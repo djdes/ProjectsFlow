@@ -1,0 +1,36 @@
+{
+  "document": {
+    "ownsScroll": false,
+    "observedViewport": "1440x900",
+    "clientHeight": 900,
+    "scrollHeight": 900,
+    "overflow": "hidden auto"
+  },
+  "chatMessages": {
+    "ownsScroll": true,
+    "desktop": {
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "tabletBrowser": { "clientHeight": 496, "scrollHeight": 4469 },
+    "effect": "scrolling history does not move the top bar, composer, or preview"
+  },
+  "preview": {
+    "ownsScroll": "inside App Preview iframe",
+    "shellDoesNotProxyScroll": true,
+    "tabletAndMobileDeviceCanvas": "may overflow its workspace vertically while remaining centered horizontally"
+  },
+  "dashboard": {
+    "ownsScroll": "right workspace content container",
+    "chatRemainsIndependent": true
+  },
+  "mobile": {
+    "studioContainer": { "clientHeight": 844, "scrollHeight": 844 },
+    "previewFrameStartsAtY": 118,
+    "note": "mobile replaces the desktop split-pane contract with a compact two-row toolbar; no chat hide toggle was exposed"
+  }
+}

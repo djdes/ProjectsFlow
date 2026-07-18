@@ -1,0 +1,97 @@
+{
+  "capturedAt": "2026-07-19T01:45:00+03:00",
+  "method": "Visible role/button/textbox audit from Playwright plus keyboard interaction during observed scenarios.",
+  "states": [
+    {
+      "name": "desktop-home",
+      "viewport": "1440x900",
+      "visibleButtons": 22,
+      "unnamedButtons": 1,
+      "unnamedButtonBoxes": [{ "x": 839, "y": 292.25, "width": 32, "height": 32 }]
+    },
+    {
+      "name": "desktop-existing",
+      "viewport": "1440x900",
+      "visibleButtons": 16,
+      "unnamedButtons": 1,
+      "unnamedButtonBoxes": [{ "x": 284, "y": 10, "width": 24, "height": 24 }]
+    },
+    {
+      "name": "tablet-home",
+      "viewport": "1024x768",
+      "visibleButtons": 21,
+      "unnamedButtons": 1,
+      "unnamedButtonBoxes": [{ "x": 631, "y": 236.1484375, "width": 32, "height": 32 }]
+    },
+    {
+      "name": "mobile-home-expanded-sidebar",
+      "viewport": "390x844",
+      "visibleButtonsInsideViewport": 15,
+      "unnamedButtonsInsideViewport": 0,
+      "warning": "Several named main-canvas actions are physically outside the viewport because of horizontal overflow."
+    },
+    {
+      "name": "mobile-chat-collapsed-sidebar",
+      "viewport": "390x844",
+      "visibleButtons": 19,
+      "unnamedButtons": 2,
+      "unnamedButtonBoxes": [
+        { "x": 25, "y": 10, "width": 24, "height": 24 },
+        { "x": 177, "y": 680, "width": 32, "height": 32 }
+      ]
+    }
+  ],
+  "positiveAccessibleNames": [
+    "Close sidebar",
+    "New chat",
+    "Open personalization settings",
+    "Give context",
+    "Settings",
+    "Start voice recording",
+    "Submit AI message",
+    "Share chat",
+    "Start new chat",
+    "Pin chat",
+    "Minimize agent details",
+    "Expand agent details",
+    "Delete, rename, and more…",
+    "Copy response",
+    "Save to private pages",
+    "Share positive feedback",
+    "Share negative feedback",
+    "Edit message",
+    "Copy text"
+  ],
+  "keyboardObservations": [
+    "Enter committed the chat rename.",
+    "Escape closed rename/history/action popovers without destructive effects.",
+    "The focused composer and focused icon menu showed a high-contrast blue ring.",
+    "The rename field exposed placeholder/name Rename chat and was prefilled with the current title."
+  ],
+  "issues": [
+    {
+      "severity": "medium",
+      "finding": "The chat title control exposes the generic accessible name history instead of the visible chat title or a clearer action such as Open chat history."
+    },
+    {
+      "severity": "medium",
+      "finding": "The AI-face button in the saved-chat header has no observed accessible name."
+    },
+    {
+      "severity": "medium",
+      "finding": "The 32px jump-to-latest control observed above the composer has no observed accessible name."
+    },
+    {
+      "severity": "low",
+      "finding": "The main composer is discoverable through placeholder text Do anything with AI… but had no separate observed aria-label."
+    },
+    {
+      "severity": "high",
+      "finding": "At 390px with the sidebar expanded, otherwise named controls are off-screen and require horizontal scrolling; this is a reachability problem independent of ARIA quality."
+    },
+    {
+      "severity": "low",
+      "finding": "Sidebar chat rows are menuitems rather than links; they remain operable, but browser link affordances are provided only through the Open in new tab action."
+    }
+  ]
+}

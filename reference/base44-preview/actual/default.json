@@ -1,0 +1,417 @@
+{
+  "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+  "title": "Purity Protocol | Base44",
+  "viewport": {
+    "width": 1440,
+    "height": 900,
+    "dpr": 1
+  },
+  "interactive": [
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Dish Bread",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 532,
+        "y": 43,
+        "w": 96,
+        "h": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Dish Apple Pie",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 636,
+        "y": 43,
+        "w": 96,
+        "h": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Dish Croissant",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 740,
+        "y": 43,
+        "w": 96,
+        "h": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Suggest more",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 529,
+        "y": 722,
+        "w": 24,
+        "h": 24
+      }
+    },
+    {
+      "tag": "div",
+      "role": "separator",
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": null,
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900
+      }
+    },
+    {
+      "tag": "div",
+      "role": "group",
+      "text": "Preview Dashboard",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": null,
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 513,
+        "y": 11,
+        "w": 166,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": "radio",
+      "text": "Preview",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 517,
+        "y": 15,
+        "w": 68,
+        "h": 22
+      }
+    },
+    {
+      "tag": "button",
+      "role": "radio",
+      "text": "Dashboard",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 587,
+        "y": 15,
+        "w": 88,
+        "h": 22
+      }
+    },
+    {
+      "tag": "div",
+      "role": "group",
+      "text": "Edit",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": null,
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 685,
+        "y": 11,
+        "w": 70,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "Edit",
+      "ariaLabel": "Edit mode",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 686,
+        "y": 12,
+        "w": 68,
+        "h": 28
+      }
+    },
+    {
+      "tag": "div",
+      "role": "group",
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": null,
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 762,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Canvas",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 763,
+        "y": 12,
+        "w": 28,
+        "h": 28
+      }
+    },
+    {
+      "tag": "div",
+      "role": null,
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": null,
+      "value": null,
+      "state": "closed",
+      "rect": {
+        "x": 862,
+        "y": 11,
+        "w": 228,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Refresh preview",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 867,
+        "y": 14,
+        "w": 24,
+        "h": 24
+      }
+    },
+    {
+      "tag": "input",
+      "role": null,
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": "/page",
+      "type": null,
+      "value": "Home",
+      "state": null,
+      "rect": {
+        "x": 895,
+        "y": 17,
+        "w": 162,
+        "h": 18
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "Show tablet preview",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 1061,
+        "y": 14,
+        "w": 24,
+        "h": 24
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 1160,
+        "y": 11,
+        "w": 52,
+        "h": 30
+      }
+    },
+    {
+      "tag": "div",
+      "role": null,
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "placeholder": null,
+      "type": null,
+      "value": null,
+      "state": "closed",
+      "rect": {
+        "x": 1220,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "",
+      "ariaLabel": "More actions",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 1220,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "30% off",
+      "ariaLabel": "Upgrade plan",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": "closed",
+      "rect": {
+        "x": 1258,
+        "y": 11,
+        "w": 90,
+        "h": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "text": "Publish",
+      "ariaLabel": "Publish App",
+      "title": null,
+      "placeholder": null,
+      "type": "button",
+      "value": null,
+      "state": null,
+      "rect": {
+        "x": 1355,
+        "y": 11,
+        "w": 73,
+        "h": 30
+      }
+    }
+  ],
+  "frames": [
+    {
+      "title": "App Preview",
+      "src": "https://preview--pure-tech-protocol.base44.app/?hide_badge=true&base44_data_env=prod&server_url=https%3A%2F%2Fpreview--pure-tech-protocol.base44.app&analytics-enable=false&access_token=%5Bredacted%5D&_b44_commit=70edc6c8dd9b173490d820dbb73bd76e006f04d9&_b44_reload=1&previewFE_version=1",
+      "rect": {
+        "x": 501,
+        "y": 52,
+        "w": 939,
+        "h": 839
+      }
+    },
+    {
+      "title": null,
+      "src": "https://js.stripe.com/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html#url=https%3A%2F%2Fapp.base44.com%2Fapps%2F6a5a6081bba26be00ddf4e25%2Feditor%2Fworkspace%2Fanalytics&title=Base44&referrer=https%3A%2F%2Faccounts.google.ru%2F&muid=a38b4089-98d4-46b9-8075-4b161018aefa6e21c5&sid=5d85dfe3-a1ae-4130-a7e5-68f51abcc979e45dfd&version=6&preview=false&__shared_params__[version]=v3",
+      "rect": {
+        "x": 0,
+        "y": 900,
+        "w": 1440,
+        "h": 1
+      }
+    },
+    {
+      "title": null,
+      "src": "https://web.cmp.usercentrics.eu/cdcs/v/1.0.0/index.html",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "scrollers": [
+    {
+      "tag": "div",
+      "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+      "rect": {
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900
+      },
+      "clientW": 1,
+      "clientH": 900,
+      "scrollW": 7,
+      "scrollH": 900
+    }
+  ],
+  "screenshot": "reference/base44-preview/screenshots/desktop/01-default-1440x900.png"
+}

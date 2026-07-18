@@ -1,0 +1,175 @@
+{
+  "status": "observed",
+  "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+  "controls": [
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "Suggest more",
+      "pressed": null,
+      "rect": {
+        "x": 529,
+        "y": 722,
+        "w": 24,
+        "h": 24
+      }
+    },
+    {
+      "text": "Edit",
+      "role": "group",
+      "ariaLabel": null,
+      "pressed": null,
+      "rect": {
+        "x": 546,
+        "y": 11,
+        "w": 70,
+        "h": 30
+      }
+    },
+    {
+      "text": "Edit",
+      "role": null,
+      "ariaLabel": "Edit mode",
+      "pressed": "true",
+      "rect": {
+        "x": 547,
+        "y": 12,
+        "w": 68,
+        "h": 28
+      }
+    },
+    {
+      "text": "",
+      "role": "group",
+      "ariaLabel": null,
+      "pressed": null,
+      "rect": {
+        "x": 622,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "Canvas",
+      "pressed": "false",
+      "rect": {
+        "x": 623,
+        "y": 12,
+        "w": 28,
+        "h": 28
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "Refresh preview",
+      "pressed": null,
+      "rect": {
+        "x": 761,
+        "y": 14,
+        "w": 24,
+        "h": 24
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": null,
+      "pressed": null,
+      "rect": {
+        "x": 789,
+        "y": 17,
+        "w": 162,
+        "h": 18
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "Show tablet preview",
+      "pressed": null,
+      "rect": {
+        "x": 955,
+        "y": 14,
+        "w": 24,
+        "h": 24
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "Undo",
+      "pressed": null,
+      "rect": {
+        "x": 1088,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "Redo",
+      "pressed": null,
+      "rect": {
+        "x": 1122,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": null,
+      "pressed": null,
+      "rect": {
+        "x": 1160,
+        "y": 11,
+        "w": 52,
+        "h": 30
+      }
+    },
+    {
+      "text": "",
+      "role": null,
+      "ariaLabel": "More actions",
+      "pressed": null,
+      "rect": {
+        "x": 1220,
+        "y": 11,
+        "w": 30,
+        "h": 30
+      }
+    },
+    {
+      "text": "30% off",
+      "role": null,
+      "ariaLabel": "Upgrade plan",
+      "pressed": null,
+      "rect": {
+        "x": 1258,
+        "y": 11,
+        "w": 90,
+        "h": 30
+      }
+    },
+    {
+      "text": "Publish",
+      "role": null,
+      "ariaLabel": "Publish App",
+      "pressed": null,
+      "rect": {
+        "x": 1355,
+        "y": 11,
+        "w": 73,
+        "h": 30
+      }
+    }
+  ],
+  "screenshot": "reference/base44-preview/screenshots/desktop/10-edit-mode-preview.png"
+}

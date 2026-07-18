@@ -1101,6 +1101,169 @@ export const aiPromptJobs = mysqlTable(
 export type AiPromptJobRow = typeof aiPromptJobs.$inferSelect;
 export type NewAiPromptJobRow = typeof aiPromptJobs.$inferInsert;
 
+// Durable AI chat history and its dedicated worker queue (db/132). This is kept
+// separate from ai_prompt_jobs because those terminal rows are intentionally GC'ed.
+export const aiConversations = mysqlTable(
+  'ai_conversations',
+  {
+    id: id(),
+    ownerUserId: char('owner_user_id', { length: 36 }).notNull(),
+    workspaceId: char('workspace_id', { length: 36 }),
+    projectId: char('project_id', { length: 36 }),
+    kind: mysqlEnum('kind', ['personal', 'project_studio']).notNull(),
+    title: varchar('title', { length: 120 }).notNull(),
+    version: int('version', { unsigned: true }).notNull().default(1),
+    lastMessageSeq: bigint('last_message_seq', { mode: 'number', unsigned: true }),
+    lastMessageAt: timestamp('last_message_at'),
+    archivedAt: timestamp('archived_at'),
+    deletedAt: timestamp('deleted_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_ai_conversations_owner_list').on(t.ownerUserId, t.archivedAt, t.lastMessageAt),
+    index('idx_ai_conversations_owner_project').on(
+      t.ownerUserId,
+      t.projectId,
+      t.kind,
+      t.archivedAt,
+      t.lastMessageAt,
+    ),
+    index('idx_ai_conversations_project').on(t.projectId, t.deletedAt, t.updatedAt),
+  ],
+);
+
+export const aiConversationMessages = mysqlTable(
+  'ai_conversation_messages',
+  {
+    id: id(),
+    seq: bigint('seq', { mode: 'number', unsigned: true }).autoincrement().notNull(),
+    conversationId: char('conversation_id', { length: 36 }).notNull(),
+    role: mysqlEnum('role', ['user', 'assistant', 'system', 'tool']).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'completed', 'failed', 'cancelled'])
+      .notNull(),
+    body: mediumtext('body').notNull(),
+    parentMessageId: char('parent_message_id', { length: 36 }),
+    clientRequestId: char('client_request_id', { length: 36 }),
+    runId: char('run_id', { length: 36 }),
+    model: varchar('model', { length: 120 }),
+    metadataJson: json('metadata_json').$type<Record<string, unknown> | null>(),
+    errorCode: varchar('error_code', { length: 80 }),
+    errorRetryable: boolean('error_retryable').notNull().default(false),
+    deletedAt: timestamp('deleted_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_ai_conversation_messages_seq').on(t.seq),
+    uniqueIndex('uq_ai_conversation_messages_client_request').on(
+      t.conversationId,
+      t.clientRequestId,
+    ),
+    index('idx_ai_conversation_messages_conversation_seq').on(t.conversationId, t.seq),
+    index('idx_ai_conversation_messages_run').on(t.runId),
+  ],
+);
+
+export const aiConversationRuns = mysqlTable(
+  'ai_conversation_runs',
+  {
+    id: id(),
+    conversationId: char('conversation_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }),
+    dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
+    userMessageId: char('user_message_id', { length: 36 }).notNull(),
+    assistantMessageId: char('assistant_message_id', { length: 36 }).notNull(),
+    mode: mysqlEnum('mode', ['chat', 'studio_plan', 'studio_edit']).notNull(),
+    status: mysqlEnum('status', ['queued', 'claimed', 'running', 'completed', 'failed', 'cancelled'])
+      .notNull()
+      .default('queued'),
+    contextVersion: int('context_version', { unsigned: true }).notNull().default(1),
+    contextSnapshotJson: json('context_snapshot_json').$type<Record<string, unknown> | null>(),
+    idempotencyKey: varchar('idempotency_key', { length: 100 }).notNull(),
+    completionIdempotencyKey: varchar('completion_idempotency_key', { length: 100 }),
+    leaseTokenHash: char('lease_token_hash', { length: 64 }),
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    claimedAt: timestamp('claimed_at'),
+    projectEditJobId: char('project_edit_job_id', { length: 36 }),
+    model: varchar('model', { length: 120 }),
+    tokensIn: bigint('tokens_in', { mode: 'number' }),
+    tokensOut: bigint('tokens_out', { mode: 'number' }),
+    costUsd: decimal('cost_usd', { precision: 12, scale: 6 }),
+    errorCode: varchar('error_code', { length: 80 }),
+    errorMessage: varchar('error_message', { length: 500 }),
+    createdAt: createdAtCol(),
+    startedAt: timestamp('started_at'),
+    finishedAt: timestamp('finished_at'),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_ai_conversation_runs_idempotency').on(t.conversationId, t.idempotencyKey),
+    index('idx_ai_conversation_runs_dispatcher').on(t.dispatcherUserId, t.status, t.createdAt),
+    index('idx_ai_conversation_runs_project').on(t.projectId, t.status, t.createdAt),
+    index('idx_ai_conversation_runs_conversation').on(t.conversationId, t.createdAt),
+  ],
+);
+
+export const aiConversationAttachments = mysqlTable(
+  'ai_conversation_attachments',
+  {
+    id: id(),
+    conversationId: char('conversation_id', { length: 36 }).notNull(),
+    messageId: char('message_id', { length: 36 }).notNull(),
+    storageKey: varchar('storage_key', { length: 500 }).notNull(),
+    originalName: varchar('original_name', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 120 }).notNull(),
+    sizeBytes: int('size_bytes', { unsigned: true }).notNull(),
+    sha256: char('sha256', { length: 64 }).notNull(),
+    deletedAt: timestamp('deleted_at'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_ai_conversation_attachments_message').on(t.messageId, t.deletedAt)],
+);
+
+export const aiConversationEvents = mysqlTable(
+  'ai_conversation_events',
+  {
+    eventSeq: bigint('event_seq', { mode: 'number', unsigned: true })
+      .autoincrement()
+      .primaryKey(),
+    conversationId: char('conversation_id', { length: 36 }).notNull(),
+    eventType: varchar('event_type', { length: 64 }).notNull(),
+    entityId: char('entity_id', { length: 36 }),
+    payloadJson: json('payload_json').$type<Record<string, unknown> | null>(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_ai_conversation_events_conversation').on(t.conversationId, t.eventSeq)],
+);
+
+export const aiConversationAuditEvents = mysqlTable(
+  'ai_conversation_audit_events',
+  {
+    id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
+    conversationId: char('conversation_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }),
+    runId: char('run_id', { length: 36 }),
+    messageId: char('message_id', { length: 36 }),
+    actorKind: mysqlEnum('actor_kind', ['user', 'dispatcher', 'system']).notNull(),
+    actorUserId: char('actor_user_id', { length: 36 }),
+    action: varchar('action', { length: 80 }).notNull(),
+    metadataJson: json('metadata_json').$type<Record<string, unknown> | null>(),
+    requestId: varchar('request_id', { length: 100 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    index('idx_ai_conversation_audit_conversation').on(t.conversationId, t.createdAt),
+    index('idx_ai_conversation_audit_project').on(t.projectId, t.createdAt),
+    index('idx_ai_conversation_audit_actor').on(t.actorUserId, t.createdAt),
+  ],
+);
+
+export type AiConversationRow = typeof aiConversations.$inferSelect;
+export type AiConversationMessageRow = typeof aiConversationMessages.$inferSelect;
+export type AiConversationRunRow = typeof aiConversationRuns.$inferSelect;
+export type AiConversationEventRow = typeof aiConversationEvents.$inferSelect;
+
 // ============================================================================
 // monitoring_analysis_jobs — миграция db/063. AI-анализ мониторинга через диспетчера.
 // Зеркало ai_prompt_jobs: сайт кладёт job с пред-собранным контекстом, Ralph пикапит

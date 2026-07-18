@@ -1,0 +1,108 @@
+{
+  "capturedAt": "2026-07-19T01:40:00+03:00",
+  "method": "Clean-room Playwright observation through the user-authorized Chrome CDP session. Values are CSS pixels from getBoundingClientRect().",
+  "source": {
+    "cdpPort": 9222,
+    "initialTabTitle": "(3) ыав | Notion",
+    "initialTabUrl": "https://app.notion.com/p/393d407d2e3d801da9ceeb7817fa1467",
+    "observedAiHomeUrl": "https://app.notion.com/ai",
+    "observedSavedChatUrl": "https://app.notion.com/chat?t=399d407d2e3d8030ad0f00a9d039c28d&wfv=chat"
+  },
+  "desktop": {
+    "viewport": { "width": 1440, "height": 900 },
+    "aiHome": {
+      "sidebar": { "x": 0, "y": 0, "width": 270, "height": 900 },
+      "chatListMenu": { "x": 0, "y": 178, "width": 270, "height": 306 },
+      "main": { "x": 270, "y": 0, "width": 1170, "height": 900 },
+      "personalizationButton": { "x": 815.5, "y": 182.75, "width": 64, "height": 64 },
+      "composerTextbox": { "x": 507, "y": 336.25, "width": 696, "height": 60 },
+      "composerActions": {
+        "giveContext": { "x": 515, "y": 400.25, "width": 28, "height": 28 },
+        "settings": { "x": 547, "y": 400.25, "width": 28, "height": 28 },
+        "model": { "x": 1076.09375, "y": 400.25, "width": 54.90625, "height": 28 },
+        "voice": { "x": 1135, "y": 400.25, "width": 28, "height": 28 },
+        "submit": { "x": 1167, "y": 400.25, "width": 28, "height": 28 }
+      },
+      "quickActionsY": 510.25,
+      "evidence": ["desktop-home.png", "desktop-home.json"]
+    },
+    "savedChat": {
+      "topBar": { "x": 270, "y": 0, "width": 1170, "height": 44 },
+      "internalConversationScroller": { "x": 270, "y": 44, "width": 1170, "height": 732 },
+      "contentColumn": { "x": 328.5, "width": 694 },
+      "composerTextbox": { "x": 336, "y": 776, "width": 694, "height": 60 },
+      "historyTitleButton": { "x": 393.765625, "y": 8, "width": 221.703125, "height": 28 },
+      "headerActions": {
+        "share": { "x": 1280, "y": 8, "width": 28, "height": 28 },
+        "newChat": { "x": 1310, "y": 8, "width": 28, "height": 28 },
+        "pin": { "x": 1340, "y": 8, "width": 28, "height": 28 },
+        "details": { "x": 1370, "y": 8, "width": 28, "height": 28 },
+        "more": { "x": 1400, "y": 8, "width": 28, "height": 28 }
+      },
+      "agentDetailsPanel": { "x": 1105, "y": 53, "width": 318, "height": 830 },
+      "evidence": ["desktop-existing.png", "desktop-existing.json", "scroll-map.json"]
+    },
+    "sidebarCollapsed": {
+      "sidebarSwitcher": { "x": -251, "y": 6, "width": 254, "height": 32 },
+      "visibleEdge": 10,
+      "chatComposerTextbox": { "x": 249, "y": 776, "width": 694, "height": 60 },
+      "observation": "The left rail translates off-canvas instead of being removed; the chat canvas recenters and reclaims the width.",
+      "evidence": ["desktop-collapsed-actual.png", "desktop-collapsed-actual.json"]
+    }
+  },
+  "tablet": {
+    "viewport": { "width": 1024, "height": 768 },
+    "aiHome": {
+      "sidebar": { "x": 0, "y": 0, "width": 270, "height": 768 },
+      "main": { "x": 270, "y": 0, "width": 754, "height": 768 },
+      "composerTextbox": { "x": 322, "y": 280.1484375, "width": 650, "height": 60 },
+      "evidence": ["tablet-home.png", "tablet-home.json"]
+    },
+    "savedChat": {
+      "sidebar": { "x": 0, "y": 0, "width": 270, "height": 768 },
+      "composerTextbox": { "x": 300, "y": 644, "width": 694, "height": 60 },
+      "detailsPanel": "auto-collapsed",
+      "detailsToggle": { "x": 954, "y": 8, "width": 28, "height": 28, "ariaLabel": "Expand agent details" },
+      "evidence": ["tablet-existing.png", "tablet-existing.json"]
+    }
+  },
+  "mobile": {
+    "viewport": { "width": 390, "height": 844 },
+    "chatWithSidebarCollapsed": {
+      "composerTextbox": { "x": 35, "y": 720, "width": 316, "height": 60 },
+      "titleButton": { "x": 134.765625, "y": 8, "width": 94.234375, "height": 28 },
+      "headerActions": {
+        "share": { "x": 245, "y": 8, "width": 28, "height": 28 },
+        "newChat": { "x": 275, "y": 8, "width": 28, "height": 28 },
+        "pin": { "x": 305, "y": 8, "width": 28, "height": 28 },
+        "more": { "x": 335, "y": 8, "width": 28, "height": 28 }
+      },
+      "observation": "The chat itself is usable at 390px when the sidebar is already collapsed; the title truncates and the four essential header actions still fit.",
+      "evidence": ["mobile-chat.png", "mobile-chat.json"]
+    },
+    "aiHomeWithSidebarExpanded": {
+      "sidebar": { "x": 0, "y": 0, "width": 270, "height": 844 },
+      "composerTextbox": { "x": 322, "y": 256.953125, "width": 292, "height": 60 },
+      "composerRightEdge": 614,
+      "viewportOverflow": 224,
+      "observation": "The desktop-width sidebar remains open and the main canvas keeps a minimum width, producing horizontal clipping/scroll at 390px.",
+      "evidence": ["mobile-home.png", "mobile-home.json"]
+    },
+    "savedChatWithSidebarExpanded": {
+      "composerTextbox": { "x": 294, "y": 720, "width": 316, "height": 60 },
+      "composerRightEdge": 610,
+      "viewportOverflow": 220,
+      "headerMoreButton": { "x": 594, "y": 8, "width": 28, "height": 28 },
+      "observation": "With the rail expanded, most chat content and right-side header actions are off-screen.",
+      "evidence": ["mobile-existing.png", "mobile-existing.json"]
+    }
+  },
+  "visualTokensObserved": {
+    "sidebarWidth": 270,
+    "chatContentWidth": 694,
+    "iconButtonSizes": [24, 28, 32],
+    "composerCornerRadius": "approximately 20px from screenshot/computed styles",
+    "primaryFocus": "2px blue outline around composer/menu controls",
+    "surface": "white canvas with subtle gray hover/selected fills and hairline borders"
+  }
+}

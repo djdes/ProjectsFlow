@@ -1,0 +1,99 @@
+{
+  "capturedAt": "2026-07-19T00:00:00+03:00",
+  "method": "Playwright connectOverCDP to an already-open authenticated Chrome tab",
+  "reference": {
+    "product": "Base44",
+    "pageTitle": "Purity Protocol | Base44",
+    "zone": "project editor Preview / Dashboard shell",
+    "sourceCodeInspected": false,
+    "privateApisInspected": false,
+    "projectMutated": false,
+    "published": false
+  },
+  "desktop": {
+    "viewport": { "width": 1440, "height": 900, "deviceScaleFactor": 2 },
+    "topBarHeight": 52,
+    "chatOpenWidth": 360.5,
+    "chatHiddenWidth": 1,
+    "previewOpen": { "x": 361.5, "y": 52, "width": 1078.5, "height": 839 },
+    "previewChatHidden": { "x": 2, "y": 52, "width": 1438, "height": 839 },
+    "chatTransition": {
+      "property": "flex-grow",
+      "durationMs": 500,
+      "timingFunction": "cubic-bezier(0.4, 0, 0.2, 1)",
+      "note": "The label changes immediately; geometry begins after a staged delay and settles after roughly 1.3 seconds."
+    }
+  },
+  "preview": {
+    "modeControl": "radio-like Preview/Dashboard segmented control",
+    "routeControl": {
+      "value": "Home",
+      "placeholder": "/page",
+      "accessibleName": null,
+      "items": ["/ (home)", "/catalog", "/product/:slug", "/checkout", "Suggested pages"]
+    },
+    "devices": [
+      { "mode": "desktop", "behavior": "fills the right workspace" },
+      { "mode": "tablet", "canvas": { "width": 768, "height": 1024 }, "behavior": "centered" },
+      { "mode": "mobile", "canvas": { "width": 373, "height": 665 }, "behavior": "centered" }
+    ],
+    "editMode": {
+      "ariaPressed": true,
+      "addsControls": ["Undo", "Redo"],
+      "keepsRouteAndDeviceControls": true,
+      "urlChanges": false
+    },
+    "canvasMode": {
+      "path": "/editor/canvas",
+      "replacesIframeCanvas": true,
+      "controls": ["Zoom to fit", "Zoom out", "Zoom", "Zoom in"]
+    },
+    "iframeStaging": "Two overlapping App Preview iframes were observed during steady preview; opacity classes select the visible host."
+  },
+  "dashboard": {
+    "path": "/editor/workspace/overview",
+    "previewOnlyControlsRemoved": ["Edit mode", "Canvas", "Refresh preview", "Route", "Device"],
+    "chatPersists": true,
+    "observedSections": ["App Visibility", "Invite Users", "Platform Badge"],
+    "navigation": [
+      "Overview", "Users", "Data", "Analytics", "Marketing", "Domains", "Integrations",
+      "Security", "Code", "Agents", "Workflows", "Logs", "API", "Settings"
+    ],
+    "navigationActivatedDuringResearch": ["Overview"]
+  },
+  "menus": {
+    "project": ["App overview", "Users", "Security", "App settings"],
+    "more": [
+      "Act as a user",
+      "Testing agent",
+      "GitHub connection",
+      "This page's files",
+      "Activity monitor",
+      "Export project as ZIP",
+      "Help center"
+    ]
+  },
+  "participants": {
+    "opensDialog": true,
+    "dialogSize": { "width": 645.12, "height": 274.56 },
+    "actions": ["Close", "Invite"],
+    "triggerAccessibleName": null,
+    "personalDataPersisted": false
+  },
+  "scroll": {
+    "document": { "scrollable": false, "overflow": "hidden auto" },
+    "chatMessages": {
+      "overflowX": "auto",
+      "overflowY": "auto",
+      "desktopOpenRect": { "x": 12, "y": 52, "width": 348, "height": 628 }
+    },
+    "preview": "isolated inside the preview frame/canvas",
+    "dashboard": "right workspace owns its content scroll"
+  },
+  "privacy": {
+    "chatMessagesMaskedInScreenshots": true,
+    "avatarsMaskedInScreenshots": true,
+    "projectLogoMaskedInScreenshots": true,
+    "cookiesTokensPrivateEndpointsStored": false
+  }
+}

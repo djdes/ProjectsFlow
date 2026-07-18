@@ -1,0 +1,76 @@
+{
+  "scenarios": [
+    {
+      "id": "S01",
+      "title": "Hide and restore AI chat",
+      "precondition": "Preview, desktop, chat open",
+      "steps": ["Click Hide chat panel", "wait for transition", "click Show chat panel"],
+      "expected": ["preview expands to full width", "chat session is preserved", "preview returns to previous width"]
+    },
+    {
+      "id": "S02",
+      "title": "Switch Preview to Dashboard and back",
+      "steps": ["Click Dashboard", "verify preview-only toolbar is absent", "Click Preview"],
+      "expected": ["URL becomes /editor/workspace/overview", "chat stays mounted", "Preview toolbar returns"]
+    },
+    {
+      "id": "S03",
+      "title": "Cycle device canvas",
+      "steps": ["Click device icon three times"],
+      "expected": ["768x1024 tablet", "373x665 mobile", "full-width desktop"]
+    },
+    {
+      "id": "S04",
+      "title": "Open route chooser",
+      "steps": ["Focus route input", "open popup", "press Escape"],
+      "expected": ["known routes are listed", "focus returns without navigation"]
+    },
+    {
+      "id": "S05",
+      "title": "Toggle edit mode",
+      "steps": ["Click Edit mode", "observe Undo/Redo", "click Edit mode again"],
+      "expected": ["aria-pressed toggles", "URL stays preview", "no project change without an edit action"]
+    },
+    {
+      "id": "S06",
+      "title": "Toggle canvas",
+      "steps": ["Click Canvas", "observe zoom controls", "click Canvas again"],
+      "expected": ["URL becomes /editor/canvas", "iframe is replaced", "Preview returns"]
+    },
+    {
+      "id": "S07",
+      "title": "Inspect project menu",
+      "steps": ["Click project selector", "press Escape"],
+      "expected": ["four settings destinations are visible", "menu dismisses"]
+    },
+    {
+      "id": "S08",
+      "title": "Inspect more menu",
+      "steps": ["Click More actions", "press Escape"],
+      "expected": ["testing/GitHub/files/activity/export/help actions are visible", "no action executes"]
+    },
+    {
+      "id": "S09",
+      "title": "Participants dialog",
+      "steps": ["Click avatar group", "press Escape"],
+      "expected": ["modal overlay opens", "Close and Invite are available", "personal data is not persisted by the test"]
+    },
+    {
+      "id": "S10",
+      "title": "Tablet browser breakpoint",
+      "precondition": "1024x768",
+      "expected": ["chat is 360px when open", "preview uses remaining 663px", "hidden chat gives preview 1024px"]
+    },
+    {
+      "id": "S11",
+      "title": "Mobile browser breakpoint",
+      "precondition": "390x844",
+      "expected": ["compact two-row toolbar", "route field expands", "fullscreen replaces desktop device control", "preview frame is 372px wide"]
+    },
+    {
+      "id": "S12",
+      "title": "Privacy-safe screenshot capture",
+      "expected": ["chat history masked", "avatars masked", "project logo masked", "no tokens/cookies/private endpoints in artifacts"]
+    }
+  ]
+}

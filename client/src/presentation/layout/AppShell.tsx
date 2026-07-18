@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, X } from 'lucide-react';
+import { Menu, Sparkles, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -57,6 +57,7 @@ export function AppShell(): React.ReactElement {
   // только элементы, которым разрешено сужаться под панелью (плашка и строка отображений).
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const { pathname } = useLocation();
+  const immersiveRoute = pathname === '/ai' || pathname.startsWith('/ai/') || /\/projects\/[^/]+\/studio(?:\/|$)/.test(pathname);
   // Закрываем мобильный drawer ТОЛЬКО при смене маршрута (клик по проекту/разделу). Раньше
   // тут была обёртка onClick={close} вокруг всего Sidebar — она закрывала панель на ЛЮБОЙ
   // клик, ломая разворот секции «Мои проекты». Теперь тоггл секции (без навигации) не закрывает.
@@ -86,6 +87,21 @@ export function AppShell(): React.ReactElement {
       }
       return next;
     });
+  }, []);
+
+  // Страницы, которым принадлежит весь viewport (Studio/ИИ), могут один раз попросить
+  // свернуть панель. Это управляемый сигнал, а не клик-эмуляция: пользователь затем может
+  // снова открыть панель, и контент штатно сдвинется вправо.
+  useEffect(() => {
+    const onSetCollapsed = (event: Event): void => {
+      const detail = (event as CustomEvent<{ collapsed?: boolean }>).detail;
+      if (typeof detail?.collapsed !== 'boolean') return;
+      autoCollapsedRef.current = false;
+      setCollapsed(detail.collapsed);
+      try { localStorage.setItem(COLLAPSE_KEY, detail.collapsed ? '1' : '0'); } catch { /* ignore */ }
+    };
+    window.addEventListener('pf:set-sidebar-collapsed', onSetCollapsed);
+    return () => window.removeEventListener('pf:set-sidebar-collapsed', onSetCollapsed);
   }, []);
 
   // Окно задачи дотянули ресайзом до левой панели → сворачиваем её (task 16).
@@ -236,7 +252,7 @@ export function AppShell(): React.ReactElement {
                           toggleCollapse();
                         }}
                         aria-label="Показать боковую панель"
-                        className="absolute left-2 top-1.5 z-50 grid size-8 place-items-center rounded-md bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-hover hover:text-foreground"
+                        className="absolute left-2 top-1.5 z-[110] grid size-8 place-items-center rounded-md bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Menu className="size-4" />
                       </button>
@@ -262,7 +278,7 @@ export function AppShell(): React.ReactElement {
                       onMouseEnter={openPeek}
                       onMouseLeave={closePeekSoon}
                       style={{ width: sidebarWidth }}
-                      className="absolute bottom-3 left-1.5 top-12 z-50 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
+                      className="absolute bottom-3 left-1.5 top-12 z-[100] overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
                     >
                       <Sidebar
                         collapsed={false}
@@ -275,7 +291,7 @@ export function AppShell(): React.ReactElement {
               </>
             )}
             <main
-              className="relative min-h-0 overflow-y-auto"
+              className={cn('relative min-h-0', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto')}
               data-pf-scrolled={mainScrolled ? 'true' : 'false'}
               onScroll={handleMainScroll}
             >
@@ -299,7 +315,7 @@ export function AppShell(): React.ReactElement {
             </header>
             <InstallAppPrompt variant="banner" />
             <main
-              className="flex-1 overflow-y-auto"
+              className={cn('min-h-0 flex-1', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto')}
               data-pf-scrolled={mainScrolled ? 'true' : 'false'}
               onScroll={handleMainScroll}
             >
@@ -368,7 +384,7 @@ type NavItem = {
   badge?: number;
 };
 
-// Нижний таб-бар (только mobile, <768px): Входящие / Проекты (drawer) / Уведомления / Профиль.
+// Нижний таб-бар (только mobile, <768px): Входящие / Проекты / Чат / ИИ / Профиль.
 // Парящая стеклянная панель (iOS-26 / Telegram glass). Жест: зажать и провести пальцем по
 // панели — стеклянный индикатор пружинисто едет за пальцем (motion layout), на отпускании
 // выбирается вкладка под ним. Обычный тап и клавиатура (Enter/Space) тоже работают.
@@ -389,6 +405,7 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
     { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/') },
     { key: 'projects', label: 'Проекты', icon: <AnimatedFolder className="size-5" />, active: false, run: onOpenProjects },
     { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: actionable, active: false, run: () => { try { localStorage.setItem('pf_sidebar_rail', 'chat'); } catch { /* ignore */ } onOpenProjects(); } },
+    { key: 'ai', label: 'ИИ', icon: <Sparkles className="size-5" />, active: pathname === '/ai' || pathname.startsWith('/ai/'), run: () => navigate('/ai') },
     { key: 'profile', label: 'Профиль', icon: <AnimatedUser className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
   ];
   const activeIndex = items.findIndex((i) => i.active);

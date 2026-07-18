@@ -1,0 +1,26 @@
+{
+  "desktop": {
+    "viewport": { "width": 1440, "height": 900 },
+    "chatRailWidth": 500,
+    "dashboardSidebarWidthApprox": 190,
+    "contentStartsAtXApprox": 735
+  },
+  "tablet": {
+    "viewport": { "width": 1024, "height": 768 },
+    "chatRailWidthApprox": 360,
+    "dashboardSidebarWidthApprox": 165,
+    "layout": "chat + compact sidebar + content"
+  },
+  "mobile": {
+    "viewport": { "width": 390, "height": 844 },
+    "layout": "single column",
+    "navigation": "section dropdown",
+    "chat": "hidden",
+    "contentPaddingApprox": 16
+  },
+  "dataGrid": {
+    "header": "sticky within table viewport",
+    "overflow": "horizontal and vertical",
+    "rowDetails": "right-side sheet over dimmed grid"
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "source": {
+    "cdpPort": 9222,
+    "tab": "(3) ыав | Notion",
+    "cleanRoom": true
+  },
+  "scenarios": [
+    {
+      "id": "AI-001",
+      "name": "Open Notion AI from the workspace sidebar",
+      "precondition": "Authorized workspace page and expanded left sidebar",
+      "steps": ["Click the round Notion AI tile inside the Notion AI sidebar section", "Wait for the UI to stabilize"],
+      "actual": ["URL becomes https://app.notion.com/ai", "Center shows How can I help you today?", "Saved chats remain visible in the sidebar"],
+      "evidence": ["desktop-home.png", "desktop-home.json"]
+    },
+    {
+      "id": "AI-002",
+      "name": "Open an existing saved chat",
+      "steps": ["Click a saved title in a time group", "Wait for the conversation to settle"],
+      "actual": ["URL becomes /chat?t=<thread>&wfv=chat", "Browser title becomes <chat title> | Notion", "Selected item gets a gray background", "Conversation restores its prior scroll position near the bottom"],
+      "evidence": ["desktop-existing.png", "desktop-existing.json"]
+    },
+    {
+      "id": "AI-003",
+      "name": "Create a new saved chat",
+      "steps": ["Click Start new chat", "Enter a prompt", "Click Submit AI message", "Wait for response completion"],
+      "actual": ["New-chat surface uses /ai?t=new…", "Submitting creates a /chat?t=<thread> route", "A Today item appears immediately", "Notion generates a title from the prompt", "Assistant completion is shown inline"],
+      "testThread": "[Research] AI chat behavior",
+      "evidence": ["desktop-created.png", "desktop-created.json", "desktop-renamed.png", "desktop-renamed.json"]
+    },
+    {
+      "id": "AI-004",
+      "name": "Rename a chat",
+      "steps": ["Open Delete, rename, and more…", "Choose Rename", "Edit the prefilled Rename chat textbox", "Press Enter"],
+      "actual": ["A compact 280x40 rename popover opens", "Current title is preselected/prefilled", "Enter saves without a separate confirmation", "Header, sidebar label, and browser title update"],
+      "evidence": ["desktop-renamed.png", "desktop-renamed.json"]
+    },
+    {
+      "id": "AI-005",
+      "name": "Use the sidebar item hover actions",
+      "steps": ["Hover a saved chat row", "Inspect the right edge", "Open its more menu"],
+      "actual": ["Timestamp is replaced by Pin and more icon buttons", "The menu contains Copy link, Pin, Mark as unread, Rename, Delete, Open in new tab"],
+      "geometry": { "pin": { "x": 206, "y": 337, "width": 24, "height": 24 }, "more": { "x": 230, "y": 337, "width": 24, "height": 24 } }
+    },
+    {
+      "id": "AI-006",
+      "name": "Open chat history from the title",
+      "steps": ["Click the title button in the chat header"],
+      "actual": ["A 320px-wide popover opens below the title", "Threads are grouped by Today, Past week and Past 30 days", "Escape closes it"],
+      "geometry": { "x": 393.765625, "y": 40, "width": 320, "height": 270.796875 }
+    },
+    {
+      "id": "AI-007",
+      "name": "Browser back and forward",
+      "steps": ["From a saved thread use browser Back", "Then use browser Forward"],
+      "actual": ["Back restores the AI home route and heading", "Forward restores the exact saved thread and its title"],
+      "evidence": ["navigation.json", "desktop-browser-back.png", "desktop-browser-forward.png"]
+    },
+    {
+      "id": "AI-008",
+      "name": "Collapse the workspace sidebar",
+      "steps": ["Reveal and click Close sidebar", "Wait for the slide transition"],
+      "actual": ["The rail moves to x=-251 leaving a narrow edge", "The conversation recenters", "The composer remains 694px wide"],
+      "evidence": ["desktop-collapsed-actual.png", "desktop-collapsed-actual.json", "geometry.json"]
+    },
+    {
+      "id": "AI-009",
+      "name": "Collapse and restore agent details",
+      "steps": ["Click Minimize agent details", "Click Expand agent details"],
+      "actual": ["The 318px right panel disappears", "Conversation uses the recovered space", "The button accessible name toggles between Minimize and Expand"],
+      "evidence": ["desktop-existing.png", "desktop-details-hidden.png", "desktop-details-hidden.json"]
+    },
+    {
+      "id": "AI-010",
+      "name": "Scroll a long conversation",
+      "steps": ["Set internal chat scroll to top", "Sample middle", "Sample bottom"],
+      "actual": ["Only the internal x=270/y=44 container scrolls", "Header remains at y=8", "Composer remains at y=776", "A floating jump-to-latest button appears away from the bottom"],
+      "evidence": ["scroll-map.json", "desktop-scroll-top.png", "desktop-scroll-middle.png", "desktop-scroll-bottom.png"]
+    },
+    {
+      "id": "AI-011",
+      "name": "Tablet layout",
+      "viewport": "1024x768",
+      "actual": ["270px sidebar remains", "Home composer shrinks to 650px", "Long-chat agent details auto-collapse", "Chat composer stays 694px wide"],
+      "evidence": ["tablet-home.png", "tablet-home.json", "tablet-existing.png", "tablet-existing.json"]
+    },
+    {
+      "id": "AI-012",
+      "name": "Mobile chat with sidebar collapsed",
+      "viewport": "390x844",
+      "actual": ["Messages become a single narrow column", "Title truncates", "Share/new/pin/more remain in the top row", "Composer fits at 316px"],
+      "evidence": ["mobile-chat.png", "mobile-chat.json"]
+    },
+    {
+      "id": "AI-013",
+      "name": "Mobile layout with sidebar expanded",
+      "viewport": "390x844",
+      "actual": ["The fixed 270px rail leaves too little content width", "Main content retains a minimum width", "Horizontal clipping/scroll appears", "Chat controls to the right are off-screen"],
+      "risk": "This is an observed responsive failure state, not a recommended behavior to reproduce.",
+      "evidence": ["mobile-home.png", "mobile-home.json", "mobile-existing.png", "mobile-existing.json"]
+    }
+  ]
+}

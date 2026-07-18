@@ -1,0 +1,34 @@
+{
+  "surfaces": [
+    {
+      "name": "desktop-chat",
+      "axis": "vertical",
+      "independent": true
+    },
+    {
+      "name": "dashboard-navigation",
+      "axis": "vertical",
+      "condition": "viewport is shorter than menu"
+    },
+    {
+      "name": "dashboard-content",
+      "axis": "vertical",
+      "independent": true
+    },
+    {
+      "name": "data-grid",
+      "axis": "horizontal-and-vertical",
+      "independent": true
+    },
+    {
+      "name": "row-editor-sheet",
+      "axis": "vertical",
+      "independent": true
+    },
+    {
+      "name": "mobile-page",
+      "axis": "vertical",
+      "independent": false
+    }
+  ]
+}

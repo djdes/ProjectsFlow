@@ -1,0 +1,28 @@
+{
+  "surfaces": [
+    {
+      "name": "left-editor-chat",
+      "axis": "vertical",
+      "owner": "Base44 editor",
+      "independent": true
+    },
+    {
+      "name": "preview-workspace",
+      "axis": "vertical",
+      "owner": "Base44 preview shell",
+      "condition": "device frame is taller than viewport"
+    },
+    {
+      "name": "result-iframe",
+      "axis": "vertical-and-horizontal-as-app-requires",
+      "owner": "built application",
+      "independent": true
+    },
+    {
+      "name": "canvas",
+      "axis": "pan-and-zoom",
+      "owner": "Base44 canvas",
+      "independent": true
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "initial": "preview.desktop",
+  "states": [
+    "preview.desktop",
+    "preview.tablet",
+    "preview.mobile",
+    "preview.routeMenu",
+    "preview.editModeLoading",
+    "preview.editModeReady",
+    "preview.elementHovered",
+    "preview.elementSelected",
+    "preview.elementPrompt",
+    "preview.themePalette",
+    "preview.codeInspector",
+    "preview.aiPending",
+    "canvas",
+    "moreMenu",
+    "publishDialog",
+    "dashboard"
+  ],
+  "transitions": [
+    { "from": "preview.desktop", "event": "cycleDevice", "to": "preview.tablet" },
+    { "from": "preview.tablet", "event": "cycleDevice", "to": "preview.mobile" },
+    { "from": "preview.mobile", "event": "cycleDevice", "to": "preview.desktop" },
+    { "from": "preview.desktop", "event": "openRouteMenu", "to": "preview.routeMenu" },
+    { "from": "preview.desktop", "event": "enableEditMode", "to": "preview.editModeLoading" },
+    { "from": "preview.editModeLoading", "event": "bridgeReady", "to": "preview.editModeReady" },
+    { "from": "preview.editModeReady", "event": "hoverElement", "to": "preview.elementHovered" },
+    { "from": "preview.elementHovered", "event": "selectElement", "to": "preview.elementSelected" },
+    { "from": "preview.elementSelected", "event": "editElement", "to": "preview.elementPrompt" },
+    { "from": "preview.elementSelected", "event": "openTheme", "to": "preview.themePalette" },
+    { "from": "preview.elementSelected", "event": "openCode", "to": "preview.codeInspector" },
+    { "from": "preview.elementPrompt", "event": "submitPrompt", "to": "preview.aiPending" },
+    { "from": "preview.elementSelected", "event": "clearSelection", "to": "preview.editModeReady" },
+    { "from": "preview.desktop", "event": "openCanvas", "to": "canvas" },
+    { "from": "preview.desktop", "event": "openMore", "to": "moreMenu" },
+    { "from": "preview.desktop", "event": "publish", "to": "publishDialog" },
+    { "from": "preview.desktop", "event": "openDashboard", "to": "dashboard" }
+  ]
+}

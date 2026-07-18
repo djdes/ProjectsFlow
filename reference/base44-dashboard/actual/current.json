@@ -1,0 +1,18 @@
+{
+  "title": "Base44",
+  "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/dashboard",
+  "viewport": {
+    "width": 1440,
+    "height": 900,
+    "dpr": 1
+  },
+  "document": {
+    "scrollWidth": 1440,
+    "scrollHeight": 900,
+    "scrollX": 0,
+    "scrollY": 0
+  },
+  "bodyText": "",
+  "interactive": [],
+  "scrollers": []
+}

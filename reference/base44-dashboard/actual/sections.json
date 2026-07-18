@@ -1,0 +1,5354 @@
+[
+  {
+    "section": "Overview",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/overview",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Purity Protocol | Экосистема для высокотехнологичной закупки профессионального клинингового оборудования и химии с акцентом на точность, аналитику расхода и безупречность поставок. | Created | 17 hours ago | Earn credits | View usage | App Visibility | Control who can access your application | Public | Invite Users | Grow your user base by inviting others | Copy Link | Send Invites | Platform Badge | The \"Edit with Base44\" badge is currently visible on your app. | Hide Badge",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 340,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 384,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 428,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 472,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 516,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 560,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 604,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 648,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 692,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Edit title",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1049,
+          "y": 84,
+          "w": 20,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1376,
+          "y": 76,
+          "w": 40,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1384,
+          "y": 134,
+          "w": 32,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Earn credits",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 760,
+          "y": 220,
+          "w": 126,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "View usage",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 899,
+          "y": 220,
+          "w": 123,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1034,
+          "y": 220,
+          "w": 40,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": "combobox",
+        "text": "Public",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 777,
+          "y": 393,
+          "w": 286,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Copy Link",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1113,
+          "y": 393,
+          "w": 139,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Send Invites",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1260,
+          "y": 393,
+          "w": 139,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Hide Badge",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1274,
+          "y": 487,
+          "w": 125,
+          "h": 36
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/02-overview.png"
+  },
+  {
+    "section": "Users",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/users",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Users | (1) | Manage the app's users and their roles | Invite User | Pending requests | all roles | Name | Role | Email | HiL1ne | Owner | admin | 1q2w3e4r5t6y7u89o0pi@gmail.com",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 340,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 384,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 428,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 472,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 516,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 560,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 604,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 648,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 692,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1273,
+          "y": 82,
+          "w": 40,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Invite User",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1321,
+          "y": 84,
+          "w": 95,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": "tab",
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 763,
+          "y": 155,
+          "w": 173,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "tab",
+        "text": "Pending requests",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 936,
+          "y": 155,
+          "w": 171,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search by Email or Name",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1019,
+          "y": 219,
+          "w": 256,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "all roles",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1283,
+          "y": 219,
+          "w": 108,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1357,
+          "y": 333,
+          "w": 34,
+          "h": 32
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      },
+      {
+        "tag": "span",
+        "id": null,
+        "cls": "font-base44 text-sm leading-5 font-normal text-black block overflow-hidden text-ellipsis whitespace-nowrap",
+        "x": 1163,
+        "y": 339,
+        "w": 168,
+        "h": 20,
+        "clientW": 168,
+        "clientH": 20,
+        "scrollW": 239,
+        "scrollH": 20
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/03-users.png"
+  },
+  {
+    "section": "Data",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/data",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Data | View and manage the data stored in your app. | No security scan has been run yet. Run scan to identify permission risks. | Dismiss | Scan | A-Z | Category | Order | Product",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Collapse",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Category",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 244,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Order",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 284,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 324,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 368,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 460,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 504,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 548,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 592,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 636,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 680,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 724,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 768,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 812,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Dismiss",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1259,
+          "y": 165,
+          "w": 75,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Scan",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1344,
+          "y": 165,
+          "w": 57,
+          "h": 36
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search tables...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 760,
+          "y": 226,
+          "w": 256,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "A-Z",
+        "ariaLabel": "A-Z",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1311,
+          "y": 226,
+          "w": 105,
+          "h": 36
+        }
+      },
+      {
+        "tag": "div",
+        "role": "button",
+        "text": "Category",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 760,
+          "y": 274,
+          "w": 318,
+          "h": 82
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Category actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1037,
+          "y": 283,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": "button",
+        "text": "Order",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1098,
+          "y": 274,
+          "w": 318,
+          "h": 82
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Order actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1375,
+          "y": 283,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": "button",
+        "text": "Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 760,
+          "y": 376,
+          "w": 318,
+          "h": 82
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Product actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1037,
+          "y": 385,
+          "w": 32,
+          "h": 32
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/04-data.png"
+  },
+  {
+    "section": "Analytics",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/analytics",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Analytics | 0 | Live visitors | Publish your app to start collecting data.",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 340,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 384,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 428,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 472,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 516,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 560,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 604,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 648,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 692,
+          "w": 210,
+          "h": 40
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/05-analytics.png"
+  },
+  {
+    "section": "Marketing",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/analytics",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Analytics | 0 | Live visitors | Publish your app to start collecting data.",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "SEO & GEO",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 336,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Social content",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 376,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 420,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 464,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 508,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 552,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 596,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 640,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 684,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 728,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 772,
+          "w": 210,
+          "h": 40
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/06-marketing.png"
+  },
+  {
+    "section": "Domains",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/domains",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Domains | Buy, connect and manage your domains. | Learn more | Built-in URL | Edit URL | pure-tech-protocol | . | base44.app | Custom domains | Want to use your domain? | Custom domains are available on our Builder plan and above. | Upgrade to connect your domain to this app. | View Plans | Email domain | Builder+ | Use your custom domain | no-reply@notifications.base44.com | Sender Name: Purity Protocol App",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "SEO & GEO",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 336,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Social content",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 376,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 420,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 464,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 508,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 552,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 596,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 640,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 684,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 728,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 772,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "a",
+        "role": null,
+        "text": "Learn more",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": "https://docs.base44.com/Guides/Setting-up-your-custom-domain#custom-domain-setup-and-troubleshooting-guide",
+        "checked": null,
+        "rect": {
+          "x": 1022,
+          "y": 105,
+          "w": 74,
+          "h": 18
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 877,
+          "y": 173,
+          "w": 16,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit URL",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1303,
+          "y": 165,
+          "w": 92,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1359,
+          "y": 234,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "View Plans",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1037,
+          "y": 537,
+          "w": 103,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 890,
+          "y": 702,
+          "w": 16,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Builder+",
+        "ariaLabel": "View plans",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 912,
+          "y": 700,
+          "w": 78,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Use your custom domain",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1206,
+          "y": 692,
+          "w": 189,
+          "h": 36
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/07-domains.png"
+  },
+  {
+    "section": "Integrations",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/app-connections",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Integrations | My integrations | Browse | Skills | Add skills to shape how the AI builds your apps. | Manage | Connectors For App Users | Set up connectors so app users can link their personal accounts. | Connectors | Connect your app to popular services with quick OAuth connections. | Most popular | Unlock this feature | This feature is only available on the Builder plan or higher. Upgrade to continue working without limits | Upgrade",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "SEO & GEO",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 336,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Social content",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 376,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 420,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 464,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 508,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 552,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 596,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 640,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 684,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 728,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 772,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": "tab",
+        "text": "My integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 764,
+          "y": 132,
+          "w": 150,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": "tab",
+        "text": "Browse",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 915,
+          "y": 132,
+          "w": 150,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Manage",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1320,
+          "y": 201,
+          "w": 79,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Manage",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1320,
+          "y": 279,
+          "w": 79,
+          "h": 32
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search connectors",
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 789,
+          "y": 416,
+          "w": 176,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Most popular",
+        "ariaLabel": "Most popular",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 418,
+          "w": 158,
+          "h": 36
+        }
+      },
+      {
+        "tag": "a",
+        "role": null,
+        "text": "Upgrade",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": "https://app.base44.com/billing?origin=connectors_upgrade_overlay",
+        "checked": null,
+        "rect": {
+          "x": 1043,
+          "y": 418,
+          "w": 90,
+          "h": 36
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/08-integrations.png"
+  },
+  {
+    "section": "Security",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/security",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "Security | Review and fix security issues across your app. | Learn more | Check the security of your app | Review your configuration, identify potential risks, and learn how to strengthen your app's protection | Check Security",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Expand",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 248,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 292,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "SEO & GEO",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 336,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Social content",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 525,
+          "y": 376,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 420,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 464,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 508,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 552,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 596,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 640,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 684,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 728,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 772,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "a",
+        "role": null,
+        "text": "Learn more",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": "https://docs.base44.com/Setting-up-your-app/Managing-security-settings",
+        "checked": null,
+        "rect": {
+          "x": 760,
+          "y": 136,
+          "w": 344,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Advanced Security Settings",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1384,
+          "y": 102,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Check Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1022,
+          "y": 405,
+          "w": 133,
+          "h": 40
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/09-security.png"
+  },
+  {
+    "section": "Code",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/code",
+    "title": "Purity Protocol | Base44",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 1
+    },
+    "text": "src | / | pages | Login.jsx | Split view | Code editing is only available on paid plans. | View plans | Loading...",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Back to Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 234,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 658,
+          "y": 106,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 690,
+          "y": 104,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "base44",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 148,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "src",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 180,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "api",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 212,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "components",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 244,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "context",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 276,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "hooks",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 308,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "lib",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 340,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "pages",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 372,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Catalog.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 404,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Checkout.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 432,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "ForgotPassword.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 460,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Home.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 488,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Login.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 516,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "ProductDetail.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 544,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Register.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 572,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "ResetPassword.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 600,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "utils",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 628,
+          "w": 195,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "App.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 660,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "index.css",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 688,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "main.jsx",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 716,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": ".gitignore",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 744,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "AGENTS.md",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 772,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "CLAUDE.md",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 800,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "components.json",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 828,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "eslint.config.js",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 856,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "index.html",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 513,
+          "y": 884,
+          "w": 195,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Split view",
+        "ariaLabel": "Split view",
+        "placeholder": null,
+        "type": null,
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1326,
+          "y": 58,
+          "w": 102,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "View plans",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "href": null,
+        "checked": null,
+        "rect": {
+          "x": 1096,
+          "y": 100,
+          "w": 115,
+          "h": 30
+        }
+      }
+    ],
+    "scrollers": [
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 500,
+        "y": 0,
+        "w": 1,
+        "h": 900,
+        "clientW": 1,
+        "clientH": 900,
+        "scrollW": 7,
+        "scrollH": 900
+      },
+      {
+        "tag": "nav",
+        "id": null,
+        "cls": "flex-1 overflow-y-auto px-3 pb-3",
+        "x": 501,
+        "y": 148,
+        "w": 234,
+        "h": 743,
+        "clientW": 219,
+        "clientH": 743,
+        "scrollW": 219,
+        "scrollH": 944
+      },
+      {
+        "tag": "span",
+        "id": null,
+        "cls": "truncate flex-1 text-left",
+        "x": 593,
+        "y": 464,
+        "w": 107,
+        "h": 20,
+        "clientW": 107,
+        "clientH": 20,
+        "scrollW": 126,
+        "scrollH": 20
+      },
+      {
+        "tag": "span",
+        "id": null,
+        "cls": "truncate flex-1 text-left",
+        "x": 593,
+        "y": 604,
+        "w": 107,
+        "h": 20,
+        "clientW": 107,
+        "clientH": 20,
+        "scrollW": 120,
+        "scrollH": 20
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:rin",
+        "x": 735,
+        "y": 52,
+        "w": 1,
+        "h": 839,
+        "clientW": 1,
+        "clientH": 839,
+        "scrollW": 7,
+        "scrollH": 839
+      },
+      {
+        "tag": "div",
+        "id": null,
+        "cls": "flex items-center px-6 h-11 border-b border-[#E5E5E5] shrink-0 bg-[#f3f4f6]",
+        "x": 736,
+        "y": 93,
+        "w": 704,
+        "h": 44,
+        "clientW": 704,
+        "clientH": 43,
+        "scrollW": 704,
+        "scrollH": 50
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/10-code.png"
+  },
+  {
+    "section": "Agents",
+    "status": "not found"
+  },
+  {
+    "section": "Workflows",
+    "status": "not found"
+  },
+  {
+    "section": "Logs",
+    "status": "not found"
+  },
+  {
+    "section": "API",
+    "status": "not found"
+  },
+  {
+    "section": "Settings",
+    "status": "not found"
+  }
+]

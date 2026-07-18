@@ -1,0 +1,34 @@
+[
+  {
+    "name": "tablet",
+    "width": 1024,
+    "height": 768,
+    "viewport": {
+      "width": 1024,
+      "height": 768,
+      "dpr": 1
+    },
+    "body": {
+      "width": 1024,
+      "height": 768
+    },
+    "visibleText": "Purity Protocol скопируй сайт magday.ru. Весь лендинг, все страницы с фронтендом, бэкендом логикой корзин, добавления, заказов. С анимациями, с иконками, с идеально ровными блока и как там. Короче абсолютно все, чтобы ты скопировал. Потом пришли мне зип архив проекта, либо давай сразу на гитхаб запушим Show more 18 hours ago Я не могу дословно скопировать чужой сайт (это нарушение авторских прав), отправить ZIP или пушить в GitHub напрямую — но я построю на платформе оригинальный интернет-магазин профессиональной химии и клинингового оборудования по вашей дизайн-концепции «The Purity Protocol»: лендинг, каталог с фильтрами, карточка товара, корзина и оформление заказа с сохранением в базу. Что построю: Лендинг: полноэкранный hero с эффектом «очищения» при скролле, матрица категорий, хиты продаж, секция доверия, футер. Каталог: «стеклянная» панель фильтров, парящие карточки товаров с индикаторами характеристик, быстрый просмотр. Карточка товара: двухпанельный макет, технические данные, сертификаты, калькулятор расхода. Корзина: выезжающая боковая панель с расчётом, умными допродажами и оформлением заказа (сохранение в базу). Визуал: «Лабораторный Премиум» — Oxygen White, Lab Cyan, Industrial Steel, строгая модульная сетка, glassmorphism, микроразметка. Начинаю с базы данных, логики корзины и образов. Built the Product, Category, and 4 more Thought for 25s Wrote Product entity Wrote Category entity Wrote Order entity Wrote context/Cart Context Wrote components/Navbar Wrote components/Footer Generated 8 images Образы генерируются. Теперь создаю компоненты, страницы и логику корзины/заказа. Built the Layout, Product Card, and 6 more Thought for 44s Wrote components/Layout Wrote components/Product Card Wrote components/Cart Sheet Wrote components/Product Grid Wrote Home Page Wrote Catalog Page Wrote Product Detail Page Wrote Checkout Page Теперь подключаю маршруты и провайдер корзины, одновременно наполняю каталог товарами. Updated App Thought for 12s Edited App Seeded product catalog Каталог наполнен (12 позиций). Теперь чиню главную страницу: она должна сама подгружать товары и использовать финальные URL изображений. Updated the Home Page Thought for 3s Edited Home Page Updated the Layout Thought for 2s Edited components/Layout Готово — собрал «The Purity Protocol»: интернет-магазин профессиональной химии и клинингового оборудования с лендингом, каталогом с фильтрами, карточками товаров с калькулятором расхода, боковой корзиной и оформлением заказов, которые сохраняются в базу. Что важно уточнить по вашему запросу: дословно скопировать magday.ru я не могу (нарушение авторских прав), отправить ZIP или запушить напрямую в GitHub с этой стороны тоже нельзя. Вместо этого я построил оригинальный магазин по вашей дизайн-концепции — он уже работает в превью. Если нужен именно GitHub: на платформе есть двусторонняя синхронизация с репозиторием — скажите, и я помогу её настроить, чтобы код оказался в вашем репо. Хотите, чтобы я добавил личный кабинет с истор",
+    "screenshot": "reference/base44-dashboard/screenshots/tablet/01-overview.png"
+  },
+  {
+    "name": "mobile",
+    "width": 390,
+    "height": 844,
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "dpr": 1
+    },
+    "body": {
+      "width": 390,
+      "height": 844
+    },
+    "visibleText": "Dashboard Preview Overview Purity Protocol Purity Protocol Экосистема для высокотехнологичной закупки профессионального клинингового оборудования и химии с акцентом на точность, аналитику расхода и безупречность поставок. Created 18 hours ago Earn credits View usage App Visibility Control who can access your application Public Invite Users Grow your user base by inviting others Copy Link Send Invites Platform Badge The \"Edit with Base44\" badge is currently visible on your app. Hide Badge Chat to Edit",
+    "screenshot": "reference/base44-dashboard/screenshots/mobile/01-overview.png"
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "switch route",
+    "steps": ["Open route selector", "Choose /catalog", "Observe iframe route change"],
+    "result": "Selected app page opens without leaving editor"
+  },
+  {
+    "name": "responsive preview",
+    "steps": ["Click device control", "Observe tablet", "Click again", "Observe mobile"],
+    "result": "A centered fixed-size iframe is used for tablet/mobile"
+  },
+  {
+    "name": "publish",
+    "steps": ["Click Publish", "Review URL, visibility and security scan"],
+    "result": "Publication is confirmed in a dedicated dialog"
+  },
+  {
+    "name": "canvas page map",
+    "steps": ["Open Canvas", "Pan or zoom", "Inspect page frames"],
+    "result": "Multiple pages are visible together on an infinite canvas"
+  },
+  {
+    "name": "inspect and style an element",
+    "steps": ["Enable Edit", "Hover a block", "Select it", "Open Theme/Custom", "Change an allowed style", "Undo and redo"],
+    "result": "Selection remains attached to the DOM element and the preview updates without navigating away"
+  },
+  {
+    "name": "targeted AI edit",
+    "steps": ["Select a DOM block", "Open Edit Element", "Write a prompt", "Submit"],
+    "result": "The AI request is scoped to the selected locator and route instead of the whole project"
+  },
+  {
+    "name": "inspect code safely",
+    "steps": ["Select an element", "Open code/source action", "Review sanitized markup and computed styles"],
+    "result": "Code context is readable without executing or exposing secrets"
+  }
+]

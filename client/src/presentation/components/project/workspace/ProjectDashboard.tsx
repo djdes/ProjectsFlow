@@ -76,6 +76,7 @@ export type ProjectDashboardProps = {
   readonly onOpenAutomation: () => void;
   readonly initialSection?: DashboardSection | string;
   readonly onSectionChange?: (section: DashboardSection) => void;
+  readonly fillAvailable?: boolean;
 };
 
 export function ProjectDashboard({
@@ -86,6 +87,7 @@ export function ProjectDashboard({
   onOpenAutomation,
   initialSection,
   onSectionChange,
+  fillAvailable = false,
 }: ProjectDashboardProps): React.ReactElement {
   const { projectRepository } = useContainer();
   const [section, setSection] = useState<DashboardSection>(() =>
@@ -198,8 +200,8 @@ export function ProjectDashboard({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-muted/10">
-      <div className="flex h-[clamp(620px,74vh,840px)] min-h-0 flex-col md:flex-row">
+    <div className={cn('overflow-hidden bg-muted/10', fillAvailable ? 'h-full' : 'rounded-xl border')}>
+      <div className={cn('flex min-h-0 flex-col md:flex-row', fillAvailable ? 'h-full' : 'h-[clamp(620px,74vh,840px)]')}>
         <aside className="hidden w-52 shrink-0 overflow-y-auto overscroll-contain border-r bg-background p-2 md:flex md:flex-col">
           <p className="px-2 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Dashboard

@@ -1,0 +1,1213 @@
+{
+  "identity": {
+    "title": "Purity Protocol | Base44",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview"
+  },
+  "beforeSelection": [
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Scrubber Machine",
+      "pressed": null,
+      "rect": {
+        "x": 551,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Microfiber Mop",
+      "pressed": null,
+      "rect": {
+        "x": 655,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Glass Cleaner",
+      "pressed": null,
+      "rect": {
+        "x": 759,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Vacuum",
+      "pressed": null,
+      "rect": {
+        "x": 863,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Dish Bread",
+      "pressed": null,
+      "rect": {
+        "x": 532,
+        "y": -29,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Dish Apple Pie",
+      "pressed": null,
+      "rect": {
+        "x": 636,
+        "y": -29,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Dish Croissant",
+      "pressed": null,
+      "rect": {
+        "x": 740,
+        "y": -29,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Suggest more",
+      "pressed": null,
+      "rect": {
+        "x": 529,
+        "y": 722,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Edit mode",
+      "pressed": "true",
+      "rect": {
+        "x": 547,
+        "y": 12,
+        "width": 68,
+        "height": 28
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Canvas",
+      "pressed": "false",
+      "rect": {
+        "x": 623,
+        "y": 12,
+        "width": 28,
+        "height": 28
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Refresh preview",
+      "pressed": null,
+      "rect": {
+        "x": 761,
+        "y": 14,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "input",
+      "role": null,
+      "name": "/page",
+      "pressed": null,
+      "rect": {
+        "x": 789,
+        "y": 17,
+        "width": 162,
+        "height": 18
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Show tablet preview",
+      "pressed": null,
+      "rect": {
+        "x": 955,
+        "y": 14,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Undo",
+      "pressed": null,
+      "rect": {
+        "x": 1088,
+        "y": 11,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Redo",
+      "pressed": null,
+      "rect": {
+        "x": 1122,
+        "y": 11,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 1160,
+        "y": 11,
+        "width": 52,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "More actions",
+      "pressed": null,
+      "rect": {
+        "x": 1220,
+        "y": 11,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Upgrade plan",
+      "pressed": null,
+      "rect": {
+        "x": 1258,
+        "y": 11,
+        "width": 90,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Publish App",
+      "pressed": null,
+      "rect": {
+        "x": 1355,
+        "y": 11,
+        "width": 73,
+        "height": 30
+      }
+    }
+  ],
+  "afterSelection": [
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Scrubber Machine",
+      "pressed": null,
+      "rect": {
+        "x": 551,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Microfiber Mop",
+      "pressed": null,
+      "rect": {
+        "x": 655,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Glass Cleaner",
+      "pressed": null,
+      "rect": {
+        "x": 759,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Product Vacuum",
+      "pressed": null,
+      "rect": {
+        "x": 863,
+        "y": -2780,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Dish Bread",
+      "pressed": null,
+      "rect": {
+        "x": 532,
+        "y": -29,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Dish Apple Pie",
+      "pressed": null,
+      "rect": {
+        "x": 636,
+        "y": -29,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Dish Croissant",
+      "pressed": null,
+      "rect": {
+        "x": 740,
+        "y": -29,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Suggest more",
+      "pressed": null,
+      "rect": {
+        "x": 529,
+        "y": 722,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Edit mode",
+      "pressed": "true",
+      "rect": {
+        "x": 547,
+        "y": 12,
+        "width": 68,
+        "height": 28
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Canvas",
+      "pressed": "false",
+      "rect": {
+        "x": 623,
+        "y": 12,
+        "width": 28,
+        "height": 28
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Refresh preview",
+      "pressed": null,
+      "rect": {
+        "x": 761,
+        "y": 14,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "input",
+      "role": null,
+      "name": "/page",
+      "pressed": null,
+      "rect": {
+        "x": 789,
+        "y": 17,
+        "width": 162,
+        "height": 18
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Show tablet preview",
+      "pressed": null,
+      "rect": {
+        "x": 955,
+        "y": 14,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Undo",
+      "pressed": null,
+      "rect": {
+        "x": 1088,
+        "y": 11,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Redo",
+      "pressed": null,
+      "rect": {
+        "x": 1122,
+        "y": 11,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 1160,
+        "y": 11,
+        "width": 52,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "More actions",
+      "pressed": null,
+      "rect": {
+        "x": 1220,
+        "y": 11,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Upgrade plan",
+      "pressed": null,
+      "rect": {
+        "x": 1258,
+        "y": 11,
+        "width": 90,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Publish App",
+      "pressed": null,
+      "rect": {
+        "x": 1355,
+        "y": 11,
+        "width": 73,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Background",
+      "pressed": null,
+      "rect": {
+        "x": 551,
+        "y": 849,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "Text color",
+      "pressed": null,
+      "rect": {
+        "x": 561,
+        "y": 849,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 597,
+        "y": 849,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 633,
+        "y": 849,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 669,
+        "y": 849,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 710,
+        "y": 849,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 746,
+        "y": 851,
+        "width": 28,
+        "height": 28
+      }
+    },
+    {
+      "tag": "button",
+      "role": null,
+      "name": "",
+      "pressed": null,
+      "rect": {
+        "x": 778,
+        "y": 851,
+        "width": 28,
+        "height": 28
+      }
+    }
+  ],
+  "frameControls": [
+    {
+      "title": "Base44 APP",
+      "controls": [
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Корзина",
+          "pressed": null,
+          "rect": {
+            "x": 563,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Меню",
+          "pressed": null,
+          "rect": {
+            "x": 619,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 165,
+            "y": 2014,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пельмени ручной лепки 1кг",
+          "pressed": null,
+          "rect": {
+            "x": 384,
+            "y": 2014,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Хлеб бородинский 400г",
+          "pressed": null,
+          "rect": {
+            "x": 602,
+            "y": 2014,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Круассан с шоколадом",
+          "pressed": null,
+          "rect": {
+            "x": 165,
+            "y": 2399,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пирог яблочный",
+          "pressed": null,
+          "rect": {
+            "x": 384,
+            "y": 2399,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Чизкейк Нью-Йорк",
+          "pressed": null,
+          "rect": {
+            "x": 602,
+            "y": 2399,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 165,
+            "y": 4955,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Солянка сборная мясная 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 384,
+            "y": 4955,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Закрыть",
+          "pressed": null,
+          "rect": {
+            "x": 1079,
+            "y": 16,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ]
+    },
+    {
+      "title": "Base44 APP",
+      "controls": [
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Корзина",
+          "pressed": null,
+          "rect": {
+            "x": 563,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Меню",
+          "pressed": null,
+          "rect": {
+            "x": 619,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 165,
+            "y": 2014,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пельмени ручной лепки 1кг",
+          "pressed": null,
+          "rect": {
+            "x": 384,
+            "y": 2014,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Хлеб бородинский 400г",
+          "pressed": null,
+          "rect": {
+            "x": 602,
+            "y": 2014,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Круассан с шоколадом",
+          "pressed": null,
+          "rect": {
+            "x": 165,
+            "y": 2399,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пирог яблочный",
+          "pressed": null,
+          "rect": {
+            "x": 384,
+            "y": 2399,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Чизкейк Нью-Йорк",
+          "pressed": null,
+          "rect": {
+            "x": 602,
+            "y": 2399,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 165,
+            "y": 4955,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Солянка сборная мясная 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 384,
+            "y": 4955,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Закрыть",
+          "pressed": null,
+          "rect": {
+            "x": 1079,
+            "y": 16,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ]
+    },
+    {
+      "title": "Base44 APP",
+      "controls": [
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Корзина",
+          "pressed": null,
+          "rect": {
+            "x": 988,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пельмени ручной лепки 1кг",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Хлеб бородинский 400г",
+          "pressed": null,
+          "rect": {
+            "x": 717,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Круассан с шоколадом",
+          "pressed": null,
+          "rect": {
+            "x": 971,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пирог яблочный",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 2288,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Чизкейк Нью-Йорк",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 2288,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 3978,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Солянка сборная мясная 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 3978,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Закрыть",
+          "pressed": null,
+          "rect": {
+            "x": 1456,
+            "y": 16,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ]
+    },
+    {
+      "title": "Base44 APP",
+      "controls": [
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Корзина",
+          "pressed": null,
+          "rect": {
+            "x": 988,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пельмени ручной лепки 1кг",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Хлеб бородинский 400г",
+          "pressed": null,
+          "rect": {
+            "x": 717,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Круассан с шоколадом",
+          "pressed": null,
+          "rect": {
+            "x": 971,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пирог яблочный",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 2288,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Чизкейк Нью-Йорк",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 2288,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 3978,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Солянка сборная мясная 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 3978,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Закрыть",
+          "pressed": null,
+          "rect": {
+            "x": 1456,
+            "y": 16,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ]
+    },
+    {
+      "title": "Base44 APP",
+      "controls": [
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Корзина",
+          "pressed": null,
+          "rect": {
+            "x": 988,
+            "y": 10,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пельмени ручной лепки 1кг",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Хлеб бородинский 400г",
+          "pressed": null,
+          "rect": {
+            "x": 717,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Круассан с шоколадом",
+          "pressed": null,
+          "rect": {
+            "x": 971,
+            "y": 1867,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Пирог яблочный",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 2288,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Чизкейк Нью-Йорк",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 2288,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Борщ домашний 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 209,
+            "y": 3978,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Добавить Солянка сборная мясная 500мл",
+          "pressed": null,
+          "rect": {
+            "x": 463,
+            "y": 3978,
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "name": "Закрыть",
+          "pressed": null,
+          "rect": {
+            "x": 1456,
+            "y": 16,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ]
+    }
+  ]
+}

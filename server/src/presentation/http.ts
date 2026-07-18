@@ -246,6 +246,10 @@ import type { SiteArtifactStorage } from '../application/site/SiteArtifactStorag
 import type { LiveService } from '../application/live/LiveService.js';
 import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
 import { chatRouter, type ChatRouterDeps } from './chat/routes.js';
+import type { AiConversationService } from '../application/ai-conversation/AiConversationService.js';
+import type { AiConversationEventHub } from '../infrastructure/realtime/AiConversationEventHub.js';
+import { aiConversationRouter, projectStudioConversationRouter } from './ai-conversation/routes.js';
+import { aiConversationAgentRouter } from './ai-conversation/agentRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
 import { buildAutomationRouter } from './automation/routes.js';
@@ -326,6 +330,10 @@ type AppDeps = {
   };
   readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
+  readonly aiConversations: {
+    readonly service: AiConversationService;
+    readonly eventHub: AiConversationEventHub;
+  };
   readonly projects: {
     readonly listProjects: ListProjects;
     readonly getProject: GetProject;
@@ -786,6 +794,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).
   app.use('/api/workspaces', chatRouter(deps.chat));
+  // Долговечные личные и проектные ИИ-чаты. Отдельный контур от коротких
+  // ai-prompt-jobs: история сообщений не очищается вместе с очередью воркера.
+  app.use('/api/ai', aiConversationRouter(deps.aiConversations));
+  app.use('/api/projects', projectStudioConversationRouter(deps.aiConversations));
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/monitoring', monitoringRouter(deps.monitoring));
@@ -928,6 +940,15 @@ export function createApp(deps: AppDeps): CreatedApp {
     res.setHeader('Cache-Control', 'no-store, private');
     next();
   });
+  // Отдельная очередь долговечных ИИ-чатов. Маунт раньше общего agent router,
+  // чтобы неизвестный для него путь не маскировал dedicated worker endpoints.
+  app.use(
+    '/api/agent',
+    aiConversationAgentRouter({
+      authenticate: deps.agent.authenticateAgentToken,
+      service: deps.aiConversations.service,
+    }),
+  );
   app.use(
     '/api/agent',
     agentApiRouter({

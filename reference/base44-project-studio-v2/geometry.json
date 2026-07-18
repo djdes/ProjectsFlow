@@ -1,0 +1,64 @@
+{
+  "units": "CSS pixels",
+  "measurementSource": "actual/desktop-states.json",
+  "desktop1440x900": {
+    "topBar": { "x": 0, "y": 0, "width": 1440, "height": 52 },
+    "previewChatOpen": {
+      "chatPanel": { "x": 0, "y": 0, "width": 360.5, "height": 900 },
+      "chatMessages": { "x": 12, "y": 52, "width": 348, "height": 628 },
+      "previewFrame": { "x": 361.5, "y": 52, "width": 1078.5, "height": 839 }
+    },
+    "previewChatHidden": {
+      "chatPanelEffectiveWidth": 0,
+      "previewFrame": { "x": 0, "y": 52, "width": 1440, "height": 839 }
+    },
+    "tabletDeviceInsideDesktop": {
+      "previewFrame": { "x": 509.25, "y": 69, "width": 768, "height": 1024 },
+      "alignment": "horizontally centered in the right workspace"
+    },
+    "mobileDeviceInsideDesktop": {
+      "previewFrame": { "width": 373, "height": 665 },
+      "alignment": "centered"
+    },
+    "participantsDialog": { "x": 397.44, "y": 312.72, "width": 645.12, "height": 274.56 },
+    "dashboard": {
+      "chatPanelWidth": 360.5,
+      "dashboardNavigation": { "x": 361, "y": 52, "width": 269, "height": 839 },
+      "content": { "x": 630, "y": 52, "width": 810, "height": 839 }
+    },
+    "routePopup": { "x": 891.7, "y": 53.5, "width": 226, "rowHeight": 30, "rowGap": 4 },
+    "moreMenu": { "width": 197.76, "rowHeight": 28.8 },
+    "canvasControls": {
+      "zoomToFit": { "x": 1236, "y": 836, "width": 32, "height": 32 },
+      "zoomOut": { "x": 1285, "y": 836, "width": 32, "height": 32 },
+      "zoom": { "x": 1321, "y": 836, "width": 60, "height": 32 },
+      "zoomIn": { "x": 1385, "y": 836, "width": 32, "height": 32 }
+    }
+  },
+  "tabletBrowser1024x768": {
+    "chatOpen": {
+      "chatPanel": { "x": 0, "y": 0, "width": 360, "height": 768 },
+      "chatMessages": { "x": 12, "y": 52, "width": 348, "height": 496 },
+      "previewFrame": { "x": 361, "y": 52, "width": 663, "height": 707 }
+    },
+    "chatHidden": {
+      "chatPanelEffectiveWidth": 0,
+      "previewFrame": { "x": 0, "y": 52, "width": 1024, "height": 707 }
+    }
+  },
+  "mobileBrowser390x844": {
+    "previewFrame": { "x": 9, "y": 118, "width": 372, "height": 717 },
+    "studioScroller": { "x": 0, "y": 0, "width": 390, "height": 844 },
+    "responsiveToolbar": {
+      "row1": ["More options", "Upgrade plan", "Publish App"],
+      "row2": ["Refresh preview", "Route", "Fullscreen"]
+    },
+    "chatPanelToggle": "not exposed at this breakpoint"
+  },
+  "transition": {
+    "property": "flex-grow",
+    "durationMs": 500,
+    "timingFunction": "cubic-bezier(0.4, 0, 0.2, 1)",
+    "settleWaitUsedMs": 1500
+  }
+}

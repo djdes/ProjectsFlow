@@ -1,0 +1,2639 @@
+[
+  {
+    "entity": "Category",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/entity-Category",
+    "text": "Data | Category | (0) | Permissions | Add Item | Filters | No records found | Get started by adding your first record.",
+    "elements": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Data Category Order Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 210,
+          "h": 164
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Collapse",
+        "placeholder": null,
+        "type": "button",
+        "state": "open",
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Category Order Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "rect": {
+          "x": 513,
+          "y": 244,
+          "w": 210,
+          "h": 120
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Category",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 244,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Order",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 284,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 324,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 368,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 44
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 460,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 504,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 548,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 592,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 636,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 680,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 724,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 768,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 812,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 735,
+          "y": 52,
+          "w": 1,
+          "h": 839
+        }
+      },
+      {
+        "tag": "a",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 760,
+          "y": 76,
+          "w": 31,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Back",
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 760,
+          "y": 120,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1126,
+          "y": 120,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Permissions",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1170,
+          "y": 120,
+          "w": 130,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Add Item",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1307,
+          "y": 120,
+          "w": 109,
+          "h": 36
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search by name, slug, icon, description",
+        "type": "text",
+        "state": null,
+        "rect": {
+          "x": 785,
+          "y": 195,
+          "w": 256,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1049,
+          "y": 195,
+          "w": 16,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Filters",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1292,
+          "y": 195,
+          "w": 99,
+          "h": 36
+        }
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/20-data-category.png"
+  },
+  {
+    "entity": "Order",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/entity-Order",
+    "text": "Data | Order | (1) | Permissions | Add Item | Filters | customer_name | customer_phone | customer_email | address | items | total | status | notes | kjhjk | o76897678 | [{\"name\":\"Борщ домашний 500мл\",\"quantity\":3,\"price\":350,\"image_url\":\"https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/f8acc2b2a_generated_image.png\"}] | 1050 | new",
+    "elements": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Data Category Order Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 210,
+          "h": 164
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Collapse",
+        "placeholder": null,
+        "type": "button",
+        "state": "open",
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Category Order Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "rect": {
+          "x": 513,
+          "y": 244,
+          "w": 210,
+          "h": 120
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Category",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 244,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Order",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 284,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 324,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 368,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 44
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 460,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 504,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 548,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 592,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 636,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 680,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 724,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 768,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 812,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 735,
+          "y": 52,
+          "w": 1,
+          "h": 839
+        }
+      },
+      {
+        "tag": "a",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 760,
+          "y": 76,
+          "w": 31,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Back",
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 760,
+          "y": 120,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1126,
+          "y": 120,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Permissions",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1170,
+          "y": 120,
+          "w": 130,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Add Item",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1307,
+          "y": 120,
+          "w": 109,
+          "h": 36
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search by customer_name, customer_phone, customer_email, address, notes",
+        "type": "text",
+        "state": null,
+        "rect": {
+          "x": 785,
+          "y": 195,
+          "w": 256,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1049,
+          "y": 195,
+          "w": 16,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Filters",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1292,
+          "y": 195,
+          "w": 99,
+          "h": 36
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "[{\"name\":\"Борщ домашний 500мл\",\"quantity\":3,\"price\":350,\"image_url\":\"https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/f8acc2b2a_generated_image.png\"}]",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1565,
+          "y": 312,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1357,
+          "y": 306,
+          "w": 34,
+          "h": 32
+        }
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/20-data-order.png"
+  },
+  {
+    "entity": "Product",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/workspace/entity-Product",
+    "text": "Data | Product | (12) | Permissions | Add Item | Filters | name | slug | description | price | old_price | image_url | category | weight | calories | ingredients | shelf_life | servings | in_stock | featured | rating | badge | Борщ домашний 500мл | borsch-domashniy-500 | Классический борщ на говяжьем бульоне со свёклой, капустой и томатами. Подаётся со сметаной и зеленью. Наваристый, как у бабушки. | 350 | https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/f8acc2b2a_generated_image.png | Домашние блюда | 500 мл | 180 ккал/100г | Говядина, свёкла, капуста, картофель, морковь, лук, томатная паста, чеснок, зелень, сметана | 3 сут в холодильнике | 2 | true | 5 | Хит | Солянка сборная мясная 500мл | solyanka-sbornaya-500 | Сытная сборная солянка с говядиной, копчёностями и оливками. Насыщенный кисло-солёный вкус, как в любимом кафе. | 390 | 210 ккал/100г | Говядина, копчёная колбаса, сосиски, лук, огурцы солёные, оливки, томатная паста, лимон, зелень | false | Пельмени ручной лепки 1кг | pelmeni-ruchnoy-1kg | Пельмени ручной лепки из тонкого теста с сочной начинкой из говядины и свинины. Лепим вручную, как в деревне. | 690 | 790 | https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/e2119bcf0_generated_image.png | Полуфабрикаты | 1 кг | 275 ккал/100г | Мука, говядина, свинина, лук, яйцо, вода, специи | 60 сут в морозилке | Котлеты домашние 1кг | kotlety-domashnie-1kg | Домашние котлеты из говядины и свинины с луком и хлебом. Сочные, пышные — идеальны с пюре или гречкой. | 750 | 1 кг, 12 шт | 245 ккал/100г | Говядина, свинина, лук, хлеб, молоко, яйцо, специи | 6 | Хлеб бородинский 400г | hleb-borodinskiy-400 | Ржаной бородинский хлеб с кориандром и солодом. Печём в русской печи, плотный и ароматный, с хрустящей корочкой. | 290 | https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/c764e49ae_generated_image.png | Выпечка | 400 г | 208 ккал/100г | Ржаная мука, солод, кориандр, дрожжи, соль, сахар | 5 сут | 8 | Круассан с шоколадом | croissant-chocolate | Слоёный круассан с тёмным шоколадом. Тончайшее слоёное тесто на сливочном масле, хрустящий снаружи и мягкий внутри. | 180 | https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/b20b1b6df_generated_image.png | 90 г, 1 шт | 340 ккал/100г | Мука, сливочное масло, молоко, дрожжи, сахар, тёмный шоколад, яйцо | 2 сут | 1 | Новинка | Пирог яблочный | pirog-yablochniy | Домашний яблочный пирог с решёткой из теста. Сочные яблоки с корицей в нежном песочном тесте. Тёплый — с шариком мороженого. | 590 | https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/a9cecd39c_generated_image.png | 700 г, 8 порц | 265 ккал/100г | Мука, сливочное масло, сахар, яблоки, корица, яйцо, сметана | 3 сут | Чизкейк Нью-Йорк | cheesecake-new-york | Классический чизкейк Нью-Йорк на основе творожного сыра с песочной основой. Нежный, кремовый, тает во рту. | 420 | 480 | https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/247718890_generated_image.png | Десерты | 150 г, 1 порц | 320 ккал/100г | Творожный сыр, сливки, сахар, яйцо, печенье, сливочное масло, ваниль | 4 сут | Тирамису | tiramisu | Итальянский тирамису с маскарпоне, кофе и какао. Воздушный сливочный десерт с лёгкой кофейной ноткой. | 450 | 295 ккал/100г | Маскарпоне, сливки, сахар, яйцо, кофе эспрессо, печенье савоярди, какао",
+    "elements": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search...",
+        "type": "text",
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 64,
+          "w": 210,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Overview",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 112,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Users",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 156,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Data Category Order Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 210,
+          "h": 164
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 200,
+          "w": 174,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Collapse",
+        "placeholder": null,
+        "type": "button",
+        "state": "open",
+        "rect": {
+          "x": 686,
+          "y": 204,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Category Order Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "rect": {
+          "x": 513,
+          "y": 244,
+          "w": 210,
+          "h": 120
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Category",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 244,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Order",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 284,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Product",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 525,
+          "y": 324,
+          "w": 198,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Analytics",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 368,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 44
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Marketing",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 513,
+          "y": 412,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Domains",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 460,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Integrations",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 504,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Security",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 548,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Code",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 592,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Agents",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 636,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Workflows New",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 680,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Logs",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 724,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "API",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 768,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Settings",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 513,
+          "y": 812,
+          "w": 210,
+          "h": 40
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 735,
+          "y": 52,
+          "w": 1,
+          "h": 839
+        }
+      },
+      {
+        "tag": "a",
+        "role": null,
+        "text": "Data",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 760,
+          "y": 76,
+          "w": 31,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Back",
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 760,
+          "y": 120,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1126,
+          "y": 120,
+          "w": 36,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Permissions",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1170,
+          "y": 120,
+          "w": 130,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Add Item",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1307,
+          "y": 120,
+          "w": 109,
+          "h": 36
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": "Search by name, slug, description, image_url, category, weight, calories, ingredients, shelf_life, badge",
+        "type": "text",
+        "state": null,
+        "rect": {
+          "x": 785,
+          "y": 195,
+          "w": 256,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1049,
+          "y": 195,
+          "w": 16,
+          "h": 36
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Filters",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "rect": {
+          "x": 1292,
+          "y": 195,
+          "w": 99,
+          "h": 36
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Борщ домашний 500мл",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 785,
+          "y": 312,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Классический борщ на говяжьем бульоне со свёклой, капустой и томатами. Подаётся со сметаной и зеленью. Наваристый, как у бабушки.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 312,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/f8acc2b2a_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 312,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Говядина, свёкла, капуста, картофель, морковь, лук, томатная паста, чеснок, зелень, сметана",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 312,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 306,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Солянка сборная мясная 500мл",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 785,
+          "y": 381,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Сытная сборная солянка с говядиной, копчёностями и оливками. Насыщенный кисло-солёный вкус, как в любимом кафе.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 381,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/f8acc2b2a_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 381,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Говядина, копчёная колбаса, сосиски, лук, огурцы солёные, оливки, томатная паста, лимон, зелень",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 381,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 375,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Пельмени ручной лепки 1кг",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 785,
+          "y": 450,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Пельмени ручной лепки из тонкого теста с сочной начинкой из говядины и свинины. Лепим вручную, как в деревне.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 450,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/e2119bcf0_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 450,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Мука, говядина, свинина, лук, яйцо, вода, специи",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 450,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 444,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Домашние котлеты из говядины и свинины с луком и хлебом. Сочные, пышные — идеальны с пюре или гречкой.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 519,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/e2119bcf0_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 519,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Говядина, свинина, лук, хлеб, молоко, яйцо, специи",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 519,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 513,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Хлеб бородинский 400г",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 785,
+          "y": 588,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Ржаной бородинский хлеб с кориандром и солодом. Печём в русской печи, плотный и ароматный, с хрустящей корочкой.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 588,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/c764e49ae_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 588,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Ржаная мука, солод, кориандр, дрожжи, соль, сахар",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 588,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 582,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Слоёный круассан с тёмным шоколадом. Тончайшее слоёное тесто на сливочном масле, хрустящий снаружи и мягкий внутри.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 657,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/b20b1b6df_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 657,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Мука, сливочное масло, молоко, дрожжи, сахар, тёмный шоколад, яйцо",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 657,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 651,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Домашний яблочный пирог с решёткой из теста. Сочные яблоки с корицей в нежном песочном тесте. Тёплый — с шариком мороженого.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 726,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/a9cecd39c_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 726,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Мука, сливочное масло, сахар, яблоки, корица, яйцо, сметана",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 726,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 720,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Классический чизкейк Нью-Йорк на основе творожного сыра с песочной основой. Нежный, кремовый, тает во рту.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 795,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/247718890_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 795,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Творожный сыр, сливки, сахар, яйцо, печенье, сливочное масло, ваниль",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 795,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 789,
+          "w": 34,
+          "h": 32
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Итальянский тирамису с маскарпоне, кофе и какао. Воздушный сливочный десерт с лёгкой кофейной ноткой.",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1185,
+          "y": 864,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "https://media.base44.com/images/public/6a5a6081bba26be00ddf4e25/247718890_generated_image.png",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 1774,
+          "y": 864,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "span",
+        "role": null,
+        "text": "Маскарпоне, сливки, сахар, яйцо, кофе эспрессо, печенье савоярди, какао",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "rect": {
+          "x": 2565,
+          "y": 864,
+          "w": 152,
+          "h": 20
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "rect": {
+          "x": 1342,
+          "y": 858,
+          "w": 34,
+          "h": 32
+        }
+      }
+    ],
+    "screenshot": "reference/base44-dashboard/screenshots/desktop/20-data-product.png"
+  }
+]

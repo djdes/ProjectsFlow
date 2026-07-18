@@ -1,0 +1,145 @@
+{
+  "source": {
+    "cdpPort": 9222,
+    "product": "Notion AI chat",
+    "method": "Observed UI transitions only; no private APIs or source inspection."
+  },
+  "initialState": "workspace_page",
+  "states": [
+    {
+      "id": "workspace_page",
+      "urlPattern": "https://app.notion.com/p/*",
+      "visible": ["workspace sidebar", "Notion AI tile", "saved chat groups"],
+      "transitions": [{ "event": "click Notion AI tile", "to": "ai_home" }]
+    },
+    {
+      "id": "ai_home",
+      "urlPattern": "https://app.notion.com/ai",
+      "visible": ["Personalize", "How can I help you today?", "large composer", "quick actions", "saved chat list"],
+      "transitions": [
+        { "event": "click saved chat", "to": "saved_chat" },
+        { "event": "click New chat/Start new chat", "to": "new_chat_draft" },
+        { "event": "focus/type in composer", "to": "ai_home_composing" }
+      ]
+    },
+    {
+      "id": "ai_home_composing",
+      "urlPattern": "https://app.notion.com/ai",
+      "visible": ["focused composer", "enabled submit when non-empty"],
+      "transitions": [
+        { "event": "click submit", "to": "chat_running" },
+        { "event": "clear composer", "to": "ai_home" }
+      ]
+    },
+    {
+      "id": "new_chat_draft",
+      "urlPattern": "https://app.notion.com/ai?t=new*",
+      "visible": ["same empty-home composition surface", "current draft if one existed"],
+      "observedInvariant": "The existing unsent draft was carried into the new-chat surface.",
+      "transitions": [
+        { "event": "submit prompt", "to": "chat_running" },
+        { "event": "browser back", "to": "previous_history_entry" }
+      ]
+    },
+    {
+      "id": "chat_running",
+      "urlPattern": "https://app.notion.com/chat?t=*&wfv=chat",
+      "visible": ["user message", "assistant progress/response", "thread added under Today", "generated title"],
+      "transitions": [
+        { "event": "assistant completes", "to": "saved_chat" },
+        { "event": "click Stop if available", "to": "saved_chat_interrupted" }
+      ]
+    },
+    {
+      "id": "saved_chat",
+      "urlPattern": "https://app.notion.com/chat?t=*&wfv=chat",
+      "visible": ["sticky chat header", "internal conversation scroller", "bottom composer", "message actions", "optional agent-details panel"],
+      "transitions": [
+        { "event": "click title/history button", "to": "history_popover" },
+        { "event": "click top more", "to": "chat_actions_menu" },
+        { "event": "click list item more", "to": "list_actions_menu" },
+        { "event": "click details toggle", "to": "saved_chat_details_collapsed" },
+        { "event": "click Close sidebar", "to": "saved_chat_sidebar_collapsed" },
+        { "event": "browser back", "to": "ai_home" },
+        { "event": "scroll away from bottom", "to": "saved_chat_scrolled" }
+      ]
+    },
+    {
+      "id": "saved_chat_scrolled",
+      "visible": ["same fixed header", "same bottom composer", "floating jump-to-latest control"],
+      "transitions": [
+        { "event": "scroll/jump to bottom", "to": "saved_chat" }
+      ]
+    },
+    {
+      "id": "history_popover",
+      "visible": ["320px grouped chat list below title", "Today/Past week/Past 30 days"],
+      "transitions": [
+        { "event": "click another thread", "to": "saved_chat" },
+        { "event": "Escape/outside click", "to": "saved_chat" }
+      ]
+    },
+    {
+      "id": "chat_actions_menu",
+      "visible": ["Copy link", "Rename", "Delete", "Last updated metadata"],
+      "transitions": [
+        { "event": "click Rename", "to": "rename_popover" },
+        { "event": "Escape/outside click", "to": "saved_chat" }
+      ]
+    },
+    {
+      "id": "list_actions_menu",
+      "visible": ["Copy link", "Pin", "Mark as unread", "Rename", "Delete", "Open in new tab"],
+      "transitions": [
+        { "event": "click Rename", "to": "rename_popover" },
+        { "event": "Escape/outside click", "to": "saved_chat" }
+      ]
+    },
+    {
+      "id": "rename_popover",
+      "visible": ["prefilled Rename chat textbox"],
+      "transitions": [
+        { "event": "Enter", "to": "saved_chat", "effect": "updates header, browser title, and sidebar item immediately" },
+        { "event": "Escape/outside click", "to": "saved_chat", "effect": "cancel" }
+      ]
+    },
+    {
+      "id": "saved_chat_details_collapsed",
+      "visible": ["wider central conversation", "Expand agent details icon"],
+      "transitions": [{ "event": "click Expand agent details", "to": "saved_chat" }]
+    },
+    {
+      "id": "saved_chat_sidebar_collapsed",
+      "visible": ["sidebar translated off-canvas", "recentered conversation", "small left-edge sliver"],
+      "transitions": [
+        { "event": "navigate to AI home", "to": "ai_home" },
+        { "event": "workspace sidebar restore action", "to": "saved_chat" }
+      ]
+    },
+    {
+      "id": "mobile_sidebar_expanded_overflow",
+      "viewport": "390x844",
+      "visible": ["270px desktop sidebar", "clipped horizontally scrollable main canvas"],
+      "transitions": [{ "event": "collapse sidebar", "to": "mobile_chat_usable" }]
+    },
+    {
+      "id": "mobile_chat_usable",
+      "viewport": "390x844",
+      "visible": ["truncated title", "four fitting header actions", "316px composer", "single-column messages"]
+    }
+  ],
+  "navigationHistoryObserved": [
+    {
+      "from": "saved_chat",
+      "event": "browser back",
+      "to": "ai_home",
+      "url": "https://app.notion.com/ai"
+    },
+    {
+      "from": "ai_home",
+      "event": "browser forward",
+      "to": "saved_chat",
+      "url": "https://app.notion.com/chat?t=399d407d2e3d8030ad0f00a9d039c28d&wfv=chat"
+    }
+  ]
+}

@@ -162,6 +162,9 @@ import { ChangeTaskAssignee } from './application/task/ChangeTaskAssignee.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
+import { DrizzleAiConversationRepository } from './infrastructure/repositories/DrizzleAiConversationRepository.js';
+import { AiConversationEventHub } from './infrastructure/realtime/AiConversationEventHub.js';
+import { AiConversationService } from './application/ai-conversation/AiConversationService.js';
 import { DrizzleUsageLedgerRepository } from './infrastructure/repositories/DrizzleUsageLedgerRepository.js';
 import { RecordUsage } from './application/usage/RecordUsage.js';
 import { GetUserUsage } from './application/usage/GetUserUsage.js';
@@ -605,6 +608,18 @@ const resolveDefaultAiDispatcherUserId = async (): Promise<string | null> => {
   aiPromptDispatcherCache = { userId, cachedAt: now };
   return userId;
 };
+
+// Долговечные ИИ-чаты используют собственные таблицы/очередь и realtime hub. Они не
+// наследуют cleanup коротких prompt-jobs, поэтому разговор и ответы переживают reload.
+const aiConversationRepo = new DrizzleAiConversationRepository(db);
+const aiConversationEventHub = new AiConversationEventHub();
+const aiConversationService = new AiConversationService({
+  repo: aiConversationRepo,
+  projectAccess: { projects: projectRepo, members: projectMemberRepo },
+  eventHub: aiConversationEventHub,
+  idGen: idGenerator,
+  resolvePersonalDispatcher: async () => resolveDefaultAiDispatcherUserId(),
+});
 
 // Periodic cleanup для ai_prompt_jobs (каждые 60 сек). Лог только когда что-то сделано —
 // чтобы не засорять stdout.
@@ -1498,6 +1513,10 @@ const { app, devProxyUpgrade } = createApp({
     storage: attachmentStorage,
     idGen: idGenerator,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+  },
+  aiConversations: {
+    service: aiConversationService,
+    eventHub: aiConversationEventHub,
   },
   projects: {
     listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),

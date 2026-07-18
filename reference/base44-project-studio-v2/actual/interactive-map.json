@@ -1,0 +1,25 @@
+{
+  "topBar": [
+    { "name": "Project selector", "role": "button", "opens": "project menu" },
+    { "name": "Theme", "role": "button" },
+    { "name": "Version history", "role": "button" },
+    { "name": "Hide/Show chat panel", "role": "button" },
+    { "name": "Preview", "role": "radio" },
+    { "name": "Dashboard", "role": "radio" },
+    { "name": "Edit mode", "role": "button", "ariaPressed": true },
+    { "name": "Canvas", "role": "button", "ariaPressed": true },
+    { "name": "Refresh preview", "role": "button" },
+    { "name": "Route", "role": "textbox", "accessibleName": null },
+    { "name": "Device preview", "role": "button" },
+    { "name": "Participants", "role": "button", "accessibleName": null },
+    { "name": "More actions", "role": "button" },
+    { "name": "Upgrade plan", "role": "button" },
+    { "name": "Publish App", "role": "button", "notActivatedDuringResearch": true }
+  ],
+  "chatComposer": ["Suggestions", "Add", "Models/Auto", "Discuss", "Speech to text", "Send"],
+  "dashboardNavigation": [
+    "Overview", "Users", "Data", "Analytics", "Marketing", "Domains", "Integrations",
+    "Security", "Code", "Agents", "Workflows", "Logs", "API", "Settings"
+  ],
+  "canvas": ["Zoom to fit", "Zoom out", "Zoom", "Zoom in"]
+}

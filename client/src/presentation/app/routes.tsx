@@ -34,8 +34,13 @@ const MonitoringOverviewPage = page(
 );
 const AlertCenterPage = page(() => import('@/presentation/pages/AlertCenterPage'), 'AlertCenterPage');
 const TasksPage = page(() => import('@/presentation/pages/TasksPage'), 'TasksPage');
+const ProjectStudioPage = page(
+  () => import('@/presentation/pages/ProjectStudioPage'),
+  'ProjectStudioPage',
+);
 const TaskDetailPage = page(() => import('@/presentation/pages/TaskDetailPage'), 'TaskDetailPage');
 const InboxPage = page(() => import('@/presentation/pages/InboxPage'), 'InboxPage');
+const AiPage = page(() => import('@/presentation/pages/AiPage'), 'AiPage');
 const ProfilePage = page(() => import('@/presentation/pages/ProfilePage'), 'ProfilePage');
 const WorkspaceSettingsPage = page(
   () => import('@/presentation/pages/WorkspaceSettingsPage'),
@@ -111,6 +116,8 @@ export const router = createBrowserRouter(
       // Главная после авторизации — «Входящие» (inbox). HomePage («Выберите проект»)
       // больше не используется как индекс.
       { index: true, element: el(<InboxPage />) },
+      { path: 'ai', element: el(<AiPage />) },
+      { path: 'ai/c/:conversationId', element: el(<AiPage />) },
       // Старые ссылки на /inbox редиректим на канонический «/».
       { path: 'inbox', element: <Navigate to="/" replace /> },
       // Уведомления переехали в чат-ленту; старые ссылки редиректим на главную.
@@ -119,6 +126,7 @@ export const router = createBrowserRouter(
       { path: 'monitoring/alerts', element: el(<AlertCenterPage />) },
       // Доска задач — «дом» проекта: при входе сразу показываем kanban.
       { path: 'projects/:projectId', element: el(<TasksPage />) },
+      { path: 'projects/:projectId/studio', element: el(<ProjectStudioPage />) },
       // Обзор/настройки проекта (git, KB, команда) переехали на отдельный роут.
       { path: 'projects/:projectId/overview', element: el(<ProjectPage />) },
       { path: 'projects/:projectId/kb', element: el(<KbPage />) },

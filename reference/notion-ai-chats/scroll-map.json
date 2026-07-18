@@ -1,0 +1,90 @@
+{
+  "capturedAt": "2026-07-18T22:35:19.690Z",
+  "source": {
+    "cdpPort": 9222,
+    "url": "https://app.notion.com/chat?t=399d407d2e3d8030ad0f00a9d039c28d&wfv=chat",
+    "title": "Возможность создания сайта | Notion"
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "container": {
+    "box": {
+      "x": 270,
+      "y": 44,
+      "width": 1170,
+      "height": 732
+    },
+    "scrollHeight": 107152,
+    "clientHeight": 732,
+    "maxScrollTop": 106420
+  },
+  "states": [
+    {
+      "position": "top",
+      "requestedScrollTop": 0,
+      "actualScrollTop": 0,
+      "progress": 0,
+      "headerBox": {
+        "x": 393.765625,
+        "y": 8,
+        "width": 221.703125,
+        "height": 28
+      },
+      "composerBox": {
+        "x": 336,
+        "y": 776,
+        "width": 694,
+        "height": 60
+      },
+      "visibleText": [],
+      "screenshot": "desktop-scroll-top.png"
+    },
+    {
+      "position": "middle",
+      "requestedScrollTop": 53210,
+      "actualScrollTop": 53210,
+      "progress": 0.5,
+      "headerBox": {
+        "x": 393.765625,
+        "y": 8,
+        "width": 221.703125,
+        "height": 28
+      },
+      "composerBox": {
+        "x": 336,
+        "y": 776,
+        "width": 694,
+        "height": 60
+      },
+      "visibleText": [],
+      "screenshot": "desktop-scroll-middle.png"
+    },
+    {
+      "position": "bottom",
+      "requestedScrollTop": 106420,
+      "actualScrollTop": 106420,
+      "progress": 1,
+      "headerBox": {
+        "x": 393.765625,
+        "y": 8,
+        "width": 221.703125,
+        "height": 28
+      },
+      "composerBox": {
+        "x": 336,
+        "y": 776,
+        "width": 694,
+        "height": 60
+      },
+      "visibleText": [],
+      "screenshot": "desktop-scroll-bottom.png"
+    }
+  ],
+  "observations": [
+    "The document itself does not scroll; the conversation uses an internal overflow-y:auto container.",
+    "The chat header remains at y=8 while the internal conversation scrolls.",
+    "The composer remains anchored near the bottom of the viewport at all sampled scroll positions."
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-07-18T22:39:10.773Z",
+  "cdpPort": 9222,
+  "states": [
+    {
+      "action": "before",
+      "url": "https://app.notion.com/chat?t=399d407d2e3d8030ad0f00a9d039c28d&wfv=chat",
+      "title": "Возможность создания сайта | Notion"
+    },
+    {
+      "action": "browser-back",
+      "url": "https://app.notion.com/ai",
+      "title": "Notion AI | Notion",
+      "heading": "How can I help you today?"
+    },
+    {
+      "action": "browser-forward",
+      "url": "https://app.notion.com/chat?t=399d407d2e3d8030ad0f00a9d039c28d&wfv=chat",
+      "title": "Возможность создания сайта | Notion",
+      "chatTitleVisible": true
+    }
+  ]
+}

@@ -1,0 +1,742 @@
+{
+    "name":  "desktop-renamed",
+    "title":  "[Research] AI chat behavior | Notion",
+    "url":  "https://app.notion.com/chat?t=3a1d407d2e3d8071a85400a9ea876d58\u0026wfv=chat",
+    "viewport":  {
+                     "width":  1440,
+                     "height":  900
+                 },
+    "document":  {
+                     "scrollX":  0,
+                     "scrollY":  0,
+                     "scrollWidth":  1440,
+                     "scrollHeight":  900,
+                     "clientWidth":  1440,
+                     "clientHeight":  900
+                 },
+    "buttons":  [
+                    {
+                        "tag":  "div",
+                        "text":  "Black D3ath’s Space",
+                        "role":  "button",
+                        "ariaLabel":  null,
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  8,
+                                    "y":  6,
+                                    "width":  254,
+                                    "height":  32
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "9999px",
+                                      "fontSize":  "16px",
+                                      "fontWeight":  "400"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Close sidebar",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  259,
+                                    "y":  21.5,
+                                    "width":  1,
+                                    "height":  1
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "9999px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Search",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  226,
+                                    "y":  52,
+                                    "width":  32,
+                                    "height":  32
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "9999px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "Explore Notion to unlock a gift",
+                        "role":  "button",
+                        "ariaLabel":  null,
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  10,
+                                    "y":  92,
+                                    "width":  250,
+                                    "height":  76
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "12px",
+                                      "fontSize":  "16px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Dismiss trial home",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  229,
+                                    "y":  101,
+                                    "width":  24,
+                                    "height":  24
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "New agent",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  230,
+                                    "y":  185,
+                                    "width":  24,
+                                    "height":  24
+                                },
+                        "style":  {
+                                      "color":  "rgb(125, 122, 117)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "New chat",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  238,
+                                    "y":  306,
+                                    "width":  24,
+                                    "height":  24
+                                },
+                        "style":  {
+                                      "color":  "rgb(125, 122, 117)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "New chat Ctrl+O",
+                        "role":  "button",
+                        "ariaLabel":  "New chat",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  16,
+                                    "y":  844,
+                                    "width":  188,
+                                    "height":  40
+                                },
+                        "style":  {
+                                      "color":  "rgb(95, 94, 89)",
+                                      "backgroundColor":  "rgb(255, 255, 255)",
+                                      "borderRadius":  "999px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "New page",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  214,
+                                    "y":  844,
+                                    "width":  40,
+                                    "height":  40
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgb(255, 255, 255)",
+                                      "borderRadius":  "999px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  null,
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  284,
+                                    "y":  10,
+                                    "width":  24,
+                                    "height":  24
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "0px",
+                                      "fontSize":  "16px",
+                                      "fontWeight":  "400"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "Notion AI",
+                        "role":  "button",
+                        "ariaLabel":  null,
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  312,
+                                    "y":  8,
+                                    "width":  71.53125,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "400"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "[Research] AI chat behavior",
+                        "role":  "button",
+                        "ariaLabel":  "history",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  393.765625,
+                                    "y":  8,
+                                    "width":  201.6640625,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "400"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Share chat",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1310,
+                                    "y":  8,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Start new chat",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1340,
+                                    "y":  8,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Pin chat",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1370,
+                                    "y":  8,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Delete, rename, and more…",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1400,
+                                    "y":  8,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(42, 28, 0, 0.07)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Edit message",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1146.5,
+                                    "y":  100,
+                                    "width":  24,
+                                    "height":  24
+                                },
+                        "style":  {
+                                      "color":  "rgb(125, 122, 117)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Copy text",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1170.5,
+                                    "y":  100,
+                                    "width":  24,
+                                    "height":  24
+                                },
+                        "style":  {
+                                      "color":  "rgb(125, 122, 117)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Copy response",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  500.5,
+                                    "y":  164,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Save to private pages",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  528.5,
+                                    "y":  164,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Share positive feedback",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  556.5,
+                                    "y":  164,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(125, 122, 117)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Share negative feedback",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  584.5,
+                                    "y":  164,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(125, 122, 117)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "6px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "button",
+                        "text":  "",
+                        "role":  null,
+                        "ariaLabel":  null,
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  839,
+                                    "y":  736,
+                                    "width":  32,
+                                    "height":  32
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgb(0, 0, 0)",
+                                      "borderRadius":  "20px",
+                                      "fontSize":  "16px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Give context",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  516,
+                                    "y":  840,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "50%",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Settings",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  548,
+                                    "y":  840,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "50%",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "Auto",
+                        "role":  "button",
+                        "ariaLabel":  null,
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1075.09375,
+                                    "y":  840,
+                                    "width":  54.90625,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "50px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Start voice recording",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1134,
+                                    "y":  840,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                      "borderRadius":  "50%",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    },
+                    {
+                        "tag":  "div",
+                        "text":  "",
+                        "role":  "button",
+                        "ariaLabel":  "Submit AI message",
+                        "title":  null,
+                        "placeholder":  null,
+                        "box":  {
+                                    "x":  1166,
+                                    "y":  840,
+                                    "width":  28,
+                                    "height":  28
+                                },
+                        "style":  {
+                                      "color":  "rgb(44, 44, 43)",
+                                      "backgroundColor":  "rgba(42, 28, 0, 0.07)",
+                                      "borderRadius":  "30px",
+                                      "fontSize":  "14px",
+                                      "fontWeight":  "500"
+                                  }
+                    }
+                ],
+    "links":  [
+
+              ],
+    "textboxes":  [
+                      {
+                          "tag":  "div",
+                          "text":  null,
+                          "role":  "textbox",
+                          "ariaLabel":  null,
+                          "title":  null,
+                          "placeholder":  "Do anything with AI…",
+                          "box":  {
+                                      "x":  508,
+                                      "y":  776,
+                                      "width":  694,
+                                      "height":  60
+                                  },
+                          "style":  {
+                                        "color":  "rgb(44, 44, 43)",
+                                        "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                        "borderRadius":  "0px",
+                                        "fontSize":  "16px",
+                                        "fontWeight":  "400"
+                                    }
+                      }
+                  ],
+    "menus":  [
+                  {
+                      "tag":  "div",
+                      "text":  "Notion AI Notion AI New agent Today [Research] AI chat behavior Now Past week Возможность создания сайта 1d Setup Assigned to autofill Jul 13 Past 30 days Осмысленное описание задачи с бананами 1w",
+                      "role":  "menu",
+                      "ariaLabel":  null,
+                      "title":  null,
+                      "placeholder":  null,
+                      "box":  {
+                                  "x":  0,
+                                  "y":  178,
+                                  "width":  270,
+                                  "height":  375
+                              },
+                      "style":  {
+                                    "color":  "rgb(95, 94, 89)",
+                                    "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                    "borderRadius":  "10px",
+                                    "fontSize":  "16px",
+                                    "fontWeight":  "500"
+                                }
+                  }
+              ],
+    "menuitems":  [
+                      {
+                          "tag":  "div",
+                          "text":  "[Research] AI chat behavior Now",
+                          "role":  "menuitem",
+                          "ariaLabel":  null,
+                          "title":  null,
+                          "placeholder":  null,
+                          "box":  {
+                                      "x":  8,
+                                      "y":  334,
+                                      "width":  254,
+                                      "height":  30
+                                  },
+                          "style":  {
+                                        "color":  "rgb(95, 94, 89)",
+                                        "backgroundColor":  "rgba(0, 0, 0, 0.03)",
+                                        "borderRadius":  "6px",
+                                        "fontSize":  "16px",
+                                        "fontWeight":  "500"
+                                    }
+                      },
+                      {
+                          "tag":  "div",
+                          "text":  "Возможность создания сайта 1d",
+                          "role":  "menuitem",
+                          "ariaLabel":  null,
+                          "title":  null,
+                          "placeholder":  null,
+                          "box":  {
+                                      "x":  8,
+                                      "y":  403,
+                                      "width":  254,
+                                      "height":  30
+                                  },
+                          "style":  {
+                                        "color":  "rgb(95, 94, 89)",
+                                        "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                        "borderRadius":  "6px",
+                                        "fontSize":  "16px",
+                                        "fontWeight":  "500"
+                                    }
+                      },
+                      {
+                          "tag":  "div",
+                          "text":  "Setup Assigned to autofill Jul 13",
+                          "role":  "menuitem",
+                          "ariaLabel":  null,
+                          "title":  null,
+                          "placeholder":  null,
+                          "box":  {
+                                      "x":  8,
+                                      "y":  434,
+                                      "width":  254,
+                                      "height":  30
+                                  },
+                          "style":  {
+                                        "color":  "rgb(95, 94, 89)",
+                                        "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                        "borderRadius":  "6px",
+                                        "fontSize":  "16px",
+                                        "fontWeight":  "500"
+                                    }
+                      },
+                      {
+                          "tag":  "div",
+                          "text":  "Осмысленное описание задачи с бананами 1w",
+                          "role":  "menuitem",
+                          "ariaLabel":  null,
+                          "title":  null,
+                          "placeholder":  null,
+                          "box":  {
+                                      "x":  8,
+                                      "y":  503,
+                                      "width":  254,
+                                      "height":  30
+                                  },
+                          "style":  {
+                                        "color":  "rgb(95, 94, 89)",
+                                        "backgroundColor":  "rgba(0, 0, 0, 0)",
+                                        "borderRadius":  "6px",
+                                        "fontSize":  "16px",
+                                        "fontWeight":  "500"
+                                    }
+                      }
+                  ]
+}

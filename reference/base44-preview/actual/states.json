@@ -1,0 +1,5302 @@
+[
+  {
+    "state": "page-selector",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "true",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 862,
+          "y": 11,
+          "w": 228,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Refresh preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 867,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": "/page",
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 895,
+          "y": 17,
+          "w": 162,
+          "h": 18
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Show tablet preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1061,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "/ (home)",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 869,
+          "y": 54,
+          "w": 226,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "/catalog",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 869,
+          "y": 88,
+          "w": 226,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "/product/:slug",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 869,
+          "y": 122,
+          "w": 226,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "/checkout",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 869,
+          "y": 156,
+          "w": 226,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "presentation",
+        "text": "Suggested pages",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 869,
+          "y": 195,
+          "w": 226,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Suggested pages",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 869,
+          "y": 195,
+          "w": 226,
+          "h": 30
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 939,
+          "h": 839
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/02-page-selector.png"
+  },
+  {
+    "state": "tablet",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "true",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 862,
+          "y": 11,
+          "w": 228,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Refresh preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 867,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": "/page",
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 895,
+          "y": 17,
+          "w": 162,
+          "h": 18
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Show mobile preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1061,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "tooltip",
+        "text": "Show mobile preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 991,
+          "y": 44,
+          "w": 163,
+          "h": 30
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 579,
+          "y": 69,
+          "w": 768,
+          "h": 1024
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/03-tablet.png"
+  },
+  {
+    "state": "mobile",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "true",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 862,
+          "y": 11,
+          "w": 228,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Refresh preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 867,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": "/page",
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 895,
+          "y": 17,
+          "w": 162,
+          "h": 18
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Show desktop preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1061,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "tooltip",
+        "text": "Show desktop preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 987,
+          "y": 44,
+          "w": 172,
+          "h": 30
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 784,
+          "y": 69,
+          "w": 373,
+          "h": 665
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/04-mobile.png"
+  },
+  {
+    "state": "desktop-restored",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "true",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 862,
+          "y": 11,
+          "w": 228,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Refresh preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 867,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "input",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": "/page",
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 895,
+          "y": 17,
+          "w": 162,
+          "h": 18
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Show tablet preview",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1061,
+          "y": 14,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "tooltip",
+        "text": "Show tablet preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 994,
+          "y": 44,
+          "w": 157,
+          "h": 30
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 939,
+          "h": 839
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/05-desktop-restored.png"
+  },
+  {
+    "state": "canvas",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/canvas",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "application",
+        "text": "Home 1440 x 900 Loading... Catalog 1440 x 900 Checkout 1440 x 900 ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 939,
+          "h": 839
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1101,
+          "y": 146,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4072,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4072,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4586,
+          "y": 146,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5466,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5466,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5980,
+          "y": 146,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4769,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4769,
+          "y": 167,
+          "w": 605,
+          "h": 378
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5283,
+          "y": 146,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Select",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 1385,
+          "y": 371,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Hand",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 407,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Draw",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 456,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Sticky note",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 505,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Image",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 541,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom to fit",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1236,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom out",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1285,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "42%",
+        "ariaLabel": "Zoom",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1321,
+          "y": 836,
+          "w": 60,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom in",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1385,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": "tooltip",
+        "text": "Canvas",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 741,
+          "y": 47,
+          "w": 71,
+          "h": 30
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/06-canvas.png"
+  },
+  {
+    "state": "edit-mode",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/canvas",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Undo",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1088,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Redo",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1122,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "application",
+        "text": "Home 1440 x 900 Loading... Catalog 1440 x 900 Checkout 1440 x 900 ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 939,
+          "h": 839
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 576,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 576,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1068,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 3932,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 3932,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4423,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5274,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5274,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5765,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4603,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4603,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5094,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Select",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 1385,
+          "y": 371,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Hand",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 407,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Draw",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 456,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Sticky note",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 505,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Image",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 541,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom to fit",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1236,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom out",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1285,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "40%",
+        "ariaLabel": "Zoom",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1321,
+          "y": 836,
+          "w": 60,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom in",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1385,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/07-edit-mode.png"
+  },
+  {
+    "state": "more-actions",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/canvas",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "open",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "application",
+        "text": "Home 1440 x 900 Loading... Catalog 1440 x 900 Checkout 1440 x 900 ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 939,
+          "h": 839
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 576,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 576,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1068,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 3932,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 3932,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4423,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5274,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5274,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5765,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4603,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4603,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5094,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Select",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 1385,
+          "y": 371,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Hand",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 407,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Draw",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 456,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Sticky note",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 505,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Image",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 541,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom to fit",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1236,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom out",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1285,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "40%",
+        "ariaLabel": "Zoom",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1321,
+          "y": 836,
+          "w": 60,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom in",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1385,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": "menu",
+        "text": "Act as a user Testing agent GitHub connection This page's files Activity monitor Export project as ZIP Help center",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1030,
+          "y": 45,
+          "w": 220,
+          "h": 244
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "Act as a user",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 54,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "Testing agent",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 84,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "GitHub connection",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 114,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "This page's files",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 144,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "Activity monitor",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 174,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "Export project as ZIP",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 204,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 234,
+          "w": 206,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": "menuitem",
+        "text": "Help center",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1037,
+          "y": 250,
+          "w": 206,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "tooltip",
+        "text": "More actions",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1180,
+          "y": 47,
+          "w": 109,
+          "h": 30
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": "Preview: Home",
+        "rect": {
+          "x": 578,
+          "y": 163,
+          "w": 579,
+          "h": 360
+        }
+      },
+      {
+        "title": "Preview: Catalog",
+        "rect": {
+          "x": 3934,
+          "y": 163,
+          "w": 579,
+          "h": 360
+        }
+      },
+      {
+        "title": "Preview: Checkout",
+        "rect": {
+          "x": 5276,
+          "y": 163,
+          "w": 579,
+          "h": 360
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/08-more-actions.png"
+  },
+  {
+    "state": "publish-dialog",
+    "status": "observed",
+    "url": "https://app.base44.com/apps/6a5a6081bba26be00ddf4e25/editor/canvas",
+    "interactive": [
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Bread",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 532,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Apple Pie",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 636,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Dish Croissant",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 740,
+          "y": 43,
+          "w": 96,
+          "h": 96
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Suggest more",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 529,
+          "y": 722,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 500,
+          "y": 0,
+          "w": 1,
+          "h": 900
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Preview Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 513,
+          "y": 11,
+          "w": 166,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Preview",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 517,
+          "y": 15,
+          "w": 68,
+          "h": 22
+        }
+      },
+      {
+        "tag": "button",
+        "role": "radio",
+        "text": "Dashboard",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": "false",
+        "pressed": null,
+        "rect": {
+          "x": 587,
+          "y": 15,
+          "w": 88,
+          "h": 22
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Edit",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 685,
+          "y": 11,
+          "w": 70,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Edit",
+        "ariaLabel": "Edit mode",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 686,
+          "y": 12,
+          "w": 68,
+          "h": 28
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 762,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Canvas",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 763,
+          "y": 12,
+          "w": 28,
+          "h": 28
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1160,
+          "y": 11,
+          "w": 52,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "More actions",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1220,
+          "y": 11,
+          "w": 30,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "30% off",
+        "ariaLabel": "Upgrade plan",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1258,
+          "y": 11,
+          "w": 90,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": "Publish App",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1355,
+          "y": 11,
+          "w": 73,
+          "h": 30
+        }
+      },
+      {
+        "tag": "div",
+        "role": "application",
+        "text": "Home 1440 x 900 Loading... Catalog 1440 x 900 Checkout 1440 x 900 ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 501,
+          "y": 52,
+          "w": 939,
+          "h": 839
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 576,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Home 1440 x 900 Loading...",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 576,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1068,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 3932,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Catalog 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 3932,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4423,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5274,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Checkout 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5274,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5765,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "div",
+        "role": "group",
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4603,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "ProductDetail 1440 x 900",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 4603,
+          "y": 161,
+          "w": 582,
+          "h": 364
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "1440 x 900",
+        "ariaLabel": "1440 x 900",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 5094,
+          "y": 140,
+          "w": 91,
+          "h": 16
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Select",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "true",
+        "rect": {
+          "x": 1385,
+          "y": 371,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Hand",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 407,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Draw",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 456,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Sticky note",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 505,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Image",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": "false",
+        "rect": {
+          "x": 1385,
+          "y": 541,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom to fit",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1236,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom out",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1285,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "40%",
+        "ariaLabel": "Zoom",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1321,
+          "y": 836,
+          "w": 60,
+          "h": 32
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Zoom in",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1385,
+          "y": 836,
+          "w": 32,
+          "h": 32
+        }
+      },
+      {
+        "tag": "div",
+        "role": "dialog",
+        "text": "Publish Your App Web Mobile app Once published, the app will be visible to users based on its visibility settings. https:// pure-tech-protocol.base44.app App visibility Public Security status Run scan Publish",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1068,
+          "y": 49,
+          "w": 360,
+          "h": 383
+        }
+      },
+      {
+        "tag": "div",
+        "role": "tablist",
+        "text": "Web Mobile app",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1069,
+          "y": 94,
+          "w": 358,
+          "h": 45
+        }
+      },
+      {
+        "tag": "button",
+        "role": "tab",
+        "text": "Web",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1085,
+          "y": 98,
+          "w": 50,
+          "h": 34
+        }
+      },
+      {
+        "tag": "button",
+        "role": "tab",
+        "text": "Mobile app",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1135,
+          "y": 98,
+          "w": 93,
+          "h": 34
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "",
+        "ariaLabel": "Edit URL",
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1374,
+          "y": 213,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1069,
+          "y": 259,
+          "w": 358,
+          "h": 1
+        }
+      },
+      {
+        "tag": "div",
+        "role": null,
+        "text": "Public",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": "closed",
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1291,
+          "y": 276,
+          "w": 120,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Public",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1291,
+          "y": 276,
+          "w": 120,
+          "h": 30
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Run scan",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1324,
+          "y": 320,
+          "w": 87,
+          "h": 24
+        }
+      },
+      {
+        "tag": "div",
+        "role": "separator",
+        "text": "",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": null,
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1069,
+          "y": 362,
+          "w": 358,
+          "h": 1
+        }
+      },
+      {
+        "tag": "button",
+        "role": null,
+        "text": "Publish",
+        "ariaLabel": null,
+        "title": null,
+        "placeholder": null,
+        "type": "button",
+        "state": null,
+        "checked": null,
+        "pressed": null,
+        "rect": {
+          "x": 1085,
+          "y": 379,
+          "w": 326,
+          "h": 36
+        }
+      }
+    ],
+    "frames": [
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": "App Preview",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      },
+      {
+        "title": "Preview: Home",
+        "rect": {
+          "x": 578,
+          "y": 163,
+          "w": 579,
+          "h": 360
+        }
+      },
+      {
+        "title": "Preview: Catalog",
+        "rect": {
+          "x": 3934,
+          "y": 163,
+          "w": 579,
+          "h": 360
+        }
+      },
+      {
+        "title": "Preview: Checkout",
+        "rect": {
+          "x": 5276,
+          "y": 163,
+          "w": 579,
+          "h": 360
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 900,
+          "w": 1440,
+          "h": 1
+        }
+      },
+      {
+        "title": null,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        }
+      }
+    ],
+    "screenshot": "reference/base44-preview/screenshots/desktop/09-publish-dialog.png"
+  }
+]

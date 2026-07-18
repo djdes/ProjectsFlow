@@ -1,0 +1,424 @@
+[
+  {
+    "label": "desktop-preview-chat-open",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 360.5,
+        "height": 900
+      },
+      "flexGrow": "25",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      {
+        "x": 361.5,
+        "y": 52,
+        "width": 1078.5,
+        "height": 839
+      },
+      {
+        "x": 361.5,
+        "y": 52,
+        "width": 1078.5,
+        "height": 839
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 628
+      },
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "desktop-preview-chat-hidden",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 900
+      },
+      "flexGrow": "100",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      {
+        "x": 0,
+        "y": 52,
+        "width": 1440,
+        "height": 839
+      },
+      {
+        "x": 0,
+        "y": 52,
+        "width": 1440,
+        "height": 839
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 628
+      },
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "desktop-tablet-device",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 360.5,
+        "height": 900
+      },
+      "flexGrow": "25",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      {
+        "x": 509.25,
+        "y": 69,
+        "width": 768,
+        "height": 1024
+      },
+      {
+        "x": 509.25,
+        "y": 69,
+        "width": 768,
+        "height": 1024
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 628
+      },
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "desktop-edit-mode",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 360.5,
+        "height": 900
+      },
+      "flexGrow": "25",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      {
+        "x": 361.5,
+        "y": 52,
+        "width": 1078.5,
+        "height": 839
+      },
+      {
+        "x": 361.5,
+        "y": 52,
+        "width": 1078.5,
+        "height": 839
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 628
+      },
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "desktop-canvas",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/canvas",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 360.5,
+        "height": 900
+      },
+      "flexGrow": "25",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      null,
+      null
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 628
+      },
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "desktop-dashboard",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/workspace/overview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 360.5,
+        "height": 900
+      },
+      "flexGrow": "25",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      null,
+      null
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 628
+      },
+      "clientWidth": 338,
+      "clientHeight": 628,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "tablet-browser-chat-open",
+    "viewport": {
+      "width": 1024,
+      "height": 768
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 360,
+        "height": 768
+      },
+      "flexGrow": "25",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      {
+        "x": 361,
+        "y": 52,
+        "width": 663,
+        "height": 707
+      },
+      {
+        "x": 361,
+        "y": 52,
+        "width": 663,
+        "height": 707
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 496
+      },
+      "clientWidth": 338,
+      "clientHeight": 496,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "tablet-browser-chat-hidden",
+    "viewport": {
+      "width": 1024,
+      "height": 768
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1024,
+        "height": 768
+      },
+      "flexGrow": "100",
+      "transition": "flex-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "frameBoxes": [
+      {
+        "x": 0,
+        "y": 52,
+        "width": 1024,
+        "height": 707
+      },
+      {
+        "x": 0,
+        "y": 52,
+        "width": 1024,
+        "height": 707
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 12,
+        "y": 52,
+        "width": 348,
+        "height": 496
+      },
+      "clientWidth": 338,
+      "clientHeight": 496,
+      "scrollWidth": 338,
+      "scrollHeight": 4469,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "mobile-browser-chat-open",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": null,
+    "frameBoxes": [
+      {
+        "x": 9,
+        "y": 118,
+        "width": 372,
+        "height": 717
+      },
+      {
+        "x": 9,
+        "y": 118,
+        "width": 372,
+        "height": 717
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 844
+      },
+      "clientWidth": 390,
+      "clientHeight": 844,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  },
+  {
+    "label": "mobile-browser-chat-hidden",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "path": "/apps/6a5a6081bba26be00ddf4e25/editor/preview",
+    "wrapper": null,
+    "frameBoxes": [
+      {
+        "x": 9,
+        "y": 118,
+        "width": 372,
+        "height": 717
+      },
+      {
+        "x": 9,
+        "y": 118,
+        "width": 372,
+        "height": 717
+      }
+    ],
+    "chatScroller": {
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 844
+      },
+      "clientWidth": 390,
+      "clientHeight": 844,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    }
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "initial": "overview",
+  "states": [
+    "overview",
+    "users.list",
+    "users.pending",
+    "data.entities",
+    "data.table",
+    "data.filters",
+    "data.rowEditor",
+    "data.permissions",
+    "analytics",
+    "domains",
+    "integrations",
+    "security",
+    "code",
+    "agents",
+    "workflows",
+    "logs",
+    "logs.details",
+    "api",
+    "settings.app",
+    "settings.authentication"
+  ],
+  "keyTransitions": [
+    { "from": "data.entities", "event": "openEntity", "to": "data.table" },
+    { "from": "data.table", "event": "openFilters", "to": "data.filters" },
+    { "from": "data.table", "event": "openRow", "to": "data.rowEditor" },
+    { "from": "data.table", "event": "openPermissions", "to": "data.permissions" },
+    { "from": "logs", "event": "expandRow", "to": "logs.details" },
+    { "from": "settings.app", "event": "openAuthentication", "to": "settings.authentication" }
+  ]
+}

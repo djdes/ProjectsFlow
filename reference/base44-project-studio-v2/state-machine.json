@@ -1,0 +1,37 @@
+{
+  "initial": {
+    "workspace": "preview",
+    "chat": "open",
+    "editor": "view",
+    "device": "desktop",
+    "overlay": "none"
+  },
+  "regions": {
+    "workspace": ["preview", "dashboard"],
+    "chat": ["open", "hidden"],
+    "editor": ["view", "edit", "canvas"],
+    "device": ["desktop", "tablet", "mobile"],
+    "overlay": ["none", "route-menu", "project-menu", "more-menu", "participants-dialog"]
+  },
+  "transitions": [
+    { "event": "CLICK_PREVIEW", "from": "dashboard", "to": "preview", "path": "/editor/preview", "preserves": ["chat session", "chat visibility"] },
+    { "event": "CLICK_DASHBOARD", "from": "preview", "to": "dashboard", "path": "/editor/workspace/overview", "hides": ["edit", "canvas", "refresh", "route", "device"] },
+    { "event": "HIDE_CHAT", "from": "open", "to": "hidden", "effect": "workspace expands to full width", "durationMs": 500 },
+    { "event": "SHOW_CHAT", "from": "hidden", "to": "open", "effect": "desktop chat width becomes 360px", "durationMs": 500 },
+    { "event": "TOGGLE_EDIT_ON", "from": "view", "to": "edit", "adds": ["undo", "redo"], "pathChanges": false },
+    { "event": "TOGGLE_EDIT_OFF", "from": "edit", "to": "view", "removes": ["undo", "redo"] },
+    { "event": "TOGGLE_CANVAS_ON", "from": "view", "to": "canvas", "path": "/editor/canvas", "adds": ["zoom to fit", "zoom out", "zoom", "zoom in"] },
+    { "event": "TOGGLE_CANVAS_OFF", "from": "canvas", "to": "view", "path": "/editor/preview" },
+    { "event": "CYCLE_DEVICE", "cycle": ["desktop", "tablet", "mobile", "desktop"], "pathChanges": false },
+    { "event": "OPEN_ROUTE", "from": "none", "to": "route-menu", "dismiss": ["Escape", "outside pointer"] },
+    { "event": "OPEN_MORE", "from": "none", "to": "more-menu", "dismiss": ["Escape", "outside pointer"] },
+    { "event": "OPEN_PARTICIPANTS", "from": "none", "to": "participants-dialog", "dismiss": ["Close", "Escape"] }
+  ],
+  "invariants": [
+    "Preview and Dashboard are mutually exclusive.",
+    "Chat history and composer are not replaced by workspace transitions.",
+    "Publish is never an implicit consequence of Preview, Edit, Canvas, Dashboard, or device transitions.",
+    "Device selection changes canvas geometry, not the route.",
+    "Document-level scroll remains disabled."
+  ]
+}

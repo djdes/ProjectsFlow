@@ -1,0 +1,22 @@
+[
+  {
+    "name": "inspect and edit database row",
+    "steps": ["Open Data", "Choose Product", "Search/filter", "Click a row", "Review typed fields"],
+    "result": "A scrollable right sheet edits the selected record"
+  },
+  {
+    "name": "configure entity permissions",
+    "steps": ["Open an entity", "Open Permissions", "Review Create/Read/Update/Delete rules"],
+    "result": "Access is configured per operation"
+  },
+  {
+    "name": "diagnose runtime activity",
+    "steps": ["Open Logs", "Filter by category/user/error", "Expand a row"],
+    "result": "Structured event details are visible without leaving Dashboard"
+  },
+  {
+    "name": "mobile dashboard navigation",
+    "steps": ["Use a 390px viewport", "Open section dropdown", "Select a section"],
+    "result": "Sidebar becomes a compact single dropdown and content is one-column"
+  }
+]

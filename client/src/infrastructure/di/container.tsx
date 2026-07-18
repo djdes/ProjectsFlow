@@ -31,6 +31,7 @@ import { HttpTaskPropertyRepository } from "@/infrastructure/http/HttpTaskProper
 import { HttpSiteEditorRepository } from "@/infrastructure/http/HttpSiteEditorRepository";
 import { HttpProjectCodeRepository } from "@/infrastructure/http/HttpProjectCodeRepository";
 import { HttpHelpRepository } from "@/infrastructure/http/HttpHelpRepository";
+import { HttpAiConversationRepository } from "@/infrastructure/http/HttpAiConversationRepository";
 import { SubmitSupport } from "@/application/help/SubmitSupport";
 import type { HelpRepository } from "@/application/help/HelpRepository";
 import { RecordTaskView } from "@/application/recent/RecordTaskView";
@@ -91,6 +92,7 @@ import { StartSiteEditorAiJob } from "@/application/site-editor/StartSiteEditorA
 import { GetUsage } from "@/application/usage/GetUsage";
 import { ChangePlan } from "@/application/usage/ChangePlan";
 import type { UsageRepository } from "@/application/usage/UsageRepository";
+import type { AiConversationRepository } from "@/application/ai-chat/AiConversationRepository";
 
 type Container = {
   listProjects: ListProjects;
@@ -125,6 +127,7 @@ type Container = {
   liveRepository: LiveRepository;
   chatRepository: ChatRepository;
   aiPromptRepository: AiPromptRepository;
+  aiConversationRepository: AiConversationRepository;
   improveTaskDescription: ImproveTaskDescription;
   composeTasks: ComposeTasks;
   automationRepository: AutomationRepository;
@@ -168,6 +171,7 @@ function buildContainer(): Container {
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   const aiPromptRepo = new HttpAiPromptRepository();
+  const aiConversationRepo = new HttpAiConversationRepository();
   const automationRepo = new HttpAutomationRepository();
   const adminRepo = new HttpAdminRepository();
   const employeeRepo = new HttpEmployeeRepository();
@@ -219,6 +223,7 @@ function buildContainer(): Container {
     liveRepository: liveRepo,
     chatRepository: chatRepo,
     aiPromptRepository: aiPromptRepo,
+    aiConversationRepository: aiConversationRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     composeTasks: new ComposeTasks(aiPromptRepo),
     automationRepository: automationRepo,

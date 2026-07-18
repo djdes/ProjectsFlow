@@ -1,0 +1,16 @@
+{
+  "observedViewport": { "width": 1440, "height": 900 },
+  "editorRail": { "x": 0, "y": 0, "width": 500, "height": 900 },
+  "workspace": { "x": 500, "y": 0, "width": 940, "height": 900 },
+  "toolbar": { "x": 500, "y": 0, "width": 940, "height": 52 },
+  "previewFrames": {
+    "desktop": { "x": 501, "y": 52, "width": 939, "height": 839 },
+    "tablet": { "x": 579, "y": 69, "width": 768, "height": 1024 },
+    "mobile": { "x": 784, "y": 69, "width": 373, "height": 665 }
+  },
+  "notes": [
+    "Desktop заполняет доступную рабочую область.",
+    "Tablet имеет фиксированную высоту 1024 и требует внешней вертикальной прокрутки.",
+    "Mobile центрируется в рабочей области."
+  ]
+}

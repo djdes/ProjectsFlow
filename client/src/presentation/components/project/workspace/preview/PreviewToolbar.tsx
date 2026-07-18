@@ -12,11 +12,13 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
 
 export function PreviewToolbar({
   mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
+  leading, trailing, studioLayout = false,
   onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onOpen, onUndo, onRedo, onCode, onPublish, onReject,
 }: {
   mode: PreviewMode; device: PreviewDevice; path: string; draftPath: string; routes: string[]; routeMenuOpen: boolean;
   saveStatus: SaveStatus; undoDepth: number; redoDepth: number;
   draftCount: number; queuedCount: number;
+  leading?: React.ReactNode; trailing?: React.ReactNode; studioLayout?: boolean;
   onMode: (mode: PreviewMode) => void; onDevice: (device: PreviewDevice) => void; onDraftPath: (path: string) => void;
   onApplyPath: (path: string) => void; onRouteMenu: (open: boolean) => void; onReload: () => void; onOpen: () => void;
   onUndo: () => void; onRedo: () => void; onCode: () => void; onPublish: () => void; onReject: () => void;
@@ -32,12 +34,19 @@ export function PreviewToolbar({
   }, [onRouteMenu, routeMenuOpen]);
 
   return (
-    <div className="flex min-h-12 flex-wrap items-center gap-1.5 border-b bg-background px-2 py-1.5" aria-label="Панель Preview">
+    <div
+      className={cn(
+        'flex items-center gap-1.5 border-b bg-background px-2 py-1.5',
+        studioLayout ? 'min-h-[52px] flex-nowrap overflow-x-auto' : 'min-h-12 flex-wrap',
+      )}
+      aria-label="Панель Preview"
+    >
+      {leading}
       <div className="flex items-center rounded-lg border bg-muted/30 p-0.5" role="tablist" aria-label="Режим Preview">
-        {([
-          ['preview', 'Preview', Monitor], ['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2],
-        ] as const).map(([value, label, Icon]) => (
-          <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => onMode(value)} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground', mode === value && 'bg-background text-foreground shadow-sm')}>
+        {((studioLayout
+          ? [['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2]]
+          : [['preview', 'Preview', Monitor], ['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2]]) as ReadonlyArray<readonly [PreviewMode, string, typeof Monitor]>).map(([value, label, Icon]) => (
+          <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => onMode(studioLayout && mode === value ? 'preview' : value)} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground', mode === value && 'bg-background text-foreground shadow-sm')}>
             <Icon className="size-3.5" />{label}
           </button>
         ))}
@@ -75,6 +84,7 @@ export function PreviewToolbar({
       </div>
       <Button type="button" variant="outline" size="icon" className="size-9" aria-label="Обновить Preview" onClick={onReload}><RefreshCw className="size-4" /></Button>
       <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={onOpen}><ExternalLink className="size-3.5" />Открыть</Button>
+      {trailing}
       <span className="sr-only" role="status" aria-live="polite">{saveStatus === 'saving' ? 'Сохраняем изменение' : saveStatus === 'error' ? 'Не удалось сохранить изменение' : saveStatus === 'dirty' ? 'Есть несохранённые изменения' : 'Изменения сохранены'}</span>
     </div>
   );
