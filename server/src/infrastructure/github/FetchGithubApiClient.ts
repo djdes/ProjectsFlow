@@ -13,6 +13,7 @@ import type {
   PutFileInput,
   RepoFileContent,
   RepoFileSummary,
+  RepoTreeResult,
   RepoImportTarget,
 } from '../../application/github/GithubApiClient.js';
 
@@ -472,12 +473,38 @@ export class FetchGithubApiClient implements GithubApiClient {
     if (res.status === 404) return [];
     if (!res.ok) throw new GithubApiError(res.status, `listRepoTree failed: ${await res.text()}`);
     const data = (await res.json()) as Array<{ path: string; sha: string; type: string; size: number }>;
-    return data.map((d) => ({
+    return data.filter((d) => d.type === 'dir' || d.type === 'file').map((d) => ({
       path: d.path,
       sha: d.sha,
       type: d.type === 'dir' ? 'dir' : 'file',
       size: d.size,
     }));
+  }
+
+  async listRepoTreeRecursive(accessToken: string, fullName: string): Promise<RepoTreeResult> {
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' };
+    const repoRes = await fetch(`https://api.github.com/repos/${fullName}`, { headers });
+    if (!repoRes.ok) throw new GithubApiError(repoRes.status, `get repository failed: ${await repoRes.text()}`);
+    const repo = (await repoRes.json()) as { default_branch?: string };
+    const branch = repo.default_branch || 'main';
+    const treeRes = await fetch(`https://api.github.com/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`, { headers });
+    if (treeRes.status === 409) return { entries: [], truncated: false };
+    if (!treeRes.ok) throw new GithubApiError(treeRes.status, `list repository tree failed: ${await treeRes.text()}`);
+    const data = (await treeRes.json()) as {
+      truncated?: boolean;
+      tree?: Array<{ path: string; sha: string; type: string; size?: number }>;
+    };
+    return {
+      entries: (data.tree ?? [])
+        .filter((entry) => entry.type === 'blob' || entry.type === 'tree')
+        .map((entry) => ({
+          path: entry.path,
+          sha: entry.sha,
+          type: entry.type === 'tree' ? 'dir' : 'file',
+          size: entry.size ?? 0,
+        })),
+      truncated: data.truncated === true,
+    };
   }
 
   async putRepoFile(input: PutFileInput): Promise<{ sha: string }> {

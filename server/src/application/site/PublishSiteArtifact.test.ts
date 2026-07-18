@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PublishSiteArtifact } from './PublishSiteArtifact.js';
+import { PublishSiteArtifact, injectDashboardMetadata } from './PublishSiteArtifact.js';
 import { NotAssignedDispatcherError } from '../../domain/file-sync/errors.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { SiteArtifact } from '../../domain/site/SiteArtifact.js';
@@ -81,4 +81,22 @@ test('PublishSiteArtifact: не диспетчер → NotAssignedDispatcherErro
   const { deps } = makeDeps({ project: makeProject({ dispatcherUserId: 'someone-else' }) });
   const uc = new PublishSiteArtifact({ ...deps, generateSlug: () => 'x-y-z' });
   await assert.rejects(() => uc.execute('p1', 'disp1', FILES), NotAssignedDispatcherError);
+});
+
+test('injectDashboardMetadata replaces existing SEO and safely injects JSON-LD', () => {
+  const result = injectDashboardMetadata('<html><head><title>Old</title><meta name="description" content="old"></head><body></body></html>', {
+    title: 'New & better',
+    description: 'Description',
+    canonicalUrl: 'https://example.com/page',
+    robotsIndex: true,
+    socialImageUrl: 'https://example.com/cover.png',
+    showPlatformBadge: true,
+    structuredData: '{"name":"safe </script> value"}',
+  });
+  assert.doesNotMatch(result, /<title>Old<\/title>/);
+  assert.match(result, /<title>New &amp; better<\/title>/);
+  assert.match(result, /name="robots" content="index,follow"/);
+  assert.match(result, /rel="canonical" href="https:\/\/example\.com\/page"/);
+  assert.match(result, /safe <\\\/script> value/);
+  assert.match(result, /data-projectsflow-badge/);
 });

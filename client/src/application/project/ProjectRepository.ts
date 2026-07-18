@@ -1,12 +1,19 @@
-import type { Project, ProjectStatus, PublicAppearance } from '@/domain/project/Project';
+import type {
+  Project,
+  ProjectStatus,
+  PublicAppearance,
+} from "@/domain/project/Project";
 import type {
   ProjectAnalytics,
   ProjectActivity,
   ProjectActivityCursor,
-} from '@/domain/project/ProjectAnalytics';
-import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
-import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
-import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
+} from "@/domain/project/ProjectAnalytics";
+import type {
+  ProjectMember,
+  ProjectRole,
+} from "@/domain/project/ProjectMembership";
+import type { NotificationPrefs } from "@/domain/notifications/NotificationPrefs";
+import type { KanbanBoardSettings } from "@/domain/kanban/KanbanSettings";
 
 // Сайт-результат проекта (db/100). siteSlug — постоянный адрес <slug>.projectsflow.ru (до
 // деплоя воркером отдаётся заглушка). deployedAt/fileCount — из site_artifacts (null/0 до деплоя).
@@ -21,7 +28,7 @@ export type ProjectSite = {
 // (обычный статический сайт). status='active' — есть вход/пользователи/база; usageBytes/лимит
 // показываем в UI, tables — объявлённые воркером таблицы.
 export type AppBackendStatus = {
-  readonly status: 'none' | 'active';
+  readonly status: "none" | "active";
   readonly usageBytes: number;
   readonly storageLimitBytes: number;
   readonly tables: readonly string[];
@@ -54,19 +61,19 @@ export type GitTokenDelegationStatus = {
 };
 
 export type GitTokenAccessOutcome =
-  | 'ok'
-  | 'not_dispatcher'
-  | 'delegation_disabled'
-  | 'granter_github_disconnected'
-  | 'granter_not_owner_anymore'
-  | 'no_eligible_grantor';
+  | "ok"
+  | "not_dispatcher"
+  | "delegation_disabled"
+  | "granter_github_disconnected"
+  | "granter_not_owner_anymore"
+  | "no_eligible_grantor";
 
 // v0.16+: context — «для чего брали токен». NULL для legacy-записей.
 export type GitTokenAccessContext =
-  | 'git_token_fetch'
-  | 'link_commit'
-  | 'sync_commits'
-  | 'kb_write';
+  | "git_token_fetch"
+  | "link_commit"
+  | "sync_commits"
+  | "kb_write";
 
 export type GitTokenAccessLogEntry = {
   readonly accessedByUserId: string;
@@ -117,8 +124,8 @@ export type GitCollision = {
   readonly projectName?: string;
 };
 
-export type AppAccess = 'anyone' | 'authenticated' | 'owner';
-export type AppFieldType = 'text' | 'int' | 'real' | 'bool' | 'datetime';
+export type AppAccess = "anyone" | "authenticated" | "owner";
+export type AppFieldType = "text" | "int" | "real" | "bool" | "datetime";
 export type AppField = {
   readonly name: string;
   readonly type: AppFieldType;
@@ -138,51 +145,106 @@ export type AppTableSchema = {
   readonly rules: AppTableRules;
 };
 export type AppBackendDashboard = {
-  readonly status: 'none' | 'active';
+  readonly status: "none" | "active";
   readonly usageBytes: number;
   readonly storageLimitBytes: number;
   readonly schema: { readonly tables: readonly AppTableSchema[] } | null;
   readonly updatedAt: string | null;
 };
-export type PendingDashboardIntegration = 'disabled' | 'pending';
+export type PendingDashboardIntegration = "disabled" | "pending";
+export type DashboardConnectionStatus =
+  | "disabled"
+  | "pending"
+  | "configured"
+  | "error";
 export type AppDashboardSettings = {
   readonly profile: {
     readonly description: string;
     readonly mainRoute: string;
-    readonly visibility: 'public' | 'private';
+    readonly visibility: "public" | "private";
+  };
+  readonly branding: {
+    readonly logoUrl: string;
+    readonly socialImageUrl: string;
+    readonly showPlatformBadge: boolean;
   };
   readonly seo: {
     readonly title: string;
     readonly description: string;
     readonly robotsIndex: boolean;
+    readonly canonicalUrl: string;
+    readonly structuredData: string;
   };
   readonly customDomain: {
     readonly hostname: string | null;
-    readonly status: 'none' | 'pending';
+    readonly status: "none" | "pending" | "verified" | "error";
+    readonly lastCheckedAt: string | null;
+    readonly error: string | null;
   };
   readonly integrations: {
-    readonly email: PendingDashboardIntegration;
-    readonly webhooks: PendingDashboardIntegration;
-    readonly oauth: PendingDashboardIntegration;
+    readonly email: DashboardConnectionStatus;
+    readonly webhooks: DashboardConnectionStatus;
+    readonly oauth: DashboardConnectionStatus;
+    readonly emailSender: string;
+    readonly webhookUrl: string;
+    readonly oauthIssuer: string;
   };
   readonly auth: {
     readonly emailPassword: boolean;
     readonly google: PendingDashboardIntegration;
     readonly microsoft: PendingDashboardIntegration;
+    readonly facebook: PendingDashboardIntegration;
+    readonly apple: PendingDashboardIntegration;
+    readonly sso: PendingDashboardIntegration;
+  };
+  readonly advanced: {
+    readonly testData: boolean;
+    readonly sessionRecordings: boolean;
+  };
+  readonly socialContent: {
+    readonly goal: string;
+    readonly channels: readonly string[];
+    readonly generated: readonly string[];
   };
   readonly updatedAt: string | null;
 };
 export type AppDashboardSettingsPatch = {
-  readonly profile?: Partial<AppDashboardSettings['profile']>;
-  readonly seo?: Partial<AppDashboardSettings['seo']>;
+  readonly profile?: Partial<AppDashboardSettings["profile"]>;
+  readonly branding?: Partial<AppDashboardSettings["branding"]>;
+  readonly seo?: Partial<AppDashboardSettings["seo"]>;
   readonly customDomain?: { readonly hostname: string | null };
-  readonly integrations?: Partial<AppDashboardSettings['integrations']>;
-  readonly auth?: Partial<AppDashboardSettings['auth']>;
+  readonly integrations?: Partial<AppDashboardSettings["integrations"]>;
+  readonly auth?: Partial<AppDashboardSettings["auth"]>;
+  readonly advanced?: Partial<AppDashboardSettings["advanced"]>;
+  readonly socialContent?: Partial<AppDashboardSettings["socialContent"]>;
+};
+export type AppSecurityFinding = {
+  readonly code: string;
+  readonly severity: "info" | "warning" | "critical";
+  readonly title: string;
+  readonly remediation: string;
+};
+export type AppSecurityScan = {
+  readonly scannedAt: string;
+  readonly findings: readonly AppSecurityFinding[];
+};
+export type AppRuntimeUser = {
+  readonly id: string;
+  readonly email: string;
+  readonly createdAt: string;
+  readonly activeSessions: number;
 };
 export type AppFilterOperator =
-  | 'eq' | 'neq' | 'contains' | 'starts_with'
-  | 'gt' | 'gte' | 'lt' | 'lte'
-  | 'is_empty' | 'is_not_empty';
+  | "eq"
+  | "neq"
+  | "contains"
+  | "starts_with"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "is_empty"
+  | "is_not_empty";
 export type AppDataFilter = {
   readonly column: string;
   readonly operator: AppFilterOperator;
@@ -198,7 +260,7 @@ export type AppRowsPage = {
 export type AppRowsQuery = {
   readonly filters?: readonly AppDataFilter[];
   readonly search?: string;
-  readonly sort?: { readonly column: string; readonly dir: 'asc' | 'desc' };
+  readonly sort?: { readonly column: string; readonly dir: "asc" | "desc" };
   readonly limit?: number;
   readonly offset?: number;
 };
@@ -210,7 +272,7 @@ export type AppCrudRules = {
 };
 export type AppAuditLogEntry = {
   readonly id: string;
-  readonly actorType: 'runtime' | 'project_member' | 'system';
+  readonly actorType: "runtime" | "project_member" | "system";
   readonly actorId?: string | null;
   readonly operation: string;
   readonly tableName?: string | null;
@@ -219,30 +281,44 @@ export type AppAuditLogEntry = {
   readonly detail?: Readonly<Record<string, unknown>> | null;
   readonly createdAt: string;
 };
-export type AppAuditPage = { readonly rows: readonly AppAuditLogEntry[]; readonly total: number };
+export type AppAuditPage = {
+  readonly rows: readonly AppAuditLogEntry[];
+  readonly total: number;
+};
 
-export type ImportProjectRepoInput =
-  & { readonly archive: File }
-  & (
-    | { readonly targetMode: 'new'; readonly name: string; readonly privateRepo: boolean }
-    | { readonly targetMode: 'existing'; readonly existingRepoFullName: string }
-  );
+export type ImportProjectRepoInput = { readonly archive: File } & (
+  | {
+      readonly targetMode: "new";
+      readonly name: string;
+      readonly privateRepo: boolean;
+    }
+  | { readonly targetMode: "existing"; readonly existingRepoFullName: string }
+);
 
-export type ProjectImportSupportStatus = 'supported' | 'needs_config' | 'unsupported';
+export type ProjectImportSupportStatus =
+  | "supported"
+  | "needs_config"
+  | "unsupported";
 export type ProjectImportKind =
-  | 'static'
-  | 'vite'
-  | 'create-react-app'
-  | 'astro-static'
-  | 'next-export'
-  | 'node-server'
-  | 'api-only'
-  | 'monorepo'
-  | 'unknown';
-export type ProjectImportPackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'none' | 'unknown';
+  | "static"
+  | "vite"
+  | "create-react-app"
+  | "astro-static"
+  | "next-export"
+  | "node-server"
+  | "api-only"
+  | "monorepo"
+  | "unknown";
+export type ProjectImportPackageManager =
+  | "npm"
+  | "pnpm"
+  | "yarn"
+  | "bun"
+  | "none"
+  | "unknown";
 export type ProjectImportDiagnostic = {
   readonly code: string;
-  readonly severity: 'info' | 'warning' | 'error';
+  readonly severity: "info" | "warning" | "error";
   readonly message: string;
   readonly remediation: string | null;
 };
@@ -258,13 +334,13 @@ export type ProjectImportAnalysis = {
   readonly fileCount: number;
   readonly diagnostics: readonly ProjectImportDiagnostic[];
   readonly dataHints: readonly {
-    kind: 'json-file' | 'lowdb' | 'json-server' | 'filesystem-write';
+    kind: "json-file" | "lowdb" | "json-server" | "filesystem-write";
     path: string | null;
     message: string;
   }[];
   readonly secretFindings: readonly {
     path: string;
-    kind: 'environment' | 'private-key' | 'credential-file' | 'token';
+    kind: "environment" | "private-key" | "credential-file" | "token";
   }[];
 };
 
@@ -278,7 +354,11 @@ export interface ProjectRepository {
   // Загрузка своего файла-обложки (multipart). Сервер сохраняет и возвращает проект с
   // проставленным coverUrl (`/api/projects/:id/cover/...`). Градиент/ссылку ставим через update.
   // onProgress — прогресс аплоада 0..100 (для мгновенного прогресс-бара в UI).
-  uploadCover(projectId: string, file: File, onProgress?: (pct: number) => void): Promise<Project>;
+  uploadCover(
+    projectId: string,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<Project>;
   // Безвозвратное удаление проекта (owner-only, инбокс запрещён). Каскадно чистит
   // все child-данные (задачи, KB, секреты, финансы и т.д.) — подробности
   // на серверном DeleteProject use-case.
@@ -296,7 +376,10 @@ export interface ProjectRepository {
   publish(projectId: string): Promise<{ slug: string; url: string }>;
   unpublish(projectId: string): Promise<void>;
   setPublicIndexing(projectId: string, indexing: boolean): Promise<void>;
-  setPublicAppearance(projectId: string, appearance: PublicAppearance): Promise<void>;
+  setPublicAppearance(
+    projectId: string,
+    appearance: PublicAppearance,
+  ): Promise<void>;
   // Создать/привязать GitHub-репо приложения проекта (self-serve воркер-раннер, M1). Owner-only.
   // Требует привязанный GitHub (иначе сервер вернёт 409 github_not_connected).
   ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }>;
@@ -322,20 +405,56 @@ export interface ProjectRepository {
   getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
   getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard>;
   getAppDashboardSettings(projectId: string): Promise<AppDashboardSettings>;
-  updateAppDashboardSettings(projectId: string, patch: AppDashboardSettingsPatch): Promise<AppDashboardSettings>;
-  queryAppRows(projectId: string, table: string, query: AppRowsQuery): Promise<AppRowsPage>;
-  createAppRow(projectId: string, table: string, values: AppDataRow): Promise<AppDataRow>;
-  updateAppRow(projectId: string, table: string, rowId: string, values: AppDataRow): Promise<AppDataRow | null>;
-  deleteAppRow(projectId: string, table: string, rowId: string): Promise<number>;
-  updateAppTablePermissions(projectId: string, table: string, rules: AppCrudRules): Promise<AppCrudRules>;
-  getAppBackendLogs(projectId: string, filters?: {
-    readonly table?: string;
-    readonly operation?: string;
-    readonly actor?: string;
-    readonly errorsOnly?: boolean;
-    readonly limit?: number;
-    readonly offset?: number;
-  }): Promise<AppAuditPage>;
+  updateAppDashboardSettings(
+    projectId: string,
+    patch: AppDashboardSettingsPatch,
+  ): Promise<AppDashboardSettings>;
+  verifyAppCustomDomain(projectId: string): Promise<AppDashboardSettings>;
+  testAppWebhook(projectId: string): Promise<AppDashboardSettings>;
+  scanAppSecurity(projectId: string): Promise<AppSecurityScan>;
+  listAppRuntimeUsers(projectId: string): Promise<readonly AppRuntimeUser[]>;
+  revokeAppRuntimeUserSessions(
+    projectId: string,
+    userId: string,
+  ): Promise<number>;
+  deleteAppRuntimeUser(projectId: string, userId: string): Promise<number>;
+  queryAppRows(
+    projectId: string,
+    table: string,
+    query: AppRowsQuery,
+  ): Promise<AppRowsPage>;
+  createAppRow(
+    projectId: string,
+    table: string,
+    values: AppDataRow,
+  ): Promise<AppDataRow>;
+  updateAppRow(
+    projectId: string,
+    table: string,
+    rowId: string,
+    values: AppDataRow,
+  ): Promise<AppDataRow | null>;
+  deleteAppRow(
+    projectId: string,
+    table: string,
+    rowId: string,
+  ): Promise<number>;
+  updateAppTablePermissions(
+    projectId: string,
+    table: string,
+    rules: AppCrudRules,
+  ): Promise<AppCrudRules>;
+  getAppBackendLogs(
+    projectId: string,
+    filters?: {
+      readonly table?: string;
+      readonly operation?: string;
+      readonly actor?: string;
+      readonly errorsOnly?: boolean;
+      readonly limit?: number;
+      readonly offset?: number;
+    },
+  ): Promise<AppAuditPage>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.
@@ -345,7 +464,12 @@ export interface ProjectRepository {
     projectId: string,
     enabled: boolean,
     granterUserId?: string,
-  ): Promise<{ enabled: boolean; grantedAt: string | null; revokedAt: string | null; granterUserId: string }>;
+  ): Promise<{
+    enabled: boolean;
+    grantedAt: string | null;
+    revokedAt: string | null;
+    granterUserId: string;
+  }>;
   listGitTokenAccessLog(projectId: string): Promise<GitTokenAccessLogEntry[]>;
   // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
   reorder(orderedIds: readonly string[]): Promise<void>;
@@ -370,12 +494,18 @@ export interface ProjectRepository {
 
   // Пер-участниковые настройки email-оповещений (свои, по проекту).
   getNotificationPrefs(projectId: string): Promise<NotificationPrefs>;
-  setNotificationPrefs(projectId: string, prefs: NotificationPrefs): Promise<NotificationPrefs>;
+  setNotificationPrefs(
+    projectId: string,
+    prefs: NotificationPrefs,
+  ): Promise<NotificationPrefs>;
 
   // Общая (на весь проект) кастомизация канбан-доски: цвета/переименования/скрытие колонок.
   // Write — editor+ (сервер вернёт 403 для viewer). {} = дефолты.
   getKanbanSettings(projectId: string): Promise<KanbanBoardSettings>;
-  setKanbanSettings(projectId: string, settings: KanbanBoardSettings): Promise<KanbanBoardSettings>;
+  setKanbanSettings(
+    projectId: string,
+    settings: KanbanBoardSettings,
+  ): Promise<KanbanBoardSettings>;
 
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-выбором ответственного во входящих.
@@ -384,7 +514,10 @@ export interface ProjectRepository {
   // Аналитика/активность проекта (окно активности проекта в шапке).
   // recordProjectView — fire-and-forget при открытии проекта (сервер троттлит).
   recordProjectView(projectId: string): Promise<void>;
-  getProjectAnalytics(projectId: string, days: number): Promise<ProjectAnalytics>;
+  getProjectAnalytics(
+    projectId: string,
+    days: number,
+  ): Promise<ProjectAnalytics>;
   getProjectActivity(
     projectId: string,
     limit: number,

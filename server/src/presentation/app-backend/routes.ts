@@ -30,6 +30,24 @@ export function appBackendRouter(deps: AppBackendRouterDeps): Router {
     } catch (error) { next(error); }
   });
 
+  router.post('/:projectId/app-dashboard/domains/verify', requireAuth, async (req, res, next) => {
+    try {
+      res.status(200).json(await deps.settings.verifyCustomDomain(req.params['projectId'] as string, req.user!.id));
+    } catch (error) { next(error); }
+  });
+
+  router.post('/:projectId/app-dashboard/integrations/webhooks/test', requireAuth, async (req, res, next) => {
+    try {
+      res.status(200).json(await deps.settings.testWebhook(req.params['projectId'] as string, req.user!.id));
+    } catch (error) { next(error); }
+  });
+
+  router.post('/:projectId/app-dashboard/security/scan', requireAuth, async (req, res, next) => {
+    try {
+      res.status(200).json(await deps.settings.scanSecurity(req.params['projectId'] as string, req.user!.id));
+    } catch (error) { next(error); }
+  });
+
   router.get(
     '/:projectId/app-backend',
     requireAuth,
@@ -57,6 +75,21 @@ export function appBackendRouter(deps: AppBackendRouterDeps): Router {
       }
     },
   );
+
+  router.get('/:projectId/app-backend/users', requireAuth, async (req, res, next) => {
+    try { res.status(200).json({ users: await deps.dashboard.listRuntimeUsers(req.params['projectId'] as string, req.user!.id) }); }
+    catch (error) { next(error); }
+  });
+
+  router.post('/:projectId/app-backend/users/:userId/revoke-sessions', requireAuth, async (req, res, next) => {
+    try { res.status(200).json(await deps.dashboard.revokeRuntimeUserSessions(req.params['projectId'] as string, req.user!.id, req.params['userId'] as string)); }
+    catch (error) { next(error); }
+  });
+
+  router.delete('/:projectId/app-backend/users/:userId', requireAuth, async (req, res, next) => {
+    try { res.status(200).json(await deps.dashboard.deleteRuntimeUser(req.params['projectId'] as string, req.user!.id, req.params['userId'] as string)); }
+    catch (error) { next(error); }
+  });
 
   router.post(
     '/:projectId/app-backend/tables/:table/query',

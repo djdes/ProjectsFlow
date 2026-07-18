@@ -71,6 +71,7 @@ export type AppCrudRules = {
   readonly update: AppAccess;
   readonly delete: AppAccess;
 };
+export type AppRuntimeUser = { readonly id: string; readonly email: string; readonly createdAt: string; readonly activeSessions: number };
 
 // Административный слой Data Explorer. В отличие от публичного App Runtime он авторизует
 // участника ПРОЕКТА и намеренно не применяет row-owner правила к просмотру: editor проекта
@@ -272,6 +273,45 @@ export class ManageAppBackendData {
       limit: clamp(opts.limit, 1, 250, 100),
       offset: clamp(opts.offset, 0, 1_000_000, 0),
     });
+  }
+
+  async listRuntimeUsers(projectId: string, callerUserId: string): Promise<readonly AppRuntimeUser[]> {
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    const backend = await this.deps.appBackends.getByProject(projectId);
+    if (!backend || backend.status !== 'active' || !backend.schema) return [];
+    this.deps.appDb.ensureDatabase(projectId, backend.schema);
+    const sessions = this.deps.appDb.select(projectId, '_sessions', { limit: 10_000 });
+    const now = Date.now();
+    const counts = new Map<string, number>();
+    for (const session of sessions) {
+      if (new Date(String(session.expires_at)).getTime() <= now) continue;
+      const userId = String(session.user_id);
+      counts.set(userId, (counts.get(userId) ?? 0) + 1);
+    }
+    return this.deps.appDb.select(projectId, '_users', { orderBy: { column: 'created_at', dir: 'desc' }, limit: 5_000 }).map((row) => ({
+      id: String(row.id), email: String(row.email), createdAt: String(row.created_at), activeSessions: counts.get(String(row.id)) ?? 0,
+    }));
+  }
+
+  async revokeRuntimeUserSessions(projectId: string, callerUserId: string, userId: string): Promise<{ revoked: number }> {
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
+    const backend = await this.deps.appBackends.getByProject(projectId);
+    if (!backend || backend.status !== 'active' || !backend.schema) throw new AppBackendNotProvisionedError(projectId);
+    this.deps.appDb.ensureDatabase(projectId, backend.schema);
+    const revoked = this.deps.appDb.removeWhere(projectId, '_sessions', { user_id: userId });
+    this.deps.appDb.recordAudit(projectId, { actorType: 'project_member', actorId: callerUserId, operation: 'dashboard.user.sessions.revoke', rowId: userId, detail: { revoked } });
+    return { revoked };
+  }
+
+  async deleteRuntimeUser(projectId: string, callerUserId: string, userId: string): Promise<{ deleted: number }> {
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
+    const backend = await this.deps.appBackends.getByProject(projectId);
+    if (!backend || backend.status !== 'active' || !backend.schema) throw new AppBackendNotProvisionedError(projectId);
+    this.deps.appDb.ensureDatabase(projectId, backend.schema);
+    this.deps.appDb.removeWhere(projectId, '_sessions', { user_id: userId });
+    const deleted = this.deps.appDb.remove(projectId, '_users', userId);
+    this.deps.appDb.recordAudit(projectId, { actorType: 'project_member', actorId: callerUserId, operation: 'dashboard.user.delete', rowId: userId, detail: { deleted } });
+    return { deleted };
   }
 
   private async requireTable(projectId: string, tableName: string): Promise<{

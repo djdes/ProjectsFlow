@@ -84,3 +84,31 @@ export class GithubImportRepoNotEmptyError extends Error {
     this.name = 'GithubImportRepoNotEmptyError';
   }
 }
+
+export class GithubRepoFileInvalidError extends Error {
+  constructor(public readonly path: string, message = 'Invalid repository file path') {
+    super(message);
+    this.name = 'GithubRepoFileInvalidError';
+  }
+}
+
+export class GithubRepoFileRestrictedError extends Error {
+  constructor(public readonly path: string, public readonly reason: 'sensitive' | 'binary' | 'too_large') {
+    super(`Repository file is not available in Dashboard Code: ${reason}`);
+    this.name = 'GithubRepoFileRestrictedError';
+  }
+}
+
+export class GithubRepoFileNotFoundError extends Error {
+  constructor(public readonly path: string) {
+    super(`Repository file not found: ${path}`);
+    this.name = 'GithubRepoFileNotFoundError';
+  }
+}
+
+export class GithubRepoFileConflictError extends Error {
+  constructor(public readonly path: string, public readonly currentSha: string) {
+    super(`Repository file changed since it was opened: ${path}`);
+    this.name = 'GithubRepoFileConflictError';
+  }
+}

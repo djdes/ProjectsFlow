@@ -40,6 +40,11 @@ export type RepoFileSummary = {
   readonly size: number;
 };
 
+export type RepoTreeResult = {
+  readonly entries: readonly RepoFileSummary[];
+  readonly truncated: boolean;
+};
+
 export type PutFileInput = {
   readonly accessToken: string;
   readonly owner: string;
@@ -113,6 +118,7 @@ export interface GithubApiClient {
   repoExists(accessToken: string, fullName: string): Promise<boolean>;
   getRepoFile(accessToken: string, fullName: string, path: string): Promise<RepoFileContent | null>;
   listRepoTree(accessToken: string, fullName: string, path?: string): Promise<RepoFileSummary[]>;
+  listRepoTreeRecursive(accessToken: string, fullName: string): Promise<RepoTreeResult>;
   putRepoFile(input: PutFileInput): Promise<{ sha: string }>;
   deleteRepoFile(accessToken: string, fullName: string, path: string, sha: string, message: string): Promise<void>;
 }

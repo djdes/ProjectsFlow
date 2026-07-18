@@ -36,6 +36,10 @@ import {
   GithubImportRepoNotWritableError,
   GithubIntegrationDisabledError,
   GithubNotConnectedError,
+  GithubRepoFileConflictError,
+  GithubRepoFileInvalidError,
+  GithubRepoFileNotFoundError,
+  GithubRepoFileRestrictedError,
   GithubRepoNameTakenError,
   GithubRepoUrlInvalidError,
 } from '../../domain/github/errors.js';
@@ -356,6 +360,42 @@ export function errorHandler(
     res.status(422).json({
       error: 'github_repo_url_invalid',
       message: 'Не удалось определить owner/repo из URL.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubRepoFileInvalidError) {
+    res.status(400).json({
+      error: 'repo_file_invalid',
+      message: err.message,
+      details: { path: err.path },
+    });
+    return;
+  }
+
+  if (err instanceof GithubRepoFileRestrictedError) {
+    res.status(err.reason === 'too_large' ? 413 : 415).json({
+      error: 'repo_file_restricted',
+      message: 'Этот файл нельзя просматривать или изменять в Dashboard Code.',
+      details: { path: err.path, reason: err.reason },
+    });
+    return;
+  }
+
+  if (err instanceof GithubRepoFileNotFoundError) {
+    res.status(404).json({
+      error: 'repo_file_not_found',
+      message: 'Файл больше не существует в репозитории.',
+      details: { path: err.path },
+    });
+    return;
+  }
+
+  if (err instanceof GithubRepoFileConflictError) {
+    res.status(409).json({
+      error: 'repo_file_conflict',
+      message: 'Файл изменился в GitHub после открытия. Перезагрузите его перед сохранением.',
+      details: { path: err.path, currentSha: err.currentSha },
     });
     return;
   }

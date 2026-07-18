@@ -8,11 +8,13 @@ import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAp
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
 import type { ManageAppBackendData } from '../application/app-backend/ManageAppBackendData.js';
 import type { ManageAppDashboardSettings } from '../application/app-backend/AppDashboardSettings.js';
+import type { ManageProjectRepositoryCode } from '../application/github/ManageProjectRepositoryCode.js';
 import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
 import type { SiteEditorService } from '../application/site-editor/SiteEditorService.js';
 import { siteEditorRouter } from './site-editor/routes.js';
 import { siteEditorAgentRouter } from './site-editor/agentRoutes.js';
+import { repositoryCodeRouter } from './repository-code/routes.js';
 import { SITE_EDITOR_BRIDGE_PATH, SITE_EDITOR_BRIDGE_SCRIPT } from './site-editor/bridgeScript.js';
 import cookieParser from 'cookie-parser';
 import {
@@ -322,6 +324,7 @@ type AppDeps = {
     readonly dashboard: ManageAppBackendData;
     readonly settings: ManageAppDashboardSettings;
   };
+  readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
   readonly projects: {
     readonly listProjects: ListProjects;
@@ -889,6 +892,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     dashboard: deps.appBackend.dashboard,
     settings: deps.appBackend.settings,
   }));
+  app.use('/api/projects', repositoryCodeRouter({ repositoryCode: deps.repositoryCode }));
   app.use('/api/projects', siteEditorRouter({ service: deps.siteEditor.service }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —
   // форма доступна и анонимам с лендинга (см. help/routes.ts).

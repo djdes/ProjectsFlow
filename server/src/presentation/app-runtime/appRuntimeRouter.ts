@@ -2,6 +2,8 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { AppAuthService, AppUser } from '../../application/app-backend/AppAuthService.js';
 import type { RunAppQuery } from '../../application/app-backend/RunAppQuery.js';
 import type { Row } from '../../application/app-backend/AppDatabaseStore.js';
+import type { AppDashboardSettingsRepository } from '../../application/app-backend/AppDashboardSettings.js';
+import { DEFAULT_APP_DASHBOARD_SETTINGS } from '../../application/app-backend/AppDashboardSettings.js';
 import {
   AppAccessDeniedError,
   AppAuthError,
@@ -15,6 +17,7 @@ import {
 export type AppRuntimeDeps = {
   readonly authService: AppAuthService;
   readonly runQuery: RunAppQuery;
+  readonly settings: AppDashboardSettingsRepository;
 };
 
 // projectId ставится host-middleware'ом (по site-slug поддомена) в req.appProjectId ДО передачи
@@ -66,21 +69,34 @@ export function appRuntimeRouter(deps: AppRuntimeDeps): Router {
   };
 
   router.post('/api/auth/signup', (req: Request, res: Response, next: NextFunction) => {
-    try {
+    void (async () => {
+      const settings = await deps.settings.get(projectId(req)) ?? DEFAULT_APP_DASHBOARD_SETTINGS;
+      if (!settings.auth.emailPassword) throw new AppAuthError('email authentication disabled');
       const r = deps.authService.signUp(projectId(req), String(req.body?.email ?? ''), String(req.body?.password ?? ''));
       res.status(201).json(r);
-    } catch (e) {
-      next(e);
-    }
+    })().catch(next);
   });
 
   router.post('/api/auth/signin', (req: Request, res: Response, next: NextFunction) => {
-    try {
+    void (async () => {
+      const settings = await deps.settings.get(projectId(req)) ?? DEFAULT_APP_DASHBOARD_SETTINGS;
+      if (!settings.auth.emailPassword) throw new AppAuthError('email authentication disabled');
       const r = deps.authService.signIn(projectId(req), String(req.body?.email ?? ''), String(req.body?.password ?? ''));
       res.json(r);
-    } catch (e) {
-      next(e);
-    }
+    })().catch(next);
+  });
+
+  router.get('/api/auth/config', (req: Request, res: Response, next: NextFunction) => {
+    void deps.settings.get(projectId(req)).then((settings) => {
+      const auth = settings?.auth ?? DEFAULT_APP_DASHBOARD_SETTINGS.auth;
+      res.json({ emailPassword: auth.emailPassword, providers: {
+        google: auth.google === 'pending' ? 'setup_required' : 'disabled',
+        microsoft: auth.microsoft === 'pending' ? 'setup_required' : 'disabled',
+        facebook: auth.facebook === 'pending' ? 'setup_required' : 'disabled',
+        apple: auth.apple === 'pending' ? 'setup_required' : 'disabled',
+        sso: auth.sso === 'pending' ? 'setup_required' : 'disabled',
+      } });
+    }).catch(next);
   });
 
   router.post('/api/auth/signout', (req: Request, res: Response) => {

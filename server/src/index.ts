@@ -121,6 +121,7 @@ import { PollDeviceFlow } from './application/github/PollDeviceFlow.js';
 import { DisconnectGithub } from './application/github/DisconnectGithub.js';
 import { ListUserRepos } from './application/github/ListUserRepos.js';
 import { ListProjectCommits } from './application/github/ListProjectCommits.js';
+import { ManageProjectRepositoryCode } from './application/github/ManageProjectRepositoryCode.js';
 import { GithubKbRepository } from './infrastructure/kb/GithubKbRepository.js';
 import { GithubKbBackend } from './infrastructure/kb/GithubKbBackend.js';
 import { LocalKbBackend } from './infrastructure/kb/LocalKbBackend.js';
@@ -546,6 +547,15 @@ const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
 
 const gitTokenDelegationRepo = new DrizzleGitTokenDelegationRepository(db, idGenerator);
+const manageProjectRepositoryCode = new ManageProjectRepositoryCode({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  tokens: githubTokenRepo,
+  api: githubApi,
+  delegations: gitTokenDelegationRepo,
+  users: userRepo,
+  activity: activityRecorder,
+});
 
 // KB-store: единый фасад, выбирающий github↔local-бэкенд по project.kbKind.
 // v0.16+: GithubKbBackend получает `delegations`/`projects`/`users` для
@@ -958,7 +968,7 @@ const appDashboardSettingsRepo = new DrizzleAppDashboardSettingsRepository(db);
 const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
 const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
 const runAppQuery = new RunAppQuery({ appBackends: appBackendRepo, appDb: appDatabaseStore });
-const appRuntime = appRuntimeRouter({ authService: appAuthService, runQuery: runAppQuery });
+const appRuntime = appRuntimeRouter({ authService: appAuthService, runQuery: runAppQuery, settings: appDashboardSettingsRepo });
 // app-ключ: случайный публичный идентификатор приложения; храним только SHA-256 (как agent-токены).
 const provisionAppBackend = new ProvisionAppBackend({
   appBackends: appBackendRepo,
@@ -1772,6 +1782,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       sites: siteArtifactRepo,
       storage: siteArtifactStorage,
+      dashboardSettings: appDashboardSettingsRepo,
     }),
     // Заглушка «сайт в разработке» на ещё-не-задеплоенном <site_slug>.<baseDomain> (db/100).
     lookupSiteSlug: async (slug) => {
@@ -1787,6 +1798,7 @@ const { app, devProxyUpgrade } = createApp({
     dashboard: manageAppBackendData,
     settings: manageAppDashboardSettings,
   },
+  repositoryCode: manageProjectRepositoryCode,
   siteEditor: {
     service: siteEditorService,
   },
