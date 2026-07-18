@@ -293,7 +293,7 @@ export function TasksPage(): React.ReactElement {
       {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-40">
+      <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-0">
         {!data.isInbox && canEdit && (
           <ProjectGithubOnboardingBanner
             projectId={data.id}
