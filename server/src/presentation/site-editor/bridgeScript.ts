@@ -38,6 +38,7 @@ export const SITE_EDITOR_BRIDGE_SCRIPT = String.raw`(() => {
   const redo = [];
   let persisted = [];
   let mutationTimer = null;
+  const replayedToggleIds = new WeakMap();
 
   const send = (type, payload) => {
     if (!nonce || !parentOrigin) return;
@@ -120,7 +121,16 @@ export const SITE_EDITOR_BRIDGE_SCRIPT = String.raw`(() => {
       return mutate(() => { node.hidden = Boolean(patch.hidden); }, () => { node.hidden = before; });
     }
     if (patch.kind === 'command') {
-      if (patch.command === 'toggle-visibility') { const before = node.hidden; return mutate(() => { node.hidden = !before; }, () => { node.hidden = before; }); }
+      if (patch.command === 'toggle-visibility') {
+        if (!recordHistory && patchId) {
+          let ids = replayedToggleIds.get(node);
+          if (!ids) { ids = new Set(); replayedToggleIds.set(node, ids); }
+          if (ids.has(patchId)) return;
+          ids.add(patchId);
+        }
+        const before = node.hidden;
+        return mutate(() => { node.hidden = !before; }, () => { node.hidden = before; });
+      }
       if (patch.command === 'layout') { const before = node.style.display; return mutate(() => { node.style.display = 'flex'; }, () => { node.style.display = before; }); }
       if (patch.command === 'duplicate') {
         if (!recordHistory && patchId && document.querySelector('[data-pf-duplicate="' + CSS.escape(patchId) + '"]')) return;

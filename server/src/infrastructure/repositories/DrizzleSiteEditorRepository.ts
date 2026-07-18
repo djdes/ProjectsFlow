@@ -69,6 +69,8 @@ function toPatch(row: PatchRow): SitePatch {
     idempotencyKey: row.idempotencyKey,
     createdRevision: row.createdRevision,
     createdBy: row.createdBy,
+    state: row.state,
+    publishJobId: row.publishJobId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -79,6 +81,7 @@ function toJob(row: JobRow): ProjectEditJob {
     id: row.id,
     projectId: row.projectId,
     createdBy: row.createdBy,
+    idempotencyKey: row.idempotencyKey,
     dispatcherUserId: row.dispatcherUserId,
     status: row.status,
     operation: row.operation,
@@ -136,7 +139,9 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
   async getPatches(projectId: string, route: string): Promise<SitePatchSnapshot> {
     const sets = await this.db.select().from(sitePatchSets)
       .where(and(eq(sitePatchSets.projectId, projectId), eq(sitePatchSets.route, route))).limit(1);
-    if (!sets[0]) return { revision: 0, patches: [] };
+    if (!sets[0]) {
+      return { revision: 0, patches: [], draftCount: 0, redoCount: 0, queuedCount: 0, publishJobId: null };
+    }
     return this.snapshot(this.db, sets[0]);
   }
 
@@ -149,6 +154,14 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
       )).limit(1);
       if (replay[0]) return this.snapshot(tx, set);
       this.assertRevision(set, input.baseRevision);
+      // Creating a new edit after undo starts a new history branch. Old redo rows
+      // must not be resurrectable through the session endpoint.
+      await tx.delete(sitePatches).where(and(
+        eq(sitePatches.projectId, input.projectId),
+        eq(sitePatches.patchSetId, set.id),
+        eq(sitePatches.state, 'draft'),
+        isNotNull(sitePatches.deletedAt),
+      ));
       const revision = set.revision + 1;
       await tx.insert(sitePatches).values({
         id: input.id,
@@ -223,7 +236,8 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
       const set = await this.lockPatchSetByRoute(tx, projectId, route);
       this.assertRevision(set, baseRevision);
       const rows = await tx.select().from(sitePatches).where(and(
-        eq(sitePatches.projectId, projectId), eq(sitePatches.patchSetId, set.id), isNull(sitePatches.deletedAt),
+        eq(sitePatches.projectId, projectId), eq(sitePatches.patchSetId, set.id),
+        eq(sitePatches.state, 'draft'), isNull(sitePatches.deletedAt),
       )).orderBy(desc(sitePatches.createdRevision), desc(sitePatches.updatedAt)).limit(1).for('update');
       if (!rows[0]) return this.snapshot(tx, set);
       const revision = set.revision + 1;
@@ -240,7 +254,8 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
       const set = await this.lockPatchSetByRoute(tx, projectId, route);
       this.assertRevision(set, baseRevision);
       const rows = await tx.select().from(sitePatches).where(and(
-        eq(sitePatches.projectId, projectId), eq(sitePatches.patchSetId, set.id), isNotNull(sitePatches.deletedAt),
+        eq(sitePatches.projectId, projectId), eq(sitePatches.patchSetId, set.id),
+        eq(sitePatches.state, 'draft'), isNotNull(sitePatches.deletedAt),
       )).orderBy(desc(sitePatches.updatedAt)).limit(1).for('update');
       if (!rows[0]) return this.snapshot(tx, set);
       const revision = set.revision + 1;
@@ -252,13 +267,78 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
     });
   }
 
-  async createJob(input: CreateProjectEditJobRecord): Promise<ProjectEditJob> {
-    await this.db.insert(projectEditJobs).values({
-      ...input,
-      locatorJson: JSON.stringify(input.locator),
-      computedStylesJson: JSON.stringify(input.computedStyles),
+  async rejectDraft(projectId: string, route: string, baseRevision: number): Promise<SitePatchSnapshot> {
+    return this.db.transaction(async (tx) => {
+      const set = await this.lockPatchSetByRoute(tx, projectId, route);
+      this.assertRevision(set, baseRevision);
+      const rows = await tx.select({ id: sitePatches.id }).from(sitePatches).where(and(
+        eq(sitePatches.projectId, projectId), eq(sitePatches.patchSetId, set.id), eq(sitePatches.state, 'draft'),
+      )).limit(1).for('update');
+      if (!rows[0]) return this.snapshot(tx, set);
+      await tx.delete(sitePatches).where(and(
+        eq(sitePatches.projectId, projectId), eq(sitePatches.patchSetId, set.id), eq(sitePatches.state, 'draft'),
+      ));
+      const revision = set.revision + 1;
+      await tx.update(sitePatchSets).set({ revision }).where(eq(sitePatchSets.id, set.id));
+      return this.snapshot(tx, { ...set, revision });
     });
-    const job = await this.getJob(input.projectId, input.id);
+  }
+
+  async queueDraftPublish(input: CreateProjectEditJobRecord & { readonly baseRevision: number }): Promise<{ readonly job: ProjectEditJob; readonly snapshot: SitePatchSnapshot }> {
+    return this.db.transaction(async (tx) => {
+      const { baseRevision, locator, computedStyles, ...jobInput } = input;
+      const set = await this.lockPatchSetByRoute(tx, input.projectId, input.route);
+      this.assertRevision(set, baseRevision);
+      const drafts = await tx.select({ id: sitePatches.id }).from(sitePatches).where(and(
+        eq(sitePatches.projectId, input.projectId), eq(sitePatches.patchSetId, set.id),
+        eq(sitePatches.state, 'draft'), isNull(sitePatches.deletedAt),
+      )).for('update');
+      if (!drafts.length) throw new SiteEditorPatchNotFoundError();
+      await tx.insert(projectEditJobs).values({
+        ...jobInput,
+        locatorJson: JSON.stringify(locator),
+        computedStylesJson: JSON.stringify(computedStyles),
+      });
+      await tx.update(sitePatches).set({ state: 'queued', publishJobId: input.id }).where(and(
+        eq(sitePatches.projectId, input.projectId), eq(sitePatches.patchSetId, set.id),
+        eq(sitePatches.state, 'draft'), isNull(sitePatches.deletedAt),
+      ));
+      await tx.delete(sitePatches).where(and(
+        eq(sitePatches.projectId, input.projectId), eq(sitePatches.patchSetId, set.id),
+        eq(sitePatches.state, 'draft'), isNotNull(sitePatches.deletedAt),
+      ));
+      const revision = set.revision + 1;
+      await tx.update(sitePatchSets).set({ revision }).where(eq(sitePatchSets.id, set.id));
+      const jobs = await tx.select().from(projectEditJobs).where(and(
+        eq(projectEditJobs.projectId, input.projectId), eq(projectEditJobs.id, input.id),
+      )).limit(1);
+      if (!jobs[0]) throw new Error('Failed to read queued site editor publish job');
+      return { job: toJob(jobs[0]), snapshot: await this.snapshot(tx, { ...set, revision }) };
+    });
+  }
+
+  async hasQueuedPublishJob(projectId: string, jobId: string): Promise<boolean> {
+    const rows = await this.db.select({ id: sitePatches.id }).from(sitePatches).where(and(
+      eq(sitePatches.projectId, projectId), eq(sitePatches.publishJobId, jobId), eq(sitePatches.state, 'queued'),
+    )).limit(1);
+    return Boolean(rows[0]);
+  }
+
+  async createJob(input: CreateProjectEditJobRecord): Promise<ProjectEditJob> {
+    const { locator, computedStyles, ...jobInput } = input;
+    await this.db.insert(projectEditJobs).values({
+      ...jobInput,
+      locatorJson: JSON.stringify(locator),
+      computedStylesJson: JSON.stringify(computedStyles),
+    }).onDuplicateKeyUpdate({
+      set: { idempotencyKey: sql`${projectEditJobs.idempotencyKey}` },
+    });
+    const rows = await this.db.select().from(projectEditJobs).where(and(
+      eq(projectEditJobs.projectId, input.projectId),
+      eq(projectEditJobs.createdBy, input.createdBy),
+      eq(projectEditJobs.idempotencyKey, input.idempotencyKey),
+    )).limit(1);
+    const job = rows[0] ? toJob(rows[0]) : null;
     if (!job) throw new Error('Failed to read project edit job');
     return job;
   }
@@ -298,18 +378,41 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
     error: string | null;
     finishedAt: Date;
   }): Promise<ProjectEditJob | null> {
-    const result = await this.db.update(projectEditJobs).set({
-      status: input.status,
-      resultJson: input.result ? JSON.stringify(input.result) : null,
-      error: input.error,
-      finishedAt: input.finishedAt,
-    }).where(and(
-      eq(projectEditJobs.projectId, input.projectId),
-      eq(projectEditJobs.id, input.jobId),
-      eq(projectEditJobs.dispatcherUserId, input.dispatcherUserId),
-      eq(projectEditJobs.status, 'running'),
-    ));
-    return Number(result[0].affectedRows) > 0 ? this.getJob(input.projectId, input.jobId) : null;
+    return this.db.transaction(async (tx) => {
+      const jobs = await tx.select().from(projectEditJobs).where(and(
+        eq(projectEditJobs.projectId, input.projectId), eq(projectEditJobs.id, input.jobId),
+        eq(projectEditJobs.dispatcherUserId, input.dispatcherUserId), eq(projectEditJobs.status, 'running'),
+      )).limit(1).for('update');
+      if (!jobs[0]) return null;
+      await tx.update(projectEditJobs).set({
+        status: input.status,
+        resultJson: input.result ? JSON.stringify(input.result) : null,
+        error: input.error,
+        finishedAt: input.finishedAt,
+      }).where(and(eq(projectEditJobs.projectId, input.projectId), eq(projectEditJobs.id, input.jobId)));
+      const setRows = await tx.select().from(sitePatchSets).where(and(
+        eq(sitePatchSets.projectId, input.projectId), eq(sitePatchSets.route, jobs[0].route),
+      )).limit(1).for('update');
+      if (setRows[0]) {
+        const queued = await tx.select({ id: sitePatches.id }).from(sitePatches).where(and(
+          eq(sitePatches.projectId, input.projectId), eq(sitePatches.publishJobId, input.jobId), eq(sitePatches.state, 'queued'),
+        )).limit(1).for('update');
+        if (queued[0]) {
+          if (input.status === 'succeeded') {
+            await tx.delete(sitePatches).where(and(eq(sitePatches.projectId, input.projectId), eq(sitePatches.publishJobId, input.jobId)));
+          } else {
+            await tx.update(sitePatches).set({ state: 'draft', publishJobId: null }).where(and(
+              eq(sitePatches.projectId, input.projectId), eq(sitePatches.publishJobId, input.jobId),
+            ));
+          }
+          await tx.update(sitePatchSets).set({ revision: setRows[0].revision + 1 }).where(eq(sitePatchSets.id, setRows[0].id));
+        }
+      }
+      const completed = await tx.select().from(projectEditJobs).where(and(
+        eq(projectEditJobs.projectId, input.projectId), eq(projectEditJobs.id, input.jobId),
+      )).limit(1);
+      return completed[0] ? toJob(completed[0]) : null;
+    });
   }
 
   private async lockOrCreatePatchSet(tx: Tx, projectId: string, route: string, seedId: string): Promise<PatchSetRow> {
@@ -349,6 +452,20 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
       eq(sitePatches.patchSetId, set.id),
       isNull(sitePatches.deletedAt),
     )).orderBy(asc(sitePatches.createdRevision), asc(sitePatches.createdAt));
-    return { revision: set.revision, patches: rows.map(toPatch) };
+    const redoRows = await db.select({ id: sitePatches.id }).from(sitePatches).where(and(
+      eq(sitePatches.projectId, set.projectId), eq(sitePatches.patchSetId, set.id),
+      eq(sitePatches.state, 'draft'), isNotNull(sitePatches.deletedAt),
+    ));
+    const patches = rows.map(toPatch);
+    const draftCount = patches.filter((patch) => patch.state === 'draft').length;
+    const queued = patches.filter((patch) => patch.state === 'queued');
+    return {
+      revision: set.revision,
+      patches,
+      draftCount,
+      redoCount: redoRows.length,
+      queuedCount: queued.length,
+      publishJobId: queued[0]?.publishJobId ?? null,
+    };
   }
 }

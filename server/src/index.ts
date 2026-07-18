@@ -81,12 +81,14 @@ import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.j
 import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
 import { FileSystemSiteArtifactStorage } from './infrastructure/storage/FileSystemSiteArtifactStorage.js';
 import { DrizzleAppBackendRepository } from './infrastructure/repositories/DrizzleAppBackendRepository.js';
+import { DrizzleAppDashboardSettingsRepository } from './infrastructure/repositories/DrizzleAppDashboardSettingsRepository.js';
 import { SqliteAppDatabaseStore } from './infrastructure/app-backend/SqliteAppDatabaseStore.js';
 import { AppAuthService } from './application/app-backend/AppAuthService.js';
 import { RunAppQuery } from './application/app-backend/RunAppQuery.js';
 import { ProvisionAppBackend } from './application/app-backend/ProvisionAppBackend.js';
 import { GetAppBackendStatus } from './application/app-backend/GetAppBackendStatus.js';
 import { ManageAppBackendData } from './application/app-backend/ManageAppBackendData.js';
+import { ManageAppDashboardSettings } from './application/app-backend/AppDashboardSettings.js';
 import { appRuntimeRouter } from './presentation/app-runtime/appRuntimeRouter.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
@@ -952,6 +954,7 @@ console.log(`[projectsflow] site artifacts dir: ${siteArtifactsDir}`);
 // Один SQLite-файл на проект: apps-data/<project_id>.sqlite (квота 100 МБ на проект).
 const appsDataDir = resolvePath(process.env['APPS_DATA_DIR'] ?? 'apps-data');
 const appBackendRepo = new DrizzleAppBackendRepository(db);
+const appDashboardSettingsRepo = new DrizzleAppDashboardSettingsRepository(db);
 const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
 const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
 const runAppQuery = new RunAppQuery({ appBackends: appBackendRepo, appDb: appDatabaseStore });
@@ -1236,6 +1239,11 @@ const manageAppBackendData = new ManageAppBackendData({
   appDb: appDatabaseStore,
   projects: projectRepo,
   members: projectMemberRepo,
+});
+const manageAppDashboardSettings = new ManageAppDashboardSettings({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  settings: appDashboardSettingsRepo,
 });
 const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
   projects: projectRepo,
@@ -1777,6 +1785,7 @@ const { app, devProxyUpgrade } = createApp({
     provision: provisionAppBackend,
     getStatus: getAppBackendStatus,
     dashboard: manageAppBackendData,
+    settings: manageAppDashboardSettings,
   },
   siteEditor: {
     service: siteEditorService,

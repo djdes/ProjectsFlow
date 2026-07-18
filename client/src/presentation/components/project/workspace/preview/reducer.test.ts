@@ -11,10 +11,13 @@ test('mode changes close transient editor state', () => {
   assert.equal(next.codeOpen, false);
 });
 
-test('successful patches advance revision and reset redo history', () => {
-  const next = previewEditorReducer({ ...createPreviewEditorState(), undoDepth: 2, redoDepth: 3, saveStatus: 'saving' }, { type: 'PATCH_SUCCESS', revision: 8 });
+test('successful patches expose the server-authoritative draft and redo counts', () => {
+  const next = previewEditorReducer(
+    { ...createPreviewEditorState(), undoDepth: 2, redoDepth: 3, saveStatus: 'saving' },
+    { type: 'PATCH_SUCCESS', revision: 8, draftCount: 3, redoDepth: 0, queuedCount: 0 },
+  );
   assert.equal(next.revision, 8);
   assert.equal(next.undoDepth, 3);
   assert.equal(next.redoDepth, 0);
-  assert.equal(next.saveStatus, 'clean');
+  assert.equal(next.saveStatus, 'dirty');
 });

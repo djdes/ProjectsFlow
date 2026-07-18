@@ -18,6 +18,7 @@ import {
   SiteEditorNotDeployedError,
   SiteEditorPatchNotFoundError,
   SiteEditorSessionInvalidError,
+  SiteEditorValidationError,
 } from '../../domain/site-editor/errors.js';
 import type { SiteEditorRepository } from './SiteEditorRepository.js';
 import {
@@ -39,6 +40,28 @@ type Deps = ProjectAccessDeps & {
 };
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
+
+function normalizeJobResultPatch(candidate: unknown): { kind: SitePatchKind; payload: Readonly<Record<string, unknown>> } | null {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+  const patch = candidate as Record<string, unknown>;
+  const kind = patch['kind'];
+  if (!['text', 'style', 'attribute', 'visibility', 'command'].includes(String(kind))) {
+    throw new SiteEditorValidationError('Invalid result patch kind');
+  }
+  if (patch['payload'] && typeof patch['payload'] === 'object' && !Array.isArray(patch['payload'])) {
+    return { kind: kind as SitePatchKind, payload: patch['payload'] as Record<string, unknown> };
+  }
+  if (kind === 'text' && typeof patch['value'] === 'string') return { kind, payload: { text: patch['value'] } };
+  if (kind === 'style' && typeof patch['property'] === 'string' && typeof patch['value'] === 'string') {
+    return { kind, payload: { styles: { [patch['property']]: patch['value'] } } };
+  }
+  if (kind === 'attribute' && typeof patch['name'] === 'string' && (typeof patch['value'] === 'string' || patch['value'] === null)) {
+    return { kind, payload: { name: patch['name'], value: patch['value'] } };
+  }
+  if (kind === 'visibility' && typeof patch['hidden'] === 'boolean') return { kind, payload: { hidden: patch['hidden'] } };
+  if (kind === 'command' && typeof patch['command'] === 'string') return { kind, payload: { command: patch['command'] } };
+  throw new SiteEditorValidationError('Invalid result patch payload');
+}
 
 export class SiteEditorService {
   private readonly now: () => Date;
@@ -166,6 +189,47 @@ export class SiteEditorService {
     return this.deps.repository.redoPatch(projectId, session.route, baseRevision);
   }
 
+  async rejectSessionDraft(projectId: string, userId: string, sessionId: string, baseRevision: number): Promise<SitePatchSnapshot> {
+    const session = await this.requireSession(projectId, userId, sessionId);
+    return this.deps.repository.rejectDraft(projectId, session.route, baseRevision);
+  }
+
+  async queueSessionDraftPublish(projectId: string, userId: string, sessionId: string, baseRevision: number): Promise<{ readonly job: ProjectEditJob; readonly snapshot: SitePatchSnapshot }> {
+    const session = await this.requireSession(projectId, userId, sessionId);
+    const { project } = await requireProjectAccess(this.deps, projectId, userId, 'update_project');
+    if (!project.dispatcherUserId) throw new ProjectEditDispatcherMissingError();
+    const snapshot = await this.deps.repository.getPatches(projectId, session.route);
+    const drafts = snapshot.patches.filter((patch) => patch.state === 'draft');
+    if (!drafts.length) throw new SiteEditorPatchNotFoundError();
+    const context = JSON.stringify({
+      protocol: 'projectsflow.site-editor-publish.v1',
+      route: session.route,
+      baseArtifactVersion: session.artifactVersion,
+      patches: drafts.map((patch) => ({
+        id: patch.id,
+        locator: patch.locator,
+        kind: patch.kind,
+        payload: patch.payload,
+        createdRevision: patch.createdRevision,
+      })),
+    }).slice(0, 50_000);
+    return this.deps.repository.queueDraftPublish({
+      id: this.deps.idGen(),
+      projectId,
+      createdBy: userId,
+      idempotencyKey: `publish:${session.id}:${baseRevision}`.slice(0, 100),
+      dispatcherUserId: project.dispatcherUserId,
+      operation: 'edit_code',
+      route: session.route,
+      locator: drafts[0]!.locator,
+      domSnapshot: context,
+      computedStyles: {},
+      prompt: 'Apply the approved ProjectsFlow visual-editor patch batch to the project source. Preserve unrelated code, run relevant checks, commit and push the change, deploy it, then complete this job only after a new deployment artifact is available.',
+      artifactVersion: session.artifactVersion,
+      baseRevision,
+    });
+  }
+
   async createJob(input: {
     projectId: string;
     userId: string;
@@ -176,14 +240,19 @@ export class SiteEditorService {
     prompt: string;
     operation: ProjectEditOperation;
     artifactVersion: string;
+    idempotencyKey: string;
   }): Promise<ProjectEditJob> {
     const { project } = await requireProjectAccess(this.deps, input.projectId, input.userId, 'update_project');
     if (!project.dispatcherUserId) throw new ProjectEditDispatcherMissingError();
     await this.assertArtifactVersion(input.projectId, input.artifactVersion);
+    if (!/^[A-Za-z0-9._:-]{8,100}$/.test(input.idempotencyKey)) {
+      throw new SiteEditorValidationError('Invalid edit job idempotency key');
+    }
     return this.deps.repository.createJob({
       id: this.deps.idGen(),
       projectId: input.projectId,
       createdBy: input.userId,
+      idempotencyKey: input.idempotencyKey,
       dispatcherUserId: project.dispatcherUserId,
       operation: input.operation,
       route: normalizeSiteRoute(input.route),
@@ -230,10 +299,35 @@ export class SiteEditorService {
   }): Promise<ProjectEditJob> {
     await requireDispatcherAccess(this.deps, input.projectId, input.userId);
     const existing = await this.requireJob(input.projectId, input.jobId);
-    if (existing.artifactVersion !== input.artifactVersion) {
-      throw new SiteEditorArtifactConflictError(await this.currentArtifactVersion(input.projectId));
+    const currentArtifactVersion = await this.currentArtifactVersion(input.projectId);
+    const isDraftPublish = await this.deps.repository.hasQueuedPublishJob(input.projectId, input.jobId);
+    if (input.status === 'succeeded') {
+      // A publish/edit job is complete only when the worker has produced a newer
+      // artifact. This prevents dropping the replay overlay before the source-backed
+      // result can replace it.
+      if (!currentArtifactVersion || input.artifactVersion !== currentArtifactVersion || (isDraftPublish && currentArtifactVersion === existing.artifactVersion)) {
+        throw new SiteEditorArtifactConflictError(currentArtifactVersion);
+      }
+    } else if (input.artifactVersion !== existing.artifactVersion) {
+      throw new SiteEditorArtifactConflictError(currentArtifactVersion);
     }
-    await this.assertArtifactVersion(input.projectId, input.artifactVersion);
+    if (input.status === 'succeeded' && !isDraftPublish) {
+      const patch = normalizeJobResultPatch(input.result?.['patch']);
+      if (patch) {
+        const snapshot = await this.deps.repository.getPatches(input.projectId, existing.route);
+        await this.deps.repository.createPatch({
+          id: this.deps.idGen(),
+          projectId: input.projectId,
+          route: existing.route,
+          baseRevision: snapshot.revision,
+          idempotencyKey: `job:${existing.id}`,
+          locator: sanitizeLocator(existing.locator),
+          kind: patch.kind,
+          payload: sanitizePatchPayload(patch.kind, patch.payload),
+          createdBy: existing.createdBy,
+        });
+      }
+    }
     const completed = await this.deps.repository.completeJob({
       projectId: input.projectId,
       jobId: input.jobId,
@@ -245,6 +339,11 @@ export class SiteEditorService {
     });
     if (!completed) throw new ProjectEditJobStateError('Edit job is not running');
     return completed;
+  }
+
+  async getArtifactVersionForDispatcher(projectId: string, userId: string): Promise<string | null> {
+    await requireDispatcherAccess(this.deps, projectId, userId);
+    return this.currentArtifactVersion(projectId);
   }
 
   private async requireJob(projectId: string, jobId: string): Promise<ProjectEditJob> {

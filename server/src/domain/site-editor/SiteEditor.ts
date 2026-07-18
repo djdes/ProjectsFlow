@@ -18,6 +18,8 @@ export type SitePatch = {
   readonly idempotencyKey: string;
   readonly createdRevision: number;
   readonly createdBy: string;
+  readonly state: 'draft' | 'queued';
+  readonly publishJobId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -25,6 +27,10 @@ export type SitePatch = {
 export type SitePatchSnapshot = {
   readonly revision: number;
   readonly patches: readonly SitePatch[];
+  readonly draftCount: number;
+  readonly redoCount: number;
+  readonly queuedCount: number;
+  readonly publishJobId: string | null;
 };
 
 export type SiteEditorSession = {
@@ -53,6 +59,7 @@ export type ProjectEditJob = {
   readonly id: string;
   readonly projectId: string;
   readonly createdBy: string;
+  readonly idempotencyKey: string;
   readonly dispatcherUserId: string;
   readonly status: ProjectEditJobStatus;
   readonly operation: ProjectEditOperation;

@@ -21,7 +21,8 @@ import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/domain/project/Project';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
-import type { AppBackendDashboard, ProjectSite } from '@/application/project/ProjectRepository';
+import type { ProjectAnalytics } from '@/domain/project/ProjectAnalytics';
+import type { AppBackendDashboard, AppDashboardSettings, ProjectSite } from '@/application/project/ProjectRepository';
 import { AppDataExplorer } from './AppDataExplorer';
 import { AppLogsPanel } from './AppLogsPanel';
 import {
@@ -42,7 +43,6 @@ import {
 import {
   DASHBOARD_SECTIONS,
   resolveDashboardSection,
-  type DashboardActionHandlers,
   type DashboardIconName,
   type DashboardSection,
 } from './dashboard/dashboardConfig';
@@ -69,9 +69,9 @@ export type ProjectDashboardProps = {
   readonly members: readonly ProjectMember[];
   readonly canEdit: boolean;
   readonly onOpenPreview: () => void;
+  readonly onOpenAutomation: () => void;
   readonly initialSection?: DashboardSection | string;
   readonly onSectionChange?: (section: DashboardSection) => void;
-  readonly actions?: Partial<DashboardActionHandlers>;
 };
 
 export function ProjectDashboard({
@@ -79,14 +79,17 @@ export function ProjectDashboard({
   members,
   canEdit,
   onOpenPreview,
+  onOpenAutomation,
   initialSection,
   onSectionChange,
-  actions,
 }: ProjectDashboardProps): React.ReactElement {
   const { projectRepository } = useContainer();
   const [section, setSection] = useState<DashboardSection>(() => resolveDashboardSection(initialSection));
   const [dashboard, setDashboard] = useState<AppBackendDashboard | null>(null);
   const [site, setSite] = useState<ProjectSite | null>(null);
+  const [analytics, setAnalytics] = useState<ProjectAnalytics | null>(null);
+  const [dashboardSettings, setDashboardSettings] = useState<AppDashboardSettings | null>(null);
+  const [currentProject, setCurrentProject] = useState(project);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -96,16 +99,24 @@ export function ProjectDashboard({
   }, [initialSection]);
 
   useEffect(() => {
+    setCurrentProject(project);
+  }, [project]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(false);
     Promise.all([
       projectRepository.getAppBackendDashboard(project.id),
       projectRepository.getProjectSite(project.id),
-    ]).then(([backend, projectSite]) => {
+      projectRepository.getProjectAnalytics(project.id, 28),
+      projectRepository.getAppDashboardSettings(project.id),
+    ]).then(([backend, projectSite, projectAnalytics, settings]) => {
       if (cancelled) return;
       setDashboard(backend);
       setSite(projectSite);
+      setAnalytics(projectAnalytics);
+      setDashboardSettings(settings);
     }).catch(() => { if (!cancelled) setError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -117,17 +128,21 @@ export function ProjectDashboard({
   };
 
   if (loading) return <div className="grid min-h-[480px] place-items-center text-sm text-muted-foreground" role="status"><span><Loader2 className="mr-2 inline size-4 animate-spin motion-reduce:animate-none" />Загружаем Dashboard…</span></div>;
-  if (error || !dashboard) return <div className="grid min-h-[480px] place-items-center px-4 text-center"><div><p className="font-medium">Dashboard не загрузился</p><p className="mt-1 text-sm text-muted-foreground">Данные проекта остались в безопасности. Попробуйте ещё раз.</p><Button variant="outline" className="mt-4" onClick={() => setReload((value) => value + 1)}>Повторить</Button></div></div>;
+  if (error || !dashboard || !dashboardSettings) return <div className="grid min-h-[480px] place-items-center px-4 text-center"><div><p className="font-medium">Dashboard не загрузился</p><p className="mt-1 text-sm text-muted-foreground">Данные проекта остались в безопасности. Попробуйте ещё раз.</p><Button variant="outline" className="mt-4" onClick={() => setReload((value) => value + 1)}>Повторить</Button></div></div>;
 
   const common: DashboardContentProps = {
-    project,
+    project: currentProject,
     members,
     canEdit,
     dashboard,
     site,
+    analytics,
+    dashboardSettings,
     onOpenPreview,
+    onOpenAutomation,
+    onProjectUpdated: setCurrentProject,
+    onDashboardSettingsUpdated: setDashboardSettings,
     onRefresh: () => setReload((value) => value + 1),
-    actions,
   };
 
   return (
@@ -141,7 +156,7 @@ export function ProjectDashboard({
               return <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => selectSection(id)} className={cn('flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors motion-reduce:transition-none', section === id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}><Icon className="size-4 shrink-0" aria-hidden /><span className="truncate">{label}</span></button>;
             })}
           </nav>
-          <div className="mt-auto border-t px-2 pt-3 text-xs text-muted-foreground"><p className="truncate font-medium text-foreground">{project.name}</p><p className="mt-1">{dashboard.status === 'active' ? `${dashboard.schema?.tables.length ?? 0} таблиц` : 'Без базы'}</p></div>
+          <div className="mt-auto border-t px-2 pt-3 text-xs text-muted-foreground"><p className="truncate font-medium text-foreground">{currentProject.name}</p><p className="mt-1">{dashboard.status === 'active' ? `${dashboard.schema?.tables.length ?? 0} таблиц` : 'Без базы'}</p></div>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">

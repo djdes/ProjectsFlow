@@ -7,6 +7,7 @@ import type { AppBackendRepository } from '../application/app-backend/AppBackend
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
 import type { ManageAppBackendData } from '../application/app-backend/ManageAppBackendData.js';
+import type { ManageAppDashboardSettings } from '../application/app-backend/AppDashboardSettings.js';
 import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
 import type { SiteEditorService } from '../application/site-editor/SiteEditorService.js';
@@ -319,6 +320,7 @@ type AppDeps = {
     readonly provision: ProvisionAppBackend;
     readonly getStatus: GetAppBackendStatus;
     readonly dashboard: ManageAppBackendData;
+    readonly settings: ManageAppDashboardSettings;
   };
   readonly chat: ChatRouterDeps;
   readonly projects: {
@@ -885,6 +887,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects', appBackendRouter({
     getStatus: deps.appBackend.getStatus,
     dashboard: deps.appBackend.dashboard,
+    settings: deps.appBackend.settings,
   }));
   app.use('/api/projects', siteEditorRouter({ service: deps.siteEditor.service }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —

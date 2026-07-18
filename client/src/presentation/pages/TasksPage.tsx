@@ -421,6 +421,7 @@ export function TasksPage(): React.ReactElement {
           members={members}
           canEdit={canEdit}
           onOpenPreview={() => setWorkspaceMode('preview')}
+          onOpenAutomation={() => setAutomationOpen(true)}
         />
       )}
 

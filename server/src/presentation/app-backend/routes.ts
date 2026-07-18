@@ -5,16 +5,30 @@ import type {
   AppRowsQuery,
   ManageAppBackendData,
 } from '../../application/app-backend/ManageAppBackendData.js';
+import type { ManageAppDashboardSettings } from '../../application/app-backend/AppDashboardSettings.js';
 
 export type AppBackendRouterDeps = {
   readonly getStatus: GetAppBackendStatus;
   readonly dashboard: ManageAppBackendData;
+  readonly settings: ManageAppDashboardSettings;
 };
 
 // Клиентское чтение статуса бэкенда приложения (cookie-auth, member проекта): включён ли,
 // usage/лимит, таблицы. Для UI-индикатора «app с бэкендом — X/100 МБ». Маунтится под /api/projects.
 export function appBackendRouter(deps: AppBackendRouterDeps): Router {
   const router = Router();
+
+  router.get('/:projectId/app-dashboard/settings', requireAuth, async (req, res, next) => {
+    try {
+      res.status(200).json(await deps.settings.get(req.params['projectId'] as string, req.user!.id));
+    } catch (error) { next(error); }
+  });
+
+  router.put('/:projectId/app-dashboard/settings', requireAuth, async (req, res, next) => {
+    try {
+      res.status(200).json(await deps.settings.update(req.params['projectId'] as string, req.user!.id, req.body));
+    } catch (error) { next(error); }
+  });
 
   router.get(
     '/:projectId/app-backend',

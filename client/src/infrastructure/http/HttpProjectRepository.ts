@@ -16,6 +16,8 @@ import type {
   ProjectSite,
   AppBackendStatus,
   AppBackendDashboard,
+  AppDashboardSettings,
+  AppDashboardSettingsPatch,
   AppRowsQuery,
   AppRowsPage,
   AppDataRow,
@@ -469,6 +471,17 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard> {
     return httpClient.get<AppBackendDashboard>(`/projects/${projectId}/app-backend/dashboard`);
+  }
+
+  async getAppDashboardSettings(projectId: string): Promise<AppDashboardSettings> {
+    return httpClient.get<AppDashboardSettings>(`/projects/${projectId}/app-dashboard/settings`);
+  }
+
+  async updateAppDashboardSettings(
+    projectId: string,
+    patch: AppDashboardSettingsPatch,
+  ): Promise<AppDashboardSettings> {
+    return httpClient.put<AppDashboardSettings>(`/projects/${projectId}/app-dashboard/settings`, patch);
   }
 
   async queryAppRows(projectId: string, table: string, query: AppRowsQuery): Promise<AppRowsPage> {

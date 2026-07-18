@@ -144,6 +144,41 @@ export type AppBackendDashboard = {
   readonly schema: { readonly tables: readonly AppTableSchema[] } | null;
   readonly updatedAt: string | null;
 };
+export type PendingDashboardIntegration = 'disabled' | 'pending';
+export type AppDashboardSettings = {
+  readonly profile: {
+    readonly description: string;
+    readonly mainRoute: string;
+    readonly visibility: 'public' | 'private';
+  };
+  readonly seo: {
+    readonly title: string;
+    readonly description: string;
+    readonly robotsIndex: boolean;
+  };
+  readonly customDomain: {
+    readonly hostname: string | null;
+    readonly status: 'none' | 'pending';
+  };
+  readonly integrations: {
+    readonly email: PendingDashboardIntegration;
+    readonly webhooks: PendingDashboardIntegration;
+    readonly oauth: PendingDashboardIntegration;
+  };
+  readonly auth: {
+    readonly emailPassword: boolean;
+    readonly google: PendingDashboardIntegration;
+    readonly microsoft: PendingDashboardIntegration;
+  };
+  readonly updatedAt: string | null;
+};
+export type AppDashboardSettingsPatch = {
+  readonly profile?: Partial<AppDashboardSettings['profile']>;
+  readonly seo?: Partial<AppDashboardSettings['seo']>;
+  readonly customDomain?: { readonly hostname: string | null };
+  readonly integrations?: Partial<AppDashboardSettings['integrations']>;
+  readonly auth?: Partial<AppDashboardSettings['auth']>;
+};
 export type AppFilterOperator =
   | 'eq' | 'neq' | 'contains' | 'starts_with'
   | 'gt' | 'gte' | 'lt' | 'lte'
@@ -286,6 +321,8 @@ export interface ProjectRepository {
   // Статус бэкенда приложения (db/102): включён ли, usage/лимит, таблицы. Member-доступ (read).
   getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
   getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard>;
+  getAppDashboardSettings(projectId: string): Promise<AppDashboardSettings>;
+  updateAppDashboardSettings(projectId: string, patch: AppDashboardSettingsPatch): Promise<AppDashboardSettings>;
   queryAppRows(projectId: string, table: string, query: AppRowsQuery): Promise<AppRowsPage>;
   createAppRow(projectId: string, table: string, values: AppDataRow): Promise<AppDataRow>;
   updateAppRow(projectId: string, table: string, rowId: string, values: AppDataRow): Promise<AppDataRow | null>;

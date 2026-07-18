@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { AlertCircle, Loader2, Monitor } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Monitor, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { siteResultUrl } from '@/lib/publicBoardUrl';
 import type { ProjectSite } from '@/application/project/ProjectRepository';
-import type { SiteEditorPatch, SiteEditorPersistedPatch, SiteEditorSession } from '@/application/site-editor/SiteEditorRepository';
+import type { SiteEditorAiJob, SiteEditorPatch, SiteEditorPersistedPatch, SiteEditorSession } from '@/application/site-editor/SiteEditorRepository';
 import { AiPromptSheet } from './preview/AiPromptSheet';
 import { CanvasRouteMap } from './preview/CanvasRouteMap';
 import { CodeSheet } from './preview/CodeSheet';
 import { PreviewCanvas } from './preview/PreviewCanvas';
 import { PreviewToolbar } from './preview/PreviewToolbar';
+import {
+  pollSiteEditorAiJob,
+  SiteEditorAiSubmissionCoordinator,
+  siteEditorAiErrorMessage,
+} from './preview/aiJobSubmission';
 import { createHostMessage, isTrustedBridgeEvent } from './preview/bridgeProtocol';
 import { joinPreviewUrl, normalizePreviewPath } from './preview/path';
 import { createPreviewEditorState, previewEditorReducer } from './preview/reducer';
@@ -24,6 +29,7 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
   const [site, setSite] = useState<ProjectSite | null>(null);
   const [loadingSite, setLoadingSite] = useState(true);
   const [siteError, setSiteError] = useState(false);
+  const [configuredMainRoute, setConfiguredMainRoute] = useState<string | null>(null);
   const [state, dispatch] = useReducer(previewEditorReducer, undefined, () => createPreviewEditorState('/'));
   const [frameKey, setFrameKey] = useState(0);
   const [frameLoading, setFrameLoading] = useState(true);
@@ -32,6 +38,8 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
   const [session, setSession] = useState<ActiveSession | null>(null);
   const [, setPersistedPatches] = useState<readonly SiteEditorPersistedPatch[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [publishJob, setPublishJob] = useState<SiteEditorAiJob | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const bridgeTimerRef = useRef<number | null>(null);
   const revisionRef = useRef(0);
@@ -39,6 +47,24 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
   const deploymentRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const serverRedoDepthRef = useRef(0);
+  const aiSubmissionRef = useRef(new SiteEditorAiSubmissionCoordinator());
+  const initialRouteAppliedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    initialRouteAppliedRef.current = false;
+    setFrameSrc(null);
+    setSession(null);
+    setPublishJob(null);
+    revisionRef.current = 0;
+    serverRedoDepthRef.current = 0;
+    dispatch({ type: 'APPLY_PATH', path: '/' });
+    setConfiguredMainRoute(null);
+    projectRepository.getAppDashboardSettings(projectId)
+      .then((settings) => { if (!cancelled) setConfiguredMainRoute(normalizePreviewPath(settings.profile.mainRoute) ?? '/'); })
+      .catch(() => { if (!cancelled) setConfiguredMainRoute('/'); });
+    return () => { cancelled = true; };
+  }, [projectId, projectRepository]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +89,15 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
   }, [baseUrl, frameSrc, state.path]);
 
   useEffect(() => {
+    if (!baseUrl || !configuredMainRoute || initialRouteAppliedRef.current) return;
+    initialRouteAppliedRef.current = true;
+    const knownRoutes = site?.routes?.length ? site.routes : ['/'];
+    const path = knownRoutes.includes(configuredMainRoute) ? configuredMainRoute : '/';
+    dispatch({ type: 'APPLY_PATH', path });
+    setFrameSrc(joinPreviewUrl(baseUrl, path));
+  }, [baseUrl, configuredMainRoute, site?.routes]);
+
+  useEffect(() => {
     if (!frameLoading) return;
     setSlowFrame(false);
     const timer = window.setTimeout(() => setSlowFrame(true), 12_000);
@@ -81,6 +116,8 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
   }, []);
 
   useEffect(() => { activeSessionIdRef.current = session?.id ?? null; }, [session]);
+
+  useEffect(() => () => aiSubmissionRef.current.cancel(), [session?.id]);
 
   useEffect(() => {
     if (!session?.remote) return;
@@ -143,11 +180,40 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
       if (cancelled) return;
       revisionRef.current = snapshot.revision;
       setPersistedPatches(snapshot.patches);
-      dispatch({ type: 'HISTORY', revision: snapshot.revision, undoDepth: snapshot.patches.length, redoDepth: serverRedoDepthRef.current });
+      serverRedoDepthRef.current = snapshot.redoCount;
+      dispatch({ type: 'HISTORY', revision: snapshot.revision, undoDepth: snapshot.draftCount, redoDepth: snapshot.redoCount, draftCount: snapshot.draftCount, queuedCount: snapshot.queuedCount });
+      if (snapshot.publishJobId) setPublishJob((current) => current?.id === snapshot.publishJobId ? current : { id: snapshot.publishJobId!, status: 'queued', message: 'Изменения переданы диспетчеру…' });
       sendBridge('replay', { patches: snapshot.patches, revision: snapshot.revision });
     }).catch(() => dispatch({ type: 'BRIDGE_ERROR', message: 'Не удалось восстановить сохранённые изменения страницы.' }));
     return () => { cancelled = true; };
   }, [frameKey, projectId, sendBridge, session, siteEditorRepository, state.bridgeStatus, state.mode, state.path]);
+
+  useEffect(() => {
+    if (!publishJob || !session?.remote || (publishJob.status !== 'queued' && publishJob.status !== 'running')) return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async (): Promise<void> => {
+      try {
+        const next = await siteEditorRepository.getAiJob(projectId, session.id, publishJob.id);
+        if (cancelled) return;
+        setPublishJob(next);
+        if (next.status === 'queued' || next.status === 'running') timer = window.setTimeout(() => void poll(), 1_500);
+        else {
+          const snapshot = await siteEditorRepository.getPatches(projectId, state.path);
+          if (cancelled) return;
+          revisionRef.current = snapshot.revision;
+          dispatch({ type: 'DRAFT_STATE', revision: snapshot.revision, draftCount: snapshot.draftCount, redoDepth: snapshot.redoCount, queuedCount: snapshot.queuedCount });
+          if (next.status === 'completed') toast.success('Изменения опубликованы в новой версии проекта.');
+          else toast.error(next.error || 'Диспетчер не смог применить изменения. Черновик сохранён.');
+          resetFrame();
+        }
+      } catch {
+        if (!cancelled) timer = window.setTimeout(() => void poll(), 3_000);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 800);
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+  }, [projectId, publishJob, resetFrame, session, siteEditorRepository, state.path]);
 
   useEffect(() => () => {
     if (session?.remote) void siteEditorRepository.closeSession(projectId, session.id).catch(() => undefined);
@@ -219,7 +285,7 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
         if (activeSessionIdRef.current !== session.id) return;
         revisionRef.current = result.revision;
         serverRedoDepthRef.current = 0;
-        dispatch({ type: 'PATCH_SUCCESS', revision: result.revision });
+        dispatch({ type: 'PATCH_SUCCESS', revision: result.revision, draftCount: result.draftCount, redoDepth: result.redoCount, queuedCount: result.queuedCount });
       } catch {
         dispatch({ type: 'PATCH_ERROR', message: 'Не удалось сохранить изменение. Страница восстановлена из последней сохранённой версии.' });
         resetFrame();
@@ -235,28 +301,83 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
       const result = direction === 'undo' ? await siteEditorRepository.undo(projectId, session.id, revisionRef.current) : await siteEditorRepository.redo(projectId, session.id, revisionRef.current);
       if (activeSessionIdRef.current !== session.id) return;
       revisionRef.current = result.revision;
-      serverRedoDepthRef.current = Math.max(0, serverRedoDepthRef.current + (direction === 'undo' ? 1 : -1));
-      dispatch({ type: 'HISTORY', revision: result.revision, undoDepth: Math.max(0, state.undoDepth + (direction === 'undo' ? -1 : 1)), redoDepth: serverRedoDepthRef.current });
+      serverRedoDepthRef.current = result.redoCount;
+      dispatch({ type: 'HISTORY', revision: result.revision, undoDepth: result.draftCount, redoDepth: result.redoCount, draftCount: result.draftCount, queuedCount: result.queuedCount });
       resetFrame();
     } catch { dispatch({ type: 'PATCH_ERROR', message: 'Не удалось изменить историю.' }); }
   };
 
-  const submitAi = async (rawPrompt: string): Promise<void> => {
+  const publishDraft = async (): Promise<void> => {
+    if (!session?.remote || !state.draftCount || state.queuedCount) return;
+    await patchQueueRef.current;
+    dispatch({ type: 'PATCH_START' });
+    try {
+      const result = await siteEditorRepository.publishDraft(projectId, session.id, revisionRef.current);
+      if (activeSessionIdRef.current !== session.id) return;
+      revisionRef.current = result.revision;
+      setPublishJob(result.job);
+      dispatch({ type: 'DRAFT_STATE', revision: result.revision, draftCount: result.draftCount, redoDepth: result.redoCount, queuedCount: result.queuedCount });
+      toast.success('Изменения переданы диспетчеру. Публикация продолжится в фоне.');
+    } catch {
+      dispatch({ type: 'PATCH_ERROR', message: 'Не удалось передать черновик диспетчеру.' });
+    }
+  };
+
+  const rejectDraft = async (): Promise<void> => {
+    if (!session?.remote || !state.draftCount || state.queuedCount) return;
+    await patchQueueRef.current;
+    dispatch({ type: 'PATCH_START' });
+    try {
+      const result = await siteEditorRepository.rejectDraft(projectId, session.id, revisionRef.current);
+      if (activeSessionIdRef.current !== session.id) return;
+      revisionRef.current = result.revision;
+      setRejectOpen(false);
+      dispatch({ type: 'DRAFT_STATE', revision: result.revision, draftCount: result.draftCount, redoDepth: result.redoCount, queuedCount: result.queuedCount });
+      resetFrame();
+      toast.success('Черновик отклонён.');
+    } catch {
+      dispatch({ type: 'PATCH_ERROR', message: 'Не удалось отклонить черновик.' });
+    }
+  };
+
+  const submitAi = (rawPrompt: string): void => {
     if (!state.selected || !session?.remote) { dispatch({ type: 'AI_STATUS', status: 'error', message: 'Editor backend не подключён.' }); return; }
     const prompt = sanitizePrompt(rawPrompt);
     if (!prompt) return;
-    dispatch({ type: 'AI_STATUS', status: 'queued', message: 'Задача поставлена в очередь…' });
-    try {
-      let job = await startSiteEditorAiJob.execute(projectId, session.id, prompt, capSnapshot(state.selected));
-      const deadline = Date.now() + 120_000;
-      while ((job.status === 'queued' || job.status === 'running') && Date.now() < deadline) {
-        dispatch({ type: 'AI_STATUS', status: job.status, message: job.message ?? (job.status === 'running' ? 'ИИ изменяет выбранный элемент…' : 'Ожидаем ИИ…') });
-        await new Promise((resolve) => window.setTimeout(resolve, 1_500));
-        job = await siteEditorRepository.getAiJob(projectId, session.id, job.id);
+    const sessionId = session.id;
+    const snapshot = capSnapshot(state.selected);
+    const submission = aiSubmissionRef.current.start(async (idempotencyKey, signal) => {
+      const initial = await startSiteEditorAiJob.execute(projectId, sessionId, prompt, snapshot, idempotencyKey);
+      return pollSiteEditorAiJob(initial, {
+        signal,
+        load: (jobId) => siteEditorRepository.getAiJob(projectId, sessionId, jobId),
+        onProgress: (job) => {
+          if (signal.aborted || activeSessionIdRef.current !== sessionId) return;
+          dispatch({
+            type: 'AI_STATUS',
+            status: job.status === 'failed' ? 'error' : job.status,
+            message: job.error ?? job.message ?? (job.status === 'running' ? 'ИИ изменяет выбранный элемент…' : 'Задача в очереди…'),
+          });
+        },
+      });
+    });
+    if (!submission.accepted) return;
+
+    // This state is committed before the coordinator starts its network worker.
+    dispatch({ type: 'AI_STATUS', status: 'submitting', message: 'Запрос принят — передаём его диспетчеру…' });
+    void submission.completion.then((job) => {
+      if (activeSessionIdRef.current !== sessionId) return;
+      if (job.status === 'completed') {
+        dispatch({ type: 'AI_STATUS', status: 'completed', message: job.message ?? 'Готово' });
+        reload();
+      } else {
+        dispatch({ type: 'AI_STATUS', status: 'error', message: job.error ?? 'ИИ не смог применить изменение.' });
       }
-      if (job.status === 'completed') { dispatch({ type: 'AI_STATUS', status: 'completed', message: job.message ?? 'Готово' }); reload(); }
-      else dispatch({ type: 'AI_STATUS', status: 'error', message: job.error ?? 'ИИ не успел завершить изменение.' });
-    } catch { dispatch({ type: 'AI_STATUS', status: 'error', message: 'Не удалось выполнить изменение с ИИ.' }); }
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (activeSessionIdRef.current !== sessionId) return;
+      dispatch({ type: 'AI_STATUS', status: 'error', message: siteEditorAiErrorMessage(error) });
+    });
   };
 
   if (loadingSite) return <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Загружаем Preview…</div>;
@@ -265,11 +386,18 @@ export function ProjectPreview({ projectId }: { projectId: string }): React.Reac
 
   return (
     <section className="overflow-hidden rounded-xl border bg-muted/20" aria-label="Preview результата проекта">
-      <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onOpen={() => window.open(currentUrl, '_blank', 'noopener,noreferrer')} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} />
+      <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} draftCount={state.draftCount} queuedCount={state.queuedCount} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onOpen={() => window.open(currentUrl, '_blank', 'noopener,noreferrer')} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onPublish={() => void publishDraft()} onReject={() => setRejectOpen(true)} />
+      {(state.queuedCount > 0 || publishJob) && (
+        <div className="flex items-center gap-2 border-b bg-blue-500/5 px-3 py-2 text-sm" role="status" aria-live="polite">
+          {publishJob?.status === 'completed' ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600" /> : publishJob?.status === 'failed' ? <XCircle className="size-4 shrink-0 text-destructive" /> : <Loader2 className="size-4 shrink-0 animate-spin text-blue-600" />}
+          <span className="min-w-0 truncate">{publishJob?.status === 'completed' ? 'Новая версия опубликована.' : publishJob?.status === 'failed' ? (publishJob.error || 'Публикация не удалась — черновик восстановлен.') : (publishJob?.message || 'Диспетчер применяет изменения к исходному коду и публикует новую версию…')}</span>
+        </div>
+      )}
       {state.mode === 'canvas' ? <CanvasRouteMap routes={routes} baseUrl={baseUrl} onOpenRoute={(path) => { applyPath(path); dispatch({ type: 'SET_MODE', mode: 'preview' }); }} /> : <PreviewCanvas ref={iframeRef} frameKey={frameKey} previewUrl={frameSrc} path={state.path} mode={state.mode} device={state.device} loading={frameLoading} slow={slowFrame} bridgeStatus={state.bridgeStatus} bridgeError={state.bridgeError} hovered={state.hovered} selected={state.selected} styleOpen={state.styleOpen} onLoad={() => { setFrameLoading(false); if (state.mode === 'edit') { sendBridge('hello', { mode: 'edit', path: state.path }); sendBridge('set-mode', { mode: 'edit' }); } }} onStyleOpen={(open) => dispatch({ type: 'SET_PANEL', panel: 'style', open })} onPatch={(patch) => void applyPatch(patch)} onAi={() => dispatch({ type: 'SET_PANEL', panel: 'ai', open: true })} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onDelete={() => setDeleteOpen(true)} onCloseSelection={() => dispatch({ type: 'SELECT', element: null })} />}
-      <CodeSheet open={state.codeOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'code', open })} element={state.selected} />
-      <AiPromptSheet open={state.aiOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'ai', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onSubmit={(prompt) => void submitAi(prompt)} />
+      <CodeSheet open={state.codeOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'code', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onEditWithAi={(prompt) => submitAi(`Измени исходный код выбранного элемента по инструкции, но верни только безопасный визуальный patch-черновик без публикации: ${prompt}`)} />
+      <AiPromptSheet open={state.aiOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'ai', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onSubmit={submitAi} />
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Удалить выбранный элемент?</DialogTitle><DialogDescription>Элемент исчезнет из страницы. Изменение можно будет отменить кнопкой «Отменить» после сохранения.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)}>Отмена</Button><Button variant="destructive" onClick={() => { setDeleteOpen(false); void applyPatch({ kind: 'command', command: 'delete' }); }}>Удалить</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Отклонить черновик?</DialogTitle><DialogDescription>Все {state.draftCount} {state.draftCount === 1 ? 'изменение' : 'изменения'} этой страницы будут удалены. Опубликованная версия сайта не изменится.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Оставить</Button><Button variant="destructive" onClick={() => void rejectDraft()}>Отклонить черновик</Button></DialogFooter></DialogContent></Dialog>
     </section>
   );
 }

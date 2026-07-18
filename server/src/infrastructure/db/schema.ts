@@ -1309,6 +1309,13 @@ export const projectAutomation = mysqlTable('project_automation', {
   updatedAt: updatedAtCol(),
 });
 
+export const appDashboardSettings = mysqlTable('app_dashboard_settings', {
+  projectId: char('project_id', { length: 36 }).notNull().primaryKey(),
+  settingsJson: mediumtext('settings_json').notNull(),
+  createdAt: createdAtCol(),
+  updatedAt: updatedAtCol(),
+});
+
 export const siteEditorSessions = mysqlTable(
   'site_editor_sessions',
   {
@@ -1356,6 +1363,8 @@ export const sitePatches = mysqlTable(
     idempotencyKey: varchar('idempotency_key', { length: 100 }).notNull(),
     createdRevision: int('created_revision', { unsigned: true }).notNull(),
     createdBy: char('created_by', { length: 36 }).notNull(),
+    state: mysqlEnum('state', ['draft', 'queued']).notNull().default('draft'),
+    publishJobId: char('publish_job_id', { length: 36 }),
     deletedAt: timestamp('deleted_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
@@ -1363,6 +1372,7 @@ export const sitePatches = mysqlTable(
   (t) => [
     uniqueIndex('uq_site_patches_idempotency').on(t.patchSetId, t.idempotencyKey),
     index('idx_site_patches_project_set').on(t.projectId, t.patchSetId, t.deletedAt, t.createdRevision),
+    index('idx_site_patches_publish_job').on(t.projectId, t.publishJobId),
   ],
 );
 
@@ -1372,6 +1382,7 @@ export const projectEditJobs = mysqlTable(
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
     createdBy: char('created_by', { length: 36 }).notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 100 }).notNull(),
     dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
     status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
       .notNull()
@@ -1398,6 +1409,7 @@ export const projectEditJobs = mysqlTable(
     updatedAt: updatedAtCol(),
   },
   (t) => [
+    uniqueIndex('uq_project_edit_jobs_idempotency').on(t.projectId, t.createdBy, t.idempotencyKey),
     index('idx_project_edit_jobs_dispatcher').on(t.dispatcherUserId, t.status, t.createdAt),
     index('idx_project_edit_jobs_project').on(t.projectId, t.status, t.createdAt),
   ],

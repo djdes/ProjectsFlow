@@ -28,6 +28,16 @@ export function siteEditorAgentRouter(deps: Deps): Router {
     } catch (error) { handleSiteEditorError(error, res, next); }
   });
 
+  router.get('/projects/:projectId/site-editor/artifact', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const artifactVersion = await deps.service.getArtifactVersionForDispatcher(
+        req.params.projectId as string,
+        req.user!.id,
+      );
+      res.json({ artifactVersion });
+    } catch (error) { handleSiteEditorError(error, res, next); }
+  });
+
   router.post('/projects/:projectId/site-editor/jobs/:jobId/claim', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = claimJobSchema.parse(req.body);

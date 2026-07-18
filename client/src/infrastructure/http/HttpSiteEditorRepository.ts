@@ -2,6 +2,7 @@ import type {
   SiteEditorAiJob,
   SiteEditorPatch,
   SiteEditorPatchSnapshot,
+  SiteEditorMutationState,
   SiteEditorRepository,
   SiteEditorSession,
   SiteEditorSnapshot,
@@ -17,6 +18,8 @@ type PersistedPatchDto = {
   payload: Record<string, unknown>;
   createdRevision: number;
 };
+
+type MutationStateDto = SiteEditorMutationState;
 
 function toPatch(dto: PersistedPatchDto): SiteEditorPatch | null {
   if (dto.kind === 'text' && typeof dto.payload.text === 'string') return { kind: 'text', value: dto.payload.text };
@@ -47,35 +50,64 @@ export class HttpSiteEditorRepository implements SiteEditorRepository {
   }
 
   async getPatches(projectId: string, route: string): Promise<SiteEditorPatchSnapshot> {
-    const result = await httpClient.get<{ revision: number; patches: PersistedPatchDto[] }>(`${base(projectId)}/patches?route=${encodeURIComponent(route)}`);
+    const result = await httpClient.get<MutationStateDto & { patches: PersistedPatchDto[] }>(`${base(projectId)}/patches?route=${encodeURIComponent(route)}`);
     return {
       revision: result.revision,
       patches: result.patches.flatMap((dto) => {
         const patch = toPatch(dto);
         return patch ? [{ id: dto.id, selector: dto.locator.cssPath, patch, createdRevision: dto.createdRevision }] : [];
       }),
+      draftCount: result.draftCount,
+      redoCount: result.redoCount,
+      queuedCount: result.queuedCount,
+      publishJobId: result.publishJobId,
     };
   }
 
-  async applyPatch(projectId: string, sessionId: string, input: { revision: number; snapshot: SiteEditorSnapshot; patch: SiteEditorPatch }): Promise<{ revision: number }> {
-    return httpClient.post<{ revision: number }>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/patches`, input);
+  async applyPatch(projectId: string, sessionId: string, input: { revision: number; snapshot: SiteEditorSnapshot; patch: SiteEditorPatch }): Promise<SiteEditorMutationState> {
+    return httpClient.post<MutationStateDto>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/patches`, input);
   }
 
-  async undo(projectId: string, sessionId: string, revision: number): Promise<{ revision: number }> {
-    return httpClient.post<{ revision: number }>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/undo`, { revision });
+  async undo(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState> {
+    return httpClient.post<MutationStateDto>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/undo`, { revision });
   }
 
-  async redo(projectId: string, sessionId: string, revision: number): Promise<{ revision: number }> {
-    return httpClient.post<{ revision: number }>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/redo`, { revision });
+  async redo(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState> {
+    return httpClient.post<MutationStateDto>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/redo`, { revision });
   }
 
-  async startAiJob(projectId: string, sessionId: string, input: { prompt: string; snapshot: SiteEditorSnapshot }): Promise<SiteEditorAiJob> {
+  async publishDraft(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState & { job: SiteEditorAiJob }> {
+    return httpClient.post<MutationStateDto & { job: SiteEditorAiJob }>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/publish`, { revision });
+  }
+
+  async rejectDraft(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState> {
+    return httpClient.post<MutationStateDto>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/reject`, { revision });
+  }
+
+  async startAiJob(projectId: string, sessionId: string, input: { prompt: string; snapshot: SiteEditorSnapshot; idempotencyKey: string }): Promise<SiteEditorAiJob> {
     const result = await httpClient.post<{ job: SiteEditorAiJob }>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/jobs`, input);
     return result.job;
   }
 
   async getAiJob(projectId: string, sessionId: string, jobId: string): Promise<SiteEditorAiJob> {
-    const result = await httpClient.get<{ job: SiteEditorAiJob }>(`${base(projectId)}/sessions/${encodeURIComponent(sessionId)}/jobs/${encodeURIComponent(jobId)}`);
-    return result.job;
+    // A successful publish changes the deployed artifact version and therefore
+    // intentionally invalidates the editor session that created the job. Poll
+    // through the project-scoped endpoint so its final state remains observable.
+    void sessionId;
+    const result = await httpClient.get<{ job: {
+      id: string;
+      status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+      error?: string | null;
+    } }>(`${base(projectId)}/jobs/${encodeURIComponent(jobId)}`);
+    return {
+      id: result.job.id,
+      status: result.job.status === 'succeeded'
+        ? 'completed'
+        : result.job.status === 'cancelled' ? 'failed' : result.job.status,
+      ...(result.job.status === 'running' ? { progress: 50, message: 'ИИ применяет изменения…' } : {}),
+      ...(result.job.status === 'succeeded' ? { progress: 100, message: 'Изменения опубликованы' } : {}),
+      ...(result.job.status === 'cancelled' && !result.job.error ? { error: 'Публикация отменена' } : {}),
+      ...(result.job.error ? { error: result.job.error } : {}),
+    };
   }
 }

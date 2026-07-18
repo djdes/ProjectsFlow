@@ -239,6 +239,8 @@ export class MockProjectRepository implements ProjectRepository {
     return Promise.resolve({ status: 'none', usageBytes: 0, storageLimitBytes: 0, tables: [] });
   }
   getAppBackendDashboard(): Promise<never> { return Promise.reject(new Error('Mock.getAppBackendDashboard: not implemented')); }
+  getAppDashboardSettings(): Promise<never> { return Promise.reject(new Error('Mock.getAppDashboardSettings: not implemented')); }
+  updateAppDashboardSettings(): Promise<never> { return Promise.reject(new Error('Mock.updateAppDashboardSettings: not implemented')); }
   queryAppRows(): Promise<never> { return Promise.reject(new Error('Mock.queryAppRows: not implemented')); }
   createAppRow(): Promise<never> { return Promise.reject(new Error('Mock.createAppRow: not implemented')); }
   updateAppRow(): Promise<never> { return Promise.reject(new Error('Mock.updateAppRow: not implemented')); }

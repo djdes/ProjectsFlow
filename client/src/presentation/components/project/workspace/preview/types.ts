@@ -22,9 +22,11 @@ export type PreviewEditorState = {
   revision: number;
   undoDepth: number;
   redoDepth: number;
+  draftCount: number;
+  queuedCount: number;
   styleOpen: boolean;
   codeOpen: boolean;
   aiOpen: boolean;
-  aiStatus: 'idle' | 'queued' | 'running' | 'completed' | 'error';
+  aiStatus: 'idle' | 'submitting' | 'queued' | 'running' | 'completed' | 'error';
   aiMessage: string | null;
 };

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { ChevronDown, Code2, ExternalLink, Grid2X2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2 } from 'lucide-react';
+import { Check, ChevronDown, Code2, ExternalLink, Grid2X2, Loader2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PreviewDevice, PreviewMode, SaveStatus } from './types';
@@ -11,14 +11,15 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
 ];
 
 export function PreviewToolbar({
-  mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth,
-  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onOpen, onUndo, onRedo, onCode,
+  mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
+  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onOpen, onUndo, onRedo, onCode, onPublish, onReject,
 }: {
   mode: PreviewMode; device: PreviewDevice; path: string; draftPath: string; routes: string[]; routeMenuOpen: boolean;
   saveStatus: SaveStatus; undoDepth: number; redoDepth: number;
+  draftCount: number; queuedCount: number;
   onMode: (mode: PreviewMode) => void; onDevice: (device: PreviewDevice) => void; onDraftPath: (path: string) => void;
   onApplyPath: (path: string) => void; onRouteMenu: (open: boolean) => void; onReload: () => void; onOpen: () => void;
-  onUndo: () => void; onRedo: () => void; onCode: () => void;
+  onUndo: () => void; onRedo: () => void; onCode: () => void; onPublish: () => void; onReject: () => void;
 }): React.ReactElement {
   const listId = useId();
   const routeBoxRef = useRef<HTMLDivElement>(null);
@@ -58,11 +59,15 @@ export function PreviewToolbar({
       </div>
 
       {mode === 'edit' && (
-        <div className="flex items-center rounded-lg border bg-background p-0.5">
-          <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!undoDepth || saveStatus === 'saving'} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-4" /></Button>
-          <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!redoDepth || saveStatus === 'saving'} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-4" /></Button>
-          <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onCode} aria-label="Показать код выбранного элемента"><Code2 className="size-4" /></Button>
-        </div>
+        <>
+          <div className="flex items-center rounded-lg border bg-background p-0.5">
+            <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!undoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onCode} aria-label="Показать код выбранного элемента"><Code2 className="size-4" /></Button>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} onClick={onReject}><X className="size-3.5" />Отклонить</Button>
+          <Button type="button" size="sm" className="h-9 gap-1.5" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} onClick={onPublish}>{queuedCount > 0 ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}{queuedCount > 0 ? 'Публикуем…' : `Применить${draftCount ? ` (${draftCount})` : ''}`}</Button>
+        </>
       )}
 
       <div className="flex items-center rounded-lg border bg-background p-0.5" aria-label="Размер Preview">

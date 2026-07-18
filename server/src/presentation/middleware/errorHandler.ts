@@ -817,6 +817,14 @@ export function errorHandler(
     return;
   }
 
+  if (
+    err instanceof Error
+    && ['invalid_custom_domain', 'invalid_main_route', 'invalid_dashboard_settings'].includes(err.message)
+  ) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
   // Неизвестная ошибка — server-side лог, минимальный ответ клиенту.
   console.error('[errorHandler] unhandled error:', err);
   res.status(500).json({ error: 'internal_server_error' });

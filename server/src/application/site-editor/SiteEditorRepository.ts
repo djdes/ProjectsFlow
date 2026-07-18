@@ -35,6 +35,7 @@ export type CreateProjectEditJobRecord = {
   readonly id: string;
   readonly projectId: string;
   readonly createdBy: string;
+  readonly idempotencyKey: string;
   readonly dispatcherUserId: string;
   readonly operation: ProjectEditOperation;
   readonly route: string;
@@ -58,6 +59,9 @@ export interface SiteEditorRepository {
   deletePatch(projectId: string, patchId: string, baseRevision: number): Promise<SitePatchSnapshot>;
   undoPatch(projectId: string, route: string, baseRevision: number): Promise<SitePatchSnapshot>;
   redoPatch(projectId: string, route: string, baseRevision: number): Promise<SitePatchSnapshot>;
+  rejectDraft(projectId: string, route: string, baseRevision: number): Promise<SitePatchSnapshot>;
+  queueDraftPublish(input: CreateProjectEditJobRecord & { readonly baseRevision: number }): Promise<{ readonly job: ProjectEditJob; readonly snapshot: SitePatchSnapshot }>;
+  hasQueuedPublishJob(projectId: string, jobId: string): Promise<boolean>;
 
   createJob(input: CreateProjectEditJobRecord): Promise<ProjectEditJob>;
   getJob(projectId: string, jobId: string): Promise<ProjectEditJob | null>;

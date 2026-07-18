@@ -38,6 +38,7 @@ export const deletePatchSchema = z.object({
 }).strict();
 
 export const createJobSchema = z.object({
+  idempotencyKey: z.string().min(8).max(100).regex(/^[A-Za-z0-9._:-]+$/),
   route: z.string().min(1).max(500),
   locator: locatorSchema,
   domSnapshot: z.string().max(50_000),

@@ -77,14 +77,3 @@ export function buildProjectOpenApi(
     paths,
   }, null, 2);
 }
-
-export type DashboardActionHandlers = {
-  readonly saveSeo: (input: { title: string; description: string; robotsIndex: boolean }) => Promise<void>;
-  readonly connectDomain: (domain: string) => Promise<void>;
-  readonly connectIntegration: (integrationId: string) => Promise<void>;
-  readonly saveAgent: (input: { name: string; instructions: string; tools: readonly string[] }) => Promise<void>;
-  readonly saveWorkflow: (input: { name: string; trigger: string; action: string }) => Promise<void>;
-  readonly saveAppSettings: (input: { description: string; mainRoute: string; visibility: 'public' | 'private' }) => Promise<void>;
-  readonly saveAuthSettings: (input: { emailPassword: boolean; google: boolean; microsoft: boolean }) => Promise<void>;
-  readonly deleteApp: () => Promise<void>;
-};

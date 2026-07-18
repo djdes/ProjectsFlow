@@ -39,6 +39,7 @@ import {
   telegramTaskDrafts,
   telegramTaskMessages,
   emailActionTokens,
+  appDashboardSettings,
   type ProjectRow,
 } from '../db/schema.js';
 import {
@@ -399,6 +400,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
       await tx.delete(telegramTaskDrafts).where(eq(telegramTaskDrafts.projectId, projectId));
       await tx.delete(telegramTaskMessages).where(eq(telegramTaskMessages.projectId, projectId));
       await tx.delete(emailActionTokens).where(eq(emailActionTokens.projectId, projectId));
+      await tx.delete(appDashboardSettings).where(eq(appDashboardSettings.projectId, projectId));
 
       // Финальный — сам проект.
       await tx.delete(projects).where(eq(projects.id, projectId));

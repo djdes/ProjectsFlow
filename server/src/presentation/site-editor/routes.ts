@@ -40,6 +40,7 @@ const frontendPatchSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), value: z.string().max(4_000) }).strict(),
   z.object({ kind: z.literal('style'), property: z.string().min(1).max(64), value: z.string().max(200) }).strict(),
   z.object({ kind: z.literal('attribute'), name: z.string().min(1).max(64), value: z.string().max(2_000).nullable() }).strict(),
+  z.object({ kind: z.literal('visibility'), hidden: z.boolean() }).strict(),
   z.object({ kind: z.literal('command'), command: z.enum(['duplicate', 'delete', 'toggle-visibility', 'layout']) }).strict(),
 ]);
 const openFrontendSessionSchema = z.object({
@@ -52,7 +53,11 @@ const frontendMutationSchema = z.object({
   patch: frontendPatchSchema,
 }).strict();
 const frontendRevisionSchema = z.object({ revision: z.number().int().min(0).max(2_147_483_647) }).strict();
-const frontendJobSchema = z.object({ prompt: z.string().min(1).max(2_000), snapshot: frontendSnapshotSchema }).strict();
+const frontendJobSchema = z.object({
+  prompt: z.string().min(1).max(2_000),
+  snapshot: frontendSnapshotSchema,
+  idempotencyKey: z.string().min(8).max(100).regex(/^[A-Za-z0-9._:-]+$/),
+}).strict();
 
 function frontendLocator(snapshot: z.infer<typeof frontendSnapshotSchema>) {
   return {
@@ -69,6 +74,7 @@ function translateFrontendPatch(patch: z.infer<typeof frontendPatchSchema>): {
   if (patch.kind === 'text') return { kind: 'text', payload: { text: patch.value } };
   if (patch.kind === 'style') return { kind: 'style', payload: { styles: { [patch.property]: patch.value } } };
   if (patch.kind === 'attribute') return { kind: 'attribute', payload: { name: patch.name, value: patch.value } };
+  if (patch.kind === 'visibility') return { kind: 'visibility', payload: { hidden: patch.hidden } };
   if (patch.command === 'toggle-visibility') return { kind: 'visibility', payload: { hidden: true } };
   return { kind: 'command', payload: { command: patch.command } };
 }
@@ -90,6 +96,8 @@ function patchDto(patch: SitePatch): unknown {
     kind: patch.kind,
     payload: patch.payload,
     createdRevision: patch.createdRevision,
+    state: patch.state,
+    publishJobId: patch.publishJobId,
     createdAt: patch.createdAt.toISOString(),
     updatedAt: patch.updatedAt.toISOString(),
   };
@@ -155,7 +163,7 @@ export function siteEditorRouter(deps: Deps): Router {
         idempotencyKey: `${sessionId}:${digest}`.slice(0, 100),
         patch: { locator: frontendLocator(body.snapshot), ...translated },
       });
-      res.status(201).json({ revision: snapshot.revision });
+      res.status(201).json({ revision: snapshot.revision, draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 
@@ -165,7 +173,7 @@ export function siteEditorRouter(deps: Deps): Router {
       const snapshot = await deps.service.undoSessionPatch(
         req.params.projectId as string, req.user!.id, req.params.sessionId as string, body.revision,
       );
-      res.json({ revision: snapshot.revision });
+      res.json({ revision: snapshot.revision, draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 
@@ -175,7 +183,34 @@ export function siteEditorRouter(deps: Deps): Router {
       const snapshot = await deps.service.redoSessionPatch(
         req.params.projectId as string, req.user!.id, req.params.sessionId as string, body.revision,
       );
-      res.json({ revision: snapshot.revision });
+      res.json({ revision: snapshot.revision, draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
+    } catch (error) { handleError(error, res, next); }
+  });
+
+  router.post('/:projectId/site-editor/sessions/:sessionId/publish', async (req, res, next) => {
+    try {
+      const body = frontendRevisionSchema.parse(req.body);
+      const result = await deps.service.queueSessionDraftPublish(
+        req.params.projectId as string, req.user!.id, req.params.sessionId as string, body.revision,
+      );
+      res.status(202).json({
+        job: frontendJobDto(result.job),
+        revision: result.snapshot.revision,
+        draftCount: result.snapshot.draftCount,
+        redoCount: result.snapshot.redoCount,
+        queuedCount: result.snapshot.queuedCount,
+        publishJobId: result.snapshot.publishJobId,
+      });
+    } catch (error) { handleError(error, res, next); }
+  });
+
+  router.post('/:projectId/site-editor/sessions/:sessionId/reject', async (req, res, next) => {
+    try {
+      const body = frontendRevisionSchema.parse(req.body);
+      const snapshot = await deps.service.rejectSessionDraft(
+        req.params.projectId as string, req.user!.id, req.params.sessionId as string, body.revision,
+      );
+      res.json({ revision: snapshot.revision, draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 
@@ -192,6 +227,7 @@ export function siteEditorRouter(deps: Deps): Router {
         domSnapshot: body.snapshot.source ?? '',
         computedStyles: body.snapshot.styles ?? {},
         prompt: body.prompt,
+        idempotencyKey: body.idempotencyKey,
         operation: 'regenerate_element',
         artifactVersion: session.artifactVersion,
       });
@@ -224,7 +260,7 @@ export function siteEditorRouter(deps: Deps): Router {
     try {
       const route = typeof req.query.route === 'string' ? req.query.route : '/';
       const snapshot = await deps.service.getPatches(req.params.projectId as string, req.user!.id, route);
-      res.json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto) });
+      res.json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto), draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 
@@ -236,7 +272,7 @@ export function siteEditorRouter(deps: Deps): Router {
         userId: req.user!.id,
         ...body,
       });
-      res.status(201).json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto) });
+      res.status(201).json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto), draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 
@@ -249,7 +285,7 @@ export function siteEditorRouter(deps: Deps): Router {
         patchId: req.params.patchId as string,
         ...body,
       });
-      res.json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto) });
+      res.json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto), draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 
@@ -262,7 +298,7 @@ export function siteEditorRouter(deps: Deps): Router {
         req.params.patchId as string,
         body.baseRevision,
       );
-      res.json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto) });
+      res.json({ revision: snapshot.revision, patches: snapshot.patches.map(patchDto), draftCount: snapshot.draftCount, redoCount: snapshot.redoCount, queuedCount: snapshot.queuedCount, publishJobId: snapshot.publishJobId });
     } catch (error) { handleError(error, res, next); }
   });
 

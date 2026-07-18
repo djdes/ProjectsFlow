@@ -34,6 +34,19 @@ const locator = {
   stableAttributes: { 'data-pf-id': 'hero-title' },
 };
 
+function patchSnapshot(revision: number, patches: readonly SitePatch[]): SitePatchSnapshot {
+  const active = patches.filter((patch) => patch.state === 'draft' || patch.state === 'queued');
+  const queued = active.filter((patch) => patch.state === 'queued');
+  return {
+    revision,
+    patches: active,
+    draftCount: active.filter((patch) => patch.state === 'draft').length,
+    redoCount: 0,
+    queuedCount: queued.length,
+    publishJobId: queued[0]?.publishJobId ?? null,
+  };
+}
+
 class InMemorySiteEditorRepository implements SiteEditorRepository {
   readonly sessions: SiteEditorSession[] = [];
   readonly jobs = new Map<string, ProjectEditJob>();
@@ -62,7 +75,7 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
   }
 
   async getPatches(projectId: string, route: string): Promise<SitePatchSnapshot> {
-    return this.snapshots.get(`${projectId}:${route}`) ?? { revision: 0, patches: [] };
+    return this.snapshots.get(`${projectId}:${route}`) ?? patchSnapshot(0, []);
   }
 
   async createPatch(input: CreatePatchRecord): Promise<SitePatchSnapshot> {
@@ -82,10 +95,12 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
       idempotencyKey: input.idempotencyKey,
       createdRevision: current.revision + 1,
       createdBy: input.createdBy,
+      state: 'draft',
+      publishJobId: null,
       createdAt: now,
       updatedAt: now,
     };
-    const next = { revision: current.revision + 1, patches: [...current.patches, patch] };
+    const next = patchSnapshot(current.revision + 1, [...current.patches, patch]);
     this.patches.set(patch.id, patch);
     this.snapshots.set(key, next);
     return next;
@@ -102,10 +117,7 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
     const snapshot = [...this.snapshots.values()].find((item) => item.patches.some((entry) => entry.id === patch.id))!;
     if (snapshot.revision !== input.baseRevision) throw new SiteEditorRevisionConflictError(snapshot.revision);
     const updated = { ...patch, locator: input.locator, kind: input.kind, payload: input.payload, updatedAt: new Date() };
-    const next = {
-      revision: snapshot.revision + 1,
-      patches: snapshot.patches.map((entry) => entry.id === patch.id ? updated : entry),
-    };
+    const next = patchSnapshot(snapshot.revision + 1, snapshot.patches.map((entry) => entry.id === patch.id ? updated : entry));
     this.patches.set(patch.id, updated);
     this.snapshots.set(patch.patchSetId, next);
     return next;
@@ -116,7 +128,7 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
     if (!patch) throw new Error('not found');
     const snapshot = this.snapshots.get(patch.patchSetId)!;
     if (snapshot.revision !== baseRevision) throw new SiteEditorRevisionConflictError(snapshot.revision);
-    const next = { revision: snapshot.revision + 1, patches: snapshot.patches.filter((item) => item.id !== patchId) };
+    const next = patchSnapshot(snapshot.revision + 1, snapshot.patches.filter((item) => item.id !== patchId));
     this.snapshots.set(patch.patchSetId, next);
     this.patches.delete(patchId);
     return next;
@@ -125,7 +137,7 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
   async undoPatch(projectId: string, route: string, baseRevision: number): Promise<SitePatchSnapshot> {
     const current = await this.getPatches(projectId, route);
     if (current.revision !== baseRevision) throw new SiteEditorRevisionConflictError(current.revision);
-    const next = { revision: current.revision + 1, patches: current.patches.slice(0, -1) };
+    const next = patchSnapshot(current.revision + 1, current.patches.slice(0, -1));
     this.snapshots.set(`${projectId}:${route}`, next);
     return next;
   }
@@ -136,7 +148,34 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
     return current;
   }
 
+  async rejectDraft(projectId: string, route: string, baseRevision: number): Promise<SitePatchSnapshot> {
+    const current = await this.getPatches(projectId, route);
+    if (current.revision !== baseRevision) throw new SiteEditorRevisionConflictError(current.revision);
+    const next = patchSnapshot(current.revision + 1, current.patches.filter((patch) => patch.state !== 'draft'));
+    this.snapshots.set(`${projectId}:${route}`, next);
+    return next;
+  }
+
+  async queueDraftPublish(input: CreateProjectEditJobRecord & { readonly baseRevision: number }): Promise<{ readonly job: ProjectEditJob; readonly snapshot: SitePatchSnapshot }> {
+    const current = await this.getPatches(input.projectId, input.route);
+    if (current.revision !== input.baseRevision) throw new SiteEditorRevisionConflictError(current.revision);
+    const job = await this.createJob(input);
+    const patches = current.patches.map((patch): SitePatch => patch.state === 'draft' ? { ...patch, state: 'queued', publishJobId: job.id } : patch);
+    const snapshot = patchSnapshot(current.revision + 1, patches);
+    this.snapshots.set(`${input.projectId}:${input.route}`, snapshot);
+    return { job, snapshot };
+  }
+
+  async hasQueuedPublishJob(projectId: string, jobId: string): Promise<boolean> {
+    return [...this.snapshots.entries()].some(([key, snapshot]) => key.startsWith(`${projectId}:`) && snapshot.patches.some((patch) => patch.state === 'queued' && patch.publishJobId === jobId));
+  }
+
   async createJob(input: CreateProjectEditJobRecord): Promise<ProjectEditJob> {
+    const existing = [...this.jobs.values()].find((job) =>
+      job.projectId === input.projectId
+      && job.createdBy === input.createdBy
+      && job.idempotencyKey === input.idempotencyKey);
+    if (existing) return existing;
     const now = new Date();
     const job: ProjectEditJob = {
       ...input,
@@ -191,6 +230,14 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
       updatedAt: input.finishedAt,
     };
     this.jobs.set(job.id, completed);
+    for (const [key, snapshot] of this.snapshots) {
+      const queued = snapshot.patches.some((patch) => patch.publishJobId === job.id && patch.state === 'queued');
+      if (!queued) continue;
+      const patches = input.status === 'succeeded'
+        ? snapshot.patches.filter((patch) => patch.publishJobId !== job.id)
+        : snapshot.patches.map((patch): SitePatch => patch.publishJobId === job.id ? { ...patch, state: 'draft', publishJobId: null } : patch);
+      this.snapshots.set(key, patchSnapshot(snapshot.revision + 1, patches));
+    }
     return completed;
   }
 }
@@ -280,6 +327,14 @@ test('patch sanitization rejects script/event/javascript/raw CSS payloads and re
     SiteEditorValidationError,
   );
   assert.throws(
+    () => sanitizePatchPayload('attribute', { name: 'href', value: '//evil.example/phishing' }),
+    SiteEditorValidationError,
+  );
+  assert.deepEqual(
+    sanitizePatchPayload('attribute', { name: 'href', value: '/catalog?sort=new' }),
+    { name: 'href', value: '/catalog?sort=new' },
+  );
+  assert.throws(
     () => sanitizePatchPayload('style', { styles: { color: 'red; position: fixed' } }),
     SiteEditorValidationError,
   );
@@ -300,6 +355,7 @@ test('edit jobs redact context and enforce artifact versions for creation and di
     domSnapshot: '<div>authorization=top-secret user@example.com</div>',
     computedStyles: { color: '#111111', backgroundImage: 'url(https://bad.example)' },
     prompt: 'Исправь блок, api_key=top-secret',
+    idempotencyKey: 'preview-ai-test-job',
     operation: 'regenerate_section',
     artifactVersion: ARTIFACT_VERSION,
   });
@@ -312,4 +368,88 @@ test('edit jobs redact context and enforce artifact versions for creation and di
     fixture.service.claimJob(PROJECT_ID, DISPATCHER_ID, job.id, ARTIFACT_VERSION),
     SiteEditorArtifactConflictError,
   );
+});
+
+test('edit job idempotency returns one queued job for retried submissions', async () => {
+  const fixture = createFixture();
+  const input = {
+    projectId: PROJECT_ID,
+    userId: EDITOR_ID,
+    route: '/catalog',
+    locator,
+    domSnapshot: '<div>Catalog</div>',
+    computedStyles: { color: '#111111' },
+    prompt: 'Сделай каталог компактнее',
+    idempotencyKey: 'preview-ai-retry-1',
+    operation: 'regenerate_section' as const,
+    artifactVersion: ARTIFACT_VERSION,
+  };
+
+  const first = await fixture.service.createJob(input);
+  const retried = await fixture.service.createJob(input);
+
+  assert.equal(retried.id, first.id);
+  assert.equal(fixture.repository.jobs.size, 1);
+});
+
+test('approved draft stays replayable until dispatcher publishes a newer artifact', async () => {
+  const fixture = createFixture();
+  const session = await fixture.service.createSession(PROJECT_ID, EDITOR_ID, '/');
+  const draft = await fixture.service.createPatch({
+    projectId: PROJECT_ID,
+    userId: EDITOR_ID,
+    route: '/',
+    baseRevision: 0,
+    idempotencyKey: 'preview-draft-publish-1',
+    patch: { locator, kind: 'text', payload: { text: 'Опубликованный заголовок' } },
+  });
+
+  const queued = await fixture.service.queueSessionDraftPublish(PROJECT_ID, EDITOR_ID, session.id, draft.revision);
+  assert.equal(queued.snapshot.draftCount, 0);
+  assert.equal(queued.snapshot.queuedCount, 1);
+  assert.equal(queued.snapshot.patches.length, 1);
+
+  await fixture.service.claimJob(PROJECT_ID, DISPATCHER_ID, queued.job.id, ARTIFACT_VERSION);
+  fixture.setArtifact('2026-07-18T10:05:00.000Z');
+  await fixture.service.completeJob({
+    projectId: PROJECT_ID,
+    userId: DISPATCHER_ID,
+    jobId: queued.job.id,
+    artifactVersion: '2026-07-18T10:05:00.000Z',
+    status: 'succeeded',
+  });
+
+  const published = await fixture.service.getPatches(PROJECT_ID, EDITOR_ID, '/');
+  assert.equal(published.queuedCount, 0);
+  assert.equal(published.patches.length, 0);
+});
+
+test('AI compact patch result is normalized into a draft and never auto-published', async () => {
+  const fixture = createFixture();
+  const job = await fixture.service.createJob({
+    projectId: PROJECT_ID,
+    userId: EDITOR_ID,
+    route: '/',
+    locator,
+    domSnapshot: '<h1>До</h1>',
+    computedStyles: {},
+    prompt: 'Перепиши заголовок',
+    idempotencyKey: 'preview-ai-compact-result',
+    operation: 'regenerate_element',
+    artifactVersion: ARTIFACT_VERSION,
+  });
+  await fixture.service.claimJob(PROJECT_ID, DISPATCHER_ID, job.id, ARTIFACT_VERSION);
+  await fixture.service.completeJob({
+    projectId: PROJECT_ID,
+    userId: DISPATCHER_ID,
+    jobId: job.id,
+    artifactVersion: ARTIFACT_VERSION,
+    status: 'succeeded',
+    result: { patch: { kind: 'text', value: 'После' } },
+  });
+
+  const snapshot = await fixture.service.getPatches(PROJECT_ID, EDITOR_ID, '/');
+  assert.equal(snapshot.draftCount, 1);
+  assert.equal(snapshot.queuedCount, 0);
+  assert.deepEqual(snapshot.patches[0]?.payload, { text: 'После' });
 });

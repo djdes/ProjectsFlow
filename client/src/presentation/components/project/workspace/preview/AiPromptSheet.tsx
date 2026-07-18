@@ -6,11 +6,16 @@ import type { InspectedElement } from './types';
 
 export function AiPromptSheet({ open, onOpenChange, element, status, message, onSubmit }: {
   open: boolean; onOpenChange: (open: boolean) => void; element: InspectedElement | null;
-  status: 'idle' | 'queued' | 'running' | 'completed' | 'error'; message: string | null; onSubmit: (prompt: string) => void;
+  status: 'idle' | 'submitting' | 'queued' | 'running' | 'completed' | 'error'; message: string | null; onSubmit: (prompt: string) => void;
 }): React.ReactElement {
   const [prompt, setPrompt] = useState('');
   useEffect(() => { if (!open) setPrompt(''); }, [open]);
-  const busy = status === 'queued' || status === 'running';
+  const busy = status === 'submitting' || status === 'queued' || status === 'running';
+  const buttonLabel = status === 'submitting' || status === 'queued'
+    ? 'Принято'
+    : status === 'running'
+      ? 'ИИ работает'
+      : 'Передать ИИ';
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
@@ -20,7 +25,7 @@ export function AiPromptSheet({ open, onOpenChange, element, status, message, on
           <label htmlFor="site-editor-ai-prompt" className="text-sm font-medium">Что изменить только в этом элементе?</label>
           <textarea id="site-editor-ai-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={2_000} rows={8} placeholder="Например: сделай кнопку контрастнее, увеличь отступы и сохрани текущий текст" className="min-h-36 resize-y rounded-lg border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring/30" />
           <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{prompt.length}/2000</span>{status !== 'idle' && <span role="status" aria-live="polite" className={status === 'error' ? 'text-destructive' : ''}>{message ?? status}</span>}</div>
-          <Button type="button" className="self-end gap-1.5" disabled={!element || !prompt.trim() || busy} onClick={() => onSubmit(prompt)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}Передать ИИ</Button>
+          <Button type="button" className="self-end gap-1.5" disabled={!element || !prompt.trim() || busy} aria-disabled={busy} onClick={() => onSubmit(prompt)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}{buttonLabel}</Button>
         </div>
       </SheetContent>
     </Sheet>

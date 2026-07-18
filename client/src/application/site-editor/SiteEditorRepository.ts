@@ -44,15 +44,23 @@ export type SiteEditorPersistedPatch = {
 export type SiteEditorPatchSnapshot = {
   revision: number;
   patches: readonly SiteEditorPersistedPatch[];
+  draftCount: number;
+  redoCount: number;
+  queuedCount: number;
+  publishJobId: string | null;
 };
+
+export type SiteEditorMutationState = Omit<SiteEditorPatchSnapshot, 'patches'>;
 
 export interface SiteEditorRepository {
   openSession(projectId: string, input: { previewUrl: string; path: string }): Promise<SiteEditorSession>;
   closeSession(projectId: string, sessionId: string): Promise<void>;
   getPatches(projectId: string, route: string): Promise<SiteEditorPatchSnapshot>;
-  applyPatch(projectId: string, sessionId: string, input: { revision: number; snapshot: SiteEditorSnapshot; patch: SiteEditorPatch }): Promise<{ revision: number }>;
-  undo(projectId: string, sessionId: string, revision: number): Promise<{ revision: number }>;
-  redo(projectId: string, sessionId: string, revision: number): Promise<{ revision: number }>;
-  startAiJob(projectId: string, sessionId: string, input: { prompt: string; snapshot: SiteEditorSnapshot }): Promise<SiteEditorAiJob>;
+  applyPatch(projectId: string, sessionId: string, input: { revision: number; snapshot: SiteEditorSnapshot; patch: SiteEditorPatch }): Promise<SiteEditorMutationState>;
+  undo(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState>;
+  redo(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState>;
+  publishDraft(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState & { job: SiteEditorAiJob }>;
+  rejectDraft(projectId: string, sessionId: string, revision: number): Promise<SiteEditorMutationState>;
+  startAiJob(projectId: string, sessionId: string, input: { prompt: string; snapshot: SiteEditorSnapshot; idempotencyKey: string }): Promise<SiteEditorAiJob>;
   getAiJob(projectId: string, sessionId: string, jobId: string): Promise<SiteEditorAiJob>;
 }
