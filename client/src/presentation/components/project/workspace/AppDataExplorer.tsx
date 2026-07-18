@@ -216,8 +216,8 @@ export function AppDataExplorer({
           <table className="w-max min-w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-background">
               <tr>
-                {columns.map((column) => (
-                  <th key={column} className="min-w-[180px] border-b border-r px-3 py-2 text-left font-medium text-muted-foreground first:min-w-[220px]">
+                {columns.map((column, columnIndex) => (
+                  <th key={column} className={cn('min-w-[180px] border-b border-r px-3 py-2 text-left font-medium text-muted-foreground first:min-w-[220px]', columnIndex === 0 && 'sticky left-0 z-20 bg-background')}>
                     <button type="button" className="flex w-full items-center gap-1.5 hover:text-foreground" onClick={() => applySort(column)}>
                       {column === 'id' && <KeyRound className="size-3.5" />}{column}
                       {sort.column === column && (sort.dir === 'asc' ? <ArrowUp className="ml-auto size-3.5" /> : <ArrowDown className="ml-auto size-3.5" />)}
@@ -230,10 +230,21 @@ export function AppDataExplorer({
               {!loading && (page?.rows.length ?? 0) === 0 ? (
                 <tr><td colSpan={columns.length} className="h-64 text-center text-sm text-muted-foreground">{filters.length || search ? 'По вашему запросу ничего не найдено.' : 'В таблице пока нет записей.'}</td></tr>
               ) : page?.rows.map((row, rowIndex) => (
-                <tr key={String(row.id ?? rowIndex)} className="group cursor-pointer hover:bg-muted/35" onClick={() => setEditingRow(row)}>
-                  {columns.map((column) => {
+                <tr
+                  key={String(row.id ?? rowIndex)}
+                  tabIndex={0}
+                  aria-label={`Открыть запись ${String(row.id ?? rowIndex + 1)}`}
+                  className="group cursor-pointer hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  onClick={() => setEditingRow(row)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    setEditingRow(row);
+                  }}
+                >
+                  {columns.map((column, columnIndex) => {
                     const field = selectedTable ? fieldForColumn(selectedTable, column) : null;
-                    return <td key={column} className="max-w-[360px] border-b border-r px-3 py-2.5"><span className={cn('block truncate', row[column] === null || row[column] === undefined || row[column] === '' ? 'text-muted-foreground/60' : 'text-foreground')}>{displayValue(row[column], field)}</span></td>;
+                    return <td key={column} className={cn('max-w-[360px] border-b border-r px-3 py-2.5', columnIndex === 0 && 'sticky left-0 z-[5] bg-background group-hover:bg-muted/35 group-focus-visible:bg-muted/35')}><span className={cn('block truncate', row[column] === null || row[column] === undefined || row[column] === '' ? 'text-muted-foreground/60' : 'text-foreground')}>{displayValue(row[column], field)}</span></td>;
                   })}
                 </tr>
               ))}

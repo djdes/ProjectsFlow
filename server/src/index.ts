@@ -73,6 +73,7 @@ import { SetPublicAppearance } from './application/project/SetPublicAppearance.j
 import { EnsureProjectAppRepo } from './application/project/EnsureProjectAppRepo.js';
 import { CreateProjectRepo } from './application/project/CreateProjectRepo.js';
 import { ImportProjectRepo } from './application/project/ImportProjectRepo.js';
+import { ProjectImportAnalyzer } from './application/project/ProjectImportAnalyzer.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
 import { ClonePublicBoard } from './application/project/ClonePublicBoard.js';
 import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
@@ -90,6 +91,8 @@ import { appRuntimeRouter } from './presentation/app-runtime/appRuntimeRouter.js
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
+import { DrizzleSiteEditorRepository } from './infrastructure/repositories/DrizzleSiteEditorRepository.js';
+import { SiteEditorService } from './application/site-editor/SiteEditorService.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
@@ -932,6 +935,14 @@ configureAdminBypass(async (userId) => {
 const siteArtifactsDir = resolvePath(process.env['SITE_ARTIFACTS_DIR'] ?? 'site-artifacts');
 const siteArtifactStorage = new FileSystemSiteArtifactStorage(siteArtifactsDir);
 const siteArtifactRepo = new DrizzleSiteArtifactRepository(db);
+const siteEditorRepo = new DrizzleSiteEditorRepository(db);
+const siteEditorService = new SiteEditorService({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  repository: siteEditorRepo,
+  sites: siteArtifactRepo,
+  idGen: idGenerator,
+});
 const SITE_BASE_DOMAIN = process.env['SITE_BASE_DOMAIN'] ?? 'projectsflow.ru';
 const MAX_SITE_BYTES = 25 * 1024 * 1024; // 25 MB на файл собранного сайта.
 console.log(`[projectsflow] site artifacts dir: ${siteArtifactsDir}`);
@@ -1438,6 +1449,8 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   projects: projectRepo,
 });
 
+const projectImportAnalyzer = new ProjectImportAnalyzer();
+
 const { app, devProxyUpgrade } = createApp({
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
   telegramDigestActions: { service: telegramDigestActionService },
@@ -1508,7 +1521,9 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+      analyzer: projectImportAnalyzer,
     }),
+    projectImportAnalyzer,
     getProjectSite: new GetProjectSite({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1762,6 +1777,9 @@ const { app, devProxyUpgrade } = createApp({
     provision: provisionAppBackend,
     getStatus: getAppBackendStatus,
     dashboard: manageAppBackendData,
+  },
+  siteEditor: {
+    service: siteEditorService,
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

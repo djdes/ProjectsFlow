@@ -596,4 +596,28 @@ export class HttpProjectRepository implements ProjectRepository {
       xhr.send(form);
     });
   }
+
+  async analyzeRepoImport(
+    projectId: string,
+    archive: File,
+  ): Promise<import('@/application/project/ProjectRepository').ProjectImportAnalysis> {
+    const form = new FormData();
+    form.append('archive', archive);
+    const response = await fetch(`/api/projects/${projectId}/repo/import/analyze`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    type ErrorResponse = { error?: string; message?: string; details?: unknown };
+    if (!response.ok) {
+      let body: ErrorResponse = {};
+      try { body = await response.json() as ErrorResponse; } catch { /* nginx/html fallback */ }
+      throw new HttpError(response.status, {
+        error: body.error ?? 'project_import_analysis_failed',
+        message: body.message ?? `Ошибка анализа архива (HTTP ${response.status})`,
+        details: body.details,
+      });
+    }
+    return response.json() as Promise<import('@/application/project/ProjectRepository').ProjectImportAnalysis>;
+  }
 }

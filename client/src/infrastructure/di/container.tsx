@@ -28,6 +28,7 @@ import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTa
 import { HttpBoardViewRepository } from '@/infrastructure/http/HttpBoardViewRepository';
 import { HttpTaskTemplateRepository } from '@/infrastructure/http/HttpTaskTemplateRepository';
 import { HttpTaskPropertyRepository } from '@/infrastructure/http/HttpTaskPropertyRepository';
+import { HttpSiteEditorRepository } from '@/infrastructure/http/HttpSiteEditorRepository';
 import { HttpHelpRepository } from '@/infrastructure/http/HttpHelpRepository';
 import { SubmitSupport } from '@/application/help/SubmitSupport';
 import type { HelpRepository } from '@/application/help/HelpRepository';
@@ -81,6 +82,10 @@ import type { PublicBoardRepository } from '@/application/public/PublicBoardRepo
 import type { BoardViewRepository } from '@/application/project/BoardViewRepository';
 import type { TaskTemplateRepository } from '@/application/task/TaskTemplateRepository';
 import type { TaskPropertyRepository } from '@/application/task/TaskPropertyRepository';
+import type { SiteEditorRepository } from '@/application/site-editor/SiteEditorRepository';
+import { OpenSiteEditorSession } from '@/application/site-editor/OpenSiteEditorSession';
+import { ApplySiteEditorPatch } from '@/application/site-editor/ApplySiteEditorPatch';
+import { StartSiteEditorAiJob } from '@/application/site-editor/StartSiteEditorAiJob';
 import { GetUsage } from '@/application/usage/GetUsage';
 import { ChangePlan } from '@/application/usage/ChangePlan';
 import type { UsageRepository } from '@/application/usage/UsageRepository';
@@ -137,6 +142,10 @@ type Container = {
   boardViewRepository: BoardViewRepository;
   taskTemplateRepository: TaskTemplateRepository;
   taskPropertyRepository: TaskPropertyRepository;
+  siteEditorRepository: SiteEditorRepository;
+  openSiteEditorSession: OpenSiteEditorSession;
+  applySiteEditorPatch: ApplySiteEditorPatch;
+  startSiteEditorAiJob: StartSiteEditorAiJob;
 };
 
 function buildContainer(): Container {
@@ -172,6 +181,7 @@ function buildContainer(): Container {
   const boardViewRepo = new HttpBoardViewRepository();
   const taskTemplateRepo = new HttpTaskTemplateRepository();
   const taskPropertyRepo = new HttpTaskPropertyRepository();
+  const siteEditorRepo = new HttpSiteEditorRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -224,6 +234,10 @@ function buildContainer(): Container {
     boardViewRepository: boardViewRepo,
     taskTemplateRepository: taskTemplateRepo,
     taskPropertyRepository: taskPropertyRepo,
+    siteEditorRepository: siteEditorRepo,
+    openSiteEditorSession: new OpenSiteEditorSession(siteEditorRepo),
+    applySiteEditorPatch: new ApplySiteEditorPatch(siteEditorRepo),
+    startSiteEditorAiJob: new StartSiteEditorAiJob(siteEditorRepo),
   };
 }
 

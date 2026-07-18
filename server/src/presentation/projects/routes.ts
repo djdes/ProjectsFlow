@@ -11,6 +11,8 @@ import type { SetPublicAppearance } from '../../application/project/SetPublicApp
 import type { EnsureProjectAppRepo } from '../../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../../application/project/CreateProjectRepo.js';
 import type { ImportProjectRepo } from '../../application/project/ImportProjectRepo.js';
+import type { ProjectImportAnalyzer } from '../../application/project/ProjectImportAnalyzer.js';
+import { extractProjectZip } from '../../application/project/extractProjectZip.js';
 import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
 import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
@@ -88,6 +90,7 @@ type Deps = {
   readonly ensureAppRepo: EnsureProjectAppRepo;
   readonly createProjectRepo: CreateProjectRepo;
   readonly importProjectRepo: ImportProjectRepo;
+  readonly projectImportAnalyzer: ProjectImportAnalyzer;
   readonly getProjectSite: GetProjectSite;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
@@ -435,6 +438,31 @@ export function projectsRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Preflight ZIP без запуска package scripts и без изменений в GitHub. Клиент обязан
+  // показать этот отчёт до подтверждения импорта; основной import повторяет анализ, поэтому
+  // прямой вызов старого endpoint не обходит compatibility/security gate.
+  router.post(
+    '/:id/repo/import/analyze',
+    repoImportUpload.single('archive'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        if (typeof id !== 'string') throw new ProjectNotFoundError();
+        if (!req.file) throw new Error('project_archive_missing');
+        await requireProjectAccess(
+          { projects: deps.projects, members: deps.members },
+          id,
+          req.user!.id,
+          'update_project',
+        );
+        const files = extractProjectZip(req.file.buffer);
+        res.json(deps.projectImportAnalyzer.analyze(files));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.post(
     '/:id/repo/import',

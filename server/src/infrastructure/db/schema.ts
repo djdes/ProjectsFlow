@@ -1309,6 +1309,100 @@ export const projectAutomation = mysqlTable('project_automation', {
   updatedAt: updatedAtCol(),
 });
 
+export const siteEditorSessions = mysqlTable(
+  'site_editor_sessions',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    tokenHash: char('token_hash', { length: 64 }).notNull(),
+    route: varchar('route', { length: 500 }).notNull().default('/'),
+    artifactVersion: varchar('artifact_version', { length: 128 }).notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    revokedAt: timestamp('revoked_at'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_site_editor_sessions_token_hash').on(t.tokenHash),
+    index('idx_site_editor_sessions_project').on(t.projectId, t.expiresAt, t.revokedAt),
+  ],
+);
+
+export const sitePatchSets = mysqlTable(
+  'site_patch_sets',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    route: varchar('route', { length: 500 }).notNull(),
+    revision: int('revision', { unsigned: true }).notNull().default(0),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_site_patch_sets_project_route').on(t.projectId, t.route),
+    index('idx_site_patch_sets_project').on(t.projectId, t.updatedAt),
+  ],
+);
+
+export const sitePatches = mysqlTable(
+  'site_patches',
+  {
+    id: id(),
+    patchSetId: char('patch_set_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    locatorJson: mediumtext('locator_json').notNull(),
+    kind: mysqlEnum('kind', ['text', 'style', 'attribute', 'visibility', 'command']).notNull(),
+    payloadJson: mediumtext('payload_json').notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 100 }).notNull(),
+    createdRevision: int('created_revision', { unsigned: true }).notNull(),
+    createdBy: char('created_by', { length: 36 }).notNull(),
+    deletedAt: timestamp('deleted_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_site_patches_idempotency').on(t.patchSetId, t.idempotencyKey),
+    index('idx_site_patches_project_set').on(t.projectId, t.patchSetId, t.deletedAt, t.createdRevision),
+  ],
+);
+
+export const projectEditJobs = mysqlTable(
+  'project_edit_jobs',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    createdBy: char('created_by', { length: 36 }).notNull(),
+    dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+      .notNull()
+      .default('queued'),
+    operation: mysqlEnum('operation', [
+      'rewrite_text',
+      'restyle',
+      'regenerate_element',
+      'regenerate_section',
+      'replace_icon',
+      'edit_code',
+    ]).notNull(),
+    route: varchar('route', { length: 500 }).notNull(),
+    locatorJson: mediumtext('locator_json').notNull(),
+    domSnapshot: mediumtext('dom_snapshot').notNull(),
+    computedStylesJson: mediumtext('computed_styles_json').notNull(),
+    prompt: text('prompt').notNull(),
+    artifactVersion: varchar('artifact_version', { length: 128 }).notNull(),
+    resultJson: mediumtext('result_json'),
+    error: varchar('error', { length: 500 }),
+    claimedAt: timestamp('claimed_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_project_edit_jobs_dispatcher').on(t.dispatcherUserId, t.status, t.createdAt),
+    index('idx_project_edit_jobs_project').on(t.projectId, t.status, t.createdAt),
+  ],
+);
+
 export type ProjectAutomationRow = typeof projectAutomation.$inferSelect;
 export type NewProjectAutomationRow = typeof projectAutomation.$inferInsert;
 

@@ -224,6 +224,9 @@ export class MockProjectRepository implements ProjectRepository {
   importRepo(): Promise<never> {
     return Promise.reject(new Error('Mock.importRepo: not implemented'));
   }
+  analyzeRepoImport(): Promise<never> {
+    return Promise.reject(new Error('Mock.analyzeRepoImport: not implemented'));
+  }
   getProjectSite(): Promise<{ siteSlug: string | null; deployedAt: string | null; fileCount: number; routes: readonly string[] }> {
     return Promise.resolve({ siteSlug: null, deployedAt: null, fileCount: 0, routes: ['/'] });
   }

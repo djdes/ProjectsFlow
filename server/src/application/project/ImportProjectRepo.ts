@@ -9,10 +9,14 @@ import {
   GithubNotConnectedError,
   GithubRepoNameTakenError,
 } from '../../domain/github/errors.js';
-import { ProjectRepoAlreadyConnectedError } from '../../domain/project/errors.js';
+import {
+  ProjectArchiveInvalidError,
+  ProjectRepoAlreadyConnectedError,
+} from '../../domain/project/errors.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import { extractProjectZip } from './extractProjectZip.js';
+import type { ProjectImportAnalyzer } from './ProjectImportAnalyzer.js';
 import { requireProjectAccess } from './projectAccess.js';
 
 type Deps = {
@@ -20,6 +24,7 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tokens: GithubTokenRepository;
   readonly api: GithubApiClient;
+  readonly analyzer: ProjectImportAnalyzer;
 };
 
 export class ImportProjectRepo {
@@ -43,6 +48,13 @@ export class ImportProjectRepo {
     const token = await this.deps.tokens.getWithTokenByUserId(input.callerUserId);
     if (!token) throw new GithubNotConnectedError();
     const files = extractProjectZip(input.archive);
+    const analysis = this.deps.analyzer.analyze(files);
+    if (analysis.status !== 'supported') {
+      const reason = analysis.diagnostics.find((item) => item.severity === 'error');
+      throw new ProjectArchiveInvalidError(
+        reason?.message ?? 'Этот проект пока нельзя безопасно импортировать',
+      );
+    }
 
     let destination: Awaited<ReturnType<GithubApiClient['createRepo']>>;
     let createdByProjectsFlow = false;

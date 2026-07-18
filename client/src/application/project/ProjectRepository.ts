@@ -193,6 +193,46 @@ export type ImportProjectRepoInput =
     | { readonly targetMode: 'existing'; readonly existingRepoFullName: string }
   );
 
+export type ProjectImportSupportStatus = 'supported' | 'needs_config' | 'unsupported';
+export type ProjectImportKind =
+  | 'static'
+  | 'vite'
+  | 'create-react-app'
+  | 'astro-static'
+  | 'next-export'
+  | 'node-server'
+  | 'api-only'
+  | 'monorepo'
+  | 'unknown';
+export type ProjectImportPackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'none' | 'unknown';
+export type ProjectImportDiagnostic = {
+  readonly code: string;
+  readonly severity: 'info' | 'warning' | 'error';
+  readonly message: string;
+  readonly remediation: string | null;
+};
+export type ProjectImportAnalysis = {
+  readonly status: ProjectImportSupportStatus;
+  readonly kind: ProjectImportKind;
+  readonly framework: string | null;
+  readonly packageManager: ProjectImportPackageManager;
+  readonly rootDir: string;
+  readonly buildCommand: string | null;
+  readonly startCommand: string | null;
+  readonly outputDir: string | null;
+  readonly fileCount: number;
+  readonly diagnostics: readonly ProjectImportDiagnostic[];
+  readonly dataHints: readonly {
+    kind: 'json-file' | 'lowdb' | 'json-server' | 'filesystem-write';
+    path: string | null;
+    message: string;
+  }[];
+  readonly secretFindings: readonly {
+    path: string;
+    kind: 'environment' | 'private-key' | 'credential-file' | 'token';
+  }[];
+};
+
 export interface ProjectRepository {
   list(): Promise<Project[]>;
   getById(id: string): Promise<Project | null>;
@@ -236,6 +276,10 @@ export interface ProjectRepository {
     input: ImportProjectRepoInput,
     onProgress?: (percent: number) => void,
   ): Promise<{ fullName: string; gitRepoUrl: string; fileCount: number }>;
+  analyzeRepoImport(
+    projectId: string,
+    archive: File,
+  ): Promise<ProjectImportAnalysis>;
   // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до
   // деплоя — заглушка), deployedAt/fileCount из site_artifacts (null/0, пока не задеплоен).
   getProjectSite(projectId: string): Promise<ProjectSite>;

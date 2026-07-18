@@ -1,4 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request, type RequestHandler } from 'express';
@@ -8,6 +9,10 @@ import type { GetAppBackendStatus } from '../application/app-backend/GetAppBacke
 import type { ManageAppBackendData } from '../application/app-backend/ManageAppBackendData.js';
 import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
+import type { SiteEditorService } from '../application/site-editor/SiteEditorService.js';
+import { siteEditorRouter } from './site-editor/routes.js';
+import { siteEditorAgentRouter } from './site-editor/agentRoutes.js';
+import { SITE_EDITOR_BRIDGE_PATH, SITE_EDITOR_BRIDGE_SCRIPT } from './site-editor/bridgeScript.js';
 import cookieParser from 'cookie-parser';
 import {
   createProxyMiddleware,
@@ -33,6 +38,7 @@ import type { SetPublicAppearance } from '../application/project/SetPublicAppear
 import type { EnsureProjectAppRepo } from '../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../application/project/CreateProjectRepo.js';
 import type { ImportProjectRepo } from '../application/project/ImportProjectRepo.js';
+import type { ProjectImportAnalyzer } from '../application/project/ProjectImportAnalyzer.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
 import type { ClonePublicBoard } from '../application/project/ClonePublicBoard.js';
 import type { ProductTelemetryRepository } from '../application/telemetry/ProductTelemetryRepository.js';
@@ -328,6 +334,7 @@ type AppDeps = {
     readonly ensureAppRepo: EnsureProjectAppRepo;
     readonly createProjectRepo: CreateProjectRepo;
     readonly importProjectRepo: ImportProjectRepo;
+    readonly projectImportAnalyzer: ProjectImportAnalyzer;
     readonly getProjectSite: GetProjectSite;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
@@ -403,6 +410,9 @@ type AppDeps = {
     // Для отдачи обложки-картинки опубликованной доски анониму (lookup проекта по slug).
     readonly projects: ProjectRepository;
     readonly coverStorage: AttachmentStorage;
+  };
+  readonly siteEditor: {
+    readonly service: SiteEditorService;
   };
   readonly telemetry: {
     readonly repo: ProductTelemetryRepository;
@@ -876,6 +886,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     getStatus: deps.appBackend.getStatus,
     dashboard: deps.appBackend.dashboard,
   }));
+  app.use('/api/projects', siteEditorRouter({ service: deps.siteEditor.service }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —
   // форма доступна и анонимам с лендинга (см. help/routes.ts).
   app.use('/api', buildHelpRouter(deps.help));
@@ -1024,6 +1035,13 @@ export function createApp(deps: AppDeps): CreatedApp {
       provision: deps.appBackend.provision,
     }),
   );
+  app.use(
+    '/api/agent',
+    siteEditorAgentRouter({
+      authenticate: deps.agent.authenticateAgentToken,
+      service: deps.siteEditor.service,
+    }),
+  );
 
   // AI-prompt-improvement (site-side, session-cookie auth): см. spec
   // 2026-05-28-ai-prompt-improvement-design.md. POST /api/ai/prompt-jobs + GET с long-poll.
@@ -1149,6 +1167,11 @@ export function createApp(deps: AppDeps): CreatedApp {
         }
         return next();
       }
+      if (req.path === SITE_EDITOR_BRIDGE_PATH) {
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.type('application/javascript').send(SITE_EDITOR_BRIDGE_SCRIPT);
+        return;
+      }
       const rel = req.path.replace(/^\/+/, '') || 'index.html';
       const abs = resolve(dir, rel);
       const root = resolve(dir);
@@ -1156,6 +1179,18 @@ export function createApp(deps: AppDeps): CreatedApp {
       const target = inside && existsSync(abs) && statSync(abs).isFile() ? abs : resolve(dir, 'index.html');
       if (!existsSync(target)) {
         res.status(404).type('html').send('<!doctype html><meta charset="utf-8"><title>Сайт не найден</title>');
+        return;
+      }
+      if (target.toLowerCase().endsWith('.html')) {
+        const html = await readFile(target, 'utf8');
+        const tag = `<script src="${SITE_EDITOR_BRIDGE_PATH}" defer></script>`;
+        // The bridge is versioned and inert until a parent performs the nonce-bound v1
+        // hello handshake. Serving it from the result origin also works with script-src 'self'.
+        const injected = html.includes(SITE_EDITOR_BRIDGE_PATH)
+          ? html
+          : html.includes('</body>') ? html.replace('</body>', `${tag}</body>`) : `${html}${tag}`;
+        res.setHeader('Cache-Control', 'no-cache');
+        res.type('html').send(injected);
         return;
       }
       res.sendFile(target);

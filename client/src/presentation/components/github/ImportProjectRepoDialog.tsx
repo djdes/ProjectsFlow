@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Archive,
+  CheckCircle2,
+  Database,
   FileArchive,
   FolderGit2,
   Github,
   Loader2,
   Lock,
+  ShieldAlert,
   ShieldCheck,
   UploadCloud,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +26,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { GithubRepoSummary } from '@/domain/github/GithubConnection';
+import type { ProjectImportAnalysis } from '@/application/project/ProjectRepository';
+import {
+  canCommitProjectImport,
+  IMPORT_STATUS_COPY,
+  projectImportTechnology,
+} from '@/application/project/importAnalysis';
 import { useContainer } from '@/infrastructure/di/container';
 import { HttpError } from '@/lib/HttpError';
 import { slugifyRepoName } from '@/lib/slugifyRepoName';
@@ -64,6 +75,7 @@ export function ImportProjectRepoDialog({
   const { projectRepository } = useContainer();
   const { refresh } = useProjectsContext();
   const inputRef = useRef<HTMLInputElement>(null);
+  const analysisRequestRef = useRef(0);
   const [name, setName] = useState('');
   const [privateRepo, setPrivateRepo] = useState(true);
   const [targetMode, setTargetMode] = useState<TargetMode>('new');
@@ -71,6 +83,8 @@ export function ImportProjectRepoDialog({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reusedExisting, setReusedExisting] = useState(false);
   const [archive, setArchive] = useState<File | null>(null);
+  const [analysis, setAnalysis] = useState<ProjectImportAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -85,6 +99,9 @@ export function ImportProjectRepoDialog({
     setPickerOpen(false);
     setReusedExisting(false);
     setArchive(null);
+    setAnalysis(null);
+    setAnalyzing(false);
+    analysisRequestRef.current += 1;
     setProgress(0);
     setError(null);
   }, [open, projectName]);
@@ -92,19 +109,37 @@ export function ImportProjectRepoDialog({
   const choose = (file: File | undefined): void => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.zip')) {
+      setArchive(null);
+      setAnalysis(null);
       setError('Выбери ZIP-архив');
       return;
     }
     if (file.size > 25 * 1024 * 1024) {
+      setArchive(null);
+      setAnalysis(null);
       setError('ZIP больше 25 МБ');
       return;
     }
     setArchive(file);
+    setAnalysis(null);
     setError(null);
+    const requestId = ++analysisRequestRef.current;
+    setAnalyzing(true);
+    void projectRepository.analyzeRepoImport(projectId, file)
+      .then((result) => {
+        if (analysisRequestRef.current === requestId) setAnalysis(result);
+      })
+      .catch((cause: unknown) => {
+        if (analysisRequestRef.current !== requestId) return;
+        setError(cause instanceof Error ? cause.message : 'Не удалось проверить совместимость архива');
+      })
+      .finally(() => {
+        if (analysisRequestRef.current === requestId) setAnalyzing(false);
+      });
   };
 
   const submit = async (): Promise<void> => {
-    if (!archive) return;
+    if (!archive || !canCommitProjectImport(analysis)) return;
     setSaving(true);
     setError(null);
     try {
@@ -179,6 +214,68 @@ export function ImportProjectRepoDialog({
             <span className="text-xs text-muted-foreground">ZIP до 25 МБ · распакованный проект до 100 МБ</span>
           </button>
           <input ref={inputRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => choose(e.target.files?.[0])} />
+
+          {analyzing && (
+            <div className="flex items-center gap-2 rounded-xl border bg-muted/35 px-3 py-3 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin text-violet-600" />
+              Проверяем структуру, runtime, базу данных и секреты…
+            </div>
+          )}
+
+          {analysis && !analyzing && (
+            <div className={cn(
+              'overflow-hidden rounded-xl border',
+              analysis.status === 'supported' && 'border-emerald-500/30 bg-emerald-500/[0.06]',
+              analysis.status === 'needs_config' && 'border-amber-500/35 bg-amber-500/[0.07]',
+              analysis.status === 'unsupported' && 'border-destructive/30 bg-destructive/[0.05]',
+            )}>
+              <div className="flex gap-3 px-3.5 py-3">
+                {analysis.status === 'supported' ? (
+                  <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                ) : analysis.status === 'needs_config' ? (
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+                ) : (
+                  <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{IMPORT_STATUS_COPY[analysis.status].title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {IMPORT_STATUS_COPY[analysis.status].description}
+                  </p>
+                  <p className="mt-1.5 truncate font-mono text-[11px] text-muted-foreground">
+                    {projectImportTechnology(analysis)} · {analysis.fileCount} файлов
+                  </p>
+                </div>
+              </div>
+              {analysis.diagnostics.filter((item) => item.severity !== 'info').length > 0 && (
+                <div className="space-y-2 border-t px-3.5 py-3">
+                  {analysis.diagnostics.filter((item) => item.severity !== 'info').map((item) => (
+                    <div key={item.code} className="flex gap-2 text-xs leading-relaxed">
+                      <ShieldAlert className={cn(
+                        'mt-0.5 size-3.5 shrink-0',
+                        item.severity === 'error' ? 'text-destructive' : 'text-amber-600',
+                      )} />
+                      <div>
+                        <p className="text-foreground">{item.message}</p>
+                        {item.remediation && <p className="mt-0.5 text-muted-foreground">{item.remediation}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analysis.dataHints.length > 0 && (
+                <div className="flex gap-2 border-t px-3.5 py-2.5 text-xs text-muted-foreground">
+                  <Database className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{analysis.dataHints.map((hint) => hint.path ?? hint.kind).join(', ')}</span>
+                </div>
+              )}
+              {analysis.secretFindings.length > 0 && (
+                <div className="border-t px-3.5 py-2.5 text-xs text-destructive">
+                  Файлы с секретами: {analysis.secretFindings.map((finding) => finding.path).join(', ')}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/60 p-1">
             <button
@@ -281,7 +378,7 @@ export function ImportProjectRepoDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>Отмена</Button>
-          <Button disabled={saving || !archive || targetMissing || (targetMode === 'new' && invalidName)} onClick={() => void submit()}>
+          <Button disabled={saving || analyzing || !archive || !canCommitProjectImport(analysis) || targetMissing || (targetMode === 'new' && invalidName)} onClick={() => void submit()}>
             {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
             {targetMode === 'existing' && selectedRepo
               ? `Импортировать в ${selectedRepo.fullName.split('/').at(-1)}`

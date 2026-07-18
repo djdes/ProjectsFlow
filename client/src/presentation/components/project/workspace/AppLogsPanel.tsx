@@ -24,6 +24,18 @@ function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'medium' }).format(date);
 }
+
+function formatCompactDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date);
+}
 export function AppLogsPanel({ projectId, tables, members }: { projectId: string; tables: readonly AppTableSchema[]; members: readonly ProjectMember[] }): React.ReactElement {
   const { projectRepository } = useContainer();
   const [tab, setTab] = useState<'app' | 'project'>('app');
@@ -81,14 +93,14 @@ export function AppLogsPanel({ projectId, tables, members }: { projectId: string
               const isExpanded = expanded === entry.id;
               return (
                 <div key={entry.id} className={cn(!entry.success && 'bg-destructive/5')}>
-                  <button type="button" onClick={() => setExpanded(isExpanded ? null : entry.id)} className="grid min-h-14 w-full grid-cols-[22px_minmax(140px,1fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] items-center gap-2 px-3 text-left text-sm hover:bg-muted/35">
+                  <button type="button" onClick={() => setExpanded(isExpanded ? null : entry.id)} className="grid min-h-14 w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[22px_minmax(140px,1fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] sm:py-0">
                     {isExpanded ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
-                    <span className="truncate font-medium">{OPERATION_LABEL[entry.operation] ?? entry.operation}</span>
-                    <span className="truncate text-muted-foreground">{entry.tableName ?? '—'}</span>
-                    <span className="truncate text-muted-foreground">{member?.user.displayName ?? (entry.actorType === 'runtime' ? 'Приложение' : entry.actorId ?? 'Система')}</span>
-                    <span className="whitespace-nowrap text-xs text-muted-foreground">{formatDate(entry.createdAt)}</span>
+                    <span className="min-w-0"><span className="block truncate font-medium">{OPERATION_LABEL[entry.operation] ?? entry.operation}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground sm:hidden">{entry.tableName ?? '—'} · {member?.user.displayName ?? (entry.actorType === 'runtime' ? 'Приложение' : entry.actorId ?? 'Система')}</span></span>
+                    <span className="hidden truncate text-muted-foreground sm:block">{entry.tableName ?? '—'}</span>
+                    <span className="hidden truncate text-muted-foreground sm:block">{member?.user.displayName ?? (entry.actorType === 'runtime' ? 'Приложение' : entry.actorId ?? 'Система')}</span>
+                    <time dateTime={entry.createdAt} className="whitespace-nowrap text-[10px] text-muted-foreground sm:text-xs"><span className="sm:hidden">{formatCompactDate(entry.createdAt)}</span><span className="hidden sm:inline">{formatDate(entry.createdAt)}</span></time>
                   </button>
-                  {isExpanded && <div className="grid gap-3 border-t bg-muted/15 px-10 py-3 text-xs sm:grid-cols-2"><div><p className="font-medium text-muted-foreground">ID записи</p><p className="mt-1 break-all">{entry.rowId ?? '—'}</p></div><div><p className="font-medium text-muted-foreground">Источник</p><p className="mt-1">{entry.actorType}</p></div><div className="sm:col-span-2"><p className="font-medium text-muted-foreground">Детали</p><pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap rounded-md border bg-background p-2 font-mono text-[11px]">{entry.detail ? JSON.stringify(entry.detail, null, 2) : '—'}</pre></div></div>}
+                  {isExpanded && <div className="grid gap-3 border-t bg-muted/15 px-3 py-3 text-xs sm:grid-cols-2 sm:px-10"><div><p className="font-medium text-muted-foreground">ID записи</p><p className="mt-1 break-all">{entry.rowId ?? '—'}</p></div><div><p className="font-medium text-muted-foreground">Источник</p><p className="mt-1">{entry.actorType}</p></div><div className="sm:col-span-2"><p className="font-medium text-muted-foreground">Детали</p><pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-background p-2 font-mono text-[11px]">{entry.detail ? JSON.stringify(entry.detail, null, 2) : '—'}</pre></div></div>}
                 </div>
               );
             })}

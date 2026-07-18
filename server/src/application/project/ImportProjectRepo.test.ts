@@ -7,10 +7,14 @@ import {
 } from '../../domain/github/errors.js';
 import type { Project } from '../../domain/project/Project.js';
 import { ImportProjectRepo } from './ImportProjectRepo.js';
+import { ProjectImportAnalyzer } from './ProjectImportAnalyzer.js';
 
-function storedZip(name = 'project/package.json'): Buffer {
+function storedZip(
+  name = 'project/index.html',
+  body = '<!doctype html><title>demo</title>',
+): Buffer {
   const filename = Buffer.from(name, 'utf8');
-  const content = Buffer.from('{"name":"demo"}', 'utf8');
+  const content = Buffer.from(body, 'utf8');
   const local = Buffer.alloc(30);
   local.writeUInt32LE(0x04034b50, 0);
   local.writeUInt16LE(20, 4);
@@ -68,6 +72,7 @@ function makeDeps(options: {
 }) {
   const project = makeProject();
   const calls = {
+    creates: 0,
     imports: [] as Array<{ fullName: string; requireEmpty: boolean }>,
     updates: [] as Array<{ gitRepoUrl?: string | null; appRepoFullName?: string | null }>,
     deletes: [] as string[],
@@ -88,6 +93,7 @@ function makeDeps(options: {
     },
     api: {
       createRepo: async () => {
+        calls.creates += 1;
         if (options.createError) throw options.createError;
         return {
           fullName: 'yaroslav/new-repo',
@@ -110,6 +116,7 @@ function makeDeps(options: {
       },
       deleteRepo: async (_token: string, fullName: string) => { calls.deletes.push(fullName); },
     },
+    analyzer: new ProjectImportAnalyzer(),
   };
   return { deps: deps as any, calls };
 }
@@ -186,4 +193,22 @@ test('ImportProjectRepo останавливается, если repo перес
   );
   assert.equal(calls.updates.length, 0);
   assert.equal(calls.deletes.length, 0);
+});
+
+test('ImportProjectRepo повторяет preflight и не мутирует GitHub для Node API', async () => {
+  const { deps, calls } = makeDeps({ target: emptyExisting });
+  await assert.rejects(
+    () => new ImportProjectRepo(deps).execute({
+      projectId: 'p1', callerUserId: 'u1',
+      target: { kind: 'new', name: 'unsafe-node', privateRepo: true },
+      archive: storedZip('project/package.json', JSON.stringify({
+        scripts: { start: 'node server.js' },
+        dependencies: { express: '^5.0.0' },
+      })),
+    }),
+    /постоянно работающий Node\.js-процесс/,
+  );
+  assert.equal(calls.creates, 0);
+  assert.equal(calls.imports.length, 0);
+  assert.equal(calls.updates.length, 0);
 });

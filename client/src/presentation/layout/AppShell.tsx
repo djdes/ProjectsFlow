@@ -236,7 +236,7 @@ export function AppShell(): React.ReactElement {
                           toggleCollapse();
                         }}
                         aria-label="Показать боковую панель"
-                        className="absolute left-2 top-1.5 z-40 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                        className="absolute left-2 top-1.5 z-50 grid size-8 place-items-center rounded-md bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Menu className="size-4" />
                       </button>
