@@ -19,6 +19,12 @@ import {
   type WorkspaceAssigneeDigestSettings,
 } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { parseJsonCol } from './jsonCol.js';
+import {
+  ALL_SCHEDULE_DAYS,
+  WEEKDAY_SCHEDULE_DAYS,
+  isWeekdaysOnly,
+  normalizeScheduleDays,
+} from '../../domain/digest/ScheduleDays.js';
 
 function rowToSettings(
   row: WorkspaceAssigneeDigestSettingsRow,
@@ -28,7 +34,10 @@ function rowToSettings(
     enabled: row.enabled,
     hour: row.sendHour,
     minute: row.sendMinute,
-    weekdaysOnly: row.weekdaysOnly,
+    daysOfWeek: normalizeScheduleDays(
+      parseJsonCol<unknown[]>(row.daysOfWeek, []),
+      row.weekdaysOnly ? WEEKDAY_SCHEDULE_DAYS : ALL_SCHEDULE_DAYS,
+    ),
     telegramGroupChatId: row.telegramGroupChatId ?? null,
     telegramGroupTitle: row.telegramGroupTitle ?? null,
     recipientMode: row.recipientMode,
@@ -86,7 +95,8 @@ export class DrizzleWorkspaceAssigneeDigestRepository
       enabled: input.enabled,
       sendHour: input.hour,
       sendMinute: input.minute,
-      weekdaysOnly: input.weekdaysOnly,
+      weekdaysOnly: isWeekdaysOnly(input.daysOfWeek),
+      daysOfWeek: input.daysOfWeek,
       telegramGroupChatId: input.telegramGroupChatId,
       telegramGroupTitle: input.telegramGroupTitle,
       recipientMode: input.recipientMode,

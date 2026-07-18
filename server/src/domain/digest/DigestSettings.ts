@@ -1,4 +1,5 @@
 import type { TaskStatus } from '../task/Task.js';
+import { ALL_SCHEDULE_DAYS, type ScheduleDay } from './ScheduleDays.js';
 
 // Каналы доставки ежедневной сводки.
 export type DigestChannelKind = 'email' | 'telegram' | 'notification';
@@ -21,8 +22,7 @@ export type DailyDigestConfig = {
   readonly tgTargets: DigestTgTarget[];
   readonly tgGrouping: DigestTgGrouping;
   readonly statuses: TaskStatus[]; // какие колонки включать
-  // true — слать только по будням (Пн–Пт по Europe/Moscow), в выходные не тревожить.
-  readonly weekdaysOnly: boolean;
+  readonly daysOfWeek: ScheduleDay[];
 };
 
 export type DigestSettings = {
@@ -50,7 +50,7 @@ export function defaultDigestSettings(projectId: string): DigestSettings {
       tgTargets: ['personal'],
       tgGrouping: 'status',
       statuses: ['backlog', 'manual', 'todo', 'done'],
-      weekdaysOnly: false,
+      daysOfWeek: [...ALL_SCHEDULE_DAYS],
     },
     dailyLastSentOn: null,
   };

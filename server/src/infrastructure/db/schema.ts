@@ -1343,6 +1343,7 @@ export const projectDigestSettings = mysqlTable('project_digest_settings', {
   dailyStatuses: json('daily_statuses').$type<string[] | null>(),
   // true — слать сводку только по будням (Пн–Пт МSK). См. db/095.
   dailyWeekdaysOnly: boolean('daily_weekdays_only').notNull().default(false),
+  dailyDaysOfWeek: json('daily_days_of_week').$type<number[] | null>(),
   dailyLastSentOn: date('daily_last_sent_on', { mode: 'string' }),
   // Массив {chatId,messageIds[]} последнего ручного теста; авто-сводки не записываются.
   dailyTestDeliveries: json('daily_test_deliveries').$type<
@@ -1363,6 +1364,7 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
     sendHour: tinyint('send_hour').notNull().default(9),
     sendMinute: tinyint('send_minute').notNull().default(0),
     weekdaysOnly: boolean('weekdays_only').notNull().default(true),
+    daysOfWeek: json('days_of_week').$type<number[] | null>(),
     telegramGroupChatId: bigint('telegram_group_chat_id', { mode: 'number' }),
     telegramGroupTitle: varchar('telegram_group_title', { length: 255 }),
     recipientMode: mysqlEnum('recipient_mode', ['all', 'selected']).notNull().default('all'),

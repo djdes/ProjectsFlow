@@ -48,6 +48,8 @@ import type {
   SaveDigestSettingsInput,
 } from '@/application/digest/DigestSettingsRepository';
 import type { TaskStatus } from '@/domain/task/Task';
+import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
+import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPicker';
 
 type Props = {
   open: boolean;
@@ -128,7 +130,7 @@ type DigestDraft = {
   tgTargets: DigestTgTarget[];
   tgGrouping: DigestTgGrouping;
   statuses: TaskStatus[];
-  weekdaysOnly: boolean;
+  daysOfWeek: ScheduleDay[];
 };
 
 // Набор «включённых автоматизаций», которыми управляет мастер-переключатель. Снимок
@@ -164,7 +166,7 @@ function digestToPayload(d: DigestDraft): SaveDigestSettingsInput {
       tgTargets: d.tgTargets,
       tgGrouping: d.tgGrouping,
       statuses: d.statuses,
-      weekdaysOnly: d.weekdaysOnly,
+      daysOfWeek: d.daysOfWeek,
     },
   };
 }
@@ -376,7 +378,7 @@ export function AutomationDialog({
           tgTargets: digestSettings.daily.tgTargets,
           tgGrouping: digestSettings.daily.tgGrouping,
           statuses: digestSettings.daily.statuses,
-          weekdaysOnly: digestSettings.daily.weekdaysOnly,
+          daysOfWeek: digestSettings.daily.daysOfWeek,
         });
       })
       .catch((e) => {
@@ -1097,19 +1099,18 @@ export function AutomationDialog({
                     />
                   </div>
 
-                  {/* Только по будням: в выходные автосводку не шлём — кому надо, зайдёт и
-                      нажмёт «Отправить сейчас». */}
-                  <label className="flex cursor-pointer items-start gap-2 text-sm">
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={digest.weekdaysOnly}
-                      onCheckedChange={(v) => updateDigest({ weekdaysOnly: v === true })}
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Дни отправки
+                    </Label>
+                    <ScheduleDayPicker
+                      value={digest.daysOfWeek}
+                      onChange={(daysOfWeek) => updateDigest({ daysOfWeek })}
                     />
-                    <span>
-                      Только по будням
-                      <span className="text-muted-foreground"> — в выходные не отправлять (Сб/Вс)</span>
-                    </span>
-                  </label>
+                    <p className="text-xs text-muted-foreground">
+                      Сводка придёт только в выбранные дни по московскому времени.
+                    </p>
+                  </div>
 
                   <div className="space-y-1.5">
                     <FieldGroupLabel>Кому</FieldGroupLabel>

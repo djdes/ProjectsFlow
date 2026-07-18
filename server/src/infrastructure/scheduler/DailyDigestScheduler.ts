@@ -2,7 +2,7 @@ import type { DigestSettingsRepository } from '../../application/digest/DigestSe
 import type { SendDailyDigest } from '../../application/digest/SendDailyDigest.js';
 
 // «Сейчас» в Europe/Moscow → { hour 0..23, minute 0..59, date 'YYYY-MM-DD' }.
-function mskNow(): { hour: number; minute: number; date: string } {
+function mskNow(at: Date): { hour: number; minute: number; date: string } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Moscow',
     year: 'numeric',
@@ -11,7 +11,7 @@ function mskNow(): { hour: number; minute: number; date: string } {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).formatToParts(new Date());
+  }).formatToParts(at);
   const get = (t: string): string => parts.find((p) => p.type === t)?.value ?? '';
   return {
     hour: Number(get('hour')) % 24, // некоторые среды дают "24" для полуночи
@@ -48,28 +48,26 @@ export class DailyDigestScheduler {
     }
   }
 
-  async tick(): Promise<void> {
+  async tick(at: Date = new Date()): Promise<void> {
     if (this.running) return;
     this.running = true;
     try {
-      await this.runTick();
+      await this.runTick(at);
     } finally {
       this.running = false;
     }
   }
 
-  private async runTick(): Promise<void> {
-    const now = mskNow();
+  private async runTick(at: Date): Promise<void> {
+    const now = mskNow(at);
     const nowMin = now.hour * 60 + now.minute;
     // День недели МSK-даты (0=Вс..6=Сб). new Date(Y,M-1,D) — календарная дата, weekday
     // от tz не зависит; берём компоненты из уже посчитанной МSK-даты.
     const [y, m, d] = now.date.split('-').map(Number);
     const dow = new Date(y!, (m ?? 1) - 1, d!).getDay();
-    const isWeekend = dow === 0 || dow === 6;
     const due = await this.deps.settings.listDailyEnabled();
     for (const s of due) {
-      // «Только по будням»: в выходные не шлём (кому надо — отправят вручную «Сейчас»).
-      if (s.daily.weekdaysOnly && isWeekend) continue;
+      if (!s.daily.daysOfWeek.includes(dow as 0 | 1 | 2 | 3 | 4 | 5 | 6)) continue;
       const schedMin = s.daily.hour * 60 + s.daily.minute;
       if (nowMin < schedMin || s.dailyLastSentOn === now.date) continue;
       try {

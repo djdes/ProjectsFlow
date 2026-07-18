@@ -3,7 +3,7 @@ import test from 'node:test';
 import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { WorkspaceAssigneeDigestScheduler } from './WorkspaceAssigneeDigestScheduler.js';
 
-function harness() {
+function harness(daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5]) {
   const calls: string[] = [];
   const settings = {
     async listScheduled() {
@@ -11,6 +11,7 @@ function harness() {
         ...defaultWorkspaceAssigneeDigestSettings('w1'),
         enabled: true,
         hour: 9,
+        daysOfWeek,
         telegramGroupChatId: -1007,
         commitSyncEnabled: true,
         eodReminderEnabled: true,
@@ -37,10 +38,20 @@ function harness() {
   return { scheduler, calls };
 }
 
-test('workspace Telegram schedule never sends on weekends', async () => {
+test('workspace Telegram schedule skips a day that is not selected', async () => {
   const { scheduler, calls } = harness();
   await scheduler.tick(new Date('2026-07-18T14:21:00.000Z')); // Saturday 17:21 MSK
   assert.deepEqual(calls, []);
+});
+
+test('workspace Telegram schedule can run on a selected weekend day', async () => {
+  const { scheduler, calls } = harness([6]);
+  await scheduler.tick(new Date('2026-07-18T14:21:00.000Z')); // Saturday 17:21 MSK
+  assert.deepEqual(calls, [
+    'digest', 'mark:digest',
+    'commit', 'mark:commit',
+    'eod', 'mark:eod',
+  ]);
 });
 
 test('workspace Telegram schedule runs all due weekday automations once', async () => {

@@ -4,7 +4,7 @@ import type { EnqueueCommitSyncJob } from '../../application/commit-sync/Enqueue
 import type { SendWorkspaceEodReminder } from '../../application/eod/SendWorkspaceEodReminder.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 
-function mskNow(at: Date): { hour: number; minute: number; date: string; weekend: boolean } {
+function mskNow(at: Date): { hour: number; minute: number; date: string; dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6 } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Moscow',
     year: 'numeric',
@@ -22,7 +22,7 @@ function mskNow(at: Date): { hour: number; minute: number; date: string; weekend
     hour: Number(get('hour')) % 24,
     minute: Number(get('minute')),
     date,
-    weekend: weekDay === 0 || weekDay === 6,
+    dayOfWeek: weekDay as 0 | 1 | 2 | 3 | 4 | 5 | 6,
   };
 }
 
@@ -66,8 +66,7 @@ export class WorkspaceAssigneeDigestScheduler {
       const nowMinutes = now.hour * 60 + now.minute;
       const settings = await this.deps.settings.listScheduled();
       for (const item of settings) {
-        // Workspace Telegram automations are intentionally business-day only.
-        if (now.weekend) continue;
+        if (!item.daysOfWeek.includes(now.dayOfWeek)) continue;
         const digestMinutes = item.hour * 60 + item.minute;
         if (item.enabled && nowMinutes >= digestMinutes && item.lastSentOn !== now.date) {
           try {

@@ -61,6 +61,8 @@ import { EmojiGrid } from '@/presentation/components/forms/EmojiGrid';
 import { InviteDialog } from '@/presentation/components/project/InviteDialog';
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
+import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
+import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPicker';
 
 const ROLE_SELECT_CLASS =
   'h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
@@ -215,7 +217,7 @@ type AssigneeDigestDraft = {
   enabled: boolean;
   hour: number;
   minute: number;
-  weekdaysOnly: boolean;
+  daysOfWeek: ScheduleDay[];
   groupChatId: string;
   groupTitle: string;
   recipientMode: WorkspaceAssigneeDigestRecipientMode;
@@ -261,7 +263,7 @@ function AssigneeDigestCard({
           enabled: result.settings.enabled,
           hour: result.settings.hour,
           minute: result.settings.minute,
-          weekdaysOnly: true,
+          daysOfWeek: result.settings.daysOfWeek,
           groupChatId:
             result.settings.telegramGroupChatId === null
               ? ''
@@ -339,7 +341,7 @@ function AssigneeDigestCard({
         enabled: draft.enabled,
         hour: draft.hour,
         minute: draft.minute,
-        weekdaysOnly: true,
+        daysOfWeek: draft.daysOfWeek,
         telegramGroupChatId:
           draft.groupChatId.trim() && Number.isInteger(Number(draft.groupChatId.trim()))
             ? Number(draft.groupChatId.trim())
@@ -360,6 +362,7 @@ function AssigneeDigestCard({
         enabled: settings.enabled,
         hour: settings.hour,
         minute: settings.minute,
+        daysOfWeek: settings.daysOfWeek,
         recipientUserIds: settings.recipientUserIds,
         projectMode: settings.projectMode,
         projectIds: settings.projectIds,
@@ -464,8 +467,8 @@ function AssigneeDigestCard({
               Telegram-расписание пространства
             </CardTitle>
             <CardDescription>
-              Ежедневная таблица по ответственным, сверка выполненных задач в 17:00 и вечернее
-              напоминание в 17:20. Всё публикуется в общей Telegram-группе пространства только по будням.
+              Ежедневная таблица по ответственным, сверка выполненных задач и вечернее
+              напоминание. Всё публикуется в общей Telegram-группе пространства в выбранные дни.
             </CardDescription>
           </div>
         </div>
@@ -589,10 +592,6 @@ function AssigneeDigestCard({
                     })
                   }
                 />
-                <label className="ml-auto flex items-center gap-2 text-sm">
-                  <Checkbox checked disabled />
-                  Только по будням
-                </label>
               </div>
               <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
                 <Switch
@@ -681,6 +680,19 @@ function AssigneeDigestCard({
                 <span className="text-xs text-muted-foreground">
                   напомнить обновить статусы в группе
                 </span>
+              </div>
+              <div className="space-y-2 rounded-md border px-3 py-3">
+                <div>
+                  <Label>Дни отправки</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Одинаково для таблицы, сверки коммитов и вечернего напоминания.
+                  </p>
+                </div>
+                <ScheduleDayPicker
+                  value={draft.daysOfWeek}
+                  disabled={!canManage}
+                  onChange={(daysOfWeek) => update({ daysOfWeek })}
+                />
               </div>
             </div>
 

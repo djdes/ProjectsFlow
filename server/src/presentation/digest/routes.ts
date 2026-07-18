@@ -4,6 +4,22 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import type { GetDigestSettings } from '../../application/digest/GetDigestSettings.js';
 import type { SaveDigestSettings } from '../../application/digest/SaveDigestSettings.js';
 import type { TriggerDailyDigestNow } from '../../application/digest/TriggerDailyDigestNow.js';
+import {
+  ALL_SCHEDULE_DAYS,
+  WEEKDAY_SCHEDULE_DAYS,
+  isWeekdaysOnly,
+  normalizeScheduleDays,
+} from '../../domain/digest/ScheduleDays.js';
+
+const scheduleDaySchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+]);
 
 const taskStatusSchema = z.enum([
   'backlog',
@@ -33,8 +49,15 @@ const saveSchema = z.object({
     // Старые клиенты продолжают получать прежнюю группировку по колонкам.
     tgGrouping: z.enum(['status', 'assignee']).optional().default('status'),
     statuses: z.array(taskStatusSchema).max(6),
-    // Старые клиенты поле не шлют — дефолт false (обратная совместимость).
+    daysOfWeek: z.array(scheduleDaySchema).min(1).max(7).optional(),
+    // Accepted during rollout for older clients; the explicit days take precedence.
     weekdaysOnly: z.boolean().optional().default(false),
+  }).transform((daily) => {
+    const daysOfWeek = normalizeScheduleDays(
+      daily.daysOfWeek,
+      daily.weekdaysOnly ? WEEKDAY_SCHEDULE_DAYS : ALL_SCHEDULE_DAYS,
+    );
+    return { ...daily, daysOfWeek, weekdaysOnly: isWeekdaysOnly(daysOfWeek) };
   }),
 });
 

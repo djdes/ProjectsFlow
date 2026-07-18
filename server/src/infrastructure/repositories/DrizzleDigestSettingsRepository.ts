@@ -19,6 +19,12 @@ import {
   type DigestTgTarget,
 } from '../../domain/digest/DigestSettings.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
+import {
+  ALL_SCHEDULE_DAYS,
+  WEEKDAY_SCHEDULE_DAYS,
+  isWeekdaysOnly,
+  normalizeScheduleDays,
+} from '../../domain/digest/ScheduleDays.js';
 // Скоуп «мои проекты» (ветка А) — через единое пространство (workspace_members,
 // is_inbox→owner), НЕ project_members (тот же класс бага, что #блокер3..5/ef0cea3) —
 // переиспользуем ProjectMemberRepository (эталон DrizzleProjectMemberRepository) вместо
@@ -45,7 +51,10 @@ function rowToSettings(row: ProjectDigestSettingsRow): DigestSettings {
           ? ('assignee' as DigestTgGrouping)
           : def.daily.tgGrouping,
       statuses: parseJsonCol<TaskStatus[]>(row.dailyStatuses, def.daily.statuses),
-      weekdaysOnly: row.dailyWeekdaysOnly,
+      daysOfWeek: normalizeScheduleDays(
+        parseJsonCol<unknown[]>(row.dailyDaysOfWeek, []),
+        row.dailyWeekdaysOnly ? WEEKDAY_SCHEDULE_DAYS : ALL_SCHEDULE_DAYS,
+      ),
     },
     dailyLastSentOn: row.dailyLastSentOn ?? null,
   };
@@ -78,7 +87,8 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
       dailyTgTargets: input.daily.tgTargets,
       dailyTgGrouping: input.daily.tgGrouping,
       dailyStatuses: input.daily.statuses,
-      dailyWeekdaysOnly: input.daily.weekdaysOnly,
+      dailyWeekdaysOnly: isWeekdaysOnly(input.daily.daysOfWeek),
+      dailyDaysOfWeek: input.daily.daysOfWeek,
     };
     await this.db
       .insert(projectDigestSettings)

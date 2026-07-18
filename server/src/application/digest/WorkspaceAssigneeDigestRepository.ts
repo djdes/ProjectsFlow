@@ -7,12 +7,13 @@ import type {
   DigestGroupHistory,
   DigestTestDelivery,
 } from './DigestSettingsRepository.js';
+import type { ScheduleDay } from '../../domain/digest/ScheduleDays.js';
 
 export type SaveWorkspaceAssigneeDigestSettingsInput = {
   readonly enabled: boolean;
   readonly hour: number;
   readonly minute: number;
-  readonly weekdaysOnly: boolean;
+  readonly daysOfWeek: ScheduleDay[];
   readonly telegramGroupChatId: number | null;
   readonly telegramGroupTitle: string | null;
   readonly recipientMode: WorkspaceAssigneeDigestRecipientMode;

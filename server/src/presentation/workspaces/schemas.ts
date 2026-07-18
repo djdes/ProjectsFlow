@@ -1,4 +1,20 @@
 import { z } from 'zod';
+import {
+  ALL_SCHEDULE_DAYS,
+  WEEKDAY_SCHEDULE_DAYS,
+  isWeekdaysOnly,
+  normalizeScheduleDays,
+} from '../../domain/digest/ScheduleDays.js';
+
+const scheduleDaySchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+]);
 
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1),
@@ -32,7 +48,8 @@ export const saveWorkspaceAssigneeDigestSchema = z
     enabled: z.boolean(),
     hour: z.number().int().min(0).max(23),
     minute: z.number().int().min(0).max(59),
-    weekdaysOnly: z.boolean(),
+    daysOfWeek: z.array(scheduleDaySchema).min(1).max(7).optional(),
+    weekdaysOnly: z.boolean().optional().default(false),
     telegramGroupChatId: z.number().int().nullable(),
     telegramGroupTitle: z.string().trim().max(255).nullable(),
     recipientMode: z.enum(['all', 'selected']),
@@ -78,7 +95,14 @@ export const saveWorkspaceAssigneeDigestSchema = z
       message: 'Выберите хотя бы одного получателя',
       path: ['recipientUserIds'],
     },
-  );
+  )
+  .transform((value) => {
+    const daysOfWeek = normalizeScheduleDays(
+      value.daysOfWeek,
+      value.weekdaysOnly ? WEEKDAY_SCHEDULE_DAYS : ALL_SCHEDULE_DAYS,
+    );
+    return { ...value, daysOfWeek, weekdaysOnly: isWeekdaysOnly(daysOfWeek) };
+  });
 
 export const resolveWorkspaceTelegramGroupSchema = z.object({
   chatId: z.number().int(),

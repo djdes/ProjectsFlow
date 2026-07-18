@@ -1,3 +1,5 @@
+import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
+
 export type WorkspaceAssigneeDigestRecipientMode = 'all' | 'selected';
 export type WorkspaceDigestProjectMode = 'all' | 'selected';
 
@@ -6,7 +8,7 @@ export type WorkspaceAssigneeDigestSettings = {
   readonly enabled: boolean;
   readonly hour: number;
   readonly minute: number;
-  readonly weekdaysOnly: boolean;
+  readonly daysOfWeek: ScheduleDay[];
   readonly telegramGroupChatId: number | null;
   readonly telegramGroupTitle: string | null;
   readonly recipientMode: WorkspaceAssigneeDigestRecipientMode;
@@ -42,7 +44,7 @@ export type SaveWorkspaceAssigneeDigestInput = {
   readonly enabled: boolean;
   readonly hour: number;
   readonly minute: number;
-  readonly weekdaysOnly: boolean;
+  readonly daysOfWeek: ScheduleDay[];
   readonly telegramGroupChatId: number | null;
   readonly telegramGroupTitle: string | null;
   readonly recipientMode: WorkspaceAssigneeDigestRecipientMode;
