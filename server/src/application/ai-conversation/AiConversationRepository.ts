@@ -46,6 +46,7 @@ export type CreateAiMessageRunRecord = {
   readonly assistantMessageId: string;
   readonly runId: string;
   readonly body: string;
+  readonly titleFallback: string | null;
   readonly clientRequestId: string;
   readonly dispatcherUserId: string;
   readonly projectId: string | null;

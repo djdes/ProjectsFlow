@@ -21,6 +21,12 @@ export function AiConversationView({
   const wasNearBottom = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
+  useEffect(() => {
+    if (!projectName && state.conversation?.title) {
+      document.title = `${state.conversation.title} — ProjectsFlow`;
+    }
+  }, [projectName, state.conversation?.title]);
+
   const scrollToLatest = (behavior: ScrollBehavior = 'smooth'): void => {
     const target = scrollArea.current;
     if (!target) return;

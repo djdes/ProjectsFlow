@@ -216,6 +216,9 @@ export class AiConversationService {
       assistantMessageId: this.deps.idGen(),
       runId,
       body,
+      titleFallback: conversation.title === DEFAULT_AI_CONVERSATION_TITLE
+        ? titleFromFirstPrompt(body)
+        : null,
       clientRequestId: input.clientRequestId,
       dispatcherUserId,
       projectId: conversation.projectId,
@@ -358,6 +361,19 @@ function normalizeTitle(value: string): string {
     throw new AiConversationValidationError('Conversation title must contain 1 to 120 characters');
   }
   return title;
+}
+
+function titleFromFirstPrompt(value: string): string {
+  const firstMeaningfulLine = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) ?? value;
+  const clean = firstMeaningfulLine
+    .replace(/^(?:#{1,6}|[-*+>]|\d+[.)])\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const source = clean || DEFAULT_AI_CONVERSATION_TITLE;
+  return source.length <= 72 ? source : `${source.slice(0, 71).trimEnd()}…`;
 }
 
 function clampLimit(limit: number | undefined): number {

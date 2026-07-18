@@ -158,6 +158,7 @@ test('send creates one run through the dedicated dispatcher and publishes durabl
   assert.equal(result.run.dispatcherUserId, DISPATCHER);
   assert.equal(repo.lastSend?.clientRequestId, '00000000-0000-4000-8000-000000000099');
   assert.equal(repo.lastSend?.mode, 'chat');
+  assert.equal(repo.lastSend?.titleFallback, result.userMessage.body);
   assert.equal(streamed[0]?.eventType, 'run.queued');
 });
 

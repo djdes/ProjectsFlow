@@ -291,6 +291,7 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
         version,
         lastMessageSeq: assistantMessage.seq,
         lastMessageAt: sql`CURRENT_TIMESTAMP(3)`,
+        ...(input.titleFallback ? { title: input.titleFallback } : {}),
       }).where(eq(aiConversations.id, input.conversationId));
 
       const events = await this.insertEvents(tx, [
@@ -301,7 +302,10 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
           seq: Number(assistantMessage.seq), role: 'assistant', status: 'queued', runId: run.id,
         }),
         event(input.conversationId, 'run.queued', run.id, { status: 'queued' }),
-        event(input.conversationId, 'conversation.updated', input.conversationId, { version }),
+        event(input.conversationId, 'conversation.updated', input.conversationId, {
+          version,
+          ...(input.titleFallback ? { title: input.titleFallback } : {}),
+        }),
       ]);
       await this.insertAudit(tx, {
         conversationId: input.conversationId,
