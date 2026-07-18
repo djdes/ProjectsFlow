@@ -20,6 +20,7 @@ import { useTheme } from '@/presentation/components/theme/ThemeProvider';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { defaultProjectIcon as FolderIcon } from '@/presentation/layout/projectIcons';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
+import { matchesKeyboardLayoutQuery } from '@/lib/keyboardLayoutSearch';
 
 const DEBOUNCE_MS = 250;
 
@@ -104,8 +105,8 @@ export function TaskSearchDialog({
 
   // Собираем единый список: проекты → действия → результаты поиска по задачам.
   const items = useMemo<PaletteItem[]>(() => {
-    const q = query.trim().toLocaleLowerCase('ru');
-    const matches = (s: string): boolean => q.length === 0 || s.toLocaleLowerCase('ru').includes(q);
+    const q = query.trim();
+    const matches = (s: string): boolean => q.length === 0 || matchesKeyboardLayoutQuery(s, q);
 
     const projectItems: PaletteItem[] = (projects ?? [])
       .filter((p) => !p.isInbox && matches(p.name))

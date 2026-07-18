@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import { cn } from '@/lib/utils';
+import { matchingKeyboardLayoutQuery } from '@/lib/keyboardLayoutSearch';
 
 // Подсветка вхождений query в тексте (регистронезависимо, ru-locale). Совпадения оборачиваются
 // в <mark> с мягким фоном — для результатов поиска (имя проекта, отрывок задачи). Пустой
@@ -13,8 +14,8 @@ export function Highlight({
   query: string;
   className?: string;
 }): React.ReactElement {
-  const q = query.trim();
-  if (q.length === 0) return <>{text}</>;
+  const q = matchingKeyboardLayoutQuery(text, query);
+  if (!q) return <>{text}</>;
   const lower = text.toLocaleLowerCase('ru');
   const needle = q.toLocaleLowerCase('ru');
   let from = lower.indexOf(needle);

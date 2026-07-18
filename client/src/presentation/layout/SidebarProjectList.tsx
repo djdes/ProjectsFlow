@@ -45,6 +45,7 @@ import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectD
 import { useSidebarSectionCollapse } from '@/presentation/hooks/useSidebarSectionCollapse';
 import { useSidebarTaskSearch } from '@/presentation/hooks/useSidebarTaskSearch';
 import { Highlight } from '@/presentation/components/search/Highlight';
+import { matchesKeyboardLayoutQuery } from '@/lib/keyboardLayoutSearch';
 import { RecentTasksBlock } from './RecentTasksBlock';
 import { SidebarTaskResults } from './SidebarTaskResults';
 import {
@@ -516,9 +517,9 @@ export function SidebarProjectList(): React.ReactElement {
     );
   }
 
-  const q = query.trim().toLocaleLowerCase('ru');
+  const q = query.trim();
   const searching = q.length > 0;
-  const matches = (p: Project): boolean => p.name.toLocaleLowerCase('ru').includes(q);
+  const matches = (p: Project): boolean => matchesKeyboardLayoutQuery(p.name, q);
 
   // Секция «Избранное» — подмножество, сортированное локально по favorite_sort_order
   // (сервер отдаёт основной список в порядке sort_order). Дубликат project.id ожидаем —
