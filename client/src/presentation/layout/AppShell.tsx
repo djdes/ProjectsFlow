@@ -262,7 +262,7 @@ export function AppShell(): React.ReactElement {
                       onMouseEnter={openPeek}
                       onMouseLeave={closePeekSoon}
                       style={{ width: sidebarWidth }}
-                      className="absolute bottom-3 left-1.5 top-12 z-30 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
+                      className="absolute bottom-3 left-1.5 top-12 z-50 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
                     >
                       <Sidebar
                         collapsed={false}
