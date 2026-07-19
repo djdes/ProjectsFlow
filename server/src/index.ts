@@ -853,11 +853,10 @@ const runTelegramDraftAutoCreate = (): void => {
 // Первый проход подхватывает просроченные черновики сразу после рестарта, затем — каждые 15с.
 runTelegramDraftAutoCreate();
 setInterval(runTelegramDraftAutoCreate, 15_000).unref();
-// v2: fan-out по taskId — грузит задачу/members и переиспользует sendAgentTelegramNotification
-// per recipient (там уже все gates — link/started/prefs/dedup/audit).
+// v2: адресная отправка по taskId — грузит задачу и шлёт её ответственному через
+// sendAgentTelegramNotification (там уже все gates — link/started/prefs/dedup/audit).
 const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
   tasks: taskRepo,
-  members: projectMemberRepo,
   send: sendAgentTelegramNotification,
 });
 // Журнал доставки уведомлений по комментарию + оркестратор (email + TG адресно).
