@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { Check, ChevronDown, Code2, Grid2X2, Loader2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2, X } from 'lucide-react';
+import { Check, ChevronDown, Grid2X2, Loader2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
 export function PreviewToolbar({
   mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
   leading, trailing, studioLayout = false,
-  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onCode, onPublish, onReject,
+  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onPublish, onReject,
 }: {
   mode: PreviewMode; device: PreviewDevice; path: string; draftPath: string; routes: string[]; routeMenuOpen: boolean;
   saveStatus: SaveStatus; undoDepth: number; redoDepth: number;
@@ -77,7 +77,6 @@ export function PreviewToolbar({
           <div className="flex items-center">
             <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!undoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-3.5" /></Button>
             <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-3.5" /></Button>
-            <Button type="button" variant="ghost" size="icon" className="size-7 rounded" onClick={onCode} aria-label="Показать код выбранного элемента"><Code2 className="size-3.5" /></Button>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
