@@ -28,6 +28,9 @@ type ActiveSession = SiteEditorSession & { remote: boolean };
 
 import type { StudioSaveState } from '@/presentation/components/project/studio/SaveStatusIndicator';
 
+// Сколько ждём диспетчера, прежде чем признать публикацию зависшей.
+const PUBLISH_TIMEOUT_MS = 4 * 60_000;
+
 export type ProjectPreviewProps = {
   projectId: string;
   initialPath?: string;
@@ -265,10 +268,18 @@ export function ProjectPreview({
     if (!publishJob || !session?.remote || (publishJob.status !== 'queued' && publishJob.status !== 'running')) return;
     let cancelled = false;
     let timer: number | null = null;
+    // Серверного sweep'а для зависших publish-job нет: если диспетчер не запущен, job
+    // остаётся queued навсегда, и баннер крутится бесконечно. Ограничиваем ожидание —
+    // правки при этом никуда не деваются, они уже сохранены как черновик.
+    const deadline = Date.now() + PUBLISH_TIMEOUT_MS;
     const poll = async (): Promise<void> => {
       try {
         const next = await siteEditorRepository.getAiJob(projectId, session.id, publishJob.id);
         if (cancelled) return;
+        if ((next.status === 'queued' || next.status === 'running') && Date.now() > deadline) {
+          setPublishJob({ ...next, status: 'failed', error: 'Диспетчер не ответил. Правки сохранены — попробуйте опубликовать позже.' });
+          return;
+        }
         setPublishJob(next);
         if (next.status === 'queued' || next.status === 'running') timer = window.setTimeout(() => void poll(), 1_500);
         else {
@@ -323,10 +334,10 @@ export function ProjectPreview({
   }, [currentUrl, openSiteEditorSession, projectId, session, state.mode, state.path]);
 
   const setMode = (mode: 'preview' | 'edit' | 'canvas'): void => {
-    // Выход из режима правки = коммит накопленного черновика.
-    if (state.mode === 'edit' && mode !== 'edit' && state.draftCount > 0 && !state.queuedCount) {
-      void publishDraft();
-    }
+    // Выход из режима правки НИЧЕГО не публикует. Каждая правка и так сохраняется
+    // мгновенно (см. applyPatch), а publishDraft — это тяжёлая операция: диспетчер
+    // переписывает исходный код, коммитит и передеплоивает. Вешать её на смену режима
+    // нельзя: пользователь получает полный цикл сборки на каждую мелкую правку.
     dispatch({ type: 'SET_MODE', mode });
     if (mode !== 'edit') sendBridge('set-mode', { mode: 'preview' });
   };
@@ -406,47 +417,24 @@ export function ProjectPreview({
     }
   };
 
-  // Автосохранение накопленных правок. Кнопки «Применить/Отклонить» убраны: правки
-  // копятся, пока пользователь в режиме правки, и уходят на сервер сами — при выходе
-  // из режима, при уходе со страницы и при закрытии вкладки.
-  const publishRef = useRef<() => Promise<void>>(async () => {});
-  const hasDraftsRef = useRef(false);
-  // Обновляем ссылки в эффекте, а не в рендере: react-hooks/refs запрещает писать в ref
-  // во время рендера. Без списка зависимостей — эффект идёт после каждого рендера,
-  // поэтому в момент выгрузки в ref лежит актуальное замыкание.
-  useEffect(() => {
-    publishRef.current = publishDraft;
-    hasDraftsRef.current = state.draftCount > 0 && state.queuedCount === 0;
-  });
-
-  useEffect(() => {
-    const flush = (): void => { if (hasDraftsRef.current) void publishRef.current(); };
-    // pagehide, а не beforeunload: срабатывает и на мобильных, и при bfcache.
-    window.addEventListener('pagehide', flush);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      // Размонтирование = уход со страницы студии.
-      flush();
-    };
-  }, []);
-
-  // Отметка времени последнего успешного сохранения — для подписи индикатора.
+  // Отметка времени последнего успешно сохранённого патча — для подписи индикатора.
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const prevQueuedRef = useRef(state.queuedCount);
+  const prevSaveStatusRef = useRef(state.saveStatus);
   useEffect(() => {
-    // Черновик ушёл в очередь публикации и очередь опустела → изменения сохранены.
-    if (prevQueuedRef.current > 0 && state.queuedCount === 0 && state.saveStatus !== 'error') {
-      setSavedAt(Date.now());
-    }
-    prevQueuedRef.current = state.queuedCount;
-  }, [state.queuedCount, state.saveStatus]);
+    if (prevSaveStatusRef.current === 'saving' && state.saveStatus === 'clean') setSavedAt(Date.now());
+    prevSaveStatusRef.current = state.saveStatus;
+  }, [state.saveStatus]);
 
+  // Индикатор показывает РЕАЛЬНОЕ состояние сохранения, а не публикации: правка летит
+  // на сервер сразу же, поэтому «несохранённое» — это только патч в полёте или упавший
+  // запрос. Отдельно сообщаем, сколько сохранённых правок ещё ждут публикации.
   useEffect(() => {
     onSaveStateChange?.({
       editing: state.mode === 'edit',
-      pending: state.draftCount,
-      saving: state.saveStatus === 'saving' || state.queuedCount > 0,
+      saving: state.saveStatus === 'saving',
       error: state.saveStatus === 'error' ? (state.bridgeError ?? 'неизвестная ошибка') : null,
+      unpublished: state.draftCount,
+      publishing: state.queuedCount > 0,
       savedAt,
     });
   }, [onSaveStateChange, savedAt, state.bridgeError, state.draftCount, state.mode, state.queuedCount, state.saveStatus]);
@@ -523,7 +511,7 @@ export function ProjectPreview({
       )}
       aria-label="Preview результата проекта"
     >
-      <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} queuedCount={state.queuedCount} leading={toolbarLeading} trailing={toolbarTrailing} studioLayout={studioLayout} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onReject={() => setRejectOpen(true)} />
+      <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} draftCount={state.draftCount} queuedCount={state.queuedCount} leading={toolbarLeading} trailing={toolbarTrailing} studioLayout={studioLayout} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onPublish={() => void publishDraft()} onReject={() => setRejectOpen(true)} />
       {(state.queuedCount > 0 || publishJob) && (
         <div className="flex items-center gap-2 border-b bg-blue-500/5 px-3 py-2 text-sm" role="status" aria-live="polite">
           {publishJob?.status === 'completed' ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600" /> : publishJob?.status === 'failed' ? <XCircle className="size-4 shrink-0 text-destructive" /> : <Loader2 className="size-4 shrink-0 animate-spin text-blue-600" />}

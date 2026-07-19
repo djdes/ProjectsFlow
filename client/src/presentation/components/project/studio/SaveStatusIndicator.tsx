@@ -25,21 +25,28 @@ function CloudCheck({ className }: { className?: string }): React.ReactElement {
 }
 
 // Состояние сохранения правок превью, поднятое из ProjectPreview в шапку левой панели.
+//
+// ВАЖНО про семантику: правка сохраняется на сервер СРАЗУ, как только применена. Поэтому
+// «не сохранено» — это только патч в полёте или упавший запрос, а не накопленная пачка.
+// Публикация (перенос правок в исходный код проекта с передеплоем) — отдельная тяжёлая
+// операция и отдельное поле; она запускается вручную из «…»-меню, а не сама.
 export type StudioSaveState = {
   // Есть ли активный режим правки — вне его индикатор не показываем.
   readonly editing: boolean;
-  // Сколько правок накоплено и ещё не отправлено на сервер.
-  readonly pending: number;
-  // Идёт ли прямо сейчас отправка.
+  // Патч прямо сейчас летит на сервер.
   readonly saving: boolean;
   // Последняя ошибка сохранения, если была.
   readonly error: string | null;
+  // Сохранённые правки, которые ещё не опубликованы в исходный код.
+  readonly unpublished: number;
+  // Диспетчер прямо сейчас публикует пачку.
+  readonly publishing: boolean;
   // Когда последний раз успешно сохранили (epoch ms).
   readonly savedAt: number | null;
 };
 
 export const EMPTY_SAVE_STATE: StudioSaveState = {
-  editing: false, pending: 0, saving: false, error: null, savedAt: null,
+  editing: false, saving: false, error: null, unpublished: 0, publishing: false, savedAt: null,
 };
 
 // «5 минут назад» / «в 14:03» — короткая подпись для тултипа.
@@ -51,12 +58,12 @@ function formatSavedAt(savedAt: number): string {
   return `в ${new Date(savedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function pluralChanges(count: number): string {
+function pluralEdits(count: number): string {
   const mod10 = count % 10;
   const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} несохранённое изменение`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} несохранённых изменения`;
-  return `${count} несохранённых изменений`;
+  if (mod10 === 1 && mod100 !== 11) return `${count} правка`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} правки`;
+  return `${count} правок`;
 }
 
 // Индикатор сохранения в шапке левой панели Project Studio (паттерн из Base44).
@@ -95,14 +102,14 @@ function describe(state: StudioSaveState): {
   label: string;
   tone: 'clean' | 'dirty' | 'error';
 } {
-  if (state.saving) return { icon: RefreshCw, label: 'Сохраняем изменения…', tone: 'dirty' };
-  if (state.error) return { icon: CloudAlert, label: `Не удалось сохранить: ${state.error}`, tone: 'error' };
-  if (state.pending > 0) {
-    return { icon: CloudOff, label: `${pluralChanges(state.pending)} — сохраним, когда выйдете из режима правки`, tone: 'dirty' };
+  if (state.publishing) return { icon: RefreshCw, label: 'Диспетчер публикует правки в исходный код…', tone: 'dirty' };
+  if (state.saving) return { icon: RefreshCw, label: 'Сохраняем правку…', tone: 'dirty' };
+  if (state.error) return { icon: CloudOff, label: `Правка не сохранена: ${state.error}`, tone: 'error' };
+
+  const saved = state.savedAt ? `Все правки сохранены ${formatSavedAt(state.savedAt)}` : 'Все правки сохранены';
+  if (state.unpublished > 0) {
+    // Сохранено, но ещё не перенесено в исходный код — предупреждаем, не пугаем.
+    return { icon: CloudAlert, label: `${saved}. ${pluralEdits(state.unpublished)} ждут публикации — «…» → «Опубликовать правки»`, tone: 'dirty' };
   }
-  return {
-    icon: CloudCheck,
-    label: state.savedAt ? `Все изменения сохранены ${formatSavedAt(state.savedAt)}` : 'Все изменения сохранены',
-    tone: 'clean',
-  };
+  return { icon: CloudCheck, label: saved, tone: 'clean' };
 }

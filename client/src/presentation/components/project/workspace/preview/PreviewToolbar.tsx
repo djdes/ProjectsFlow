@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { Grid2X2, Monitor, MoreHorizontal, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Trash2, Undo2 } from 'lucide-react';
+import { Grid2X2, Monitor, MoreHorizontal, MousePointer2, RefreshCw, Redo2, Rocket, Smartphone, Tablet, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -12,17 +12,17 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
 ];
 
 export function PreviewToolbar({
-  mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, queuedCount,
+  mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
   leading, trailing, studioLayout = false,
-  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onReject,
+  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onPublish, onReject,
 }: {
   mode: PreviewMode; device: PreviewDevice; path: string; draftPath: string; routes: string[]; routeMenuOpen: boolean;
   saveStatus: SaveStatus; undoDepth: number; redoDepth: number;
-  queuedCount: number;
+  draftCount: number; queuedCount: number;
   leading?: React.ReactNode; trailing?: React.ReactNode; studioLayout?: boolean;
   onMode: (mode: PreviewMode) => void; onDevice: (device: PreviewDevice) => void; onDraftPath: (path: string) => void;
   onApplyPath: (path: string) => void; onRouteMenu: (open: boolean) => void; onReload: () => void;
-  onUndo: () => void; onRedo: () => void; onCode: () => void; onReject: () => void;
+  onUndo: () => void; onRedo: () => void; onCode: () => void; onPublish: () => void; onReject: () => void;
 }): React.ReactElement {
   const listId = useId();
   const routeBoxRef = useRef<HTMLDivElement>(null);
@@ -81,14 +81,18 @@ export function PreviewToolbar({
             <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!undoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-3.5" /></Button>
             <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-3.5" /></Button>
           </div>
-          {/* Кнопок сохранения тут нет — правки уходят сами при выходе из режима правки.
-              Остаётся только аварийный сброс всего черновика, спрятанный в «…». */}
+          {/* Сами правки сохраняются мгновенно — кнопки «Сохранить» тут не нужно.
+              А вот публикация переписывает исходный код проекта и передеплоивает его,
+              поэтому остаётся ЯВНЫМ действием и живёт в «…». */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" className="size-7 shrink-0 rounded" disabled={saveStatus === 'saving' || queuedCount > 0} aria-label="Ещё действия с правками"><MoreHorizontal className="size-3.5" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7 shrink-0 rounded" disabled={saveStatus === 'saving' || queuedCount > 0} aria-label="Действия с правками"><MoreHorizontal className="size-3.5" /></Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={!undoDepth} onSelect={onReject}>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem disabled={!draftCount} onSelect={onPublish}>
+                <Rocket className="size-4" />Опубликовать правки{draftCount ? ` (${draftCount})` : ''}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={!draftCount} onSelect={onReject}>
                 <Trash2 className="size-4" />Отклонить все правки
               </DropdownMenuItem>
             </DropdownMenuContent>
