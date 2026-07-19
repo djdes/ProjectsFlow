@@ -8,17 +8,20 @@ import type { DashboardSection } from '@/presentation/components/project/workspa
 import type { StudioSplitPane } from './useStudioSplitPane';
 import { StudioThemePanel } from './StudioThemePanel';
 import { useState } from 'react';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 
 export function StudioChatPane({
   conversationId,
   projectId,
   projectName,
+  projectIcon,
   splitPane,
   onOpenDashboardSection,
 }: {
   conversationId: string;
   projectId: string;
   projectName: string;
+  projectIcon: string | null;
   splitPane: StudioSplitPane;
   onOpenDashboardSection: (section: DashboardSection) => void;
 }): React.ReactElement {
@@ -42,12 +45,12 @@ export function StudioChatPane({
         )}
       >
         <div style={{ width: splitPane.width }} className="relative flex h-full min-h-0 flex-col">
-          <header className="flex h-[52px] shrink-0 items-center gap-1 border-b px-2.5">
+          <header className="flex h-[52px] shrink-0 items-center gap-1 border-b px-2">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-9 shrink-0 rounded-lg"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg p-0"
               aria-label="Открыть основную панель"
               onClick={() => window.dispatchEvent(new CustomEvent('pf:set-sidebar-collapsed', { detail: { collapsed: false } }))}
             >
@@ -55,7 +58,10 @@ export function StudioChatPane({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>
+                <button type="button" className="flex min-w-0 max-w-[calc(100%_-_116px)] items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>
+                  <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-md bg-muted text-xs" aria-hidden>
+                    {projectIcon ? <ProjectIconView icon={projectIcon} pixelSize={18} /> : (projectName.trim()[0] ?? '?').toUpperCase()}
+                  </span>
                   <span className="truncate">{projectName}</span><ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>

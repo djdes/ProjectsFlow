@@ -1,4 +1,4 @@
-import { Database, Eye, MessageSquareText, PanelLeftOpen } from 'lucide-react';
+import { MessageSquareText, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -23,8 +23,8 @@ export function StudioTopBar({
   embedded?: 'leading' | 'trailing';
 }): React.ReactElement {
   const items = [
-    { id: 'preview' as const, label: 'Preview', icon: Eye },
-    { id: 'dashboard' as const, label: 'Dashboard', icon: Database },
+    { id: 'preview' as const, label: 'Preview' },
+    { id: 'dashboard' as const, label: 'Dashboard' },
   ];
 
   const leading = (
@@ -40,12 +40,10 @@ export function StudioTopBar({
         >
           <PanelLeftOpen className="size-4" />
         </Button>
-      ) : (
-        <span className="hidden size-8 lg:block" aria-hidden />
-      )}
+      ) : null}
 
-      <div role="tablist" aria-label="Раздел Project Studio" className="inline-flex items-center rounded-lg border bg-muted/35 p-0.5">
-        {items.map(({ id, label, icon: Icon }) => (
+      <div role="tablist" aria-label="Раздел Project Studio" className="inline-flex items-center rounded-md border bg-background p-0.5">
+        {items.map(({ id, label }) => (
           <button
             key={id}
             type="button"
@@ -53,13 +51,12 @@ export function StudioTopBar({
             aria-selected={panel === id}
             onClick={() => onPanelChange(id)}
             className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors motion-reduce:transition-none',
+              'inline-flex h-7 items-center rounded-[5px] px-2.5 text-sm font-medium transition-colors motion-reduce:transition-none',
               panel === id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
             )}
           >
-            <Icon className="size-3.5" aria-hidden />
             <span>{label}</span>
           </button>
         ))}
@@ -90,7 +87,7 @@ export function StudioTopBar({
   if (embedded === 'trailing') return <>{trailing}</>;
 
   return (
-    <header className="flex h-[52px] shrink-0 items-center gap-2 border-b bg-background px-2 sm:px-3">
+    <header className="flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-2">
       {leading}
 
       <span className="min-w-0 flex-1" aria-hidden />

@@ -210,7 +210,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   return (
     <main className="flex h-full min-h-[520px] w-full overflow-hidden bg-background" aria-label={`Project Studio — ${data.project.name}`}>
-      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} splitPane={splitPane} onOpenDashboardSection={openDashboardSection} />
+      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} onOpenDashboardSection={openDashboardSection} />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Рабочая область проекта">
         {panel === 'dashboard' && (

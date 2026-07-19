@@ -40,27 +40,27 @@ export function PreviewToolbar({
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 border-b bg-background px-2 py-1.5',
-        studioLayout ? 'min-h-[52px] flex-nowrap overflow-x-auto' : 'min-h-12 flex-wrap',
+        'flex items-center gap-1 border-b bg-background px-2 py-1',
+        studioLayout ? 'min-h-11 flex-nowrap overflow-x-auto' : 'min-h-11 flex-wrap',
       )}
       aria-label="Панель Preview"
     >
       {leading}
-      <div className="flex items-center rounded-lg border bg-muted/30 p-0.5" role="tablist" aria-label="Режим Preview">
+      <div className="flex items-center rounded-md border bg-background p-0.5" role="tablist" aria-label="Режим Preview">
         {((studioLayout
           ? [['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2]]
           : [['preview', 'Preview', Monitor], ['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2]]) as ReadonlyArray<readonly [PreviewMode, string, typeof Monitor]>).map(([value, label, Icon]) => (
-          <button key={value} type="button" role="tab" aria-label={label} aria-selected={mode === value} onClick={() => onMode(studioLayout && mode === value ? 'preview' : value)} className={cn('inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground', value === 'canvas' ? 'w-8 px-0' : 'px-2.5', mode === value && 'bg-background text-foreground shadow-sm')}>
+          <button key={value} type="button" role="tab" aria-label={label} aria-selected={mode === value} onClick={() => onMode(studioLayout && mode === value ? 'preview' : value)} className={cn('inline-flex h-7 items-center justify-center gap-1.5 rounded-[5px] text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted/60 hover:text-foreground', value === 'canvas' ? 'w-7 px-0' : 'px-2.5', mode === value && 'bg-muted text-foreground')}>
             <Icon className="size-3.5" />{value === 'canvas' ? <span className="sr-only">{label}</span> : label}
           </button>
         ))}
       </div>
 
-      <div className={cn('relative min-w-[190px]', studioLayout ? 'mx-auto w-[min(320px,32vw)] shrink-0' : 'flex-1')} ref={routeBoxRef}>
-        <form className="flex h-9 items-center rounded-lg border bg-background px-0.5 focus-within:ring-2 focus-within:ring-ring/30" onSubmit={(event) => { event.preventDefault(); onApplyPath(draftPath); }}>
-          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Обновить Preview" onClick={onReload}><RefreshCw className="size-3.5" /></button>
-          <input value={draftPath} onChange={(event) => { onDraftPath(event.target.value); onRouteMenu(true); }} onFocus={() => onRouteMenu(true)} onKeyDown={(event) => { if (event.key === 'Escape') onRouteMenu(false); }} role="combobox" aria-label="Путь страницы результата" aria-expanded={routeMenuOpen} aria-controls={listId} aria-autocomplete="list" className="h-8 min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-none" placeholder="/catalog" />
-          <button type="button" title={`${activeDevice.label} → ${nextDevice.label}`} className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label={`Устройство: ${activeDevice.label}. Переключить на ${nextDevice.label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => onDevice(nextDevice.value)}><activeDevice.icon className="size-3.5" /></button>
+      <div className={cn('relative min-w-[180px]', studioLayout ? 'mx-auto w-[min(290px,30vw)] shrink-0' : 'flex-1')} ref={routeBoxRef}>
+        <form className="flex h-8 items-center rounded-md border bg-background px-0.5 focus-within:border-foreground/25 focus-within:ring-1 focus-within:ring-ring/20" onSubmit={(event) => { event.preventDefault(); onApplyPath(draftPath); }}>
+          <button type="button" className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Обновить Preview" onClick={onReload}><RefreshCw className="size-3.5" /></button>
+          <input value={draftPath} onChange={(event) => { onDraftPath(event.target.value); onRouteMenu(true); }} onFocus={() => onRouteMenu(true)} onKeyDown={(event) => { if (event.key === 'Escape') onRouteMenu(false); }} role="combobox" aria-label="Путь страницы результата" aria-expanded={routeMenuOpen} aria-controls={listId} aria-autocomplete="list" className="h-7 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none" placeholder="/catalog" />
+          <button type="button" title={`${activeDevice.label} → ${nextDevice.label}`} className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label={`Устройство: ${activeDevice.label}. Переключить на ${nextDevice.label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => onDevice(nextDevice.value)}><activeDevice.icon className="size-3.5" /></button>
         </form>
         {routeMenuOpen && (
           <div id={listId} role="listbox" aria-label="Страницы результата" className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
@@ -74,14 +74,14 @@ export function PreviewToolbar({
 
       {mode === 'edit' && (
         <>
-          <div className="flex items-center rounded-lg border bg-background p-0.5">
-            <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!undoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-4" /></Button>
-            <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-4" /></Button>
-            <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onCode} aria-label="Показать код выбранного элемента"><Code2 className="size-4" /></Button>
+          <div className="flex items-center">
+            <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!undoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-3.5" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-3.5" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="size-7 rounded" onClick={onCode} aria-label="Показать код выбранного элемента"><Code2 className="size-3.5" /></Button>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" size="sm" className="h-9 gap-1 px-2.5" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} aria-label="Действия с изменениями">
+              <Button type="button" variant="outline" size="sm" className="h-8 gap-1 rounded-md px-2 text-xs shadow-none" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} aria-label="Действия с изменениями">
                 {queuedCount > 0 ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                 <span className="hidden sm:inline">{queuedCount > 0 ? 'Публикуем…' : draftCount}</span>
                 <ChevronDown className="size-3.5 opacity-70" />

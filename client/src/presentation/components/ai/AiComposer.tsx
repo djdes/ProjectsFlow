@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, FileText, Image, Paperclip, Plus, Sparkles, X } from 'lucide-react';
+import { ArrowUp, FileText, Paperclip, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { composeAiMessage, prepareAiAttachment, type AiAttachmentDraft } from './aiAttachments';
@@ -105,8 +105,7 @@ export function AiComposer({
       )}
       <div className="mt-2 flex items-center gap-1.5">
         <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.target.value = ''; }} />
-        <button type="button" title="Добавить вложение" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => fileInput.current?.click()}><Plus className="size-4" /></button>
-        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => fileInput.current?.click()}>{attachments.some((item) => item.kind === 'image') ? <Image className="size-4" /> : <Paperclip className="size-4" />}</button>
+        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
         <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
         <div className="flex-1" />
         <button type="button" onClick={() => void submit()} disabled={(!body.trim() && attachments.length === 0) || sending} aria-label={sending ? 'ИИ отвечает' : 'Отправить'} className="grid size-9 place-items-center rounded-full bg-foreground text-background transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:scale-100">
