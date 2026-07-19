@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
@@ -7,26 +8,28 @@ import { useActivityFeed } from '@/presentation/hooks/useActivityFeed';
 import { NotificationItem } from '@/presentation/notifications/NotificationItem';
 import { useNotificationActions } from '@/presentation/notifications/useNotificationActions';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
+import { AiConversationListPanel } from '@/presentation/components/ai/AiConversationListPanel';
 import { OPEN_CHAT_EVENT } from './openChatEvent';
 import { WorkspaceChatPanel } from './WorkspaceChatPanel';
 
-type CommTab = 'all' | 'action' | 'chat';
+type CommTab = 'all' | 'action' | 'chat' | 'ai';
 const STORAGE_KEY = 'pf_comm_tab';
 
 function readTab(): CommTab {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'all' || v === 'action' || v === 'chat') return v;
+    if (v === 'all' || v === 'action' || v === 'chat' || v === 'ai') return v;
   } catch {
     /* localStorage недоступен */
   }
   return 'all';
 }
 
-// Панель общения в сайдбаре: переключалка Все / Требуется действие / Чат.
-// «Все» и «Требуется действие» — лента активности пространства; «Чат» — общий чат.
+// Панель общения в сайдбаре: единая поверхность Все / Действие / Чат / ИИ.
 export function CommunicationPanel(): React.ReactElement {
   const [tab, setTab] = useState<CommTab>(readTab);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   // Счётчики на вкладках = слагаемые бейджа на rail-иконке «Чат» (chatUnread + actionable),
   // чтобы «3» на иконке всегда сводилось к конкретной вкладке (иначе непонятно, где эти уведомления).
   const { count: actionable } = useActionableUnreadCount();
@@ -39,7 +42,20 @@ export function CommunicationPanel(): React.ReactElement {
     } catch {
       /* ignore */
     }
+    if (t === 'ai' && pathname !== '/ai' && !pathname.startsWith('/ai/')) navigate('/ai');
   };
+
+  // Прямой URL/Back к ИИ-чату раскрывает раздел общения и его вкладку ИИ.
+  useEffect(() => {
+    if (pathname === '/ai' || pathname.startsWith('/ai/')) {
+      setTab('ai');
+      try {
+        localStorage.setItem(STORAGE_KEY, 'ai');
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [pathname]);
 
   // chat_mention: внешний сигнал «открой чат» — переключаем вкладку панели.
   useEffect(() => {
@@ -67,10 +83,19 @@ export function CommunicationPanel(): React.ReactElement {
         <TabButton active={tab === 'chat'} onClick={() => select('chat')} badge={chatUnread}>
           Чат
         </TabButton>
+        <TabButton active={tab === 'ai'} onClick={() => select('ai')}>
+          ИИ
+        </TabButton>
       </div>
 
       <div className="mt-2 min-h-0 flex-1">
-        {tab === 'chat' ? <WorkspaceChatPanel /> : <ActivityFeedList tab={tab} />}
+        {tab === 'ai' ? (
+          <AiConversationListPanel />
+        ) : tab === 'chat' ? (
+          <WorkspaceChatPanel />
+        ) : (
+          <ActivityFeedList tab={tab} />
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronsLeft, ChevronsRight, Plus, Shield, Sparkles } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Plus, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -24,7 +24,6 @@ import {
   AnimatedSearch,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { CommunicationPanel } from '@/presentation/chat/CommunicationPanel';
-import { AiConversationListPanel } from '@/presentation/components/ai/AiConversationListPanel';
 import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
@@ -34,14 +33,14 @@ import { avatarColor, getInitials } from './projectIcons';
 // Активная вкладка рейла (только переключатели слева): Главная показывает список проектов
 // в нижней области, Чат — общий чат пространства. Входящие/Поиск — это icon-кнопки действий
 // справа, они НЕ становятся активной вкладкой (просто выполняют переход/открывают поиск).
-type RailKey = 'home' | 'chat' | 'ai';
-const RAIL_ORDER: readonly RailKey[] = ['home', 'chat', 'ai'];
+type RailKey = 'home' | 'chat';
+const RAIL_ORDER: readonly RailKey[] = ['home', 'chat'];
 const RAIL_KEY = 'pf_sidebar_rail';
 
 function readRail(): RailKey {
   try {
     const value = localStorage.getItem(RAIL_KEY);
-    return value === 'chat' || value === 'ai' ? value : 'home';
+    return value === 'chat' || value === 'ai' ? 'chat' : 'home';
   } catch {
     return 'home';
   }
@@ -93,20 +92,18 @@ export function Sidebar({
     window.addEventListener(OPEN_CHAT_EVENT, onOpenChat);
     return () => window.removeEventListener(OPEN_CHAT_EVENT, onOpenChat);
   }, [setRailPersist]);
-  // Прямой переход/Back на /ai должен синхронизировать вкладку рейла и список чатов.
+  // Прямой переход/Back на /ai раскрывает общий раздел общения; внутри него активируется ИИ.
   useEffect(() => {
-    if (pathname === '/ai' || pathname.startsWith('/ai/')) setRailPersist('ai');
+    if (pathname === '/ai' || pathname.startsWith('/ai/')) setRailPersist('chat');
   }, [pathname, setRailPersist]);
   // Нижняя область = чат только когда активен Чат; для Главная/Входящие/Поиск — проекты.
   const showChat = activeRail === 'chat';
-  const showAi = activeRail === 'ai';
 
   // Rail: слева вкладки-переключатели (Главная/Чат — активная разворачивается с подписью),
   // справа icon-кнопки действий (Входящие/Поиск — без активного состояния, клик = действие).
   const railItems: RailItem[] = [
     { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" />, variant: 'tab' },
     { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable, variant: 'tab' },
-    { key: 'ai', label: 'ИИ', icon: <Sparkles className="size-5" />, variant: 'tab' },
     {
       // Центральная акцентная кнопка «Задача» (как «+» в YouTube) — открывает AddTaskDialog.
       key: 'add',
@@ -139,7 +136,6 @@ export function Sidebar({
     // экран («Входящие», route '/') — из глубины проекта домой одним кликом. На мобиле
     // drawer закроется сам (AppShell закрывает его при смене маршрута).
     if (key === 'home') navigate('/');
-    if (key === 'ai') navigate('/ai');
   };
 
   if (collapsed) {
@@ -176,17 +172,6 @@ export function Sidebar({
           >
             <AnimatedChat className="size-4" />
           </RailButton>
-          <RailButton
-            onClick={() => {
-              setRailPersist('ai');
-              navigate('/ai');
-              onToggleCollapse?.();
-            }}
-            label="ИИ"
-          >
-            <Sparkles className="size-4" />
-          </RailButton>
-
           <div className="my-0.5 h-px w-6 bg-border" />
 
           <div className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto py-0.5">
@@ -253,7 +238,7 @@ export function Sidebar({
       {/* Нижняя область: список проектов («Главная») ИЛИ общий чат пространства. Crossfade. */}
       {animations ? (
         <motion.div
-          key={showAi ? 'ai' : showChat ? 'chat' : 'home'}
+          key={showChat ? 'chat' : 'home'}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.18 }}
@@ -261,9 +246,7 @@ export function Sidebar({
           // а чат скроллит свой внутренний контейнер. overflow-hidden тут срезал ринги/4px.
           className="min-h-0 min-w-0"
         >
-          {showAi ? (
-            <AiConversationListPanel />
-          ) : showChat ? (
+          {showChat ? (
             <CommunicationPanel />
           ) : (
             <nav className="h-full min-h-0 min-w-0">
@@ -273,9 +256,7 @@ export function Sidebar({
         </motion.div>
       ) : (
         <div className="min-h-0 min-w-0">
-          {showAi ? (
-            <AiConversationListPanel />
-          ) : showChat ? (
+          {showChat ? (
             <CommunicationPanel />
           ) : (
             <nav className="h-full min-h-0 min-w-0">
