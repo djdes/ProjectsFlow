@@ -17,6 +17,7 @@ import { toast } from '@/components/ui/sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AiComposer } from './AiComposer';
+import { AiComposerPresets } from './AiComposerPresets';
 import { extractAiAttachments } from './aiAttachments';
 import { AiActionPlanCard, extractAiActionPlan } from './AiActionPlanCard';
 import { AiAgentStepsBlock } from './AiAgentStepsBlock';
@@ -41,7 +42,16 @@ export function AiConversationView({
   const wasNearBottom = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1280);
+  const [presetPick, setPresetPick] = useState<{ conversationId: string; seed: number } | null>(null);
   const personalWorkspace = !projectName && !hideHeader && !compact;
+  const presetApplied = presetPick?.conversationId === conversationId;
+
+  // Композер держит текст в DOM и поднимает черновик из sessionStorage только при
+  // монтировании — поэтому пресет пишет черновик и перемонтирует композер через key.
+  const applyPreset = (prompt: string): void => {
+    try { sessionStorage.setItem(`pf-ai-draft:${conversationId}`, prompt); } catch { /* sessionStorage unavailable */ }
+    setPresetPick((current) => ({ conversationId, seed: (current?.conversationId === conversationId ? current.seed : 0) + 1 }));
+  };
 
   useEffect(() => {
     if (!projectName && state.conversation?.title) {
@@ -110,6 +120,7 @@ export function AiConversationView({
                     <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
                       {projectName ? 'Обсуждайте код, интерфейс и данные проекта. Любое изменение сайта будет предложением и потребует явного подтверждения.' : 'Задайте вопрос, продумайте идею или разберите задачу. История сохранится здесь автоматически.'}
                     </p>
+                    {!compact && <AiComposerPresets className="mt-6 w-full max-w-2xl" disabled={state.sending} onPick={applyPreset} />}
                   </div>
                 ) : state.messages.map((message, index) => {
                   const previousUser = [...state.messages.slice(0, index)].reverse().find((item) => item.role === 'user');
@@ -141,7 +152,14 @@ export function AiConversationView({
           </div>
           <div className="shrink-0 border-t bg-background/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
-              <AiComposer conversationId={conversationId} sending={state.sending} onSend={(body) => state.send(body, projectName ? 'studio_plan' : 'chat')} compact={compact} />
+              <AiComposer
+                key={presetApplied ? `${conversationId}:${presetPick.seed}` : conversationId}
+                conversationId={conversationId}
+                sending={state.sending}
+                onSend={(body) => state.send(body, projectName ? 'studio_plan' : 'chat')}
+                compact={compact}
+                autoFocus={presetApplied}
+              />
               {!compact && <p className="pt-1.5 text-center text-[10px] text-muted-foreground">ИИ может ошибаться. Проверяйте важные ответы.</p>}
             </div>
           </div>

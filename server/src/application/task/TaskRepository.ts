@@ -54,6 +54,13 @@ export type UpdateTaskPatch = {
   readonly priority?: TaskPriority | null;
 };
 
+// Лёгкая ссылка на задачу в корзине (для авто-purge).
+export type TrashedTaskRef = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly deletedAt: Date;
+};
+
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
   // Батч-выборка задач по id (для верхнего личного канбана — задачи из разных проектов).
@@ -71,6 +78,20 @@ export interface TaskRepository {
   getByIdIncludingDeleted(taskId: string): Promise<Task | null>;
   // Содержимое корзины проекта: только удалённые задачи, свежие сверху.
   listTrashedByProject(projectId: string): Promise<Task[]>;
+  /**
+   * Из переданных id вернуть те, что больше НЕ доступны как живая задача (в корзине или
+   * физически снесены). Нужно лог-сущностям (уведомления, лента активности): они хранят
+   * taskId денормализованно и не джойнятся с tasks, поэтому чтение помечает такие записи
+   * флагом, а не правит историю задним числом.
+   */
+  findDeletedTaskIds(taskIds: readonly string[]): Promise<Set<string>>;
+  /**
+   * Задачи, пролежавшие в корзине дольше cutoff — вход авто-purge (PurgeTrashedTasks).
+   * Глобально по всем проектам: чистильщик системный, не привязан к вызывающему.
+   * Отдаём только ссылки, а не Task: purge-циклу нужны лишь id, а полный Task тянет
+   * джойны пользователей на каждую строку.
+   */
+  listTrashedBefore(cutoff: Date, limit: number): Promise<readonly TrashedTaskRef[]>;
   create(input: CreateTaskInput): Promise<Task>;
   update(
     taskId: string,

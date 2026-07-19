@@ -251,6 +251,11 @@ import { EmailActionService } from './application/email-action/EmailActionServic
 import { DeleteTask } from './application/task/DeleteTask.js';
 import { ListTrashedTasks } from './application/task/ListTrashedTasks.js';
 import { RestoreDeletedTask } from './application/task/RestoreDeletedTask.js';
+import { PurgeDeletedTask } from './application/task/PurgeDeletedTask.js';
+import {
+  DEFAULT_TRASH_RETENTION_DAYS,
+  PurgeTrashedTasks,
+} from './application/task/PurgeTrashedTasks.js';
 import { AiActionBatchService } from './application/ai-action/AiActionBatchService.js';
 import { DrizzleAiActionBatchRepository } from './infrastructure/repositories/DrizzleAiActionBatchRepository.js';
 import { LinkCommit } from './application/task/LinkCommit.js';
@@ -1082,6 +1087,18 @@ setInterval(() => {
   void siteEditorService.sweepStaleRunningJobs().catch(() => {});
 }, 5 * 60_000).unref();
 
+// Автоочистка корзины задач (db/134): без неё мягко удалённые задачи копились бы в tasks
+// бессрочно вместе с комментариями, версиями и вложениями. Срок хранения настраивается
+// через TASK_TRASH_RETENTION_DAYS. Подметаем на старте и раз в час — задержка в час
+// на фоне 30 дней хранения не значима.
+const trashRetentionDays =
+  Number(process.env['TASK_TRASH_RETENTION_DAYS']) || DEFAULT_TRASH_RETENTION_DAYS;
+const purgeTrashedTasks = new PurgeTrashedTasks({ tasks: taskRepo });
+void purgeTrashedTasks.execute(trashRetentionDays).catch(() => {});
+setInterval(() => {
+  void purgeTrashedTasks.execute(trashRetentionDays).catch(() => {});
+}, 60 * 60_000).unref();
+
 // ===== Чат пространства (db/075): общий канал участников пространства =====
 // Workspace-scoped firehose событий чата (только для открытых SSE-вкладок; НЕ per-user bus).
 const chatEventHub = new ChatEventHub();
@@ -1741,8 +1758,10 @@ const { app, devProxyUpgrade } = createApp({
     workspaces: workspaceRepo,
     users: userRepo,
     taskVersions: taskVersionRepo,
+    tasks: taskRepo,
   },
   notifications: {
+    tasks: taskRepo,
     list: new ListNotifications({ repo: notificationRepo }),
     countUnread: new CountUnreadNotifications({ repo: notificationRepo }),
     markRead: new MarkNotificationRead({ repo: notificationRepo, now }),
@@ -1772,6 +1791,7 @@ const { app, devProxyUpgrade } = createApp({
       activity: activityRepo,
       users: userRepo,
       taskVersions: taskVersionRepo,
+      tasks: taskRepo,
     }),
   },
   help: {
@@ -2035,6 +2055,11 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
     }),
     restoreDeletedTask: new RestoreDeletedTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
+    purgeDeletedTask: new PurgeDeletedTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,

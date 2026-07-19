@@ -292,6 +292,12 @@ export function NotificationItem({
           </>
         )}
 
+        {/* Задача из payload'а в корзине: текст уведомления сохраняем, но предупреждаем, что
+            перехода не будет — иначе клик выглядел бы поломкой. */}
+        {n.taskDeleted && (
+          <p className="text-xs font-medium text-muted-foreground">🗑️ Задача удалена</p>
+        )}
+
         <p className="text-xs text-muted-foreground">{relativeTime(n.createdAt)}</p>
       </div>
     </li>

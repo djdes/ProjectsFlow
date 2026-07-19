@@ -10,6 +10,7 @@ import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { DeleteTask } from '../../application/task/DeleteTask.js';
 import type { ListTrashedTasks } from '../../application/task/ListTrashedTasks.js';
 import type { RestoreDeletedTask } from '../../application/task/RestoreDeletedTask.js';
+import type { PurgeDeletedTask } from '../../application/task/PurgeDeletedTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { UnlinkCommit } from '../../application/task/UnlinkCommit.js';
 import type { ListTaskCommits } from '../../application/task/ListTaskCommits.js';
@@ -61,6 +62,7 @@ type Deps = {
   // Корзина проекта + откат удаления (db/134).
   readonly listTrashedTasks: ListTrashedTasks;
   readonly restoreDeletedTask: RestoreDeletedTask;
+  readonly purgeDeletedTask: PurgeDeletedTask;
   readonly getTaskVersions: GetTaskVersions;
   readonly getProjectTaskVersions: GetProjectTaskVersions;
   readonly restoreTaskVersion: RestoreTaskVersion;
@@ -484,6 +486,19 @@ export function tasksRouter(deps: Deps): Router {
       }
     },
   );
+
+  // «Удалить навсегда»: физический DELETE задачи из корзины, Undo после этого нет.
+  router.delete('/trash/:taskId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const taskId = req.params['taskId'] as string;
+      await deps.purgeDeletedTask.execute(projectId, req.user!.id, taskId);
+      deps.notifyTaskChanged(projectId);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
 
   // POST /:taskId/assign-to-project — перенос задачи в другой проект (из инбокса —
   // owner, из именованного — move_task; права гейтит use-case по task.projectId).

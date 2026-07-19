@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, desc, eq, inArray, max, min, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   taskDelegations,
@@ -25,6 +25,7 @@ import {
 import type {
   CreateTaskInput,
   TaskRepository,
+  TrashedTaskRef,
   UpdateTaskPatch,
 } from '../../application/task/TaskRepository.js';
 import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
@@ -180,6 +181,28 @@ export class DrizzleTaskRepository implements TaskRepository {
       .where(and(eq(tasks.projectId, projectId), taskDeleted()))
       .orderBy(desc(tasks.deletedAt), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
+  }
+
+  async findDeletedTaskIds(taskIds: readonly string[]): Promise<Set<string>> {
+    if (taskIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(activeTasks(inArray(tasks.id, [...taskIds])));
+    // Строки могли и вовсе исчезнуть (purge проекта) — «нет среди живых» тоже считаем удалённой.
+    const alive = new Set(rows.map((r) => r.id));
+    return new Set([...taskIds].filter((id) => !alive.has(id)));
+  }
+
+  async listTrashedBefore(cutoff: Date, limit: number): Promise<readonly TrashedTaskRef[]> {
+    const rows = await this.db
+      .select({ id: tasks.id, projectId: tasks.projectId, deletedAt: tasks.deletedAt })
+      .from(tasks)
+      .where(and(taskDeleted(), lt(tasks.deletedAt, cutoff)))
+      // Сначала самые залежавшиеся: при упоре в limit следующий проход добирает остаток.
+      .orderBy(asc(tasks.deletedAt), asc(tasks.id))
+      .limit(limit);
+    return rows.map((r) => ({ id: r.id, projectId: r.projectId, deletedAt: r.deletedAt as Date }));
   }
 
   async create(input: CreateTaskInput): Promise<Task> {

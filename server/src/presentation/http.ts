@@ -114,6 +114,7 @@ import type { MoveTask } from '../application/task/MoveTask.js';
 import type { DeleteTask } from '../application/task/DeleteTask.js';
 import type { ListTrashedTasks } from '../application/task/ListTrashedTasks.js';
 import type { RestoreDeletedTask } from '../application/task/RestoreDeletedTask.js';
+import type { PurgeDeletedTask } from '../application/task/PurgeDeletedTask.js';
 import type { GetTaskVersions } from '../application/task/GetTaskVersions.js';
 import type { GetProjectTaskVersions } from '../application/task/GetProjectTaskVersions.js';
 import type { RestoreTaskVersion } from '../application/task/RestoreTaskVersion.js';
@@ -410,6 +411,7 @@ type AppDeps = {
     readonly workspaces: WorkspaceRepository;
     readonly users: UserRepository;
     readonly taskVersions: TaskVersionRepository;
+    readonly tasks: TaskRepository;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
@@ -462,6 +464,7 @@ type AppDeps = {
     readonly getProjectFinance: GetProjectFinance;
   };
   readonly notifications: {
+    readonly tasks: TaskRepository;
     readonly list: ListNotifications;
     readonly countUnread: CountUnreadNotifications;
     readonly markRead: MarkNotificationRead;
@@ -530,6 +533,7 @@ type AppDeps = {
     readonly deleteTask: DeleteTask;
     readonly listTrashedTasks: ListTrashedTasks;
     readonly restoreDeletedTask: RestoreDeletedTask;
+    readonly purgeDeletedTask: PurgeDeletedTask;
     readonly getTaskVersions: GetTaskVersions;
     readonly getProjectTaskVersions: GetProjectTaskVersions;
     readonly restoreTaskVersion: RestoreTaskVersion;
@@ -796,6 +800,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       workspaces: deps.activity.workspaces,
       users: deps.activity.users,
       taskVersions: deps.activity.taskVersions,
+      tasks: deps.activity.tasks,
     }),
   );
   // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).

@@ -4,7 +4,8 @@ import type { GetActivityFeed } from '../../application/activity/GetActivityFeed
 import type { WorkspaceRepository } from '../../application/workspace/WorkspaceRepository.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
 import type { TaskVersionRepository } from '../../application/task/TaskVersionRepository.js';
-import type { Notification } from '../../domain/notifications/Notification.js';
+import type { TaskRepository } from '../../application/task/TaskRepository.js';
+import { notificationTaskId, type Notification } from '../../domain/notifications/Notification.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireWorkspaceMember } from '../../application/workspace/workspaceAccess.js';
 
@@ -13,6 +14,7 @@ type Deps = {
   readonly workspaces: WorkspaceRepository;
   readonly users: UserRepository;
   readonly taskVersions: TaskVersionRepository;
+  readonly tasks: TaskRepository;
 };
 
 const querySchema = z.object({
@@ -22,8 +24,14 @@ const querySchema = z.object({
 });
 
 // Уведомление сериализуем 1-в-1 как /api/notifications — клиент парсит той же логикой.
-function notifDto(n: Notification): unknown {
-  return { ...n, createdAt: n.createdAt.toISOString(), readAt: n.readAt?.toISOString() ?? null };
+function notifDto(n: Notification, deletedTaskIds: ReadonlySet<string>): unknown {
+  const taskId = notificationTaskId(n.payload);
+  return {
+    ...n,
+    createdAt: n.createdAt.toISOString(),
+    readAt: n.readAt?.toISOString() ?? null,
+    taskDeleted: taskId !== null && deletedTaskIds.has(taskId),
+  };
 }
 
 // GET /api/workspaces/:workspaceId/feed?tab=all|action&before=&limit=
@@ -62,18 +70,31 @@ export function activityFeedRouter(deps: Deps): Router {
       // версии (старые задачи до фичи версий их не имеют). Собираем taskId'ы событий и одним
       // запросом узнаём, у каких из них есть снимки — клиент по hasVersions решает, рисовать ли часы.
       const taskIds = new Set<string>();
+      // Ссылки на задачу есть и у событий, и у уведомлений — сверяем с живыми задачами разом:
+      // лента и колокольчик не джойнятся с tasks, и ссылка на удалённую вела бы в 404.
+      const linkedTaskIds = new Set<string>();
       for (const it of items) {
-        if (it.type === 'activity' && it.event.payload?.taskId) taskIds.add(it.event.payload.taskId);
+        if (it.type === 'activity') {
+          if (it.event.payload?.taskId) {
+            taskIds.add(it.event.payload.taskId);
+            linkedTaskIds.add(it.event.payload.taskId);
+          }
+          continue;
+        }
+        const notifTaskId = notificationTaskId(it.notification.payload);
+        if (notifTaskId) linkedTaskIds.add(notifTaskId);
       }
-      const withVersions =
-        taskIds.size > 0 ? await deps.taskVersions.taskIdsWithVersions([...taskIds]) : new Set<string>();
+      const [withVersions, deletedTaskIds] = await Promise.all([
+        taskIds.size > 0 ? deps.taskVersions.taskIdsWithVersions([...taskIds]) : new Set<string>(),
+        deps.tasks.findDeletedTaskIds([...linkedTaskIds]),
+      ]);
 
       const dto = items.map((it) => {
         if (it.type === 'notification') {
           return {
             type: 'notification' as const,
             createdAt: it.createdAt.toISOString(),
-            notification: notifDto(it.notification),
+            notification: notifDto(it.notification, deletedTaskIds),
           };
         }
         const e = it.event;
@@ -91,6 +112,7 @@ export function activityFeedRouter(deps: Deps): Router {
           targetDisplayName: target?.displayName ?? null,
           payload: e.payload,
           hasVersions: !!e.payload?.taskId && withVersions.has(e.payload.taskId),
+          taskDeleted: !!e.payload?.taskId && deletedTaskIds.has(e.payload.taskId),
         };
       });
 

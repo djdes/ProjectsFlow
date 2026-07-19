@@ -24,6 +24,7 @@ type ActivityDto = {
   targetDisplayName: string | null;
   payload: ActivityPayload | null;
   hasVersions?: boolean;
+  taskDeleted?: boolean;
 };
 
 type NotificationDto = {
@@ -32,6 +33,7 @@ type NotificationDto = {
   payload: NotificationPayload;
   readAt: string | null;
   createdAt: string;
+  taskDeleted?: boolean;
 };
 
 type NotificationFeedDto = { type: 'notification'; createdAt: string; notification: NotificationDto };
@@ -49,6 +51,7 @@ function parseNotification(dto: NotificationDto): Notification {
     payload,
     readAt: dto.readAt ? new Date(dto.readAt) : null,
     createdAt: new Date(dto.createdAt),
+    taskDeleted: dto.taskDeleted ?? false,
   };
 }
 
@@ -68,6 +71,7 @@ function fromDto(dto: FeedItemDto): FeedItem {
     targetDisplayName: dto.targetDisplayName,
     payload: dto.payload,
     hasVersions: dto.hasVersions ?? false,
+    taskDeleted: dto.taskDeleted ?? false,
   };
   return item;
 }

@@ -11,6 +11,7 @@ type NotificationDto = {
   payload: NotificationPayload;
   readAt: string | null;
   createdAt: string;
+  taskDeleted?: boolean;
 };
 
 function fromDto(dto: NotificationDto): Notification {
@@ -26,6 +27,7 @@ function fromDto(dto: NotificationDto): Notification {
     payload,
     readAt: dto.readAt ? new Date(dto.readAt) : null,
     createdAt: new Date(dto.createdAt),
+    taskDeleted: dto.taskDeleted ?? false,
   };
 }
 

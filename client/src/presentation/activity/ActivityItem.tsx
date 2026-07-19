@@ -162,10 +162,15 @@ function renderText(item: ActivityEventItem, nav: NavHandlers): React.ReactNode 
   const target = item.targetDisplayName ?? 'участника';
   const p = item.payload ?? {};
   const taskName = cleanName(p.taskExcerpt);
-  const taskLink = taskName ? (
-    <ActLink onClick={nav.openTask}>«{taskName}»</ActLink>
+  const taskLabel = taskName ? `«${taskName}»` : 'задачу';
+  // Задача в корзине: текст события сохраняем («что было»), но ссылку убираем — она вела бы
+  // в 404. Помечаем явно, чтобы отсутствие клика не выглядело поломкой.
+  const taskLink = item.taskDeleted ? (
+    <span className="text-muted-foreground">
+      {taskLabel} <span className="text-xs">(задача удалена)</span>
+    </span>
   ) : (
-    <ActLink onClick={nav.openTask}>задачу</ActLink>
+    <ActLink onClick={nav.openTask}>{taskLabel}</ActLink>
   );
   const projectName = cleanName(p.projectName, 32);
   const projectLink = projectName ? <ActLink onClick={nav.openProject}>«{projectName}»</ActLink> : null;
@@ -262,10 +267,10 @@ export function ActivityItem({
   // Кнопку истории версий показываем ТОЛЬКО когда у задачи реально есть версии (hasVersions
   // с сервера) — иначе часы-иконка вела бы в пустое окно «Версий пока нет».
   const versionTaskId =
-    onOpenVersions && TASK_KINDS.has(item.kind) && item.hasVersions
+    onOpenVersions && TASK_KINDS.has(item.kind) && item.hasVersions && !item.taskDeleted
       ? (item.payload?.taskId ?? null)
       : null;
-  const taskId = item.payload?.taskId ?? null;
+  const taskId = item.taskDeleted ? null : (item.payload?.taskId ?? null);
   // Название задачи / блок изменения ведут на страницу задачи (при hl= — с подсветкой поля);
   // имя проекта — на доску проекта. Сам глагол/имя автора остаются обычным текстом (выделяется).
   const openTask = (field?: string): void => {

@@ -513,6 +513,7 @@ export class HttpProjectRepository implements ProjectRepository {
         payload: ActivityPayload | null;
         createdAt: string;
         hasVersions?: boolean;
+        taskDeleted?: boolean;
       }>;
       hasMore: boolean;
       nextCursor: { createdAt: string; id: string } | null;

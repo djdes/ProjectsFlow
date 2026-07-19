@@ -166,4 +166,7 @@ export type Notification = {
   readonly payload: NotificationPayload;
   readonly readAt: Date | null;
   readonly createdAt: Date;
+  // Задача из payload'а удалена (сервер сверяет на чтении). Уведомление остаётся в списке,
+  // но вместо ссылки в 404 UI показывает пометку «задача удалена».
+  readonly taskDeleted?: boolean;
 };

@@ -53,6 +53,12 @@ export function useNotificationActions(opts?: {
   const handleClick = (n: Notification): void => {
     void (async () => {
       await markRead(n);
+      // Задача уехала в корзину — переход вёл бы в 404. Уведомление остаётся в списке как
+      // лог-запись, просто гасим его и объясняем почему нет перехода.
+      if (n.taskDeleted) {
+        toast.info('Задача удалена — открывать нечего');
+        return;
+      }
       const p = n.payload;
       // Дип-линк к задаче + конкретному комментарию (KanbanBoard ловит ?task=, TaskDrawer — #comment-).
       if (p.type === 'comment_mention')

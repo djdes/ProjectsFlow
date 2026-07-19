@@ -194,3 +194,9 @@ export type Notification = {
   readonly readAt: Date | null;
   readonly createdAt: Date;
 };
+
+// Задача, на которую ссылается уведомление (null — уведомление не про задачу). Payload
+// денормализован и с tasks не джойнится, поэтому чтение сверяет этот id с живыми задачами.
+export function notificationTaskId(payload: NotificationPayload): string | null {
+  return 'taskId' in payload ? payload.taskId : null;
+}

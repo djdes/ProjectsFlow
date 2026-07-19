@@ -3,11 +3,13 @@ import type { ListNotifications } from '../../application/notifications/ListNoti
 import type { CountUnreadNotifications } from '../../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../../application/notifications/MarkAllNotificationsRead.js';
-import type { Notification } from '../../domain/notifications/Notification.js';
+import { notificationTaskId, type Notification } from '../../domain/notifications/Notification.js';
 import type { RealtimeEvent } from '../../domain/realtime/RealtimeEvent.js';
+import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
+  readonly tasks: TaskRepository;
   readonly list: ListNotifications;
   readonly countUnread: CountUnreadNotifications;
   readonly markRead: MarkNotificationRead;
@@ -21,13 +23,21 @@ type Deps = {
 type NotificationDto = Omit<Notification, 'createdAt' | 'readAt'> & {
   createdAt: string;
   readAt: string | null;
+  // Задача из payload'а уехала в корзину: клиент показывает «задача удалена» вместо ссылки
+  // в 404. Само уведомление — лог-запись, её текст и наличие в списке не меняются.
+  taskDeleted: boolean;
 };
 
-function toDto(n: Notification): NotificationDto {
+// Свежесозданное уведомление (SSE) всегда указывает на живую задачу — ему сверять нечего.
+const NO_DELETED_TASKS: ReadonlySet<string> = new Set();
+
+function toDto(n: Notification, deletedTaskIds: ReadonlySet<string>): NotificationDto {
+  const taskId = notificationTaskId(n.payload);
   return {
     ...n,
     createdAt: n.createdAt.toISOString(),
     readAt: n.readAt?.toISOString() ?? null,
+    taskDeleted: taskId !== null && deletedTaskIds.has(taskId),
   };
 }
 
@@ -45,7 +55,11 @@ export function notificationsRouter(deps: Deps): Router {
         unreadOnly,
         limit,
       });
-      res.json({ notifications: list.map(toDto) });
+      const taskIds = list
+        .map((n) => notificationTaskId(n.payload))
+        .filter((id): id is string => id !== null);
+      const deleted = await deps.tasks.findDeletedTaskIds([...new Set(taskIds)]);
+      res.json({ notifications: list.map((n) => toDto(n, deleted)) });
     } catch (e) {
       next(e);
     }
@@ -64,7 +78,7 @@ export function notificationsRouter(deps: Deps): Router {
     res.write('retry: 5000\n\n');
 
     const send = (n: Notification): void => {
-      res.write(`event: notification\ndata: ${JSON.stringify(toDto(n))}\n\n`);
+      res.write(`event: notification\ndata: ${JSON.stringify(toDto(n, NO_DELETED_TASKS))}\n\n`);
     };
     const unsubscribe = deps.subscribe(req.user!.id, send);
 
