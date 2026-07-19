@@ -145,7 +145,9 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('pf:studio-chat-hidden', { detail: { hidden: splitPane.hidden } }));
-    return () => window.dispatchEvent(new CustomEvent('pf:studio-chat-hidden', { detail: { hidden: false } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('pf:studio-chat-hidden', { detail: { hidden: false } }));
+    };
   }, [splitPane.hidden]);
 
   const content = useMemo(() => {
