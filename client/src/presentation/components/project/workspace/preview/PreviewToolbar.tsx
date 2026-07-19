@@ -14,7 +14,7 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
 export function PreviewToolbar({
   mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
   leading, trailing, studioLayout = false,
-  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onPublish, onReject,
+  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onExitEdit, onPublish, onReject,
 }: {
   mode: PreviewMode; device: PreviewDevice; path: string; draftPath: string; routes: string[]; routeMenuOpen: boolean;
   saveStatus: SaveStatus; undoDepth: number; redoDepth: number;
@@ -22,7 +22,10 @@ export function PreviewToolbar({
   leading?: React.ReactNode; trailing?: React.ReactNode; studioLayout?: boolean;
   onMode: (mode: PreviewMode) => void; onDevice: (device: PreviewDevice) => void; onDraftPath: (path: string) => void;
   onApplyPath: (path: string) => void; onRouteMenu: (open: boolean) => void; onReload: () => void;
-  onUndo: () => void; onRedo: () => void; onCode: () => void; onPublish: () => void; onReject: () => void;
+  onUndo: () => void; onRedo: () => void; onCode: () => void;
+  // Повторный клик по Edit: выйти из режима и сохранить накопленные правки в проект.
+  onExitEdit: () => void;
+  onPublish: () => void; onReject: () => void;
 }): React.ReactElement {
   const listId = useId();
   const routeBoxRef = useRef<HTMLDivElement>(null);
@@ -53,7 +56,17 @@ export function PreviewToolbar({
         {((studioLayout
           ? [['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2]]
           : [['preview', 'Preview', Monitor], ['edit', 'Edit', MousePointer2], ['canvas', 'Canvas', Grid2X2]]) as ReadonlyArray<readonly [PreviewMode, string, typeof Monitor]>).map(([value, label, Icon]) => (
-          <button key={value} type="button" role="tab" aria-label={label} aria-selected={mode === value} onClick={() => onMode(studioLayout && mode === value ? 'preview' : value)} className={cn('inline-flex h-7 items-center justify-center gap-1.5 rounded-[5px] text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted/60 hover:text-foreground', value === 'canvas' ? 'w-7 px-0' : 'px-2.5', mode === value && 'bg-muted text-foreground')}>
+          <button key={value} type="button" role="tab" aria-label={label} aria-selected={mode === value} onClick={() => {
+            // Повторный клик по активной вкладке возвращает в Preview. Для Edit это
+            // отдельный сигнал: именно он сохраняет правки в проект (см. onExitEdit).
+            // Уход на Canvas или иной путь наружу ничего не публикует.
+            if (studioLayout && mode === value) {
+              if (value === 'edit') onExitEdit();
+              else onMode('preview');
+              return;
+            }
+            onMode(value);
+          }} className={cn('inline-flex h-7 items-center justify-center gap-1.5 rounded-[5px] text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted/60 hover:text-foreground', value === 'canvas' ? 'w-7 px-0' : 'px-2.5', mode === value && 'bg-muted text-foreground')}>
             <Icon className="size-3.5" />{value === 'canvas' ? <span className="sr-only">{label}</span> : label}
           </button>
         ))}

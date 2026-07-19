@@ -26,27 +26,27 @@ function CloudCheck({ className }: { className?: string }): React.ReactElement {
 
 // Состояние сохранения правок превью, поднятое из ProjectPreview в шапку левой панели.
 //
-// ВАЖНО про семантику: правка сохраняется на сервер СРАЗУ, как только применена. Поэтому
-// «не сохранено» — это только патч в полёте или упавший запрос, а не накопленная пачка.
-// Публикация (перенос правок в исходный код проекта с передеплоем) — отдельная тяжёлая
-// операция и отдельное поле; она запускается вручную из «…»-меню, а не сама.
+// Семантика «сохранено» здесь — пользовательская, а не техническая. Технически каждая
+// правка уже лежит на сервере черновиком и переживает уход со страницы. Но для
+// пользователя правка «сохранена» только когда она перенесена в исходный код проекта
+// и тот пересобран, — а это происходит по повторному клику по Edit.
 export type StudioSaveState = {
   // Есть ли активный режим правки — вне его индикатор не показываем.
   readonly editing: boolean;
-  // Патч прямо сейчас летит на сервер.
+  // Патч прямо сейчас летит на сервер (черновик).
   readonly saving: boolean;
-  // Последняя ошибка сохранения, если была.
+  // Последняя ошибка записи черновика, если была.
   readonly error: string | null;
-  // Сохранённые правки, которые ещё не опубликованы в исходный код.
-  readonly unpublished: number;
-  // Диспетчер прямо сейчас публикует пачку.
+  // Правки, ещё не перенесённые в проект. Для пользователя это «не сохранено».
+  readonly unsaved: number;
+  // Диспетчер прямо сейчас переносит правки в исходный код и пересобирает проект.
   readonly publishing: boolean;
-  // Когда последний раз успешно сохранили (epoch ms).
+  // Когда последний раз успешно сохранили в проект (epoch ms).
   readonly savedAt: number | null;
 };
 
 export const EMPTY_SAVE_STATE: StudioSaveState = {
-  editing: false, saving: false, error: null, unpublished: 0, publishing: false, savedAt: null,
+  editing: false, saving: false, error: null, unsaved: 0, publishing: false, savedAt: null,
 };
 
 // «5 минут назад» / «в 14:03» — короткая подпись для тултипа.
@@ -58,12 +58,14 @@ function formatSavedAt(savedAt: number): string {
   return `в ${new Date(savedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function pluralEdits(count: number): string {
+// Согласуем и существительное, и глагол: «1 правка не сохранена», «2 правки не
+// сохранены», «5 правок не сохранено».
+function unsavedPhrase(count: number): string {
   const mod10 = count % 10;
   const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} правка`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} правки`;
-  return `${count} правок`;
+  if (mod10 === 1 && mod100 !== 11) return `${count} правка не сохранена`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} правки не сохранены`;
+  return `${count} правок не сохранено`;
 }
 
 // Индикатор сохранения в шапке левой панели Project Studio (паттерн из Base44).
@@ -102,14 +104,19 @@ function describe(state: StudioSaveState): {
   label: string;
   tone: 'clean' | 'dirty' | 'error';
 } {
-  if (state.publishing) return { icon: RefreshCw, label: 'Диспетчер публикует правки в исходный код…', tone: 'dirty' };
-  if (state.saving) return { icon: RefreshCw, label: 'Сохраняем правку…', tone: 'dirty' };
-  if (state.error) return { icon: CloudOff, label: `Правка не сохранена: ${state.error}`, tone: 'error' };
-
-  const saved = state.savedAt ? `Все правки сохранены ${formatSavedAt(state.savedAt)}` : 'Все правки сохранены';
-  if (state.unpublished > 0) {
-    // Сохранено, но ещё не перенесено в исходный код — предупреждаем, не пугаем.
-    return { icon: CloudAlert, label: `${saved}. ${pluralEdits(state.unpublished)} ждут публикации — «…» → «Опубликовать правки»`, tone: 'dirty' };
+  if (state.publishing) return { icon: RefreshCw, label: 'Сохраняем правки в проект…', tone: 'dirty' };
+  if (state.saving) return { icon: RefreshCw, label: 'Записываем правку…', tone: 'dirty' };
+  if (state.error) return { icon: CloudAlert, label: `Правку не удалось записать: ${state.error}`, tone: 'error' };
+  if (state.unsaved > 0) {
+    return {
+      icon: CloudOff,
+      label: `${unsavedPhrase(state.unsaved)} — нажмите Edit ещё раз, чтобы сохранить в проект`,
+      tone: 'dirty',
+    };
   }
-  return { icon: CloudCheck, label: saved, tone: 'clean' };
+  return {
+    icon: CloudCheck,
+    label: state.savedAt ? `Все правки сохранены ${formatSavedAt(state.savedAt)}` : 'Все правки сохранены',
+    tone: 'clean',
+  };
 }
