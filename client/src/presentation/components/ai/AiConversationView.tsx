@@ -310,7 +310,7 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
           <>
             {actionResult.text && <div className="prose prose-sm max-w-none overflow-x-auto break-words dark:prose-invert prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted prose-pre:text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{actionResult.text}</ReactMarkdown></div>}
             {extracted.attachments.length > 0 && <MessageAttachments attachments={extracted.attachments} />}
-            {actionResult.plan && <AiActionPlanCard plan={actionResult.plan} defaultProjectId={projectId} />}
+            {actionResult.plan && <AiActionPlanCard plan={actionResult.plan} defaultProjectId={projectId} messageId={message.id} />}
           </>
         ) : (
           <div className="flex items-center gap-2 py-1 text-muted-foreground"><span className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.3s]" /><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.15s]" /><i className="size-1.5 animate-bounce rounded-full bg-current" /></span><span className="text-xs">Формирую ответ</span></div>

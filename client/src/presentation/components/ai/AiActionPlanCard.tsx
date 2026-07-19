@@ -1,26 +1,41 @@
-import { useMemo, useState } from 'react';
-import { Check, Circle, ExternalLink, Loader2, ListChecks, RotateCcw, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { AiAction, AiActionPlan, AiAffectedEntity } from '@/domain/ai-action/AiAction';
+import { aiActionProjectTarget } from '@/domain/ai-action/AiAction';
+import { classifyAiActionPlan } from '@/application/ai-action/classifyAiActionPlan';
+import type { DestructiveTarget } from '@/application/ai-action/ResolveDestructiveTargets';
+import { AiDestructiveReviewCard, pluralizeTasks } from './AiDestructiveReviewCard';
+import { AiActionResultCard, type AiActionOutcome } from './AiActionResultCard';
+
+export type { AiAction, AiActionPlan } from '@/domain/ai-action/AiAction';
 
 const ACTION_BLOCK = /```projectsflow-actions\s*([\s\S]*?)```/iu;
 const STATUSES = new Set<TaskStatus>(['backlog', 'todo', 'in_progress', 'awaiting_clarification', 'done', 'manual']);
+const STORAGE_PREFIX = 'pf-ai-action-plan:';
 
-type ProjectTarget = { projectId?: string; projectRef?: string };
-type CreateProjectAction = { id: string; type: 'create_project'; name: string };
-type CreateTaskAction = ProjectTarget & { id: string; type: 'create_task'; description: string; status?: TaskStatus; deadline?: string | null; priority?: TaskPriority | null; assigneeUserId?: string };
-type UpdateTaskAction = ProjectTarget & { id: string; type: 'update_task'; taskId: string; description?: string; status?: TaskStatus; deadline?: string | null; priority?: TaskPriority | null };
-type DeleteTaskAction = ProjectTarget & { id: string; type: 'delete_task'; taskId: string };
-type DeleteAllTasksAction = ProjectTarget & { id: string; type: 'delete_all_tasks' };
-export type AiAction = CreateProjectAction | CreateTaskAction | UpdateTaskAction | DeleteTaskAction | DeleteAllTasksAction;
-export type AiActionPlan = { title: string; summary?: string; actions: AiAction[] };
-
-type ItemState = { status: 'pending' | 'running' | 'done' | 'failed' | 'undone'; error?: string; href?: string };
 type UndoEntry = { projectId: string; undo: () => Promise<void> };
+type Phase = 'running' | 'review' | 'result';
+
+// Журнал применения плана. Живёт в localStorage, потому что карточка перерисовывается
+// на каждый рендер истории: без него F5 или переключение чата запускали бы уже
+// выполненный план заново (действия исполняет клиент, серверного батча пока нет).
+type StoredRecord = {
+  version: 1;
+  autoDone: number;
+  autoFailed: number;
+  created: AiAffectedEntity[];
+  refs: Record<string, string>;
+  review: 'none' | 'pending' | 'applied' | 'rejected';
+  affected: AiAffectedEntity[];
+};
+
+// Один и тот же план не должен исполниться дважды из-за StrictMode/двойного монтирования
+// до того, как запись доедет до localStorage.
+const inFlight = new Set<string>();
 
 export function extractAiActionPlan(body: string): { text: string; plan: AiActionPlan | null } {
   const match = ACTION_BLOCK.exec(body);
@@ -81,145 +96,271 @@ function normalizeAction(value: unknown): AiAction | null {
 function isStatus(value: unknown): value is TaskStatus { return typeof value === 'string' && STATUSES.has(value as TaskStatus); }
 function isPriority(value: unknown): value is TaskPriority { return value === 1 || value === 2 || value === 3 || value === 4; }
 
-export function AiActionPlanCard({ plan, defaultProjectId }: { plan: AiActionPlan; defaultProjectId?: string }): React.ReactElement {
-  const { projectRepository, taskRepository } = useContainer();
+export function AiActionPlanCard({ plan, defaultProjectId, messageId }: { plan: AiActionPlan; defaultProjectId?: string; messageId?: string }): React.ReactElement | null {
+  const { projectRepository, taskRepository, resolveDestructiveTargets } = useContainer();
   const { user } = useCurrentUser();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [undoing, setUndoing] = useState(false);
-  const [completed, setCompleted] = useState(false);
-  const [items, setItems] = useState<Record<string, ItemState>>(() => Object.fromEntries(plan.actions.map((action) => [action.id, { status: 'pending' }])));
-  const [undoEntries, setUndoEntries] = useState<UndoEntry[]>([]);
-  const doneCount = useMemo(() => Object.values(items).filter((item) => item.status === 'done').length, [items]);
+  const classification = useMemo(() => classifyAiActionPlan(plan), [plan]);
+  const storageKey = useMemo(() => STORAGE_PREFIX + (messageId ?? planFingerprint(plan)), [messageId, plan]);
 
-  const updateItem = (id: string, patch: Partial<ItemState>): void => setItems((current) => ({ ...current, [id]: { ...(current[id] ?? { status: 'pending' }), ...patch } }));
-  const resolveProject = (action: ProjectTarget, refs: Map<string, string>): string => {
-    const value = action.projectId ?? (action.projectRef ? refs.get(action.projectRef) : undefined) ?? defaultProjectId;
+  // Журнал читается синхронно при первом рендере: иначе уже применённый план
+  // мигал бы «Применяю действия…» на каждом рендере истории.
+  const stored = useMemo(() => readRecord(storageKey), [storageKey]);
+  const [phase, setPhase] = useState<Phase>(storedPhase(stored));
+  const [record, setRecord] = useState<StoredRecord | null>(stored);
+  const [affected, setAffected] = useState<readonly AiAffectedEntity[]>(stored?.affected ?? []);
+  const [resolving, setResolving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  // Журнал отката живёт только в этой вкладке: после перезагрузки откатывать нечем,
+  // поэтому доступность кнопки — состояние, а не длина ref'а.
+  const [canUndo, setCanUndo] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [outcome, setOutcome] = useState<AiActionOutcome>(stored?.review === 'rejected' ? 'rejected' : 'applied');
+  const journalRef = useRef<UndoEntry[]>([]);
+  const refsRef = useRef<Map<string, string>>(new Map(Object.entries(stored?.refs ?? {})));
+
+  const persist = (next: StoredRecord): void => {
+    setRecord(next);
+    writeRecord(storageKey, next);
+  };
+
+  const resolveProject = (action: AiAction): string => {
+    const target = aiActionProjectTarget(action);
+    const value = target.projectId ?? (target.projectRef ? refsRef.current.get(target.projectRef) : undefined) ?? defaultProjectId;
     if (!value) throw new Error('Не указан проект для действия');
     return value;
   };
 
-  const run = async (): Promise<void> => {
-    if (!user || running || completed) return;
-    setConfirmOpen(false);
-    setRunning(true);
-    const refs = new Map<string, string>();
-    const journal: UndoEntry[] = [];
-    for (const action of plan.actions) {
-      updateItem(action.id, { status: 'running', error: undefined });
+  // Стадия 1: неразрушительные действия применяются молча, сразу при появлении плана.
+  useEffect(() => {
+    if (!user || stored) return;
+    if (inFlight.has(storageKey)) return;
+    inFlight.add(storageKey);
+    void (async () => {
+      try {
+        const result = await applySafeActions();
+        persist(result);
+        setCanUndo(journalRef.current.length > 0);
+        setPhase(classification.requiresReview ? 'review' : 'result');
+      } finally {
+        inFlight.delete(storageKey);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- план и ключ неизменны для смонтированного сообщения; перезапуск по смене user/repo привёл бы к повторному исполнению
+  }, [storageKey, user?.id]);
+
+  // Стадия 2: список объектов под удаление резолвится ДО решения пользователя.
+  useEffect(() => {
+    if (phase !== 'review' || affected.length > 0) return;
+    setResolving(true);
+    void (async () => {
+      try {
+        const targets: DestructiveTarget[] = classification.reviewActions.map((action) => ({ action, projectId: resolveProject(action) }));
+        setAffected(await resolveDestructiveTargets.execute(targets));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Не удалось собрать список задач');
+      } finally {
+        setResolving(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- резолв делаем один раз на вход в review
+  }, [phase]);
+
+  const applySafeActions = async (): Promise<StoredRecord> => {
+    const created: AiAffectedEntity[] = [];
+    let failed = 0;
+    for (const action of classification.autoActions) {
       try {
         if (action.type === 'create_project') {
           const project = await projectRepository.create({ name: action.name });
-          refs.set(action.id, project.id);
-          journal.push({ projectId: project.id, undo: () => projectRepository.delete(project.id) });
-          updateItem(action.id, { status: 'done', href: `/projects/${project.id}` });
+          refsRef.current.set(action.id, project.id);
+          journalRef.current.push({ projectId: project.id, undo: () => projectRepository.delete(project.id) });
+          created.push({ actionId: action.id, kind: 'project', projectId: project.id, entityId: project.id, title: `Проект «${action.name}»` });
           announceProjectChange(project.id);
         } else if (action.type === 'create_task') {
-          const projectId = resolveProject(action, refs);
+          const projectId = resolveProject(action);
           const task = await taskRepository.create(projectId, {
             description: action.description,
             status: action.status ?? 'todo',
             deadline: action.deadline,
             priority: action.priority,
-            assigneeUserId: action.assigneeUserId ?? user.id,
+            assigneeUserId: action.assigneeUserId ?? user?.id ?? '',
           });
-          journal.push({ projectId, undo: () => taskRepository.delete(projectId, task.id) });
-          updateItem(action.id, { status: 'done', href: `/projects/${projectId}?task=${task.id}` });
+          journalRef.current.push({ projectId, undo: () => taskRepository.delete(projectId, task.id) });
+          created.push({ actionId: action.id, kind: 'task', projectId, entityId: task.id, title: firstLine(action.description) });
           announceProjectChange(projectId, task.id);
-        } else {
-          const projectId = resolveProject(action, refs);
-          const tasks = await taskRepository.list(projectId);
-          if (action.type === 'delete_all_tasks') {
-            const deleted: Task[] = [];
-            journal.push({ projectId, undo: async () => {
-              for (const task of deleted) await restoreTask(taskRepository, task);
-            } });
-            for (const task of tasks) {
-              await taskRepository.delete(projectId, task.id);
-              deleted.push(task);
-            }
-            updateItem(action.id, { status: 'done', href: `/projects/${projectId}` });
-            announceProjectChange(projectId);
-            continue;
-          }
-          const before = tasks.find((task) => task.id === action.taskId);
+        } else if (action.type === 'update_task') {
+          const projectId = resolveProject(action);
+          const before = (await taskRepository.list(projectId)).find((task) => task.id === action.taskId);
           if (!before) throw new Error('Задача не найдена или уже удалена');
-          if (action.type === 'delete_task') {
-            await taskRepository.delete(projectId, action.taskId);
-            journal.push({ projectId, undo: async () => { await restoreTask(taskRepository, before); } });
-            updateItem(action.id, { status: 'done' });
-            announceProjectChange(projectId);
-          } else {
-            const patch = { description: action.description, deadline: action.deadline, priority: action.priority };
-            await taskRepository.update(projectId, action.taskId, patch);
-            if (action.status && action.status !== before.status) await taskRepository.move(projectId, action.taskId, { targetStatus: action.status, beforeTaskId: null, afterTaskId: null });
-            journal.push({ projectId, undo: async () => {
-              await taskRepository.update(projectId, before.id, { description: before.description ?? '', deadline: before.deadline, priority: before.priority });
-              if (action.status && before.status !== action.status) await taskRepository.move(projectId, before.id, { targetStatus: before.status, beforeTaskId: null, afterTaskId: null });
-            } });
-            updateItem(action.id, { status: 'done', href: `/projects/${projectId}?task=${action.taskId}` });
-            announceProjectChange(projectId);
-          }
+          await taskRepository.update(projectId, action.taskId, { description: action.description, deadline: action.deadline, priority: action.priority });
+          if (action.status && action.status !== before.status) await taskRepository.move(projectId, action.taskId, { targetStatus: action.status, beforeTaskId: null, afterTaskId: null });
+          journalRef.current.push({ projectId, undo: async () => {
+            await taskRepository.update(projectId, before.id, { description: before.description ?? '', deadline: before.deadline, priority: before.priority });
+            if (action.status && before.status !== action.status) await taskRepository.move(projectId, before.id, { targetStatus: before.status, beforeTaskId: null, afterTaskId: null });
+          } });
+          created.push({ actionId: action.id, kind: 'task', projectId, entityId: action.taskId, title: firstLine(action.description ?? before.description ?? '') });
+          announceProjectChange(projectId);
         }
-      } catch (error) {
-        updateItem(action.id, { status: 'failed', error: error instanceof Error ? error.message : 'Неизвестная ошибка' });
+      } catch {
+        failed += 1;
       }
     }
-    setUndoEntries(journal);
-    setCompleted(true);
-    setRunning(false);
-    toast.success(`Выполнено действий: ${journal.length} из ${plan.actions.length}`);
+    return {
+      version: 1,
+      autoDone: created.length,
+      autoFailed: failed,
+      created,
+      refs: Object.fromEntries(refsRef.current),
+      review: classification.requiresReview ? 'pending' : 'none',
+      affected: [],
+    };
+  };
+
+  const confirmDestructive = async (): Promise<void> => {
+    if (busy || !record) return;
+    setBusy(true);
+    setError(undefined);
+    const removed: AiAffectedEntity[] = [];
+    try {
+      for (const action of classification.reviewActions) {
+        const projectId = resolveProject(action);
+        const targets = affected.filter((entity) => entity.actionId === action.id);
+        const snapshots = await taskRepository.list(projectId);
+        for (const entity of targets) {
+          const before = snapshots.find((task) => task.id === entity.entityId);
+          if (!before) continue;
+          await taskRepository.delete(projectId, entity.entityId);
+          journalRef.current.push({ projectId, undo: () => restoreTask(taskRepository, before) });
+          removed.push(entity);
+        }
+        announceProjectChange(projectId);
+      }
+      setOutcome('applied');
+      persist({ ...record, review: 'applied', affected: removed });
+      setAffected(removed);
+      setCanUndo(journalRef.current.length > 0);
+      setPhase('result');
+      toast.success(`Удалено ${removed.length} ${pluralizeTasks(removed.length)}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось выполнить удаление');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reject = (): void => {
+    if (busy || !record) return;
+    setOutcome('rejected');
+    persist({ ...record, review: 'rejected', affected: [] });
+    setAffected([]);
+    setPhase('result');
   };
 
   const undo = async (): Promise<void> => {
-    if (undoing || undoEntries.length === 0) return;
+    if (undoing || journalRef.current.length === 0) return;
     setUndoing(true);
     let undone = 0;
-    for (const entry of [...undoEntries].reverse()) {
+    for (const entry of [...journalRef.current].reverse()) {
       try {
         await entry.undo();
         announceProjectChange(entry.projectId);
         undone += 1;
-      } catch { /* keep undoing the remaining independent operations */ }
+      } catch { /* остальные независимые операции всё равно откатываем */ }
     }
-    setItems((current) => Object.fromEntries(Object.entries(current).map(([id, item]) => [id, item.status === 'done' ? { ...item, status: 'undone' } : item])));
-    setUndoEntries([]);
+    journalRef.current = [];
+    setCanUndo(false);
     setUndoing(false);
     toast.success(`Отменено действий: ${undone}`);
+    setAffected([]);
   };
 
+  if (!user) return null;
+
+  if (phase === 'running') {
+    return (
+      <section className="not-prose mt-3 flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-xs text-muted-foreground" aria-label={plan.title}>
+        <Loader2 className="size-3.5 animate-spin" />
+        Применяю действия…
+      </section>
+    );
+  }
+
+  if (phase === 'review') {
+    return (
+      <AiDestructiveReviewCard
+        entities={affected}
+        loading={resolving}
+        busy={busy}
+        error={error}
+        onReject={reject}
+        onConfirm={() => void confirmDestructive()}
+      />
+    );
+  }
+
+  const summary = record ? resultSummary(record, outcome) : plan.title;
+  const listed = outcome === 'rejected' ? (record?.created ?? []) : [...(record?.created ?? []), ...affected];
   return (
-    <section className="not-prose mt-3 overflow-hidden rounded-xl border bg-card" aria-label={plan.title}>
-      <div className="border-b bg-muted/25 px-3 py-2.5"><div className="flex items-start gap-2"><ListChecks className="mt-0.5 size-4 text-primary" /><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{plan.title}</h3>{plan.summary && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{plan.summary}</p>}</div><span className="text-xs tabular-nums text-muted-foreground">{doneCount}/{plan.actions.length}</span></div></div>
-      <div className="max-h-72 overflow-y-auto p-1.5">
-        {plan.actions.map((action, index) => {
-          const item = items[action.id] ?? { status: 'pending' as const };
-          return <div key={action.id} className="flex min-h-10 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/45">{statusIcon(item.status)}<div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{actionLabel(action)}</p>{item.error && <p className="truncate text-[10px] text-destructive">{item.error}</p>}</div><span className="text-[10px] text-muted-foreground">{index + 1}</span>{item.href && <a href={item.href} className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground" aria-label="Открыть результат"><ExternalLink className="size-3.5" /></a>}</div>;
-        })}
-      </div>
-      <div className="flex items-center justify-end gap-2 border-t px-3 py-2">
-        {completed && undoEntries.length > 0 && <Button type="button" variant="outline" size="sm" disabled={undoing} onClick={() => void undo()}>{undoing ? <Loader2 className="animate-spin" /> : <RotateCcw />}Восстановить</Button>}
-        {!completed && <Button type="button" size="sm" disabled={running || !user} onClick={() => setConfirmOpen(true)}>{running ? <Loader2 className="animate-spin" /> : <Check />}Подтвердить {plan.actions.length}</Button>}
-      </div>
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}><DialogContent className="sm:max-w-md"><DialogTitle>Выполнить предложенные действия?</DialogTitle><DialogDescription>ProjectsFlow последовательно применит {plan.actions.length} действий. До подтверждения ИИ ничего не меняет. После выполнения изменения можно отменить.</DialogDescription><DialogFooter><Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>Отмена</Button><Button type="button" onClick={() => void run()}>Выполнить</Button></DialogFooter></DialogContent></Dialog>
-    </section>
+    <AiActionResultCard
+      outcome={outcome}
+      title={summary}
+      entities={listed}
+      undoing={undoing}
+      canUndo={canUndo}
+      onUndo={() => void undo()}
+    />
   );
 }
 
-function statusIcon(status: ItemState['status']): React.ReactElement {
-  if (status === 'running') return <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />;
-  if (status === 'done') return <Check className="size-3.5 shrink-0 text-emerald-600" />;
-  if (status === 'failed') return <Trash2 className="size-3.5 shrink-0 text-destructive" />;
-  if (status === 'undone') return <RotateCcw className="size-3.5 shrink-0 text-muted-foreground" />;
-  return <Circle className="size-3.5 shrink-0 text-muted-foreground" />;
+function storedPhase(stored: StoredRecord | null): Phase {
+  if (!stored) return 'running';
+  return stored.review === 'pending' ? 'review' : 'result';
 }
 
-function actionLabel(action: AiAction): string {
-  if (action.type === 'delete_all_tasks') return 'Удалить все задачи проекта';
-  if (action.type === 'create_project') return `Создать проект «${action.name}»`;
-  if (action.type === 'create_task') return `Создать задачу: ${action.description.split('\n')[0]}`;
-  if (action.type === 'update_task') return `Изменить задачу ${action.taskId.slice(0, 8)}`;
-  return `Удалить задачу ${action.taskId.slice(0, 8)}`;
+function resultSummary(record: StoredRecord, outcome: AiActionOutcome): string {
+  const parts: string[] = [];
+  if (record.autoDone > 0) parts.push(`Выполнено действий: ${record.autoDone}`);
+  if (record.autoFailed > 0) parts.push(`не удалось: ${record.autoFailed}`);
+  if (outcome === 'rejected') parts.push('удаление отклонено — ничего не удалено');
+  else if (record.review === 'applied') parts.push(`удалено ${record.affected.length} ${pluralizeTasks(record.affected.length)}`);
+  return parts.length > 0 ? capitalize(parts.join(', ')) : 'Изменений не потребовалось';
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function firstLine(value: string): string {
+  return value.split('\n')[0]?.trim() || 'Без названия';
+}
+
+// Отпечаток плана нужен только когда сообщение ещё не имеет id (оптимистичный рендер):
+// иначе журнал применения привязывается к идентификатору сообщения.
+function planFingerprint(plan: AiActionPlan): string {
+  const source = JSON.stringify(plan);
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) | 0;
+  }
+  return `fp${(hash >>> 0).toString(36)}`;
+}
+
+function readRecord(key: string): StoredRecord | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredRecord;
+    return parsed.version === 1 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRecord(key: string, record: StoredRecord): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(record));
+  } catch { /* приватный режим/переполненное хранилище — журнал не критичен для рендера */ }
 }
 
 async function restoreTask(repository: ReturnType<typeof useContainer>['taskRepository'], task: Task): Promise<void> {

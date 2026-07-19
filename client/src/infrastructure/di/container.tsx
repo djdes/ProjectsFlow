@@ -41,6 +41,7 @@ import { ComposeTasks } from "@/application/ai/ComposeTasks";
 import type { AiPromptRepository } from "@/application/ai/AiPromptRepository";
 import type { AutomationRepository } from "@/application/automation/AutomationRepository";
 import { SearchTasks } from "@/application/task/SearchTasks";
+import { ResolveDestructiveTargets } from "@/application/ai-action/ResolveDestructiveTargets";
 import { ListProjects } from "@/application/project/ListProjects";
 import { ListWorkspaces } from "@/application/workspace/ListWorkspaces";
 import { CreateWorkspace } from "@/application/workspace/CreateWorkspace";
@@ -106,6 +107,7 @@ type Container = {
   updateProfile: UpdateProfile;
   uploadAvatar: UploadAvatar;
   searchTasks: SearchTasks;
+  resolveDestructiveTargets: ResolveDestructiveTargets;
   projectRepository: ProjectRepository;
   projectCodeRepository: ProjectCodeRepository;
   authRepository: AuthRepository;
@@ -202,6 +204,7 @@ function buildContainer(): Container {
     updateProfile: new UpdateProfile(userRepo),
     uploadAvatar: new UploadAvatar(userRepo),
     searchTasks: new SearchTasks(taskSearchRepo),
+    resolveDestructiveTargets: new ResolveDestructiveTargets(taskRepo),
     projectRepository: projectRepo,
     projectCodeRepository: projectCodeRepo,
     authRepository: authRepo,
