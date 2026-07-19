@@ -13,6 +13,8 @@ import type {
   AppTable,
 } from '../../domain/app-backend/AppSchema.js';
 import { appAccessForOperation } from '../../domain/app-backend/AppSchema.js';
+import type { SensitiveKind } from '../../domain/app-backend/sensitiveFields.js';
+import { SECRET_MASK, maskValue, sensitiveColumns } from '../../domain/app-backend/sensitiveFields.js';
 import {
   AppBackendNotProvisionedError,
   AppSchemaInvalidError,
@@ -40,6 +42,7 @@ const FILTER_OPERATORS: readonly AppFilterOperator[] = [
   'is_empty',
   'is_not_empty',
 ];
+const EMPTINESS_OPERATORS: readonly AppFilterOperator[] = ['is_empty', 'is_not_empty'];
 const ACCESS: readonly AppAccess[] = ['anyone', 'authenticated', 'owner'];
 
 export type AppBackendDashboard = {
@@ -55,6 +58,9 @@ export type AppRowsPage = {
   readonly total: number;
   readonly limit: number;
   readonly offset: number;
+  // Колонки, значения которых замаскированы. UI показывает их как «скрыто» и предлагает
+  // точечное раскрытие через revealRowValue.
+  readonly masked: Readonly<Record<string, SensitiveKind>>;
 };
 
 export type AppRowsQuery = {
@@ -110,16 +116,28 @@ export class ManageAppBackendData {
     await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
     const { table } = await this.requireTable(projectId, tableName);
     const columns = this.columnSet(table);
+    const sensitive = sensitiveColumns(table.fields);
     const filters = (query.filters ?? []).slice(0, 20).map((filter) =>
       this.normalizeFilter(table, filter));
     const limit = clamp(query.limit, 1, 100, 50);
     const offset = clamp(query.offset, 0, 1_000_000, 0);
+    // Сортировка по чувствительной колонке — это компаратор скрытых значений: порядок строк
+    // вместе с пагинацией позволяет двоичным поиском восстановить то, что мы маскируем.
+    if (query.sort && sensitive.has(query.sort.column)) {
+      throw new AppSchemaInvalidError(`column ${query.sort.column} is sensitive and cannot be sorted by`);
+    }
     const sort = query.sort && columns.has(query.sort.column)
       ? { column: query.sort.column, dir: query.sort.dir === 'desc' ? 'desc' as const : 'asc' as const }
       : { column: 'created_at', dir: 'desc' as const };
     const searchValue = typeof query.search === 'string' ? query.search.slice(0, 200) : '';
+    // Свободный поиск не заходит в чувствительные колонки (ни секреты, ни PII): совпадение по
+    // ним работает как оракул и позволяет побайтово подобрать значение, которое мы намеренно
+    // не показываем — номер карты подбирается так же, как API-ключ.
     const search = searchValue.trim()
-      ? { columns: [...columns], value: searchValue.trim() }
+      ? {
+          columns: [...columns].filter((column) => !sensitive.has(column)),
+          value: searchValue.trim(),
+        }
       : undefined;
     const opts = { filters, search };
     const rows = this.deps.appDb.select(projectId, table.name, {
@@ -127,7 +145,7 @@ export class ManageAppBackendData {
       orderBy: sort,
       limit,
       offset,
-    }).map((row) => this.fromStorageRow(table, row));
+    }).map((row) => this.maskRow(sensitive, this.fromStorageRow(table, row)));
     const total = this.deps.appDb.count(projectId, table.name, opts);
     this.deps.appDb.recordAudit(projectId, {
       actorType: 'project_member',
@@ -136,7 +154,33 @@ export class ManageAppBackendData {
       tableName: table.name,
       detail: { count: rows.length, filtered: filters.length > 0 || Boolean(search) },
     });
-    return { rows, total, limit, offset };
+    return { rows, total, limit, offset, masked: Object.fromEntries(sensitive) };
+  }
+
+  // Точечное раскрытие одного чувствительного значения. Отдельная операция, потому что
+  // требует права редактирования и ВСЕГДА оставляет след в аудите — в отличие от чтения грида.
+  async revealRowValue(
+    projectId: string,
+    callerUserId: string,
+    tableName: string,
+    rowId: string,
+    column: string,
+  ): Promise<{ readonly value: unknown }> {
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
+    const { table } = await this.requireTable(projectId, tableName);
+    const sensitive = sensitiveColumns(table.fields);
+    if (!sensitive.has(column)) throw new AppTableNotAllowedError(`column ${column}`);
+    const row = this.deps.appDb.findOne(projectId, table.name, { id: rowId });
+    this.deps.appDb.recordAudit(projectId, {
+      actorType: 'project_member',
+      actorId: callerUserId,
+      operation: 'dashboard.reveal',
+      tableName: table.name,
+      rowId,
+      detail: { column, kind: sensitive.get(column) },
+    });
+    if (!row) return { value: null };
+    return { value: this.fromStorageRow(table, row)[column] ?? null };
   }
 
   async insertRow(
@@ -149,7 +193,15 @@ export class ManageAppBackendData {
     const { backend, table } = await this.requireTable(projectId, tableName);
     assertWithinQuota(this.deps.appDb.sizeBytes(projectId), backend.storageLimitBytes);
     const values = this.normalizeValues(table, rawValues, true);
-    const row = this.fromStorageRow(table, this.deps.appDb.insert(projectId, table.name, values));
+    for (const [column, kind] of sensitiveColumns(table.fields)) {
+      if (kind === 'secret' && values[column] === SECRET_MASK) {
+        throw new AppSchemaInvalidError(`${column} must not be the mask placeholder`);
+      }
+    }
+    const row = this.maskRow(
+      sensitiveColumns(table.fields),
+      this.fromStorageRow(table, this.deps.appDb.insert(projectId, table.name, values)),
+    );
     this.deps.appDb.recordAudit(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
@@ -172,7 +224,18 @@ export class ManageAppBackendData {
     await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
     const { backend, table } = await this.requireTable(projectId, tableName);
     assertWithinQuota(this.deps.appDb.sizeBytes(projectId), backend.storageLimitBytes);
-    const values = this.normalizeValues(table, rawValues, false);
+    const sensitive = sensitiveColumns(table.fields);
+    const current = sensitive.size > 0
+      ? this.deps.appDb.findOne(projectId, table.name, { id: rowId })
+      : null;
+    // Клиент видит маску вместо настоящего значения. Если он прислал её обратно нетронутой —
+    // это «поле не редактировали», а не «затереть маской». Отбрасываем маски ДО нормализации
+    // типов: для datetime/int/real маска не парсится и запрос падал бы 400 раньше проверки.
+    const values = this.normalizeValues(
+      table,
+      this.dropUnchangedMasks(sensitive, current, rawValues),
+      false,
+    );
     this.deps.appDb.update(projectId, table.name, rowId, values);
     this.deps.appDb.recordAudit(projectId, {
       actorType: 'project_member',
@@ -184,7 +247,7 @@ export class ManageAppBackendData {
     });
     await this.syncUsage(projectId);
     const row = this.deps.appDb.findOne(projectId, table.name, { id: rowId });
-    return row ? this.fromStorageRow(table, row) : null;
+    return row ? this.maskRow(sensitiveColumns(table.fields), this.fromStorageRow(table, row)) : null;
   }
 
   async deleteRow(
@@ -288,9 +351,22 @@ export class ManageAppBackendData {
       const userId = String(session.user_id);
       counts.set(userId, (counts.get(userId) ?? 0) + 1);
     }
-    return this.deps.appDb.select(projectId, '_users', { orderBy: { column: 'created_at', dir: 'desc' }, limit: 5_000 }).map((row) => ({
-      id: String(row.id), email: String(row.email), createdAt: String(row.created_at), activeSessions: counts.get(String(row.id)) ?? 0,
+    // Адреса рантайм-пользователей — та же PII, что и в пользовательских таблицах: маскируем
+    // так же и оставляем след в аудите, иначе это канал массовой выгрузки почт мимо схемы.
+    const users = this.deps.appDb.select(projectId, '_users', { orderBy: { column: 'created_at', dir: 'desc' }, limit: 5_000 }).map((row) => ({
+      id: String(row.id),
+      email: String(maskValue(String(row.email), 'pii')),
+      createdAt: String(row.created_at),
+      activeSessions: counts.get(String(row.id)) ?? 0,
     }));
+    this.deps.appDb.recordAudit(projectId, {
+      actorType: 'project_member',
+      actorId: callerUserId,
+      operation: 'dashboard.users.list',
+      tableName: '_users',
+      detail: { count: users.length },
+    });
+    return users;
   }
 
   async revokeRuntimeUserSessions(projectId: string, callerUserId: string, userId: string): Promise<{ revoked: number }> {
@@ -337,11 +413,19 @@ export class ManageAppBackendData {
     const columns = this.columnSet(table);
     if (!columns.has(raw.column)) throw new AppTableNotAllowedError(`column ${raw.column}`);
     if (!FILTER_OPERATORS.includes(raw.operator)) throw new AppSchemaInvalidError('invalid filter operator');
+    // По чувствительной колонке (секрет ИЛИ PII) разрешаем только проверку на заполненность:
+    // сравнение со значением превратило бы фильтр в оракул для подбора скрытого значения.
+    if (
+      sensitiveColumns(table.fields).has(raw.column)
+      && !EMPTINESS_OPERATORS.includes(raw.operator)
+    ) {
+      throw new AppSchemaInvalidError(`column ${raw.column} is sensitive and cannot be matched by value`);
+    }
     const field = table.fields.find((candidate) => candidate.name === raw.column);
     return {
       column: raw.column,
       operator: raw.operator,
-      ...(!['is_empty', 'is_not_empty'].includes(raw.operator)
+      ...(!EMPTINESS_OPERATORS.includes(raw.operator)
         ? { value: field ? this.normalizeFieldValue(field, raw.value, false) : raw.value }
         : {}),
     };
@@ -389,6 +473,34 @@ export class ManageAppBackendData {
     const value = new Date(String(raw));
     if (Number.isNaN(value.getTime())) throw new AppSchemaInvalidError(`${field.name} must be datetime`);
     return value.toISOString();
+  }
+
+  // Работает по СЫРОМУ вводу (до нормализации типов): маска — всегда строка, и для колонки
+  // нетекстового типа нормализация отвергла бы её как невалидное значение.
+  private dropUnchangedMasks(
+    sensitive: ReadonlyMap<string, SensitiveKind>,
+    current: Row | null,
+    raw: unknown,
+  ): unknown {
+    if (sensitive.size === 0 || !raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    const result = { ...(raw as Record<string, unknown>) };
+    for (const [column, kind] of sensitive) {
+      if (!(column in result)) continue;
+      if (kind === 'secret' && result[column] === SECRET_MASK) { delete result[column]; continue; }
+      if (current && column in current && result[column] === maskValue(current[column], kind)) {
+        delete result[column];
+      }
+    }
+    return result;
+  }
+
+  private maskRow(sensitive: ReadonlyMap<string, SensitiveKind>, row: Row): Row {
+    if (sensitive.size === 0) return row;
+    const result: Row = { ...row };
+    for (const [column, kind] of sensitive) {
+      if (column in result) result[column] = maskValue(result[column], kind);
+    }
+    return result;
   }
 
   private fromStorageRow(table: AppTable, row: Row): Row {

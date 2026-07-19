@@ -169,6 +169,27 @@ export function appBackendRouter(deps: AppBackendRouterDeps): Router {
     },
   );
 
+  router.post(
+    '/:projectId/app-backend/tables/:table/rows/:rowId/reveal',
+    requireAuth,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = req.body && typeof req.body === 'object'
+          ? req.body as { column?: unknown }
+          : {};
+        res.status(200).json(await deps.dashboard.revealRowValue(
+          req.params['projectId'] as string,
+          req.user!.id,
+          req.params['table'] as string,
+          req.params['rowId'] as string,
+          typeof body.column === 'string' ? body.column : '',
+        ));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.put(
     '/:projectId/app-backend/tables/:table/permissions',
     requireAuth,

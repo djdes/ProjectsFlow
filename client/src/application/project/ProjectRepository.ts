@@ -251,11 +251,14 @@ export type AppDataFilter = {
   readonly value?: unknown;
 };
 export type AppDataRow = Record<string, unknown>;
+export type AppSensitiveKind = "secret" | "pii";
 export type AppRowsPage = {
   readonly rows: readonly AppDataRow[];
   readonly total: number;
   readonly limit: number;
   readonly offset: number;
+  // Колонки, значения которых сервер отдал замаскированными.
+  readonly masked?: Readonly<Record<string, AppSensitiveKind>>;
 };
 export type AppRowsQuery = {
   readonly filters?: readonly AppDataFilter[];
@@ -439,6 +442,12 @@ export interface ProjectRepository {
     table: string,
     rowId: string,
   ): Promise<number>;
+  revealAppRowValue(
+    projectId: string,
+    table: string,
+    rowId: string,
+    column: string,
+  ): Promise<unknown>;
   updateAppTablePermissions(
     projectId: string,
     table: string,

@@ -677,6 +677,19 @@ export class HttpProjectRepository implements ProjectRepository {
     return result.deleted;
   }
 
+  async revealAppRowValue(
+    projectId: string,
+    table: string,
+    rowId: string,
+    column: string,
+  ): Promise<unknown> {
+    const result = await httpClient.post<{ value: unknown }>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}/reveal`,
+      { column },
+    );
+    return result.value;
+  }
+
   async updateAppTablePermissions(
     projectId: string,
     table: string,

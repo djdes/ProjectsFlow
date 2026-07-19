@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
+  ArrowDownAZ,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
   Database,
+  Eye,
   Filter,
   KeyRound,
+  ListOrdered,
   Loader2,
+  Lock,
   Plus,
   Search,
   ShieldCheck,
@@ -31,6 +35,7 @@ import type {
   AppField,
   AppFilterOperator,
   AppRowsPage,
+  AppSensitiveKind,
   AppTableSchema,
 } from '@/application/project/ProjectRepository';
 
@@ -113,6 +118,18 @@ export function AppDataExplorer({
   const [reload, setReload] = useState(0);
   const [editingRow, setEditingRow] = useState<AppDataRow | 'new' | null>(null);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [tableSearch, setTableSearch] = useState('');
+  const [alphabetical, setAlphabetical] = useState(false);
+
+  const visibleTables = useMemo(() => {
+    const needle = tableSearch.trim().toLowerCase();
+    const filtered = needle
+      ? tables.filter((table) => table.name.toLowerCase().includes(needle))
+      : [...tables];
+    return alphabetical
+      ? filtered.sort((left, right) => left.name.localeCompare(right.name, 'ru'))
+      : filtered;
+  }, [alphabetical, tableSearch, tables]);
 
   useEffect(() => {
     if (tables.length === 0) setSelectedTableName('');
@@ -159,6 +176,7 @@ export function AppDataExplorer({
 
   const columns = selectedTable ? ['id', ...selectedTable.fields.map((field) => field.name), 'owner_id', 'created_at'] : [];
   const maxOffset = page ? Math.max(0, Math.floor(Math.max(0, page.total - 1) / PAGE_SIZE) * PAGE_SIZE) : 0;
+  const masked: Readonly<Record<string, AppSensitiveKind>> = page?.masked ?? {};
   const applySort = (column: string): void => {
     setSort((current) => current.column === column
       ? { column, dir: current.dir === 'asc' ? 'desc' : 'asc' }
@@ -167,138 +185,179 @@ export function AppDataExplorer({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-background">
-      <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-3 py-2">
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-          {tables.map((table) => (
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+      <aside className="shrink-0 overflow-hidden rounded-xl border bg-background lg:w-60">
+        <div className="flex items-center gap-1.5 border-b px-2.5 py-2">
+          <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border px-2">
+            <Search className="size-3.5 shrink-0 text-muted-foreground" />
+            <input
+              value={tableSearch}
+              onChange={(event) => setTableSearch(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              placeholder="Поиск таблиц…"
+            />
+          </label>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-pressed={alphabetical}
+            title={alphabetical ? 'Порядок схемы' : 'Сортировка А–Я'}
+            onClick={() => setAlphabetical((value) => !value)}
+          >
+            {alphabetical ? <ArrowDownAZ className="size-4" /> : <ListOrdered className="size-4" />}
+            <span className="sr-only">{alphabetical ? 'Вернуть порядок схемы' : 'Сортировать таблицы А–Я'}</span>
+          </Button>
+        </div>
+        <div className="max-h-[320px] overflow-y-auto p-1.5 lg:max-h-[560px]">
+          {visibleTables.length === 0 ? (
+            <p className="px-2 py-6 text-center text-xs text-muted-foreground">Таблицы не найдены.</p>
+          ) : visibleTables.map((table) => (
             <button
               key={table.name}
               type="button"
               onClick={() => { setSelectedTableName(table.name); setFilters([]); setOffset(0); }}
-              className={cn('inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors', selectedTable?.name === table.name ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')}
+              className={cn('flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors', selectedTable?.name === table.name ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')}
             >
-              <Database className="size-3.5" />{table.name}
+              <Database className="size-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{table.name}</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">{table.fields.length}</span>
             </button>
           ))}
         </div>
-        <span className="hidden h-5 w-px bg-border sm:block" />
-        <label className="flex h-9 min-w-[180px] flex-1 items-center gap-2 rounded-md border px-2.5 sm:max-w-xs">
-          <Search className="size-3.5 text-muted-foreground" />
-          <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Поиск по полям…" />
-          {searchDraft && <button type="button" onClick={() => setSearchDraft('')} aria-label="Очистить поиск"><X className="size-3.5 text-muted-foreground" /></button>}
-        </label>
+      </aside>
+
+      <div className="min-w-0 flex-1 overflow-hidden rounded-xl border bg-background">
+        <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-3 py-2">
+          <span className="min-w-0 truncate text-sm font-semibold">{selectedTable?.name ?? '—'}{page ? ` (${page.total})` : ''}</span>
+          <span className="hidden h-5 w-px bg-border sm:block" />
+          <label className="flex h-9 min-w-[180px] flex-1 items-center gap-2 rounded-md border px-2.5 sm:max-w-xs">
+            <Search className="size-3.5 text-muted-foreground" />
+            <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Поиск по полям…" />
+            {searchDraft && <button type="button" onClick={() => setSearchDraft('')} aria-label="Очистить поиск"><X className="size-3.5 text-muted-foreground" /></button>}
+          </label>
+          {selectedTable && (
+            <>
+              <FilterPopover table={selectedTable} masked={masked} filters={filters} onChange={(next) => { setFilters(next); setOffset(0); }} />
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setPermissionsOpen(true)}><ShieldCheck className="size-3.5" /><span className="hidden sm:inline">Права</span></Button>
+              {canEdit && <Button size="sm" className="h-9 gap-1.5" onClick={() => setEditingRow('new')}><Plus className="size-3.5" />Запись</Button>}
+            </>
+          )}
+        </div>
+
+        {filters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/15 px-3 py-2">
+            {filters.map((filter, index) => (
+              <span key={`${filter.column}-${index}`} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
+                {filter.column} · {OPERATOR_LABEL[filter.operator]}{filter.value !== undefined ? ` · ${String(filter.value)}` : ''}
+                <button type="button" onClick={() => setFilters(filters.filter((_, item) => item !== index))} aria-label="Убрать фильтр"><X className="size-3" /></button>
+              </span>
+            ))}
+            <button type="button" className="px-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setFilters([])}>Очистить</button>
+          </div>
+        )}
+
+        <div className="relative min-h-[430px] overflow-auto">
+          {loading && <div className="absolute inset-x-0 top-0 z-20 flex h-1 overflow-hidden bg-muted"><span className="h-full w-1/3 animate-pulse bg-primary" /></div>}
+          {error ? (
+            <div className="grid min-h-[430px] place-items-center text-center text-sm text-muted-foreground"><div><p>{error}</p><Button className="mt-3" variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}>Повторить</Button></div></div>
+          ) : (
+            <table className="w-max min-w-full border-collapse text-sm">
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr>
+                  {columns.map((column, columnIndex) => (
+                    <th key={column} className={cn('min-w-[180px] border-b border-r px-3 py-2 text-left font-medium text-muted-foreground first:min-w-[220px]', columnIndex === 0 && 'sticky left-0 z-20 bg-background')}>
+                      <button type="button" className="flex w-full items-center gap-1.5 hover:text-foreground" onClick={() => applySort(column)}>
+                        {column === 'id' && <KeyRound className="size-3.5" />}
+                        {masked[column] && <Lock className="size-3 text-amber-600" aria-label="Значения скрыты" />}
+                        {column}
+                        {sort.column === column && (sort.dir === 'asc' ? <ArrowUp className="ml-auto size-3.5" /> : <ArrowDown className="ml-auto size-3.5" />)}
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && (page?.rows.length ?? 0) === 0 ? (
+                  <tr><td colSpan={columns.length} className="h-64 text-center text-sm text-muted-foreground">{filters.length || search ? 'По вашему запросу ничего не найдено.' : 'В таблице пока нет записей.'}</td></tr>
+                ) : page?.rows.map((row, rowIndex) => (
+                  <tr
+                    key={String(row.id ?? rowIndex)}
+                    tabIndex={0}
+                    aria-label={`Открыть запись ${String(row.id ?? rowIndex + 1)}`}
+                    className="group cursor-pointer hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={() => setEditingRow(row)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
+                      setEditingRow(row);
+                    }}
+                  >
+                    {columns.map((column, columnIndex) => {
+                      const field = selectedTable ? fieldForColumn(selectedTable, column) : null;
+                      return <td key={column} className={cn('max-w-[360px] border-b border-r px-3 py-2.5', columnIndex === 0 && 'sticky left-0 z-[5] bg-background group-hover:bg-muted/35 group-focus-visible:bg-muted/35')}><span className={cn('block truncate', row[column] === null || row[column] === undefined || row[column] === '' ? 'text-muted-foreground/60' : 'text-foreground')}>{displayValue(row[column], field)}</span></td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="flex min-h-12 items-center justify-between gap-3 border-t px-3 text-xs text-muted-foreground">
+          <span>{page ? `${page.total} ${page.total === 1 ? 'запись' : 'записей'}` : '—'}</span>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="size-8" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}><ChevronLeft className="size-4" /><span className="sr-only">Предыдущая страница</span></Button>
+            <span className="min-w-16 text-center">{Math.floor(offset / PAGE_SIZE) + 1} / {Math.max(1, Math.ceil((page?.total ?? 0) / PAGE_SIZE))}</span>
+            <Button variant="ghost" size="icon" className="size-8" disabled={offset >= maxOffset || loading} onClick={() => setOffset(Math.min(maxOffset, offset + PAGE_SIZE))}><ChevronRight className="size-4" /><span className="sr-only">Следующая страница</span></Button>
+          </div>
+        </div>
+
         {selectedTable && (
           <>
-            <FilterPopover table={selectedTable} filters={filters} onChange={(next) => { setFilters(next); setOffset(0); }} />
-            <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setPermissionsOpen(true)}><ShieldCheck className="size-3.5" /><span className="hidden sm:inline">Права</span></Button>
-            {canEdit && <Button size="sm" className="h-9 gap-1.5" onClick={() => setEditingRow('new')}><Plus className="size-3.5" />Запись</Button>}
+            <RowEditorSheet
+              open={editingRow !== null}
+              row={editingRow}
+              table={selectedTable}
+              masked={masked}
+              canEdit={canEdit}
+              projectId={projectId}
+              onOpenChange={(open) => { if (!open) setEditingRow(null); }}
+              onSaved={() => { setEditingRow(null); setReload((value) => value + 1); }}
+            />
+            <PermissionsDialog
+              open={permissionsOpen}
+              onOpenChange={setPermissionsOpen}
+              projectId={projectId}
+              table={selectedTable}
+              canEdit={canEdit}
+              onSaved={(rules) => {
+                if (!dashboard.schema) return;
+                onDashboardChange({
+                  ...dashboard,
+                  schema: { tables: dashboard.schema.tables.map((table) => table.name === selectedTable.name ? { ...table, rules: { read: rules.read, write: rules.update, create: rules.create, update: rules.update, delete: rules.delete } } : table) },
+                });
+              }}
+            />
           </>
         )}
       </div>
-
-      {filters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/15 px-3 py-2">
-          {filters.map((filter, index) => (
-            <span key={`${filter.column}-${index}`} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
-              {filter.column} · {OPERATOR_LABEL[filter.operator]}{filter.value !== undefined ? ` · ${String(filter.value)}` : ''}
-              <button type="button" onClick={() => setFilters(filters.filter((_, item) => item !== index))} aria-label="Убрать фильтр"><X className="size-3" /></button>
-            </span>
-          ))}
-          <button type="button" className="px-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setFilters([])}>Очистить</button>
-        </div>
-      )}
-
-      <div className="relative min-h-[430px] overflow-auto">
-        {loading && <div className="absolute inset-x-0 top-0 z-20 flex h-1 overflow-hidden bg-muted"><span className="h-full w-1/3 animate-pulse bg-primary" /></div>}
-        {error ? (
-          <div className="grid min-h-[430px] place-items-center text-center text-sm text-muted-foreground"><div><p>{error}</p><Button className="mt-3" variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}>Повторить</Button></div></div>
-        ) : (
-          <table className="w-max min-w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr>
-                {columns.map((column, columnIndex) => (
-                  <th key={column} className={cn('min-w-[180px] border-b border-r px-3 py-2 text-left font-medium text-muted-foreground first:min-w-[220px]', columnIndex === 0 && 'sticky left-0 z-20 bg-background')}>
-                    <button type="button" className="flex w-full items-center gap-1.5 hover:text-foreground" onClick={() => applySort(column)}>
-                      {column === 'id' && <KeyRound className="size-3.5" />}{column}
-                      {sort.column === column && (sort.dir === 'asc' ? <ArrowUp className="ml-auto size-3.5" /> : <ArrowDown className="ml-auto size-3.5" />)}
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && (page?.rows.length ?? 0) === 0 ? (
-                <tr><td colSpan={columns.length} className="h-64 text-center text-sm text-muted-foreground">{filters.length || search ? 'По вашему запросу ничего не найдено.' : 'В таблице пока нет записей.'}</td></tr>
-              ) : page?.rows.map((row, rowIndex) => (
-                <tr
-                  key={String(row.id ?? rowIndex)}
-                  tabIndex={0}
-                  aria-label={`Открыть запись ${String(row.id ?? rowIndex + 1)}`}
-                  className="group cursor-pointer hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  onClick={() => setEditingRow(row)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                    event.preventDefault();
-                    setEditingRow(row);
-                  }}
-                >
-                  {columns.map((column, columnIndex) => {
-                    const field = selectedTable ? fieldForColumn(selectedTable, column) : null;
-                    return <td key={column} className={cn('max-w-[360px] border-b border-r px-3 py-2.5', columnIndex === 0 && 'sticky left-0 z-[5] bg-background group-hover:bg-muted/35 group-focus-visible:bg-muted/35')}><span className={cn('block truncate', row[column] === null || row[column] === undefined || row[column] === '' ? 'text-muted-foreground/60' : 'text-foreground')}>{displayValue(row[column], field)}</span></td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="flex min-h-12 items-center justify-between gap-3 border-t px-3 text-xs text-muted-foreground">
-        <span>{page ? `${page.total} ${page.total === 1 ? 'запись' : 'записей'}` : '—'}</span>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="size-8" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}><ChevronLeft className="size-4" /><span className="sr-only">Предыдущая страница</span></Button>
-          <span className="min-w-16 text-center">{Math.floor(offset / PAGE_SIZE) + 1} / {Math.max(1, Math.ceil((page?.total ?? 0) / PAGE_SIZE))}</span>
-          <Button variant="ghost" size="icon" className="size-8" disabled={offset >= maxOffset || loading} onClick={() => setOffset(Math.min(maxOffset, offset + PAGE_SIZE))}><ChevronRight className="size-4" /><span className="sr-only">Следующая страница</span></Button>
-        </div>
-      </div>
-
-      {selectedTable && (
-        <>
-          <RowEditorSheet
-            open={editingRow !== null}
-            row={editingRow}
-            table={selectedTable}
-            canEdit={canEdit}
-            projectId={projectId}
-            onOpenChange={(open) => { if (!open) setEditingRow(null); }}
-            onSaved={() => { setEditingRow(null); setReload((value) => value + 1); }}
-          />
-          <PermissionsDialog
-            open={permissionsOpen}
-            onOpenChange={setPermissionsOpen}
-            projectId={projectId}
-            table={selectedTable}
-            canEdit={canEdit}
-            onSaved={(rules) => {
-              if (!dashboard.schema) return;
-              onDashboardChange({
-                ...dashboard,
-                schema: { tables: dashboard.schema.tables.map((table) => table.name === selectedTable.name ? { ...table, rules: { read: rules.read, write: rules.update, create: rules.create, update: rules.update, delete: rules.delete } } : table) },
-              });
-            }}
-          />
-        </>
-      )}
     </div>
   );
 }
 
-function FilterPopover({ table, filters, onChange }: { table: AppTableSchema; filters: AppDataFilter[]; onChange: (filters: AppDataFilter[]) => void }): React.ReactElement {
+function FilterPopover({ table, masked, filters, onChange }: { table: AppTableSchema; masked: Readonly<Record<string, AppSensitiveKind>>; filters: AppDataFilter[]; onChange: (filters: AppDataFilter[]) => void }): React.ReactElement {
   const columns = [...SYSTEM_COLUMNS, ...table.fields.map((field) => field.name)];
   const [open, setOpen] = useState(false);
   const [column, setColumn] = useState(table.fields[0]?.name ?? 'id');
   const field = fieldForColumn(table, column);
-  const availableOperators = operatorsFor(field);
+  // Секретную колонку сервер разрешает фильтровать только по заполненности — не предлагаем
+  // операторы, на которых запрос гарантированно упадёт.
+  const secretColumn = masked[column] === 'secret';
+  const availableOperators = useMemo(
+    () => (secretColumn ? (['is_empty', 'is_not_empty'] as AppFilterOperator[]) : operatorsFor(field)),
+    [field, secretColumn],
+  );
   const [operator, setOperator] = useState<AppFilterOperator>(availableOperators[0] ?? 'eq');
   const [value, setValue] = useState('');
   useEffect(() => { if (!availableOperators.includes(operator)) setOperator(availableOperators[0] ?? 'eq'); }, [availableOperators, operator]);
@@ -325,19 +384,30 @@ function FilterPopover({ table, filters, onChange }: { table: AppTableSchema; fi
   );
 }
 
-function RowEditorSheet({ open, onOpenChange, row, table, canEdit, projectId, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; row: AppDataRow | 'new' | null; table: AppTableSchema; canEdit: boolean; projectId: string; onSaved: () => void }): React.ReactElement {
+function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, projectId, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; row: AppDataRow | 'new' | null; table: AppTableSchema; masked: Readonly<Record<string, AppSensitiveKind>>; canEdit: boolean; projectId: string; onSaved: () => void }): React.ReactElement {
   const { projectRepository } = useContainer();
   const isNew = row === 'new';
   const existingRow = row !== null && typeof row === 'object' ? row : null;
   const [values, setValues] = useState<AppDataRow>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [revealing, setRevealing] = useState<string | null>(null);
   useEffect(() => {
     const next: AppDataRow = {};
     for (const field of table.fields) next[field.name] = existingRow ? existingRow[field.name] ?? '' : field.type === 'bool' ? false : '';
     setValues(next);
     setConfirmDelete(false);
+    setRevealing(null);
   }, [existingRow, table]);
+  const reveal = async (column: string): Promise<void> => {
+    if (!existingRow) return;
+    setRevealing(column);
+    try {
+      const value = await projectRepository.revealAppRowValue(projectId, table.name, String(existingRow.id), column);
+      setValues((current) => ({ ...current, [column]: value ?? '' }));
+    } catch { toast.error('Не удалось раскрыть значение. Нужны права редактора проекта.'); }
+    finally { setRevealing(null); }
+  };
   const save = async (): Promise<void> => {
     if (!canEdit || !row) return;
     setSaving(true);
@@ -364,7 +434,18 @@ function RowEditorSheet({ open, onOpenChange, row, table, canEdit, projectId, on
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {existingRow && SYSTEM_COLUMNS.map((column) => <div key={column} className="grid gap-1 sm:grid-cols-[140px_1fr]"><span className="text-xs font-medium text-muted-foreground">{column}</span><span className="break-all text-sm">{displayValue(existingRow[column], null)}</span></div>)}
             {!isNew && <div className="border-t" />}
-            {table.fields.map((field) => <FieldEditor key={field.name} field={field} value={values[field.name]} disabled={!canEdit || saving} onChange={(value) => setValues((current) => ({ ...current, [field.name]: value }))} />)}
+            {table.fields.map((field) => (
+              <FieldEditor
+                key={field.name}
+                field={field}
+                value={values[field.name]}
+                sensitive={masked[field.name] ?? null}
+                revealing={revealing === field.name}
+                onReveal={!isNew && existingRow ? () => void reveal(field.name) : null}
+                disabled={!canEdit || saving}
+                onChange={(value) => setValues((current) => ({ ...current, [field.name]: value }))}
+              />
+            ))}
           </div>
           <div className="flex items-center justify-between border-t px-5 py-3">
             {!isNew && canEdit ? <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)} disabled={saving}><Trash2 className="mr-1.5 size-4" />Удалить</Button> : <span />}
@@ -377,8 +458,24 @@ function RowEditorSheet({ open, onOpenChange, row, table, canEdit, projectId, on
   );
 }
 
-function FieldEditor({ field, value, disabled, onChange }: { field: AppField; value: unknown; disabled: boolean; onChange: (value: unknown) => void }): React.ReactElement {
-  const label = <span className="text-sm font-medium">{field.name}{field.required && <span className="ml-0.5 text-destructive">*</span>}<span className="ml-2 text-xs font-normal text-muted-foreground">{field.type}{field.unique ? ' · unique' : ''}</span></span>;
+function FieldEditor({ field, value, sensitive, revealing, onReveal, disabled, onChange }: { field: AppField; value: unknown; sensitive: AppSensitiveKind | null; revealing: boolean; onReveal: (() => void) | null; disabled: boolean; onChange: (value: unknown) => void }): React.ReactElement {
+  const label = (
+    <span className="flex items-center gap-1.5 text-sm font-medium">
+      {sensitive && <Lock className="size-3 text-amber-600" />}
+      {field.name}{field.required && <span className="ml-0.5 text-destructive">*</span>}
+      <span className="text-xs font-normal text-muted-foreground">{field.type}{field.unique ? ' · unique' : ''}</span>
+      {sensitive && (
+        <span className="text-xs font-normal text-amber-700 dark:text-amber-500">
+          {sensitive === 'secret' ? '· секрет, скрыт' : '· персональные данные, скрыты'}
+        </span>
+      )}
+      {sensitive && onReveal && (
+        <button type="button" onClick={onReveal} disabled={revealing} className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground">
+          {revealing ? <Loader2 className="size-3 animate-spin" /> : <Eye className="size-3" />}Показать
+        </button>
+      )}
+    </span>
+  );
   if (field.type === 'bool') {
     const checked = value === true;
     return <label className="flex items-center justify-between rounded-lg border px-3 py-3">{label}<button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={cn('relative h-6 w-11 rounded-full transition-colors', checked ? 'bg-primary' : 'bg-muted')}><span className={cn('absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} /></button></label>;
