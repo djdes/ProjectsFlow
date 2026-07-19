@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Archive, MoreHorizontal, Pencil, Plus, Search, Sparkles } from 'lucide-react';
+import { Archive, ChevronRight, FolderKanban, MoreHorizontal, Pencil, Plus, Search, Sparkles } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { AiConversation } from '@/domain/ai-chat/AiConversation';
 import { useAiConversations, announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
@@ -41,14 +41,31 @@ function groupConversations(items: AiConversation[]): Group[] {
     .filter((group) => group.items.length > 0);
 }
 
+function conversationAge(conversation: AiConversation): string {
+  const value = new Date(conversation.lastMessageAt ?? conversation.updatedAt);
+  const delta = Date.now() - value.getTime();
+  const minutes = Math.max(0, Math.floor(delta / 60_000));
+  if (minutes < 1) return 'сейчас';
+  if (minutes < 60) return `${minutes} мин`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ч`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} д`;
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(value);
+}
+
 export function AiConversationListPanel(): React.ReactElement {
   const { aiConversationRepository } = useContainer();
   const { items, loading, error } = useAiConversations();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   const filtered = useMemo(() => items.filter((item) => item.title.toLocaleLowerCase('ru').includes(search.trim().toLocaleLowerCase('ru'))), [items, search]);
-  const groups = useMemo(() => groupConversations(filtered), [filtered]);
+  const personalItems = useMemo(() => filtered.filter((item) => item.kind === 'personal'), [filtered]);
+  const projectItems = useMemo(() => filtered.filter((item) => item.kind === 'project_studio'), [filtered]);
+  const groups = useMemo(() => groupConversations(personalItems), [personalItems]);
+  const showProjects = projectsOpen || search.trim().length > 0;
 
   const create = async (): Promise<void> => {
     if (busy) return;
@@ -66,7 +83,7 @@ export function AiConversationListPanel(): React.ReactElement {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-1 pb-2">
         <div className="grid size-7 place-items-center rounded-lg bg-foreground text-background"><Sparkles className="size-4" /></div>
-        <div className="min-w-0 flex-1 truncate text-sm font-semibold">ИИ</div>
+        <div className="min-w-0 flex-1 truncate text-sm font-semibold">Мои ИИ-чаты</div>
         <button type="button" onClick={() => void create()} disabled={busy} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-hover hover:text-foreground" aria-label="Новый чат">
           <Plus className="size-4" />
         </button>
@@ -81,7 +98,7 @@ export function AiConversationListPanel(): React.ReactElement {
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
         {loading && <div className="space-y-1 py-1">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-8 animate-pulse rounded-lg bg-muted" />)}</div>}
         {!loading && error && <p className="px-2 py-4 text-xs text-destructive">Не удалось загрузить чаты.</p>}
-        {!loading && !error && groups.length === 0 && <p className="px-2 py-5 text-xs leading-5 text-muted-foreground">Здесь появятся ваши разговоры с ИИ и чаты проектов.</p>}
+        {!loading && !error && groups.length === 0 && <p className="px-2 py-5 text-xs leading-5 text-muted-foreground">{search.trim() ? 'Личные чаты не найдены.' : 'Создайте личный чат — он будет всегда под рукой.'}</p>}
         {groups.map((group) => (
           <section key={group.label} className="mb-3">
             <h3 className="px-2 pb-1 pt-1 text-[11px] font-medium text-muted-foreground">{group.label}</h3>
@@ -90,12 +107,32 @@ export function AiConversationListPanel(): React.ReactElement {
             </div>
           </section>
         ))}
+        {!loading && !error && projectItems.length > 0 && (
+          <section className="mt-3 border-t pt-2">
+            <button
+              type="button"
+              aria-expanded={showProjects}
+              onClick={() => setProjectsOpen((value) => !value)}
+              className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition hover:bg-hover hover:text-foreground"
+            >
+              <ChevronRight className={cn('size-3.5 transition-transform', showProjects && 'rotate-90')} />
+              <FolderKanban className="size-3.5" />
+              <span className="min-w-0 flex-1 truncate text-left">Чаты проектов</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{projectItems.length}</span>
+            </button>
+            {showProjects && (
+              <div className="mt-1 space-y-0.5 pl-2">
+                {projectItems.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} project />)}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
 }
 
-function ConversationRow({ conversation }: { conversation: AiConversation }): React.ReactElement {
+function ConversationRow({ conversation, project = false }: { conversation: AiConversation; project?: boolean }): React.ReactElement {
   const { aiConversationRepository } = useContainer();
   const [renameOpen, setRenameOpen] = useState(false);
   const [title, setTitle] = useState(conversation.title);
@@ -146,8 +183,9 @@ function ConversationRow({ conversation }: { conversation: AiConversation }): Re
           title={conversation.title}
           className={({ isActive }) => cn('flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 pr-8 text-xs transition hover:bg-hover', isActive && 'bg-active font-medium')}
         >
-          <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+          {project ? <FolderKanban className="size-3.5 shrink-0 text-muted-foreground" /> : <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />}
           <span className="min-w-0 truncate">{conversation.title}</span>
+          <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground transition group-hover:opacity-0">{conversationAge(conversation)}</span>
         </NavLink>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
