@@ -48,7 +48,7 @@ export function StudioChatPane({
           splitPane.dragging && 'select-none',
         )}
       >
-        <div style={{ width: splitPane.width }} className="relative flex h-full min-h-0 flex-col">
+        <div style={splitPane.contentStyle} className="relative flex h-full min-h-0 flex-col">
           <header className="flex h-11 shrink-0 items-center gap-1 border-b px-2">
             <Button
               type="button"
@@ -73,9 +73,10 @@ export function StudioChatPane({
                 {dashboardLinks.map(({ label, section, icon: Icon }) => <DropdownMenuItem key={section} onSelect={() => onOpenDashboardSection(section)}><Icon />{label}</DropdownMenuItem>)}
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* Как в Base44: статус сохранения стоит сразу за названием проекта. */}
-            <SaveStatusIndicator state={saveState} />
             <span className="min-w-0 flex-1" aria-hidden />
+            {/* Как в Base44: статус сохранения прижат к правому краю, первым в группе
+                иконок — сразу перед сменой темы. */}
+            <SaveStatusIndicator state={saveState} />
             <Popover open={themeOpen} onOpenChange={setThemeOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Тема проекта"><Palette className="size-4" /></Button>

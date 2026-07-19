@@ -73,7 +73,9 @@ export function SaveStatusIndicator({ state }: { state: StudioSaveState }): Reac
       <TooltipTrigger asChild>
         <span
           className={cn(
-            'grid size-[30px] shrink-0 place-items-center rounded-md',
+            // size-8, как у соседних кнопок хедера (тема, скрыть панель) — иначе
+            // индикатор не встаёт с ними на одну линию.
+            'grid size-8 shrink-0 place-items-center rounded-md',
             tone === 'error' ? 'text-destructive' : tone === 'dirty' ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground',
           )}
           role="status"

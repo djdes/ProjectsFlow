@@ -5,6 +5,17 @@ const MIN_WIDTH = 280;
 const MAX_WIDTH = 560;
 const STORAGE_KEY = 'pf:project-studio:chat-width';
 
+// Ширину панели держим в CSS-переменной, а не только в React-стейте. Во время
+// перетаскивания это принципиально: setState на каждый pointermove перерисовывал всю
+// панель вместе с деревом чата, из-за чего ресайз ощутимо лагал. Теперь при драге мы
+// пишем только переменную (кадр в rAF), а React-стейт обновляем один раз — на отпускании.
+const CSS_VAR = '--pf-studio-chat-width';
+
+function applyWidthVar(px: number): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty(CSS_VAR, `${px}px`);
+}
+
 function clampWidth(value: number): number {
   const viewportMaximum = typeof window === 'undefined'
     ? MAX_WIDTH
@@ -23,6 +34,7 @@ export type StudioSplitPane = {
   readonly hidden: boolean;
   readonly dragging: boolean;
   readonly paneStyle: React.CSSProperties;
+  readonly contentStyle: React.CSSProperties;
   readonly separatorProps: React.HTMLAttributes<HTMLDivElement> & {
     role: 'separator';
     tabIndex: number;
@@ -41,8 +53,13 @@ export function useStudioSplitPane(): StudioSplitPane {
   const [hidden, setHidden] = useState(false);
   const [dragging, setDragging] = useState(false);
   const widthRef = useRef(width);
+  const frameRef = useRef<number | null>(null);
 
   useEffect(() => { widthRef.current = width; }, [width]);
+
+  // Синхронизируем переменную со стейтом при монтировании и при «дискретных» изменениях
+  // (клавиатура, resize окна, double-click). При драге переменную ведёт сам обработчик.
+  useEffect(() => { applyWidthVar(width); }, [width]);
 
   useEffect(() => {
     const onResize = (): void => setWidth((current) => clampWidth(current));
@@ -65,6 +82,7 @@ export function useStudioSplitPane(): StudioSplitPane {
   const commitWidth = useCallback((next: number): void => {
     const clamped = clampWidth(next);
     widthRef.current = clamped;
+    applyWidthVar(clamped);
     setWidth(clamped);
     try { window.localStorage.setItem(STORAGE_KEY, String(clamped)); } catch { /* storage is optional */ }
   }, []);
@@ -76,11 +94,25 @@ export function useStudioSplitPane(): StudioSplitPane {
     const startWidth = widthRef.current;
     setDragging(true);
 
+    // Во время драга НЕ дёргаем setState и localStorage — только CSS-переменную, не чаще
+    // кадра. Иначе каждое движение мыши перерисовывало панель с чатом и писало на диск.
     const onMove = (moveEvent: PointerEvent): void => {
-      commitWidth(startWidth + moveEvent.clientX - startX);
+      const next = clampWidth(startWidth + moveEvent.clientX - startX);
+      widthRef.current = next;
+      if (frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        applyWidthVar(widthRef.current);
+      });
     };
     const onEnd = (): void => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
       setDragging(false);
+      // Единственная за весь драг синхронизация стейта и localStorage.
+      commitWidth(widthRef.current);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onEnd);
       window.removeEventListener('pointercancel', onEnd);
@@ -119,9 +151,12 @@ export function useStudioSplitPane(): StudioSplitPane {
     hidden,
     dragging,
     paneStyle: {
-      width: hidden ? 0 : width,
+      width: hidden ? 0 : `var(${CSS_VAR}, ${DEFAULT_WIDTH}px)`,
       transition: dragging ? 'none' : 'width 500ms cubic-bezier(0.4, 0, 0.2, 1)',
     },
+    // Внутреннее содержимое держит ширину само, чтобы при сворачивании панели текст
+    // не переливался. Тоже от переменной — иначе драг снова упрётся в ре-рендер.
+    contentStyle: { width: `var(${CSS_VAR}, ${DEFAULT_WIDTH}px)` },
     separatorProps,
     setHidden,
     toggle: () => setHidden((current) => !current),
