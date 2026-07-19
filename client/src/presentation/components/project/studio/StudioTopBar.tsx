@@ -9,7 +9,6 @@ export type StudioPanel = 'preview' | 'dashboard';
 export function StudioTopBar({
   panel,
   projectId,
-  projectName,
   actions,
   chatHidden,
   onPanelChange,
@@ -19,7 +18,6 @@ export function StudioTopBar({
 }: {
   panel: StudioPanel;
   projectId: string;
-  projectName: string;
   actions?: React.ReactNode;
   chatHidden: boolean;
   onPanelChange: (panel: StudioPanel) => void;
@@ -100,9 +98,7 @@ export function StudioTopBar({
     <header className="flex h-[52px] shrink-0 items-center gap-2 border-b bg-background px-2 sm:px-3">
       {leading}
 
-      <p className="min-w-0 flex-1 truncate px-1 text-center text-xs text-muted-foreground sm:text-sm">
-        {projectName}
-      </p>
+      <span className="min-w-0 flex-1" aria-hidden />
       {trailing}
     </header>
   );

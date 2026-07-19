@@ -10,7 +10,7 @@ import {
   Loader2,
   Megaphone,
   Plug,
-  RefreshCw,
+  Search,
   Settings2,
   ShieldCheck,
   Users,
@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useContainer } from "@/infrastructure/di/container";
 import { cn } from "@/lib/utils";
+import { useProjectsContext } from "@/presentation/hooks/ProjectsProvider";
 import type { Project } from "@/domain/project/Project";
 import type { ProjectMember } from "@/domain/project/ProjectMembership";
 import type { ProjectAnalytics } from "@/domain/project/ProjectAnalytics";
@@ -90,6 +91,7 @@ export function ProjectDashboard({
   fillAvailable = false,
 }: ProjectDashboardProps): React.ReactElement {
   const { projectRepository } = useContainer();
+  const { applyToggleFavorite } = useProjectsContext();
   const [section, setSection] = useState<DashboardSection>(() =>
     resolveDashboardSection(initialSection),
   );
@@ -102,6 +104,7 @@ export function ProjectDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
+  const [sectionQuery, setSectionQuery] = useState("");
   const panelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -197,17 +200,33 @@ export function ProjectDashboard({
     onProjectUpdated: setCurrentProject,
     onDashboardSettingsUpdated: setDashboardSettings,
     onRefresh: () => setReload((value) => value + 1),
+    onToggleFavorite: async (favorite) => {
+      await projectRepository.toggleFavorite(currentProject.id, favorite);
+      applyToggleFavorite(currentProject.id, favorite);
+      setCurrentProject((value) => ({ ...value, isFavorite: favorite }));
+    },
   };
+
+  const visibleSections = DASHBOARD_SECTIONS.filter((item) =>
+    item.label.toLocaleLowerCase("ru-RU").includes(sectionQuery.trim().toLocaleLowerCase("ru-RU")),
+  );
 
   return (
     <div className={cn('overflow-hidden bg-muted/10', fillAvailable ? 'h-full' : 'rounded-xl border')}>
       <div className={cn('flex min-h-0 flex-col md:flex-row', fillAvailable ? 'h-full' : 'h-[clamp(620px,74vh,840px)]')}>
-        <aside className="hidden w-52 shrink-0 overflow-y-auto overscroll-contain border-r bg-background p-2 md:flex md:flex-col">
-          <p className="px-2 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Dashboard
-          </p>
+        <aside className="hidden w-60 shrink-0 overflow-y-auto overscroll-contain border-r bg-background p-3 md:flex md:flex-col">
+          <label className="relative mb-3 block">
+            <span className="sr-only">Найти раздел Dashboard</span>
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={sectionQuery}
+              onChange={(event) => setSectionQuery(event.target.value)}
+              placeholder="Поиск…"
+              className="h-9 w-full rounded-lg border-0 bg-muted/60 pl-8 pr-3 text-sm outline-none transition focus:bg-muted focus:ring-2 focus:ring-ring/25"
+            />
+          </label>
           <nav className="space-y-0.5" aria-label="Разделы Dashboard">
-            {DASHBOARD_SECTIONS.map(({ id, label, icon }) => {
+            {visibleSections.map(({ id, label, icon }) => {
               const Icon = SECTION_ICON[icon];
               return (
                 <button
@@ -227,11 +246,11 @@ export function ProjectDashboard({
                 </button>
               );
             })}
+            {visibleSections.length === 0 && (
+              <p className="px-2 py-4 text-center text-xs text-muted-foreground">Разделы не найдены</p>
+            )}
           </nav>
           <div className="mt-auto border-t px-2 pt-3 text-xs text-muted-foreground">
-            <p className="truncate font-medium text-foreground">
-              {currentProject.name}
-            </p>
             <p className="mt-1">
               {dashboard.status === "active"
                 ? `${dashboard.schema?.tables.length ?? 0} таблиц`
@@ -258,15 +277,6 @@ export function ProjectDashboard({
                 ))}
               </select>
             </label>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-11"
-              onClick={() => setReload((value) => value + 1)}
-              aria-label="Обновить Dashboard"
-            >
-              <RefreshCw className="size-4" />
-            </Button>
           </div>
           <main
             ref={panelRef}

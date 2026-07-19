@@ -216,7 +216,6 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
           <StudioTopBar
             panel={panel}
             projectId={data.project.id}
-            projectName={data.project.name}
             actions={(
               <>
                 <ProjectActivityButton
@@ -249,7 +248,6 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
             <StudioTopBar
               panel={panel}
               projectId={data.project.id}
-              projectName={data.project.name}
               chatHidden={splitPane.hidden}
               onPanelChange={panelChange}
               onShowChat={() => splitPane.setHidden(false)}
@@ -261,7 +259,6 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
             <StudioTopBar
               panel={panel}
               projectId={data.project.id}
-              projectName={data.project.name}
               actions={(
                 <>
                   <ProjectActivityButton

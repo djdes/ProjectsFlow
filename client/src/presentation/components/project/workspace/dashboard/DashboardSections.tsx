@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bot,
   CheckCircle2,
+  Check,
   CircleDashed,
   Copy,
   Database,
@@ -13,15 +14,18 @@ import {
   Globe2,
   Link2,
   Loader2,
+  Pencil,
   Plug,
   RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
+  Star,
   Trash2,
   UserPlus,
   Users,
   Workflow,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
@@ -50,6 +54,7 @@ import {
 } from "./dashboardConfig";
 import { RepositoryCodeEditor } from "./RepositoryCodeEditor";
 import { DeleteProjectDialog } from "@/presentation/components/project/DeleteProjectDialog";
+import { ProjectIconPicker } from "@/presentation/components/project/ProjectIconPicker";
 
 export type DashboardContentProps = {
   readonly project: Project;
@@ -64,6 +69,7 @@ export type DashboardContentProps = {
   readonly onProjectUpdated: (project: Project) => void;
   readonly onDashboardSettingsUpdated: (settings: AppDashboardSettings) => void;
   readonly onRefresh: () => void;
+  readonly onToggleFavorite: (favorite: boolean) => Promise<void>;
 };
 
 function SectionHeader({
@@ -137,10 +143,16 @@ export function OverviewSection({
   dashboard,
   site,
   members,
-  dashboardSettings,
+  canEdit,
   onOpenPreview,
-  onRefresh,
+  onProjectUpdated,
+  onToggleFavorite,
 }: DashboardContentProps): React.ReactElement {
+  const { projectRepository } = useContainer();
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState(project.description ?? "");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const deployed = Boolean(site?.siteSlug && site.deployedAt);
   const url = site?.siteSlug ? siteResultUrl(site.siteSlug) : null;
   const usagePercent =
@@ -150,6 +162,39 @@ export function OverviewSection({
           (dashboard.usageBytes / dashboard.storageLimitBytes) * 100,
         )
       : 0;
+  useEffect(() => {
+    if (!editingDescription) setDescriptionDraft(project.description ?? "");
+  }, [editingDescription, project.description]);
+
+  const saveDescription = async (): Promise<void> => {
+    if (!canEdit || profileBusy) return;
+    setProfileBusy(true);
+    try {
+      const updated = await projectRepository.update(project.id, {
+        description: descriptionDraft.trim() || null,
+      });
+      onProjectUpdated(updated);
+      setEditingDescription(false);
+      toast.success("Описание сохранено");
+    } catch {
+      toast.error("Не удалось сохранить описание");
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
+  const toggleFavorite = async (): Promise<void> => {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    try {
+      await onToggleFavorite(!project.isFavorite);
+      toast.success(project.isFavorite ? "Убрано из избранного" : "Добавлено в избранное");
+    } catch {
+      toast.error("Не удалось изменить избранное");
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
   const copy = async (): Promise<void> => {
     if (!url) return;
     try {
@@ -162,26 +207,48 @@ export function OverviewSection({
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start gap-4">
-        <span
-          className="grid size-16 shrink-0 place-items-center rounded-2xl border bg-muted/35 text-3xl"
-          aria-hidden
-        >
-          {dashboardSettings.branding.logoUrl ? (
-            <img
-              src={dashboardSettings.branding.logoUrl}
-              alt=""
-              className="size-full rounded-2xl object-cover"
-            />
-          ) : (
-            (project.icon ?? "📦")
-          )}
+        <span className="grid size-16 shrink-0 place-items-center rounded-2xl border bg-muted/25">
+          <ProjectIconPicker
+            projectId={project.id}
+            icon={project.icon}
+            big
+            disabled={!canEdit}
+            onChanged={(icon) => onProjectUpdated({ ...project, icon })}
+          />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-2xl font-semibold">{project.name}</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {project.description ||
-              "Результат проекта, пользователи и данные приложения в одном месте."}
-          </p>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-2xl font-semibold">{project.name}</h2>
+            {canEdit && !editingDescription && (
+              <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Редактировать описание" onClick={() => setEditingDescription(true)}>
+                <Pencil className="size-4" />
+              </button>
+            )}
+          </div>
+          {editingDescription ? (
+            <div className="mt-2 flex max-w-2xl items-start gap-2">
+              <textarea
+                value={descriptionDraft}
+                onChange={(event) => setDescriptionDraft(event.target.value.slice(0, 500))}
+                rows={3}
+                autoFocus
+                placeholder="Коротко опишите приложение…"
+                className="min-h-20 flex-1 resize-y rounded-lg border bg-background px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-ring/25"
+              />
+              <div className="flex shrink-0 flex-col gap-1">
+                <Button type="button" size="icon" className="size-8" aria-label="Сохранить описание" disabled={profileBusy} onClick={() => void saveDescription()}>
+                  {profileBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Отменить" disabled={profileBusy} onClick={() => { setDescriptionDraft(project.description ?? ""); setEditingDescription(false); }}>
+                  <X className="size-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {project.description || "Результат проекта, пользователи и данные приложения в одном месте."}
+            </p>
+          )}
           <p className="mt-1 text-xs text-muted-foreground">
             Создан{" "}
             {new Intl.DateTimeFormat("ru-RU", { dateStyle: "long" }).format(
@@ -192,10 +259,12 @@ export function OverviewSection({
         <Button
           variant="ghost"
           size="icon"
-          onClick={onRefresh}
-          aria-label="Обновить Dashboard"
+          disabled={favoriteBusy}
+          onClick={() => void toggleFavorite()}
+          aria-label={project.isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
+          className={project.isFavorite ? "text-amber-500 hover:text-amber-600" : undefined}
         >
-          <RefreshCw className="size-4" />
+          <Star className={cn("size-5", project.isFavorite && "fill-current")} />
         </Button>
       </header>
       <div className="grid gap-3 lg:grid-cols-3">

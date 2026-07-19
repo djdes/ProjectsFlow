@@ -84,6 +84,8 @@ async function fileToIconDataUrl(file: File): Promise<string> {
 type Props = {
   projectId: string;
   icon: string | null;
+  onChanged?: (icon: string | null) => void;
+  disabled?: boolean;
   // Крупный вариант (для большого заголовка проекта в шапке страницы, Notion-style).
   big?: boolean;
   // 'inline' (по умолчанию) — квадрат-иконка рядом с заголовком. 'head' — текстовая кнопка
@@ -95,7 +97,7 @@ type Props = {
 // Иконка проекта рядом с заголовком. Клик открывает пикер с тремя вкладками (Notion-style):
 // «Эмодзи» (категории + недавние), «Иконки» (lucide), «Загрузить» (файл/ссылка). Сверху —
 // фильтр, справа — «случайная» и «убрать». Сама иконка занимает квадрат целиком.
-export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inline' }: Props): React.ReactElement {
+export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false, big = false, variant = 'inline' }: Props): React.ReactElement {
   const { submit, saving } = useUpdateProject();
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
@@ -103,11 +105,13 @@ export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inl
   const [query, setQuery] = useState('');
 
   const choose = async (next: string | null): Promise<void> => {
+    if (disabled) return;
     setOpen(false);
     if (next && next !== icon && isPlainEmoji(next)) setRecent(pushRecent(next));
     if (next === icon) return;
     try {
       await submit(projectId, { icon: next });
+      onChanged?.(next);
     } catch (e) {
       toast.error(`Не удалось сменить иконку: ${(e as Error).message}`);
     }
@@ -120,7 +124,7 @@ export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inl
           // Текстовая кнопка «Добавить иконку» для ряда hover-действий шапки (Notion-style).
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || disabled}
             aria-label="Добавить иконку проекта"
             className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
@@ -130,7 +134,7 @@ export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inl
         ) : (
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || disabled}
             aria-label={icon ? 'Сменить иконку проекта' : 'Добавить иконку проекта'}
             title="Иконка проекта"
             className={cn(
