@@ -1147,6 +1147,7 @@ export function KanbanBoard({
             высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
         <div
           ref={boardScrollRef}
+          data-pf-kanban-scroll
           className={cn(
             // items-start + full-bleed: ряд колонок во всю ширину окна; первая колонка
             // отступает на bleedPadClass (уезжает при скролле), последняя доходит до края.

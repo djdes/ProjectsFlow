@@ -45,13 +45,14 @@ function normalizeJobResultPatch(candidate: unknown): { kind: SitePatchKind; pay
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
   const patch = candidate as Record<string, unknown>;
   const kind = patch['kind'];
-  if (!['text', 'style', 'attribute', 'visibility', 'command'].includes(String(kind))) {
+  if (!['text', 'html', 'style', 'attribute', 'visibility', 'command'].includes(String(kind))) {
     throw new SiteEditorValidationError('Invalid result patch kind');
   }
   if (patch['payload'] && typeof patch['payload'] === 'object' && !Array.isArray(patch['payload'])) {
     return { kind: kind as SitePatchKind, payload: patch['payload'] as Record<string, unknown> };
   }
   if (kind === 'text' && typeof patch['value'] === 'string') return { kind, payload: { text: patch['value'] } };
+  if (kind === 'html' && typeof patch['value'] === 'string') return { kind, payload: { html: patch['value'] } };
   if (kind === 'style' && typeof patch['property'] === 'string' && typeof patch['value'] === 'string') {
     return { kind, payload: { styles: { [patch['property']]: patch['value'] } } };
   }

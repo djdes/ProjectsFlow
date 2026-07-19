@@ -6,12 +6,18 @@ import type {
 import { SiteEditorValidationError } from '../../domain/site-editor/errors.js';
 
 const STYLE_PROPERTIES = new Set([
-  'color', 'backgroundColor', 'borderColor', 'borderRadius', 'borderWidth', 'borderStyle',
-  'fontSize', 'fontWeight', 'fontFamily', 'lineHeight', 'letterSpacing', 'textAlign',
+  'color', 'background', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'borderWidth', 'borderStyle',
+  'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
+  'fontSize', 'fontWeight', 'fontFamily', 'fontStyle', 'lineHeight', 'letterSpacing',
+  'textAlign', 'textDecoration', 'textTransform', 'whiteSpace', 'wordBreak',
   'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'gap',
   'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight', 'display',
-  'opacity', 'boxShadow', 'justifyContent', 'alignItems', 'flexDirection', 'gridTemplateColumns',
+  'visibility', 'opacity', 'boxShadow', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
+  'overflow', 'overflowX', 'overflowY', 'flex', 'justifyContent', 'justifyItems', 'justifySelf',
+  'alignItems', 'alignContent', 'alignSelf', 'flexDirection', 'flexWrap', 'flexGrow', 'flexShrink',
+  'flexBasis', 'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'rowGap', 'columnGap',
+  'objectFit', 'objectPosition', 'aspectRatio', 'transform', 'transformOrigin', 'cursor',
 ]);
 const SAFE_ATTRIBUTES = new Set(['title', 'alt', 'aria-label', 'href', 'target', 'rel', 'class']);
 const DANGEROUS_VALUE = /(?:javascript\s*:|expression\s*\(|url\s*\(|@import|[{};]|<\/?script)/i;
@@ -82,6 +88,17 @@ export function sanitizePatchPayload(
       throw new SiteEditorValidationError('Invalid text patch');
     }
     return { text };
+  }
+  if (kind === 'html') {
+    const html = raw['html'];
+    if (typeof html !== 'string' || html.length > 50_000 || !html.trim()) {
+      throw new SiteEditorValidationError('Invalid html patch');
+    }
+    if (/<(?:script|style|iframe|object|embed|link|meta|base|form)\b/i.test(html)
+      || /\son[a-z]+\s*=|(?:javascript|vbscript)\s*:|srcdoc\s*=/i.test(html)) {
+      throw new SiteEditorValidationError('Unsafe html patch');
+    }
+    return { html };
   }
   if (kind === 'visibility') {
     if (typeof raw['hidden'] !== 'boolean') throw new SiteEditorValidationError('Invalid visibility patch');

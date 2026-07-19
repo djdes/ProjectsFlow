@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
-import { Check, Code2, Grid2X2, Loader2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2, X } from 'lucide-react';
+import { Check, ChevronDown, Code2, Grid2X2, Loader2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { PreviewDevice, PreviewMode, SaveStatus } from './types';
 
@@ -78,8 +79,19 @@ export function PreviewToolbar({
             <Button type="button" variant="ghost" size="icon" className="size-8" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-4" /></Button>
             <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onCode} aria-label="Показать код выбранного элемента"><Code2 className="size-4" /></Button>
           </div>
-          <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} onClick={onReject}><X className="size-3.5" />Отклонить</Button>
-          <Button type="button" size="sm" className="h-9 gap-1.5" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} onClick={onPublish}>{queuedCount > 0 ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}{queuedCount > 0 ? 'Публикуем…' : `Применить${draftCount ? ` (${draftCount})` : ''}`}</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="sm" className="h-9 gap-1 px-2.5" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} aria-label="Действия с изменениями">
+                {queuedCount > 0 ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                <span className="hidden sm:inline">{queuedCount > 0 ? 'Публикуем…' : draftCount}</span>
+                <ChevronDown className="size-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={onPublish}><Check className="size-4" />Применить изменения ({draftCount})</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onReject}><X className="size-4" />Отклонить изменения</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
 

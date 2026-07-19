@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Archive, ArrowDown, BookOpen, Bot, CheckCircle2, ChevronDown, ChevronRight, Copy, FileOutput, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Pencil, Plus, RefreshCw, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, User, Wrench } from 'lucide-react';
+import { AlertCircle, Archive, ArrowDown, BookOpen, Bot, CheckCircle2, ChevronDown, ChevronRight, Copy, FileOutput, FileText, Image, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, Plus, RefreshCw, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, User, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -14,16 +14,20 @@ import { toast } from '@/components/ui/sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AiComposer } from './AiComposer';
+import { extractAiAttachments } from './aiAttachments';
+import { AiActionPlanCard, extractAiActionPlan } from './AiActionPlanCard';
 
 export function AiConversationView({
   conversationId,
   compact = false,
   projectName,
+  projectId,
   hideHeader = false,
 }: {
   conversationId: string;
   compact?: boolean;
   projectName?: string;
+  projectId?: string;
   hideHeader?: boolean;
 }): React.ReactElement {
   const state = useAiConversation(conversationId);
@@ -110,6 +114,7 @@ export function AiConversationView({
                       previousUserBody={previousUser?.body}
                       sending={state.sending}
                       onRetry={(body) => state.send(body, projectName ? 'studio_plan' : 'chat')}
+                      projectId={projectId}
                     />
                   );
                 })}
@@ -284,8 +289,10 @@ function AiConversationHeader({
   );
 }
 
-function ConversationMessage({ message, previousUserBody, sending, onRetry }: { message: AiMessage; previousUserBody?: string; sending: boolean; onRetry: (body: string) => Promise<void> }): React.ReactElement {
+function ConversationMessage({ message, previousUserBody, sending, onRetry, projectId }: { message: AiMessage; previousUserBody?: string; sending: boolean; onRetry: (body: string) => Promise<void>; projectId?: string }): React.ReactElement {
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
+  const extracted = extractAiAttachments(message.body);
+  const actionResult = message.role === 'assistant' ? extractAiActionPlan(extracted.text) : { text: extracted.text, plan: null };
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.body);
@@ -300,7 +307,11 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry }: { 
       {!user && <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background"><Bot className="size-4" /></div>}
       <div className={cn('min-w-0 max-w-full overflow-hidden text-sm leading-6', user ? 'max-w-[85%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5' : 'max-w-[calc(100%-2.5rem)] flex-1')}>
         {message.body ? (
-          <div className="prose prose-sm max-w-none overflow-x-auto break-words dark:prose-invert prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted prose-pre:text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{message.body}</ReactMarkdown></div>
+          <>
+            {actionResult.text && <div className="prose prose-sm max-w-none overflow-x-auto break-words dark:prose-invert prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted prose-pre:text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{actionResult.text}</ReactMarkdown></div>}
+            {extracted.attachments.length > 0 && <MessageAttachments attachments={extracted.attachments} />}
+            {actionResult.plan && <AiActionPlanCard plan={actionResult.plan} defaultProjectId={projectId} />}
+          </>
         ) : (
           <div className="flex items-center gap-2 py-1 text-muted-foreground"><span className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.3s]" /><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.15s]" /><i className="size-1.5 animate-bounce rounded-full bg-current" /></span><span className="text-xs">Формирую ответ</span></div>
         )}
@@ -313,6 +324,14 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry }: { 
       {user && <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><User className="size-4" /></div>}
     </article>
   );
+}
+
+function MessageAttachments({ attachments }: { attachments: ReturnType<typeof extractAiAttachments>['attachments'] }): React.ReactElement {
+  return <div className="not-prose mt-2 flex flex-wrap gap-2">{attachments.map((attachment) => attachment.kind === 'image' && attachment.previewUrl ? (
+    <button key={attachment.id} type="button" className="group relative overflow-hidden rounded-xl border bg-muted" onClick={() => window.open(attachment.previewUrl, '_blank', 'noopener,noreferrer')}><img src={attachment.previewUrl} alt={attachment.name} className="max-h-48 max-w-[280px] object-contain" /><span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-2 py-1 text-left text-[10px] text-white opacity-0 transition group-hover:opacity-100"><Image className="mr-1 inline size-3" />{attachment.name}</span></button>
+  ) : (
+    <div key={attachment.id} className="flex max-w-[280px] items-center gap-2 rounded-xl border bg-muted/30 px-2.5 py-2">{attachment.kind === 'text' ? <FileText className="size-4 shrink-0" /> : <Paperclip className="size-4 shrink-0" />}<span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-[10px] text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span></div>
+  ))}</div>;
 }
 
 function AgentDetails({ messages }: { messages: readonly AiMessage[] }): React.ReactElement {

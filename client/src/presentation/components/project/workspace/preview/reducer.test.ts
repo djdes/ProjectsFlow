@@ -21,3 +21,11 @@ test('successful patches expose the server-authoritative draft and redo counts',
   assert.equal(next.redoDepth, 0);
   assert.equal(next.saveStatus, 'dirty');
 });
+
+test('selecting another preview element keeps the non-modal code panel open', () => {
+  const first = { locator: { selector: '#first', tagName: 'DIV' }, bounds: { x: 1, y: 2, width: 3, height: 4 }, label: 'First' };
+  const second = { locator: { selector: '#second', tagName: 'DIV' }, bounds: { x: 4, y: 5, width: 6, height: 7 }, label: 'Second' };
+  const next = previewEditorReducer({ ...createPreviewEditorState(), mode: 'edit', selected: first, codeOpen: true }, { type: 'SELECT', element: second });
+  assert.equal(next.codeOpen, true);
+  assert.equal(next.selected?.locator.selector, '#second');
+});

@@ -2,13 +2,11 @@ import { Database, Eye, MessageSquareText, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ProjectModeMenu } from '@/presentation/components/project/workspace/ProjectModeMenu';
 
 export type StudioPanel = 'preview' | 'dashboard';
 
 export function StudioTopBar({
   panel,
-  projectId,
   actions,
   chatHidden,
   onPanelChange,
@@ -17,7 +15,6 @@ export function StudioTopBar({
   embedded,
 }: {
   panel: StudioPanel;
-  projectId: string;
   actions?: React.ReactNode;
   chatHidden: boolean;
   onPanelChange: (panel: StudioPanel) => void;
@@ -72,8 +69,6 @@ export function StudioTopBar({
 
   const trailing = (
     <>
-      <ProjectModeMenu projectId={projectId} mode="studio" />
-
       <TooltipProvider delayDuration={550}>
         <div className="hidden shrink-0 items-center gap-0.5 lg:flex">{actions}</div>
       </TooltipProvider>

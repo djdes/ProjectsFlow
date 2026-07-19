@@ -1,14 +1,21 @@
 import type { SiteEditorSnapshot } from '@/application/site-editor/SiteEditorRepository';
 
 export const ALLOWED_STYLE_PROPERTIES = new Set([
-  'color', 'backgroundColor', 'borderColor', 'borderWidth', 'borderStyle', 'borderRadius',
+  'color', 'background', 'backgroundColor', 'border', 'borderColor', 'borderWidth', 'borderStyle', 'borderRadius',
+  'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
   'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'gap',
-  'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textAlign',
-  'display', 'flexDirection', 'alignItems', 'justifyContent', 'gridTemplateColumns',
+  'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing',
+  'textAlign', 'textDecoration', 'textTransform', 'whiteSpace', 'wordBreak',
+  'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
+  'display', 'visibility', 'opacity', 'boxShadow', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
+  'overflow', 'overflowX', 'overflowY', 'flex', 'flexDirection', 'flexWrap', 'flexGrow', 'flexShrink',
+  'flexBasis', 'alignItems', 'alignContent', 'alignSelf', 'justifyContent', 'justifyItems', 'justifySelf',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'rowGap', 'columnGap',
+  'objectFit', 'objectPosition', 'aspectRatio', 'transform', 'transformOrigin', 'cursor',
 ]);
 
-const SAFE_VALUE = /^[#(),.%\-\w\s/]+$/u;
+const SAFE_VALUE = /^[#(),.%\-\w\s/'":]+$/u;
 
 export function sanitizeStylePatch(property: string, value: string): { property: string; value: string } | null {
   const trimmed = value.trim().slice(0, 160);
@@ -17,7 +24,7 @@ export function sanitizeStylePatch(property: string, value: string): { property:
 }
 
 export function sanitizeAttribute(name: string, value: string): { name: string; value: string } | null {
-  if (!['href', 'title', 'aria-label', 'alt'].includes(name)) return null;
+  if (!['href', 'title', 'aria-label', 'alt', 'target', 'rel', 'class'].includes(name)) return null;
   const trimmed = value.trim().slice(0, 500);
   if ([...trimmed].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return null;
   if (name === 'href') {
@@ -45,4 +52,11 @@ export function sanitizePrompt(prompt: string): string {
     })
     .join('');
   return withoutControls.replace(/\s+/gu, ' ').trim().slice(0, 2_000);
+}
+
+export function sanitizeSourceMarkup(source: string): string | null {
+  const value = source.trim().slice(0, 50_000);
+  if (!value || /<(?:script|style|iframe|object|embed|link|meta|base|form)\b/iu.test(value)) return null;
+  if (/\son[a-z]+\s*=|(?:javascript|vbscript)\s*:|srcdoc\s*=/iu.test(value)) return null;
+  return value;
 }

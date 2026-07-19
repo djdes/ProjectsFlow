@@ -21,7 +21,8 @@ import {
 import { createHostMessage, isTrustedBridgeEvent } from './preview/bridgeProtocol';
 import { joinPreviewUrl, normalizePreviewPath } from './preview/path';
 import { createPreviewEditorState, previewEditorReducer } from './preview/reducer';
-import { capSnapshot, sanitizeAttribute, sanitizePrompt, sanitizeStylePatch } from './preview/sanitization';
+import { capSnapshot, sanitizeAttribute, sanitizePrompt, sanitizeSourceMarkup, sanitizeStylePatch } from './preview/sanitization';
+import type { PreviewEditorState } from './preview/types';
 
 type ActiveSession = SiteEditorSession & { remote: boolean };
 
@@ -50,7 +51,25 @@ export function ProjectPreview({
   const [siteError, setSiteError] = useState(false);
   const [configuredMainRoute, setConfiguredMainRoute] = useState<string | null>(null);
   const requestedInitialPath = normalizePreviewPath(initialPath ?? '') ?? '/';
-  const [state, dispatch] = useReducer(previewEditorReducer, requestedInitialPath, createPreviewEditorState);
+  const [state, dispatch] = useReducer(previewEditorReducer, requestedInitialPath, (path): PreviewEditorState => {
+    const base = createPreviewEditorState(path);
+    try {
+      const raw = window.sessionStorage.getItem(`pf-preview-editor:${projectId}`);
+      if (!raw) return base;
+      const saved = JSON.parse(raw) as Partial<typeof base>;
+      return {
+        ...base,
+        mode: saved.mode === 'edit' || saved.mode === 'canvas' ? saved.mode : 'preview',
+        device: saved.device === 'tablet' || saved.device === 'mobile' ? saved.device : 'desktop',
+        path: typeof saved.path === 'string' ? saved.path : path,
+        draftPath: typeof saved.draftPath === 'string' ? saved.draftPath : (typeof saved.path === 'string' ? saved.path : path),
+        selected: saved.selected ?? null,
+        codeOpen: saved.codeOpen === true,
+      };
+    } catch {
+      return base;
+    }
+  });
   const [frameKey, setFrameKey] = useState(0);
   const [frameLoading, setFrameLoading] = useState(true);
   const [slowFrame, setSlowFrame] = useState(false);
@@ -70,6 +89,27 @@ export function ProjectPreview({
   const aiSubmissionRef = useRef(new SiteEditorAiSubmissionCoordinator());
   const initialRouteAppliedRef = useRef(false);
   const initialPathRef = useRef(requestedInitialPath);
+  const initializedProjectRef = useRef(false);
+  const statePathRef = useRef(state.path);
+
+  useEffect(() => {
+    statePathRef.current = state.path;
+  }, [state.path]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(`pf-preview-editor:${projectId}`, JSON.stringify({
+        mode: state.mode,
+        device: state.device,
+        path: state.path,
+        draftPath: state.draftPath,
+        selected: state.selected ? { ...state.selected, ...capSnapshot(state.selected) } : null,
+        codeOpen: state.codeOpen,
+      }));
+    } catch {
+      // Session persistence is a convenience; the editor remains usable without it.
+    }
+  }, [projectId, state.codeOpen, state.device, state.draftPath, state.mode, state.path, state.selected]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +120,8 @@ export function ProjectPreview({
     revisionRef.current = 0;
     serverRedoDepthRef.current = 0;
     initialPathRef.current = requestedInitialPath;
-    dispatch({ type: 'APPLY_PATH', path: requestedInitialPath });
+    if (initializedProjectRef.current) dispatch({ type: 'APPLY_PATH', path: requestedInitialPath });
+    initializedProjectRef.current = true;
     setConfiguredMainRoute(null);
     projectRepository.getAppDashboardSettings(projectId)
       .then((settings) => { if (!cancelled) setConfiguredMainRoute(normalizePreviewPath(settings.profile.mainRoute) ?? '/'); })
@@ -115,7 +156,9 @@ export function ProjectPreview({
     initialRouteAppliedRef.current = true;
     const knownRoutes = site?.routes?.length ? site.routes : ['/'];
     const path = initialPath ? requestedInitialPath : (knownRoutes.includes(configuredMainRoute) ? configuredMainRoute : '/');
-    dispatch({ type: 'APPLY_PATH', path });
+    // Do not destroy a restored edit selection/code panel when the resolved
+    // route is already the route persisted for this Studio session.
+    if (path !== statePathRef.current) dispatch({ type: 'APPLY_PATH', path });
     setFrameSrc(joinPreviewUrl(baseUrl, path));
     onPathChange?.(path);
   }, [baseUrl, configuredMainRoute, initialPath, onPathChange, requestedInitialPath, site?.routes]);
@@ -300,6 +343,11 @@ export function ProjectPreview({
     if (patch.kind === 'style') { const safe = sanitizeStylePatch(patch.property, patch.value); if (!safe) { toast.error('Это CSS-свойство или значение нельзя применить.'); return; } patch = { kind: 'style', ...safe }; }
     if (patch.kind === 'attribute' && patch.value !== null) { const safe = sanitizeAttribute(patch.name, patch.value); if (!safe) { toast.error('Небезопасная ссылка или атрибут.'); return; } patch = { kind: 'attribute', ...safe }; }
     if (patch.kind === 'text') patch = { kind: 'text', value: patch.value.slice(0, 4_000) };
+    if (patch.kind === 'html') {
+      const safe = sanitizeSourceMarkup(patch.value);
+      if (!safe) { toast.error('Исходник содержит небезопасный HTML.'); return; }
+      patch = { kind: 'html', value: safe };
+    }
     const selected = capSnapshot(state.selected);
     dispatch({ type: 'PATCH_START' });
     sendBridge('patch', { patch });
@@ -412,7 +460,7 @@ export function ProjectPreview({
   return (
     <section
       className={cn(
-        'overflow-hidden bg-muted/20',
+        'relative overflow-hidden bg-muted/20',
         fillAvailable ? 'flex h-full min-h-0 flex-col' : 'rounded-xl border',
       )}
       aria-label="Preview результата проекта"
@@ -425,7 +473,7 @@ export function ProjectPreview({
         </div>
       )}
       {state.mode === 'canvas' ? <CanvasRouteMap routes={routes} baseUrl={baseUrl} fillAvailable={fillAvailable} onOpenRoute={(path) => { applyPath(path); dispatch({ type: 'SET_MODE', mode: 'preview' }); }} /> : <PreviewCanvas ref={iframeRef} frameKey={frameKey} previewUrl={frameSrc} path={state.path} mode={state.mode} device={state.device} loading={frameLoading} slow={slowFrame} bridgeStatus={state.bridgeStatus} bridgeError={state.bridgeError} hovered={state.hovered} selected={state.selected} styleOpen={state.styleOpen} fillAvailable={fillAvailable} onLoad={() => { setFrameLoading(false); if (state.mode === 'edit') { sendBridge('hello', { mode: 'edit', path: state.path }); sendBridge('set-mode', { mode: 'edit' }); } }} onStyleOpen={(open) => dispatch({ type: 'SET_PANEL', panel: 'style', open })} onPatch={(patch) => void applyPatch(patch)} onAi={() => dispatch({ type: 'SET_PANEL', panel: 'ai', open: true })} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onDelete={() => setDeleteOpen(true)} onCloseSelection={() => dispatch({ type: 'SELECT', element: null })} />}
-      <CodeSheet open={state.codeOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'code', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onEditWithAi={(prompt) => submitAi(`Измени исходный код выбранного элемента по инструкции, но верни только безопасный визуальный patch-черновик без публикации: ${prompt}`)} />
+      <CodeSheet open={state.codeOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'code', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onPatch={(patch) => void applyPatch(patch)} onEditWithAi={(prompt) => submitAi(`Измени исходный код выбранного элемента по инструкции, но верни только безопасный визуальный patch-черновик без публикации: ${prompt}`)} />
       <AiPromptSheet open={state.aiOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'ai', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onSubmit={submitAi} />
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Удалить выбранный элемент?</DialogTitle><DialogDescription>Элемент исчезнет из страницы. Изменение можно будет отменить кнопкой «Отменить» после сохранения.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)}>Отмена</Button><Button variant="destructive" onClick={() => { setDeleteOpen(false); void applyPatch({ kind: 'command', command: 'delete' }); }}>Удалить</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Отклонить черновик?</DialogTitle><DialogDescription>Все {state.draftCount} {state.draftCount === 1 ? 'изменение' : 'изменения'} этой страницы будут удалены. Опубликованная версия сайта не изменится.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Оставить</Button><Button variant="destructive" onClick={() => void rejectDraft()}>Отклонить черновик</Button></DialogFooter></DialogContent></Dialog>

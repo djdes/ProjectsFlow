@@ -25,7 +25,6 @@ import { ProjectDescription } from '@/presentation/components/project/ProjectDes
 import { randomCover } from '@/presentation/components/project/coverGallery';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import { actionErrorMessage } from '@/lib/actionFeedback';
-import { ProjectModeMenu } from '@/presentation/components/project/workspace/ProjectModeMenu';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -182,7 +181,6 @@ export function TasksPage(): React.ReactElement {
   // и в правом верхнем углу окна активности (Notion-style).
   const projectActions = (compact = false) => (
     <>
-      <ProjectModeMenu projectId={data.id} mode="tasks" />
       {!compact && members.length > 1 && (
         <MemberAvatarStack
           members={members}
@@ -217,6 +215,7 @@ export function TasksPage(): React.ReactElement {
       </Button>
       <ProjectActionsMenu
         project={data}
+        mode="tasks"
         financeVisible={financeVisible}
         monitoringVisible={monitoringVisible}
         monitoringAlerts={monitoringAlerts}
@@ -233,7 +232,7 @@ export function TasksPage(): React.ReactElement {
     // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её родительский
     // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
     <div className="flex min-h-full flex-col" data-pf-project-page>
-      <div className="pf-sticky-surface sticky top-0 z-40 flex min-h-11 items-center justify-between gap-2 bg-background px-2 sm:hidden">
+      <div id="pf-project-mobile-header" className="pf-sticky-surface sticky top-0 z-40 flex min-h-11 items-center justify-between gap-2 bg-background px-2 sm:hidden">
         <div className="min-w-0 truncate text-sm font-medium">
           {data.icon ? `${data.icon} ` : ''}
           {data.name}
@@ -293,7 +292,7 @@ export function TasksPage(): React.ReactElement {
       {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-0">
+      <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-[35] isolate">
         {!data.isInbox && canEdit && (
           <ProjectGithubOnboardingBanner
             projectId={data.id}

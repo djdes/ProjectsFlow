@@ -64,7 +64,7 @@ export function StudioThemePanel({
   };
 
   return (
-    <section className="absolute inset-0 z-40 flex min-h-0 flex-col bg-background" aria-label="Тема проекта">
+    <section className="flex max-h-[min(720px,calc(100dvh-88px))] w-[min(390px,calc(100vw-24px))] min-h-0 flex-col bg-background" aria-label="Тема проекта">
       <header className="flex h-[70px] shrink-0 items-start justify-between border-b px-5 py-3.5">
         <div>
           <h2 className="text-lg font-semibold">Тема</h2>

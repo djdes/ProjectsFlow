@@ -9,7 +9,9 @@ import {
   EyeOff,
   History,
   Link as LinkIcon,
+  LayoutGrid,
   MoreHorizontal,
+  PanelsTopLeft,
   Search,
   Settings,
   Trash2,
@@ -46,6 +48,7 @@ type Props = {
   onOpenAutomation: () => void;
   onOpenTaskFromHistory?: () => void;
   compact?: boolean;
+  mode?: 'tasks' | 'studio';
 };
 
 type Action = {
@@ -68,6 +71,7 @@ export function ProjectActionsMenu({
   onOpenAutomation,
   onOpenTaskFromHistory,
   compact = false,
+  mode = 'tasks',
 }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { projectRepository, taskRepository } = useContainer();
@@ -158,6 +162,13 @@ export function ProjectActionsMenu({
 
   const actions = useMemo<Action[]>(() => {
     const list: Action[] = [
+      {
+        key: 'project-mode',
+        label: mode === 'tasks' ? 'Открыть Студию' : 'Открыть задачи',
+        icon: mode === 'tasks' ? PanelsTopLeft : LayoutGrid,
+        onSelect: () => navigate(mode === 'tasks' ? `/projects/${projectId}/studio` : `/projects/${projectId}`),
+        section: 0,
+      },
       { key: 'link', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink, section: 0 },
     ];
     if (financeVisible)
@@ -233,7 +244,7 @@ export function ProjectActionsMenu({
       });
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, financeVisible, monitoringVisible, monitoringAlerts, canEdit, isOwner]);
+  }, [project, financeVisible, monitoringVisible, monitoringAlerts, canEdit, isOwner, mode]);
 
   const q = query.trim().toLowerCase();
   const filtered = q ? actions.filter((a) => a.label.toLowerCase().includes(q)) : actions;

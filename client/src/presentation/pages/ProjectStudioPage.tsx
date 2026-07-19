@@ -198,6 +198,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
       />
       <ProjectActionsMenu
         project={data.project}
+        mode="studio"
         financeVisible={financeVisible}
         monitoringVisible={monitoringVisible}
         monitoringAlerts={monitoringAlerts}
@@ -209,13 +210,12 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   return (
     <main className="flex h-full min-h-[520px] w-full overflow-hidden bg-background" aria-label={`Project Studio — ${data.project.name}`}>
-      <StudioChatPane conversationId={data.conversationId} projectName={data.project.name} splitPane={splitPane} onOpenDashboardSection={openDashboardSection} />
+      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} splitPane={splitPane} onOpenDashboardSection={openDashboardSection} />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Рабочая область проекта">
         {panel === 'dashboard' && (
           <StudioTopBar
             panel={panel}
-            projectId={data.project.id}
             actions={(
               <>
                 <ProjectActivityButton
@@ -247,7 +247,6 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
           previewToolbarLeading={(
             <StudioTopBar
               panel={panel}
-              projectId={data.project.id}
               chatHidden={splitPane.hidden}
               onPanelChange={panelChange}
               onShowChat={() => splitPane.setHidden(false)}
@@ -258,7 +257,6 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
           previewToolbarTrailing={(
             <StudioTopBar
               panel={panel}
-              projectId={data.project.id}
               actions={(
                 <>
                   <ProjectActivityButton
@@ -285,6 +283,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
         open={mobileChatOpen}
         onOpenChange={setMobileChatOpen}
         conversationId={data.conversationId}
+        projectId={data.project.id}
         projectName={data.project.name}
       />
       <AutomationDialog

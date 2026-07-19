@@ -8,7 +8,7 @@ export const SITE_EDITOR_BRIDGE_SCRIPT = String.raw`(() => {
   window.__PROJECTSFLOW_SITE_EDITOR_V1__ = true;
   const protocol = 'projectsflow.site-editor';
   const version = 1;
-  const safeStyles = new Set(['color','backgroundColor','borderColor','borderRadius','borderWidth','borderStyle','fontSize','fontWeight','fontFamily','lineHeight','letterSpacing','textAlign','padding','paddingTop','paddingRight','paddingBottom','paddingLeft','margin','marginTop','marginRight','marginBottom','marginLeft','gap','width','height','minWidth','minHeight','maxWidth','maxHeight','display','opacity','boxShadow','justifyContent','alignItems','flexDirection','gridTemplateColumns']);
+  const safeStyles = new Set(['color','background','backgroundColor','border','borderColor','borderRadius','borderWidth','borderStyle','borderTop','borderRight','borderBottom','borderLeft','fontSize','fontWeight','fontFamily','fontStyle','lineHeight','letterSpacing','textAlign','textDecoration','textTransform','whiteSpace','wordBreak','padding','paddingTop','paddingRight','paddingBottom','paddingLeft','margin','marginTop','marginRight','marginBottom','marginLeft','gap','width','height','minWidth','minHeight','maxWidth','maxHeight','display','visibility','opacity','boxShadow','position','top','right','bottom','left','zIndex','overflow','overflowX','overflowY','flex','justifyContent','justifyItems','justifySelf','alignItems','alignContent','alignSelf','flexDirection','flexWrap','flexGrow','flexShrink','flexBasis','gridTemplateColumns','gridTemplateRows','gridColumn','gridRow','rowGap','columnGap','objectFit','objectPosition','aspectRatio','transform','transformOrigin','cursor']);
   const safeAttributes = new Set(['title','alt','aria-label','href','target','rel','class']);
   const dangerous = /(?:javascript\s*:|expression\s*\(|url\s*\(|@import|[{};]|<\/?script)/i;
   const safeHref = (value) => {
@@ -104,6 +104,23 @@ export const SITE_EDITOR_BRIDGE_SCRIPT = String.raw`(() => {
       const before = node.textContent || '';
       const after = String(patch.value || '').slice(0, 4000);
       return mutate(() => { if (node.textContent !== after) node.textContent = after; }, () => { node.textContent = before; });
+    }
+    if (patch.kind === 'html') {
+      const value = String(patch.value || '').slice(0, 50000).trim();
+      if (!value || /<(?:script|style|iframe|object|embed|link|meta|base|form)\b/i.test(value) || /\son[a-z]+\s*=|(?:javascript|vbscript)\s*:|srcdoc\s*=/i.test(value)) {
+        return send('error', { message: 'Небезопасный HTML-фрагмент.' });
+      }
+      const template = document.createElement('template');
+      template.innerHTML = value;
+      const replacement = template.content.firstElementChild;
+      if (!replacement || template.content.children.length !== 1 || replacement.tagName !== node.tagName) {
+        return send('error', { message: 'Исходник должен содержать один корневой элемент того же типа.' });
+      }
+      const parent = node.parentNode; const next = node.nextSibling;
+      return mutate(
+        () => { if (parent && node.parentNode === parent) parent.replaceChild(replacement, node); },
+        () => { if (parent && replacement.parentNode === parent) parent.replaceChild(node, replacement); else if (parent) parent.insertBefore(node, next); },
+      );
     }
     if (patch.kind === 'style') {
       if (!safeStyles.has(patch.property) || typeof patch.value !== 'string' || dangerous.test(patch.value)) return send('error', { message: 'Небезопасное CSS-значение.' });

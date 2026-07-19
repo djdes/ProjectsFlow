@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { capSnapshot, sanitizeAttribute, sanitizePrompt, sanitizeStylePatch } from './sanitization';
+import { capSnapshot, sanitizeAttribute, sanitizePrompt, sanitizeSourceMarkup, sanitizeStylePatch } from './sanitization';
 
 test('allows known CSS and blocks executable or unknown values', () => {
   assert.deepEqual(sanitizeStylePatch('borderRadius', '12px'), { property: 'borderRadius', value: '12px' });
@@ -16,5 +16,11 @@ test('blocks executable links and caps AI payloads', () => {
   assert.equal(capped.locator.selector.length, 500);
   assert.equal(capped.locator.text?.length, 1_000);
   assert.equal(capped.source?.length, 8_000);
-  assert.deepEqual(capped.styles, { color: '#fff' });
+  assert.deepEqual(capped.styles, { color: '#fff', position: 'fixed' });
+});
+
+test('allows inert element markup but rejects executable source edits', () => {
+  assert.equal(sanitizeSourceMarkup('<section class="hero"><h1>Hello</h1></section>'), '<section class="hero"><h1>Hello</h1></section>');
+  assert.equal(sanitizeSourceMarkup('<img src=x onerror="alert(1)">'), null);
+  assert.equal(sanitizeSourceMarkup('<script>alert(1)</script>'), null);
 });

@@ -1,6 +1,7 @@
 import { ChevronDown, LayoutDashboard, Menu, Palette, PanelLeftClose, Settings2, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 import type { DashboardSection } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
@@ -10,11 +11,13 @@ import { useState } from 'react';
 
 export function StudioChatPane({
   conversationId,
+  projectId,
   projectName,
   splitPane,
   onOpenDashboardSection,
 }: {
   conversationId: string;
+  projectId: string;
   projectName: string;
   splitPane: StudioSplitPane;
   onOpenDashboardSection: (section: DashboardSection) => void;
@@ -39,16 +42,16 @@ export function StudioChatPane({
         )}
       >
         <div style={{ width: splitPane.width }} className="relative flex h-full min-h-0 flex-col">
-          <header className="flex h-[52px] shrink-0 items-center gap-1 border-b px-2">
+          <header className="flex h-[52px] shrink-0 items-center gap-1 border-b px-2.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-8 shrink-0"
+              className="size-9 shrink-0 rounded-lg"
               aria-label="Открыть основную панель"
               onClick={() => window.dispatchEvent(new CustomEvent('pf:set-sidebar-collapsed', { detail: { collapsed: false } }))}
             >
-              <Menu className="size-4" />
+              <Menu className="size-[18px]" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -60,11 +63,17 @@ export function StudioChatPane({
                 {dashboardLinks.map(({ label, section, icon: Icon }) => <DropdownMenuItem key={section} onSelect={() => onOpenDashboardSection(section)}><Icon />{label}</DropdownMenuItem>)}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => setThemeOpen(true)} aria-label="Тема проекта"><Palette className="size-4" /></Button>
+            <Popover open={themeOpen} onOpenChange={setThemeOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Тема проекта"><Palette className="size-4" /></Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={8} className="w-auto overflow-hidden p-0">
+                <StudioThemePanel conversationId={conversationId} projectName={projectName} onClose={() => setThemeOpen(false)} />
+              </PopoverContent>
+            </Popover>
             <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Скрыть панель чата" onClick={() => splitPane.setHidden(true)}><PanelLeftClose className="size-4" /></Button>
           </header>
-          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectName={projectName} hideHeader /></div>
-          {themeOpen && <StudioThemePanel conversationId={conversationId} projectName={projectName} onClose={() => setThemeOpen(false)} />}
+          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} hideHeader /></div>
         </div>
       </aside>
       {!splitPane.hidden && (

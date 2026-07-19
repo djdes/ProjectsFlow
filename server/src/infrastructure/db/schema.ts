@@ -1521,7 +1521,7 @@ export const sitePatches = mysqlTable(
     patchSetId: char('patch_set_id', { length: 36 }).notNull(),
     projectId: char('project_id', { length: 36 }).notNull(),
     locatorJson: mediumtext('locator_json').notNull(),
-    kind: mysqlEnum('kind', ['text', 'style', 'attribute', 'visibility', 'command']).notNull(),
+    kind: mysqlEnum('kind', ['text', 'html', 'style', 'attribute', 'visibility', 'command']).notNull(),
     payloadJson: mediumtext('payload_json').notNull(),
     idempotencyKey: varchar('idempotency_key', { length: 100 }).notNull(),
     createdRevision: int('created_revision', { unsigned: true }).notNull(),

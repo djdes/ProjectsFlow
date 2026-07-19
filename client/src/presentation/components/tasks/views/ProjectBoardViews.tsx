@@ -267,13 +267,16 @@ export function ProjectBoardViews({
   const [stickyTop, setStickyTop] = useState(0);
   useEffect(() => {
     const crumbs = document.getElementById('pf-project-crumbs');
+    const mobileHeader = document.getElementById('pf-project-mobile-header');
     const banners = document.getElementById('pf-sticky-banners');
     const measure = (): void => {
-      setStickyTop((crumbs?.offsetHeight ?? 0) + (banners?.offsetHeight ?? 0));
+      const headerHeight = Math.max(crumbs?.offsetHeight ?? 0, mobileHeader?.offsetHeight ?? 0);
+      setStickyTop(headerHeight + (banners?.offsetHeight ?? 0));
     };
     measure();
     const ro = new ResizeObserver(measure);
     if (crumbs) ro.observe(crumbs);
+    if (mobileHeader) ro.observe(mobileHeader);
     if (banners) ro.observe(banners);
     return () => ro.disconnect();
   }, []);

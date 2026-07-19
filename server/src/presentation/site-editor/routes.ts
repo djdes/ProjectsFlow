@@ -38,6 +38,7 @@ const frontendSnapshotSchema = z.object({
 }).strict();
 const frontendPatchSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), value: z.string().max(4_000) }).strict(),
+  z.object({ kind: z.literal('html'), value: z.string().max(50_000) }).strict(),
   z.object({ kind: z.literal('style'), property: z.string().min(1).max(64), value: z.string().max(200) }).strict(),
   z.object({ kind: z.literal('attribute'), name: z.string().min(1).max(64), value: z.string().max(2_000).nullable() }).strict(),
   z.object({ kind: z.literal('visibility'), hidden: z.boolean() }).strict(),
@@ -69,9 +70,10 @@ function frontendLocator(snapshot: z.infer<typeof frontendSnapshotSchema>) {
 }
 
 function translateFrontendPatch(patch: z.infer<typeof frontendPatchSchema>): {
-  kind: 'text' | 'style' | 'attribute' | 'visibility' | 'command'; payload: Readonly<Record<string, unknown>>;
+  kind: 'text' | 'html' | 'style' | 'attribute' | 'visibility' | 'command'; payload: Readonly<Record<string, unknown>>;
 } {
   if (patch.kind === 'text') return { kind: 'text', payload: { text: patch.value } };
+  if (patch.kind === 'html') return { kind: 'html', payload: { html: patch.value } };
   if (patch.kind === 'style') return { kind: 'style', payload: { styles: { [patch.property]: patch.value } } };
   if (patch.kind === 'attribute') return { kind: 'attribute', payload: { name: patch.name, value: patch.value } };
   if (patch.kind === 'visibility') return { kind: 'visibility', payload: { hidden: patch.hidden } };

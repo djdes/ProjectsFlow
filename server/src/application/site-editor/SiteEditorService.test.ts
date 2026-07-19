@@ -338,6 +338,14 @@ test('patch sanitization rejects script/event/javascript/raw CSS payloads and re
     () => sanitizePatchPayload('style', { styles: { color: 'red; position: fixed' } }),
     SiteEditorValidationError,
   );
+  assert.deepEqual(
+    sanitizePatchPayload('html', { html: '<section class="hero"><h1>Safe</h1></section>' }),
+    { html: '<section class="hero"><h1>Safe</h1></section>' },
+  );
+  assert.throws(
+    () => sanitizePatchPayload('html', { html: '<img src="x" onerror="steal()">' }),
+    SiteEditorValidationError,
+  );
   const redacted = redactDomSnapshot(
     '<script>steal()</script><input value="secret"><p>api_key=abc123456 user@example.com +7 999 123-45-67</p>',
   );

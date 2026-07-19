@@ -1,4 +1,4 @@
-export type SitePatchKind = 'text' | 'style' | 'attribute' | 'visibility' | 'command';
+export type SitePatchKind = 'text' | 'html' | 'style' | 'attribute' | 'visibility' | 'command';
 
 export type SiteElementLocator = {
   readonly cssPath: string;

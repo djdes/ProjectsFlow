@@ -51,7 +51,7 @@ export function previewEditorReducer(state: PreviewEditorState, action: PreviewE
     case 'BRIDGE_ERROR': return { ...state, bridgeStatus: 'error', bridgeError: action.message };
     case 'SESSION_READY': return { ...state, revision: action.revision, saveStatus: 'clean', undoDepth: 0, redoDepth: 0, draftCount: 0, queuedCount: 0 };
     case 'HOVER': return { ...state, hovered: action.element };
-    case 'SELECT': return { ...state, selected: action.element, hovered: null, styleOpen: false, codeOpen: false, aiOpen: false };
+    case 'SELECT': return { ...state, selected: action.element, hovered: null, styleOpen: false, aiOpen: false };
     case 'PATCH_START': return { ...state, saveStatus: 'saving' };
     case 'PATCH_SUCCESS': return { ...state, saveStatus: action.draftCount ? 'dirty' : 'clean', revision: action.revision, undoDepth: action.draftCount, redoDepth: action.redoDepth, draftCount: action.draftCount, queuedCount: action.queuedCount, bridgeError: null };
     case 'PATCH_ERROR': return { ...state, saveStatus: 'error', bridgeError: action.message };

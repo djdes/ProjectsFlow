@@ -111,7 +111,7 @@ function pendingDto(value: PendingAiConversationRun): unknown {
     run: runDto(value.run),
     conversationTitle: value.conversationTitle,
     projectName: value.projectName,
-    inputText: value.inputText,
+    inputText: `${value.inputText}\n\n${actionProtocol(value.run.projectId)}`,
     // The worker receives a bounded, already-authorized transcript only. It has
     // no conversation API, filesystem or MCP access, so follow-up answers still
     // keep context without broadening the worker capability.
@@ -125,6 +125,18 @@ function pendingDto(value: PendingAiConversationRun): unknown {
       createdAt: message.createdAt.toISOString(),
     })),
   };
+}
+
+function actionProtocol(projectId: string | null): string {
+  return [
+    'SYSTEM CAPABILITY: You are planning changes in ProjectsFlow. Never claim that a mutation has already happened.',
+    'When the user asks to create, change, or delete ProjectsFlow projects/tasks, explain the plan briefly and append exactly one fenced block named projectsflow-actions.',
+    'The block must be strict JSON: {"title":"...","summary":"...","actions":[...]}. It is hidden by the UI and only executes after explicit user confirmation.',
+    'Supported actions: {"id":"stable-ref","type":"create_project","name":"..."}; {"id":"...","type":"create_task","projectId":"..." OR "projectRef":"id-of-create_project","description":"...","status":"backlog|todo|in_progress|awaiting_clarification|done|manual","deadline":"YYYY-MM-DD|null","priority":1|2|3|4|null}; {"id":"...","type":"update_task","projectId":"...","taskId":"...", optional description/status/deadline/priority}; {"id":"...","type":"delete_task","projectId":"...","taskId":"..."}; {"id":"...","type":"delete_all_tasks","projectId":"..."}.',
+    `Current project id: ${projectId ?? 'none (ask for a project or create one first)'}. For actions in the current Studio, use this project id. For 100 tasks, output 100 explicit create_task actions so progress and per-item results are visible.`,
+    'Attachments appear in the user text as PF_ATTACHMENT HTML comments containing base64 JSON. Read text attachments directly and use image data as visual context when supported; do not repeat the encoded payload in the answer.',
+    'For ordinary questions that require no mutation, do not emit a projectsflow-actions block.',
+  ].join('\n');
 }
 
 function runDto(value: AiConversationRun): unknown {

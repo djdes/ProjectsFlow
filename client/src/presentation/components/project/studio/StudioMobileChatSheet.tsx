@@ -7,11 +7,13 @@ export function StudioMobileChatSheet({
   open,
   onOpenChange,
   conversationId,
+  projectId,
   projectName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversationId: string;
+  projectId: string;
   projectName: string;
 }): React.ReactElement {
   return (
@@ -23,7 +25,7 @@ export function StudioMobileChatSheet({
         className="w-[min(94vw,420px)] max-w-none p-0 lg:hidden"
       >
         <SheetTitle className="sr-only">AI-чат проекта {projectName}</SheetTitle>
-        <AiConversationView conversationId={conversationId} projectName={projectName} />
+        <AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} />
         <Button
           type="button"
           variant="ghost"

@@ -13,6 +13,7 @@ export type SiteEditorSnapshot = {
 
 export type SiteEditorPatch =
   | { kind: 'text'; value: string }
+  | { kind: 'html'; value: string }
   | { kind: 'style'; property: string; value: string }
   | { kind: 'attribute'; name: string; value: string | null }
   | { kind: 'visibility'; hidden: boolean }

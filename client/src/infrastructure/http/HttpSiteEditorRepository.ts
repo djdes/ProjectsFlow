@@ -14,7 +14,7 @@ const base = (projectId: string): string => `/projects/${encodeURIComponent(proj
 type PersistedPatchDto = {
   id: string;
   locator: { cssPath: string };
-  kind: 'text' | 'style' | 'attribute' | 'visibility' | 'command';
+  kind: 'text' | 'html' | 'style' | 'attribute' | 'visibility' | 'command';
   payload: Record<string, unknown>;
   createdRevision: number;
 };
@@ -23,6 +23,7 @@ type MutationStateDto = SiteEditorMutationState;
 
 function toPatch(dto: PersistedPatchDto): SiteEditorPatch | null {
   if (dto.kind === 'text' && typeof dto.payload.text === 'string') return { kind: 'text', value: dto.payload.text };
+  if (dto.kind === 'html' && typeof dto.payload.html === 'string') return { kind: 'html', value: dto.payload.html };
   if (dto.kind === 'attribute' && typeof dto.payload.name === 'string') {
     return { kind: 'attribute', name: dto.payload.name, value: typeof dto.payload.value === 'string' ? dto.payload.value : null };
   }
