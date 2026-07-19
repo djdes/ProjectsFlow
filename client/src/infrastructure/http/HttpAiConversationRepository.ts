@@ -9,6 +9,7 @@ import type {
   AiConversationKind,
   SendAiMessageResult,
 } from '@/domain/ai-chat/AiConversation';
+import type { AiKnowledgeSource } from '@/domain/ai-chat/AiKnowledgeSource';
 import { httpClient } from './httpClient';
 
 function queryString(values: Record<string, string | number | boolean | undefined>): string {
@@ -79,6 +80,13 @@ export class HttpAiConversationRepository implements AiConversationRepository {
 
   cancelRun(conversationId: string, runId: string): Promise<void> {
     return httpClient.post(`/ai/conversations/${encodeURIComponent(conversationId)}/runs/${encodeURIComponent(runId)}/cancel`);
+  }
+
+  async listKnowledge(conversationId: string): Promise<AiKnowledgeSource[]> {
+    const result = await httpClient.get<{ sources: AiKnowledgeSource[] }>(
+      `/ai/conversations/${encodeURIComponent(conversationId)}/knowledge`,
+    );
+    return result.sources;
   }
 
   streamUrl(conversationId: string, afterEventId?: string | null): string {

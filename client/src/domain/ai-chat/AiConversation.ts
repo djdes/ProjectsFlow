@@ -26,6 +26,9 @@ export type AiMessage = {
   runId: string | null;
   parentMessageId: string | null;
   clientRequestId?: string | null;
+  // Служебная нагрузка ответа: шаги агента (readAiAgentSteps) и просмотренные
+  // источники. Тела ответа не касается — блок шагов рендерится отдельно.
+  metadata?: Record<string, unknown> | null;
   error?: { code: string; retryable: boolean } | null;
   createdAt: string;
   updatedAt: string;

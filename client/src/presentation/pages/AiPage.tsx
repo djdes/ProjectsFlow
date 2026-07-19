@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, BrainCircuit, Code2, FileSearch, Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useContainer } from '@/infrastructure/di/container';
 import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 import { AiComposer } from '@/presentation/components/ai/AiComposer';
+import { AiComposerPresets } from '@/presentation/components/ai/AiComposerPresets';
 
 export function AiPage(): React.ReactElement {
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -61,12 +62,6 @@ export function AiPage(): React.ReactElement {
     }
   };
 
-  const actions = [
-    { icon: BrainCircuit, title: 'Продумать решение', prompt: 'Помоги продумать решение. Сначала задай важные уточняющие вопросы.' },
-    { icon: FileSearch, title: 'Разобрать документ', prompt: 'Помоги разобрать документ и выделить главное.' },
-    { icon: Code2, title: 'Обсудить код', prompt: 'Помоги разобраться с кодом и предложи безопасный план изменений.' },
-  ];
-
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -77,15 +72,9 @@ export function AiPage(): React.ReactElement {
           <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
           <div className="mt-7 w-full max-w-2xl text-left">
             <AiComposer conversationId={null} sending={busy} onSend={createAndSend} autoFocus />
+            <AiComposerPresets className="mt-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
           </div>
           <button type="button" onClick={() => void create()} disabled={busy} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition hover:bg-hover hover:text-foreground disabled:opacity-50"><Plus className="size-4" />Открыть пустой чат</button>
-        </div>
-        <div className="grid gap-2 pb-4 md:grid-cols-3">
-          {actions.map(({ icon: Icon, title, prompt }) => (
-            <button key={title} type="button" onClick={() => void create(prompt)} className="group flex min-h-20 items-center gap-3 rounded-2xl border bg-card px-4 text-left transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted"><Icon className="size-4" /></span><span className="flex-1 text-sm font-medium">{title}</span><ArrowRight className="size-4 text-muted-foreground transition group-hover:translate-x-0.5" />
-            </button>
-          ))}
         </div>
       </div>
       </div>

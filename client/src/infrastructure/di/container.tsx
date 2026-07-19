@@ -94,6 +94,8 @@ import { GetUsage } from "@/application/usage/GetUsage";
 import { ChangePlan } from "@/application/usage/ChangePlan";
 import type { UsageRepository } from "@/application/usage/UsageRepository";
 import type { AiConversationRepository } from "@/application/ai-chat/AiConversationRepository";
+import type { AiActionBatchRepository } from "@/application/ai-action/AiActionBatchRepository";
+import { HttpAiActionBatchRepository } from "@/infrastructure/http/HttpAiActionBatchRepository";
 
 type Container = {
   listProjects: ListProjects;
@@ -130,6 +132,7 @@ type Container = {
   chatRepository: ChatRepository;
   aiPromptRepository: AiPromptRepository;
   aiConversationRepository: AiConversationRepository;
+  aiActionBatchRepository: AiActionBatchRepository;
   improveTaskDescription: ImproveTaskDescription;
   composeTasks: ComposeTasks;
   automationRepository: AutomationRepository;
@@ -174,6 +177,7 @@ function buildContainer(): Container {
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   const aiPromptRepo = new HttpAiPromptRepository();
   const aiConversationRepo = new HttpAiConversationRepository();
+  const aiActionBatchRepo = new HttpAiActionBatchRepository();
   const automationRepo = new HttpAutomationRepository();
   const adminRepo = new HttpAdminRepository();
   const employeeRepo = new HttpEmployeeRepository();
@@ -227,6 +231,7 @@ function buildContainer(): Container {
     chatRepository: chatRepo,
     aiPromptRepository: aiPromptRepo,
     aiConversationRepository: aiConversationRepo,
+    aiActionBatchRepository: aiActionBatchRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     composeTasks: new ComposeTasks(aiPromptRepo),
     automationRepository: automationRepo,

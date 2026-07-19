@@ -1,8 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronRight, FolderKanban, MoreHorizontal, Pencil, Plus, Search, Sparkles } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { AiConversation } from '@/domain/ai-chat/AiConversation';
-import { useAiConversations, announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
+import {
+  conversationActivityAt,
+  useAiConversations,
+  announceAiConversationsChanged,
+} from '@/presentation/hooks/useAiConversations';
+import { formatRelativeTime, groupByRecency } from './relativeTime';
 import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
 import {
@@ -19,55 +24,44 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Group = { label: string; items: AiConversation[] };
+const NEW_CHAT_HINT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+  ? '⌘O'
+  : 'Ctrl+O';
 
-function startOfDay(value: Date): number {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+/**
+ * Возвращает «свежий» `Date.now()` раз в минуту: относительное время считается при рендере,
+ * а без тика строка «сейчас» залипла бы до следующего обновления списка.
+ */
+function useMinuteTick(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return now;
 }
 
-function groupConversations(items: AiConversation[]): Group[] {
-  const now = startOfDay(new Date());
-  const buckets = new Map<string, AiConversation[]>();
-  for (const item of items) {
-    const time = Date.parse(item.lastMessageAt ?? item.updatedAt);
-    const days = Math.max(0, Math.floor((now - startOfDay(new Date(time))) / 86_400_000));
-    const label = days === 0 ? 'Сегодня' : days <= 7 ? 'Прошлая неделя' : days <= 30 ? 'Последние 30 дней' : 'Ранее';
-    const bucket = buckets.get(label) ?? [];
-    bucket.push(item);
-    buckets.set(label, bucket);
-  }
-  return ['Сегодня', 'Прошлая неделя', 'Последние 30 дней', 'Ранее']
-    .map((label) => ({ label, items: buckets.get(label) ?? [] }))
-    .filter((group) => group.items.length > 0);
-}
-
-function conversationAge(conversation: AiConversation): string {
-  const value = new Date(conversation.lastMessageAt ?? conversation.updatedAt);
-  const delta = Date.now() - value.getTime();
-  const minutes = Math.max(0, Math.floor(delta / 60_000));
-  if (minutes < 1) return 'сейчас';
-  if (minutes < 60) return `${minutes} мин`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ч`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} д`;
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(value);
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
 
 export function AiConversationListPanel(): React.ReactElement {
   const { aiConversationRepository } = useContainer();
   const { items, loading, error } = useAiConversations();
   const navigate = useNavigate();
+  const now = useMinuteTick();
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const filtered = useMemo(() => items.filter((item) => item.title.toLocaleLowerCase('ru').includes(search.trim().toLocaleLowerCase('ru'))), [items, search]);
   const personalItems = useMemo(() => filtered.filter((item) => item.kind === 'personal'), [filtered]);
   const projectItems = useMemo(() => filtered.filter((item) => item.kind === 'project_studio'), [filtered]);
-  const groups = useMemo(() => groupConversations(personalItems), [personalItems]);
+  // Группируем только личные чаты: проектные живут в отдельной свёрнутой секции ниже.
+  const groups = useMemo(() => groupByRecency(personalItems, conversationActivityAt, now), [personalItems, now]);
   const showProjects = projectsOpen || search.trim().length > 0;
 
-  const create = async (): Promise<void> => {
+  const create = useCallback(async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
     try {
@@ -77,7 +71,18 @@ export function AiConversationListPanel(): React.ReactElement {
     } finally {
       setBusy(false);
     }
-  };
+  }, [aiConversationRepository, busy, navigate]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== 'o' || isTypingTarget(event.target)) return;
+      event.preventDefault();
+      void create();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [create]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -92,18 +97,15 @@ export function AiConversationListPanel(): React.ReactElement {
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск чатов" className="h-8 w-full rounded-lg border bg-background pl-8 pr-2 text-xs outline-none focus:border-primary/50" />
       </div>
-      <button type="button" onClick={() => void create()} disabled={busy} className="mb-2 flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium transition hover:bg-hover">
-        <Plus className="size-4" /> Новый чат
-      </button>
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
         {loading && <div className="space-y-1 py-1">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-8 animate-pulse rounded-lg bg-muted" />)}</div>}
         {!loading && error && <p className="px-2 py-4 text-xs text-destructive">Не удалось загрузить чаты.</p>}
         {!loading && !error && groups.length === 0 && <p className="px-2 py-5 text-xs leading-5 text-muted-foreground">{search.trim() ? 'Личные чаты не найдены.' : 'Создайте личный чат — он будет всегда под рукой.'}</p>}
         {groups.map((group) => (
           <section key={group.label} className="mb-3">
-            <h3 className="px-2 pb-1 pt-1 text-[11px] font-medium text-muted-foreground">{group.label}</h3>
+            <h3 className="sticky top-0 z-10 bg-sidebar/90 px-2 py-1 text-xs font-medium leading-5 text-muted-foreground backdrop-blur-sm">{group.label}</h3>
             <div className="space-y-0.5">
-              {group.items.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} />)}
+              {group.items.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} now={now} />)}
             </div>
           </section>
         ))}
@@ -122,17 +124,30 @@ export function AiConversationListPanel(): React.ReactElement {
             </button>
             {showProjects && (
               <div className="mt-1 space-y-0.5 pl-2">
-                {projectItems.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} project />)}
+                {projectItems.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} now={now} project />)}
               </div>
             )}
           </section>
         )}
       </div>
+      {/* min-h + padding, а не фикс-высота: под safe-area кнопка должна расти вниз, а не сжиматься. */}
+      <div className="shrink-0 border-t bg-sidebar/95 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={() => void create()}
+          disabled={busy}
+          className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition hover:bg-hover disabled:opacity-50"
+        >
+          <Plus className="size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">Новый чат</span>
+          <kbd className="shrink-0 rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] font-normal text-muted-foreground">{NEW_CHAT_HINT}</kbd>
+        </button>
+      </div>
     </div>
   );
 }
 
-function ConversationRow({ conversation, project = false }: { conversation: AiConversation; project?: boolean }): React.ReactElement {
+function ConversationRow({ conversation, now, project = false }: { conversation: AiConversation; now: number; project?: boolean }): React.ReactElement {
   const { aiConversationRepository } = useContainer();
   const [renameOpen, setRenameOpen] = useState(false);
   const [title, setTitle] = useState(conversation.title);
@@ -184,8 +199,10 @@ function ConversationRow({ conversation, project = false }: { conversation: AiCo
           className={({ isActive }) => cn('flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 pr-8 text-xs transition hover:bg-hover', isActive && 'bg-active font-medium')}
         >
           {project ? <FolderKanban className="size-3.5 shrink-0 text-muted-foreground" /> : <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />}
-          <span className="min-w-0 truncate">{conversation.title}</span>
-          <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground transition group-hover:opacity-0">{conversationAge(conversation)}</span>
+          <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground transition group-hover:opacity-0">
+            {formatRelativeTime(conversationActivityAt(conversation), now)}
+          </span>
         </NavLink>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

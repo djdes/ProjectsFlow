@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AiConversation, AiMessage } from '@/domain/ai-chat/AiConversation';
 import { useContainer } from '@/infrastructure/di/container';
+import { publishAiActiveRun } from '@/presentation/components/ai/aiActiveRun';
 import { announceAiConversationsChanged } from './useAiConversations';
 
 function createClientRequestId(): string {
@@ -86,6 +87,17 @@ export function useAiConversation(conversationId: string | null) {
       if (pollTimer !== null) window.clearInterval(pollTimer);
     };
   }, [aiConversationRepository, conversationId, refresh]);
+
+  // Композер рендерится вне этого хука, но кнопке «Стоп» нужен именно живой ран,
+  // а не флаг `sending` (он гаснет сразу после POST, задолго до конца генерации).
+  useEffect(() => {
+    if (!conversationId) return;
+    const active = messages.find((message) => message.role === 'assistant'
+      && (message.status === 'queued' || message.status === 'running')
+      && message.runId);
+    publishAiActiveRun(conversationId, active?.runId ?? null);
+    return () => publishAiActiveRun(conversationId, null);
+  }, [conversationId, messages]);
 
   const send = useCallback(async (body: string, mode: 'chat' | 'studio_plan' = 'chat') => {
     if (!conversationId || !body.trim() || sending) return;

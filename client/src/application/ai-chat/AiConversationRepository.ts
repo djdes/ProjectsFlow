@@ -4,6 +4,7 @@ import type {
   AiMessage,
   SendAiMessageResult,
 } from '@/domain/ai-chat/AiConversation';
+import type { AiKnowledgeSource } from '@/domain/ai-chat/AiKnowledgeSource';
 
 export type AiConversationListQuery = {
   scope?: 'personal' | 'project' | 'all';
@@ -34,6 +35,8 @@ export interface AiConversationRepository {
   listMessages(conversationId: string, query?: { beforeSeq?: string; afterSeq?: string; limit?: number }): Promise<AiMessageListResult>;
   sendMessage(conversationId: string, input: { body: string; clientRequestId: string; mode?: 'chat' | 'studio_plan'; expectedConversationVersion?: number }): Promise<SendAiMessageResult>;
   cancelRun(conversationId: string, runId: string): Promise<void>;
+  // Панель Knowledge: накопительный за диалог список просмотренных агентом источников.
+  listKnowledge(conversationId: string): Promise<AiKnowledgeSource[]>;
   streamUrl(conversationId: string, afterEventId?: string | null): string;
 }
 
@@ -43,6 +46,7 @@ export const aiConversationKeys = {
   list: (query: AiConversationListQuery = {}) => ['ai-conversations', 'list', query] as const,
   detail: (conversationId: string) => ['ai-conversations', 'detail', conversationId] as const,
   messages: (conversationId: string) => ['ai-conversations', 'messages', conversationId] as const,
+  knowledge: (conversationId: string) => ['ai-conversations', 'knowledge', conversationId] as const,
   run: (conversationId: string, runId: string) => ['ai-conversations', 'run', conversationId, runId] as const,
   projectStudio: (projectId: string) => ['ai-conversations', 'project-studio', projectId] as const,
 };

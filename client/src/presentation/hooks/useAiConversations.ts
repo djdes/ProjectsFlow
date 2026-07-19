@@ -8,6 +8,15 @@ export function announceAiConversationsChanged(): void {
   window.dispatchEvent(new CustomEvent(AI_CONVERSATIONS_CHANGED_EVENT));
 }
 
+/**
+ * Момент последней активности диалога. Единая точка для сортировки и группировки истории:
+ * если считать их по разным полям, чат окажется в группе «Сегодня», но отсортируется как старый.
+ */
+export function conversationActivityAt(conversation: AiConversation): number {
+  const parsed = Date.parse(conversation.lastMessageAt ?? conversation.updatedAt);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export function useAiConversations(options: { archived?: boolean; projectId?: string } = {}) {
   const { aiConversationRepository } = useContainer();
   const [items, setItems] = useState<AiConversation[]>([]);
@@ -46,7 +55,7 @@ export function useAiConversations(options: { archived?: boolean; projectId?: st
   }, [refresh]);
 
   const sorted = useMemo(
-    () => [...items].sort((a, b) => Date.parse(b.lastMessageAt ?? b.updatedAt) - Date.parse(a.lastMessageAt ?? a.updatedAt)),
+    () => [...items].sort((a, b) => conversationActivityAt(b) - conversationActivityAt(a)),
     [items],
   );
 

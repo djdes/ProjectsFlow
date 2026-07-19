@@ -1,11 +1,14 @@
-import { Check, FileText, Loader2, RotateCcw, XCircle } from 'lucide-react';
+import { Check, FileText, Loader2, RotateCcw, Undo2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { AiAffectedEntity } from '@/domain/ai-action/AiAction';
 
-export type AiActionOutcome = 'applied' | 'rejected';
+// 'undone' — состояние после серверного отката: карточка остаётся в ленте как след
+// произошедшего, но откатывать больше нечего.
+export type AiActionOutcome = 'applied' | 'rejected' | 'undone';
 
 // Сводка ПОСЛЕ решения: список затронутого остаётся в ленте, откат доступен второй
-// линией защиты (§2.1 референса).
+// линией защиты (§2.1 референса). Доступность «Отменить» приходит из серверного
+// журнала батча, поэтому кнопка жива и после перезагрузки вкладки.
 export function AiActionResultCard({
   outcome,
   title,
@@ -22,19 +25,22 @@ export function AiActionResultCard({
   onUndo: () => void;
 }): React.ReactElement {
   const rejected = outcome === 'rejected';
+  const undone = outcome === 'undone';
   return (
     <section className="not-prose mt-3 overflow-hidden rounded-xl border bg-card" aria-label={title}>
       <div className="flex items-start gap-2 px-3 py-2.5">
         {rejected ? (
           <XCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        ) : undone ? (
+          <Undo2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         ) : (
           <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" />
         )}
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-normal leading-5">{rejected ? 'Отклонено' : 'Готово'}</h3>
+          <h3 className="text-sm font-normal leading-5">{rejected ? 'Отклонено' : undone ? 'Отменено' : 'Готово'}</h3>
           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{title}</p>
         </div>
-        {!rejected && canUndo && (
+        {canUndo && (
           <Button type="button" size="sm" variant="secondary" className="sm:h-7 sm:px-2" disabled={undoing} onClick={onUndo}>
             {undoing ? <Loader2 className="animate-spin" /> : <RotateCcw />}
             Отменить

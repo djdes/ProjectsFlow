@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Archive, ArrowDown, BookOpen, Bot, CheckCircle2, ChevronDown, ChevronRight, Copy, FileOutput, FileText, Image, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, Plus, RefreshCw, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, User, Wrench } from 'lucide-react';
+import { AlertCircle, Archive, ArrowDown, Bot, CheckCircle2, ChevronDown, Copy, FileText, Image, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, Plus, RefreshCw, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -7,8 +7,11 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { useAiConversation } from '@/presentation/hooks/useAiConversation';
 import { useAiConversations, announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
+import { useAiChatPanels } from '@/presentation/hooks/useAiChatPanels';
 import { useContainer } from '@/infrastructure/di/container';
 import type { AiConversation, AiMessage } from '@/domain/ai-chat/AiConversation';
+import { readAiAgentSteps } from '@/domain/ai-chat/AiAgentStep';
+import type { AiActionBatchStatus } from '@/domain/ai-action/AiActionBatch';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
@@ -16,6 +19,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AiComposer } from './AiComposer';
 import { extractAiAttachments } from './aiAttachments';
 import { AiActionPlanCard, extractAiActionPlan } from './AiActionPlanCard';
+import { AiAgentStepsBlock } from './AiAgentStepsBlock';
+import { AiKnowledgePanel } from './AiKnowledgePanel';
+import { AiArtifactsPanel } from './AiArtifactsPanel';
 
 export function AiConversationView({
   conversationId,
@@ -140,7 +146,11 @@ export function AiConversationView({
             </div>
           </div>
         </div>
-        {personalWorkspace && detailsOpen && <AgentDetails messages={state.messages} />}
+        {/* Панели — только персональный режим и только от xl: в студии проекта и на
+            мобиле правой колонки нет, её появление сломало бы обе раскладки. */}
+        {personalWorkspace && detailsOpen && (
+          <AgentDetails conversationId={conversationId} revision={state.messages.length} />
+        )}
       </div>
     </div>
   );
@@ -291,8 +301,13 @@ function AiConversationHeader({
 
 function ConversationMessage({ message, previousUserBody, sending, onRetry, projectId }: { message: AiMessage; previousUserBody?: string; sending: boolean; onRetry: (body: string) => Promise<void>; projectId?: string }): React.ReactElement {
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
+  // Статус батча поднят сюда только ради шага «Требуется подтверждение»: он обязан
+  // стоять последним в блоке шагов, то есть НАД телом ответа, а сама карточка
+  // подтверждения живёт под ним.
+  const [batchStatus, setBatchStatus] = useState<AiActionBatchStatus | null>(null);
   const extracted = extractAiAttachments(message.body);
   const actionResult = message.role === 'assistant' ? extractAiActionPlan(extracted.text) : { text: extracted.text, plan: null };
+  const steps = message.role === 'assistant' ? readAiAgentSteps(message.metadata) : [];
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.body);
@@ -306,11 +321,12 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
     <article className={cn('group flex gap-3', user && 'justify-end')}>
       {!user && <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background"><Bot className="size-4" /></div>}
       <div className={cn('min-w-0 max-w-full overflow-hidden text-sm leading-6', user ? 'max-w-[85%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5' : 'max-w-[calc(100%-2.5rem)] flex-1')}>
+        {!user && <AiAgentStepsBlock steps={steps} needsReview={batchStatus === 'pending_review'} />}
         {message.body ? (
           <>
             {actionResult.text && <div className="prose prose-sm max-w-none overflow-x-auto break-words dark:prose-invert prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted prose-pre:text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{actionResult.text}</ReactMarkdown></div>}
             {extracted.attachments.length > 0 && <MessageAttachments attachments={extracted.attachments} />}
-            {actionResult.plan && <AiActionPlanCard plan={actionResult.plan} defaultProjectId={projectId} messageId={message.id} />}
+            {actionResult.plan && <AiActionPlanCard plan={actionResult.plan} defaultProjectId={projectId} messageId={message.id} conversationId={message.conversationId} onBatchStatusChange={setBatchStatus} />}
           </>
         ) : (
           <div className="flex items-center gap-2 py-1 text-muted-foreground"><span className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.3s]" /><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.15s]" /><i className="size-1.5 animate-bounce rounded-full bg-current" /></span><span className="text-xs">Формирую ответ</span></div>
@@ -334,24 +350,15 @@ function MessageAttachments({ attachments }: { attachments: ReturnType<typeof ex
   ))}</div>;
 }
 
-function AgentDetails({ messages }: { messages: readonly AiMessage[] }): React.ReactElement {
-  const artifactCount = messages.filter((message) => message.role === 'assistant' && /```|\[[^\]]+\]\([^)]+\)/.test(message.body)).length;
+// Правая колонка референса: ровно две сворачиваемые панели шириной 318px —
+// «что смотрели» и «что сделали». Разделение принципиальное, в одну ленту не сводится.
+function AgentDetails({ conversationId, revision }: { conversationId: string; revision: number }): React.ReactElement {
+  const { knowledge, artifacts, loading } = useAiChatPanels(conversationId, revision);
   return (
-    <aside className="hidden w-[300px] shrink-0 flex-col overflow-y-auto border-l bg-muted/10 p-3 xl:flex" aria-label="Детали агента">
-      <div className="px-2 pb-3 pt-1"><h2 className="text-sm font-semibold">Контекст чата</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Источники, навыки и результаты текущего разговора.</p></div>
-      <DetailsSection icon={BookOpen} title="Знания" count={1}><p>Контекст вашего пространства ProjectsFlow и история текущего чата.</p></DetailsSection>
-      <DetailsSection icon={Wrench} title="Навыки" count={3}><div className="flex flex-wrap gap-1.5"><span className="rounded-md bg-muted px-2 py-1">Анализ</span><span className="rounded-md bg-muted px-2 py-1">Тексты</span><span className="rounded-md bg-muted px-2 py-1">Код</span></div></DetailsSection>
-      <DetailsSection icon={FileOutput} title="Результаты" count={artifactCount}><p>{artifactCount > 0 ? `В ответах найдено результатов: ${artifactCount}. Откройте соответствующий ответ, чтобы скопировать код или ссылку.` : 'Код, ссылки и другие результаты появятся здесь после ответа ИИ.'}</p></DetailsSection>
+    <aside className="hidden w-[318px] shrink-0 flex-col gap-1 overflow-y-auto border-l bg-muted/10 p-3 xl:flex" aria-label="Детали агента">
+      <AiKnowledgePanel sources={knowledge} loading={loading} />
+      <div className="border-t" />
+      <AiArtifactsPanel artifacts={artifacts} loading={loading} />
     </aside>
-  );
-}
-
-function DetailsSection({ icon: Icon, title, count, children }: { icon: typeof BookOpen; title: string; count: number; children: React.ReactNode }): React.ReactElement {
-  const [open, setOpen] = useState(true);
-  return (
-    <section className="border-t py-2">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-medium hover:bg-hover"><ChevronRight className={cn('size-3.5 transition-transform', open && 'rotate-90')} /><Icon className="size-4 text-muted-foreground" /><span className="flex-1">{title}</span><span className="text-xs tabular-nums text-muted-foreground">{count}</span></button>
-      {open && <div className="px-8 pb-3 pt-1 text-xs leading-5 text-muted-foreground">{children}</div>}
-    </section>
   );
 }

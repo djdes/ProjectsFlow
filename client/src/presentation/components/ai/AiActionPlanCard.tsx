@@ -3,9 +3,20 @@ import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
-import type { AiAction, AiActionPlan, AiAffectedEntity } from '@/domain/ai-action/AiAction';
+import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { AiAction, AiActionPlan } from '@/domain/ai-action/AiAction';
 import { aiActionProjectTarget } from '@/domain/ai-action/AiAction';
+import type { AiActionBatch, AiActionBatchStatus } from '@/domain/ai-action/AiActionBatch';
+import { canUndoAiActionBatch } from '@/domain/ai-action/AiActionBatch';
+import type { AiActionBatchResult } from '@/application/ai-action/AiActionBatchRepository';
+import {
+  batchDestructiveEntities,
+  batchListedEntities,
+  batchOutcome,
+  buildBatchPlanItems,
+  isDestructiveBatchItemType,
+  summarizeBatch,
+} from '@/application/ai-action/aiActionBatchPlan';
 import { classifyAiActionPlan } from '@/application/ai-action/classifyAiActionPlan';
 import type { DestructiveTarget } from '@/application/ai-action/ResolveDestructiveTargets';
 import { AiDestructiveReviewCard, pluralizeTasks } from './AiDestructiveReviewCard';
@@ -15,26 +26,11 @@ export type { AiAction, AiActionPlan } from '@/domain/ai-action/AiAction';
 
 const ACTION_BLOCK = /```projectsflow-actions\s*([\s\S]*?)```/iu;
 const STATUSES = new Set<TaskStatus>(['backlog', 'todo', 'in_progress', 'awaiting_clarification', 'done', 'manual']);
-const STORAGE_PREFIX = 'pf-ai-action-plan:';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-type UndoEntry = { projectId: string; undo: () => Promise<void> };
-type Phase = 'running' | 'review' | 'result';
-
-// Журнал применения плана. Живёт в localStorage, потому что карточка перерисовывается
-// на каждый рендер истории: без него F5 или переключение чата запускали бы уже
-// выполненный план заново (действия исполняет клиент, серверного батча пока нет).
-type StoredRecord = {
-  version: 1;
-  autoDone: number;
-  autoFailed: number;
-  created: AiAffectedEntity[];
-  refs: Record<string, string>;
-  review: 'none' | 'pending' | 'applied' | 'rejected';
-  affected: AiAffectedEntity[];
-};
-
-// Один и тот же план не должен исполниться дважды из-за StrictMode/двойного монтирования
-// до того, как запись доедет до localStorage.
+// Один и тот же план не должен уйти на сервер дважды из-за StrictMode/двойного
+// монтирования до того, как вернётся ответ create. Серверная идемпотентность всё равно
+// поймает дубль, но лишний круглый рейс и мигание карточки нам не нужны.
 const inFlight = new Set<string>();
 
 export function extractAiActionPlan(body: string): { text: string; plan: AiActionPlan | null } {
@@ -96,33 +92,41 @@ function normalizeAction(value: unknown): AiAction | null {
 function isStatus(value: unknown): value is TaskStatus { return typeof value === 'string' && STATUSES.has(value as TaskStatus); }
 function isPriority(value: unknown): value is TaskPriority { return value === 1 || value === 2 || value === 3 || value === 4; }
 
-export function AiActionPlanCard({ plan, defaultProjectId, messageId }: { plan: AiActionPlan; defaultProjectId?: string; messageId?: string }): React.ReactElement | null {
-  const { projectRepository, taskRepository, resolveDestructiveTargets } = useContainer();
+export function AiActionPlanCard({
+  plan,
+  defaultProjectId,
+  messageId,
+  conversationId,
+  onBatchStatusChange,
+}: {
+  plan: AiActionPlan;
+  defaultProjectId?: string;
+  messageId?: string;
+  conversationId?: string;
+  // Нужен блоку шагов: «Требуется подтверждение» стоит НАД телом ответа, а карточка
+  // подтверждения — под ним, поэтому статус приходится поднимать в сообщение.
+  onBatchStatusChange?: (status: AiActionBatchStatus | null) => void;
+}): React.ReactElement | null {
+  const { projectRepository, taskRepository, resolveDestructiveTargets, aiActionBatchRepository } = useContainer();
   const { user } = useCurrentUser();
   const classification = useMemo(() => classifyAiActionPlan(plan), [plan]);
-  const storageKey = useMemo(() => STORAGE_PREFIX + (messageId ?? planFingerprint(plan)), [messageId, plan]);
+  // Ключ идемпотентности: id сообщения. Отпечаток плана — запасной вариант для
+  // оптимистичного рендера, когда сообщение ещё не получило серверный id.
+  const idempotencyKey = useMemo(
+    () => (messageId && UUID.test(messageId) ? messageId : planFingerprint(plan)),
+    [messageId, plan],
+  );
 
-  // Журнал читается синхронно при первом рендере: иначе уже применённый план
-  // мигал бы «Применяю действия…» на каждом рендере истории.
-  const stored = useMemo(() => readRecord(storageKey), [storageKey]);
-  const [phase, setPhase] = useState<Phase>(storedPhase(stored));
-  const [record, setRecord] = useState<StoredRecord | null>(stored);
-  const [affected, setAffected] = useState<readonly AiAffectedEntity[]>(stored?.affected ?? []);
-  const [resolving, setResolving] = useState(false);
+  const [batch, setBatch] = useState<AiActionBatch | null>(null);
+  const [preparing, setPreparing] = useState(true);
   const [busy, setBusy] = useState(false);
   const [undoing, setUndoing] = useState(false);
-  // Журнал отката живёт только в этой вкладке: после перезагрузки откатывать нечем,
-  // поэтому доступность кнопки — состояние, а не длина ref'а.
-  const [canUndo, setCanUndo] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [outcome, setOutcome] = useState<AiActionOutcome>(stored?.review === 'rejected' ? 'rejected' : 'applied');
-  const journalRef = useRef<UndoEntry[]>([]);
-  const refsRef = useRef<Map<string, string>>(new Map(Object.entries(stored?.refs ?? {})));
+  const refsRef = useRef<Map<string, string>>(new Map());
 
-  const persist = (next: StoredRecord): void => {
-    setRecord(next);
-    writeRecord(storageKey, next);
-  };
+  useEffect(() => {
+    onBatchStatusChange?.(batch?.status ?? null);
+  }, [batch?.status, onBatchStatusChange]);
 
   const resolveProject = (action: AiAction): string => {
     const target = aiActionProjectTarget(action);
@@ -131,51 +135,57 @@ export function AiActionPlanCard({ plan, defaultProjectId, messageId }: { plan: 
     return value;
   };
 
-  // Стадия 1: неразрушительные действия применяются молча, сразу при появлении плана.
+  const resolveProjectOrNull = (action: AiAction): string | null => {
+    try { return resolveProject(action); } catch { return null; }
+  };
+
+  // Единственная точка входа: сначала журналируем план на сервере, и только если сервер
+  // ответил «этот батч новый», исполняем действия. Раньше эту роль играл localStorage —
+  // он не переживал приватный режим, другое устройство и очистку хранилища.
   useEffect(() => {
-    if (!user || stored) return;
-    if (inFlight.has(storageKey)) return;
-    inFlight.add(storageKey);
+    if (!user || !conversationId) return;
+    if (inFlight.has(idempotencyKey)) return;
+    inFlight.add(idempotencyKey);
     void (async () => {
       try {
-        const result = await applySafeActions();
-        persist(result);
-        setCanUndo(journalRef.current.length > 0);
-        setPhase(classification.requiresReview ? 'review' : 'result');
+        // Список объектов под удаление резолвится ДО создания батча: только так каждая
+        // удаляемая задача получает собственную строку журнала и, значит, собственный откат.
+        const targets: DestructiveTarget[] = classification.reviewActions.map((action) => ({
+          action, projectId: resolveProject(action),
+        }));
+        const affected = targets.length > 0 ? await resolveDestructiveTargets.execute(targets) : [];
+
+        const created = await aiActionBatchRepository.create({
+          conversationId,
+          messageId: messageId && UUID.test(messageId) ? messageId : null,
+          idempotencyKey,
+          title: plan.title,
+          projectId: defaultProjectId ?? null,
+          items: buildBatchPlanItems(classification.autoActions, affected, resolveProjectOrNull),
+        });
+        setBatch(created.batch);
+
+        if (created.replayed || classification.autoActions.length === 0) return;
+        const results = await applySafeActions();
+        setBatch(await aiActionBatchRepository.recordResults(created.batch.id, results));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Не удалось выполнить действия');
       } finally {
-        inFlight.delete(storageKey);
+        inFlight.delete(idempotencyKey);
+        setPreparing(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- план и ключ неизменны для смонтированного сообщения; перезапуск по смене user/repo привёл бы к повторному исполнению
-  }, [storageKey, user?.id]);
+  }, [idempotencyKey, conversationId, user?.id]);
 
-  // Стадия 2: список объектов под удаление резолвится ДО решения пользователя.
-  useEffect(() => {
-    if (phase !== 'review' || affected.length > 0) return;
-    setResolving(true);
-    void (async () => {
-      try {
-        const targets: DestructiveTarget[] = classification.reviewActions.map((action) => ({ action, projectId: resolveProject(action) }));
-        setAffected(await resolveDestructiveTargets.execute(targets));
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Не удалось собрать список задач');
-      } finally {
-        setResolving(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- резолв делаем один раз на вход в review
-  }, [phase]);
-
-  const applySafeActions = async (): Promise<StoredRecord> => {
-    const created: AiAffectedEntity[] = [];
-    let failed = 0;
+  const applySafeActions = async (): Promise<AiActionBatchResult[]> => {
+    const results: AiActionBatchResult[] = [];
     for (const action of classification.autoActions) {
       try {
         if (action.type === 'create_project') {
           const project = await projectRepository.create({ name: action.name });
           refsRef.current.set(action.id, project.id);
-          journalRef.current.push({ projectId: project.id, undo: () => projectRepository.delete(project.id) });
-          created.push({ actionId: action.id, kind: 'project', projectId: project.id, entityId: project.id, title: `Проект «${action.name}»` });
+          results.push({ actionId: action.id, entityId: project.id, projectId: null, status: 'done' });
           announceProjectChange(project.id);
         } else if (action.type === 'create_task') {
           const projectId = resolveProject(action);
@@ -186,8 +196,7 @@ export function AiActionPlanCard({ plan, defaultProjectId, messageId }: { plan: 
             priority: action.priority,
             assigneeUserId: action.assigneeUserId ?? user?.id ?? '',
           });
-          journalRef.current.push({ projectId, undo: () => taskRepository.delete(projectId, task.id) });
-          created.push({ actionId: action.id, kind: 'task', projectId, entityId: task.id, title: firstLine(action.description) });
+          results.push({ actionId: action.id, entityId: task.id, projectId, status: 'done' });
           announceProjectChange(projectId, task.id);
         } else if (action.type === 'update_task') {
           const projectId = resolveProject(action);
@@ -195,53 +204,60 @@ export function AiActionPlanCard({ plan, defaultProjectId, messageId }: { plan: 
           if (!before) throw new Error('Задача не найдена или уже удалена');
           await taskRepository.update(projectId, action.taskId, { description: action.description, deadline: action.deadline, priority: action.priority });
           if (action.status && action.status !== before.status) await taskRepository.move(projectId, action.taskId, { targetStatus: action.status, beforeTaskId: null, afterTaskId: null });
-          journalRef.current.push({ projectId, undo: async () => {
-            await taskRepository.update(projectId, before.id, { description: before.description ?? '', deadline: before.deadline, priority: before.priority });
-            if (action.status && before.status !== action.status) await taskRepository.move(projectId, before.id, { targetStatus: before.status, beforeTaskId: null, afterTaskId: null });
-          } });
-          created.push({ actionId: action.id, kind: 'task', projectId, entityId: action.taskId, title: firstLine(action.description ?? before.description ?? '') });
+          results.push({
+            actionId: action.id,
+            entityId: action.taskId,
+            projectId,
+            status: 'done',
+            // Снимок уезжает на сервер — благодаря ему откат правки работает и после F5,
+            // и из другой вкладки.
+            before: {
+              description: before.description ?? '',
+              status: before.status,
+              deadline: before.deadline ?? null,
+              priority: before.priority ?? null,
+            },
+          });
           announceProjectChange(projectId);
         }
-      } catch {
-        failed += 1;
+      } catch (cause) {
+        results.push({
+          actionId: action.id,
+          entityId: null,
+          projectId: resolveProjectOrNull(action),
+          status: 'failed',
+          errorMessage: cause instanceof Error ? cause.message : 'Действие не выполнено',
+        });
       }
     }
-    return {
-      version: 1,
-      autoDone: created.length,
-      autoFailed: failed,
-      created,
-      refs: Object.fromEntries(refsRef.current),
-      review: classification.requiresReview ? 'pending' : 'none',
-      affected: [],
-    };
+    return results;
   };
 
   const confirmDestructive = async (): Promise<void> => {
-    if (busy || !record) return;
+    if (busy || !batch) return;
     setBusy(true);
     setError(undefined);
-    const removed: AiAffectedEntity[] = [];
     try {
-      for (const action of classification.reviewActions) {
-        const projectId = resolveProject(action);
-        const targets = affected.filter((entity) => entity.actionId === action.id);
-        const snapshots = await taskRepository.list(projectId);
-        for (const entity of targets) {
-          const before = snapshots.find((task) => task.id === entity.entityId);
-          if (!before) continue;
-          await taskRepository.delete(projectId, entity.entityId);
-          journalRef.current.push({ projectId, undo: () => restoreTask(taskRepository, before) });
-          removed.push(entity);
+      const results: AiActionBatchResult[] = [];
+      const touched = new Set<string>();
+      for (const item of batch.items) {
+        if (!isDestructiveBatchItemType(item.type) || !item.entityId || !item.projectId) continue;
+        try {
+          await taskRepository.delete(item.projectId, item.entityId);
+          results.push({ actionId: item.actionId, entityId: item.entityId, projectId: item.projectId, status: 'done' });
+        } catch (cause) {
+          results.push({
+            actionId: item.actionId, entityId: item.entityId, projectId: item.projectId, status: 'failed',
+            errorMessage: cause instanceof Error ? cause.message : 'Не удалось удалить задачу',
+          });
         }
-        announceProjectChange(projectId);
+        touched.add(item.projectId);
       }
-      setOutcome('applied');
-      persist({ ...record, review: 'applied', affected: removed });
-      setAffected(removed);
-      setCanUndo(journalRef.current.length > 0);
-      setPhase('result');
-      toast.success(`Удалено ${removed.length} ${pluralizeTasks(removed.length)}`);
+      const applied = await aiActionBatchRepository.apply(batch.id, results);
+      setBatch(applied);
+      for (const projectId of touched) announceProjectChange(projectId);
+      const removed = results.filter((item) => item.status === 'done').length;
+      toast.success(`Удалено ${removed} ${pluralizeTasks(removed)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось выполнить удаление');
     } finally {
@@ -249,81 +265,81 @@ export function AiActionPlanCard({ plan, defaultProjectId, messageId }: { plan: 
     }
   };
 
-  const reject = (): void => {
-    if (busy || !record) return;
-    setOutcome('rejected');
-    persist({ ...record, review: 'rejected', affected: [] });
-    setAffected([]);
-    setPhase('result');
+  const reject = async (): Promise<void> => {
+    if (busy || !batch) return;
+    setBusy(true);
+    try {
+      setBatch(await aiActionBatchRepository.reject(batch.id));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось отклонить действия');
+    } finally {
+      setBusy(false);
+    }
   };
 
+  // Откат целиком серверный: он опирается на entity id и before-снимки в журнале, а не
+  // на замыкания этой вкладки, поэтому доступен и после перезагрузки.
   const undo = async (): Promise<void> => {
-    if (undoing || journalRef.current.length === 0) return;
+    if (undoing || !batch) return;
     setUndoing(true);
-    let undone = 0;
-    for (const entry of [...journalRef.current].reverse()) {
-      try {
-        await entry.undo();
-        announceProjectChange(entry.projectId);
-        undone += 1;
-      } catch { /* остальные независимые операции всё равно откатываем */ }
+    try {
+      const touched = new Set(batch.items.flatMap((item) => (item.projectId ? [item.projectId] : [])));
+      const undone = await aiActionBatchRepository.undo(batch.id);
+      setBatch(undone);
+      for (const projectId of touched) announceProjectChange(projectId);
+      const count = undone.items.filter((item) => item.status === 'undone').length;
+      toast.success(`Отменено действий: ${count}`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Не удалось отменить действия');
+    } finally {
+      setUndoing(false);
     }
-    journalRef.current = [];
-    setCanUndo(false);
-    setUndoing(false);
-    toast.success(`Отменено действий: ${undone}`);
-    setAffected([]);
   };
 
   if (!user) return null;
 
-  if (phase === 'running') {
+  if (!batch || (preparing && batch.status !== 'pending_review')) {
     return (
       <section className="not-prose mt-3 flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-xs text-muted-foreground" aria-label={plan.title}>
-        <Loader2 className="size-3.5 animate-spin" />
-        Применяю действия…
+        {error ? error : <><Loader2 className="size-3.5 animate-spin" />Применяю действия…</>}
       </section>
     );
   }
 
-  if (phase === 'review') {
+  if (batch.status === 'pending_review') {
     return (
       <AiDestructiveReviewCard
-        entities={affected}
-        loading={resolving}
+        entities={batchDestructiveEntities(batch)}
+        loading={preparing}
         busy={busy}
         error={error}
-        onReject={reject}
+        onReject={() => void reject()}
         onConfirm={() => void confirmDestructive()}
       />
     );
   }
 
-  const summary = record ? resultSummary(record, outcome) : plan.title;
-  const listed = outcome === 'rejected' ? (record?.created ?? []) : [...(record?.created ?? []), ...affected];
+  const outcome: AiActionOutcome = batchOutcome(batch.status);
   return (
     <AiActionResultCard
       outcome={outcome}
-      title={summary}
-      entities={listed}
+      title={resultSummary(batch, outcome)}
+      entities={batchListedEntities(batch, outcome)}
       undoing={undoing}
-      canUndo={canUndo}
+      canUndo={canUndoAiActionBatch(batch)}
       onUndo={() => void undo()}
     />
   );
 }
 
-function storedPhase(stored: StoredRecord | null): Phase {
-  if (!stored) return 'running';
-  return stored.review === 'pending' ? 'review' : 'result';
-}
-
-function resultSummary(record: StoredRecord, outcome: AiActionOutcome): string {
+function resultSummary(batch: AiActionBatch, outcome: AiActionOutcome): string {
+  if (outcome === 'undone') return 'Действия отменены';
+  const counts = summarizeBatch(batch);
   const parts: string[] = [];
-  if (record.autoDone > 0) parts.push(`Выполнено действий: ${record.autoDone}`);
-  if (record.autoFailed > 0) parts.push(`не удалось: ${record.autoFailed}`);
+  if (counts.done > 0) parts.push(`Выполнено действий: ${counts.done}`);
+  if (counts.failed > 0) parts.push(`не удалось: ${counts.failed}`);
   if (outcome === 'rejected') parts.push('удаление отклонено — ничего не удалено');
-  else if (record.review === 'applied') parts.push(`удалено ${record.affected.length} ${pluralizeTasks(record.affected.length)}`);
+  else if (counts.removed > 0) parts.push(`удалено ${counts.removed} ${pluralizeTasks(counts.removed)}`);
   return parts.length > 0 ? capitalize(parts.join(', ')) : 'Изменений не потребовалось';
 }
 
@@ -331,12 +347,8 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function firstLine(value: string): string {
-  return value.split('\n')[0]?.trim() || 'Без названия';
-}
-
-// Отпечаток плана нужен только когда сообщение ещё не имеет id (оптимистичный рендер):
-// иначе журнал применения привязывается к идентификатору сообщения.
+// Отпечаток плана нужен только когда сообщение ещё не имеет серверного id
+// (оптимистичный рендер): иначе ключ идемпотентности — сам id сообщения.
 function planFingerprint(plan: AiActionPlan): string {
   const source = JSON.stringify(plan);
   let hash = 0;
@@ -344,31 +356,6 @@ function planFingerprint(plan: AiActionPlan): string {
     hash = (hash * 31 + source.charCodeAt(index)) | 0;
   }
   return `fp${(hash >>> 0).toString(36)}`;
-}
-
-function readRecord(key: string): StoredRecord | null {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredRecord;
-    return parsed.version === 1 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeRecord(key: string, record: StoredRecord): void {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(record));
-  } catch { /* приватный режим/переполненное хранилище — журнал не критичен для рендера */ }
-}
-
-async function restoreTask(repository: ReturnType<typeof useContainer>['taskRepository'], task: Task): Promise<void> {
-  await repository.create(task.projectId, {
-    description: task.description ?? '', icon: task.icon, cover: task.cover, coverPosition: task.coverPosition,
-    status: task.status, ralphMode: task.ralphMode, assigneeUserId: task.assignee.userId,
-    deadline: task.deadline, startDate: task.startDate, parentTaskId: task.parentTaskId, priority: task.priority,
-  });
 }
 
 function announceProjectChange(projectId: string, createdTaskId?: string): void {
