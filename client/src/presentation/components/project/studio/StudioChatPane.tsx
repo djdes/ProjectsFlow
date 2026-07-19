@@ -1,18 +1,31 @@
-import { PanelLeftClose } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, Menu, Palette, PanelLeftClose, Settings2, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
+import type { DashboardSection } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import type { StudioSplitPane } from './useStudioSplitPane';
+import { StudioThemePanel } from './StudioThemePanel';
+import { useState } from 'react';
 
 export function StudioChatPane({
   conversationId,
   projectName,
   splitPane,
+  onOpenDashboardSection,
 }: {
   conversationId: string;
   projectName: string;
   splitPane: StudioSplitPane;
+  onOpenDashboardSection: (section: DashboardSection) => void;
 }): React.ReactElement {
+  const [themeOpen, setThemeOpen] = useState(false);
+  const dashboardLinks: Array<{ label: string; section: DashboardSection; icon: typeof LayoutDashboard }> = [
+    { label: 'Обзор приложения', section: 'overview', icon: LayoutDashboard },
+    { label: 'Пользователи', section: 'users', icon: Users },
+    { label: 'Безопасность', section: 'security', icon: ShieldCheck },
+    { label: 'Настройки приложения', section: 'settings', icon: Settings2 },
+  ];
   return (
     <>
       <aside
@@ -25,18 +38,33 @@ export function StudioChatPane({
           splitPane.dragging && 'select-none',
         )}
       >
-        <div style={{ width: splitPane.width }} className="relative h-full min-h-0">
-          <AiConversationView conversationId={conversationId} projectName={projectName} />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute right-2 top-2 z-10 size-8 bg-background/90 backdrop-blur"
-            aria-label="Скрыть AI-чат"
-            onClick={() => splitPane.setHidden(true)}
-          >
-            <PanelLeftClose className="size-4" />
-          </Button>
+        <div style={{ width: splitPane.width }} className="relative flex h-full min-h-0 flex-col">
+          <header className="flex h-[52px] shrink-0 items-center gap-1 border-b px-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              aria-label="Открыть основную панель"
+              onClick={() => window.dispatchEvent(new CustomEvent('pf:set-sidebar-collapsed', { detail: { collapsed: false } }))}
+            >
+              <Menu className="size-4" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>
+                  <span className="truncate">{projectName}</span><ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                {dashboardLinks.map(({ label, section, icon: Icon }) => <DropdownMenuItem key={section} onSelect={() => onOpenDashboardSection(section)}><Icon />{label}</DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => setThemeOpen(true)} aria-label="Тема проекта"><Palette className="size-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Скрыть панель чата" onClick={() => splitPane.setHidden(true)}><PanelLeftClose className="size-4" /></Button>
+          </header>
+          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectName={projectName} hideHeader /></div>
+          {themeOpen && <StudioThemePanel conversationId={conversationId} projectName={projectName} onClose={() => setThemeOpen(false)} />}
         </div>
       </aside>
       {!splitPane.hidden && (

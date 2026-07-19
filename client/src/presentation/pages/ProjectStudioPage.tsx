@@ -139,6 +139,14 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
   const sectionChange = useCallback((next: DashboardSection): void => {
     updateQuery({ section: next }, true);
   }, [updateQuery]);
+  const openDashboardSection = useCallback((next: DashboardSection): void => {
+    updateQuery({ panel: 'dashboard', section: next });
+  }, [updateQuery]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('pf:studio-chat-hidden', { detail: { hidden: splitPane.hidden } }));
+    return () => window.dispatchEvent(new CustomEvent('pf:studio-chat-hidden', { detail: { hidden: false } }));
+  }, [splitPane.hidden]);
 
   const content = useMemo(() => {
     if (loading) {
@@ -199,7 +207,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   return (
     <main className="flex h-full min-h-[520px] w-full overflow-hidden bg-background" aria-label={`Project Studio — ${data.project.name}`}>
-      <StudioChatPane conversationId={data.conversationId} projectName={data.project.name} splitPane={splitPane} />
+      <StudioChatPane conversationId={data.conversationId} projectName={data.project.name} splitPane={splitPane} onOpenDashboardSection={openDashboardSection} />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Рабочая область проекта">
         {panel === 'dashboard' && (

@@ -11,10 +11,12 @@ export function AiConversationView({
   conversationId,
   compact = false,
   projectName,
+  hideHeader = false,
 }: {
   conversationId: string;
   compact?: boolean;
   projectName?: string;
+  hideHeader?: boolean;
 }): React.ReactElement {
   const state = useAiConversation(conversationId);
   const scrollArea = useRef<HTMLDivElement | null>(null);
@@ -49,14 +51,14 @@ export function AiConversationView({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
-      <header className={cn('flex shrink-0 items-center gap-2 border-b px-4', compact ? 'h-12' : 'h-[52px]')}>
+      {!hideHeader && <header className={cn('flex shrink-0 items-center gap-2 border-b px-4', compact ? 'h-12' : 'h-[52px]')}>
         <div className="grid size-7 place-items-center rounded-lg bg-foreground text-background"><Sparkles className="size-4" /></div>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-semibold">{state.conversation?.title ?? projectName ?? 'ИИ'}</h1>
           {projectName && <p className="truncate text-[10px] text-muted-foreground">Чат проекта · {projectName}</p>}
         </div>
         {state.sending && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Loader2 className="size-3 animate-spin" /> Думаю</span>}
-      </header>
+      </header>}
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <div
           ref={scrollArea}

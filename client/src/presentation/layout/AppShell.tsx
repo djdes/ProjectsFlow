@@ -57,7 +57,17 @@ export function AppShell(): React.ReactElement {
   // только элементы, которым разрешено сужаться под панелью (плашка и строка отображений).
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const { pathname } = useLocation();
-  const immersiveRoute = pathname === '/ai' || pathname.startsWith('/ai/') || /\/projects\/[^/]+\/studio(?:\/|$)/.test(pathname);
+  const studioRoute = /\/projects\/[^/]+\/studio(?:\/|$)/.test(pathname);
+  const immersiveRoute = pathname === '/ai' || pathname.startsWith('/ai/') || studioRoute;
+  const [studioChatHidden, setStudioChatHidden] = useState(false);
+  useEffect(() => {
+    const onStudioChatHidden = (event: Event): void => {
+      const hidden = (event as CustomEvent<{ hidden?: boolean }>).detail?.hidden;
+      if (typeof hidden === 'boolean') setStudioChatHidden(hidden);
+    };
+    window.addEventListener('pf:studio-chat-hidden', onStudioChatHidden);
+    return () => window.removeEventListener('pf:studio-chat-hidden', onStudioChatHidden);
+  }, []);
   // Закрываем мобильный drawer ТОЛЬКО при смене маршрута (клик по проекту/разделу). Раньше
   // тут была обёртка onClick={close} вокруг всего Sidebar — она закрывала панель на ЛЮБОЙ
   // клик, ломая разворот секции «Мои проекты». Теперь тоггл секции (без навигации) не закрывает.
@@ -238,7 +248,7 @@ export function AppShell(): React.ReactElement {
             )}
             {/* Свёрнутая панель (Notion-style): бургер сверху-слева + предпросмотр на hover.
                 Контент (обложка, синяя плашка) при этом растянут до левого края. */}
-            {collapsed && (
+            {collapsed && !(studioRoute && studioChatHidden) && (
               <>
                 <TooltipProvider delayDuration={550} skipDelayDuration={120}>
                   <Tooltip>
