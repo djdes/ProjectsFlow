@@ -3,6 +3,15 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z, ZodError } from 'zod';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { AiConversationService } from '../../application/ai-conversation/AiConversationService.js';
+import {
+  AI_AGENT_STEP_KINDS,
+  MAX_AI_AGENT_STEPS,
+  normalizeAgentSteps,
+} from '../../domain/ai-conversation/AiAgentStep.js';
+import {
+  MAX_AI_KNOWLEDGE_SOURCES,
+  normalizeKnowledgeSources,
+} from '../../domain/ai-conversation/AiKnowledgeSource.js';
 import type { AiConversationRun, PendingAiConversationRun } from '../../domain/ai-conversation/AiRun.js';
 import {
   AiConversationCompletionConflictError,
@@ -17,6 +26,24 @@ type Deps = {
   readonly service: AiConversationService;
 };
 
+// Шаги и источники опциональны: воркер, который их не шлёт, обязан продолжать
+// работать ровно как раньше — блок шагов и панели просто не появятся.
+const stepSchema = z.object({
+  id: z.string().min(1).max(80).optional(),
+  kind: z.enum(AI_AGENT_STEP_KINDS as unknown as [string, ...string[]]),
+  detail: z.string().max(2_000).nullable().optional(),
+  startedAt: z.string().max(40).nullable().optional(),
+  durationMs: z.number().int().nonnegative().nullable().optional(),
+}).strict();
+
+const knowledgeSchema = z.object({
+  id: z.string().min(1).max(80),
+  kind: z.enum(['project', 'task', 'kb_page', 'document']),
+  title: z.string().min(1).max(300),
+  subtitle: z.string().max(200).nullable().optional(),
+  href: z.string().max(300).nullable().optional(),
+}).strict();
+
 const completeSchema = z.object({
   leaseToken: z.string().min(20).max(256),
   idempotencyKey: z.string().min(8).max(128),
@@ -25,6 +52,8 @@ const completeSchema = z.object({
   tokensIn: z.number().int().nonnegative().nullable().optional(),
   tokensOut: z.number().int().nonnegative().nullable().optional(),
   costUsd: z.number().nonnegative().nullable().optional(),
+  steps: z.array(stepSchema).max(MAX_AI_AGENT_STEPS).nullable().optional(),
+  knowledge: z.array(knowledgeSchema).max(MAX_AI_KNOWLEDGE_SOURCES).nullable().optional(),
 }).strict();
 
 const failSchema = z.object({
@@ -80,6 +109,8 @@ export function aiConversationAgentRouter(deps: Deps): Router {
         tokensIn: body.tokensIn ?? null,
         tokensOut: body.tokensOut ?? null,
         costUsd: body.costUsd ?? null,
+        steps: body.steps == null ? null : normalizeAgentSteps(body.steps),
+        knowledge: body.knowledge == null ? null : normalizeKnowledgeSources(body.knowledge),
         requestId: req.header('x-request-id') ?? null,
       });
       res.json({ run: runDto(result.run), assistantMessage: result.assistantMessage });
@@ -136,6 +167,8 @@ function actionProtocol(projectId: string | null): string {
     `Current project id: ${projectId ?? 'none (ask for a project or create one first)'}. For actions in the current Studio, use this project id. For 100 tasks, output 100 explicit create_task actions so progress and per-item results are visible.`,
     'Attachments appear in the user text as PF_ATTACHMENT HTML comments containing base64 JSON. Read text attachments directly and use image data as visual context when supported; do not repeat the encoded payload in the answer.',
     'For ordinary questions that require no mutation, do not emit a projectsflow-actions block.',
+    'PROGRESS REPORTING (optional, sent on the /complete call, NOT inside the answer body): "steps":[{"kind":"thought|query|read|write|review","detail":"one short sentence","durationMs":1200}] — at most 50. Do not send a label: the server writes the human-readable Russian one from "kind".',
+    'CONTEXT REPORTING (optional, same call): "knowledge":[{"kind":"project|task|kb_page|document","id":"<entity id>","title":"...","subtitle":"...","href":"/projects/..."}] — the objects you actually looked at, at most 50. "href" must be a site-relative path.',
   ].join('\n');
 }
 

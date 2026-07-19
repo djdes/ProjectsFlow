@@ -108,6 +108,8 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
 
   async listStorageKeysByProject(projectId: string): Promise<string[]> {
     // INNER JOIN с tasks: аттач существует только если его task ещё в БД.
+    // БЕЗ фильтра deleted_at (db/134) намеренно: сносим проект целиком, файлы задач
+    // из корзины тоже надо убрать с диска — иначе они переживут проект мусором.
     // Используется DeleteProject use-case'ом ДО каскадного удаления, чтобы потом
     // best-effort удалить файлы с диска (DB-каскад только убирает ROW'ы).
     const rows = await this.db

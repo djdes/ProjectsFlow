@@ -8,6 +8,8 @@ import type { GetProjectTaskVersions } from '../../application/task/GetProjectTa
 import type { RestoreTaskVersion } from '../../application/task/RestoreTaskVersion.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { DeleteTask } from '../../application/task/DeleteTask.js';
+import type { ListTrashedTasks } from '../../application/task/ListTrashedTasks.js';
+import type { RestoreDeletedTask } from '../../application/task/RestoreDeletedTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { UnlinkCommit } from '../../application/task/UnlinkCommit.js';
 import type { ListTaskCommits } from '../../application/task/ListTaskCommits.js';
@@ -56,6 +58,9 @@ type Deps = {
   readonly updateTask: UpdateTask;
   readonly moveTask: MoveTask;
   readonly deleteTask: DeleteTask;
+  // Корзина проекта + откат удаления (db/134).
+  readonly listTrashedTasks: ListTrashedTasks;
+  readonly restoreDeletedTask: RestoreDeletedTask;
   readonly getTaskVersions: GetTaskVersions;
   readonly getProjectTaskVersions: GetProjectTaskVersions;
   readonly restoreTaskVersion: RestoreTaskVersion;
@@ -450,6 +455,35 @@ export function tasksRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Корзина проекта (db/134). Зарегистрировано ПОСЛЕ /:taskId-роутов только по стилю файла:
+  // конфликта нет — bare `GET /:taskId` в этом роутере не существует.
+  router.get('/trash', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const trashed = await deps.listTrashedTasks.execute(projectId, req.user!.id);
+      res.json({ tasks: trashed.map(toDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Undo удаления: задача возвращается с ТЕМ ЖЕ id, поэтому ссылки на неё,
+  // комментарии и история версий переживают откат.
+  router.post(
+    '/trash/:taskId/restore',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const task = await deps.restoreDeletedTask.execute(projectId, req.user!.id, taskId);
+        deps.notifyTaskChanged(projectId);
+        res.json({ task: toDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // POST /:taskId/assign-to-project — перенос задачи в другой проект (из инбокса —
   // owner, из именованного — move_task; права гейтит use-case по task.projectId).

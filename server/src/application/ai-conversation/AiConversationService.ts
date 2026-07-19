@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import type { AiConversation, AiConversationKind } from '../../domain/ai-conversation/AiConversation.js';
 import { DEFAULT_AI_CONVERSATION_TITLE } from '../../domain/ai-conversation/AiConversation.js';
 import type { AiConversationEvent } from '../../domain/ai-conversation/AiConversationEvent.js';
+import type { AiKnowledgeSource } from '../../domain/ai-conversation/AiKnowledgeSource.js';
+import {
+  mergeKnowledgeSources,
+  normalizeKnowledgeSources,
+} from '../../domain/ai-conversation/AiKnowledgeSource.js';
 import type { AiConversationMessage } from '../../domain/ai-conversation/AiMessage.js';
 import type {
   AiConversationRun,
@@ -184,6 +189,23 @@ export class AiConversationService {
       ...(query.afterSeq !== undefined ? { afterSeq: query.afterSeq } : {}),
       limit: clampLimit(query.limit),
     });
+  }
+
+  /**
+   * Источники, которые агент просматривал за весь диалог. Читаются из metadata
+   * ассистентских сообщений — то есть переживают перезагрузку и не зависят от того,
+   * открыта ли была вкладка в момент ответа.
+   */
+  async listKnowledge(userId: string, conversationId: string): Promise<AiKnowledgeSource[]> {
+    await this.loadAuthorized(userId, conversationId);
+    const messages = await this.deps.repo.listMessages(conversationId, { limit: MAX_PAGE });
+    return mergeKnowledgeSources(
+      messages
+        .filter((message) => message.role === 'assistant' && message.metadata)
+        .map((message) => normalizeKnowledgeSources(
+          (message.metadata as Record<string, unknown>)['knowledge'],
+        )),
+    );
   }
 
   async sendMessage(

@@ -341,6 +341,8 @@ export class DrizzleProjectRepository implements ProjectRepository {
     await this.db.transaction(async (tx) => {
       // Список task-ID этого проекта — нужен для удаления task_attachments/
       // task_comments/task_commits, у которых FK по task_id, а не по project_id.
+      // БЕЗ фильтра deleted_at (db/134) намеренно: физический снос проекта должен
+      // забрать и задачи из корзины, иначе они останутся сиротами без проекта.
       const taskIds = (
         await tx
           .select({ id: tasks.id })

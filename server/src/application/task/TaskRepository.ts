@@ -61,16 +61,40 @@ export interface TaskRepository {
   listByIds(taskIds: readonly string[]): Promise<Task[]>;
   // Все задачи, где userId — текущий ответственный (в любых проектах).
   listAssignedTo(userId: string): Promise<Task[]>;
+  // Все выборки выше и getById отдают ТОЛЬКО живые задачи: удалённая задача (db/134)
+  // не должна «воскресать» ни в одном виде.
   getById(taskId: string): Promise<Task | null>;
+  /**
+   * Чтение задачи вместе с удалёнными — только для корзины/восстановления. Обычный
+   * код должен звать getById: иначе удалённая задача просочится в UI/уведомления.
+   */
+  getByIdIncludingDeleted(taskId: string): Promise<Task | null>;
+  // Содержимое корзины проекта: только удалённые задачи, свежие сверху.
+  listTrashedByProject(projectId: string): Promise<Task[]>;
   create(input: CreateTaskInput): Promise<Task>;
   update(
     taskId: string,
     patch: UpdateTaskPatch,
     actorUserId?: string | null,
   ): Promise<Task | null>;
+  /**
+   * Мягкое удаление (db/134): проставляет deleted_at/deleted_by, строка и все её
+   * child-таблицы остаются на месте. Идемпотентно — повторный вызов на уже удалённой
+   * задаче возвращает false и НЕ переписывает deleted_at.
+   * Возвращает true, если задача была живой и стала удалённой.
+   */
+  softDelete(taskId: string, deletedByUserId: string | null): Promise<boolean>;
+  /**
+   * Снять метку удаления. Возвращает задачу с ТЕМ ЖЕ id (не пересоздаёт), поэтому
+   * комментарии, версии, привязанные коммиты и внешние ссылки переживают откат.
+   * null, если задачи нет или она не была удалена.
+   */
+  restore(taskId: string): Promise<Task | null>;
+  // Физическое удаление одной строки. Осталось для purge-сценариев; обычное удаление
+  // задачи — softDelete.
   delete(taskId: string): Promise<boolean>;
   /**
-   * Удалить задачу вместе со ВСЕМИ её child-строками (комментарии, аттачи, коммиты,
+   * ФИЗИЧЕСКИ удалить задачу вместе со ВСЕМИ её child-строками (комментарии, аттачи, коммиты,
    * версии, legacy-история назначений, live-сессии/события, telegram-маппинги,
    * email-токены) в одной
    * транзакции. Без этого удаление задачи оставляло сироты (FK на схеме нет). Возвращает

@@ -4,6 +4,7 @@ import {
   boolean,
   char,
   date,
+  datetime,
   decimal,
   double,
   index,
@@ -697,6 +698,11 @@ export const tasks = mysqlTable(
     startDate: date('start_date', { mode: 'string' }),
     // Приоритет 1..4 (1=urgent, 4=low — стиль Todoist). NULL = без приоритета. См. db/041.
     priority: tinyint('priority', { unsigned: true }),
+    // Мягкое удаление (db/134). NULL = живая задача. Заполнено = задача в корзине:
+    // скрыта из ВСЕХ выборок, но строка и все её child-таблицы целы, поэтому
+    // восстановление возвращает задачу с ТЕМ ЖЕ id.
+    deletedAt: datetime('deleted_at'),
+    deletedBy: char('deleted_by', { length: 36 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -705,6 +711,8 @@ export const tasks = mysqlTable(
     index('idx_tasks_project').on(t.projectId),
     index('idx_tasks_assignee').on(t.assigneeUserId),
     index('idx_tasks_ralph_cancel').on(t.ralphCancelRequestedAt),
+    index('idx_tasks_project_deleted').on(t.projectId, t.deletedAt),
+    index('idx_tasks_assignee_deleted').on(t.assigneeUserId, t.deletedAt),
   ],
 );
 
@@ -1258,6 +1266,61 @@ export const aiConversationAuditEvents = mysqlTable(
     index('idx_ai_conversation_audit_actor').on(t.actorUserId, t.createdAt),
   ],
 );
+
+// Journal of AI action batches (db/135). The UNIQUE (conversation_id, idempotency_key)
+// below is what makes re-sending the same plan a no-op instead of a second execution.
+export const aiActionBatches = mysqlTable(
+  'ai_action_batches',
+  {
+    id: id(),
+    conversationId: char('conversation_id', { length: 36 }).notNull(),
+    messageId: char('message_id', { length: 36 }),
+    ownerUserId: char('owner_user_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }),
+    status: mysqlEnum('status', ['pending_review', 'applied', 'rejected', 'undone'])
+      .notNull()
+      .default('pending_review'),
+    title: varchar('title', { length: 200 }).notNull(),
+    planJson: json('plan_json').$type<Record<string, unknown> | null>(),
+    idempotencyKey: varchar('idempotency_key', { length: 100 }).notNull(),
+    createdBy: char('created_by', { length: 36 }).notNull(),
+    appliedAt: timestamp('applied_at'),
+    undoneAt: timestamp('undone_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_ai_action_batches_idempotency').on(t.conversationId, t.idempotencyKey),
+    index('idx_ai_action_batches_conversation').on(t.conversationId, t.createdAt),
+    index('idx_ai_action_batches_owner').on(t.ownerUserId, t.createdAt),
+  ],
+);
+
+export const aiActionBatchItems = mysqlTable(
+  'ai_action_batch_items',
+  {
+    id: id(),
+    batchId: char('batch_id', { length: 36 }).notNull(),
+    position: int('position', { unsigned: true }).notNull(),
+    actionId: varchar('action_id', { length: 80 }).notNull(),
+    type: varchar('type', { length: 40 }).notNull(),
+    entityKind: mysqlEnum('entity_kind', ['project', 'task']).notNull(),
+    entityId: char('entity_id', { length: 36 }),
+    projectId: char('project_id', { length: 36 }),
+    title: varchar('title', { length: 300 }).notNull(),
+    status: mysqlEnum('status', ['pending', 'done', 'failed', 'undone'])
+      .notNull()
+      .default('pending'),
+    beforeJson: json('before_json').$type<Record<string, unknown> | null>(),
+    errorMessage: varchar('error_message', { length: 500 }),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [index('idx_ai_action_batch_items_batch').on(t.batchId, t.position)],
+);
+
+export type AiActionBatchRow = typeof aiActionBatches.$inferSelect;
+export type AiActionBatchItemRow = typeof aiActionBatchItems.$inferSelect;
 
 export type AiConversationRow = typeof aiConversations.$inferSelect;
 export type AiConversationMessageRow = typeof aiConversationMessages.$inferSelect;

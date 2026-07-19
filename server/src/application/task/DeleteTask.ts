@@ -24,12 +24,10 @@ export class DeleteTask {
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
 
-    // Атомарно: задача + все её child-строки (комментарии, аттачи, коммиты, версии,
-    // legacy-история назначений, live-сессии/события, telegram-маппинги,
-    // email-токены) в одной TX (B2/B3).
-    // Раньше комментарии чистились отдельным запросом, а attachments/commits/versions
-    // оставались сиротами; крэш между шагами оставлял несогласованное состояние.
-    const ok = await this.deps.tasks.deleteWithChildren(taskId);
+    // Мягкое удаление (db/134): задача уезжает в корзину вместе со всеми child-строками.
+    // Физического DELETE больше нет — иначе Undo пришлось бы пересоздавать задачу с НОВЫМ
+    // id, что рвёт ссылки на неё, комментарии и историю версий.
+    const ok = await this.deps.tasks.softDelete(taskId, ownerUserId);
     if (!ok) throw new TaskNotFoundError(taskId);
 
     // Лента действий (best-effort).

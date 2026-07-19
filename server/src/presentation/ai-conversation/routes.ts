@@ -124,6 +124,15 @@ export function aiConversationRouter(deps: AiConversationRouterDeps): Router {
     } catch (error) { handleError(error, res, next); }
   });
 
+  // Панель Knowledge. Отдельный запрос, а не поле сообщения: список накопительный
+  // за диалог и не должен зависеть от того, какая страница сообщений подгружена.
+  router.get('/conversations/:conversationId/knowledge', async (req, res, next) => {
+    try {
+      const sources = await deps.service.listKnowledge(uid(req), cid(req));
+      res.json({ sources, count: sources.length });
+    } catch (error) { handleError(error, res, next); }
+  });
+
   router.post('/conversations/:conversationId/runs/:runId/cancel', async (req, res, next) => {
     try {
       const result = await deps.service.cancelRun(

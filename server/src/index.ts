@@ -249,6 +249,10 @@ import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories
 import { CreateEmailActionToken } from './application/email-action/CreateEmailActionToken.js';
 import { EmailActionService } from './application/email-action/EmailActionService.js';
 import { DeleteTask } from './application/task/DeleteTask.js';
+import { ListTrashedTasks } from './application/task/ListTrashedTasks.js';
+import { RestoreDeletedTask } from './application/task/RestoreDeletedTask.js';
+import { AiActionBatchService } from './application/ai-action/AiActionBatchService.js';
+import { DrizzleAiActionBatchRepository } from './infrastructure/repositories/DrizzleAiActionBatchRepository.js';
 import { LinkCommit } from './application/task/LinkCommit.js';
 import { UnlinkCommit } from './application/task/UnlinkCommit.js';
 import { ListTaskCommits } from './application/task/ListTaskCommits.js';
@@ -1491,6 +1495,50 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
 
 const projectImportAnalyzer = new ProjectImportAnalyzer();
 
+// Журнал батчей действий ассистента (db/135). Откат намеренно ходит через ТЕ ЖЕ
+// use-case'ы, что и обычные HTTP-роуты, — иначе Undo обошёл бы проверки прав.
+const aiActionUndoTaskDeps = { projects: projectRepo, members: projectMemberRepo, tasks: taskRepo };
+const aiActionUndoUpdateTask = new UpdateTask({ ...aiActionUndoTaskDeps, activity: activityRecorder });
+const aiActionUndoDeleteTask = new DeleteTask({
+  ...aiActionUndoTaskDeps,
+  comments: taskCommentRepo,
+  activityRecorder,
+});
+const aiActionUndoRestoreTask = new RestoreDeletedTask(aiActionUndoTaskDeps);
+const aiActionUndoDeleteProject = new DeleteProject({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  attachments: taskAttachmentRepo,
+  storage: attachmentStorage,
+});
+const aiActionBatchService = new AiActionBatchService({
+  repo: new DrizzleAiActionBatchRepository(db),
+  conversations: aiConversationService,
+  idGen: idGenerator,
+  undoExecutor: {
+    deleteTask: async (projectId, actorUserId, taskId) => {
+      await aiActionUndoDeleteTask.execute(projectId, actorUserId, taskId);
+    },
+    restoreTask: async (projectId, actorUserId, taskId) => {
+      await aiActionUndoRestoreTask.execute(projectId, actorUserId, taskId);
+    },
+    updateTask: async (projectId, ownerUserId, taskId, before) => {
+      await aiActionUndoUpdateTask.execute({
+        projectId,
+        ownerUserId,
+        taskId,
+        description: before.description ?? undefined,
+        ...(before.deadline !== undefined ? { deadline: before.deadline } : {}),
+        ...(before.priority !== undefined ? { priority: before.priority } : {}),
+        ...(before.status !== undefined ? { status: before.status } : {}),
+      });
+    },
+    deleteProject: async (projectId, actorUserId) => {
+      await aiActionUndoDeleteProject.execute(projectId, actorUserId);
+    },
+  },
+});
+
 const { app, devProxyUpgrade } = createApp({
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
   telegramDigestActions: { service: telegramDigestActionService },
@@ -1525,6 +1573,7 @@ const { app, devProxyUpgrade } = createApp({
     service: aiConversationService,
     eventHub: aiConversationEventHub,
   },
+  aiActionBatches: { service: aiActionBatchService },
   projects: {
     listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
@@ -1979,6 +2028,16 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       activityRecorder,
+    }),
+    listTrashedTasks: new ListTrashedTasks({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
+    restoreDeletedTask: new RestoreDeletedTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
     }),
     getTaskVersions: new GetTaskVersions({
       projects: projectRepo,

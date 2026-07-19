@@ -85,6 +85,12 @@ export type Task = {
   readonly parentTaskId: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
   readonly priority: TaskPriority | null;
+  // Мягкое удаление (db/134). null = живая задача, Date = лежит в корзине.
+  // Optional, а не обязательное: обычные выборки задач отдают только живые задачи,
+  // поэтому подавляющее большинство мест не должно думать про это поле —
+  // заполнено оно только в trash-выборках.
+  readonly deletedAt?: Date | null;
+  readonly deletedBy?: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

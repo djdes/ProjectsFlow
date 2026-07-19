@@ -8,6 +8,8 @@ export class DrizzleTaskBillingAttributionRepository
 {
   constructor(private readonly db: Database) {}
 
+  // БЕЗ фильтра deleted_at (db/134) намеренно: атрибуция расхода должна работать и по
+  // задаче, уехавшей в корзину, иначе биллинг теряет плательщика уже начисленных трат.
   async findLegacyCreatorForTask(taskId: string): Promise<string | null> {
     const rows = await this.db
       .select({

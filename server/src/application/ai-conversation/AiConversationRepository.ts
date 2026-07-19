@@ -2,7 +2,9 @@ import type {
   AiConversation,
   AiConversationKind,
 } from '../../domain/ai-conversation/AiConversation.js';
+import type { AiAgentStep } from '../../domain/ai-conversation/AiAgentStep.js';
 import type { AiConversationEvent } from '../../domain/ai-conversation/AiConversationEvent.js';
+import type { AiKnowledgeSource } from '../../domain/ai-conversation/AiKnowledgeSource.js';
 import type { AiConversationMessage } from '../../domain/ai-conversation/AiMessage.js';
 import type {
   AiConversationRun,
@@ -82,6 +84,10 @@ export type CompleteAiConversationRunInput = {
   readonly tokensIn: number | null;
   readonly tokensOut: number | null;
   readonly costUsd: number | null;
+  // Шаги и просмотренные источники едут в metadata_json ассистентского сообщения.
+  // null = воркер их не прислал; уже записанные значения при этом не затираются.
+  readonly steps?: readonly AiAgentStep[] | null;
+  readonly knowledge?: readonly AiKnowledgeSource[] | null;
   readonly requestId?: string | null;
 };
 

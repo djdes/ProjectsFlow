@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, type SQL } from 'drizzle-orm';
+import { desc, eq, inArray, like, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, tasks } from '../db/schema.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
@@ -11,6 +11,7 @@ import type {
 // НЕ project_members (#блокер4) — переиспользуем ProjectMemberRepository (эталон
 // DrizzleProjectMemberRepository).
 import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
+import { activeTasks } from './taskSoftDelete.js';
 
 const EXCERPT_MAX = 160;
 
@@ -59,7 +60,7 @@ export class DrizzleTaskSearchRepository implements TaskSearchRepository {
       .select(columns)
       .from(tasks)
       .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .where(scopeCond ? and(like(tasks.description, pattern), scopeCond) : like(tasks.description, pattern))
+      .where(activeTasks(like(tasks.description, pattern), scopeCond))
       .orderBy(desc(tasks.updatedAt))
       .limit(q.limit);
 

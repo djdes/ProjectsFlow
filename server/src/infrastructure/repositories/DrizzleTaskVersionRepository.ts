@@ -11,6 +11,7 @@ import type {
   CreateTaskVersionInput,
   TaskVersionRepository,
 } from '../../application/task/TaskVersionRepository.js';
+import { activeTasks } from './taskSoftDelete.js';
 
 type VersionRowWithActor = {
   readonly version: TaskVersionRow;
@@ -137,7 +138,7 @@ export class DrizzleTaskVersionRepository implements TaskVersionRepository {
       // Проект определяем по текущей задаче, а не по projectId старого снимка. Так после
       // переноса задачи вся её прежняя история едет вместе с ней и «Открыть задачу» работает.
       .innerJoin(tasks, eq(tasks.id, taskVersions.taskId))
-      .where(eq(tasks.projectId, projectId))
+      .where(activeTasks(eq(tasks.projectId, projectId)))
       .orderBy(desc(taskVersions.createdAt), desc(taskVersions.id));
     return toVersionsWithInferredFields(rows as VersionRowWithActor[]);
   }
@@ -149,7 +150,10 @@ export class DrizzleTaskVersionRepository implements TaskVersionRepository {
 
   async getLatestForProject(projectId: string): Promise<TaskVersion | null> {
     const rows = await this.selectWithActor()
-      .where(eq(taskVersions.projectId, projectId))
+      // JOIN только ради фильтра мягкого удаления: правка задачи, уехавшей в корзину,
+      // не должна оставаться «последним изменением проекта» в сводке активности.
+      .innerJoin(tasks, eq(tasks.id, taskVersions.taskId))
+      .where(activeTasks(eq(taskVersions.projectId, projectId)))
       .orderBy(desc(taskVersions.createdAt), desc(taskVersions.id))
       .limit(1);
     return rows[0] ? toVersion(rows[0] as VersionRowWithActor) : null;

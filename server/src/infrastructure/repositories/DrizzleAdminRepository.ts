@@ -26,7 +26,8 @@ export class DrizzleAdminRepository implements AdminRepository {
         ownerEmail: users.email,
         createdAt: projects.createdAt,
         memberCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = ${projects.id})`,
-        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id})`,
+        // deleted_at IS NULL (db/134): задачи из корзины не должны раздувать счётчик.
+        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
       })
       .from(projects)
       .innerJoin(users, eq(users.id, projects.ownerId))

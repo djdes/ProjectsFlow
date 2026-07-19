@@ -531,10 +531,15 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
         errorMessage: failInput!.errorMessage,
       }).where(eq(aiConversationRuns.id, run.id));
 
+      const priorMetadata = completeInput
+        ? (await this.findMessageRow(tx, run.assistantMessageId))?.metadataJson ?? null
+        : null;
+
       await tx.update(aiConversationMessages).set(completeInput ? {
         status: 'completed',
         body: completeInput.body,
         model: completeInput.model,
+        metadataJson: mergeMessageMetadata(priorMetadata, completeInput),
         errorCode: null,
         errorRetryable: false,
       } : {
@@ -771,6 +776,23 @@ function toEvent(row: AiConversationEventRow): AiConversationEvent {
     entityId: row.entityId ?? null,
     payload: row.payloadJson ?? null,
     createdAt: row.createdAt,
+  };
+}
+
+/**
+ * Дописать шаги/источники в metadata ассистентского сообщения, не трогая остальное.
+ * Отсутствующее поле (воркер старой версии) не должно стирать уже записанное —
+ * иначе ретрай завершения обнулял бы ленту шагов.
+ */
+function mergeMessageMetadata(
+  current: Record<string, unknown> | null,
+  input: CompleteAiConversationRunInput,
+): Record<string, unknown> | null {
+  if (input.steps == null && input.knowledge == null) return current;
+  return {
+    ...(current ?? {}),
+    ...(input.steps == null ? {} : { steps: input.steps }),
+    ...(input.knowledge == null ? {} : { knowledge: input.knowledge }),
   };
 }
 

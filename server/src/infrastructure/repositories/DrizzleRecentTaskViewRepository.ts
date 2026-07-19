@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, recentTaskViews, tasks } from '../db/schema.js';
 import type { RecentTaskView } from '../../domain/task/RecentTaskView.js';
@@ -8,6 +8,7 @@ import type { RecentTaskViewRepository } from '../../application/task/RecentTask
 // project_members (#блокер5, отчёт fix-blockers-report.md) — переиспользуем
 // ProjectMemberRepository (эталон DrizzleProjectMemberRepository).
 import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
+import { activeTasks } from './taskSoftDelete.js';
 
 // Описание задачи отдельного title-поля не имеет — берём первые N символов.
 const EXCERPT_MAX = 80;
@@ -32,7 +33,7 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
     const taskRows = await this.db
       .select({ projectId: tasks.projectId })
       .from(tasks)
-      .where(eq(tasks.id, taskId))
+      .where(activeTasks(eq(tasks.id, taskId)))
       .limit(1);
     const projectId = taskRows[0]?.projectId;
     if (!projectId) return;
@@ -71,7 +72,9 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
       .from(recentTaskViews)
       .innerJoin(tasks, eq(tasks.id, recentTaskViews.taskId))
       .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .where(and(eq(recentTaskViews.userId, userId), inArray(projects.id, accessibleIds)))
+      .where(
+        activeTasks(eq(recentTaskViews.userId, userId), inArray(projects.id, accessibleIds)),
+      )
       .orderBy(desc(recentTaskViews.viewedAt))
       .limit(limit);
 

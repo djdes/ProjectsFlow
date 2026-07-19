@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, eq, inArray, max, min, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   taskDelegations,
@@ -28,9 +28,13 @@ import type {
   UpdateTaskPatch,
 } from '../../application/task/TaskRepository.js';
 import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
+import { activeTasks, taskDeleted } from './taskSoftDelete.js';
 
 // Row shape с заджойненным display_name запросившего отмену Ralph.
-type TaskRowJoined = TaskRow & {
+type TaskRowJoined = Omit<TaskRow, 'deletedAt' | 'deletedBy'> & {
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+} & {
   cancelByDisplayName: string | null;
   assigneeDisplayName: string | null;
   assigneeAvatarUrl: string | null;
@@ -85,6 +89,8 @@ function toTask(row: TaskRowJoined): Task {
     priority: row.priority !== null && row.priority !== undefined
       ? (row.priority as TaskPriority)
       : null,
+    deletedAt: row.deletedAt ?? null,
+    deletedBy: row.deletedBy ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -127,6 +133,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         startDate: tasks.startDate,
         parentTaskId: tasks.parentTaskId,
         priority: tasks.priority,
+        deletedAt: tasks.deletedAt,
+        deletedBy: tasks.deletedBy,
         createdAt: tasks.createdAt,
         updatedAt: tasks.updatedAt,
         cancelByDisplayName: users.displayName,
@@ -139,27 +147,39 @@ export class DrizzleTaskRepository implements TaskRepository {
 
   async listByProject(projectId: string): Promise<Task[]> {
     const rows = await this.baseSelect()
-      .where(eq(tasks.projectId, projectId))
+      .where(activeTasks(eq(tasks.projectId, projectId)))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
   async listByIds(taskIds: readonly string[]): Promise<Task[]> {
     if (taskIds.length === 0) return [];
-    const rows = await this.baseSelect().where(inArray(tasks.id, [...taskIds]));
+    const rows = await this.baseSelect().where(activeTasks(inArray(tasks.id, [...taskIds])));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
   async listAssignedTo(userId: string): Promise<Task[]> {
     const rows = await this.baseSelect()
-      .where(eq(tasks.assigneeUserId, userId))
+      .where(activeTasks(eq(tasks.assigneeUserId, userId)))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
   async getById(taskId: string): Promise<Task | null> {
+    const rows = await this.baseSelect().where(activeTasks(eq(tasks.id, taskId))).limit(1);
+    return rows[0] ? toTask(rows[0] as TaskRowJoined) : null;
+  }
+
+  async getByIdIncludingDeleted(taskId: string): Promise<Task | null> {
     const rows = await this.baseSelect().where(eq(tasks.id, taskId)).limit(1);
     return rows[0] ? toTask(rows[0] as TaskRowJoined) : null;
+  }
+
+  async listTrashedByProject(projectId: string): Promise<Task[]> {
+    const rows = await this.baseSelect()
+      .where(and(eq(tasks.projectId, projectId), taskDeleted()))
+      .orderBy(desc(tasks.deletedAt), asc(tasks.id));
+    return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
   async create(input: CreateTaskInput): Promise<Task> {
@@ -226,11 +246,33 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (patch.priority !== undefined) set.priority = patch.priority;
 
     if (Object.keys(set).length > 0) {
-      await this.db.update(tasks).set(set).where(eq(tasks.id, taskId));
+      await this.db.update(tasks).set(set).where(activeTasks(eq(tasks.id, taskId)));
     }
     const updated = await this.getById(taskId);
     if (updated && before) await this.history?.record(updated, actorUserId, before);
     return updated;
+  }
+
+  async softDelete(taskId: string, deletedByUserId: string | null): Promise<boolean> {
+    // Идемпотентно: повторный клик «Удалить» (двойной клик / ретрай запроса) не должен
+    // переписывать deleted_at — иначе окно Undo и порядок в корзине уезжают.
+    // Подзадачи НЕ отвязываем (в отличие от физического deleteWithChildren): parent_task_id
+    // должен пережить откат, иначе восстановление вернёт задачу с тем же id, но без детей.
+    const result = await this.db
+      .update(tasks)
+      .set({ deletedAt: sql`CURRENT_TIMESTAMP`, deletedBy: deletedByUserId })
+      .where(activeTasks(eq(tasks.id, taskId)));
+    const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+    return affected > 0;
+  }
+
+  async restore(taskId: string): Promise<Task | null> {
+    // Снимаем метку и читаем задачу обратно — тот же id, те же комментарии/версии/коммиты.
+    await this.db
+      .update(tasks)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(and(eq(tasks.id, taskId), taskDeleted()));
+    return this.getById(taskId);
   }
 
   async delete(taskId: string): Promise<boolean> {
@@ -269,7 +311,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     const rows = await this.db
       .select({ minPos: min(tasks.position), maxPos: max(tasks.position) })
       .from(tasks)
-      .where(and(eq(tasks.projectId, projectId), eq(tasks.status, status)));
+      .where(activeTasks(eq(tasks.projectId, projectId), eq(tasks.status, status)));
     const row = rows[0];
     if (!row || row.minPos === null || row.maxPos === null) return null;
     return { min: Number(row.minPos), max: Number(row.maxPos) };
@@ -286,7 +328,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         ralphCancelRequestedAt: sql`CURRENT_TIMESTAMP`,
         ralphCancelRequestedBy: userId,
       })
-      .where(and(eq(tasks.id, taskId), sql`${tasks.ralphCancelRequestedAt} IS NULL`));
+      .where(activeTasks(eq(tasks.id, taskId), sql`${tasks.ralphCancelRequestedAt} IS NULL`));
     const updated = await this.getById(taskId);
     if (updated && before) await this.history?.record(updated, userId, before);
     return updated;
@@ -300,7 +342,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     await this.db
       .update(tasks)
       .set({ ralphCancelRequestedAt: null, ralphCancelRequestedBy: null })
-      .where(eq(tasks.id, taskId));
+      .where(activeTasks(eq(tasks.id, taskId)));
     const updated = await this.getById(taskId);
     if (updated && before) await this.history?.record(updated, actorUserId, before);
     return updated;
@@ -317,7 +359,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       const rows = await tx
         .select({ id: tasks.id })
         .from(tasks)
-        .where(and(eq(tasks.projectId, projectId), eq(tasks.status, status)))
+        .where(activeTasks(eq(tasks.projectId, projectId), eq(tasks.status, status)))
         .orderBy(asc(tasks.position), asc(tasks.id));
       let pos = STEP;
       for (const r of rows) {
@@ -347,7 +389,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       await tx
         .update(tasks)
         .set({ projectId: targetProjectId, assigneeUserId, statusBeforeDone: null })
-        .where(eq(tasks.id, taskId));
+        .where(activeTasks(eq(tasks.id, taskId)));
       await tx
         .update(taskVersions)
         .set({ projectId: targetProjectId })

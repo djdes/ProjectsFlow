@@ -230,7 +230,8 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         project: projects,
         wsRole: workspaceMembers.role,
         memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${projects.workspaceId})`,
-        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id})`,
+        // deleted_at IS NULL (db/134): задачи из корзины не должны раздувать счётчик.
+        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
         isFavorite: projectMembers.isFavorite,
         favoriteSortOrder: projectMembers.favoriteSortOrder,
       })

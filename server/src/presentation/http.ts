@@ -112,6 +112,8 @@ import type { CreateTask } from '../application/task/CreateTask.js';
 import type { UpdateTask } from '../application/task/UpdateTask.js';
 import type { MoveTask } from '../application/task/MoveTask.js';
 import type { DeleteTask } from '../application/task/DeleteTask.js';
+import type { ListTrashedTasks } from '../application/task/ListTrashedTasks.js';
+import type { RestoreDeletedTask } from '../application/task/RestoreDeletedTask.js';
 import type { GetTaskVersions } from '../application/task/GetTaskVersions.js';
 import type { GetProjectTaskVersions } from '../application/task/GetProjectTaskVersions.js';
 import type { RestoreTaskVersion } from '../application/task/RestoreTaskVersion.js';
@@ -249,6 +251,7 @@ import { chatRouter, type ChatRouterDeps } from './chat/routes.js';
 import type { AiConversationService } from '../application/ai-conversation/AiConversationService.js';
 import type { AiConversationEventHub } from '../infrastructure/realtime/AiConversationEventHub.js';
 import { aiConversationRouter, projectStudioConversationRouter } from './ai-conversation/routes.js';
+import { aiActionBatchRouter, type AiActionBatchRouterDeps } from './ai-action/routes.js';
 import { aiConversationAgentRouter } from './ai-conversation/agentRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
@@ -334,6 +337,7 @@ type AppDeps = {
     readonly service: AiConversationService;
     readonly eventHub: AiConversationEventHub;
   };
+  readonly aiActionBatches: AiActionBatchRouterDeps;
   readonly projects: {
     readonly listProjects: ListProjects;
     readonly getProject: GetProject;
@@ -524,6 +528,8 @@ type AppDeps = {
     readonly updateTask: UpdateTask;
     readonly moveTask: MoveTask;
     readonly deleteTask: DeleteTask;
+    readonly listTrashedTasks: ListTrashedTasks;
+    readonly restoreDeletedTask: RestoreDeletedTask;
     readonly getTaskVersions: GetTaskVersions;
     readonly getProjectTaskVersions: GetProjectTaskVersions;
     readonly restoreTaskVersion: RestoreTaskVersion;
@@ -797,6 +803,9 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Долговечные личные и проектные ИИ-чаты. Отдельный контур от коротких
   // ai-prompt-jobs: история сообщений не очищается вместе с очередью воркера.
   app.use('/api/ai', aiConversationRouter(deps.aiConversations));
+  // Журнал батчей действий ассистента: серверная идемпотентность плана и Undo,
+  // переживающий перезагрузку вкладки.
+  app.use('/api/ai', aiActionBatchRouter(deps.aiActionBatches));
   app.use('/api/projects', projectStudioConversationRouter(deps.aiConversations));
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
