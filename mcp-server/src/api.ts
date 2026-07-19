@@ -256,6 +256,29 @@ export type CompleteAiPromptJobInput = {
   error?: string | null;
 };
 
+// Job'ы визуального редактора: пользователь накопил правки в превью и нажал Edit
+// повторно — диспетчер должен перенести их в исходный код и пересобрать проект.
+export type PendingSiteEditorJob = {
+  id: string;
+  projectId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  operation: 'rewrite_text' | 'restyle' | 'regenerate_element' | 'regenerate_section' | 'replace_icon' | 'edit_code';
+  route: string;
+  // Для edit_code здесь лежит JSON-пачка патчей (protocol projectsflow.site-editor-publish.v1).
+  domSnapshot: string;
+  prompt: string;
+  // Версия артефакта, на которой правки снимались. Claim упадёт конфликтом, если она разъехалась.
+  artifactVersion: string;
+  createdAt: string;
+};
+
+export type CompleteSiteEditorJobInput = {
+  artifactVersion: string;
+  status: 'succeeded' | 'failed';
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+};
+
 // AI-анализ мониторинга через диспетчера (db/063).
 export type MonitoringAnalysisKind = 'snapshot' | 'logs' | 'alert' | 'digest';
 
@@ -729,6 +752,36 @@ export class ApiClient {
   async completeAiPromptJob(jobId: string, input: CompleteAiPromptJobInput): Promise<void> {
     await this.request<void>(
       `/agent/ai-prompt-jobs/${encodeURIComponent(jobId)}/complete`,
+      { method: 'POST', body: input },
+    );
+  }
+
+  async listPendingSiteEditorJobs(limit: number): Promise<PendingSiteEditorJob[]> {
+    const { jobs } = await this.request<{ jobs: PendingSiteEditorJob[] }>(
+      `/agent/pending-site-editor-jobs?limit=${limit}`,
+    );
+    return jobs;
+  }
+
+  // Текущая версия артефакта проекта — её надо передать в claim/complete.
+  async getSiteEditorArtifactVersion(projectId: string): Promise<string> {
+    const { artifactVersion } = await this.request<{ artifactVersion: string }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/site-editor/artifact`,
+    );
+    return artifactVersion;
+  }
+
+  async claimSiteEditorJob(projectId: string, jobId: string, artifactVersion: string): Promise<PendingSiteEditorJob> {
+    const { job } = await this.request<{ job: PendingSiteEditorJob }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/site-editor/jobs/${encodeURIComponent(jobId)}/claim`,
+      { method: 'POST', body: { artifactVersion } },
+    );
+    return job;
+  }
+
+  async completeSiteEditorJob(projectId: string, jobId: string, input: CompleteSiteEditorJobInput): Promise<void> {
+    await this.request<void>(
+      `/agent/projects/${encodeURIComponent(projectId)}/site-editor/jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
     );
   }

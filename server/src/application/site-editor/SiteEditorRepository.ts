@@ -66,6 +66,10 @@ export interface SiteEditorRepository {
   createJob(input: CreateProjectEditJobRecord): Promise<ProjectEditJob>;
   getJob(projectId: string, jobId: string): Promise<ProjectEditJob | null>;
   listQueuedJobs(projectId: string, dispatcherUserId: string, limit: number): Promise<readonly ProjectEditJob[]>;
+  // Кросс-проектный вариант для раннера: он поллит одну глобальную очередь, а не обходит
+  // проекты по одному. Именно отсутствие такого листинга оставляло publish-job'ы в
+  // queued навсегда — раннер про per-project роут просто не знал.
+  listQueuedJobsForDispatcher(dispatcherUserId: string, limit: number): Promise<readonly ProjectEditJob[]>;
   claimJob(projectId: string, jobId: string, dispatcherUserId: string, claimedAt: Date): Promise<ProjectEditJob | null>;
   completeJob(input: {
     readonly projectId: string;

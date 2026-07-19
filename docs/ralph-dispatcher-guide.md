@@ -142,6 +142,66 @@ loop:
 8. **Если задача из job-очереди** — `pf_complete_agent_job` обязателен (без
    него job висит в `running` и юзер не видит результат).
 
+## Публикация правок визуального редактора (site-editor)
+
+В студии проекта юзер правит живое превью — текст, стили, атрибуты, удаление
+элементов. Каждая правка сразу ложится черновиком в `site_patches`. Когда юзер
+жмёт **Edit второй раз**, сервер кладёт job в `project_edit_jobs`
+(`operation: 'edit_code'`), и диспетчер должен перенести пачку правок в исходный
+код проекта и пересобрать его.
+
+> ⚠️ **Эта очередь долго не поллилась никем.** Серверная часть (роуты, claim,
+> complete) была построена, а раннер про неё не знал — job'ы оставались в `queued`
+> навсегда, и юзер бесконечно видел «Сохраняем правки в проект…». Если добавляешь
+> новую очередь на сервере — сразу заводи и polling, иначе повторится.
+
+**Эндпоинты** (Bearer, `requireDispatcherAccess`):
+
+```
+GET  /api/agent/pending-site-editor-jobs?limit=20      ← глобальная очередь, поллить эту
+GET  /api/agent/projects/:projectId/site-editor/artifact
+POST /api/agent/projects/:projectId/site-editor/jobs/:jobId/claim     { artifactVersion }
+POST /api/agent/projects/:projectId/site-editor/jobs/:jobId/complete  { artifactVersion, status, result?, error? }
+```
+
+Есть и per-project `GET /projects/:projectId/site-editor/jobs/pending`, но полагаться
+на него не стоит: обходить проекты по одному дорого, глобальная очередь для того и
+заведена.
+
+MCP-эквиваленты: `pf_list_pending_site_editor_jobs`, `pf_claim_site_editor_job`,
+`pf_complete_site_editor_job`.
+
+**Что лежит в job'е.** Для `edit_code` поле `domSnapshot` — это JSON-пачка патчей
+(протокол `projectsflow.site-editor-publish.v1`):
+
+```json
+{
+  "protocol": "projectsflow.site-editor-publish.v1",
+  "route": "/catalog",
+  "baseArtifactVersion": "…",
+  "patches": [
+    { "id": "…", "locator": {…}, "kind": "text|style|attribute|visibility|command|html",
+      "payload": {…}, "createdRevision": 12 }
+  ]
+}
+```
+
+**Порядок работы:**
+
+1. `claim` с текущим `artifactVersion`. Если прилетел 409 artifact-conflict — проект
+   пересобрали после снятия правок; **не продавливать**, а завершить job'ом `failed`
+   с коротким объяснением, чтобы юзер переснял правки на свежей сборке.
+2. Применить патчи к исходникам по `locator`, прогнать проверки проекта.
+3. Закоммитить, запушить, дождаться нового артефакта деплоя.
+4. `complete` со `status: 'succeeded'` — только после того, как новая версия реально
+   поднялась. `succeeded` удаляет queued-патчи (они теперь в исходниках), `failed`
+   возвращает их в `draft`, так что работа юзера не теряется в любом случае.
+
+**Тайминг.** Юзер всё это время смотрит на спиннер «Сохраняем правки в проект…».
+Клиент ждёт 12 минут, потом показывает «Диспетчер не ответил» — правки при этом
+остаются сохранёнными черновиком. Реальный цикл: 1–4 мин на работу агента над кодом
+плюс 90–150 сек на деплой.
+
 ## AI prompt-improvement
 
 Сайт ProjectsFlow добавил кнопку «AI» в формах создания задач (`AddTaskDialog`,

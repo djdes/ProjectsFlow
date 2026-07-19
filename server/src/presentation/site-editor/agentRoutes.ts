@@ -16,6 +16,20 @@ export function siteEditorAgentRouter(deps: Deps): Router {
   router.use(requireAgentToken(deps.authenticate));
   router.use(requireAgentCapabilityScope());
 
+  // Глобальная очередь — то, что реально поллит раннер (по образцу /pending-ai-prompt-jobs).
+  // Per-project вариант ниже оставлен для точечных запросов, но полагаться на него нельзя:
+  // раннер не обходит проекты по одному, и именно из-за этого publish-job'ы висели в queued.
+  router.get('/pending-site-editor-jobs', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const rawLimit = Number(req.query['limit'] ?? 20);
+      const jobs = await deps.service.listQueuedJobsForDispatcher(
+        req.user!.id,
+        Number.isFinite(rawLimit) ? rawLimit : 20,
+      );
+      res.json({ jobs });
+    } catch (error) { handleSiteEditorError(error, res, next); }
+  });
+
   router.get('/projects/:projectId/site-editor/jobs/pending', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const rawLimit = Number(req.query['limit'] ?? 20);

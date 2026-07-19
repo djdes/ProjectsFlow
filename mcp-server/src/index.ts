@@ -609,6 +609,66 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_list_pending_site_editor_jobs',
+    description:
+      'List queued visual-editor publish jobs where current user is the dispatcher, oldest first. ' +
+      'These come from the ProjectsFlow project studio: the user edited the live preview (text, ' +
+      'styles, attributes, deletions) and pressed Edit a second time to save those edits into the ' +
+      'project. Each item has id, projectId, route, artifactVersion, prompt and domSnapshot — for ' +
+      'operation "edit_code" domSnapshot is a JSON batch of patches (protocol ' +
+      'projectsflow.site-editor-publish.v1) with locator/kind/payload per patch. Poll this in the ' +
+      'agent-runner loop alongside pf_list_pending_agent_jobs. If empty, no work to do. ' +
+      'NOTE: until this queue is polled, users see their edits stuck as "not saved" forever.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Max jobs to return (default 10, max 50)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_claim_site_editor_job',
+    description:
+      'Atomically claim a queued visual-editor publish job (queued → running). Pass projectId and ' +
+      'jobId; artifactVersion is optional — omit it and the current one is fetched for you. ' +
+      'Returns the full job including domSnapshot (the patch batch). On 409 artifact conflict the ' +
+      'project was rebuilt since the edits were captured: do NOT force it, complete the job as ' +
+      'failed with a short reason so the user can redo the edits on the fresh build.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_pending_site_editor_jobs)' },
+        jobId: { type: 'string', description: 'Site-editor job id' },
+        artifactVersion: { type: 'string', description: 'Optional; fetched automatically when omitted' },
+      },
+      required: ['projectId', 'jobId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_complete_site_editor_job',
+    description:
+      'Finalize a visual-editor publish job. Call it ONLY after the patches are applied to the ' +
+      'project source, checks pass, the change is committed, pushed AND a new deployment artifact ' +
+      'is live — the user is watching a "saving to project" spinner until then. status="succeeded" ' +
+      'drops the queued patches (they now live in the source); status="failed" requires a short ' +
+      'error (≤500 chars) and returns the patches to draft so nothing the user did is lost.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id' },
+        jobId: { type: 'string', description: 'Site-editor job id' },
+        artifactVersion: { type: 'string', description: 'Artifact version the job was claimed with' },
+        status: { type: 'string', enum: ['succeeded', 'failed'] },
+        result: { type: 'object', description: 'Optional structured result (e.g. commit sha)' },
+        error: { type: 'string', description: 'Required when status=failed (≤500 chars)' },
+      },
+      required: ['projectId', 'jobId', 'artifactVersion', 'status'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_list_pending_ai_prompt_jobs',
     description:
       'List queued AI-prompt-improvement jobs where current user is the dispatcher, oldest first. ' +
@@ -1575,6 +1635,25 @@ const CompleteAiPromptJobInput = z.object({
   error: z.string().max(500).nullable().optional(),
 });
 
+const ListPendingSiteEditorJobsInput = z.object({
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+const ClaimSiteEditorJobInput = z.object({
+  projectId: z.string().min(1),
+  jobId: z.string().min(1),
+  artifactVersion: z.string().min(1).max(128).optional(),
+});
+
+const CompleteSiteEditorJobInput = z.object({
+  projectId: z.string().min(1),
+  jobId: z.string().min(1),
+  artifactVersion: z.string().min(1).max(128),
+  status: z.enum(['succeeded', 'failed']),
+  result: z.record(z.string(), z.unknown()).nullable().optional(),
+  error: z.string().max(500).nullable().optional(),
+});
+
 const ListPendingMonitoringAnalysisJobsInput = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 });
@@ -1894,6 +1973,29 @@ async function main(): Promise<void> {
           await api.completeAiPromptJob(input.jobId, {
             ok: input.ok,
             improvedText: input.improvedText ?? null,
+            error: input.error ?? null,
+          });
+          return jsonResult({ ok: true });
+        }
+        case 'pf_list_pending_site_editor_jobs': {
+          const input = ListPendingSiteEditorJobsInput.parse(req.params.arguments ?? {});
+          const jobs = await api.listPendingSiteEditorJobs(input.limit ?? 10);
+          return jsonResult(jobs);
+        }
+        case 'pf_claim_site_editor_job': {
+          const input = ClaimSiteEditorJobInput.parse(req.params.arguments ?? {});
+          // artifactVersion можно не передавать — подтянем текущую сами.
+          const artifactVersion = input.artifactVersion
+            ?? await api.getSiteEditorArtifactVersion(input.projectId);
+          const job = await api.claimSiteEditorJob(input.projectId, input.jobId, artifactVersion);
+          return jsonResult(job);
+        }
+        case 'pf_complete_site_editor_job': {
+          const input = CompleteSiteEditorJobInput.parse(req.params.arguments ?? {});
+          await api.completeSiteEditorJob(input.projectId, input.jobId, {
+            artifactVersion: input.artifactVersion,
+            status: input.status,
+            result: input.result ?? null,
             error: input.error ?? null,
           });
           return jsonResult({ ok: true });

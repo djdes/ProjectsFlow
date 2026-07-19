@@ -277,6 +277,14 @@ export class SiteEditorService {
     return this.deps.repository.listQueuedJobs(projectId, userId, Math.max(1, Math.min(50, limit)));
   }
 
+  // Глобальная очередь для раннера: отдаём все queued-job'ы, назначенные этому диспетчеру,
+  // сразу по всем проектам. Авторизация — сам фильтр по dispatcherUserId: чужие job'ы в
+  // выборку не попадают, поэтому отдельная проверка доступа к проекту здесь не нужна
+  // (тот же приём, что в ListPendingAiPromptJobs).
+  async listQueuedJobsForDispatcher(userId: string, limit = 20): Promise<readonly ProjectEditJob[]> {
+    return this.deps.repository.listQueuedJobsForDispatcher(userId, Math.max(1, Math.min(50, limit)));
+  }
+
   async claimJob(projectId: string, userId: string, jobId: string, artifactVersion: string): Promise<ProjectEditJob> {
     await requireDispatcherAccess(this.deps, projectId, userId);
     const existing = await this.requireJob(projectId, jobId);

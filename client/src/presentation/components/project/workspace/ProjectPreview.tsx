@@ -28,8 +28,11 @@ type ActiveSession = SiteEditorSession & { remote: boolean };
 
 import type { StudioSaveState } from '@/presentation/components/project/studio/SaveStatusIndicator';
 
-// Сколько ждём диспетчера, прежде чем признать публикацию зависшей.
-const PUBLISH_TIMEOUT_MS = 4 * 60_000;
+// Сколько ждём диспетчера, прежде чем признать сохранение зависшим. Цикл длинный:
+// агент правит исходники и прогоняет проверки (1–4 мин), затем коммит/пуш и деплой
+// (замеры на проде — 90–150 сек). Ставим с запасом, иначе честная сборка будет падать
+// по таймауту. Серверного sweep-а для таких job'ов нет, поэтому предел нужен.
+const PUBLISH_TIMEOUT_MS = 12 * 60_000;
 
 export type ProjectPreviewProps = {
   projectId: string;
