@@ -7,6 +7,7 @@ import { AiConversationView } from '@/presentation/components/ai/AiConversationV
 import type { DashboardSection } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import type { StudioSplitPane } from './useStudioSplitPane';
 import { StudioThemePanel } from './StudioThemePanel';
+import { SaveStatusIndicator, type StudioSaveState } from './SaveStatusIndicator';
 import { useState } from 'react';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 
@@ -16,6 +17,7 @@ export function StudioChatPane({
   projectName,
   projectIcon,
   splitPane,
+  saveState,
   onOpenDashboardSection,
 }: {
   conversationId: string;
@@ -23,6 +25,8 @@ export function StudioChatPane({
   projectName: string;
   projectIcon: string | null;
   splitPane: StudioSplitPane;
+  // Статус сохранения правок превью — живёт в правой панели, показывается здесь.
+  saveState: StudioSaveState;
   onOpenDashboardSection: (section: DashboardSection) => void;
 }): React.ReactElement {
   const [themeOpen, setThemeOpen] = useState(false);
@@ -69,6 +73,8 @@ export function StudioChatPane({
                 {dashboardLinks.map(({ label, section, icon: Icon }) => <DropdownMenuItem key={section} onSelect={() => onOpenDashboardSection(section)}><Icon />{label}</DropdownMenuItem>)}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Как в Base44: статус сохранения стоит сразу за названием проекта. */}
+            <SaveStatusIndicator state={saveState} />
             <span className="min-w-0 flex-1" aria-hidden />
             <Popover open={themeOpen} onOpenChange={setThemeOpen}>
               <PopoverTrigger asChild>

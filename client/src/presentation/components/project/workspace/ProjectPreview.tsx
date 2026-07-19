@@ -26,6 +26,8 @@ import type { PreviewEditorState } from './preview/types';
 
 type ActiveSession = SiteEditorSession & { remote: boolean };
 
+import type { StudioSaveState } from '@/presentation/components/project/studio/SaveStatusIndicator';
+
 export type ProjectPreviewProps = {
   projectId: string;
   initialPath?: string;
@@ -34,6 +36,9 @@ export type ProjectPreviewProps = {
   toolbarLeading?: React.ReactNode;
   toolbarTrailing?: React.ReactNode;
   studioLayout?: boolean;
+  // Статус сохранения поднимается наверх: в studio-раскладке его показывает
+  // индикатор в шапке ЛЕВОЙ панели, а не кнопки в этом тулбаре.
+  onSaveStateChange?: (state: StudioSaveState) => void;
 };
 
 export function ProjectPreview({
@@ -44,6 +49,7 @@ export function ProjectPreview({
   toolbarLeading,
   toolbarTrailing,
   studioLayout = false,
+  onSaveStateChange,
 }: ProjectPreviewProps): React.ReactElement {
   const { projectRepository, siteEditorRepository, openSiteEditorSession, applySiteEditorPatch, startSiteEditorAiJob } = useContainer();
   const [site, setSite] = useState<ProjectSite | null>(null);
@@ -317,6 +323,10 @@ export function ProjectPreview({
   }, [currentUrl, openSiteEditorSession, projectId, session, state.mode, state.path]);
 
   const setMode = (mode: 'preview' | 'edit' | 'canvas'): void => {
+    // Выход из режима правки = коммит накопленного черновика.
+    if (state.mode === 'edit' && mode !== 'edit' && state.draftCount > 0 && !state.queuedCount) {
+      void publishDraft();
+    }
     dispatch({ type: 'SET_MODE', mode });
     if (mode !== 'edit') sendBridge('set-mode', { mode: 'preview' });
   };
@@ -396,6 +406,54 @@ export function ProjectPreview({
     }
   };
 
+  // Автосохранение накопленных правок. Кнопки «Применить/Отклонить» убраны: правки
+  // копятся, пока пользователь в режиме правки, и уходят на сервер сами — при выходе
+  // из режима, при уходе со страницы и при закрытии вкладки.
+  const publishRef = useRef<() => Promise<void>>(async () => {});
+  const hasDraftsRef = useRef(false);
+  // Обновляем ссылки в эффекте, а не в рендере: react-hooks/refs запрещает писать в ref
+  // во время рендера. Без списка зависимостей — эффект идёт после каждого рендера,
+  // поэтому в момент выгрузки в ref лежит актуальное замыкание.
+  useEffect(() => {
+    publishRef.current = publishDraft;
+    hasDraftsRef.current = state.draftCount > 0 && state.queuedCount === 0;
+  });
+
+  useEffect(() => {
+    const flush = (): void => { if (hasDraftsRef.current) void publishRef.current(); };
+    // pagehide, а не beforeunload: срабатывает и на мобильных, и при bfcache.
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      // Размонтирование = уход со страницы студии.
+      flush();
+    };
+  }, []);
+
+  // Отметка времени последнего успешного сохранения — для подписи индикатора.
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const prevQueuedRef = useRef(state.queuedCount);
+  useEffect(() => {
+    // Черновик ушёл в очередь публикации и очередь опустела → изменения сохранены.
+    if (prevQueuedRef.current > 0 && state.queuedCount === 0 && state.saveStatus !== 'error') {
+      setSavedAt(Date.now());
+    }
+    prevQueuedRef.current = state.queuedCount;
+  }, [state.queuedCount, state.saveStatus]);
+
+  useEffect(() => {
+    onSaveStateChange?.({
+      editing: state.mode === 'edit',
+      pending: state.draftCount,
+      saving: state.saveStatus === 'saving' || state.queuedCount > 0,
+      error: state.saveStatus === 'error' ? (state.bridgeError ?? 'неизвестная ошибка') : null,
+      savedAt,
+    });
+  }, [onSaveStateChange, savedAt, state.bridgeError, state.draftCount, state.mode, state.queuedCount, state.saveStatus]);
+
+  // Аварийный сброс всего черновика страницы. Живёт в «…»-меню тулбара: обычный путь —
+  // это автосохранение при выходе из режима правки, а сюда идут, когда наредактировали
+  // лишнего и откатывать по одному шагу undo слишком долго.
   const rejectDraft = async (): Promise<void> => {
     if (!session?.remote || !state.draftCount || state.queuedCount) return;
     await patchQueueRef.current;
@@ -407,9 +465,9 @@ export function ProjectPreview({
       setRejectOpen(false);
       dispatch({ type: 'DRAFT_STATE', revision: result.revision, draftCount: result.draftCount, redoDepth: result.redoCount, queuedCount: result.queuedCount });
       resetFrame();
-      toast.success('Черновик отклонён.');
+      toast.success('Все правки отклонены.');
     } catch {
-      dispatch({ type: 'PATCH_ERROR', message: 'Не удалось отклонить черновик.' });
+      dispatch({ type: 'PATCH_ERROR', message: 'Не удалось отклонить правки.' });
     }
   };
 
@@ -465,7 +523,7 @@ export function ProjectPreview({
       )}
       aria-label="Preview результата проекта"
     >
-      <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} draftCount={state.draftCount} queuedCount={state.queuedCount} leading={toolbarLeading} trailing={toolbarTrailing} studioLayout={studioLayout} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onPublish={() => void publishDraft()} onReject={() => setRejectOpen(true)} />
+      <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} queuedCount={state.queuedCount} leading={toolbarLeading} trailing={toolbarTrailing} studioLayout={studioLayout} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onReject={() => setRejectOpen(true)} />
       {(state.queuedCount > 0 || publishJob) && (
         <div className="flex items-center gap-2 border-b bg-blue-500/5 px-3 py-2 text-sm" role="status" aria-live="polite">
           {publishJob?.status === 'completed' ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600" /> : publishJob?.status === 'failed' ? <XCircle className="size-4 shrink-0 text-destructive" /> : <Loader2 className="size-4 shrink-0 animate-spin text-blue-600" />}
@@ -475,8 +533,8 @@ export function ProjectPreview({
       {state.mode === 'canvas' ? <CanvasRouteMap routes={routes} baseUrl={baseUrl} fillAvailable={fillAvailable} onOpenRoute={(path) => { applyPath(path); dispatch({ type: 'SET_MODE', mode: 'preview' }); }} /> : <PreviewCanvas ref={iframeRef} frameKey={frameKey} previewUrl={frameSrc} path={state.path} mode={state.mode} device={state.device} loading={frameLoading} slow={slowFrame} bridgeStatus={state.bridgeStatus} bridgeError={state.bridgeError} hovered={state.hovered} selected={state.selected} styleOpen={state.styleOpen} fillAvailable={fillAvailable} onLoad={() => { setFrameLoading(false); if (state.mode === 'edit') { sendBridge('hello', { mode: 'edit', path: state.path }); sendBridge('set-mode', { mode: 'edit' }); } }} onStyleOpen={(open) => dispatch({ type: 'SET_PANEL', panel: 'style', open })} onPatch={(patch) => void applyPatch(patch)} onAi={() => dispatch({ type: 'SET_PANEL', panel: 'ai', open: true })} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onDelete={() => setDeleteOpen(true)} onCloseSelection={() => dispatch({ type: 'SELECT', element: null })} />}
       <CodeSheet open={state.codeOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'code', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onPatch={(patch) => void applyPatch(patch)} onEditWithAi={(prompt) => submitAi(`Измени исходный код выбранного элемента по инструкции, но верни только безопасный визуальный patch-черновик без публикации: ${prompt}`)} />
       <AiPromptSheet open={state.aiOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'ai', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onSubmit={submitAi} />
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Удалить выбранный элемент?</DialogTitle><DialogDescription>Элемент исчезнет из страницы. Изменение можно будет отменить кнопкой «Отменить» после сохранения.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)}>Отмена</Button><Button variant="destructive" onClick={() => { setDeleteOpen(false); void applyPatch({ kind: 'command', command: 'delete' }); }}>Удалить</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Отклонить черновик?</DialogTitle><DialogDescription>Все {state.draftCount} {state.draftCount === 1 ? 'изменение' : 'изменения'} этой страницы будут удалены. Опубликованная версия сайта не изменится.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Оставить</Button><Button variant="destructive" onClick={() => void rejectDraft()}>Отклонить черновик</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Отклонить все правки?</DialogTitle><DialogDescription>Все {state.draftCount} {state.draftCount === 1 ? 'правка' : 'правок'} этой страницы будут удалены. Опубликованная версия сайта не изменится.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Оставить</Button><Button variant="destructive" onClick={() => void rejectDraft()}>Отклонить правки</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Удалить выбранный элемент?</DialogTitle><DialogDescription>Элемент исчезнет из страницы. Изменение можно откатить стрелкой «Отменить» в панели.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)}>Отмена</Button><Button variant="destructive" onClick={() => { setDeleteOpen(false); void applyPatch({ kind: 'command', command: 'delete' }); }}>Удалить</Button></DialogFooter></DialogContent></Dialog>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { Check, ChevronDown, Grid2X2, Loader2, Monitor, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Undo2, X } from 'lucide-react';
+import { Grid2X2, Monitor, MoreHorizontal, MousePointer2, RefreshCw, Redo2, Smartphone, Tablet, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -12,17 +12,17 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
 ];
 
 export function PreviewToolbar({
-  mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
+  mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, queuedCount,
   leading, trailing, studioLayout = false,
-  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onPublish, onReject,
+  onMode, onDevice, onDraftPath, onApplyPath, onRouteMenu, onReload, onUndo, onRedo, onReject,
 }: {
   mode: PreviewMode; device: PreviewDevice; path: string; draftPath: string; routes: string[]; routeMenuOpen: boolean;
   saveStatus: SaveStatus; undoDepth: number; redoDepth: number;
-  draftCount: number; queuedCount: number;
+  queuedCount: number;
   leading?: React.ReactNode; trailing?: React.ReactNode; studioLayout?: boolean;
   onMode: (mode: PreviewMode) => void; onDevice: (device: PreviewDevice) => void; onDraftPath: (path: string) => void;
   onApplyPath: (path: string) => void; onRouteMenu: (open: boolean) => void; onReload: () => void;
-  onUndo: () => void; onRedo: () => void; onCode: () => void; onPublish: () => void; onReject: () => void;
+  onUndo: () => void; onRedo: () => void; onCode: () => void; onReject: () => void;
 }): React.ReactElement {
   const listId = useId();
   const routeBoxRef = useRef<HTMLDivElement>(null);
@@ -41,7 +41,10 @@ export function PreviewToolbar({
     <div
       className={cn(
         'flex items-center gap-1 border-b bg-background px-2 py-1',
-        studioLayout ? 'min-h-11 flex-nowrap overflow-x-auto' : 'min-h-11 flex-wrap',
+        // В studio-раскладке высота ЖЁСТКАЯ (h-11) и совпадает с хедером левой панели —
+        // только так нижние границы обеих панелей сходятся в одну сплошную линию.
+        // min-h-* здесь нельзя: тулбар подрастает от контента и линия разъезжается.
+        studioLayout ? 'h-11 shrink-0 flex-nowrap overflow-x-auto' : 'min-h-11 flex-wrap',
       )}
       aria-label="Панель Preview"
     >
@@ -56,7 +59,7 @@ export function PreviewToolbar({
         ))}
       </div>
 
-      <div className={cn('relative min-w-[180px]', studioLayout ? 'mx-auto w-[min(290px,30vw)] shrink-0' : 'flex-1')} ref={routeBoxRef}>
+      <div className={cn(studioLayout ? 'relative mx-auto w-[min(200px,22vw)] min-w-[132px] shrink-0' : 'relative min-w-[180px] flex-1')} ref={routeBoxRef}>
         <form className="flex h-8 items-center rounded-md border bg-background px-0.5 focus-within:border-foreground/25 focus-within:ring-1 focus-within:ring-ring/20" onSubmit={(event) => { event.preventDefault(); onApplyPath(draftPath); }}>
           <button type="button" className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Обновить Preview" onClick={onReload}><RefreshCw className="size-3.5" /></button>
           <input value={draftPath} onChange={(event) => { onDraftPath(event.target.value); onRouteMenu(true); }} onFocus={() => onRouteMenu(true)} onKeyDown={(event) => { if (event.key === 'Escape') onRouteMenu(false); }} role="combobox" aria-label="Путь страницы результата" aria-expanded={routeMenuOpen} aria-controls={listId} aria-autocomplete="list" className="h-7 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none" placeholder="/catalog" />
@@ -78,17 +81,16 @@ export function PreviewToolbar({
             <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!undoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onUndo} aria-label="Отменить изменение"><Undo2 className="size-3.5" /></Button>
             <Button type="button" variant="ghost" size="icon" className="size-7 rounded" disabled={!redoDepth || saveStatus === 'saving' || queuedCount > 0} onClick={onRedo} aria-label="Повторить изменение"><Redo2 className="size-3.5" /></Button>
           </div>
+          {/* Кнопок сохранения тут нет — правки уходят сами при выходе из режима правки.
+              Остаётся только аварийный сброс всего черновика, спрятанный в «…». */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="h-8 gap-1 rounded-md px-2 text-xs shadow-none" disabled={!draftCount || saveStatus === 'saving' || queuedCount > 0} aria-label="Действия с изменениями">
-                {queuedCount > 0 ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                <span className="hidden sm:inline">{queuedCount > 0 ? 'Публикуем…' : draftCount}</span>
-                <ChevronDown className="size-3.5 opacity-70" />
-              </Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7 shrink-0 rounded" disabled={saveStatus === 'saving' || queuedCount > 0} aria-label="Ещё действия с правками"><MoreHorizontal className="size-3.5" /></Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onSelect={onPublish}><Check className="size-4" />Применить изменения ({draftCount})</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onReject}><X className="size-4" />Отклонить изменения</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={!undoDepth} onSelect={onReject}>
+                <Trash2 className="size-4" />Отклонить все правки
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </>

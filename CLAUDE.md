@@ -6,6 +6,22 @@
 > **Доступы, git, деплой, прод-окружение целиком** — в [docs/ONBOARDING.md](docs/ONBOARDING.md).
 > Этот файл — только короткие правила работы. Не дублируй сюда креды.
 
+## Playwright и копирование интерфейсных зон
+
+Перед **любой** работой с Playwright / Browser MCP / CDP / визуальным копированием
+референсного сайта полностью прочитай свою версию инструкции и следуй ей как основному
+регламенту на весь flow:
+
+| Кто ты | Файл |
+| --- | --- |
+| Claude | `C:\Users\Yaroslav\simplifications\Инструкция работы с playwright для claude.md` |
+| Codex | `C:\Users\Yaroslav\simplifications\Инструкция работы с playwright для codex.md` |
+
+Правило действует и когда юзер просит «сделай через Playwright», и когда ты сам решил взять
+Playwright. Читай файл ДО первого вызова браузера. `COPY_PROJECT` и `COPY_ZONE` берутся из
+последнего сообщения юзера — не проси править файл инструкции. Codex-версия правила
+продублирована в [AGENTS.md](AGENTS.md).
+
 ## Контекст проекта
 
 - **Что это.** Платформа управления проектами (сайты, ПО и т.д.). Multi-tenant SaaS
@@ -39,7 +55,7 @@ Next.js, NextAuth, RSC, Server Actions — **не используем**. Реш
 client/src/
 ├── domain/         ← entities, value objects. 0 deps на React/HTTP/DOM
 ├── application/    ← ports (repository-interfaces) + use-cases. Зависит только от domain
-├── infrastructure/ ← адаптеры (mock, в будущем http) + DI-контейнер. Реализует порты
+├── infrastructure/ ← HTTP-адаптеры + DI-контейнер. Реализует порты
 ├── presentation/   ← React: layout, pages, hooks, theme, app/routes. НЕ знает про конкретные адаптеры
 ├── components/ui/  ← shadcn-примитивы (button, dropdown-menu и т.д.)
 ├── lib/            ← shared утилиты (cn helper)
@@ -55,19 +71,24 @@ client/src/
 | `infrastructure` | `domain`, `application` |
 | `presentation` | `domain`, `application`, `lib/`, `components/ui/` |
 
-`presentation` НЕ импортирует из `infrastructure/mock/*` или `infrastructure/http/*` напрямую —
-только через DI-контейнер `infrastructure/di/container.tsx` (единственный мост).
+`presentation` НЕ импортирует из `infrastructure/http/*` напрямую — только через
+DI-контейнер `infrastructure/di/container.tsx` (единственный мост).
 Этот контекст устроен как singleton на уровне модуля.
 
 При добавлении новой фичи: сначала domain, потом application (порт + use-case),
-потом mock-реализация в infrastructure, потом UI. Не наоборот.
+потом HTTP-реализация в infrastructure, потом UI. Не наоборот.
+
+Mock-слоя больше нет: `infrastructure/mock/` удалён, контейнер целиком собран на
+HTTP-репозиториях. Запрет на импорт `@/infrastructure/mock/*` в eslint оставлен как
+страховка на случай, если моки вернутся.
 
 ## Структура и где что менять
 
 - Новый shadcn-компонент → `npx shadcn@latest add <name>` (положит в `client/src/components/ui/`).
 - Новая страница → компонент в `client/src/presentation/pages/`, маршрут в `presentation/app/routes.tsx`.
 - Новый use-case → класс в `client/src/application/<feature>/<UseCase>.ts`, передать в `container.tsx`.
-- Новый mock-репозиторий → реализует порт из `application/`, регистрируется в `container.tsx`.
+- Новый репозиторий → `infrastructure/http/Http<Name>Repository.ts`, реализует порт
+  из `application/`, регистрируется в `container.tsx`.
 - Дизайн-токены (цвета, скругления) — CSS-переменные в `client/src/styles/globals.css`,
   Tailwind-маппинг в `client/tailwind.config.ts`. Палитра: slate-нейтрали + один синий акцент.
 - Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.

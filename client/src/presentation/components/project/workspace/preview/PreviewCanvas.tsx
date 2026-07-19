@@ -23,6 +23,19 @@ export const PreviewCanvas = forwardRef<HTMLIFrameElement, {
     <div className={cn('relative overflow-auto bg-[#f3f3f2] dark:bg-[#111]', fillAvailable ? 'min-h-0 flex-1 p-0' : 'min-h-[620px] p-3 sm:p-5')}>
       <div className={cn('relative mx-auto overflow-hidden border bg-white transition-[width] duration-300 ease-out motion-reduce:transition-none dark:bg-zinc-950', fillAvailable && device === 'desktop' ? 'h-full min-h-0 border-0' : 'min-h-[580px]')} style={{ width: frame.width, maxWidth: '100%' }}>
         {loading && <div className="absolute inset-0 z-50 grid place-items-center bg-background"><div className="text-center text-sm text-muted-foreground"><Loader2 className="mx-auto mb-2 size-5 animate-spin" />{slow ? 'Сайт загружается дольше обычного…' : 'Загружаем результат…'}</div></div>}
+        {/*
+          sandbox содержит allow-scripts + allow-same-origin одновременно. Обычно эта пара
+          снимает песочницу, но здесь она безопасна и нужна — мосту (bridgeProtocol) требуется
+          доступ к DOM собственного документа. Держится на трёх условиях, не ломайте их:
+            1. previewUrl ВСЕГДА указывает на отдельный поддомен <slug>.projectsflow.ru
+               (siteResultUrl), никогда на origin приложения. allow-same-origin даёт iframe
+               его собственный origin — до родителя он всё равно не дотянется.
+            2. Сессионная кука httpOnly и host-only (без domain=) — на поддомен не уходит
+               и недоступна из JS превью. См. server auth/routes.ts → sessionCookieOptions.
+            3. Мутации из поддоменов режет csrfOriginGuard по Sec-Fetch-Site.
+          Если превью когда-нибудь начнут отдавать с основного origin — этот sandbox надо
+          переделывать, иначе страница получит полный доступ к приложению.
+        */}
         <iframe ref={ref} key={frameKey} src={previewUrl} title={`Результат проекта — ${path}`} className="w-full border-0 bg-white" style={{ height: fillAvailable && device === 'desktop' ? '100%' : frame.height }} sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads allow-same-origin" referrerPolicy="strict-origin-when-cross-origin" onLoad={onLoad} />
         {mode === 'edit' && (
           <div className="pointer-events-none absolute inset-0 z-30" aria-hidden="true">

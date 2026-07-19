@@ -15,7 +15,9 @@ import {
   StudioMobileChatSheet,
   StudioTopBar,
   StudioWorkspace,
+  EMPTY_SAVE_STATE,
   type StudioPanel,
+  type StudioSaveState,
   useStudioSplitPane,
 } from '@/presentation/components/project/studio';
 import {
@@ -32,6 +34,16 @@ type StudioData = {
 
 function resolvePanel(value: string | null): StudioPanel {
   return value === 'dashboard' ? 'dashboard' : 'preview';
+}
+
+// Отличает «фичи тут нет / нет доступа» от сетевого сбоя. Прятать блок надо только в первом
+// случае: при обрыве связи блок должен остаться на месте, иначе временный сбой неотличим от
+// отсутствия прав и раздел молча пропадает из интерфейса.
+// Проверка по duck-typing, а не через instanceof HttpError: presentation не имеет права
+// импортировать из infrastructure/http (см. CLAUDE.md → «Архитектура client/»).
+function featureUnavailable(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return status === 403 || status === 404;
 }
 
 export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: string } = {}): React.ReactElement {
@@ -52,6 +64,8 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [automationOpen, setAutomationOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  // Статус сохранения правок превью: живёт в правой панели, показывается в шапке левой.
+  const [saveState, setSaveState] = useState<StudioSaveState>(EMPTY_SAVE_STATE);
   const [financeVisible, setFinanceVisible] = useState(false);
   const [monitoringVisible, setMonitoringVisible] = useState(false);
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
@@ -118,10 +132,10 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
     let cancelled = false;
     projectFinanceRepository.getSummary(projectId)
       .then(() => { if (!cancelled) setFinanceVisible(true); })
-      .catch(() => { if (!cancelled) setFinanceVisible(false); });
+      .catch((err: unknown) => { if (!cancelled && featureUnavailable(err)) setFinanceVisible(false); });
     monitoringRepository.listServers(projectId)
       .then(() => { if (!cancelled) setMonitoringVisible(true); })
-      .catch(() => { if (!cancelled) setMonitoringVisible(false); });
+      .catch((err: unknown) => { if (!cancelled && featureUnavailable(err)) setMonitoringVisible(false); });
     monitoringRepository.listAlerts(projectId, true)
       .then((alerts) => { if (!cancelled) setMonitoringAlerts(alerts.length); })
       .catch(() => { if (!cancelled) setMonitoringAlerts(0); });
@@ -210,7 +224,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   return (
     <main className="flex h-full min-h-[520px] w-full overflow-hidden bg-background" aria-label={`Project Studio — ${data.project.name}`}>
-      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} onOpenDashboardSection={openDashboardSection} />
+      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} saveState={saveState} onOpenDashboardSection={openDashboardSection} />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Рабочая область проекта">
         {panel === 'dashboard' && (
@@ -244,6 +258,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
           onSectionChange={sectionChange}
           onOpenPreview={() => panelChange('preview')}
           onOpenAutomation={() => setAutomationOpen(true)}
+          onSaveStateChange={setSaveState}
           previewToolbarLeading={(
             <StudioTopBar
               panel={panel}

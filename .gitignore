@@ -20,8 +20,6 @@ coverage/
 .deploy/
 # Astro auto-generated types
 */.astro/
-# Playwright session artifacts (created by MCP debug runs)
-.playwright-mcp/
 # Claude Code state
 .claude/
 # Local Notion reference materials
@@ -33,3 +31,7 @@ uploads/
 *.tsbuildinfo
 # file-sync runtime blob storage (контент-адресуемые блобы, создаются в рантайме)
 */sync-blobs/
+
+
+# Interface-research artifacts (screenshots of third-party accounts). Keep local.
+reference/

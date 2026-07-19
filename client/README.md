@@ -2,7 +2,8 @@
 
 Vite + React 19 + TypeScript + Tailwind + shadcn/ui. Фронт платформы ProjectsFlow.
 
-Сейчас работает на mock-данных (см. `src/infrastructure/mock/`). Реальный backend появится в Spec #2.
+Работает на реальном backend'е: все репозитории — HTTP-адаптеры в `src/infrastructure/http/`,
+собираются в DI-контейнере. Mock-слой удалён.
 
 ## Запуск
 
@@ -40,7 +41,7 @@ npm run lint         # eslint . (включая правила слоёв)
 
 **Правила импорта защищены ESLint** (`eslint-plugin-boundaries`). Если линтер ругается
 «Dependency not allowed» — нарушено правило слоёв. Главное правило: `presentation`
-не импортирует из `infrastructure/mock/*` напрямую, только через `useContainer()`.
+не импортирует из `infrastructure/http/*` напрямую, только через `useContainer()`.
 
 ## Добавление shadcn-компонента
 
@@ -60,7 +61,7 @@ npx shadcn@latest add <component>   # положит файл в src/components/
 1. `domain/<feature>/<Entity>.ts` — если нужна новая сущность.
 2. `application/<feature>/<Repository>.ts` — порт.
 3. `application/<feature>/<UseCase>.ts` — use-case-обёртка.
-4. `infrastructure/mock/Mock<Repository>.ts` — мок.
+4. `infrastructure/http/Http<Repository>.ts` — HTTP-адаптер.
 5. Регистрация в `infrastructure/di/container.tsx`.
 6. Хук в `presentation/hooks/use<Thing>.ts`.
 7. UI в `presentation/pages/` или `presentation/layout/`.

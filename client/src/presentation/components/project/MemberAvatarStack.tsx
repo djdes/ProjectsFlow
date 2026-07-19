@@ -6,8 +6,10 @@ import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { MembersHoverPanel } from './MembersHoverPanel';
 
-// Сколько аватаров показываем в самом стеке (остальные — счётчиком «+N»).
-const STACK = 4;
+// Максимум кружков в стеке — места в шапках мало, держим компактно.
+// Если участников больше — последний кружок становится счётчиком «+N»,
+// поэтому аватаров показываем на один меньше.
+const MAX_CIRCLES = 3;
 
 // Аватар-стек участников проекта с поповером-панелью при наведении (см. MembersHoverPanel).
 // Поповер открывается по hover (задержка ~120мс) и по клику; курсор свободно переходит со
@@ -29,6 +31,10 @@ export function MemberAvatarStack({
 
   if (members.length === 0) return null;
 
+  // Всего кружков не больше MAX_CIRCLES. Если все помещаются — показываем всех без
+  // счётчика; если нет — последний кружок занимает «+N», значит аватаров на один меньше.
+  const shown = members.length <= MAX_CIRCLES ? members.length : MAX_CIRCLES - 1;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
@@ -39,7 +45,7 @@ export function MemberAvatarStack({
           aria-label="Участники проекта"
           aria-expanded={open}
         >
-          {members.slice(0, STACK).map((m) => (
+          {members.slice(0, shown).map((m) => (
             <Avatar key={m.userId} className="size-6 ring-2 ring-background">
               {m.user.avatarUrl ? (
                 <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
@@ -49,9 +55,9 @@ export function MemberAvatarStack({
               </AvatarFallback>
             </Avatar>
           ))}
-          {members.length > STACK && (
+          {members.length > shown && (
             <span className="grid size-6 place-items-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-background">
-              +{members.length - STACK}
+              +{members.length - shown}
             </span>
           )}
         </button>

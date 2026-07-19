@@ -4,6 +4,7 @@ import { ProjectDashboard } from '@/presentation/components/project/workspace/Pr
 import { ProjectPreview } from '@/presentation/components/project/workspace/ProjectPreview';
 import type { DashboardSection } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import type { StudioPanel } from './StudioTopBar';
+import type { StudioSaveState } from './SaveStatusIndicator';
 
 export function StudioWorkspace({
   panel,
@@ -18,6 +19,7 @@ export function StudioWorkspace({
   onOpenAutomation,
   previewToolbarLeading,
   previewToolbarTrailing,
+  onSaveStateChange,
 }: {
   panel: StudioPanel;
   project: Project;
@@ -31,6 +33,7 @@ export function StudioWorkspace({
   onOpenAutomation: () => void;
   previewToolbarLeading?: React.ReactNode;
   previewToolbarTrailing?: React.ReactNode;
+  onSaveStateChange?: (state: StudioSaveState) => void;
 }): React.ReactElement {
   return (
     <div className="min-h-0 flex-1 overflow-hidden bg-background">
@@ -44,6 +47,7 @@ export function StudioWorkspace({
           toolbarLeading={previewToolbarLeading}
           toolbarTrailing={previewToolbarTrailing}
           studioLayout
+          onSaveStateChange={onSaveStateChange}
         />
       ) : (
         <ProjectDashboard
