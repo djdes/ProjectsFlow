@@ -1071,6 +1071,14 @@ const liveService = new LiveService({
 // Best-effort: ошибка не должна мешать старту сервера.
 void liveService.sweepStaleRunning().catch(() => {});
 
+// То же для job'ов визуального редактора: воркер диспетчера мог умереть, не отчитавшись,
+// и тогда job навсегда остаётся running, а у пользователя вечно крутится «Сохраняем правки
+// в проект…». Подметаем на старте и раз в 5 минут — правки при этом возвращаются в черновик.
+void siteEditorService.sweepStaleRunningJobs().catch(() => {});
+setInterval(() => {
+  void siteEditorService.sweepStaleRunningJobs().catch(() => {});
+}, 5 * 60_000).unref();
+
 // ===== Чат пространства (db/075): общий канал участников пространства =====
 // Workspace-scoped firehose событий чата (только для открытых SSE-вкладок; НЕ per-user bus).
 const chatEventHub = new ChatEventHub();

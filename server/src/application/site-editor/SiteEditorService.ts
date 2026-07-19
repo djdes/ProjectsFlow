@@ -285,6 +285,31 @@ export class SiteEditorService {
     return this.deps.repository.listQueuedJobsForDispatcher(userId, Math.max(1, Math.min(50, limit)));
   }
 
+  // Подметает job'ы, зависшие в running. Воркер диспетчера может умереть в любой момент
+  // (упавший процесс, перезагрузка машины, необработанное исключение) — и тогда job остаётся
+  // running навсегда: никакого TTL у него нет, а пользователь всё это время смотрит на
+  // «Сохраняем правки в проект…», которое никогда не закончится. Помечаем такие job'ы
+  // failed, что возвращает их патчи в draft — работа пользователя не теряется, он просто
+  // может опубликовать её заново. Зеркало liveService.sweepStaleRunning().
+  async sweepStaleRunningJobs(olderThanMinutes = 20, limit = 100): Promise<number> {
+    const cutoff = new Date(this.now().getTime() - olderThanMinutes * 60_000);
+    const stale = await this.deps.repository.listStaleRunningJobs(cutoff, limit);
+    let swept = 0;
+    for (const job of stale) {
+      const done = await this.deps.repository.completeJob({
+        projectId: job.projectId,
+        jobId: job.id,
+        dispatcherUserId: job.dispatcherUserId,
+        status: 'failed',
+        result: null,
+        error: `worker did not report back within ${olderThanMinutes} min — правки возвращены в черновик`,
+        finishedAt: this.now(),
+      });
+      if (done) swept += 1;
+    }
+    return swept;
+  }
+
   async claimJob(projectId: string, userId: string, jobId: string, artifactVersion: string): Promise<ProjectEditJob> {
     await requireDispatcherAccess(this.deps, projectId, userId);
     const existing = await this.requireJob(projectId, jobId);

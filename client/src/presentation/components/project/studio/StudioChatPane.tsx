@@ -10,6 +10,7 @@ import { StudioThemePanel } from './StudioThemePanel';
 import { SaveStatusIndicator, type StudioSaveState } from './SaveStatusIndicator';
 import { useState } from 'react';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
+import { useSidebarCollapsed } from '@/presentation/layout/sidebarCollapsedContext';
 
 export function StudioChatPane({
   conversationId,
@@ -30,6 +31,9 @@ export function StudioChatPane({
   onOpenDashboardSection: (section: DashboardSection) => void;
 }): React.ReactElement {
   const [themeOpen, setThemeOpen] = useState(false);
+  // Бургер открывает основную панель — когда она и так открыта, кнопка бессмысленна
+  // и просто дублирует навигацию, занимая место в и без того тесной шапке.
+  const sidebarCollapsed = useSidebarCollapsed();
   const dashboardLinks: Array<{ label: string; section: DashboardSection; icon: typeof LayoutDashboard }> = [
     { label: 'Обзор приложения', section: 'overview', icon: LayoutDashboard },
     { label: 'Пользователи', section: 'users', icon: Users },
@@ -50,16 +54,18 @@ export function StudioChatPane({
       >
         <div style={splitPane.contentStyle} className="relative flex h-full min-h-0 flex-col">
           <header className="flex h-11 shrink-0 items-center gap-1 border-b px-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg p-0"
-              aria-label="Открыть основную панель"
-              onClick={() => window.dispatchEvent(new CustomEvent('pf:set-sidebar-collapsed', { detail: { collapsed: false } }))}
-            >
-              <Menu className="size-[18px]" />
-            </Button>
+            {sidebarCollapsed && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg p-0"
+                aria-label="Открыть основную панель"
+                onClick={() => window.dispatchEvent(new CustomEvent('pf:set-sidebar-collapsed', { detail: { collapsed: false } }))}
+              >
+                <Menu className="size-[18px]" />
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="flex min-w-0 max-w-[calc(100%_-_116px)] items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>

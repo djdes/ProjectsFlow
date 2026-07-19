@@ -71,6 +71,9 @@ export interface SiteEditorRepository {
   // queued навсегда — раннер про per-project роут просто не знал.
   listQueuedJobsForDispatcher(dispatcherUserId: string, limit: number): Promise<readonly ProjectEditJob[]>;
   claimJob(projectId: string, jobId: string, dispatcherUserId: string, claimedAt: Date): Promise<ProjectEditJob | null>;
+  // Job'ы, зависшие в running: воркер забрал задачу и умер, не отчитавшись. Без подметания
+  // они висят вечно, а пользователь смотрит на спиннер, который никогда не остановится.
+  listStaleRunningJobs(claimedBefore: Date, limit: number): Promise<readonly ProjectEditJob[]>;
   completeJob(input: {
     readonly projectId: string;
     readonly jobId: string;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectEditJobs,
@@ -364,6 +364,14 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
       eq(projectEditJobs.dispatcherUserId, dispatcherUserId),
       eq(projectEditJobs.status, 'queued'),
     )).orderBy(asc(projectEditJobs.createdAt)).limit(limit);
+    return rows.map(toJob);
+  }
+
+  async listStaleRunningJobs(claimedBefore: Date, limit: number): Promise<readonly ProjectEditJob[]> {
+    const rows = await this.db.select().from(projectEditJobs).where(and(
+      eq(projectEditJobs.status, 'running'),
+      lt(projectEditJobs.claimedAt, claimedBefore),
+    )).orderBy(asc(projectEditJobs.claimedAt)).limit(limit);
     return rows.map(toJob);
   }
 
