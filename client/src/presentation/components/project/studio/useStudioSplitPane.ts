@@ -10,10 +10,21 @@ const STORAGE_KEY = 'pf:project-studio:chat-width';
 // панель вместе с деревом чата, из-за чего ресайз ощутимо лагал. Теперь при драге мы
 // пишем только переменную (кадр в rAF), а React-стейт обновляем один раз — на отпускании.
 const CSS_VAR = '--pf-studio-chat-width';
+// Плавность сворачивания панели нужна, но во время драга она вредна: ширина должна идти
+// за курсором кадр в кадр. Держим её отдельной переменной и гасим императивно прямо в
+// pointerdown — если полагаться на React-стейт `dragging`, первые кадры движения успевают
+// уехать в 500-миллисекундную анимацию, и рывок читается как лаг.
+const TRANSITION_VAR = '--pf-studio-chat-transition';
+const PANE_TRANSITION = 'width 500ms cubic-bezier(0.4, 0, 0.2, 1)';
 
 function applyWidthVar(px: number): void {
   if (typeof document === 'undefined') return;
   document.documentElement.style.setProperty(CSS_VAR, `${px}px`);
+}
+
+function applyTransitionVar(value: string): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty(TRANSITION_VAR, value);
 }
 
 function clampWidth(value: number): number {
@@ -94,6 +105,22 @@ export function useStudioSplitPane(): StudioSplitPane {
     const startWidth = widthRef.current;
     setDragging(true);
 
+    // Справа живёт iframe превью. Стоит курсору при быстром движении заехать на него —
+    // iframe забирает pointer-события себе, наши window-слушатели замолкают и панель
+    // «отваливается» от курсора. Лечим двумя независимыми способами, потому что каждый
+    // по отдельности в разных браузерах даёт осечки:
+    //   1) pointer capture — события продолжают адресоваться разделителю поверх iframe;
+    //   2) на время драга отключаем pointer-events у всех iframe на странице.
+    const separator = event.currentTarget;
+    applyTransitionVar('none');
+    try { separator.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
+    const frames = [...document.querySelectorAll('iframe')];
+    const restoreFrames = frames.map((frame) => {
+      const previous = frame.style.pointerEvents;
+      frame.style.pointerEvents = 'none';
+      return () => { frame.style.pointerEvents = previous; };
+    });
+
     // Во время драга НЕ дёргаем setState и localStorage — только CSS-переменную, не чаще
     // кадра. Иначе каждое движение мыши перерисовывало панель с чатом и писало на диск.
     const onMove = (moveEvent: PointerEvent): void => {
@@ -110,6 +137,9 @@ export function useStudioSplitPane(): StudioSplitPane {
         window.cancelAnimationFrame(frameRef.current);
         frameRef.current = null;
       }
+      restoreFrames.forEach((restore) => restore());
+      applyTransitionVar(PANE_TRANSITION);
+      try { separator.releasePointerCapture(event.pointerId); } catch { /* already released */ }
       setDragging(false);
       // Единственная за весь драг синхронизация стейта и localStorage.
       commitWidth(widthRef.current);
@@ -152,7 +182,7 @@ export function useStudioSplitPane(): StudioSplitPane {
     dragging,
     paneStyle: {
       width: hidden ? 0 : `var(${CSS_VAR}, ${DEFAULT_WIDTH}px)`,
-      transition: dragging ? 'none' : 'width 500ms cubic-bezier(0.4, 0, 0.2, 1)',
+      transition: `var(${TRANSITION_VAR}, ${PANE_TRANSITION})`,
     },
     // Внутреннее содержимое держит ширину само, чтобы при сворачивании панели текст
     // не переливался. Тоже от переменной — иначе драг снова упрётся в ре-рендер.
