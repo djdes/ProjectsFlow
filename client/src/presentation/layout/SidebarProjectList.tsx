@@ -443,6 +443,40 @@ function ProjectGroup({
 // тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
 const PROJECT_LIMIT = Infinity;
 
+// Затухание краёв списка при прокрутке (как в Notion). Маска живёт в CSS
+// (.pf-scroll-fade), здесь — только решение, с какой стороны её включить: сверху, если
+// что-то уже прокручено вверх, снизу — пока список не домотан до конца. Статичная маска
+// не годится: она гасила бы первый и последний пункт, когда скрывать нечего.
+// Возвращаем ref-КОЛБЭК (через useState), а не useRef: контейнер списка размонтируется
+// при переключении на общий чат пространства, и подписки должны переезжать вместе с ним.
+function useScrollFade(): (node: HTMLDivElement | null) => void {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!node) return;
+    const sync = (): void => {
+      // Допуск в 1px: при zoom/HiDPI scrollTop дробный и до точного края не доходит.
+      node.dataset.fadeTop = node.scrollTop > 1 ? 'true' : 'false';
+      node.dataset.fadeBottom =
+        node.scrollTop + node.clientHeight < node.scrollHeight - 1 ? 'true' : 'false';
+    };
+    node.addEventListener('scroll', sync, { passive: true });
+    // Высота меняется не только от скролла: поиск, разворот секций, догрузка проектов.
+    // ResizeObserver ловит размер вьюпорта, MutationObserver — изменения содержимого.
+    const ro = new ResizeObserver(sync);
+    ro.observe(node);
+    const mo = new MutationObserver(sync);
+    mo.observe(node, { childList: true, subtree: true });
+    sync();
+    return () => {
+      node.removeEventListener('scroll', sync);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [node]);
+
+  return setNode;
+}
 
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
@@ -458,6 +492,8 @@ export function SidebarProjectList(): React.ReactElement {
   const [query, setQuery] = useState('');
   // Поиск ищет И по проектам (по имени, мгновенно), И по задачам (по описанию, дебаунс).
   const taskSearch = useSidebarTaskSearch(query);
+  // Вызываем ДО ранних return'ов ниже — иначе порядок хуков поедет между рендерами.
+  const setScrollFadeRef = useScrollFade();
 
   if (loading) return <SidebarProjectListSkeleton />;
 
@@ -603,7 +639,10 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-4 px-1">
+      <div
+        ref={setScrollFadeRef}
+        className="pf-scroll-visible pf-scroll-fade -mx-1 min-h-0 flex-1 space-y-4 px-1"
+      >
         {/* Вне поиска — «Недавнее» (недавно открытые задачи). В поиске — найденные задачи
             (блок «Задачи»: 3 → «ещё» до 10, сортировка по дате создания, подсветка). */}
         {searching ? (
