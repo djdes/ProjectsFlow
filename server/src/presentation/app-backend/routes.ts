@@ -6,6 +6,7 @@ import type {
   ManageAppBackendData,
 } from '../../application/app-backend/ManageAppBackendData.js';
 import type { ManageAppDashboardSettings } from '../../application/app-backend/AppDashboardSettings.js';
+import type { ManageAppAuthProviders } from '../../application/app-backend/AppAuthService.js';
 import type { AppLogQuery, QueryAppLogs } from '../../application/app-backend/QueryAppLogs.js';
 import type { AppLogCategory } from '../../domain/app-backend/AppLogEntry.js';
 import { APP_LOG_CATEGORIES } from '../../domain/app-backend/AppLogEntry.js';
@@ -19,6 +20,9 @@ export type AppBackendRouterDeps = {
   // Единая лента логов (срез 2). Опционален: пока composition root не собрал источники,
   // роут отвечает пустой страницей, а не 500 — фича включается прозрачно при wiring в index.ts.
   readonly queryLogs?: QueryAppLogs;
+  // Провайдеры входа приложения (срез 9). Опционален: без wiring раздел auth-провайдеров недоступен
+  // (404), остальной дашборд работает как прежде.
+  readonly authProviders?: ManageAppAuthProviders;
 };
 
 function isLogCategory(value: unknown): value is AppLogCategory {
@@ -57,6 +61,33 @@ export function appBackendRouter(deps: AppBackendRouterDeps): Router {
   router.post('/:projectId/app-dashboard/security/scan', requireAuth, async (req, res, next) => {
     try {
       res.status(200).json(await deps.settings.scanSecurity(req.params['projectId'] as string, req.user!.id));
+    } catch (error) { next(error); }
+  });
+
+  // Конфиг Google-провайдера (срез 9). Статус НИКОГДА не содержит client_secret (write-only).
+  router.get('/:projectId/app-dashboard/auth/google', requireAuth, async (req, res, next) => {
+    try {
+      if (!deps.authProviders) { res.status(404).json({ error: 'not_available' }); return; }
+      res.status(200).json(await deps.authProviders.getGoogle(req.params['projectId'] as string, req.user!.id));
+    } catch (error) { next(error); }
+  });
+
+  router.put('/:projectId/app-dashboard/auth/google', requireAuth, async (req, res, next) => {
+    try {
+      if (!deps.authProviders) { res.status(404).json({ error: 'not_available' }); return; }
+      const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+      res.status(200).json(await deps.authProviders.saveGoogle(req.params['projectId'] as string, req.user!.id, {
+        clientId: typeof body['clientId'] === 'string' ? body['clientId'] : '',
+        clientSecret: typeof body['clientSecret'] === 'string' ? body['clientSecret'] : '',
+        enabled: body['enabled'] === true,
+      }));
+    } catch (error) { next(error); }
+  });
+
+  router.delete('/:projectId/app-dashboard/auth/google', requireAuth, async (req, res, next) => {
+    try {
+      if (!deps.authProviders) { res.status(404).json({ error: 'not_available' }); return; }
+      res.status(200).json(await deps.authProviders.disableGoogle(req.params['projectId'] as string, req.user!.id));
     } catch (error) { next(error); }
   });
 

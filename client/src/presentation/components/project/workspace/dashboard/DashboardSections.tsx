@@ -49,6 +49,19 @@ import type {
 } from "@/domain/project/ProjectMembership";
 import type { ProjectAnalytics } from "@/domain/project/ProjectAnalytics";
 import type { AutomationConfig } from "@/domain/automation/AutomationConfig";
+import {
+  WORKFLOW_PRIORITIES,
+  WORKFLOW_TASK_STATUSES,
+  WORKFLOW_WEBHOOK_EVENTS,
+  type CreateWorkflowInput,
+  type WorkflowAction,
+  type WorkflowPriority,
+  type WorkflowRule,
+  type WorkflowTaskStatus,
+  type WorkflowTrigger,
+  type WorkflowWebhookEvent,
+} from "@/application/automation/WorkflowRepository";
+import { Input } from "@/components/ui/input";
 import type {
   AppBackendDashboard,
   AppDashboardSettings,
@@ -56,6 +69,7 @@ import type {
   AppSecurityScan,
   AppTraffic,
   DispatcherCandidate,
+  GoogleAuthProviderStatus,
   ProjectSite,
   ProjectWorkerOverview,
   ProjectWorkerRun,
@@ -2620,9 +2634,415 @@ export function AgentsSection({
   );
 }
 
+// Человекочитаемые ярлыки замкнутых наборов правил (событие → действие).
+const WORKFLOW_STATUS_LABELS: Record<WorkflowTaskStatus, string> = {
+  backlog: "Бэклог",
+  todo: "К выполнению",
+  in_progress: "В работе",
+  awaiting_clarification: "Ждёт уточнения",
+  done: "Готово",
+  manual: "Ручная",
+};
+
+const WORKFLOW_PRIORITY_LABELS: Record<WorkflowPriority, string> = {
+  1: "Срочный",
+  2: "Высокий",
+  3: "Средний",
+  4: "Низкий",
+};
+
+const WORKFLOW_TRIGGER_LABELS: Record<WorkflowTrigger["type"], string> = {
+  task_created: "Задача создана",
+  task_status_changed: "Задача перешла в статус",
+  task_deadline_approaching: "До дедлайна осталось ≤ N часов",
+  webhook_received: "Пришёл входящий вебхук",
+};
+
+const WORKFLOW_ACTION_LABELS: Record<WorkflowAction["type"], string> = {
+  delegate: "Делегировать участнику",
+  set_priority: "Выставить приоритет",
+  send_telegram: "Отправить в Telegram",
+  trigger_webhook: "Дёрнуть исходящий вебхук",
+};
+
+function describeTrigger(trigger: WorkflowTrigger): string {
+  switch (trigger.type) {
+    case "task_created":
+      return "Когда задача создана";
+    case "task_status_changed":
+      return `Когда задача → «${WORKFLOW_STATUS_LABELS[trigger.status]}»`;
+    case "task_deadline_approaching":
+      return `Когда до дедлайна ≤ ${trigger.hoursBefore} ч`;
+    case "webhook_received":
+      return `Когда пришёл вебхук «${trigger.key}»`;
+  }
+}
+
+function describeAction(action: WorkflowAction): string {
+  switch (action.type) {
+    case "delegate":
+      return "делегировать участнику";
+    case "set_priority":
+      return `выставить приоритет «${WORKFLOW_PRIORITY_LABELS[action.priority]}»`;
+    case "send_telegram":
+      return "отправить в Telegram";
+    case "trigger_webhook":
+      return `дёрнуть вебхук на событии ${action.event}`;
+  }
+}
+
+const selectCls = "h-9 w-full rounded-lg border bg-background px-2 text-sm";
+
+// Конструктор правил «событие → действие» поверх статуса автономного цикла (срез 8).
+// Замкнутые триггеры/действия — те же, что валидируются на сервере. Никаких выражений над
+// данными: пользователь лишь выбирает тип события и тип действия из фиксированных списков.
+function WorkflowRulesPanel({
+  project,
+  canEdit,
+  members,
+}: {
+  project: Project;
+  canEdit: boolean;
+  members: readonly ProjectMember[];
+}): React.ReactElement {
+  const { workflowRepository } = useContainer();
+  const [rules, setRules] = useState<readonly WorkflowRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Черновик нового правила.
+  const [name, setName] = useState("");
+  const [triggerType, setTriggerType] = useState<WorkflowTrigger["type"]>("task_status_changed");
+  const [status, setStatus] = useState<WorkflowTaskStatus>("done");
+  const [hoursBefore, setHoursBefore] = useState(24);
+  const [webhookKey, setWebhookKey] = useState("");
+  const [actionType, setActionType] = useState<WorkflowAction["type"]>("send_telegram");
+  const [assigneeUserId, setAssigneeUserId] = useState<string>(members[0]?.userId ?? "");
+  const [priority, setPriority] = useState<WorkflowPriority>(2);
+  const [message, setMessage] = useState("");
+  const [event, setEvent] = useState<WorkflowWebhookEvent>("task.status_changed");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    void workflowRepository
+      .list(project.id)
+      .then((value) => {
+        if (!cancelled) setRules(value);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workflowRepository, project.id]);
+
+  function buildTrigger(): WorkflowTrigger {
+    switch (triggerType) {
+      case "task_created":
+        return { type: "task_created" };
+      case "task_status_changed":
+        return { type: "task_status_changed", status };
+      case "task_deadline_approaching":
+        return { type: "task_deadline_approaching", hoursBefore };
+      case "webhook_received":
+        return { type: "webhook_received", key: webhookKey.trim() };
+    }
+  }
+
+  function buildAction(): WorkflowAction {
+    switch (actionType) {
+      case "delegate":
+        return { type: "delegate", assigneeUserId };
+      case "set_priority":
+        return { type: "set_priority", priority };
+      case "send_telegram":
+        return { type: "send_telegram", message: message.trim() };
+      case "trigger_webhook":
+        return { type: "trigger_webhook", event };
+    }
+  }
+
+  async function handleCreate(): Promise<void> {
+    const input: CreateWorkflowInput = {
+      name: name.trim(),
+      trigger: buildTrigger(),
+      action: buildAction(),
+    };
+    if (!input.name) {
+      toast.error("Укажите название правила");
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await workflowRepository.create(project.id, input);
+      setRules((prev) => [...prev, created]);
+      setName("");
+      setMessage("");
+      toast.success("Правило создано");
+    } catch {
+      toast.error("Не удалось создать правило. Проверьте параметры.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleToggle(rule: WorkflowRule): Promise<void> {
+    setBusyId(rule.id);
+    try {
+      const updated = await workflowRepository.update(project.id, rule.id, {
+        enabled: !rule.enabled,
+      });
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+    } catch {
+      toast.error("Не удалось изменить правило");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(rule: WorkflowRule): Promise<void> {
+    setBusyId(rule.id);
+    try {
+      await workflowRepository.remove(project.id, rule.id);
+      setRules((prev) => prev.filter((r) => r.id !== rule.id));
+    } catch {
+      toast.error("Не удалось удалить правило");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const memberLabel = (userId: string): string =>
+    members.find((m) => m.userId === userId)?.user.displayName ?? userId;
+
+  return (
+    <section className="overflow-hidden rounded-xl border">
+      <div className="border-b bg-muted/15 px-4 py-3">
+        <p className="text-sm font-semibold">Правила «событие → действие»</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Конструктор поверх автономного цикла: замкнутый набор триггеров и действий над
+          задачами, дедлайнами и вебхуками. Правило, зациклившее само себя, сервер отключает
+          автоматически.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" />
+          Загружаем правила…
+        </p>
+      ) : loadError ? (
+        <p className="px-4 py-4 text-sm text-amber-700 dark:text-amber-300">
+          Не удалось прочитать правила. Проект и задачи не затронуты.
+        </p>
+      ) : rules.length === 0 ? (
+        <p className="px-4 py-4 text-xs leading-5 text-muted-foreground">
+          Правил пока нет. Соберите первое ниже — например «Задача → Готово ⇒ сообщение в
+          Telegram».
+        </p>
+      ) : (
+        <div className="divide-y">
+          {rules.map((rule) => (
+            <div key={rule.id} className="flex items-center gap-3 px-4 py-3">
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  rule.enabled ? "bg-emerald-500" : "bg-muted-foreground/40",
+                )}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{rule.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {describeTrigger(rule.trigger)} ⇒ {describeAction(rule.action)}
+                  {rule.action.type === "delegate"
+                    ? ` (${memberLabel(rule.action.assigneeUserId)})`
+                    : ""}
+                </p>
+                {rule.lastStatus ? (
+                  <p
+                    className={cn(
+                      "mt-0.5 truncate text-[11px]",
+                      rule.lastStatus.startsWith("error") ||
+                        rule.lastStatus.startsWith("disabled")
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    Последний запуск: {rule.lastStatus}
+                  </p>
+                ) : null}
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!canEdit || busyId === rule.id}
+                onClick={() => void handleToggle(rule)}
+              >
+                {rule.enabled ? "Выключить" : "Включить"}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                disabled={!canEdit || busyId === rule.id}
+                onClick={() => void handleDelete(rule)}
+                aria-label="Удалить правило"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="space-y-3 border-t bg-muted/10 p-4">
+          <p className="text-xs font-semibold text-muted-foreground">Новое правило</p>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Название правила"
+            maxLength={120}
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Событие (триггер)</label>
+              <select
+                value={triggerType}
+                onChange={(e) => setTriggerType(e.target.value as WorkflowTrigger["type"])}
+                className={selectCls}
+              >
+                {(Object.keys(WORKFLOW_TRIGGER_LABELS) as WorkflowTrigger["type"][]).map((t) => (
+                  <option key={t} value={t}>
+                    {WORKFLOW_TRIGGER_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+              {triggerType === "task_status_changed" && (
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as WorkflowTaskStatus)}
+                  className={selectCls}
+                >
+                  {WORKFLOW_TASK_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {WORKFLOW_STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {triggerType === "task_deadline_approaching" && (
+                <Input
+                  type="number"
+                  min={1}
+                  max={168}
+                  value={hoursBefore}
+                  onChange={(e) => setHoursBefore(Number(e.target.value))}
+                  placeholder="Часов до дедлайна"
+                />
+              )}
+              {triggerType === "webhook_received" && (
+                <Input
+                  value={webhookKey}
+                  onChange={(e) => setWebhookKey(e.target.value)}
+                  placeholder="ключ вебхука (a-z0-9_-)"
+                  maxLength={64}
+                />
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Действие</label>
+              <select
+                value={actionType}
+                onChange={(e) => setActionType(e.target.value as WorkflowAction["type"])}
+                className={selectCls}
+              >
+                {(Object.keys(WORKFLOW_ACTION_LABELS) as WorkflowAction["type"][]).map((a) => (
+                  <option key={a} value={a}>
+                    {WORKFLOW_ACTION_LABELS[a]}
+                  </option>
+                ))}
+              </select>
+              {actionType === "delegate" && (
+                <select
+                  value={assigneeUserId}
+                  onChange={(e) => setAssigneeUserId(e.target.value)}
+                  className={selectCls}
+                >
+                  {members.length === 0 ? (
+                    <option value="">Нет участников</option>
+                  ) : (
+                    members.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.user.displayName}
+                      </option>
+                    ))
+                  )}
+                </select>
+              )}
+              {actionType === "set_priority" && (
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(Number(e.target.value) as WorkflowPriority)}
+                  className={selectCls}
+                >
+                  {WORKFLOW_PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {WORKFLOW_PRIORITY_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {actionType === "send_telegram" && (
+                <Input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Текст сообщения"
+                  maxLength={1000}
+                />
+              )}
+              {actionType === "trigger_webhook" && (
+                <select
+                  value={event}
+                  onChange={(e) => setEvent(e.target.value as WorkflowWebhookEvent)}
+                  className={selectCls}
+                >
+                  {WORKFLOW_WEBHOOK_EVENTS.map((ev) => (
+                    <option key={ev} value={ev}>
+                      {ev}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => void handleCreate()} disabled={creating}>
+              {creating ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Workflow className="mr-1.5 size-4" />
+              )}
+              Добавить правило
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function WorkflowsSection({
   project,
   canEdit,
+  members,
   onOpenAutomation,
 }: DashboardContentProps): React.ReactElement {
   const { automationRepository } = useContainer();
@@ -2700,6 +3120,7 @@ export function WorkflowsSection({
           </Button>
         }
       />
+      <WorkflowRulesPanel project={project} canEdit={canEdit} members={members} />
       {loading ? (
         <div className="grid min-h-44 place-items-center rounded-xl border text-sm text-muted-foreground">
           <span>
@@ -3653,71 +4074,15 @@ export function SettingsSection({
                 })
               }
             />
-            <AuthRow
-              name="Google"
-              state={dashboardSettings.auth.google}
-              disabled={!canEdit || saving}
-              onClick={() =>
-                void updateAuth({
-                  google:
-                    dashboardSettings.auth.google === "pending"
-                      ? "disabled"
-                      : "pending",
-                })
-              }
+            <GoogleAuthProviderRow
+              projectId={project.id}
+              siteSlug={site?.siteSlug ?? null}
+              canEdit={canEdit}
             />
-            <AuthRow
-              name="Microsoft"
-              state={dashboardSettings.auth.microsoft}
-              disabled={!canEdit || saving}
-              onClick={() =>
-                void updateAuth({
-                  microsoft:
-                    dashboardSettings.auth.microsoft === "pending"
-                      ? "disabled"
-                      : "pending",
-                })
-              }
-            />
-            <AuthRow
-              name="Facebook"
-              state={dashboardSettings.auth.facebook}
-              disabled={!canEdit || saving}
-              onClick={() =>
-                void updateAuth({
-                  facebook:
-                    dashboardSettings.auth.facebook === "pending"
-                      ? "disabled"
-                      : "pending",
-                })
-              }
-            />
-            <AuthRow
-              name="Apple"
-              state={dashboardSettings.auth.apple}
-              disabled={!canEdit || saving}
-              onClick={() =>
-                void updateAuth({
-                  apple:
-                    dashboardSettings.auth.apple === "pending"
-                      ? "disabled"
-                      : "pending",
-                })
-              }
-            />
-            <AuthRow
-              name="Single Sign-on (SSO)"
-              state={dashboardSettings.auth.sso}
-              disabled={!canEdit || saving}
-              onClick={() =>
-                void updateAuth({
-                  sso:
-                    dashboardSettings.auth.sso === "pending"
-                      ? "disabled"
-                      : "pending",
-                })
-              }
-            />
+            <ComingSoonAuthRow name="Microsoft" />
+            <ComingSoonAuthRow name="Facebook" />
+            <ComingSoonAuthRow name="Apple" />
+            <ComingSoonAuthRow name="Single Sign-on (SSO)" />
           </div>
         </section>
       )}
@@ -3777,6 +4142,225 @@ function AuthRow({
           )}
         />
       </button>
+    </div>
+  );
+}
+
+// Провайдеры, для которых бэкенд ещё не написан. Честно показываем «Скоро» без переключателя,
+// который ничего не делает (см. срез 9 плана dashboard-parity).
+function ComingSoonAuthRow({ name }: { name: string }): React.ReactElement {
+  return (
+    <div className="flex items-center gap-3 px-4 py-4">
+      <span className="min-w-0 flex-1 text-sm font-medium text-muted-foreground">
+        {name}
+      </span>
+      <StatusPill tone="muted">Скоро</StatusPill>
+    </div>
+  );
+}
+
+// Google OAuth — реальный провайдер (срез 9). Форма настройки: client_id + client_secret
+// (секрет write-only, наружу не возвращается), callback URL для регистрации в Google Cloud Console
+// и переключатель включения. Без ключей вход не работает — честно, без имитации.
+function GoogleAuthProviderRow({
+  projectId,
+  siteSlug,
+  canEdit,
+}: {
+  projectId: string;
+  siteSlug: string | null;
+  canEdit: boolean;
+}): React.ReactElement {
+  const { projectRepository } = useContainer();
+  const [status, setStatus] = useState<GoogleAuthProviderStatus | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const callbackUrl = siteSlug
+    ? `${siteResultUrl(siteSlug)}/api/auth/google/callback`
+    : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void projectRepository
+      .getGoogleAuthProvider(projectId)
+      .then((next) => {
+        if (cancelled) return;
+        setStatus(next);
+        setClientId(next.clientId);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus({ configured: false, enabled: false, clientId: "" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, projectRepository]);
+
+  const save = async (enabled: boolean): Promise<void> => {
+    if (!clientId.trim()) {
+      toast.error("Укажите Client ID");
+      return;
+    }
+    if (!status?.configured && !clientSecret.trim()) {
+      toast.error("Укажите Client Secret");
+      return;
+    }
+    setBusy(true);
+    try {
+      const next = await projectRepository.saveGoogleAuthProvider(projectId, {
+        clientId: clientId.trim(),
+        clientSecret: clientSecret.trim(),
+        enabled,
+      });
+      setStatus(next);
+      setClientSecret("");
+      toast.success(
+        enabled ? "Вход через Google включён" : "Настройки Google сохранены",
+      );
+    } catch {
+      toast.error("Не удалось сохранить настройки Google");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      const next = await projectRepository.disableGoogleAuthProvider(projectId);
+      setStatus(next);
+      toast.success("Вход через Google выключен");
+    } catch {
+      toast.error("Не удалось выключить Google");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tone: "ok" | "warn" | "muted" = !status
+    ? "muted"
+    : status.enabled
+      ? "ok"
+      : status.configured
+        ? "warn"
+        : "muted";
+  const label = !status
+    ? "…"
+    : status.enabled
+      ? "Включено"
+      : status.configured
+        ? "Настроено, выключено"
+        : "Выключено";
+
+  return (
+    <div className="px-4 py-4">
+      <div className="flex items-center gap-3">
+        <span className="min-w-0 flex-1 text-sm font-medium">Google</span>
+        <StatusPill tone={tone}>{label}</StatusPill>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!canEdit}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "Свернуть" : "Настроить"}
+        </Button>
+      </div>
+      {expanded && (
+        <div className="mt-4 space-y-4 rounded-lg border bg-muted/10 p-4">
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <p>
+              Создайте OAuth-клиент в{" "}
+              <a
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Google Cloud Console
+                <ExternalLink className="size-3" />
+              </a>{" "}
+              (APIs &amp; Services → Credentials → OAuth client ID → Web
+              application) и добавьте callback URL ниже в «Authorized redirect
+              URIs».
+            </p>
+          </div>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium">Authorized redirect URI</span>
+            {callbackUrl ? (
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded-md border bg-background px-2 py-1.5 text-xs">
+                  {callbackUrl}
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(callbackUrl);
+                    toast.success("Callback URL скопирован");
+                  }}
+                >
+                  <Copy className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <p className="rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
+                Опубликуйте приложение, чтобы получить постоянный callback URL.
+              </p>
+            )}
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium">Client ID</span>
+            <Input
+              value={clientId}
+              onChange={(event) => setClientId(event.target.value)}
+              placeholder="xxxxxxxx.apps.googleusercontent.com"
+              disabled={!canEdit || busy}
+              autoComplete="off"
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium">Client Secret</span>
+            <Input
+              type="password"
+              value={clientSecret}
+              onChange={(event) => setClientSecret(event.target.value)}
+              placeholder={
+                status?.configured ? "•••••••• (сохранён, оставьте пустым)" : "GOCSPX-…"
+              }
+              disabled={!canEdit || busy}
+              autoComplete="off"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canEdit || busy}
+              onClick={() => void save(true)}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              {status?.enabled ? "Сохранить" : "Сохранить и включить"}
+            </Button>
+            {status?.enabled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canEdit || busy}
+                onClick={() => void disable()}
+              >
+                Выключить
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

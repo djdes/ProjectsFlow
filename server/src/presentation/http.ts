@@ -9,6 +9,7 @@ import type { GetAppBackendStatus } from '../application/app-backend/GetAppBacke
 import type { ManageAppBackendData } from '../application/app-backend/ManageAppBackendData.js';
 import type { QueryAppLogs } from '../application/app-backend/QueryAppLogs.js';
 import type { ManageAppDashboardSettings } from '../application/app-backend/AppDashboardSettings.js';
+import type { ManageAppAuthProviders } from '../application/app-backend/AppAuthService.js';
 import type { ManageProjectRepositoryCode } from '../application/github/ManageProjectRepositoryCode.js';
 import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
@@ -16,6 +17,7 @@ import { appTrafficRouter } from './app-backend/appTrafficRoutes.js';
 import type { GetAppTraffic } from '../application/app-backend/GetAppTraffic.js';
 import { integrationsRouter } from './integrations/routes.js';
 import type { ManageWebhooks } from '../application/integrations/ManageWebhooks.js';
+import type { ManageWorkflows } from '../application/automation/ManageWorkflows.js';
 import type { SiteEditorService } from '../application/site-editor/SiteEditorService.js';
 import { siteEditorRouter } from './site-editor/routes.js';
 import { siteEditorAgentRouter } from './site-editor/agentRoutes.js';
@@ -231,6 +233,7 @@ import { meKanbanColorsRouter } from './me/kanbanColorsRoutes.js';
 import { meUiPrefsRouter } from './me/uiPrefsRoutes.js';
 import { sharedMembersRouter } from './me/sharedMembersRoutes.js';
 import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
+import { workflowRouter } from './automation/workflowRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { taskAssigneesRouter } from './assignees/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
@@ -339,6 +342,7 @@ type AppDeps = {
     readonly dashboard: ManageAppBackendData;
     readonly settings: ManageAppDashboardSettings;
     readonly queryLogs: QueryAppLogs;
+    readonly authProviders: ManageAppAuthProviders;
   };
   // Трафик опубликованного приложения (db/137). `recordRuntime` — приём визитов на site-поддомене
   // (публично, диспатчим вручную ниже); `getAppTraffic` — чтение агрегатов в дашборде (cookie-auth).
@@ -349,6 +353,10 @@ type AppDeps = {
   // Исходящие вебхуки проекта (db/138, срез 6 Integrations). Управление подписками (cookie-auth).
   readonly integrations: {
     readonly webhooks: ManageWebhooks;
+  };
+  // Правила «событие → действие» проекта (db/139, срез 8 Workflows). CRUD (cookie-auth).
+  readonly automation: {
+    readonly workflows: ManageWorkflows;
   };
   readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
@@ -963,9 +971,11 @@ export function createApp(deps: AppDeps): CreatedApp {
     dashboard: deps.appBackend.dashboard,
     settings: deps.appBackend.settings,
     queryLogs: deps.appBackend.queryLogs,
+    authProviders: deps.appBackend.authProviders,
   }));
   app.use('/api/projects', appTrafficRouter({ getAppTraffic: deps.appTraffic.getAppTraffic }));
   app.use('/api/projects', integrationsRouter({ webhooks: deps.integrations.webhooks }));
+  app.use('/api/projects', workflowRouter({ workflows: deps.automation.workflows }));
   app.use('/api/projects', repositoryCodeRouter({ repositoryCode: deps.repositoryCode }));
   app.use('/api/projects', siteEditorRouter({ service: deps.siteEditor.service }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —

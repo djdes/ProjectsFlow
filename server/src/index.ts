@@ -84,7 +84,8 @@ import { DrizzleAppBackendRepository } from './infrastructure/repositories/Drizz
 import { DrizzleAppAdminAuditRepository } from './infrastructure/repositories/DrizzleAppAdminAuditRepository.js';
 import { DrizzleAppDashboardSettingsRepository } from './infrastructure/repositories/DrizzleAppDashboardSettingsRepository.js';
 import { SqliteAppDatabaseStore } from './infrastructure/app-backend/SqliteAppDatabaseStore.js';
-import { AppAuthService } from './application/app-backend/AppAuthService.js';
+import { AppAuthService, ManageAppAuthProviders } from './application/app-backend/AppAuthService.js';
+import { HttpGoogleOAuthProvider } from './infrastructure/app-backend/GoogleOAuthProvider.js';
 import { RunAppQuery } from './application/app-backend/RunAppQuery.js';
 import { ProvisionAppBackend } from './application/app-backend/ProvisionAppBackend.js';
 import { GetAppBackendStatus } from './application/app-backend/GetAppBackendStatus.js';
@@ -98,10 +99,15 @@ import { GetAppTraffic } from './application/app-backend/GetAppTraffic.js';
 import { DrizzleAppTrafficRepository } from './infrastructure/repositories/DrizzleAppTrafficRepository.js';
 import { DrizzleProjectWebhookRepository } from './infrastructure/repositories/DrizzleProjectWebhookRepository.js';
 import { ManageWebhooks } from './application/integrations/ManageWebhooks.js';
+import { DispatchWebhook } from './application/integrations/DispatchWebhook.js';
+import type { WebhookEvent } from './domain/integrations/ProjectWebhook.js';
+import { DrizzleProjectWorkflowRepository } from './infrastructure/repositories/DrizzleProjectWorkflowRepository.js';
+import { ManageWorkflows } from './application/automation/ManageWorkflows.js';
 import {
-  DispatchWebhook,
-  WebhookDispatchingActivityRecorder,
-} from './application/integrations/DispatchWebhook.js';
+  RunWorkflow,
+  EffectWorkflowActionRunner,
+  WorkflowDispatchingActivityRecorder,
+} from './application/automation/RunWorkflow.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
@@ -443,19 +449,49 @@ const dispatchWebhook = new DispatchWebhook({
   webhooks: projectWebhookRepo,
   idGen: idGenerator,
 });
-const activityRecorder = new WebhookDispatchingActivityRecorder(
+const manageWebhooks = new ManageWebhooks({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  webhooks: projectWebhookRepo,
+  dispatcher: dispatchWebhook,
+  idGen: idGenerator,
+});
+
+// Правила «событие → действие» (db/139, срез 8 Workflows). Движок RunWorkflow встраивается в
+// ту же ленту действий, что и вебхуки: WorkflowDispatchingActivityRecorder после записи
+// события и фан-аута вебхуков запускает подходящие правила. Так «задача → done ⇒ Telegram»
+// достигается через wiring, без правки MoveTask.
+//
+// Эффекты действий (Telegram/вебхук) заполняются НИЖЕ, после конструирования реальных
+// сервисов (broadcastTelegramByTask объявлен позже по файлу). Мутируемый холдер разрывает
+// порядок инициализации: движок и рекордер строим здесь, эффекты подключаем как только они
+// есть. delegate/set_priority — доменно и в движке поддержаны, но их боевой эффект пока не
+// подключён (требует резолва актора/прав); в UI/журнале правило создаётся и валидируется.
+const projectWorkflowRepo = new DrizzleProjectWorkflowRepository(db);
+const workflowEffects: {
+  sendTelegram?: (projectId: string, message: string, taskId: string | null) => Promise<void>;
+  triggerWebhook?: (projectId: string, event: WebhookEvent) => Promise<void>;
+} = {};
+const runWorkflow = new RunWorkflow({
+  workflows: projectWorkflowRepo,
+  runner: new EffectWorkflowActionRunner({
+    sendTelegram: (p, m, t) => workflowEffects.sendTelegram?.(p, m, t) ?? Promise.resolve(),
+    triggerWebhook: (p, e) => workflowEffects.triggerWebhook?.(p, e) ?? Promise.resolve(),
+  }),
+});
+const activityRecorder = new WorkflowDispatchingActivityRecorder(
   {
     activity: activityRepo,
     resolveWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
     idGen: idGenerator,
   },
   dispatchWebhook,
+  runWorkflow,
 );
-const manageWebhooks = new ManageWebhooks({
+const manageWorkflows = new ManageWorkflows({
   projects: projectRepo,
   members: projectMemberRepo,
-  webhooks: projectWebhookRepo,
-  dispatcher: dispatchWebhook,
+  workflows: projectWorkflowRepo,
   idGen: idGenerator,
 });
 const getActivityFeed = new GetActivityFeed({
@@ -901,6 +937,21 @@ const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
   tasks: taskRepo,
   send: sendAgentTelegramNotification,
 });
+// Подключаем боевые эффекты действий workflow (см. холдер выше, у RunWorkflow). Telegram —
+// адресно ответственному по задаче события; исходящий вебхук — фан-аут события среза 6.
+// Оба эффекта best-effort: их ошибки локализованы внутри движка и не роняют исходную операцию.
+workflowEffects.sendTelegram = async (_projectId, message, taskId) => {
+  if (!taskId) return; // без задачи адресата нет — правило-триггер без задачи Telegram не шлёт
+  await broadcastTelegramByTask.execute({
+    taskId,
+    text: message,
+    kind: 'workflow',
+    respectPrefs: true,
+  });
+};
+workflowEffects.triggerWebhook = async (projectId, event) => {
+  await dispatchWebhook.dispatch(projectId, event, { source: 'workflow' });
+};
 // Журнал доставки уведомлений по комментарию + оркестратор (email + TG адресно).
 // Единый источник «кто уведомлён» — питает меню ⋮ у комментария.
 const commentNotificationLogRepo = new DrizzleCommentNotificationLogRepository(db);
@@ -1025,7 +1076,24 @@ const appBackendRepo = new DrizzleAppBackendRepository(db);
 const appAdminAuditRepo = new DrizzleAppAdminAuditRepository(db, idGenerator);
 const appDashboardSettingsRepo = new DrizzleAppDashboardSettingsRepository(db);
 const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
-const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
+// Секрет для подписи OAuth-state и шифрования client_secret провайдеров (срез 9). Стабильный
+// fallback позволяет работать в dev; в prod задаётся APP_OAUTH_SECRET/SESSION_SECRET.
+const appOauthSecret = process.env['APP_OAUTH_SECRET'] ?? process.env['SESSION_SECRET'] ?? 'pf-app-oauth';
+const googleOAuthProvider = new HttpGoogleOAuthProvider();
+const appAuthService = new AppAuthService({
+  appDb: appDatabaseStore,
+  idGen: idGenerator,
+  now,
+  secret: appOauthSecret,
+  google: googleOAuthProvider,
+});
+const manageAppAuthProviders = new ManageAppAuthProviders({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  auth: appAuthService,
+  appBackends: appBackendRepo,
+  appDb: appDatabaseStore,
+});
 const runAppQuery = new RunAppQuery({ appBackends: appBackendRepo, appDb: appDatabaseStore });
 const appRuntime = appRuntimeRouter({ authService: appAuthService, runQuery: runAppQuery, settings: appDashboardSettingsRepo });
 // --- Трафик опубликованного приложения (db/137): приём визитов + чтение агрегатов ---
@@ -1970,6 +2038,7 @@ const { app, devProxyUpgrade } = createApp({
     dashboard: manageAppBackendData,
     settings: manageAppDashboardSettings,
     queryLogs: queryAppLogs,
+    authProviders: manageAppAuthProviders,
   },
   appTraffic: {
     getAppTraffic,
@@ -1977,6 +2046,9 @@ const { app, devProxyUpgrade } = createApp({
   },
   integrations: {
     webhooks: manageWebhooks,
+  },
+  automation: {
+    workflows: manageWorkflows,
   },
   repositoryCode: manageProjectRepositoryCode,
   siteEditor: {
