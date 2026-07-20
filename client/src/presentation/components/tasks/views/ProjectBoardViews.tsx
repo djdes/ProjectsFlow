@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowDown,
   ArrowUp,
@@ -21,6 +22,7 @@ import {
   List,
   ListFilter,
   Paintbrush,
+  PanelsTopLeft,
   Pencil,
   Plus,
   Rows3,
@@ -192,6 +194,7 @@ export function ProjectBoardViews({
   bleedPadClass = '',
 }: Props): React.ReactElement {
   const { boardViewRepository, taskTemplateRepository } = useContainer();
+  const navigate = useNavigate();
   const rightPanelWidth = useRightPanelWidth();
   const storageKey = `pf:board-view:${projectId}`;
   const [views, setViews] = useState<BoardView[] | null>(null);
@@ -1054,10 +1057,25 @@ export function ProjectBoardViews({
               <Settings2 className="size-4" />
             </ToolbarIcon>
           )}
-          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-md">
+          {/* Студия проекта. Раньше жила в «трёх точках» — оттуда её не видно, хотя это
+              вторая по значимости точка входа после создания задачи. Парная кнопка к
+              «Создать»: тот же синий, та же высота и скругление. */}
+          <Button
+            size="icon"
+            aria-label="Открыть Студию"
+            title="Открыть Студию"
+            onClick={() => navigate(`/projects/${projectId}/studio`)}
+            className="ml-1 size-10 rounded-lg max-sm:size-10 sm:size-9"
+          >
+            <PanelsTopLeft className="size-4" />
+          </Button>
+          {/* Скругление задаёт обёртка, а половинки внутри — rounded-none. Иначе они рисуют
+              собственные 6px внутри 8px-обрезки, и группа выглядит менее скруглённой, чем
+              задумано (обрезка не «дорисовывает» угол, она только срезает). */}
+          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-lg">
             <Button
               size="sm"
-              className="h-10 rounded-r-none px-3.5 text-sm sm:h-9 sm:text-xs"
+              className="h-10 rounded-none px-3.5 text-sm font-semibold sm:h-9 sm:text-[13px]"
               onClick={() => requestCreate('backlog')}
             >
               Создать
@@ -1067,7 +1085,7 @@ export function ProjectBoardViews({
                 <Button
                   size="sm"
                   aria-label="Создать в колонке…"
-                  className="h-10 rounded-l-none border-l border-primary-foreground/20 px-2 sm:h-9"
+                  className="h-10 rounded-none border-l border-primary-foreground/20 px-2 sm:h-9"
                 >
                   <ChevronDown className="size-3.5" />
                 </Button>

@@ -13,7 +13,6 @@ import {
   Link as LinkIcon,
   LayoutGrid,
   MoreHorizontal,
-  PanelsTopLeft,
   Search,
   Settings,
   Sparkles,
@@ -178,16 +177,19 @@ export function ProjectActionsMenu({
   };
 
   const actions = useMemo<Action[]>(() => {
-    const list: Action[] = [
-      {
+    const list: Action[] = [];
+    // Переход в Студию из режима задач живёт в тулбаре доски отдельной кнопкой — дублировать
+    // его здесь незачем. Обратный переход остаётся в меню: в Студии тулбара доски нет, и
+    // убрать отсюда «Открыть задачи» значило бы запереть пользователя в Студии.
+    if (mode !== 'tasks')
+      list.push({
         key: 'project-mode',
-        label: mode === 'tasks' ? 'Открыть Студию' : 'Открыть задачи',
-        icon: mode === 'tasks' ? PanelsTopLeft : LayoutGrid,
-        onSelect: () => navigate(mode === 'tasks' ? `/projects/${projectId}/studio` : `/projects/${projectId}`),
+        label: 'Открыть задачи',
+        icon: LayoutGrid,
+        onSelect: () => navigate(`/projects/${projectId}`),
         section: 0,
-      },
-      { key: 'link', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink, section: 0 },
-    ];
+      });
+    list.push({ key: 'link', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink, section: 0 });
     if (financeVisible)
       list.push({
         key: 'finance',
