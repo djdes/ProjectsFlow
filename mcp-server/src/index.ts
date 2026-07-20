@@ -653,7 +653,10 @@ const TOOLS = [
       'project source, checks pass, the change is committed, pushed AND a new deployment artifact ' +
       'is live — the user is watching a "saving to project" spinner until then. status="succeeded" ' +
       'drops the queued patches (they now live in the source); status="failed" requires a short ' +
-      'error (≤500 chars) and returns the patches to draft so nothing the user did is lost.',
+      'error (≤500 chars) and returns the patches to draft so nothing the user did is lost. ' +
+      'The element-edit prompt was written by the user in the project chat, so ALSO answer there: ' +
+      'pass "summary" (a short reply in Russian about what you changed) and optionally "steps". ' +
+      'Both are optional — omit them and the chat gets a generic "готово" instead of your words.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -663,6 +666,29 @@ const TOOLS = [
         status: { type: 'string', enum: ['succeeded', 'failed'] },
         result: { type: 'object', description: 'Optional structured result (e.g. commit sha)' },
         error: { type: 'string', description: 'Required when status=failed (≤500 chars)' },
+        summary: {
+          type: 'string',
+          description: 'Reply shown in the project chat as the AI answer (Russian, ≤10000 chars)',
+        },
+        steps: {
+          type: 'array',
+          description:
+            'Optional progress steps rendered above the answer: ' +
+            '[{"kind":"thought|query|read|write|review","detail":"one short sentence","durationMs":1200}], ' +
+            'at most 50. Do not send a label — the server writes the Russian one from "kind".',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              kind: { type: 'string', enum: ['thought', 'query', 'read', 'write', 'review'] },
+              detail: { type: 'string' },
+              startedAt: { type: 'string' },
+              durationMs: { type: 'integer' },
+            },
+            required: ['kind'],
+            additionalProperties: false,
+          },
+        },
       },
       required: ['projectId', 'jobId', 'artifactVersion', 'status'],
       additionalProperties: false,
@@ -1652,6 +1678,15 @@ const CompleteSiteEditorJobInput = z.object({
   status: z.enum(['succeeded', 'failed']),
   result: z.record(z.string(), z.unknown()).nullable().optional(),
   error: z.string().max(500).nullable().optional(),
+  // Ответ для чата проекта: пользователь просил правку словами и ждёт ответ словами.
+  summary: z.string().max(10000).nullable().optional(),
+  steps: z.array(z.object({
+    id: z.string().max(80).optional(),
+    kind: z.enum(['thought', 'query', 'read', 'write', 'review']),
+    detail: z.string().max(2000).nullable().optional(),
+    startedAt: z.string().max(40).nullable().optional(),
+    durationMs: z.number().int().nonnegative().nullable().optional(),
+  })).max(50).nullable().optional(),
 });
 
 const ListPendingMonitoringAnalysisJobsInput = z.object({
@@ -1997,6 +2032,8 @@ async function main(): Promise<void> {
             status: input.status,
             result: input.result ?? null,
             error: input.error ?? null,
+            summary: input.summary ?? null,
+            steps: input.steps ?? null,
           });
           return jsonResult({ ok: true });
         }

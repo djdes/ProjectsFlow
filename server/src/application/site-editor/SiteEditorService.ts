@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { ProjectAccessDeps } from '../project/projectAccess.js';
 import { requireDispatcherAccess, requireProjectAccess } from '../project/projectAccess.js';
 import type { SiteArtifactRepository } from '../site/SiteArtifactRepository.js';
+import type { AiAgentStep } from '../../domain/ai-conversation/AiAgentStep.js';
 import type {
   ProjectEditJob,
   ProjectEditOperation,
@@ -20,6 +21,7 @@ import {
   SiteEditorSessionInvalidError,
   SiteEditorValidationError,
 } from '../../domain/site-editor/errors.js';
+import type { EditRunChatSink } from './EditRunChatSink.js';
 import type { SiteEditorRepository } from './SiteEditorRepository.js';
 import {
   normalizeSiteRoute,
@@ -37,6 +39,11 @@ type Deps = ProjectAccessDeps & {
   readonly tokenGen?: () => string;
   readonly hashToken?: (token: string) => string;
   readonly now?: () => Date;
+  /**
+   * Зеркалирование правок в чат проекта. Опционально: без сконфигурированного чата
+   * редактор обязан работать ровно как раньше (и так собран каждый его тест).
+   */
+  readonly chat?: EditRunChatSink;
 };
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
@@ -249,7 +256,7 @@ export class SiteEditorService {
     if (!/^[A-Za-z0-9._:-]{8,100}$/.test(input.idempotencyKey)) {
       throw new SiteEditorValidationError('Invalid edit job idempotency key');
     }
-    return this.deps.repository.createJob({
+    const job = await this.deps.repository.createJob({
       id: this.deps.idGen(),
       projectId: input.projectId,
       createdBy: input.userId,
@@ -263,6 +270,8 @@ export class SiteEditorService {
       prompt: redactSensitiveText(input.prompt).slice(0, 4000),
       artifactVersion: input.artifactVersion,
     });
+    await this.openChatRun(job, input.userId);
+    return job;
   }
 
   async getJob(projectId: string, userId: string, jobId: string): Promise<ProjectEditJob> {
@@ -305,7 +314,11 @@ export class SiteEditorService {
         error: `worker did not report back within ${olderThanMinutes} min — правки возвращены в черновик`,
         finishedAt: this.now(),
       });
-      if (done) swept += 1;
+      if (!done) continue;
+      swept += 1;
+      // Подметание идёт мимо completeJob, поэтому сообщение в чате закрываем здесь же:
+      // иначе у пользователя навсегда осталась бы «печатает…» на мёртвой правке.
+      await this.closeChatRun(done, null, null);
     }
     return swept;
   }
@@ -330,6 +343,10 @@ export class SiteEditorService {
     status: 'succeeded' | 'failed';
     result?: Readonly<Record<string, unknown>> | null;
     error?: string | null;
+    // Слова ИИ для чата проекта. Воркер старой версии их не шлёт — тогда в диалог
+    // уходит фолбэк, а сообщение всё равно закрывается.
+    summary?: string | null;
+    steps?: readonly AiAgentStep[] | null;
   }): Promise<ProjectEditJob> {
     await requireDispatcherAccess(this.deps, input.projectId, input.userId);
     const existing = await this.requireJob(input.projectId, input.jobId);
@@ -372,12 +389,67 @@ export class SiteEditorService {
       finishedAt: this.now(),
     });
     if (!completed) throw new ProjectEditJobStateError('Edit job is not running');
+    // Публикация черновиков приходит не из чата (её ставит кнопка Edit, а не промпт),
+    // поэтому и закрывать там нечего: искать несуществующий run на каждой публикации —
+    // лишний проход по таблице сообщений.
+    if (!isDraftPublish) await this.closeChatRun(completed, input.summary, input.steps);
     return completed;
   }
 
   async getArtifactVersionForDispatcher(projectId: string, userId: string): Promise<string | null> {
     await requireDispatcherAccess(this.deps, projectId, userId);
     return this.currentArtifactVersion(projectId);
+  }
+
+  /**
+   * Промпт правки обязан лечь в чат проекта: пользователь пишет ИИ, а не «в job».
+   *
+   * Best-effort по построению. Job на этот момент уже сохранён и будет выполнен, так
+   * что упавшая запись в чат не должна превращаться в ошибку правки — иначе UI скажет
+   * «не удалось» там, где изменение всё равно применится.
+   */
+  private async openChatRun(job: ProjectEditJob, userId: string): Promise<void> {
+    if (!this.deps.chat) return;
+    try {
+      await this.deps.chat.openEditRun({
+        projectId: job.projectId,
+        userId,
+        jobId: job.id,
+        idempotencyKey: job.idempotencyKey,
+        prompt: job.prompt,
+        selection: {
+          kind: 'site_element',
+          route: job.route,
+          selector: job.locator.cssPath,
+          tagName: job.locator.tagName,
+          // Текстовый отпечаток уже прошёл redact в sanitizeLocator.
+          label: job.locator.textFingerprint ?? null,
+          artifactVersion: job.artifactVersion,
+          jobId: job.id,
+        },
+      });
+    } catch (error) {
+      console.warn('[site-editor] edit prompt did not reach the project chat:', error);
+    }
+  }
+
+  private async closeChatRun(
+    job: ProjectEditJob,
+    summary: string | null | undefined,
+    steps: readonly AiAgentStep[] | null | undefined,
+  ): Promise<void> {
+    if (!this.deps.chat) return;
+    try {
+      await this.deps.chat.closeEditRun({
+        jobId: job.id,
+        status: job.status === 'succeeded' ? 'succeeded' : 'failed',
+        summary: summary ?? null,
+        steps: steps ?? null,
+        error: job.error,
+      });
+    } catch (error) {
+      console.warn('[site-editor] edit result did not reach the project chat:', error);
+    }
   }
 
   private async requireJob(projectId: string, jobId: string): Promise<ProjectEditJob> {

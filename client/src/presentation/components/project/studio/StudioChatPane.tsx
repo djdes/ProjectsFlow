@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import type { AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 import type { DashboardSection } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import type { StudioSplitPane } from './useStudioSplitPane';
@@ -25,6 +26,7 @@ export function StudioChatPane({
   splitPane,
   saveState,
   onOpenDashboardSection,
+  onOpenSelection,
 }: {
   conversationId: string;
   projectId: string;
@@ -34,6 +36,9 @@ export function StudioChatPane({
   // Статус сохранения правок превью — живёт в правой панели, показывается здесь.
   saveState: StudioSaveState;
   onOpenDashboardSection: (section: DashboardSection) => void;
+  // Клик по чипу зоны в сообщении: открыть предпросмотр на нужной странице и выделить
+  // тот же элемент. Владелец состояния — страница студии.
+  onOpenSelection?: (selection: AiSelectionRef) => void;
 }): React.ReactElement {
   const [themeOpen, setThemeOpen] = useState(false);
   // Бургер открывает основную панель — когда она и так открыта, кнопка бессмысленна
@@ -118,7 +123,7 @@ export function StudioChatPane({
               <TooltipContent side="bottom" className={DARK_TOOLTIP}>Скрыть панель чата</TooltipContent>
             </Tooltip>
           </header>
-          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} hideHeader /></div>
+          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} hideHeader onOpenSelection={onOpenSelection} /></div>
         </div>
       </aside>
       {!splitPane.hidden && (

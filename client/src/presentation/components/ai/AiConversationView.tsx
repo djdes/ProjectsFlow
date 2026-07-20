@@ -11,6 +11,7 @@ import { useAiChatPanels } from '@/presentation/hooks/useAiChatPanels';
 import { useContainer } from '@/infrastructure/di/container';
 import type { AiConversation, AiMessage } from '@/domain/ai-chat/AiConversation';
 import { readAiAgentSteps } from '@/domain/ai-chat/AiAgentStep';
+import { readAiSelectionRef, type AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
 import type { AiActionBatchStatus } from '@/domain/ai-action/AiActionBatch';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -23,6 +24,7 @@ import { AiActionPlanCard, extractAiActionPlan } from './AiActionPlanCard';
 import { AiAgentStepsBlock } from './AiAgentStepsBlock';
 import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiArtifactsPanel } from './AiArtifactsPanel';
+import { AiSelectionChip } from './AiSelectionChip';
 
 export function AiConversationView({
   conversationId,
@@ -30,12 +32,16 @@ export function AiConversationView({
   projectName,
   projectId,
   hideHeader = false,
+  onOpenSelection,
 }: {
   conversationId: string;
   compact?: boolean;
   projectName?: string;
   projectId?: string;
   hideHeader?: boolean;
+  // Клик по чипу зоны в сообщении. Приходит только оттуда, где есть предпросмотр
+  // (Project Studio); без него чип рисуется как read-only отметка.
+  onOpenSelection?: (selection: AiSelectionRef) => void;
 }): React.ReactElement {
   const state = useAiConversation(conversationId);
   const scrollArea = useRef<HTMLDivElement | null>(null);
@@ -132,6 +138,7 @@ export function AiConversationView({
                       sending={state.sending}
                       onRetry={(body) => state.send(body, projectName ? 'studio_plan' : 'chat')}
                       projectId={projectId}
+                      onOpenSelection={onOpenSelection}
                     />
                   );
                 })}
@@ -317,7 +324,7 @@ function AiConversationHeader({
   );
 }
 
-function ConversationMessage({ message, previousUserBody, sending, onRetry, projectId }: { message: AiMessage; previousUserBody?: string; sending: boolean; onRetry: (body: string) => Promise<void>; projectId?: string }): React.ReactElement {
+function ConversationMessage({ message, previousUserBody, sending, onRetry, projectId, onOpenSelection }: { message: AiMessage; previousUserBody?: string; sending: boolean; onRetry: (body: string) => Promise<void>; projectId?: string; onOpenSelection?: (selection: AiSelectionRef) => void }): React.ReactElement {
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
   // Статус батча поднят сюда только ради шага «Требуется подтверждение»: он обязан
   // стоять последним в блоке шагов, то есть НАД телом ответа, а сама карточка
@@ -326,6 +333,9 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
   const extracted = extractAiAttachments(message.body);
   const actionResult = message.role === 'assistant' ? extractAiActionPlan(extracted.text) : { text: extracted.text, plan: null };
   const steps = message.role === 'assistant' ? readAiAgentSteps(message.metadata) : [];
+  // Зона правки приезжает только в пользовательском сообщении — это отметка того,
+  // к чему был привязан промпт, а не часть ответа.
+  const selection = message.role === 'user' ? readAiSelectionRef(message.metadata) : null;
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.body);
@@ -340,6 +350,9 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
       {!user && <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background"><Bot className="size-4" /></div>}
       <div className={cn('min-w-0 max-w-full overflow-hidden text-sm leading-6', user ? 'max-w-[85%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5' : 'max-w-[calc(100%-2.5rem)] flex-1')}>
         {!user && <AiAgentStepsBlock steps={steps} needsReview={batchStatus === 'pending_review'} />}
+        {/* Как в референсе: бейдж зоны — первый ребёнок внутри пузыря, над текстом
+            промпта. Контейнер с переносом — зон в одном сообщении может стать больше. */}
+        {selection && <div className="mb-1.5 flex flex-wrap items-center gap-1"><AiSelectionChip selection={selection} onOpen={onOpenSelection} /></div>}
         {message.body ? (
           <>
             {actionResult.text && <div className="prose prose-sm max-w-none overflow-x-auto break-words dark:prose-invert prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted prose-pre:text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{actionResult.text}</ReactMarkdown></div>}

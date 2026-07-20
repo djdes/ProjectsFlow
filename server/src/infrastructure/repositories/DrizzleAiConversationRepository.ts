@@ -16,12 +16,16 @@ import type {
   AiConversationRepository,
   AiMessageRunResult,
   AiMutationResult,
+  AiRunCompletionPayload,
+  AiRunFailurePayload,
   AiRunMutationValue,
   ClaimAiConversationRunInput,
   CompleteAiConversationRunInput,
+  CompleteAiRunForEditJobInput,
   CreateAiConversationRecord,
   CreateAiMessageRunRecord,
   FailAiConversationRunInput,
+  FailAiRunForEditJobInput,
   ListAiConversationsQuery,
   ListAiMessagesQuery,
 } from '../../application/ai-conversation/AiConversationRepository.js';
@@ -257,6 +261,7 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
         status: 'completed',
         body: input.body,
         clientRequestId: input.clientRequestId,
+        metadataJson: input.userMessageMetadata ? { ...input.userMessageMetadata } : null,
       });
       await tx.insert(aiConversationMessages).values({
         id: input.assistantMessageId,
@@ -278,6 +283,7 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
         contextVersion: input.contextVersion,
         contextSnapshotJson: input.contextSnapshot ? { ...input.contextSnapshot } : null,
         idempotencyKey: input.clientRequestId,
+        projectEditJobId: input.projectEditJobId ?? null,
       });
 
       const userMessage = await this.findMessageRow(tx, input.userMessageId);
@@ -413,6 +419,10 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
       .leftJoin(projects, eq(projects.id, aiConversationRuns.projectId))
       .where(and(
         eq(aiConversationRuns.dispatcherUserId, dispatcherUserId),
+        // Run, привязанный к job'у визуального редактора, исполняет и закрывает сам job.
+        // Отдать его ещё и воркеру чата — значит получить два ответа в одном сообщении
+        // и гонку двух завершений.
+        isNull(aiConversationRuns.projectEditJobId),
         or(
           eq(aiConversationRuns.status, 'queued'),
           and(
@@ -478,28 +488,50 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
   async completeRun(
     input: CompleteAiConversationRunInput,
   ): Promise<AiMutationResult<AiRunMutationValue> | null> {
-    return this.finishRun(input, 'completed');
+    const { runId, dispatcherUserId, leaseTokenHash, ...payload } = input;
+    return this.finishRun(payload, 'completed', { kind: 'lease', runId, dispatcherUserId, leaseTokenHash });
   }
 
   async failRun(
     input: FailAiConversationRunInput,
   ): Promise<AiMutationResult<AiRunMutationValue> | null> {
-    return this.finishRun(input, 'failed');
+    const { runId, dispatcherUserId, leaseTokenHash, ...payload } = input;
+    return this.finishRun(payload, 'failed', { kind: 'lease', runId, dispatcherUserId, leaseTokenHash });
+  }
+
+  async completeRunForEditJob(
+    input: CompleteAiRunForEditJobInput,
+  ): Promise<AiMutationResult<AiRunMutationValue> | null> {
+    const { projectEditJobId, ...payload } = input;
+    return this.finishRun(payload, 'completed', { kind: 'edit_job', projectEditJobId });
+  }
+
+  async failRunForEditJob(
+    input: FailAiRunForEditJobInput,
+  ): Promise<AiMutationResult<AiRunMutationValue> | null> {
+    const { projectEditJobId, ...payload } = input;
+    return this.finishRun(payload, 'failed', { kind: 'edit_job', projectEditJobId });
   }
 
   private async finishRun(
-    input: CompleteAiConversationRunInput | FailAiConversationRunInput,
+    input: AiRunCompletionPayload | AiRunFailurePayload,
     terminalStatus: 'completed' | 'failed',
+    auth: FinishRunAuth,
   ): Promise<AiMutationResult<AiRunMutationValue> | null> {
     return this.db.transaction(async (tx) => {
       const completeInput = terminalStatus === 'completed'
-        ? input as CompleteAiConversationRunInput
+        ? input as AiRunCompletionPayload
         : null;
       const failInput = terminalStatus === 'failed'
-        ? input as FailAiConversationRunInput
+        ? input as AiRunFailurePayload
         : null;
-      const run = await this.lockRun(tx, input.runId);
-      if (!run || run.dispatcherUserId !== input.dispatcherUserId) return null;
+      const run = auth.kind === 'lease'
+        ? await this.lockRun(tx, auth.runId)
+        : await this.lockRunByEditJob(tx, auth.projectEditJobId);
+      if (!run) return null;
+      // Сверка диспетчера — часть lease-пути. Внутренний путь находит run по
+      // project_edit_job_id, а доступ к самому job'у уже проверил site-editor.
+      if (auth.kind === 'lease' && run.dispatcherUserId !== auth.dispatcherUserId) return null;
       if (run.status === terminalStatus) {
         if (run.completionIdempotencyKey !== input.completionIdempotencyKey) {
           throw new AiConversationCompletionConflictError();
@@ -507,9 +539,16 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
         const assistant = await this.findMessageRow(tx, run.assistantMessageId);
         return assistant ? { value: { run: toRun(run), assistantMessage: toMessage(assistant) }, events: [] } : null;
       }
-      if (run.status !== 'running' || run.leaseTokenHash !== input.leaseTokenHash ||
-        !run.leaseExpiresAt || run.leaseExpiresAt.getTime() < Date.now()) {
-        throw new AiConversationRunStateConflictError(run.status);
+      if (auth.kind === 'lease') {
+        if (run.status !== 'running' || run.leaseTokenHash !== auth.leaseTokenHash ||
+          !run.leaseExpiresAt || run.leaseExpiresAt.getTime() < Date.now()) {
+          throw new AiConversationRunStateConflictError(run.status);
+        }
+      } else if (inArrayValue(run.status, ['completed', 'failed', 'cancelled'])) {
+        // Пользователь отменил правку, либо run уже закрыт другим путём (например,
+        // подметанием зависших job'ов). Воскрешать закрытое сообщение нельзя.
+        const assistant = await this.findMessageRow(tx, run.assistantMessageId);
+        return assistant ? { value: { run: toRun(run), assistantMessage: toMessage(assistant) }, events: [] } : null;
       }
 
       const completed = completeInput !== null;
@@ -576,16 +615,24 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
         projectId: run.projectId,
         runId: run.id,
         messageId: assistant.id,
-        actorKind: 'dispatcher',
-        actorUserId: input.dispatcherUserId,
+        // Внутренний путь пишется как 'system': ответ в чат положил сервер по факту
+        // завершения job'а, а не диспетчер своим вызовом /complete.
+        ...(auth.kind === 'lease'
+          ? { actorKind: 'dispatcher' as const, actorUserId: auth.dispatcherUserId }
+          : { actorKind: 'system' as const, actorUserId: null }),
         action: completed ? 'run.complete' : 'run.fail',
         metadata: completeInput
           ? {
               model: completeInput.model,
               tokensIn: completeInput.tokensIn,
               tokensOut: completeInput.tokensOut,
+              ...(auth.kind === 'edit_job' ? { projectEditJobId: auth.projectEditJobId } : {}),
             }
-          : { errorCode: failInput!.errorCode, retryable: failInput!.retryable },
+          : {
+              errorCode: failInput!.errorCode,
+              retryable: failInput!.retryable,
+              ...(auth.kind === 'edit_job' ? { projectEditJobId: auth.projectEditJobId } : {}),
+            },
         requestId: input.requestId,
       });
       return { value: { run: toRun(updatedRun), assistantMessage: toMessage(assistant) }, events };
@@ -609,6 +656,19 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
     const [row] = await tx.select().from(aiConversationRuns)
       .where(eq(aiConversationRuns.id, runId)).limit(1).for('update');
     return row;
+  }
+
+  private async lockRunByEditJob(
+    tx: Tx,
+    projectEditJobId: string,
+  ): Promise<AiConversationRunRow | undefined> {
+    // Сначала обычное чтение, и только потом блокировка по первичному ключу.
+    // project_edit_job_id не проиндексирован, а `SELECT ... FOR UPDATE` по
+    // непроиндексированной колонке берёт в InnoDB gap-локи на весь просмотренный
+    // диапазон — то есть подвесил бы вставку новых сообщений во все диалоги разом.
+    const [found] = await tx.select({ id: aiConversationRuns.id }).from(aiConversationRuns)
+      .where(eq(aiConversationRuns.projectEditJobId, projectEditJobId)).limit(1);
+    return found ? this.lockRun(tx, found.id) : undefined;
   }
 
   private async findConversationRow(executor: Executor, id: string): Promise<AiConversationRow | undefined> {
@@ -669,6 +729,17 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
     });
   }
 }
+
+// Как авторизовано завершение run'а: lease-токеном воркера чата либо связью с job'ом
+// визуального редактора, который run и породил.
+type FinishRunAuth =
+  | {
+      readonly kind: 'lease';
+      readonly runId: string;
+      readonly dispatcherUserId: string;
+      readonly leaseTokenHash: string;
+    }
+  | { readonly kind: 'edit_job'; readonly projectEditJobId: string };
 
 type NewEvent = {
   readonly conversationId: string;
@@ -786,7 +857,7 @@ function toEvent(row: AiConversationEventRow): AiConversationEvent {
  */
 function mergeMessageMetadata(
   current: Record<string, unknown> | null,
-  input: CompleteAiConversationRunInput,
+  input: AiRunCompletionPayload,
 ): Record<string, unknown> | null {
   if (input.steps == null && input.knowledge == null) return current;
   return {

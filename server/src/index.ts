@@ -178,6 +178,7 @@ import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/Driz
 import { DrizzleAiConversationRepository } from './infrastructure/repositories/DrizzleAiConversationRepository.js';
 import { AiConversationEventHub } from './infrastructure/realtime/AiConversationEventHub.js';
 import { AiConversationService } from './application/ai-conversation/AiConversationService.js';
+import { AiConversationEditRunChatSink } from './application/ai-conversation/AiConversationEditRunChatSink.js';
 import { DrizzleUsageLedgerRepository } from './infrastructure/repositories/DrizzleUsageLedgerRepository.js';
 import { RecordUsage } from './application/usage/RecordUsage.js';
 import { GetUserUsage } from './application/usage/GetUserUsage.js';
@@ -1009,6 +1010,9 @@ const siteEditorService = new SiteEditorService({
   repository: siteEditorRepo,
   sites: siteArtifactRepo,
   idGen: idGenerator,
+  // Промпт правки элемента идёт в чат проекта, ответ воркера возвращается в то же
+  // сообщение. Связывается только здесь: сам site-editor про чат ничего не знает.
+  chat: new AiConversationEditRunChatSink({ conversations: aiConversationService }),
 });
 const SITE_BASE_DOMAIN = process.env['SITE_BASE_DOMAIN'] ?? 'projectsflow.ru';
 const MAX_SITE_BYTES = 25 * 1024 * 1024; // 25 MB на файл собранного сайта.

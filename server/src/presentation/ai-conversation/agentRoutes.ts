@@ -4,7 +4,6 @@ import { z, ZodError } from 'zod';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { AiConversationService } from '../../application/ai-conversation/AiConversationService.js';
 import {
-  AI_AGENT_STEP_KINDS,
   MAX_AI_AGENT_STEPS,
   normalizeAgentSteps,
 } from '../../domain/ai-conversation/AiAgentStep.js';
@@ -20,6 +19,7 @@ import {
 } from '../../domain/ai-conversation/errors.js';
 import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { agentStepSchema } from './schemas.js';
 
 type Deps = {
   readonly authenticate: AuthenticateAgentToken;
@@ -28,14 +28,6 @@ type Deps = {
 
 // Шаги и источники опциональны: воркер, который их не шлёт, обязан продолжать
 // работать ровно как раньше — блок шагов и панели просто не появятся.
-const stepSchema = z.object({
-  id: z.string().min(1).max(80).optional(),
-  kind: z.enum(AI_AGENT_STEP_KINDS as unknown as [string, ...string[]]),
-  detail: z.string().max(2_000).nullable().optional(),
-  startedAt: z.string().max(40).nullable().optional(),
-  durationMs: z.number().int().nonnegative().nullable().optional(),
-}).strict();
-
 const knowledgeSchema = z.object({
   id: z.string().min(1).max(80),
   kind: z.enum(['project', 'task', 'kb_page', 'document']),
@@ -52,7 +44,7 @@ const completeSchema = z.object({
   tokensIn: z.number().int().nonnegative().nullable().optional(),
   tokensOut: z.number().int().nonnegative().nullable().optional(),
   costUsd: z.number().nonnegative().nullable().optional(),
-  steps: z.array(stepSchema).max(MAX_AI_AGENT_STEPS).nullable().optional(),
+  steps: z.array(agentStepSchema).max(MAX_AI_AGENT_STEPS).nullable().optional(),
   knowledge: z.array(knowledgeSchema).max(MAX_AI_KNOWLEDGE_SOURCES).nullable().optional(),
 }).strict();
 
@@ -146,6 +138,11 @@ function pendingDto(value: PendingAiConversationRun): unknown {
     // The worker receives a bounded, already-authorized transcript only. It has
     // no conversation API, filesystem or MCP access, so follow-up answers still
     // keep context without broadening the worker capability.
+    //
+    // Правки элементов (mode studio_edit) остаются в истории намеренно: «поменяли
+    // заголовок каталога» — тот же контекст диалога, что и обычный вопрос. А вот
+    // metadata здесь не сериализуется вообще, поэтому CSS-селекторы зоны планировщику
+    // не достаются; сами studio_edit-run'ы в эту очередь не попадают (их закрывает job).
     history: value.history.map((message) => ({
       id: message.id,
       seq: String(message.seq),

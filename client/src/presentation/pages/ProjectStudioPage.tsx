@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
+import type { AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
 import { ProjectActionsMenu } from '@/presentation/components/project/ProjectActionsMenu';
@@ -25,6 +26,7 @@ import {
   type DashboardSection,
 } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import { normalizePreviewPath } from '@/presentation/components/project/workspace/preview/path';
+import type { PreviewSelectionRequest } from '@/presentation/components/project/workspace/ProjectPreview';
 
 type StudioData = {
   project: Project;
@@ -69,6 +71,9 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
   const [financeVisible, setFinanceVisible] = useState(false);
   const [monitoringVisible, setMonitoringVisible] = useState(false);
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
+  // Зона, которую попросили выделить из чата. Живёт здесь, потому что переход к ней —
+  // это смена panel/path, а ими владеет страница.
+  const [requestedSelection, setRequestedSelection] = useState<PreviewSelectionRequest | null>(null);
   const splitPane = useStudioSplitPane();
 
   // Studio starts as a focused workspace. This signal runs once for the mounted
@@ -143,7 +148,11 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
   }, [monitoringRepository, projectFinanceRepository, projectId]);
 
   const canEdit = data?.project.role !== 'viewer';
+  // Запрос на зону одноразовый. Превью пересоздаётся при переключении панелей, поэтому
+  // без сброса возврат с дашборда снова включал бы Edit и выделял то, о чём просили
+  // давно. Сам openSelection ходит в updateQuery напрямую и своего запроса не гасит.
   const panelChange = useCallback((next: StudioPanel): void => {
+    setRequestedSelection(null);
     updateQuery({ panel: next });
   }, [updateQuery]);
   const pathChange = useCallback((next: string): void => {
@@ -154,7 +163,17 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
     updateQuery({ section: next }, true);
   }, [updateQuery]);
   const openDashboardSection = useCallback((next: DashboardSection): void => {
+    setRequestedSelection(null);
     updateQuery({ panel: 'dashboard', section: next });
+  }, [updateQuery]);
+  // Клик по чипу зоны в сообщении: открываем предпросмотр на той же странице и просим
+  // его войти в Edit и выделить элемент. Токен — нонс: повторный клик по тому же чипу
+  // обязан сработать снова, поэтому пересобираем запрос с новым номером.
+  const openSelection = useCallback((selection: AiSelectionRef): void => {
+    const route = normalizePreviewPath(selection.route) ?? '/';
+    setMobileChatOpen(false);
+    updateQuery({ panel: 'preview', path: route });
+    setRequestedSelection((current) => ({ selector: selection.selector, route, token: (current?.token ?? 0) + 1 }));
   }, [updateQuery]);
 
   useEffect(() => {
@@ -224,7 +243,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   return (
     <main className="flex h-full min-h-[520px] w-full overflow-hidden bg-background" aria-label={`Project Studio — ${data.project.name}`}>
-      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} saveState={saveState} onOpenDashboardSection={openDashboardSection} />
+      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} saveState={saveState} onOpenDashboardSection={openDashboardSection} onOpenSelection={openSelection} />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Рабочая область проекта">
         {panel === 'dashboard' && (
@@ -259,6 +278,8 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
           onOpenPreview={() => panelChange('preview')}
           onOpenAutomation={() => setAutomationOpen(true)}
           onSaveStateChange={setSaveState}
+          requestedSelection={requestedSelection}
+          onEditRunStarted={() => splitPane.setHidden(false)}
           previewToolbarLeading={(
             <StudioTopBar
               panel={panel}
@@ -300,6 +321,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
         conversationId={data.conversationId}
         projectId={data.project.id}
         projectName={data.project.name}
+        onOpenSelection={openSelection}
       />
       <AutomationDialog
         open={automationOpen}

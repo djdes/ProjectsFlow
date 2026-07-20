@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { SiteEditorService } from '../../application/site-editor/SiteEditorService.js';
+import { normalizeAgentSteps } from '../../domain/ai-conversation/AiAgentStep.js';
 import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
 import { claimJobSchema, completeJobSchema } from './schemas.js';
@@ -67,12 +68,15 @@ export function siteEditorAgentRouter(deps: Deps): Router {
 
   router.post('/projects/:projectId/site-editor/jobs/:jobId/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const body = completeJobSchema.parse(req.body);
+      const { steps, ...body } = completeJobSchema.parse(req.body);
       const job = await deps.service.completeJob({
         projectId: req.params.projectId as string,
         userId: req.user!.id,
         jobId: req.params.jobId as string,
         ...body,
+        // Тот же нормализатор, что и у чата: неизвестный вид шага отбрасывается, а
+        // человекочитаемый ярлык пишет сервер, а не воркер.
+        steps: steps == null ? null : normalizeAgentSteps(steps),
       });
       res.json({ job });
     } catch (error) { handleSiteEditorError(error, res, next); }

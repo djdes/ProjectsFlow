@@ -216,6 +216,24 @@ export const SITE_EDITOR_BRIDGE_SCRIPT = String.raw`(() => {
     if (message.type === 'set-mode') mode = message.payload?.mode === 'edit' ? 'edit' : 'preview';
     else if (message.type === 'navigate' && typeof message.payload?.path === 'string' && message.payload.path.startsWith('/')) location.assign(message.payload.path);
     else if (message.type === 'reload') location.reload();
+    else if (message.type === 'select') {
+      // Выделение зоны по команде хоста (клик по чипу зоны в чате). Ветка добавлена без
+      // бампа версии протокола: закешированные бриджи просто не знают этот тип и молча
+      // его игнорируют, тогда как бамп отрезал бы их все разом.
+      const selector = typeof message.payload?.selector === 'string' ? message.payload.selector : '';
+      let node = null;
+      // Селекторы вроде nth-of-type хрупкие: после правки ИИ элемента может не быть, а
+      // синтаксически кривой селектор роняет querySelector исключением. Ни то ни другое
+      // не должно ломать редактор — хост покажет тост и останется в режиме правки.
+      try { node = selector ? document.querySelector(selector) : null; } catch { node = null; }
+      // scrollIntoView ДО describe: bounds считаются от вьюпорта, по ним хост рисует
+      // рамку. При CSS scroll-behavior:smooth первый замер будет до конца анимации —
+      // его добьёт refreshSelection, висящий на scroll.
+      if (node) node.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const element = node ? describe(node) : null;
+      if (!element) send('error', { message: 'Зона из этого сообщения больше не найдена на странице — возможно, её изменил ИИ.' });
+      else { selected = element; send('select', { element: selected }); }
+    }
     else if (message.type === 'patch') applyPatch(message.payload?.patch);
     else if (message.type === 'replay' && Array.isArray(message.payload?.patches)) {
       persisted = message.payload.patches.slice(0, 500);

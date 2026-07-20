@@ -13,9 +13,13 @@ export type FrameMessage =
   | (Envelope & { type: 'history'; payload: { revision: number; undoDepth: number; redoDepth: number } })
   | (Envelope & { type: 'error'; payload: { message: string } });
 
+// `select` добавлен АДДИТИВНО и БЕЗ бампа версии протокола: скрипт моста отдаётся с
+// max-age=300, так что в проде живут закешированные бриджи без этой ветки. Они молча
+// проигнорируют неизвестный тип (лишний раз выделения не случится), а бамп версии
+// разом отрезал бы их ВСЕ — сломав редактор до истечения кеша.
 export type HostMessage = Envelope & {
-  type: 'hello' | 'set-mode' | 'navigate' | 'patch' | 'replay' | 'undo' | 'redo' | 'reload';
-  payload?: { mode?: 'preview' | 'edit'; path?: string; patch?: SiteEditorPatch; patches?: readonly SiteEditorPersistedPatch[]; revision?: number };
+  type: 'hello' | 'set-mode' | 'navigate' | 'patch' | 'replay' | 'undo' | 'redo' | 'reload' | 'select';
+  payload?: { mode?: 'preview' | 'edit'; path?: string; patch?: SiteEditorPatch; patches?: readonly SiteEditorPersistedPatch[]; revision?: number; selector?: string };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

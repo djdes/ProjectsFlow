@@ -34,6 +34,19 @@ import type { StudioSaveState } from '@/presentation/components/project/studio/S
 // по таймауту. Серверного sweep-а для таких job'ов нет, поэтому предел нужен.
 const PUBLISH_TIMEOUT_MS = 12 * 60_000;
 
+// Сколько после отправки команды выделения считаем ошибку моста ответом именно на неё.
+// postMessage отвечает мгновенно, запас взят на подтормаживающий фрейм.
+const SELECTION_REPLY_WINDOW_MS = 5_000;
+
+/** Запрос «выдели вот эту зону», пришедший снаружи — из чипа зоны в чате. */
+export type PreviewSelectionRequest = {
+  selector: string;
+  route: string;
+  // Нонс: повторный клик по тому же чипу обязан сработать снова, поэтому реагируем на
+  // смену токена, а не на смену селектора.
+  token: number;
+};
+
 export type ProjectPreviewProps = {
   projectId: string;
   initialPath?: string;
@@ -45,6 +58,10 @@ export type ProjectPreviewProps = {
   // Статус сохранения поднимается наверх: в studio-раскладке его показывает
   // индикатор в шапке ЛЕВОЙ панели, а не кнопки в этом тулбаре.
   onSaveStateChange?: (state: StudioSaveState) => void;
+  requestedSelection?: PreviewSelectionRequest | null;
+  // Правка ушла в работу — её ответ придёт в чат проекта. Даёт хосту раскрыть
+  // панель чата, если она свёрнута.
+  onEditRunStarted?: () => void;
 };
 
 export function ProjectPreview({
@@ -56,6 +73,8 @@ export function ProjectPreview({
   toolbarTrailing,
   studioLayout = false,
   onSaveStateChange,
+  requestedSelection,
+  onEditRunStarted,
 }: ProjectPreviewProps): React.ReactElement {
   const { projectRepository, siteEditorRepository, openSiteEditorSession, applySiteEditorPatch, startSiteEditorAiJob } = useContainer();
   const [site, setSite] = useState<ProjectSite | null>(null);
@@ -103,6 +122,12 @@ export function ProjectPreview({
   const initialPathRef = useRef(requestedInitialPath);
   const initializedProjectRef = useRef(false);
   const statePathRef = useRef(state.path);
+  // Очередь на выделение зоны. Команду нельзя отправить в момент клика: при смене пути
+  // фрейм перезагружается и рукопожатие моста идёт заново, так что селектор ждёт здесь
+  // и уходит на готовности моста (и в onLoad, когда сессия пережила перезагрузку).
+  const pendingSelectionRef = useRef<{ selector: string; route: string } | null>(null);
+  const selectionTokenRef = useRef<number | null>(null);
+  const selectionSentAtRef = useRef(0);
 
   useEffect(() => {
     statePathRef.current = state.path;
@@ -221,7 +246,7 @@ export function ProjectPreview({
       switch (message.type) {
         case 'ready': dispatch({ type: 'BRIDGE_READY' }); break;
         case 'hover': dispatch({ type: 'HOVER', element: message.payload.element }); break;
-        case 'select': dispatch({ type: 'SELECT', element: message.payload.element }); break;
+        case 'select': selectionSentAtRef.current = 0; dispatch({ type: 'SELECT', element: message.payload.element }); break;
         case 'navigation': {
           const nextPath = normalizePreviewPath(message.payload.path);
           if (nextPath && nextPath !== state.path) {
@@ -238,7 +263,20 @@ export function ProjectPreview({
           break;
         }
         case 'history': if (!session.remote) dispatch({ type: 'HISTORY', ...message.payload }); break;
-        case 'error': dispatch({ type: 'BRIDGE_ERROR', message: message.payload.message.slice(0, 300) }); break;
+        case 'error': {
+          const text = message.payload.message.slice(0, 300);
+          // Промах выделения — не поломка моста: редактор жив, просто зоны на странице
+          // больше нет (селекторы nth-of-type хрупкие, ИИ мог переписать разметку).
+          // Гасить канвас красной плашкой здесь нельзя — достаточно тоста, и мы всё
+          // равно остаёмся в режиме правки.
+          if (selectionSentAtRef.current && Date.now() - selectionSentAtRef.current < SELECTION_REPLY_WINDOW_MS) {
+            selectionSentAtRef.current = 0;
+            toast.error(text);
+            break;
+          }
+          dispatch({ type: 'BRIDGE_ERROR', message: text });
+          break;
+        }
       }
     };
     window.addEventListener('message', onMessage);
@@ -341,10 +379,15 @@ export function ProjectPreview({
     // черновиком и переживут уход со страницы. Отправка их диспетчеру — только через
     // exitEditMode (повторный клик по Edit) или пункт «Опубликовать» в «…».
     dispatch({ type: 'SET_MODE', mode });
-    if (mode !== 'edit') sendBridge('set-mode', { mode: 'preview' });
+    // Выход из правки руками отменяет невыполненный запрос зоны: иначе селектор ждал бы
+    // в очереди сколь угодно долго и «выстрелил» неожиданным выделением при следующем
+    // входе в Edit на этой же странице.
+    if (mode !== 'edit') { pendingSelectionRef.current = null; sendBridge('set-mode', { mode: 'preview' }); }
   };
 
-  const applyPath = (raw: string): void => {
+  // Мемоизирован, потому что на него завязан эффект перехода к зоне из чата: без
+  // стабильной ссылки эффект пересобирался бы на каждый рендер.
+  const applyPath = useCallback((raw: string): void => {
     const normalized = normalizePreviewPath(raw);
     if (!normalized || !baseUrl) { toast.error('Укажите путь внутри сайта, например /catalog'); return; }
     if (session?.remote) void siteEditorRepository.closeSession(projectId, session.id).catch(() => undefined);
@@ -356,9 +399,39 @@ export function ProjectPreview({
     setFrameSrc(joinPreviewUrl(baseUrl, normalized));
     onPathChange?.(normalized);
     resetFrame();
-  };
+  }, [baseUrl, onPathChange, projectId, resetFrame, session, siteEditorRepository]);
 
   const reload = (): void => resetFrame();
+
+  const flushPendingSelection = useCallback((): void => {
+    const pending = pendingSelectionRef.current;
+    // Пока фрейм не приехал на нужный маршрут, отправлять нечего: команда ушла бы в
+    // старый документ, а он вот-вот перезагрузится. statePathRef обновляется эффектом,
+    // объявленным выше по файлу, — к этому моменту он уже актуален.
+    if (!pending || pending.route !== statePathRef.current) return;
+    // Повтор гейта sendBridge: очищать очередь можно только если команда реально ушла.
+    if (!session || !frameSrc || !iframeRef.current?.contentWindow) return;
+    pendingSelectionRef.current = null;
+    selectionSentAtRef.current = Date.now();
+    sendBridge('select', { selector: pending.selector });
+  }, [frameSrc, sendBridge, session]);
+
+  // Клик по чипу зоны в чате: входим в Edit, при необходимости уводим превью на нужную
+  // страницу и ставим селектор в очередь. Реагируем на токен, а не на селектор —
+  // повторный клик по тому же чипу обязан сработать снова.
+  useEffect(() => {
+    if (!requestedSelection || selectionTokenRef.current === requestedSelection.token) return;
+    selectionTokenRef.current = requestedSelection.token;
+    const route = normalizePreviewPath(requestedSelection.route) ?? '/';
+    pendingSelectionRef.current = { selector: requestedSelection.selector, route };
+    if (state.mode !== 'edit') dispatch({ type: 'SET_MODE', mode: 'edit' });
+    if (route !== statePathRef.current) applyPath(route);
+  }, [applyPath, requestedSelection, state.mode]);
+
+  useEffect(() => {
+    if (state.mode !== 'edit' || state.bridgeStatus !== 'ready') return;
+    flushPendingSelection();
+  }, [flushPendingSelection, requestedSelection?.token, state.bridgeStatus, state.mode]);
 
   const applyPatch = async (rawPatch: SiteEditorPatch): Promise<void> => {
     if (!state.selected || !session) return;
@@ -456,6 +529,7 @@ export function ProjectPreview({
       dispatch({ type: 'PUBLISH_START' });
       void publishDraft();
     }
+    pendingSelectionRef.current = null;
     dispatch({ type: 'SET_MODE', mode: 'preview' });
     sendBridge('set-mode', { mode: 'preview' });
   };
@@ -502,6 +576,9 @@ export function ProjectPreview({
       });
     });
     if (!submission.accepted) return;
+    // Промпт правки уходит в чат проекта, туда же придёт ответ. Если панель чата
+    // свёрнута, обратная связь ушла бы в невидимое место — раскрываем её.
+    onEditRunStarted?.();
 
     // This state is committed before the coordinator starts its network worker.
     dispatch({ type: 'AI_STATUS', status: 'submitting', message: 'Запрос принят — передаём его диспетчеру…' });
@@ -539,7 +616,7 @@ export function ProjectPreview({
           <span className="min-w-0 truncate">{publishJob?.status === 'completed' ? 'Новая версия опубликована.' : publishJob?.status === 'failed' ? (publishJob.error || 'Публикация не удалась — черновик восстановлен.') : (publishJob?.message || 'Диспетчер применяет изменения к исходному коду и публикует новую версию…')}</span>
         </div>
       )}
-      {state.mode === 'canvas' ? <CanvasRouteMap routes={routes} baseUrl={baseUrl} fillAvailable={fillAvailable} onOpenRoute={(path) => { applyPath(path); dispatch({ type: 'SET_MODE', mode: 'preview' }); }} /> : <PreviewCanvas ref={iframeRef} frameKey={frameKey} previewUrl={frameSrc} path={state.path} mode={state.mode} device={state.device} loading={frameLoading} slow={slowFrame} bridgeStatus={state.bridgeStatus} bridgeError={state.bridgeError} hovered={state.hovered} selected={state.selected} styleOpen={state.styleOpen} fillAvailable={fillAvailable} onLoad={() => { setFrameLoading(false); if (state.mode === 'edit') { sendBridge('hello', { mode: 'edit', path: state.path }); sendBridge('set-mode', { mode: 'edit' }); } }} onStyleOpen={(open) => dispatch({ type: 'SET_PANEL', panel: 'style', open })} onPatch={(patch) => void applyPatch(patch)} onAi={() => dispatch({ type: 'SET_PANEL', panel: 'ai', open: true })} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onDelete={() => setDeleteOpen(true)} onCloseSelection={() => dispatch({ type: 'SELECT', element: null })} />}
+      {state.mode === 'canvas' ? <CanvasRouteMap routes={routes} baseUrl={baseUrl} fillAvailable={fillAvailable} onOpenRoute={(path) => { applyPath(path); dispatch({ type: 'SET_MODE', mode: 'preview' }); }} /> : <PreviewCanvas ref={iframeRef} frameKey={frameKey} previewUrl={frameSrc} path={state.path} mode={state.mode} device={state.device} loading={frameLoading} slow={slowFrame} bridgeStatus={state.bridgeStatus} bridgeError={state.bridgeError} hovered={state.hovered} selected={state.selected} styleOpen={state.styleOpen} fillAvailable={fillAvailable} onLoad={() => { setFrameLoading(false); if (state.mode === 'edit') { sendBridge('hello', { mode: 'edit', path: state.path }); sendBridge('set-mode', { mode: 'edit' }); flushPendingSelection(); } }} onStyleOpen={(open) => dispatch({ type: 'SET_PANEL', panel: 'style', open })} onPatch={(patch) => void applyPatch(patch)} onAi={() => dispatch({ type: 'SET_PANEL', panel: 'ai', open: true })} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onDelete={() => setDeleteOpen(true)} onCloseSelection={() => dispatch({ type: 'SELECT', element: null })} />}
       <CodeSheet open={state.codeOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'code', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onPatch={(patch) => void applyPatch(patch)} onEditWithAi={(prompt) => submitAi(`Измени исходный код выбранного элемента по инструкции, но верни только безопасный визуальный patch-черновик без публикации: ${prompt}`)} />
       <AiPromptSheet open={state.aiOpen} onOpenChange={(open) => dispatch({ type: 'SET_PANEL', panel: 'ai', open })} element={state.selected} status={state.aiStatus} message={state.aiMessage} onSubmit={submitAi} />
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Отклонить все правки?</DialogTitle><DialogDescription>Все {state.draftCount} {state.draftCount === 1 ? 'правка' : 'правок'} этой страницы будут удалены. Опубликованная версия сайта не изменится.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Оставить</Button><Button variant="destructive" onClick={() => void rejectDraft()}>Отклонить правки</Button></DialogFooter></DialogContent></Dialog>

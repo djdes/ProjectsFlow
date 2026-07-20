@@ -1,6 +1,21 @@
 import { z } from 'zod';
+import { AI_AGENT_STEP_KINDS } from '../../domain/ai-conversation/AiAgentStep.js';
 
 const uuid = z.string().uuid();
+
+/**
+ * Шаг работы агента в том виде, в каком его присылает воркер. Схема общая для чата и
+ * для job'ов визуального редактора: у обоих один и тот же воркер, и разъехавшийся
+ * контракт шага означал бы, что «N шагов» рисуется только в одном из двух мест.
+ * Ярлык не принимается — его пишет сервер из kind (см. normalizeAgentSteps).
+ */
+export const agentStepSchema = z.object({
+  id: z.string().min(1).max(80).optional(),
+  kind: z.enum(AI_AGENT_STEP_KINDS as unknown as [string, ...string[]]),
+  detail: z.string().max(2_000).nullable().optional(),
+  startedAt: z.string().max(40).nullable().optional(),
+  durationMs: z.number().int().nonnegative().nullable().optional(),
+}).strict();
 
 export const createConversationSchema = z.object({
   kind: z.enum(['personal', 'project_studio']),
@@ -38,7 +53,9 @@ export const listMessagesQuerySchema = z.object({
 export const sendMessageSchema = z.object({
   body: z.string().trim().min(1).max(50_000),
   clientRequestId: uuid,
-  mode: z.enum(['chat', 'studio_plan']).optional(),
+  // studio_edit — пометка «сообщение про правку зоны сайта». Ссылку на зону и связь с
+  // job'ом клиент задать не может: их проставляет только серверный путь редактора.
+  mode: z.enum(['chat', 'studio_plan', 'studio_edit']).optional(),
   expectedConversationVersion: z.coerce.number().int().positive().optional(),
 }).strict();
 

@@ -7,7 +7,8 @@ export type StudioPanel = 'preview' | 'dashboard';
 
 // Тёмный тултип — как в Base44. Глобальный TooltipContent светлый (bg-popover) и трогать
 // его нельзя: он обслуживает ещё десяток мест. Поэтому красим точечно, здесь.
-const DARK_TOOLTIP = 'border-transparent bg-neutral-900 text-white';
+// Экспортируем: тулбар превью живёт в той же шапке студии и должен красить тултипы так же.
+export const DARK_TOOLTIP = 'border-transparent bg-neutral-900 text-white';
 
 export function StudioTopBar({
   panel,

@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import type { AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 
 export function StudioMobileChatSheet({
@@ -9,12 +10,16 @@ export function StudioMobileChatSheet({
   conversationId,
   projectId,
   projectName,
+  onOpenSelection,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversationId: string;
   projectId: string;
   projectName: string;
+  // На мобиле лист перекрывает превью, поэтому владелец состояния закрывает его сам —
+  // здесь только проброс клика по чипу зоны.
+  onOpenSelection?: (selection: AiSelectionRef) => void;
 }): React.ReactElement {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -25,7 +30,7 @@ export function StudioMobileChatSheet({
         className="w-[min(94vw,420px)] max-w-none p-0 lg:hidden"
       >
         <SheetTitle className="sr-only">AI-чат проекта {projectName}</SheetTitle>
-        <AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} />
+        <AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} onOpenSelection={onOpenSelection} />
         <Button
           type="button"
           variant="ghost"

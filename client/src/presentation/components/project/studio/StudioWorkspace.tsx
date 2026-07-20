@@ -1,7 +1,7 @@
 import type { Project } from '@/domain/project/Project';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { ProjectDashboard } from '@/presentation/components/project/workspace/ProjectDashboard';
-import { ProjectPreview } from '@/presentation/components/project/workspace/ProjectPreview';
+import { ProjectPreview, type PreviewSelectionRequest } from '@/presentation/components/project/workspace/ProjectPreview';
 import type { DashboardSection } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import type { StudioPanel } from './StudioTopBar';
 import type { StudioSaveState } from './SaveStatusIndicator';
@@ -20,6 +20,8 @@ export function StudioWorkspace({
   previewToolbarLeading,
   previewToolbarTrailing,
   onSaveStateChange,
+  requestedSelection,
+  onEditRunStarted,
 }: {
   panel: StudioPanel;
   project: Project;
@@ -34,6 +36,9 @@ export function StudioWorkspace({
   previewToolbarLeading?: React.ReactNode;
   previewToolbarTrailing?: React.ReactNode;
   onSaveStateChange?: (state: StudioSaveState) => void;
+  // Запрос на выделение зоны из чипа в чате — доезжает до превью как есть.
+  requestedSelection?: PreviewSelectionRequest | null;
+  onEditRunStarted?: () => void;
 }): React.ReactElement {
   return (
     <div className="min-h-0 flex-1 overflow-hidden bg-background">
@@ -48,6 +53,8 @@ export function StudioWorkspace({
           toolbarTrailing={previewToolbarTrailing}
           studioLayout
           onSaveStateChange={onSaveStateChange}
+          requestedSelection={requestedSelection}
+          onEditRunStarted={onEditRunStarted}
         />
       ) : (
         <ProjectDashboard

@@ -13,6 +13,7 @@ import type {
   AiConversationRunMode,
   PendingAiConversationRun,
 } from '../../domain/ai-conversation/AiRun.js';
+import type { AiSelectionRef } from '../../domain/ai-conversation/AiSelectionRef.js';
 import {
   AiConversationDispatcherMissingError,
   AiConversationNotFoundError,
@@ -26,7 +27,9 @@ import type {
   AiMessageRunResult,
   AiRunMutationValue,
   CompleteAiConversationRunInput,
+  CompleteAiRunForEditJobInput,
   FailAiConversationRunInput,
+  FailAiRunForEditJobInput,
 } from './AiConversationRepository.js';
 
 const DEFAULT_PAGE = 50;
@@ -50,9 +53,20 @@ export type CreateAiConversationInput = {
 export type SendAiMessageInput = {
   readonly body: string;
   readonly clientRequestId: string;
-  readonly mode?: Extract<AiConversationRunMode, 'chat' | 'studio_plan'>;
+  readonly mode?: AiConversationRunMode;
   readonly expectedConversationVersion?: number;
   readonly requestId?: string | null;
+  /**
+   * Зона сайта, к которой относится промпт. Заполняется только внутренним путём
+   * визуального редактора — в HTTP-схеме отправки сообщения поля нет, иначе клиент
+   * мог бы писать в metadata произвольный объект.
+   */
+  readonly selection?: AiSelectionRef | null;
+  /**
+   * Job визуального редактора, который исполняет промпт. Такой run не попадает в
+   * очередь воркера чата: ответ в сообщение положит завершение job'а.
+   */
+  readonly projectEditJobId?: string | null;
 };
 
 export class AiConversationService {
@@ -251,6 +265,8 @@ export class AiConversationService {
         projectId: conversation.projectId,
         requestedAt: this.now().toISOString(),
       },
+      userMessageMetadata: input.selection ? { selection: input.selection } : null,
+      projectEditJobId: input.projectEditJobId ?? null,
       expectedConversationVersion: input.expectedConversationVersion,
       requestId: input.requestId,
     });
@@ -334,6 +350,30 @@ export class AiConversationService {
       leaseTokenHash: hashLease(leaseToken),
     });
     if (!result) throw new AiConversationRunNotFoundError();
+    this.publish(result.events);
+    return result.value;
+  }
+
+  /**
+   * Ответ ИИ на правку элемента: run закрывает job визуального редактора. Воркеру
+   * site-editor'а lease-токен чата НЕ выдаётся — с ним он мог бы закрыть любой run
+   * своего диспетчера, включая личные диалоги. Поэтому вход внутренний, а run ищется
+   * по project_edit_job_id.
+   * null — у job'а нет связанного run'а: значит правку запросили не из чата, и писать
+   * в диалог нечего.
+   */
+  async completeRunFromEditJob(
+    input: CompleteAiRunForEditJobInput,
+  ): Promise<AiRunMutationValue | null> {
+    const result = await this.deps.repo.completeRunForEditJob(input);
+    if (!result) return null;
+    this.publish(result.events);
+    return result.value;
+  }
+
+  async failRunFromEditJob(input: FailAiRunForEditJobInput): Promise<AiRunMutationValue | null> {
+    const result = await this.deps.repo.failRunForEditJob(input);
+    if (!result) return null;
     this.publish(result.events);
     return result.value;
   }

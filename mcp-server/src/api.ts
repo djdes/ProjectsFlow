@@ -272,11 +272,23 @@ export type PendingSiteEditorJob = {
   createdAt: string;
 };
 
+export type SiteEditorJobStep = {
+  id?: string;
+  kind: 'thought' | 'query' | 'read' | 'write' | 'review';
+  detail?: string | null;
+  startedAt?: string | null;
+  durationMs?: number | null;
+};
+
 export type CompleteSiteEditorJobInput = {
   artifactVersion: string;
   status: 'succeeded' | 'failed';
   result?: Record<string, unknown> | null;
   error?: string | null;
+  // Ответ ИИ для чата проекта: правку просили словами в Студии, туда же приходит ответ.
+  // Сервер сам подставит фолбэк, если воркер их не прислал.
+  summary?: string | null;
+  steps?: SiteEditorJobStep[] | null;
 };
 
 // AI-анализ мониторинга через диспетчера (db/063).
