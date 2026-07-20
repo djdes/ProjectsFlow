@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
 
@@ -17,6 +17,46 @@ import { IconPicker } from '@/presentation/components/project/IconPicker';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { STATUS_SUBTITLE } from './statusLabels';
 import type { SelectModifiers } from './selection/selectionReducer';
+
+type PinnedHeader = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  clipLeft: number;
+  clipRight: number;
+};
+
+function samePinnedHeader(left: PinnedHeader | null, right: PinnedHeader | null): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return left.left === right.left && left.top === right.top && left.width === right.width &&
+    left.height === right.height && left.clipLeft === right.clipLeft && left.clipRight === right.clipRight;
+}
+
+// Bottom of the whole columns row (the tallest column), in viewport coords. Children of
+// the board scroller are the columns themselves, so the lowest of their bottoms is where
+// the board content really ends — the scroller's own rect would add its bottom padding.
+function columnsRowBottom(scroller: HTMLElement, fallback: number): number {
+  let bottom = fallback;
+  const children = scroller.children;
+  for (let i = 0; i < children.length; i += 1) {
+    const childBottom = children[i]!.getBoundingClientRect().bottom;
+    if (childBottom > bottom) bottom = childBottom;
+  }
+  return bottom;
+}
+
+function scrollParents(element: HTMLElement): Array<HTMLElement | Window> {
+  const parents: Array<HTMLElement | Window> = [window];
+  let current = element.parentElement;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    if (/(?:auto|scroll|overlay)/u.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) parents.push(current);
+    current = current.parentElement;
+  }
+  return [...new Set(parents)];
+}
 
 export type KanbanColumnColorClasses = {
   readonly pill: string;
@@ -42,6 +82,9 @@ type Props = {
   status: TaskStatus;
   // Пустая строка ⇒ хедер без названия (backlog-колонка). Счётчик и `+` остаются.
   label: string;
+  // Верхний офсет для sticky-шапки колонки (Notion: заголовки липнут при скролле).
+  // undefined — шапка не закрепляется.
+  stickyHeaderTop?: number;
   tasks: Task[];
   onCreate?: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
@@ -125,6 +168,7 @@ function doneBucket(d: Date): string {
 export function KanbanColumn({
   status,
   label,
+  stickyHeaderTop,
   tasks,
   onCreate,
   onEdit,
@@ -178,6 +222,10 @@ export function KanbanColumn({
   // Сигнал «верни фокус в поле» — растёт при «+»: карточка создания переезжает наверх (сдвиг
   // в DOM теряет фокус), поле надо сфокусировать заново после коммита.
   const [refocusSignal, setRefocusSignal] = useState(0);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const headerSlotRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [pinnedHeader, setPinnedHeader] = useState<PinnedHeader | null>(null);
 
   const closeInline = (): void => {
     setInlineCreating(false);
@@ -252,6 +300,64 @@ export function KanbanColumn({
   const listTasks = selectionMode ? rest : rest.slice(0, preview.shownCount);
   const hiddenCount = rest.length - listTasks.length;
 
+  useLayoutEffect(() => {
+    if (stickyHeaderTop == null) {
+      setPinnedHeader(null);
+      return;
+    }
+    const column = columnRef.current;
+    const slot = headerSlotRef.current;
+    const header = headerRef.current;
+    const scroller = slot?.closest<HTMLElement>('[data-pf-kanban-scroll]') ?? null;
+    if (!column || !slot || !header || !scroller) return;
+    let frame = 0;
+    const measure = (): void => {
+      const columnRect = column.getBoundingClientRect();
+      const slotRect = slot.getBoundingClientRect();
+      const headerRect = header.getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      const height = Math.round(headerRect.height);
+      const width = Math.round(slotRect.width);
+      const left = Math.round(slotRect.left);
+      const top = Math.round(stickyHeaderTop);
+      const clipLeft = Math.max(0, Math.round(scrollerRect.left - slotRect.left));
+      const clipRight = Math.max(0, Math.round(slotRect.right - scrollerRect.right));
+      const hasHorizontalIntersection = width - clipLeft - clipRight > 0;
+      // Открепляемся по низу ВСЕГО ряда колонок, а не своей колонки: иначе шапка короткой
+      // колонки отваливается сразу, как кончились её карточки, хотя доска ещё скроллится.
+      const rowBottom = columnsRowBottom(scroller, columnRect.bottom);
+      const shouldPin = slotRect.top <= stickyHeaderTop && rowBottom > stickyHeaderTop + height && hasHorizontalIntersection;
+      const next = shouldPin ? { left, top, width, height, clipLeft, clipRight } : null;
+      setPinnedHeader((current) => samePinnedHeader(current, next) ? current : next);
+    };
+    const schedule = (): void => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+    const parents = scrollParents(slot);
+    parents.forEach((parent) => parent.addEventListener('scroll', schedule, { passive: true }));
+    window.addEventListener('resize', schedule, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule);
+    observer?.observe(column);
+    observer?.observe(header);
+    observer?.observe(scroller);
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      parents.forEach((parent) => parent.removeEventListener('scroll', schedule));
+      window.removeEventListener('resize', schedule);
+      observer?.disconnect();
+    };
+  }, [stickyHeaderTop]);
+
+  const pinnedHeaderStyle: CSSProperties | undefined = pinnedHeader ? {
+    position: 'fixed',
+    left: pinnedHeader.left,
+    top: pinnedHeader.top,
+    width: pinnedHeader.width,
+    clipPath: `inset(0 ${pinnedHeader.clipRight}px 0 ${pinnedHeader.clipLeft}px)`,
+  } : undefined;
+
   // Единый рендер карточки (используется и в сессии, и в основном списке).
   // dropLine — синяя полоска-индикатор дропа в зазоре над/под карточкой (absolute).
   const renderCard = (t: Task, dropLine: 'before' | 'after' | null = null): React.ReactElement => (
@@ -292,27 +398,28 @@ export function KanbanColumn({
 
   return (
     <div
+      ref={columnRef}
       className={cn(
         // group/column — именованный, чтобы не конфликтовать с голым `group` карточек:
         // на hover колонки проявляем «тихие» иконки шапки (Notion-style).
-        // Колонка растягивается на высоту всего ряда (items-stretch у полосы колонок), чтобы
-        // нативный sticky у шапки работал до самого низа доски — даже там, где карточки
-        // кончились раньше. Свой скролл колонке не нужен: скроллится панель доски.
+        // Высота — по контенту (Notion single-scroll): колонка растёт вниз, свой скролл не нужен —
+        // скроллится вся страница целиком.
         'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >
-      {/* Native sticky header (Notion parity): the board pane is the scroll container, so the
-          browser pins the header itself — no JS geometry, no lag behind the scroll.
-          Two layers: the outer one paints an OPAQUE page-coloured base (translucent + blur used
-          to let cards ghost through), the inner one repeats the column's own tint on top, so the
-          pinned header ends up exactly the column colour but fully opaque. */}
-      <div className="sticky top-0 z-30 shrink-0 rounded-t-xl bg-background">
+      <div ref={headerSlotRef} className="shrink-0" style={pinnedHeader ? { height: pinnedHeader.height } : undefined}>
         <div
+          ref={headerRef}
+          style={pinnedHeaderStyle}
           className={cn(
-            'flex items-center justify-between gap-2 rounded-t-xl px-3 pb-1 pt-2.5',
-            // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
-            selectionMode ? 'bg-primary/10' : (colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30'),
+          'flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-2.5',
+          // Notion: шапка колонки липнет при скролле страницы (заголовки колонок
+          // остаются видны). Фрост-фон (bg-muted/85 + blur) прячет карточки, уезжающие
+          // под неё, и сохраняет тон колонки.
+          stickyHeaderTop != null && 'z-30 rounded-t-xl bg-muted/85 backdrop-blur-md dark:bg-muted/90',
+          // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
+          selectionMode && 'rounded-t-xl bg-primary/10',
           )}
         >
         {selectionMode ? (

@@ -160,7 +160,7 @@ export function InboxPage(): React.ReactElement {
               projectId={project.id}
               showCommits={false}
               hideDone={hideDone}
-              boardTopOffset={stickyTop}
+              stickyHeaderTop={stickyTop}
               bleedNegClass={KANBAN_BLEED_NEG}
               bleedPadClass={KANBAN_BLEED_PAD}
               externalDnd={dndRegistry}

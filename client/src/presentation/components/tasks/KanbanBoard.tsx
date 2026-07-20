@@ -119,10 +119,9 @@ type Props = {
   // Снимок карточек, реально показанных на нижней inbox-доске. InboxPage использует его,
   // чтобы отрисовать те же Task в верхней личной колонке без второго запроса.
   onBoardTasksChange?: (tasks: readonly Task[]) => void;
-  // Расстояние от верха окна до линии, у которой закрепляются шапки колонок (низ крошек
-  // и плашек страницы). Задаёт высоту панели доски: `100dvh - boardTopOffset`. undefined —
-  // панель не ограничена по высоте (шапки закрепляются только внутри своей колонки).
-  boardTopOffset?: number;
+  // Верхний офсет для sticky-шапок колонок (Notion: при скролле липнут заголовки
+  // колонок, а не строка вкладок). undefined — не закрепляем (инбокс).
+  stickyHeaderTop?: number;
   // Запрос из общего правого toolbar отображений. Нужен проектной доске, чтобы
   // «Создать» и выбор колонки работали так же, как в таблице/списке/календаре.
   createRequest?: ViewCreateRequest | null;
@@ -276,7 +275,7 @@ export function KanbanBoard({
   bleedPadClass = '',
   externalDnd = null,
   onBoardTasksChange,
-  boardTopOffset,
+  stickyHeaderTop,
   createRequest,
   viewFilters,
   viewSort = null,
@@ -1026,10 +1025,8 @@ export function KanbanBoard({
     drawerIdx >= 0 && drawerIdx < drawerSiblings.length - 1 ? drawerSiblings[drawerIdx + 1] : null;
 
   return (
-    // Скроллер доски — сама панель колонок (см. ниже): она прокручивается по обеим осям, как
-    // .notion-scroller у Notion, поэтому шапки колонок держит нативный CSS `position: sticky`.
-    // Страница (родительский <main overflow-y-auto>) при этом остаётся скроллером для всего,
-    // что выше доски (крошки, фильтры, блок ответственных).
+    // Single-scroll (Notion): доска НЕ ограничена высотой экрана и НЕ скроллится внутри себя —
+    // растёт по контенту, а скроллится вся страница (родительский <main overflow-y-auto>).
     // Провайдер «идёт ресайз» = тяга сайдбара ИЛИ реколонка доски по любой причине.
     <SidebarResizingContext.Provider value={parentResizing || boardResizing}>
     {/* flex-[1_0_auto]: доска заполняет свободную высоту тела страницы при коротком контенте
@@ -1143,35 +1140,25 @@ export function KanbanBoard({
       {(() => {
         const boardBody = (
           <>
-        {/* Панель доски — единственный скроллер доски СРАЗУ ПО ДВУМ ОСЯМ (как .notion-scroller
-            у Notion). Это обязательное условие нативного `position: sticky` у шапок колонок:
-            липкий элемент закрепляется относительно БЛИЖАЙШЕГО скролл-контейнера, и пока
-            горизонтальная прокрутка жила в отдельном контейнере поверх страничной вертикальной,
-            нативный sticky по вертикали не срабатывал вовсе (проверено в браузере).
-            max-h до нижней кромки окна: высокая доска прокручивается внутри панели, шапки
-            закреплены её верхом; короткая доска панель не заполняет и ведёт себя как раньше. */}
+        {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
+            (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
+            работает в обоих режимах: все колонки в DOM, просто проскроллены.
+            items-start — каждая колонка своей высоты по контенту (не тянется до самой длинной);
+            высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
         <div
           ref={boardScrollRef}
           data-pf-kanban-scroll
-          style={boardTopOffset != null ? { maxHeight: `calc(100dvh - ${boardTopOffset}px)` } : undefined}
           className={cn(
-            // full-bleed: ряд колонок во всю ширину окна; первая колонка отступает на
-            // bleedPadClass (уезжает при скролле), последняя доходит до края.
-            // На мобиле колонки «прилипают» при свайпе (snap) — scroll-snap-type задаётся
-            // именно на скролл-контейнере, поэтому остаётся здесь.
-            'snap-x snap-mandatory overflow-auto pb-20 sm:snap-none sm:pb-28',
-            // Родные скроллбары прячем — видимый горизонтальный и закреплённый снизу даёт
+            // items-start + full-bleed: ряд колонок во всю ширину окна; первая колонка
+            // отступает на bleedPadClass (уезжает при скролле), последняя доходит до края.
+            'flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28',
+            // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
             // SyncedStickyScrollbar (иначе внизу доски появляется второй «раздвоенный» бар).
             '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             bleedNegClass,
             bleedPadClass,
           )}
         >
-        {/* Полоса колонок: w-max + items-stretch — все колонки высотой с самую длинную, поэтому
-            шапка короткой колонки остаётся закреплённой до самого низа доски. Полоса — блочный
-            потомок скроллера (не flex-элемент), иначе её высота стала бы определённой по высоте
-            панели и растяжение до самой длинной колонки сломалось бы. */}
-        <div className="flex w-max items-stretch gap-3">
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
             const color = resolveColumnColor(perColumn, defaults?.[status], status);
@@ -1181,6 +1168,7 @@ export function KanbanBoard({
                 key={status}
                 status={status}
                 label={label}
+                stickyHeaderTop={stickyHeaderTop}
                 tasks={filterTasks(hideDone && status === 'done' ? [] : grouped[status])}
                 onCreate={canEdit ? (s) => setDialog({ mode: 'create', status: s }) : undefined}
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}
@@ -1259,14 +1247,10 @@ export function KanbanBoard({
               />
             );
           })}
-          {/* self-start: меню скрытых колонок не растягивается на высоту ряда. */}
-          <div className="self-start">
-            <KanbanHiddenColumnsMenu
-              hidden={hiddenColumns}
-              onShow={(status) => setHidden(status, false)}
-            />
-          </div>
-        </div>
+          <KanbanHiddenColumnsMenu
+            hidden={hiddenColumns}
+            onShow={(status) => setHidden(status, false)}
+          />
         </div>
         {/* Спейсер: при коротком контенте забирает свободную высоту и проталкивает
             закреплённый скролл к самому низу; при длинном — схлопывается в 0. */}
