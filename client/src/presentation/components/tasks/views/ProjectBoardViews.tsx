@@ -1197,7 +1197,7 @@ export function ProjectBoardViews({
           onOpenAutomation={onOpenAutomation}
           bleedNegClass={bleedNegClass}
           bleedPadClass={bleedPadClass}
-          stickyHeaderTop={stickyTop}
+          boardTopOffset={stickyTop}
           createRequest={createReq}
           viewFilters={state.filters}
           viewSort={state.sort}
