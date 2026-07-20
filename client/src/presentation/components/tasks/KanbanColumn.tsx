@@ -34,6 +34,19 @@ function samePinnedHeader(left: PinnedHeader | null, right: PinnedHeader | null)
     left.height === right.height && left.clipLeft === right.clipLeft && left.clipRight === right.clipRight;
 }
 
+// Bottom of the whole columns row (the tallest column), in viewport coords. Children of
+// the board scroller are the columns themselves, so the lowest of their bottoms is where
+// the board content really ends — the scroller's own rect would add its bottom padding.
+function columnsRowBottom(scroller: HTMLElement, fallback: number): number {
+  let bottom = fallback;
+  const children = scroller.children;
+  for (let i = 0; i < children.length; i += 1) {
+    const childBottom = children[i]!.getBoundingClientRect().bottom;
+    if (childBottom > bottom) bottom = childBottom;
+  }
+  return bottom;
+}
+
 function scrollParents(element: HTMLElement): Array<HTMLElement | Window> {
   const parents: Array<HTMLElement | Window> = [window];
   let current = element.parentElement;
@@ -310,7 +323,10 @@ export function KanbanColumn({
       const clipLeft = Math.max(0, Math.round(scrollerRect.left - slotRect.left));
       const clipRight = Math.max(0, Math.round(slotRect.right - scrollerRect.right));
       const hasHorizontalIntersection = width - clipLeft - clipRight > 0;
-      const shouldPin = slotRect.top <= stickyHeaderTop && columnRect.bottom > stickyHeaderTop + height && hasHorizontalIntersection;
+      // Открепляемся по низу ВСЕГО ряда колонок, а не своей колонки: иначе шапка короткой
+      // колонки отваливается сразу, как кончились её карточки, хотя доска ещё скроллится.
+      const rowBottom = columnsRowBottom(scroller, columnRect.bottom);
+      const shouldPin = slotRect.top <= stickyHeaderTop && rowBottom > stickyHeaderTop + height && hasHorizontalIntersection;
       const next = shouldPin ? { left, top, width, height, clipLeft, clipRight } : null;
       setPinnedHeader((current) => samePinnedHeader(current, next) ? current : next);
     };

@@ -76,6 +76,7 @@ import { PROJECT_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStrea
 import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { STATUS_LABEL } from '../statusLabels';
 import { KanbanBoard } from '../KanbanBoard';
+import { useBoardStickyTop } from '../useBoardStickyTop';
 import { TableView } from './TableView';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
@@ -262,24 +263,9 @@ export function ProjectBoardViews({
   const [searchOpen, setSearchOpen] = useState(false);
   const [createReq, setCreateReq] = useState<ViewCreateRequest | null>(null);
 
-  // Sticky-отступ строки вкладок: под крошками (#pf-project-crumbs) и плашками
-  // (#pf-sticky-banners) страницы — их высоты динамические (баннер закрываемый).
-  const [stickyTop, setStickyTop] = useState(0);
-  useEffect(() => {
-    const crumbs = document.getElementById('pf-project-crumbs');
-    const mobileHeader = document.getElementById('pf-project-mobile-header');
-    const banners = document.getElementById('pf-sticky-banners');
-    const measure = (): void => {
-      const headerHeight = Math.max(crumbs?.offsetHeight ?? 0, mobileHeader?.offsetHeight ?? 0);
-      setStickyTop(headerHeight + (banners?.offsetHeight ?? 0));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (crumbs) ro.observe(crumbs);
-    if (mobileHeader) ro.observe(mobileHeader);
-    if (banners) ro.observe(banners);
-    return () => ro.disconnect();
-  }, []);
+  // Линия закрепления шапок колонок: под крошками (#pf-project-crumbs) и плашками
+  // (#pf-sticky-banners) страницы, с учётом верхней кромки <main> (мобильная шапка).
+  const stickyTop = useBoardStickyTop();
 
   // Шаблоны задач (db/108) — пункты в шевроне «Создать ▾» (Notion Templates).
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);

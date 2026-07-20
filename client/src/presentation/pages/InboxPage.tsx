@@ -12,6 +12,7 @@ import type { Task } from '@/domain/task/Task';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
 import { InboxUnifiedDnd } from '@/presentation/components/tasks/InboxUnifiedDnd';
+import { useBoardStickyTop } from '@/presentation/components/tasks/useBoardStickyTop';
 import type { UnifiedDndRegistry } from '@/presentation/components/tasks/unifiedDndTypes';
 
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
@@ -55,6 +56,9 @@ export function InboxPage(): React.ReactElement {
   // InboxUnifiedDnd диспетчеризует. Ref (не state) — стабильная ссылка переживает ремаунты
   // KanbanBoard по refetchKey и не дёргает лишние рендеры.
   const dndRegistry = useRef<UnifiedDndRegistry>({ board: null, block: null });
+  // Шапки колонок доски закрепляются у верхней кромки <main> — своих sticky-строк
+  // (крошки/плашки) у «Входящих» нет, поэтому офсет = только верх скролл-контейнера.
+  const stickyTop = useBoardStickyTop();
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +160,7 @@ export function InboxPage(): React.ReactElement {
               projectId={project.id}
               showCommits={false}
               hideDone={hideDone}
+              stickyHeaderTop={stickyTop}
               bleedNegClass={KANBAN_BLEED_NEG}
               bleedPadClass={KANBAN_BLEED_PAD}
               externalDnd={dndRegistry}
