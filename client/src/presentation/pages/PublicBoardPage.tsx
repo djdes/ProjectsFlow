@@ -491,7 +491,7 @@ export function PublicBoardPage(): React.ReactElement {
 
   return (
     <div
-      className="min-h-dvh bg-background pb-16"
+      className="min-h-dvh bg-background pb-[calc(4rem+env(safe-area-inset-bottom))]"
       style={{ '--pf-public-accent': board?.appearance.accentColor ?? '#2383e2' } as React.CSSProperties}
     >
       {/* Верхняя полоса — реплика публичной страницы Notion. */}
