@@ -1,6 +1,8 @@
+import { memo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -69,7 +71,15 @@ const DND_TRANSITION = {
   easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
 };
 
-export function KanbanCard({
+// Тач-устройство? Считаем ОДИН раз при загрузке модуля (тип указателя не меняется в рантайме).
+// На тач-девайсах (телефон/PWA) полностью отключаем framer-motion layout-обёртку карточек:
+// пер-карточный layout-пересчёт 200+ элементов — главный источник лагов при скролле доски.
+const IS_COARSE_POINTER =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(pointer: coarse)').matches;
+
+function KanbanCardImpl({
   task,
   onEdit,
   onDelete,
@@ -110,8 +120,9 @@ export function KanbanCard({
   // после Sync commits, ручной link и пр.). dnd-kit'овский transform — отдельный inline-style
   // на inner div, не конфликтует с motion'овским layout-уровнем.
   // Для preview-варианта (DragOverlay) motion-обёртка отключена — иначе два элемента с одним
-  // layoutId.
-  const Wrapper = preview ? PassthroughWrapper : MotionWrapper;
+  // layoutId. На тач-устройствах (IS_COARSE_POINTER) тоже отключаем — layout-анимация карточек
+  // на мобиле только жрёт кадры при скролле, визуально она там почти не нужна.
+  const Wrapper = preview || IS_COARSE_POINTER ? PassthroughWrapper : MotionWrapper;
 
   // Гасим mousedown/touchstart на actions, чтобы нажатие по Edit/Delete/чекбоксу не
   // стартовало drag через активаторы dnd-kit (MouseSensor/TouchSensor) на родителе.
@@ -145,6 +156,111 @@ export function KanbanCard({
   // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
   const promoteNext = onQuickPromote ? quickPromoteNext(task.status) : null;
+
+  // Есть ли вообще кнопки действий на карточке.
+  const showActions = !readOnly && !selecting && !preview;
+
+  // Кнопки действий рендерятся в ДВУХ раскладках: десктоп — плавающий оверлей в правом
+  // верхнем углу (по hover), мобила — статичный ряд, прижатый под текстом (всегда виден).
+  // big=true → тач-размер (size-9), иначе компактный десктопный (size-6).
+  const renderActions = (big: boolean): React.ReactNode =>
+    showActions ? (
+      <>
+        {showCheckbox && (
+          <InboxCheckbox
+            task={task}
+            lastDoneTaskId={lastDoneTaskId}
+            lastTodoTaskId={lastTodoTaskId}
+            onChanged={onTaskChanged}
+            variant="toolbar"
+          />
+        )}
+        {onQuickPromote && promoteNext && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'group/promote shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground',
+              big ? 'size-9' : 'size-6',
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickPromote(task);
+            }}
+            aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+            title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+          >
+            <ArrowRight
+              className={cn(
+                'transition-transform duration-150 group-hover/promote:translate-x-0.5',
+                big ? 'size-4' : 'size-3',
+              )}
+            />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
+            big ? 'size-9' : 'size-6',
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(task);
+          }}
+          aria-label="Удалить"
+        >
+          <Trash2 className={big ? 'size-4' : 'size-3'} />
+        </Button>
+      </>
+    ) : null;
+
+  // Мета-бейджи (ответственный / чеклист / комменты / дедлайн / статус). Десктоп — нижний
+  // левый оверлей (по hover), мобила — тот же контент в статичном нижнем ряду.
+  const metaInner = hasMeta ? (
+    <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+      <AssigneeBadge assignee={task.assignee} />
+      {checklist && (
+        <span
+          className={cn(
+            'flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums',
+            checklist.done === checklist.total && 'text-emerald-600 dark:text-emerald-400',
+          )}
+          title="Чеклист в описании"
+        >
+          <ListChecks className="size-3" />
+          {checklist.done}/{checklist.total}
+        </span>
+      )}
+      {(task.commentCount ?? 0) > 0 && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+          <MessageSquare className="size-3" />
+          {task.commentCount}
+        </span>
+      )}
+      {(task.attachmentCount ?? 0) > 0 && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+          <ImageIcon className="size-3" />
+          {task.attachmentCount}
+        </span>
+      )}
+      <RalphModeBadge mode={task.ralphMode} />
+      {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
+      {task.status === 'in_progress' && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
+          <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
+          {STATUS_LABEL.in_progress}
+        </span>
+      )}
+      {task.status === 'awaiting_clarification' && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-amber-600 dark:text-amber-400">
+          <ClaudeIcon className="size-3" />
+          {STATUS_LABEL.awaiting_clarification}
+        </span>
+      )}
+    </span>
+  ) : null;
 
   return (
     <Wrapper layoutId={task.id}>
@@ -190,7 +306,9 @@ export function KanbanCard({
           // сам отличает скролл от переноса.
           // Notion-style компактная карточка: минимальный отступ (px-2 py-1.5), без
           // лишнего «воздуха». При hover — только маленькая корзина (оверлей ниже).
-          'group relative flex select-none items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 outline-none dark:border-white/[0.08]',
+          // Мобила — колонка (текст сверху, ряд мета/действий снизу); десктоп — как было
+          // (строка: чекбокс + текст, действия/мета плавающими оверлеями).
+          'group relative flex select-none flex-col gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 outline-none sm:flex-row sm:items-start dark:border-white/[0.08]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[border-color,opacity,background-color] duration-150 ease-out',
@@ -252,56 +370,16 @@ export function KanbanCard({
           />
         )}
 
-        {/* Действия — в ПРАВОМ ВЕРХНЕМ углу карточки (на hover/тач). Вынесены из нижней
-            мета-строки, чтобы кнопки и мета не конкурировали за место (дедлайн больше не
-            сжимается). Сплошной bg-card маскирует текст под кнопками. */}
-        {!readOnly && !selecting && !preview && (
+        {/* Действия — ДЕСКТОП: плавающий оверлей в правом верхнем углу (по hover/focus).
+            На мобиле скрыт (max-sm:hidden) — там действия в статичном нижнем ряду (ниже),
+            чтобы не перекрывать текст задачи. Сплошной bg-card маскирует текст под кнопками.
+            top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки. */}
+        {showActions && (
           <div
-            // top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки
-            // (~16px от края) НЕЗАВИСИМО от её высоты (24px desktop / 32px тач) — на
-            // однострочной карточке кнопки строго по вертикали, на многострочной — по
-            // первой строке (как в Notion).
-            className="pointer-events-none absolute right-2 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:top-1.5 max-sm:translate-y-0 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
+            className="pointer-events-none absolute right-2 top-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
             {...stopDragProps}
           >
-            {showCheckbox && (
-              <InboxCheckbox
-                task={task}
-                lastDoneTaskId={lastDoneTaskId}
-                lastTodoTaskId={lastTodoTaskId}
-                onChanged={onTaskChanged}
-                variant="toolbar"
-              />
-            )}
-            {onQuickPromote && promoteNext && (
-              <Button
-                variant="ghost"
-                size="icon"
-                // На тач-экранах увеличиваем hit-area до 36px (U10): визуально компактно
-                // на десктопе (size-6), но пальцем не промахнёшься между «передать»/«удалить».
-                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-9"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickPromote(task);
-                }}
-                aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-                title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-              >
-                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5 max-sm:size-4" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-9"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(task);
-              }}
-              aria-label="Удалить"
-            >
-              <Trash2 className="size-3 max-sm:size-4" />
-            </Button>
+            {renderActions(false)}
           </div>
         )}
         {selecting ? (
@@ -359,61 +437,42 @@ export function KanbanCard({
             затемняется. Симметрична плашке действий сверху-справа. Не занимает высоту (absolute),
             прячется в режиме выделения и drag-preview. pointer-events-none — чтобы невидимая
             (opacity-0) плашка не перехватывала mousedown и не мешала начать drag. */}
+        {/* Мета — ДЕСКТОП: нижний левый оверлей (по hover). На мобиле скрыт (hidden),
+            вместо него — статичный ряд ниже. */}
         {!selecting && !preview && hasMeta && (
           <div
             className={cn(
               // Нейтральный bg-card + ring — один в один как плашка действий сверху-справа
               // (она нормально смотрится на любой карточке, включая зелёную done).
-              'pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.08]',
+              'pointer-events-none absolute bottom-1 left-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]',
             )}
           >
-            <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
-              <AssigneeBadge assignee={task.assignee} />
-              {checklist && (
-                <span
-                  className={cn(
-                    'flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums',
-                    checklist.done === checklist.total && 'text-emerald-600 dark:text-emerald-400',
-                  )}
-                  title="Чеклист в описании"
-                >
-                  <ListChecks className="size-3" />
-                  {checklist.done}/{checklist.total}
-                </span>
-              )}
-              {(task.commentCount ?? 0) > 0 && (
-                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-                  <MessageSquare className="size-3" />
-                  {task.commentCount}
-                </span>
-              )}
-              {(task.attachmentCount ?? 0) > 0 && (
-                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-                  <ImageIcon className="size-3" />
-                  {task.attachmentCount}
-                </span>
-              )}
-              <RalphModeBadge mode={task.ralphMode} />
-              {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
-              {task.status === 'in_progress' && (
-                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
-                  <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
-                  {STATUS_LABEL.in_progress}
-                </span>
-              )}
-              {task.status === 'awaiting_clarification' && (
-                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-amber-600 dark:text-amber-400">
-                  <ClaudeIcon className="size-3" />
-                  {STATUS_LABEL.awaiting_clarification}
-                </span>
-              )}
-            </span>
+            {metaInner}
+          </div>
+        )}
+
+        {/* Мета/действия — МОБИЛА: статичный ряд, прижатый ПОД текстом задачи. Всегда виден
+            (не по hover), крупные кнопки, текст выше виден целиком. На десктопе скрыт (sm:hidden).
+            border-t мягко отделяет ряд от текста. */}
+        {!selecting && !preview && (hasMeta || showActions) && (
+          <div
+            className="mt-0.5 flex items-center justify-between gap-2 border-t border-black/[0.05] pt-1 text-[11px] text-muted-foreground sm:hidden dark:border-white/[0.06]"
+            {...stopDragProps}
+          >
+            <span className="flex min-w-0 flex-1 items-center overflow-hidden">{metaInner}</span>
+            {showActions && <span className="flex shrink-0 items-center gap-1">{renderActions(true)}</span>}
           </div>
         )}
       </div>
     </Wrapper>
   );
 }
+
+// React.memo: доска часто ре-рендерится (фильтры, refetch, выделение), но конкретная карточка
+// меняется редко. Без memo перерисовывались ВСЕ карточки колонки разом (+ пересчёт layout у
+// каждого motion.div) — ключевой источник лагов. Коллбеки из KanbanBoard стабильны (useCallback),
+// task-ссылки стабильны между несвязанными рендерами → shallow-compare реально отсекает работу.
+export const KanbanCard = memo(KanbanCardImpl);
 
 function MotionWrapper({
   layoutId,
@@ -425,9 +484,12 @@ function MotionWrapper({
   // Пока тянут ручку левой панели — layout-анимацию выключаем: иначе карточки «плывут»
   // пружиной за колонками на каждом шаге ресайза и «висят в воздухе» до отпускания.
   const resizing = useSidebarResizing();
+  // Тумблер анимаций выключен (или системный reduced-motion) → layout-анимацию тоже гасим:
+  // CSS pf-no-motion не глушит framer-motion layout (он на JS-transform), поэтому гейтим здесь.
+  const { animations } = useMotion();
   return (
     <motion.div
-      layout={resizing ? false : 'position'}
+      layout={resizing || !animations ? false : 'position'}
       layoutId={layoutId}
       initial={false}
       transition={{ type: 'spring', stiffness: 500, damping: 38, mass: 0.6 }}

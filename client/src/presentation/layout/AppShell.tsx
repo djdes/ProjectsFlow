@@ -42,6 +42,7 @@ import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleH
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { SidebarResizingContext } from './sidebarResizingContext';
 import { Sidebar } from './Sidebar';
+import { useEdgeSwipe } from '@/presentation/hooks/useEdgeSwipe';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 
@@ -74,6 +75,14 @@ export function AppShell(): React.ReactElement {
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
+  // iPhone-style жест: свайп от левого края открывает мобильную панель, свайп влево — закрывает.
+  // Только на мобиле (!isDesktop); на десктопе панель управляется иначе (Ctrl+\ / клик).
+  useEdgeSwipe({
+    enabled: !isDesktop,
+    open: drawerOpen,
+    onOpen: () => setDrawerOpen(true),
+    onClose: () => setDrawerOpen(false),
+  });
   // Свёрнутость левой панели (desktop), переживает перезагрузку.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
