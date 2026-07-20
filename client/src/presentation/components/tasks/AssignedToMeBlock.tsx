@@ -900,18 +900,24 @@ export function AssignedToMeBlock({
                 </span>
               </div>
               <div className="flex flex-col gap-1.5 p-1.5">
-                {group.items.map((item) => (
-                  <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
-                    <AcceptedCard
-                      item={item}
-                      onOpen={() => setDrawerTask(item)}
-                      onChanged={handleToggled}
-                      onDelete={() => handleDelete(item)}
-                      showCreatedAt={grouping === 'created'}
-                      hideProjectLabel={grouping === 'project'}
-                    />
-                  </DraggableTask>
-                ))}
+                {/* Каппинг «первые 4 + Показать ещё» (на тач включён по умолчанию) — иначе
+                    колонка рендерит все свои карточки и вешает скролл на мобиле. */}
+                <ColumnPreviewList
+                  key={[grouping, group.key].join('|')}
+                  items={group.items}
+                  renderItem={(item) => (
+                    <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
+                      <AcceptedCard
+                        item={item}
+                        onOpen={() => setDrawerTask(item)}
+                        onChanged={handleToggled}
+                        onDelete={() => handleDelete(item)}
+                        showCreatedAt={grouping === 'created'}
+                        hideProjectLabel={grouping === 'project'}
+                      />
+                    </DraggableTask>
+                  )}
+                />
               </div>
             </GroupDropColumn>
             );
