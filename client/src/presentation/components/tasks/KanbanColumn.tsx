@@ -404,7 +404,10 @@ export function KanbanColumn({
         // на hover колонки проявляем «тихие» иконки шапки (Notion-style).
         // Высота — по контенту (Notion single-scroll): колонка растёт вниз, свой скролл не нужен —
         // скроллится вся страница целиком.
-        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
+        // snap-center (моб): при свайпе колонка магнитно встаёт по ЦЕНТРУ экрана (92vw
+        // оставляет узкие «пипки» соседей по краям — видно, что доска листается). На sm+
+        // снап выключен на контейнере (sm:snap-none) — десктоп скроллит свободно.
+        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center flex-col rounded-xl sm:w-72 sm:max-w-none',
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >

@@ -261,7 +261,7 @@ export function KanbanCard({
             // (~16px от края) НЕЗАВИСИМО от её высоты (24px desktop / 32px тач) — на
             // однострочной карточке кнопки строго по вертикали, на многострочной — по
             // первой строке (как в Notion).
-            className="pointer-events-none absolute right-2 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
+            className="pointer-events-none absolute right-2 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:top-1.5 max-sm:translate-y-0 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
             {...stopDragProps}
           >
             {showCheckbox && (
@@ -279,7 +279,7 @@ export function KanbanCard({
                 size="icon"
                 // На тач-экранах увеличиваем hit-area до 36px (U10): визуально компактно
                 // на десктопе (size-6), но пальцем не промахнёшься между «передать»/«удалить».
-                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-8"
+                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-9"
                 onClick={(e) => {
                   e.stopPropagation();
                   onQuickPromote(task);
@@ -287,20 +287,20 @@ export function KanbanCard({
                 aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
                 title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
               >
-                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5 max-sm:size-3.5" />
+                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5 max-sm:size-4" />
               </Button>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-8"
+              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-9"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(task);
               }}
               aria-label="Удалить"
             >
-              <Trash2 className="size-3 max-sm:size-3.5" />
+              <Trash2 className="size-3 max-sm:size-4" />
             </Button>
           </div>
         )}
@@ -322,7 +322,10 @@ export function KanbanCard({
               своим фоном (снизу-слева и сверху-справа), маскируя только свою область. */}
           <div>
             {task.description?.trim() ? (
-              <div className="line-clamp-4 text-sm leading-snug">
+              // На мобиле показываем ВЕСЬ текст задачи (line-clamp-none): на телефоне карточка
+              // и так почти во всю ширину, обрезать нечего — юзер хочет читать задачу целиком.
+              // На десктопе оставляем компактный клэмп в 4 строки.
+              <div className="line-clamp-4 max-sm:line-clamp-none text-sm leading-snug">
                 {/* Иконка задачи (эмодзи/lucide/картинка) — перед заголовком, как в Notion. */}
                 {task.icon && (
                   <span className="mr-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">
@@ -330,8 +333,10 @@ export function KanbanCard({
                   </span>
                 )}
                 {/* Заголовок — plain-текст (не markdown), чтобы `---`/`- `/`* `/`# ` в начале
-                    не превращались в hr/список/heading и не пропадали под COMPACT-пресетом. */}
-                <TaskTitleText title={title} />
+                    не превращались в hr/список/heading и не пропадали под COMPACT-пресетом.
+                    На доске заголовок держим полужирным (font-medium) — так карточка читается
+                    «названием сверху», как в Notion; в списке/панели вес обычный. */}
+                <TaskTitleText title={title} className="font-medium text-foreground" />
                 {body.trim() && (
                   <Markdown
                     className={cn(

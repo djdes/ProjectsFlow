@@ -189,7 +189,9 @@ function FilterDropdown({
 
 function cnFilterTrigger(active: boolean): string {
   return [
-    'relative inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors',
+    // На тач-экранах поднимаем до 36px (max-sm:size-9) — пальцем в 28px кнопку не попасть;
+    // на десктопе остаётся компактный size-7.
+    'relative inline-flex size-7 max-sm:size-9 shrink-0 items-center justify-center rounded-md transition-colors',
     active
       ? 'bg-primary/10 text-primary'
       : 'text-muted-foreground hover:bg-accent hover:text-foreground',
