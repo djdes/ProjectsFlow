@@ -25,7 +25,7 @@ import type {
   SelectOpts,
   WhereClause,
 } from '../../application/app-backend/AppDatabaseStore.js';
-import { AppTableNotAllowedError } from '../../domain/app-backend/errors.js';
+import { AppTableNotAllowedError, AppUniqueViolationError } from '../../domain/app-backend/errors.js';
 
 // projectId используется для построения пути к файлу → жёсткая проверка формата (защита от traversal).
 const PROJECT_ID_RE = /^[a-z0-9-]{6,64}$/i;
@@ -55,6 +55,17 @@ function normalizeValue(v: unknown): unknown {
 function clampInt(v: number | undefined, min: number, max: number, dflt: number): number {
   if (v === undefined || !Number.isFinite(v)) return dflt;
   return Math.max(min, Math.min(max, Math.floor(v)));
+}
+
+// Монотонные метки времени: created_at/updated_at строго возрастают между записями в рамках процесса.
+// Нужно для optimistic concurrency (долг 0.1) — две записи в одну миллисекунду не должны получить
+// одинаковую версию, иначе устаревший апдейт прошёл бы как совпадающий по updated_at.
+let lastTsMillis = 0;
+function nowIso(): string {
+  let t = Date.now();
+  if (t <= lastTsMillis) t = lastTsMillis + 1;
+  lastTsMillis = t;
+  return new Date(t).toISOString();
 }
 
 // Реализация AppDatabaseStore на SQLite: один файл на проект, кэш соединений, параметризованные CRUD.
@@ -129,6 +140,7 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
         'id TEXT PRIMARY KEY',
         'owner_id TEXT',
         'created_at TEXT NOT NULL',
+        'updated_at TEXT',
         ...t.fields.map((f) => {
           const notnull = f.required ? ' NOT NULL' : '';
           const uniq = f.unique ? ' UNIQUE' : '';
@@ -136,6 +148,13 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
         }),
       ];
       conn.db.exec(`CREATE TABLE IF NOT EXISTS "${t.name}" (${cols.join(', ')});`);
+      // Обратная совместимость: уже созданные (до долга 0.1) базы не имеют updated_at. Догоняем
+      // идемпотентно — ADD COLUMN на существующей таблице. NULL в старых строках допустим: до первой
+      // записи версия строки «неизвестна», клиент шлёт запрос без проверки версии (last-write-wins).
+      const existing = conn.db.prepare(`PRAGMA table_info("${t.name}")`).all() as { name: string }[];
+      if (!existing.some((c) => c.name === 'updated_at')) {
+        conn.db.exec(`ALTER TABLE "${t.name}" ADD COLUMN updated_at TEXT`);
+      }
     }
     this.reloadColumns(conn);
   }
@@ -174,14 +193,27 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     if (hasId && !(typeof values.id === 'string' && values.id)) {
       row.id = this.idGen();
     }
+    const ts = nowIso();
     if (allowed.has('created_at') && !('created_at' in values)) {
-      row.created_at = new Date().toISOString();
+      row.created_at = ts;
+    }
+    // updated_at = created_at при вставке: строка «свежая», её версия совпадает с моментом создания.
+    if (allowed.has('updated_at') && !('updated_at' in values)) {
+      row.updated_at = row.created_at ?? ts;
     }
     const finalCols = Object.keys(row);
     const quoted = finalCols.map((k) => `"${k}"`).join(', ');
     const placeholders = finalCols.map(() => '?').join(', ');
     const params = finalCols.map((k) => normalizeValue(row[k]));
-    conn.db.prepare(`INSERT INTO "${table}" (${quoted}) VALUES (${placeholders})`).run(...params);
+    try {
+      conn.db.prepare(`INSERT INTO "${table}" (${quoted}) VALUES (${placeholders})`).run(...params);
+    } catch (error) {
+      // Нарушение UNIQUE поднимаем типизированной доменной ошибкой (а не сырым SqliteError), чтобы
+      // прикладной слой мог ответить нейтрально по чувствительной колонке и не раскрывать её имя.
+      const columns = parseUniqueViolation(error);
+      if (columns) throw new AppUniqueViolationError(table, columns);
+      throw error;
+    }
     if (hasId && typeof row.id === 'string') {
       return this.findOne(projectId, table, { id: row.id }) ?? row;
     }
@@ -226,15 +258,38 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     return (row as Row | undefined) ?? null;
   }
 
-  update(projectId: string, table: string, id: string, values: Row): number {
+  // updated_at ведётся стором, не клиентом: любой update строки бампает версию. Если передан
+  // expectedUpdatedAt — WHERE дополняется проверкой версии (optimistic concurrency, долг 0.1):
+  // при несовпадении меняется 0 строк, и вызывающий отличает конфликт от «строки нет».
+  update(
+    projectId: string,
+    table: string,
+    id: string,
+    values: Row,
+    expectedUpdatedAt?: string | null,
+  ): number {
     const conn = this.open(projectId);
     const allowed = this.allowedCols(conn, table);
-    const keys = Object.keys(values).filter((k) => k !== 'id');
+    // created_at/updated_at неизменяемы клиентом: created_at фиксирован, updated_at ставит стор.
+    const keys = Object.keys(values).filter((k) => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
     this.assertCols(allowed, keys);
-    if (keys.length === 0) return 0;
-    const setSql = keys.map((k) => `"${k}" = ?`).join(', ');
+    const hasUpdatedAt = allowed.has('updated_at');
+    const setParts = keys.map((k) => `"${k}" = ?`);
     const params = keys.map((k) => normalizeValue(values[k]));
-    const res = conn.db.prepare(`UPDATE "${table}" SET ${setSql} WHERE "id" = ?`).run(...params, id);
+    if (hasUpdatedAt) {
+      setParts.push('"updated_at" = ?');
+      params.push(nowIso());
+    }
+    if (setParts.length === 0) return 0;
+    let sql = `UPDATE "${table}" SET ${setParts.join(', ')} WHERE "id" = ?`;
+    const whereParams: unknown[] = [id];
+    // `IS` — NULL-безопасное сравнение: старые строки с updated_at = NULL матчатся только запросом
+    // без проверки версии (expectedUpdatedAt не передан вовсе).
+    if (expectedUpdatedAt !== undefined && hasUpdatedAt) {
+      sql += ' AND "updated_at" IS ?';
+      whereParams.push(expectedUpdatedAt);
+    }
+    const res = conn.db.prepare(sql).run(...params, ...whereParams);
     return res.changes;
   }
 
@@ -321,7 +376,9 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     const totalRow = conn.db
       .prepare(`SELECT COUNT(*) AS total FROM _audit_log${where}`)
       .get(...params) as { total: number | bigint };
-    const limit = clampInt(opts.limit, 1, 250, 100);
+    // Потолок 2000 совпадает с размером самого буфера: listLogs тянет отсюда окно (offset+limit)
+    // для слияния с надёжным журналом, и должен уметь достать все рантайм-события буфера.
+    const limit = clampInt(opts.limit, 1, 2000, 100);
     const offset = clampInt(opts.offset, 0, 1_000_000, 0);
     const raw = conn.db.prepare(`
       SELECT id, actor_type, actor_id, operation, table_name, row_id, success, detail_json, created_at
@@ -354,6 +411,29 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
       })),
     };
   }
+}
+
+// better-sqlite3 бросает SqliteError с code='SQLITE_CONSTRAINT_UNIQUE' и message вида
+// "UNIQUE constraint failed: table.col1, table.col2". Возвращаем список задетых колонок (без
+// префикса таблицы) или null, если это не UNIQUE-нарушение.
+function parseUniqueViolation(error: unknown): string[] | null {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  if (code !== 'SQLITE_CONSTRAINT_UNIQUE') return null;
+  const message = (error as { message?: unknown }).message;
+  if (typeof message !== 'string') return [];
+  const marker = 'failed:';
+  const idx = message.indexOf(marker);
+  if (idx < 0) return [];
+  return message
+    .slice(idx + marker.length)
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((qualified) => {
+      const dot = qualified.lastIndexOf('.');
+      return dot >= 0 ? qualified.slice(dot + 1) : qualified;
+    });
 }
 
 function ensureAuditTable(conn: Conn): void {

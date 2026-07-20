@@ -9,10 +9,14 @@ import type { AppBackend } from '../../domain/app-backend/AppBackend.js';
 import type { AppSchema } from '../../domain/app-backend/AppSchema.js';
 import { InsufficientProjectRoleError } from '../../domain/project/errors.js';
 import {
+  AppDuplicateValueError,
+  AppRowConflictError,
   AppSchemaInvalidError,
   AppTableNotAllowedError,
   StorageQuotaExceededError,
 } from '../../domain/app-backend/errors.js';
+import type { AppAdminAuditRepository } from './AppAdminAuditRepository.js';
+import type { AppAuditEntry, AppAuditInput, AppAuditListOpts } from './AppDatabaseStore.js';
 import { SECRET_MASK, maskValue } from '../../domain/app-backend/sensitiveFields.js';
 
 const schema: AppSchema = {
@@ -45,8 +49,65 @@ const schema: AppSchema = {
       ],
       rules: { read: 'owner', write: 'owner' },
     },
+    {
+      // Нейтральные имена полей: чувствительность задаётся ТОЛЬКО явным флагом (долг 0.3),
+      // эвристика по имени тут ничего не ловит.
+      name: 'notes',
+      fields: [
+        { name: 'title', type: 'text', required: true },
+        { name: 'body', type: 'text', sensitive: 'secret' },
+      ],
+      rules: { read: 'owner', write: 'owner' },
+    },
+    {
+      // Секретная колонка с UNIQUE-ограничением: `token` ловится эвристикой как secret и уникальна.
+      // Сценарий оракула существования секрета через нарушение UNIQUE (V2).
+      name: 'api_tokens',
+      fields: [
+        { name: 'label', type: 'text', required: true },
+        { name: 'token', type: 'text', unique: true },
+      ],
+      rules: { read: 'owner', write: 'owner' },
+    },
   ],
 };
+
+// In-memory реализация надёжного журнала административного аудита (порт AppAdminAuditRepository).
+// Зеркалит фильтры/порядок DrizzleAppAdminAuditRepository: НЕ вытесняется, ordering по seq desc.
+function makeAdminAudit(): AppAdminAuditRepository {
+  const rows: { projectId: string; seq: number; entry: AppAuditEntry }[] = [];
+  let seq = 0;
+  let idc = 0;
+  return {
+    async record(projectId: string, input: AppAuditInput): Promise<AppAuditEntry> {
+      const entry: AppAuditEntry = {
+        id: `adm-${++idc}`,
+        actorType: input.actorType,
+        actorId: input.actorId ?? null,
+        operation: input.operation.slice(0, 80),
+        tableName: input.tableName ?? null,
+        rowId: input.rowId ?? null,
+        success: input.success !== false,
+        detail: input.detail ?? null,
+        createdAt: new Date().toISOString(),
+      };
+      rows.push({ projectId, seq: ++seq, entry });
+      return entry;
+    },
+    async list(projectId: string, opts: AppAuditListOpts = {}) {
+      let filtered = rows.filter((r) => r.projectId === projectId);
+      if (opts.tableName) filtered = filtered.filter((r) => r.entry.tableName === opts.tableName);
+      if (opts.operation) filtered = filtered.filter((r) => r.entry.operation === opts.operation);
+      if (opts.actorId) filtered = filtered.filter((r) => r.entry.actorId === opts.actorId);
+      if (opts.errorsOnly) filtered = filtered.filter((r) => !r.entry.success);
+      const total = filtered.length;
+      const sorted = [...filtered].sort((a, b) => b.seq - a.seq);
+      const limit = opts.limit ?? 100;
+      const offset = opts.offset ?? 0;
+      return { total, rows: sorted.slice(offset, offset + limit).map((r) => r.entry) };
+    },
+  };
+}
 
 function setup(
   role: 'owner' | 'editor' | 'viewer' = 'editor',
@@ -63,13 +124,15 @@ function setup(
     async upsert(input: any) { backend = { ...backend, ...input, updatedAt: new Date() }; return backend; },
     async setUsage(_projectId: string, usageBytes: number) { backend = { ...backend, usageBytes }; },
   };
+  const adminAudit = makeAdminAudit();
   const manage = new ManageAppBackendData({
     appBackends,
     appDb,
+    adminAudit,
     projects: { async getById() { return { id: 'project-1' } as any; } } as any,
     members: { async findForProject() { return { projectId: 'project-1', userId: 'u1', role, joinedAt: new Date() }; } } as any,
   });
-  return { manage, appDb, backend: () => backend };
+  return { manage, appDb, adminAudit, backend: () => backend };
 }
 
 test('Dashboard CRUD нормализует типы, ищет, сортирует и пишет аудит', async () => {
@@ -325,4 +388,234 @@ test('превышенная квота блокирует запись, но н
     () => manage.insertRow('project-1', 'u1', 'products', { name: 'Denied by quota' }),
     StorageQuotaExceededError,
   );
+});
+
+// --- Долг 0.1: optimistic concurrency ---
+
+test('optimistic concurrency: устаревшая версия падает конфликтом, без версии — last-write-wins', async () => {
+  const { manage } = setup();
+  const created = await manage.insertRow('project-1', 'u1', 'products', { name: 'Coffee', price: 10 });
+  const rowId = String(created['id']);
+  const base = String(created['updated_at']);
+  assert.ok(base, 'updated_at проставлен при вставке');
+
+  const updated = await manage.updateRow('project-1', 'u1', 'products', rowId, { name: 'Coffee A' }, base);
+  assert.equal(updated?.['name'], 'Coffee A');
+  assert.notEqual(String(updated?.['updated_at']), base, 'updated_at сдвинулся после записи');
+
+  // Второй апдейт с той же (уже устаревшей) версией — конфликт, а не молчаливое затирание.
+  await assert.rejects(
+    () => manage.updateRow('project-1', 'u1', 'products', rowId, { name: 'Coffee B' }, base),
+    AppRowConflictError,
+  );
+  // Данные не пострадали — осталась версия первого апдейта.
+  const check = await manage.listRows('project-1', 'u1', 'products', {});
+  assert.equal(check.rows[0]!['name'], 'Coffee A');
+
+  // Без expectedUpdatedAt проверка версии не применяется (совместимость со старым клиентом).
+  const forced = await manage.updateRow('project-1', 'u1', 'products', rowId, { name: 'Coffee C' });
+  assert.equal(forced?.['name'], 'Coffee C');
+});
+
+test('конфликт версий несёт актуальную строку для перезагрузки панели без потери ввода', async () => {
+  const { manage } = setup();
+  const created = await manage.insertRow('project-1', 'u1', 'customers', {
+    name: 'Иван', email: 'ivan@mail.ru', api_key: 'sk-live-1',
+  });
+  const rowId = String(created['id']);
+  const stale = String(created['updated_at']);
+  await manage.updateRow('project-1', 'u1', 'customers', rowId, { name: 'Иван П.' }, stale);
+  try {
+    await manage.updateRow('project-1', 'u1', 'customers', rowId, { name: 'Иван С.' }, stale);
+    assert.fail('ожидался конфликт');
+  } catch (error) {
+    assert.ok(error instanceof AppRowConflictError);
+    // Актуальная строка маскирована — секрет не утекает даже в теле конфликта.
+    assert.equal(error.currentRow?.['api_key'], SECRET_MASK);
+    assert.equal(error.currentRow?.['name'], 'Иван П.');
+    assert.ok(error.currentRow?.['updated_at']);
+  }
+});
+
+// --- Долг 0.2: выгрузка CSV с ограничениями ---
+
+test('выгрузка CSV не содержит чувствительной колонки — ни значения, ни маски, ни заголовка', async () => {
+  const { manage } = setup();
+  await manage.insertRow('project-1', 'u1', 'customers', {
+    name: 'Иван', email: 'ivan.petrov@mail.ru', api_key: 'sk-live-secret-42',
+  });
+  const result = await manage.exportRows('project-1', 'u1', 'customers', {});
+  assert.equal(result.rowCount, 1);
+  assert.equal(result.truncated, false);
+  // Ни секретной, ни PII-колонки в списке колонок.
+  assert.equal(result.columns.includes('api_key'), false);
+  assert.equal(result.columns.includes('email'), false);
+  assert.equal(result.columns.includes('name'), true);
+  // Ни значения, ни маски, ни заголовка в самом файле.
+  assert.equal(result.csv.includes('api_key'), false);
+  assert.equal(result.csv.includes('sk-live-secret-42'), false);
+  assert.equal(result.csv.includes(SECRET_MASK), false);
+  assert.equal(result.csv.includes('petrov'), false);
+  assert.equal(result.csv.includes('email'), false);
+  assert.equal(result.csv.includes('Иван'), true);
+});
+
+test('выгрузка требует update_project и уважает оракул-гарды', async () => {
+  const viewer = setup('viewer');
+  await assert.rejects(
+    () => viewer.manage.exportRows('project-1', 'u1', 'customers', {}),
+    InsufficientProjectRoleError,
+  );
+  const { manage } = setup();
+  // Сортировка/фильтр/поиск по чувствительной колонке в экспорте отвергаются так же, как в гриде.
+  await assert.rejects(
+    () => manage.exportRows('project-1', 'u1', 'customers', { sort: { column: 'api_key', dir: 'asc' } }),
+    AppSchemaInvalidError,
+  );
+  await assert.rejects(
+    () => manage.exportRows('project-1', 'u1', 'customers', { filters: [{ column: 'api_key', operator: 'eq', value: 'x' }] }),
+    AppSchemaInvalidError,
+  );
+});
+
+test('выгрузка пишет аудит dashboard.export с числом строк и колонками', async () => {
+  const { manage } = setup();
+  await manage.insertRow('project-1', 'u1', 'products', { name: 'A', price: 1 });
+  await manage.exportRows('project-1', 'u1', 'products', {});
+  const logs = await manage.listLogs('project-1', 'u1', {});
+  const entry = logs.rows.find((e) => e.operation === 'dashboard.export');
+  assert.ok(entry, 'есть запись dashboard.export');
+  assert.equal(entry!.detail?.['rows'], 1);
+});
+
+test('выгрузка обрезается на потолке 10 000 и сообщает truncated', async () => {
+  const { manage, appDb } = setup();
+  // Быстрее вставлять напрямую в стор, минуя аудит/квоту — оракул тут не проверяем.
+  for (let i = 0; i < 10_001; i++) {
+    appDb.insert('project-1', 'products', { name: `p${i}`, price: i });
+  }
+  const result = await manage.exportRows('project-1', 'u1', 'products', {});
+  assert.equal(result.truncated, true);
+  assert.equal(result.rowCount, 10_000);
+  // Заголовок + 10 000 строк данных.
+  assert.equal(result.csv.split('\r\n').length, 10_001);
+});
+
+// --- Долг 0.3: явный флаг sensitive ---
+
+test('явный флаг sensitive маскирует нейтральное поле и закрывает оракул', async () => {
+  const { manage } = setup();
+  await manage.insertRow('project-1', 'u1', 'notes', { title: 'Заметка', body: 'секретный текст' });
+
+  const page = await manage.listRows('project-1', 'u1', 'notes', {});
+  assert.equal(page.masked['body'], 'secret');
+  assert.equal(page.rows[0]!['body'], SECRET_MASK);
+  assert.equal(page.rows[0]!['title'], 'Заметка');
+
+  // Ни сортировки, ни фильтра по значению, ни поиска по флагованному полю.
+  await assert.rejects(
+    () => manage.listRows('project-1', 'u1', 'notes', { sort: { column: 'body', dir: 'asc' } }),
+    AppSchemaInvalidError,
+  );
+  await assert.rejects(
+    () => manage.listRows('project-1', 'u1', 'notes', { filters: [{ column: 'body', operator: 'contains', value: 'сек' }] }),
+    AppSchemaInvalidError,
+  );
+  assert.equal((await manage.listRows('project-1', 'u1', 'notes', { search: 'секретный' })).total, 0);
+  assert.equal((await manage.listRows('project-1', 'u1', 'notes', { search: 'Заметка' })).total, 1);
+});
+
+test('переключение чувствительности пишется в аудит; снятие возвращает поле, если эвристика молчит', async () => {
+  const { manage } = setup();
+  await manage.setFieldSensitivity('project-1', 'u1', 'notes', 'title', 'pii');
+  let page = await manage.listRows('project-1', 'u1', 'notes', {});
+  assert.equal(page.masked['title'], 'pii');
+  const logs = await manage.listLogs('project-1', 'u1', {});
+  const changed = logs.rows.find((e) => e.operation === 'dashboard.sensitivity_changed');
+  assert.ok(changed, 'снятие/установка флага пишется в аудит');
+  assert.equal(changed!.detail?.['to'], 'pii');
+
+  // Снятие: 'title' не ловится эвристикой → поле снова открыто.
+  await manage.setFieldSensitivity('project-1', 'u1', 'notes', 'title', null);
+  page = await manage.listRows('project-1', 'u1', 'notes', {});
+  assert.equal(page.masked['title'], undefined);
+});
+
+test('снятие флага не раскрывает поле, чьё имя ловит эвристика', async () => {
+  const { manage } = setup();
+  // customers.api_key ловится эвристикой; даже если явный флаг снять, защита остаётся.
+  await manage.setFieldSensitivity('project-1', 'u1', 'customers', 'api_key', null);
+  const page = await manage.listRows('project-1', 'u1', 'customers', {});
+  assert.equal(page.masked['api_key'], 'secret');
+});
+
+test('viewer не может менять чувствительность поля', async () => {
+  const { manage } = setup('viewer');
+  await assert.rejects(
+    () => manage.setFieldSensitivity('project-1', 'u1', 'notes', 'title', 'secret'),
+    InsufficientProjectRoleError,
+  );
+});
+
+// --- Регрессии на дыры аудита раскрытия секретов ---
+
+// V1: запись о раскрытии секрета переживает вытеснение per-project SQLite-буфера трафиком
+// публичного App Runtime (>2000 событий). Раньше reveal писался в тот же буфер и вымывался
+// ~2000 дешёвыми чтениями; теперь он в надёжном журнале (MariaDB) и всегда достаётся.
+test('раскрытие секрета переживает 3000+ рантайм-событий приложения', async () => {
+  const { manage, appDb } = setup();
+  const created = await manage.insertRow('project-1', 'u1', 'customers', {
+    name: 'Иван', email: 'ivan@mail.ru', api_key: 'sk-live-42',
+  });
+  const rowId = String(created['id']);
+  await manage.revealRowValue('project-1', 'u1', 'customers', rowId, 'api_key');
+
+  // Публичный App Runtime заваливает per-project _audit_log дешёвыми чтениями (actorType runtime).
+  for (let i = 0; i < 3000; i++) {
+    appDb.recordAudit('project-1', {
+      actorType: 'runtime',
+      actorId: null,
+      operation: 'select',
+      tableName: 'customers',
+      detail: { count: 1 },
+    });
+  }
+
+  // SQLite-буфер усечён до 2000 — рантайм-запись самого начала уже вытеснена.
+  const runtimeOnly = appDb.listAudit('project-1', {});
+  assert.equal(runtimeOnly.total <= 2000, true, 'SQLite-буфер усечён');
+  assert.equal(runtimeOnly.rows.some((e) => e.operation === 'dashboard.reveal'), false,
+    'раскрытия в SQLite-буфере нет — оно в надёжном журнале');
+
+  // Раскрытие всё ещё достаётся из объединённой ленты (фильтр по операции).
+  const revealLogs = await manage.listLogs('project-1', 'u1', { operation: 'dashboard.reveal' });
+  assert.equal(revealLogs.total, 1);
+  assert.equal(
+    revealLogs.rows.some((e) => e.operation === 'dashboard.reveal' && e.rowId === rowId),
+    true,
+  );
+});
+
+// V2: подбор существующего значения секрета через нарушение UNIQUE не должен быть бесшумным
+// оракулом. Ответ — НЕЙТРАЛЬНЫЙ (без имени колонки и без значения), а попытка пишется в аудит.
+test('UNIQUE-конфликт по секретной колонке даёт нейтральную ошибку и пишет неудачную попытку в аудит', async () => {
+  const { manage } = setup();
+  await manage.insertRow('project-1', 'u1', 'api_tokens', { label: 'A', token: 'sk-secret-1' });
+
+  await assert.rejects(
+    () => manage.insertRow('project-1', 'u1', 'api_tokens', { label: 'B', token: 'sk-secret-1' }),
+    (error: unknown) => {
+      assert.ok(error instanceof AppDuplicateValueError, 'нейтральная ошибка дубликата');
+      // Ни имени колонки, ни значения секрета в тексте ошибки.
+      assert.equal(/token/i.test((error as Error).message), false, 'имя колонки не раскрыто');
+      assert.equal(/sk-secret-1/.test((error as Error).message), false, 'значение не раскрыто');
+      return true;
+    },
+  );
+
+  // Неудачная попытка оставила след в надёжном журнале — канал существования не бесшумен.
+  const logs = await manage.listLogs('project-1', 'u1', { errorsOnly: true });
+  const failed = logs.rows.find((e) => e.operation === 'dashboard.insert' && e.success === false);
+  assert.ok(failed, 'неудачная попытка вставки записана в аудит');
+  assert.equal(failed!.detail?.['reason'], 'unique_conflict');
 });

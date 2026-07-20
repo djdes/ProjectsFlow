@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   Bot,
   CheckCircle2,
   Check,
   CircleDashed,
+  Clock,
   Copy,
+  Cpu,
   Database,
   Download,
   ExternalLink,
   Github,
   Globe2,
+  KeyRound,
   Link2,
   Loader2,
   Pencil,
@@ -30,7 +34,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { useContainer } from "@/infrastructure/di/container";
-import { siteResultDisplayUrl, siteResultUrl } from "@/lib/publicBoardUrl";
+import {
+  publicBoardDisplayUrl,
+  publicBoardUrl,
+  siteResultDisplayUrl,
+  siteResultUrl,
+} from "@/lib/publicBoardUrl";
+import { emitPublishChanged } from "@/presentation/lib/publishEvents";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/domain/project/Project";
 import type {
@@ -46,6 +56,8 @@ import type {
   AppSecurityScan,
   DispatcherCandidate,
   ProjectSite,
+  ProjectWorkerOverview,
+  ProjectWorkerRun,
 } from "@/application/project/ProjectRepository";
 import {
   buildProjectOpenApi,
@@ -153,6 +165,8 @@ export function OverviewSection({
   const [descriptionDraft, setDescriptionDraft] = useState(project.description ?? "");
   const [profileBusy, setProfileBusy] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const isOwner = project.role === "owner";
   const deployed = Boolean(site?.siteSlug && site.deployedAt);
   const url = site?.siteSlug ? siteResultUrl(site.siteSlug) : null;
   const usagePercent =
@@ -200,6 +214,55 @@ export function OverviewSection({
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Ссылка скопирована");
+    } catch {
+      toast.error("Браузер не разрешил скопировать ссылку");
+    }
+  };
+  // Публикация проекта — тот же путь, что и в окне «Поделиться» (ProjectPublishTab):
+  // projectRepository.publish/unpublish + emitPublishChanged. Второй путь не заводим.
+  const publish = async (): Promise<void> => {
+    if (!isOwner || publishBusy) return;
+    setPublishBusy(true);
+    try {
+      const { slug } = await projectRepository.publish(project.id);
+      onProjectUpdated({ ...project, isPublic: true, publicSlug: slug });
+      emitPublishChanged({
+        projectId: project.id,
+        isPublic: true,
+        publicSlug: slug,
+        publicIndexing: project.publicIndexing,
+      });
+      toast.success("Проект опубликован");
+    } catch {
+      toast.error("Не удалось опубликовать");
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+  const unpublish = async (): Promise<void> => {
+    if (!isOwner || publishBusy) return;
+    setPublishBusy(true);
+    try {
+      await projectRepository.unpublish(project.id);
+      onProjectUpdated({ ...project, isPublic: false });
+      emitPublishChanged({
+        projectId: project.id,
+        isPublic: false,
+        publicSlug: project.publicSlug,
+        publicIndexing: project.publicIndexing,
+      });
+      toast.success("Публикация снята");
+    } catch {
+      toast.error("Не удалось снять с публикации");
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+  const copyBoardLink = async (): Promise<void> => {
+    if (!project.publicSlug) return;
+    try {
+      await navigator.clipboard.writeText(publicBoardUrl(project.publicSlug));
+      toast.success("Ссылка доски скопирована");
     } catch {
       toast.error("Браузер не разрешил скопировать ссылку");
     }
@@ -255,17 +318,70 @@ export function OverviewSection({
               project.createdAt,
             )}
           </p>
+          {project.isPublic && project.publicSlug && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusPill tone="ok">Опубликован</StatusPill>
+              <a
+                href={publicBoardUrl(project.publicSlug)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-w-0 items-center gap-1 truncate text-xs text-primary hover:underline"
+              >
+                <span className="truncate">
+                  {publicBoardDisplayUrl(project.publicSlug)}
+                </span>
+                <ExternalLink className="size-3 shrink-0" />
+              </a>
+              <button
+                type="button"
+                onClick={() => void copyBoardLink()}
+                aria-label="Скопировать ссылку доски"
+                className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Copy className="size-3.5" />
+              </button>
+            </div>
+          )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={favoriteBusy}
-          onClick={() => void toggleFavorite()}
-          aria-label={project.isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
-          className={project.isFavorite ? "text-amber-500 hover:text-amber-600" : undefined}
-        >
-          <Star className={cn("size-5", project.isFavorite && "fill-current")} />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {isOwner &&
+            (project.isPublic ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={publishBusy}
+                onClick={() => void unpublish()}
+              >
+                {publishBusy && (
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                )}
+                Снять с публикации
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={publishBusy}
+                onClick={() => void publish()}
+              >
+                {publishBusy ? (
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                ) : (
+                  <Globe2 className="mr-1.5 size-4" />
+                )}
+                Опубликовать
+              </Button>
+            ))}
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={favoriteBusy}
+            onClick={() => void toggleFavorite()}
+            aria-label={project.isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
+            className={project.isFavorite ? "text-amber-500 hover:text-amber-600" : undefined}
+          >
+            <Star className={cn("size-5", project.isFavorite && "fill-current")} />
+          </Button>
+        </div>
       </header>
       <div className="grid gap-3 lg:grid-cols-3">
         <section className="rounded-xl border p-4 lg:col-span-2">
@@ -405,7 +521,15 @@ export function OverviewSection({
               ok={Boolean(site?.siteSlug)}
               label="Изолированный поддомен проекта"
             />
-            <HealthRow ok={deployed} label="Опубликованный артефакт" />
+            <HealthRow
+              ok={deployed}
+              label="Опубликованный артефакт"
+              hint={
+                site?.deployedAt
+                  ? `${site.fileCount} файлов · ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(site.deployedAt))}`
+                  : undefined
+              }
+            />
             <HealthRow
               ok={dashboard.status === "active"}
               label="Управляемая база данных"
@@ -422,10 +546,12 @@ function HealthRow({
   ok,
   label,
   optional = false,
+  hint,
 }: {
   ok: boolean;
   label: string;
   optional?: boolean;
+  hint?: string;
 }): React.ReactElement {
   return (
     <div className="flex items-center gap-2 text-sm">
@@ -436,10 +562,17 @@ function HealthRow({
         )}
       />
       <span className={ok ? "" : "text-muted-foreground"}>{label}</span>
-      {optional && !ok && (
-        <span className="ml-auto text-xs text-muted-foreground">
-          необязательно
+      {hint ? (
+        <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
+          {hint}
         </span>
+      ) : (
+        optional &&
+        !ok && (
+          <span className="ml-auto text-xs text-muted-foreground">
+            необязательно
+          </span>
+        )
       )}
     </div>
   );
@@ -1917,6 +2050,49 @@ export function CodeSection({
   );
 }
 
+const WORKER_RUN_STATUS: Record<
+  ProjectWorkerRun["status"],
+  { label: string; tone: "ok" | "warn" | "muted" }
+> = {
+  running: { label: "Выполняется", tone: "ok" },
+  completed: { label: "Завершён", tone: "ok" },
+  failed: { label: "Ошибка", tone: "warn" },
+  timeout: { label: "Таймаут", tone: "warn" },
+  canceled: { label: "Отменён", tone: "muted" },
+};
+
+function formatWorkerTime(iso: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(iso));
+}
+
+function WorkerRunRow({
+  run,
+}: {
+  run: ProjectWorkerRun;
+}): React.ReactElement {
+  const meta = WORKER_RUN_STATUS[run.status];
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 text-sm">
+      <Cpu className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">
+          {run.agentName ?? "Воркер"}
+          {run.attempt > 1 ? ` · попытка ${run.attempt}` : ""}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {formatWorkerTime(run.startedAt)}
+          {run.model ? ` · ${run.model}` : ""}
+          {run.costUsd != null ? ` · $${run.costUsd.toFixed(4)}` : ""}
+        </p>
+      </div>
+      <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
+    </div>
+  );
+}
+
 export function AgentsSection({
   project,
   onProjectUpdated,
@@ -1928,9 +2104,30 @@ export function AgentsSection({
   const [selected, setSelected] = useState(project.dispatcherUserId ?? "");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [overview, setOverview] = useState<ProjectWorkerOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewNonce, setOverviewNonce] = useState(0);
   useEffect(() => {
     setSelected(project.dispatcherUserId ?? "");
   }, [project.dispatcherUserId]);
+  useEffect(() => {
+    let cancelled = false;
+    setOverviewLoading(true);
+    projectRepository
+      .getProjectWorkerOverview(project.id)
+      .then((value) => {
+        if (!cancelled) setOverview(value);
+      })
+      .catch(() => {
+        if (!cancelled) setOverview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setOverviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id, projectRepository, overviewNonce]);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -1989,7 +2186,23 @@ export function AgentsSection({
     <div className="space-y-5">
       <SectionHeader
         title="Агенты"
-        description="Реальный ProjectsFlow-диспетчер, который получает задачи проекта через изолированный agent token."
+        description="Реальный ProjectsFlow-воркер: кто диспетчер, чем он сейчас занят, какими правами владеет и что запускал последним."
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={overviewLoading}
+            onClick={() => setOverviewNonce((n) => n + 1)}
+          >
+            <RefreshCw
+              className={cn(
+                "mr-1.5 size-4",
+                overviewLoading && "animate-spin",
+              )}
+            />
+            Обновить
+          </Button>
+        }
       />
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
         <section className="space-y-4 rounded-xl border p-4">
@@ -2077,6 +2290,109 @@ export function AgentsSection({
           </button>
         </aside>
       </div>
+      <section className="rounded-xl border">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Activity className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold">Состояние воркера</h3>
+          </div>
+          {overview &&
+            (overview.runningCount > 0 ? (
+              <StatusPill tone="ok">
+                Идёт работа: {overview.runningCount}
+              </StatusPill>
+            ) : (
+              <StatusPill tone="muted">Простаивает</StatusPill>
+            ))}
+        </div>
+        {overviewLoading && !overview ? (
+          <p className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Загружаем состояние воркера…
+          </p>
+        ) : !overview ? (
+          <p className="px-4 py-4 text-xs leading-5 text-muted-foreground">
+            Состояние воркера пока недоступно.
+          </p>
+        ) : (
+          <div className="grid gap-4 p-4 sm:grid-cols-2">
+            <div className="rounded-lg border bg-muted/10 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <KeyRound className="size-4 text-muted-foreground" />
+                Права доступа (capabilities)
+              </div>
+              {overview.capabilities.active === 0 ? (
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Сейчас у воркера нет активных прав. Они выдаются автоматически
+                  на время выполнения задачи и истекают сами.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <li>
+                    Активных прав:{" "}
+                    <span className="font-medium text-foreground">
+                      {overview.capabilities.active}
+                    </span>
+                  </li>
+                  <li>
+                    Привязано к задаче: {overview.capabilities.taskScoped} · ко
+                    всему проекту: {overview.capabilities.projectScoped}
+                  </li>
+                  {overview.capabilities.nextExpiryAt && (
+                    <li className="flex items-center gap-1">
+                      <Clock className="size-3" />
+                      Ближайшее истечение:{" "}
+                      {formatWorkerTime(overview.capabilities.nextExpiryAt)}
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-lg border bg-muted/10 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Bot className="size-4 text-muted-foreground" />
+                Режим
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li>
+                  Диспетчер:{" "}
+                  <span className="font-medium text-foreground">
+                    {overview.dispatcherUserId ? "назначен" : "не назначен"}
+                  </span>
+                </li>
+                <li>
+                  Параллельность:{" "}
+                  {overview.multiTaskWorker
+                    ? "до трёх задач одновременно"
+                    : "по одной задаче"}
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </section>
+      <section className="overflow-hidden rounded-xl border">
+        <div className="border-b px-4 py-3 text-sm font-semibold">
+          История запусков
+        </div>
+        {overviewLoading && !overview ? (
+          <p className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Загружаем историю…
+          </p>
+        ) : overview && overview.recentRuns.length > 0 ? (
+          <div className="divide-y">
+            {overview.recentRuns.map((run) => (
+              <WorkerRunRow key={run.id} run={run} />
+            ))}
+          </div>
+        ) : (
+          <p className="px-4 py-4 text-xs leading-5 text-muted-foreground">
+            Воркер ещё ничего не запускал в этом проекте. Прогоны появятся здесь,
+            когда диспетчер возьмёт задачу в работу.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

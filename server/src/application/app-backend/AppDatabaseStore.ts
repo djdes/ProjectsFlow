@@ -69,7 +69,15 @@ export interface AppDatabaseStore {
   select(projectId: string, table: string, opts?: SelectOpts): Row[];
   count(projectId: string, table: string, opts?: Omit<SelectOpts, 'orderBy' | 'limit' | 'offset'>): number;
   findOne(projectId: string, table: string, where: WhereClause): Row | null;
-  update(projectId: string, table: string, id: string, values: Row): number;
+  // updated_at ставит стор автоматически. expectedUpdatedAt (optimistic concurrency, долг 0.1):
+  // если передан — апдейт применяется, только когда версия строки совпадает; иначе меняется 0 строк.
+  update(
+    projectId: string,
+    table: string,
+    id: string,
+    values: Row,
+    expectedUpdatedAt?: string | null,
+  ): number;
   remove(projectId: string, table: string, id: string): number;
   // Удаление по произвольному равенству (напр. сессии по token_hash). Пустой where → 0 (никогда
   // не удаляем всю таблицу).

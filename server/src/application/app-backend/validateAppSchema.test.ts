@@ -98,6 +98,32 @@ test('validateAppSchema: дубли таблиц/полей → ошибка', (
   );
 });
 
+test('validateAppSchema: флаг sensitive принимается и нормализуется', () => {
+  const s = validateAppSchema({
+    tables: [{
+      name: 'notes',
+      fields: [
+        { name: 'title', type: 'text' },
+        { name: 'body', type: 'text', sensitive: 'secret' },
+        { name: 'contact', type: 'text', sensitive: 'pii' },
+      ],
+      rules: { read: 'owner', write: 'owner' },
+    }],
+  });
+  assert.equal(s.tables[0]!.fields[0]!.sensitive, undefined);
+  assert.equal(s.tables[0]!.fields[1]!.sensitive, 'secret');
+  assert.equal(s.tables[0]!.fields[2]!.sensitive, 'pii');
+});
+
+test('validateAppSchema: неверный флаг sensitive → ошибка', () => {
+  assert.throws(
+    () => validateAppSchema({
+      tables: [{ name: 'notes', fields: [{ name: 'body', type: 'text', sensitive: 'private' }], rules: { read: 'owner', write: 'owner' } }],
+    }),
+    AppSchemaInvalidError,
+  );
+});
+
 test('validateAppSchema: битые/невалидные правила доступа → ошибка', () => {
   assert.throws(
     () => validateAppSchema({ tables: [{ name: 'posts', fields: [], rules: { read: 'anyone' } }] }),

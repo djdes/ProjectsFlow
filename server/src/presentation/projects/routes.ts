@@ -18,6 +18,7 @@ import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../../application/project/ListDispatcherCandidates.js';
+import type { GetProjectWorkerOverview } from '../../application/agent/GetProjectWorkerOverview.js';
 import type { SetGitTokenDelegation } from '../../application/project/SetGitTokenDelegation.js';
 import type { ListGitTokenAccessLog } from '../../application/project/ListGitTokenAccessLog.js';
 import type { GitTokenDelegationRepository } from '../../application/project/GitTokenDelegationRepository.js';
@@ -95,6 +96,8 @@ type Deps = {
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
+  // Карточка воркера в разделе Agents: capabilities + LIVE-статус + история прогонов.
+  readonly getWorkerOverview: GetProjectWorkerOverview;
   readonly setGitTokenDelegation: SetGitTokenDelegation;
   readonly listGitTokenAccessLog: ListGitTokenAccessLog;
   // Прямое чтение делегации для GET-эндпоинта (mine/all) — без отдельного
@@ -1040,6 +1043,19 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const candidates = await deps.listDispatcherCandidates.execute(id, req.user!.id);
       res.json({ candidates });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Обзор воркера проекта (раздел Agents): активные capabilities + LIVE-статус +
+  // история прогонов. read_project (member+; admin — bypass).
+  router.get('/:id/worker-overview', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const overview = await deps.getWorkerOverview.execute(id, req.user!.id);
+      res.json(overview);
     } catch (e) {
       next(e);
     }

@@ -138,6 +138,22 @@ export class DrizzleAgentTokenRepository implements AgentTokenRepository {
     return affected > 0;
   }
 
+  async listActiveProjectCapabilities(projectId: string): Promise<AgentToken[]> {
+    const rows = await this.db
+      .select()
+      .from(agentTokens)
+      .where(
+        and(
+          eq(agentTokens.scopeKind, 'project'),
+          eq(agentTokens.projectId, projectId),
+          isNull(agentTokens.revokedAt),
+          or(isNull(agentTokens.expiresAt), gt(agentTokens.expiresAt, new Date())),
+        ),
+      )
+      .orderBy(desc(agentTokens.createdAt));
+    return rows.map(toToken);
+  }
+
   async touchLastUsed(id: string): Promise<void> {
     await this.db
       .update(agentTokens)

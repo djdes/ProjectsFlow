@@ -146,6 +146,10 @@ import {
   ChatAttachmentNotFoundError,
   ChatAttachmentTooLargeError,
 } from '../../domain/chat/errors.js';
+import {
+  AppDuplicateValueError,
+  AppUniqueViolationError,
+} from '../../domain/app-backend/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -862,6 +866,18 @@ export function errorHandler(
     && ['invalid_custom_domain', 'invalid_main_route', 'invalid_dashboard_settings'].includes(err.message)
   ) {
     res.status(400).json({ error: err.message });
+    return;
+  }
+
+  // Конфликт уникальности в Data Explorer. Отвечаем НЕЙТРАЛЬНО — без имени колонки и без
+  // значения: иначе UNIQUE-конфликт по чувствительной колонке работал бы как оракул
+  // существования секрета (см. AppDuplicateValueError). AppUniqueViolationError сюда доходит
+  // только по путям, которые прикладной слой не переупаковал (напр. update) — тоже глушим.
+  if (err instanceof AppDuplicateValueError || err instanceof AppUniqueViolationError) {
+    res.status(409).json({
+      error: 'app_duplicate_value',
+      message: 'Запись с такими данными уже существует',
+    });
     return;
   }
 

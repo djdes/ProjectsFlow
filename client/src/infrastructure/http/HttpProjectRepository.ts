@@ -12,6 +12,7 @@ import { ProjectNameAlreadyExistsError } from "@/domain/project/errors";
 import type {
   CreateProjectInput,
   DispatcherCandidate,
+  ProjectWorkerOverview,
   GitCollision,
   GitTokenAccessLogEntry,
   GitTokenDelegationStatus,
@@ -25,11 +26,14 @@ import type {
   AppRuntimeUser,
   AppRowsQuery,
   AppRowsPage,
+  AppRowsExport,
   AppDataRow,
   AppCrudRules,
+  AppSensitiveKind,
   AppAuditPage,
   SharedMember,
 } from "@/application/project/ProjectRepository";
+import { AppRowVersionConflictError } from "@/application/project/ProjectRepository";
 import type { UpdateProjectInput } from "@/application/project/ProjectRepository";
 import type { NotificationPrefs } from "@/domain/notifications/NotificationPrefs";
 import type { KanbanBoardSettings } from "@/domain/kanban/KanbanSettings";
@@ -280,6 +284,14 @@ export class HttpProjectRepository implements ProjectRepository {
       { userId },
     );
     return fromDto(project);
+  }
+
+  async getProjectWorkerOverview(
+    projectId: string,
+  ): Promise<ProjectWorkerOverview> {
+    return httpClient.get<ProjectWorkerOverview>(
+      `/projects/${projectId}/worker-overview`,
+    );
   }
 
   async setMultiTaskWorker(
@@ -658,12 +670,23 @@ export class HttpProjectRepository implements ProjectRepository {
     table: string,
     rowId: string,
     values: AppDataRow,
+    expectedUpdatedAt?: string,
   ): Promise<AppDataRow | null> {
-    const result = await httpClient.patch<{ row: AppDataRow | null }>(
-      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`,
-      { values },
-    );
-    return result.row;
+    try {
+      const result = await httpClient.patch<{ row: AppDataRow | null }>(
+        `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`,
+        { values, ...(expectedUpdatedAt !== undefined ? { expectedUpdatedAt } : {}) },
+      );
+      return result.row;
+    } catch (err) {
+      // 409 app_row_conflict — строку изменил другой участник. Отдаём типизированную ошибку с
+      // актуальной строкой, чтобы UI обновил базу без потери введённого.
+      if (err instanceof HttpError && err.status === 409 && err.body.error === "app_row_conflict") {
+        const details = err.body.details as { row?: AppDataRow | null } | undefined;
+        throw new AppRowVersionConflictError(details?.row ?? null);
+      }
+      throw err;
+    }
   }
 
   async deleteAppRow(
@@ -688,6 +711,29 @@ export class HttpProjectRepository implements ProjectRepository {
       { column },
     );
     return result.value;
+  }
+
+  async exportAppRows(
+    projectId: string,
+    table: string,
+    query: AppRowsQuery,
+  ): Promise<AppRowsExport> {
+    return httpClient.post<AppRowsExport>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/export`,
+      query,
+    );
+  }
+
+  async setAppFieldSensitivity(
+    projectId: string,
+    table: string,
+    field: string,
+    sensitive: AppSensitiveKind | null,
+  ): Promise<{ readonly field: string; readonly sensitive: AppSensitiveKind | null }> {
+    return httpClient.put<{ field: string; sensitive: AppSensitiveKind | null }>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/fields/${encodeURIComponent(field)}/sensitivity`,
+      { sensitive },
+    );
   }
 
   async updateAppTablePermissions(

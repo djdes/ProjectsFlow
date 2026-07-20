@@ -34,6 +34,12 @@ export interface LiveRepository {
   getSession(sessionId: string): Promise<LiveSession | null>;
   listSessions(taskId: string): Promise<LiveSession[]>;
 
+  // Проектный обзор воркера (раздел Agents): последние прогоны по ВСЕМ задачам проекта,
+  // новые сверху. limit — потолок числа строк (карточка показывает историю).
+  listRecentProjectSessions(projectId: string, limit: number): Promise<LiveSession[]>;
+  // Сколько сейчас идёт (status='running') прогонов в проекте — «воркер занят».
+  countRunningProjectSessions(projectId: string): Promise<number>;
+
   // Идемпотентный append одного события в task_progress_events (с session_id).
   // false — дубль по UNIQUE(task_id, seq) (ER_DUP_ENTRY), true — записано.
   appendEvent(input: {

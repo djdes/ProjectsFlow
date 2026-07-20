@@ -63,11 +63,16 @@ export function validateAppSchema(raw: unknown): AppSchema {
       if (typeof ftype !== 'string' || !FIELD_TYPES.includes(ftype as AppFieldType)) {
         fail(`table ${name}.${fname}: invalid type: ${String(ftype)}`);
       }
+      const sensitive = f.sensitive;
+      if (sensitive !== undefined && sensitive !== 'secret' && sensitive !== 'pii') {
+        fail(`table ${name}.${fname}: invalid sensitive flag: ${String(sensitive)}`);
+      }
       fields.push({
         name: fname,
         type: ftype as AppFieldType,
         ...(f.required === true ? { required: true } : {}),
         ...(f.unique === true ? { unique: true } : {}),
+        ...(sensitive === 'secret' || sensitive === 'pii' ? { sensitive } : {}),
       });
     }
 

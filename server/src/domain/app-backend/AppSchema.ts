@@ -17,6 +17,10 @@ export type AppField = {
   readonly type: AppFieldType;
   readonly required?: boolean;
   readonly unique?: boolean;
+  // Явная пометка чувствительности поля. Приоритетнее эвристики по имени, но НЕ отменяет её:
+  // sensitiveColumns() берёт объединение (см. domain/app-backend/sensitiveFields.ts). Снять защиту
+  // с поля, чьё имя ловит эвристика, простым удалением флага нельзя — только осознанно через UI.
+  readonly sensitive?: 'secret' | 'pii';
 };
 
 export type AppTableRules = {
@@ -49,3 +53,7 @@ export type AppTable = {
 export type AppSchema = {
   readonly tables: readonly AppTable[];
 };
+
+// Служебные колонки, которые App Runtime добавляет и ведёт сам (не объявляются в схеме).
+// `updated_at` — версия строки для optimistic concurrency (см. долг 0.1).
+export const APP_SERVICE_COLUMNS = ['id', 'owner_id', 'created_at', 'updated_at'] as const;

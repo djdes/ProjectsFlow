@@ -6,6 +6,7 @@ import type {
   Row,
 } from './AppDatabaseStore.js';
 import type { AppBackendRepository } from './AppBackendRepository.js';
+import type { AppAdminAuditRepository } from './AppAdminAuditRepository.js';
 import type {
   AppAccess,
   AppField,
@@ -14,11 +15,14 @@ import type {
 } from '../../domain/app-backend/AppSchema.js';
 import { appAccessForOperation } from '../../domain/app-backend/AppSchema.js';
 import type { SensitiveKind } from '../../domain/app-backend/sensitiveFields.js';
-import { SECRET_MASK, maskValue, sensitiveColumns } from '../../domain/app-backend/sensitiveFields.js';
+import { SECRET_MASK, classifyField, maskValue, sensitiveColumns } from '../../domain/app-backend/sensitiveFields.js';
 import {
   AppBackendNotProvisionedError,
+  AppDuplicateValueError,
+  AppRowConflictError,
   AppSchemaInvalidError,
   AppTableNotAllowedError,
+  AppUniqueViolationError,
 } from '../../domain/app-backend/errors.js';
 import type { ProjectAccessDeps } from '../project/projectAccess.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
@@ -28,6 +32,9 @@ import { assertWithinQuota } from './CheckQuota.js';
 type Deps = ProjectAccessDeps & {
   readonly appBackends: AppBackendRepository;
   readonly appDb: AppDatabaseStore;
+  // Надёжный журнал административного аудита (MariaDB). Все действия участника проекта пишутся
+  // сюда, а НЕ в per-project SQLite `_audit_log`: там их вытесняет трафик публичного App Runtime.
+  readonly adminAudit: AppAdminAuditRepository;
 };
 
 const FILTER_OPERATORS: readonly AppFilterOperator[] = [
@@ -79,6 +86,23 @@ export type AppCrudRules = {
 };
 export type AppRuntimeUser = { readonly id: string; readonly email: string; readonly createdAt: string; readonly activeSessions: number };
 
+// Результат выгрузки CSV (долг 0.2). csv — уже собранный файл; columns НЕ содержит чувствительных
+// колонок (они не попадают в файл вовсе — ни значением, ни маской); truncated — упёрлись в потолок.
+export type AppRowsExport = {
+  readonly csv: string;
+  readonly rowCount: number;
+  readonly truncated: boolean;
+  readonly columns: readonly string[];
+};
+
+// Жёсткий потолок выгрузки: экспорт — самый удобный вектор массовой утечки, лимит — граница ущерба.
+const EXPORT_ROW_CAP = 10_000;
+const EXPORT_CHUNK = 1_000;
+const SENSITIVITY_VALUES: readonly (SensitiveKind | null)[] = ['secret', 'pii', null];
+// Потолок окна слияния двух журналов логов (админ MariaDB + рантайм SQLite). Лента листается
+// инкрементально по 100; в пределах последних MERGE_WINDOW событий пагинация по времени точна.
+const MERGE_WINDOW = 2000;
+
 // Административный слой Data Explorer. В отличие от публичного App Runtime он авторизует
 // участника ПРОЕКТА и намеренно не применяет row-owner правила к просмотру: editor проекта
 // управляет приложением целиком. Все имена по-прежнему берутся только из AppSchema.
@@ -115,30 +139,10 @@ export class ManageAppBackendData {
   ): Promise<AppRowsPage> {
     await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
     const { table } = await this.requireTable(projectId, tableName);
-    const columns = this.columnSet(table);
     const sensitive = sensitiveColumns(table.fields);
-    const filters = (query.filters ?? []).slice(0, 20).map((filter) =>
-      this.normalizeFilter(table, filter));
+    const { filters, search, sort } = this.buildQueryOpts(table, query, sensitive);
     const limit = clamp(query.limit, 1, 100, 50);
     const offset = clamp(query.offset, 0, 1_000_000, 0);
-    // Сортировка по чувствительной колонке — это компаратор скрытых значений: порядок строк
-    // вместе с пагинацией позволяет двоичным поиском восстановить то, что мы маскируем.
-    if (query.sort && sensitive.has(query.sort.column)) {
-      throw new AppSchemaInvalidError(`column ${query.sort.column} is sensitive and cannot be sorted by`);
-    }
-    const sort = query.sort && columns.has(query.sort.column)
-      ? { column: query.sort.column, dir: query.sort.dir === 'desc' ? 'desc' as const : 'asc' as const }
-      : { column: 'created_at', dir: 'desc' as const };
-    const searchValue = typeof query.search === 'string' ? query.search.slice(0, 200) : '';
-    // Свободный поиск не заходит в чувствительные колонки (ни секреты, ни PII): совпадение по
-    // ним работает как оракул и позволяет побайтово подобрать значение, которое мы намеренно
-    // не показываем — номер карты подбирается так же, как API-ключ.
-    const search = searchValue.trim()
-      ? {
-          columns: [...columns].filter((column) => !sensitive.has(column)),
-          value: searchValue.trim(),
-        }
-      : undefined;
     const opts = { filters, search };
     const rows = this.deps.appDb.select(projectId, table.name, {
       ...opts,
@@ -147,7 +151,7 @@ export class ManageAppBackendData {
       offset,
     }).map((row) => this.maskRow(sensitive, this.fromStorageRow(table, row)));
     const total = this.deps.appDb.count(projectId, table.name, opts);
-    this.deps.appDb.recordAudit(projectId, {
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.select',
@@ -171,7 +175,7 @@ export class ManageAppBackendData {
     const sensitive = sensitiveColumns(table.fields);
     if (!sensitive.has(column)) throw new AppTableNotAllowedError(`column ${column}`);
     const row = this.deps.appDb.findOne(projectId, table.name, { id: rowId });
-    this.deps.appDb.recordAudit(projectId, {
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.reveal',
@@ -193,16 +197,38 @@ export class ManageAppBackendData {
     const { backend, table } = await this.requireTable(projectId, tableName);
     assertWithinQuota(this.deps.appDb.sizeBytes(projectId), backend.storageLimitBytes);
     const values = this.normalizeValues(table, rawValues, true);
-    for (const [column, kind] of sensitiveColumns(table.fields)) {
+    const sensitive = sensitiveColumns(table.fields);
+    for (const [column, kind] of sensitive) {
       if (kind === 'secret' && values[column] === SECRET_MASK) {
         throw new AppSchemaInvalidError(`${column} must not be the mask placeholder`);
       }
     }
-    const row = this.maskRow(
-      sensitiveColumns(table.fields),
-      this.fromStorageRow(table, this.deps.appDb.insert(projectId, table.name, values)),
-    );
-    this.deps.appDb.recordAudit(projectId, {
+    let inserted: Row;
+    try {
+      inserted = this.deps.appDb.insert(projectId, table.name, values);
+    } catch (error) {
+      if (error instanceof AppUniqueViolationError) {
+        const sensitiveHit = error.columns.some((column) => sensitive.has(column));
+        // UNIQUE-конфликт по чувствительной колонке — это оракул существования секрета: успешный
+        // подбор значения отвергается ровно так же, как несуществующее. Чтобы канал не был
+        // бесшумным, пишем НЕУДАЧНУЮ попытку в надёжный журнал (её нельзя вытеснить трафиком),
+        // а наружу отдаём нейтральную ошибку без имени колонки и без значения.
+        if (sensitiveHit) {
+          await this.deps.adminAudit.record(projectId, {
+            actorType: 'project_member',
+            actorId: callerUserId,
+            operation: 'dashboard.insert',
+            tableName: table.name,
+            success: false,
+            detail: { reason: 'unique_conflict', sensitive: true, fields: Object.keys(values) },
+          });
+        }
+        throw new AppDuplicateValueError(table.name);
+      }
+      throw error;
+    }
+    const row = this.maskRow(sensitive, this.fromStorageRow(table, inserted));
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.insert',
@@ -214,20 +240,23 @@ export class ManageAppBackendData {
     return row;
   }
 
+  // expectedUpdatedAt — версия строки, которую видел клиент при открытии (optimistic concurrency,
+  // долг 0.1). Если между открытием и сохранением строку изменил другой участник — бросаем
+  // AppRowConflictError с актуальной (маскированной) строкой, чтобы UI обновил базу, не теряя ввода.
   async updateRow(
     projectId: string,
     callerUserId: string,
     tableName: string,
     rowId: string,
     rawValues: unknown,
+    expectedUpdatedAt?: string | null,
   ): Promise<Row | null> {
     await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
     const { backend, table } = await this.requireTable(projectId, tableName);
     assertWithinQuota(this.deps.appDb.sizeBytes(projectId), backend.storageLimitBytes);
     const sensitive = sensitiveColumns(table.fields);
-    const current = sensitive.size > 0
-      ? this.deps.appDb.findOne(projectId, table.name, { id: rowId })
-      : null;
+    const current = this.deps.appDb.findOne(projectId, table.name, { id: rowId });
+    if (!current) return null;
     // Клиент видит маску вместо настоящего значения. Если он прислал её обратно нетронутой —
     // это «поле не редактировали», а не «затереть маской». Отбрасываем маски ДО нормализации
     // типов: для datetime/int/real маска не парсится и запрос падал бы 400 раньше проверки.
@@ -236,8 +265,17 @@ export class ManageAppBackendData {
       this.dropUnchangedMasks(sensitive, current, rawValues),
       false,
     );
-    this.deps.appDb.update(projectId, table.name, rowId, values);
-    this.deps.appDb.recordAudit(projectId, {
+    // Между findOne(current) и update нет await — стор синхронный, гонки нет: если строка есть, а
+    // guarded-update поменял 0 строк, значит версия разошлась (кто-то записал раньше).
+    const changes = this.deps.appDb.update(projectId, table.name, rowId, values, expectedUpdatedAt);
+    if (changes === 0 && expectedUpdatedAt !== undefined) {
+      throw new AppRowConflictError(
+        table.name,
+        rowId,
+        this.maskRow(sensitive, this.fromStorageRow(table, current)),
+      );
+    }
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.update',
@@ -259,7 +297,7 @@ export class ManageAppBackendData {
     await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
     const { table } = await this.requireTable(projectId, tableName);
     const deleted = this.deps.appDb.remove(projectId, table.name, rowId);
-    this.deps.appDb.recordAudit(projectId, {
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.delete',
@@ -302,7 +340,7 @@ export class ManageAppBackendData {
       appKeyHash: backend.appKeyHash,
       storageLimitBytes: backend.storageLimitBytes,
     });
-    this.deps.appDb.recordAudit(projectId, {
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.permissions',
@@ -310,6 +348,92 @@ export class ManageAppBackendData {
       detail: rules,
     });
     return rules;
+  }
+
+  // Выгрузка CSV (долг 0.2). Требует update_project — выгрузка ≠ просмотр: это создание офлайн-копии
+  // данных, а не чтение грида. Чувствительные колонки НЕ попадают в файл вовсе (ни значением, ни
+  // маской, ни заголовком) — иначе получаем файл, по которому оракул гоняется офлайн без аудита.
+  async exportRows(
+    projectId: string,
+    callerUserId: string,
+    tableName: string,
+    query: AppRowsQuery,
+  ): Promise<AppRowsExport> {
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
+    const { table } = await this.requireTable(projectId, tableName);
+    const sensitive = sensitiveColumns(table.fields);
+    // Те же оракул-гарды, что и у грида: сорт/поиск/фильтр по чувствительной колонке отвергаются.
+    const { filters, search, sort } = this.buildQueryOpts(table, query, sensitive);
+    const opts = { filters, search };
+    const total = this.deps.appDb.count(projectId, table.name, opts);
+    const truncated = total > EXPORT_ROW_CAP;
+    const target = Math.min(total, EXPORT_ROW_CAP);
+    // Колонки файла — БЕЗ чувствительных. Значения секретных полей вообще не эмитируются.
+    const columns = ['id', 'owner_id', 'created_at', 'updated_at', ...table.fields.map((field) => field.name)]
+      .filter((column) => !sensitive.has(column));
+    const rows: Row[] = [];
+    for (let off = 0; off < target; off += EXPORT_CHUNK) {
+      const batch = this.deps.appDb
+        .select(projectId, table.name, { ...opts, orderBy: sort, limit: EXPORT_CHUNK, offset: off })
+        .map((row) => this.fromStorageRow(table, row));
+      rows.push(...batch);
+      if (batch.length < EXPORT_CHUNK) break;
+    }
+    const capped = rows.slice(0, EXPORT_ROW_CAP);
+    const csv = toCsv(columns, capped, table);
+    await this.deps.adminAudit.record(projectId, {
+      actorType: 'project_member',
+      actorId: callerUserId,
+      operation: 'dashboard.export',
+      tableName: table.name,
+      detail: { rows: capped.length, columns, truncated },
+    });
+    return { csv, rowCount: capped.length, truncated, columns };
+  }
+
+  // Явный флаг чувствительности поля (долг 0.3). Требует update_project. Снятие флага (null) не всегда
+  // раскрывает поле: если имя ловит эвристика, оно остаётся замаскированным. Любое изменение —
+  // в аудит dashboard.sensitivity_changed (снятие показывается в Security как finding — срез 4).
+  async setFieldSensitivity(
+    projectId: string,
+    callerUserId: string,
+    tableName: string,
+    fieldName: string,
+    sensitive: SensitiveKind | null,
+  ): Promise<{ readonly field: string; readonly sensitive: SensitiveKind | null }> {
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'update_project');
+    const { backend, table } = await this.requireTable(projectId, tableName);
+    if (!SENSITIVITY_VALUES.includes(sensitive)) {
+      throw new AppSchemaInvalidError(`invalid sensitive value: ${String(sensitive)}`);
+    }
+    const field = table.fields.find((candidate) => candidate.name === fieldName);
+    if (!field) throw new AppTableNotAllowedError(`column ${fieldName}`);
+    const previous = field.sensitive ?? null;
+    const schema = validateAppSchema({
+      tables: backend.schema!.tables.map((candidate) => candidate.name === table.name
+        ? {
+            ...candidate,
+            fields: candidate.fields.map((f) => f.name === fieldName
+              ? { name: f.name, type: f.type, ...(f.required ? { required: true } : {}), ...(f.unique ? { unique: true } : {}), ...(sensitive ? { sensitive } : {}) }
+              : f),
+          }
+        : candidate),
+    });
+    await this.deps.appBackends.upsert({
+      projectId,
+      status: backend.status,
+      schema,
+      appKeyHash: backend.appKeyHash,
+      storageLimitBytes: backend.storageLimitBytes,
+    });
+    await this.deps.adminAudit.record(projectId, {
+      actorType: 'project_member',
+      actorId: callerUserId,
+      operation: 'dashboard.sensitivity_changed',
+      tableName: table.name,
+      detail: { field: fieldName, from: previous, to: sensitive, heuristic: classifyField(fieldName) },
+    });
+    return { field: fieldName, sensitive };
   }
 
   async listLogs(
@@ -328,14 +452,27 @@ export class ManageAppBackendData {
     const backend = await this.deps.appBackends.getByProject(projectId);
     if (!backend || backend.status !== 'active' || !backend.schema) return { rows: [], total: 0 };
     this.deps.appDb.ensureDatabase(projectId, backend.schema);
-    return this.deps.appDb.listAudit(projectId, {
+    const filters = {
       tableName: cleanOptional(opts.tableName, 64),
       operation: cleanOptional(opts.operation, 80),
       actorId: cleanOptional(opts.actorId, 64),
       errorsOnly: opts.errorsOnly === true,
-      limit: clamp(opts.limit, 1, 250, 100),
-      offset: clamp(opts.offset, 0, 1_000_000, 0),
-    });
+    };
+    const limit = clamp(opts.limit, 1, 250, 100);
+    const offset = clamp(opts.offset, 0, 1_000_000, 0);
+    // Единая лента = административные события (надёжный журнал в MariaDB) + рантайм-события
+    // (per-project SQLite). Тянем окно (offset+limit) из обоих источников и сливаем по времени.
+    // Так вытеснение SQLite-буфера трафиком приложения больше не скрывает раскрытия секретов:
+    // они живут в надёжном журнале и всегда достаются (в т.ч. фильтром по operation).
+    const window = Math.min(offset + limit, MERGE_WINDOW);
+    const [admin, runtime] = await Promise.all([
+      this.deps.adminAudit.list(projectId, { ...filters, limit: window, offset: 0 }),
+      Promise.resolve(this.deps.appDb.listAudit(projectId, { ...filters, limit: window, offset: 0 })),
+    ]);
+    const rows = [...admin.rows, ...runtime.rows]
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : (a.id < b.id ? 1 : -1)))
+      .slice(offset, offset + limit);
+    return { rows, total: admin.total + runtime.total };
   }
 
   async listRuntimeUsers(projectId: string, callerUserId: string): Promise<readonly AppRuntimeUser[]> {
@@ -359,7 +496,7 @@ export class ManageAppBackendData {
       createdAt: String(row.created_at),
       activeSessions: counts.get(String(row.id)) ?? 0,
     }));
-    this.deps.appDb.recordAudit(projectId, {
+    await this.deps.adminAudit.record(projectId, {
       actorType: 'project_member',
       actorId: callerUserId,
       operation: 'dashboard.users.list',
@@ -375,7 +512,7 @@ export class ManageAppBackendData {
     if (!backend || backend.status !== 'active' || !backend.schema) throw new AppBackendNotProvisionedError(projectId);
     this.deps.appDb.ensureDatabase(projectId, backend.schema);
     const revoked = this.deps.appDb.removeWhere(projectId, '_sessions', { user_id: userId });
-    this.deps.appDb.recordAudit(projectId, { actorType: 'project_member', actorId: callerUserId, operation: 'dashboard.user.sessions.revoke', rowId: userId, detail: { revoked } });
+    await this.deps.adminAudit.record(projectId, { actorType: 'project_member', actorId: callerUserId, operation: 'dashboard.user.sessions.revoke', rowId: userId, detail: { revoked } });
     return { revoked };
   }
 
@@ -386,7 +523,7 @@ export class ManageAppBackendData {
     this.deps.appDb.ensureDatabase(projectId, backend.schema);
     this.deps.appDb.removeWhere(projectId, '_sessions', { user_id: userId });
     const deleted = this.deps.appDb.remove(projectId, '_users', userId);
-    this.deps.appDb.recordAudit(projectId, { actorType: 'project_member', actorId: callerUserId, operation: 'dashboard.user.delete', rowId: userId, detail: { deleted } });
+    await this.deps.adminAudit.record(projectId, { actorType: 'project_member', actorId: callerUserId, operation: 'dashboard.user.delete', rowId: userId, detail: { deleted } });
     return { deleted };
   }
 
@@ -405,7 +542,39 @@ export class ManageAppBackendData {
   }
 
   private columnSet(table: AppTable): Set<string> {
-    return new Set(['id', 'owner_id', 'created_at', ...table.fields.map((field) => field.name)]);
+    return new Set(['id', 'owner_id', 'created_at', 'updated_at', ...table.fields.map((field) => field.name)]);
+  }
+
+  // Единая нормализация фильтров/поиска/сортировки — используется и гридом (listRows), и выгрузкой
+  // (exportRows), чтобы защита от оракула (раздел 4 плана) была ровно одна и её нельзя было обойти
+  // через экспорт: сортировка/поиск/фильтр по чувствительной колонке отвергаются здесь.
+  private buildQueryOpts(
+    table: AppTable,
+    query: AppRowsQuery,
+    sensitive: ReadonlyMap<string, SensitiveKind>,
+  ): {
+    filters: AppDataFilter[];
+    search: { columns: string[]; value: string } | undefined;
+    sort: { column: string; dir: 'asc' | 'desc' };
+  } {
+    const columns = this.columnSet(table);
+    const filters = (query.filters ?? []).slice(0, 20).map((filter) => this.normalizeFilter(table, filter));
+    // Сортировка по чувствительной колонке — это компаратор скрытых значений: порядок строк
+    // вместе с пагинацией позволяет двоичным поиском восстановить то, что мы маскируем.
+    if (query.sort && sensitive.has(query.sort.column)) {
+      throw new AppSchemaInvalidError(`column ${query.sort.column} is sensitive and cannot be sorted by`);
+    }
+    const sort = query.sort && columns.has(query.sort.column)
+      ? { column: query.sort.column, dir: query.sort.dir === 'desc' ? 'desc' as const : 'asc' as const }
+      : { column: 'created_at', dir: 'desc' as const };
+    const searchValue = typeof query.search === 'string' ? query.search.slice(0, 200) : '';
+    // Свободный поиск не заходит в чувствительные колонки (ни секреты, ни PII): совпадение по
+    // ним работает как оракул и позволяет побайтово подобрать значение, которое мы намеренно
+    // не показываем — номер карты подбирается так же, как API-ключ.
+    const search = searchValue.trim()
+      ? { columns: [...columns].filter((column) => !sensitive.has(column)), value: searchValue.trim() }
+      : undefined;
+    return { filters, search, sort };
   }
 
   private normalizeFilter(table: AppTable, raw: AppDataFilter): AppDataFilter {
@@ -545,6 +714,29 @@ export function effectiveCrudRules(table: AppTable): AppCrudRules {
 function clamp(value: number | undefined, min: number, max: number, fallback: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, Math.floor(value)));
+}
+
+// Сборка CSV (RFC 4180): ячейка экранируется кавычками, если содержит запятую/кавычку/перевод строки.
+// columns УЖЕ не содержит чувствительных колонок — эта функция не знает про маскирование и не должна:
+// всё, что попадает сюда, эмитируется как есть.
+function toCsv(columns: readonly string[], rows: readonly Row[], table: AppTable): string {
+  const fieldByName = new Map(table.fields.map((field) => [field.name, field]));
+  const header = columns.map(csvCell).join(',');
+  const lines = rows.map((row) => columns.map((column) => {
+    const field = fieldByName.get(column);
+    let value = row[column];
+    if (field?.type === 'bool' && value !== null && value !== undefined) {
+      value = value === true || value === 1;
+    }
+    return csvCell(value);
+  }).join(','));
+  return [header, ...lines].join('\r\n');
+}
+
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const text = typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function cleanOptional(value: string | undefined, max: number): string | undefined {

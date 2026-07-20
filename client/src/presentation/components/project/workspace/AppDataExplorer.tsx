@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowDownAZ,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
   Database,
+  Download,
   Eye,
   Filter,
   KeyRound,
@@ -38,11 +40,12 @@ import type {
   AppSensitiveKind,
   AppTableSchema,
 } from '@/application/project/ProjectRepository';
+import { AppRowVersionConflictError } from '@/application/project/ProjectRepository';
 
 const EMPTY_TABLES: AppTableSchema[] = [];
 
 const PAGE_SIZE = 50;
-const SYSTEM_COLUMNS = ['id', 'owner_id', 'created_at'] as const;
+const SYSTEM_COLUMNS = ['id', 'owner_id', 'created_at', 'updated_at'] as const;
 const ACCESS_OPTIONS: Array<{ value: AppAccess; label: string; hint: string }> = [
   { value: 'anyone', label: 'Все', hint: 'Даже без входа' },
   { value: 'authenticated', label: 'Авторизованные', hint: 'Любой пользователь приложения' },
@@ -74,6 +77,20 @@ function effectiveRules(table: AppTableSchema): AppCrudRules {
 function fieldForColumn(table: AppTableSchema, column: string): AppField | null {
   return table.fields.find((field) => field.name === column) ?? null;
 }
+
+// Локально обновляем поле схемы после смены чувствительности, чтобы не перезапрашивать весь dashboard.
+function withSensitive(field: AppField, sensitive: AppSensitiveKind | null): AppField {
+  const next = { ...field };
+  if (sensitive) next.sensitive = sensitive;
+  else delete next.sensitive;
+  return next;
+}
+
+const SENSITIVITY_OPTIONS: Array<{ value: '' | AppSensitiveKind; label: string }> = [
+  { value: '', label: 'Обычное' },
+  { value: 'pii', label: 'Персональные данные' },
+  { value: 'secret', label: 'Секрет' },
+];
 
 function operatorsFor(field: AppField | null): AppFilterOperator[] {
   if (!field || field.type === 'text') return ['contains', 'starts_with', 'eq', 'neq', 'is_empty', 'is_not_empty'];
@@ -118,6 +135,7 @@ export function AppDataExplorer({
   const [reload, setReload] = useState(0);
   const [editingRow, setEditingRow] = useState<AppDataRow | 'new' | null>(null);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [tableSearch, setTableSearch] = useState('');
   const [alphabetical, setAlphabetical] = useState(false);
 
@@ -174,7 +192,7 @@ export function AppDataExplorer({
     return <div className="grid min-h-[360px] place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">В схеме пока нет пользовательских таблиц.</div>;
   }
 
-  const columns = selectedTable ? ['id', ...selectedTable.fields.map((field) => field.name), 'owner_id', 'created_at'] : [];
+  const columns = selectedTable ? ['id', ...selectedTable.fields.map((field) => field.name), 'owner_id', 'created_at', 'updated_at'] : [];
   const maxOffset = page ? Math.max(0, Math.floor(Math.max(0, page.total - 1) / PAGE_SIZE) * PAGE_SIZE) : 0;
   const masked: Readonly<Record<string, AppSensitiveKind>> = page?.masked ?? {};
   const applySort = (column: string): void => {
@@ -240,6 +258,7 @@ export function AppDataExplorer({
             <>
               <FilterPopover table={selectedTable} masked={masked} filters={filters} onChange={(next) => { setFilters(next); setOffset(0); }} />
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setPermissionsOpen(true)}><ShieldCheck className="size-3.5" /><span className="hidden sm:inline">Права</span></Button>
+              {canEdit && <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setExportOpen(true)}><Download className="size-3.5" /><span className="hidden sm:inline">Выгрузить CSV</span></Button>}
               {canEdit && <Button size="sm" className="h-9 gap-1.5" onClick={() => setEditingRow('new')}><Plus className="size-3.5" />Запись</Button>}
             </>
           )}
@@ -330,6 +349,7 @@ export function AppDataExplorer({
               onOpenChange={setPermissionsOpen}
               projectId={projectId}
               table={selectedTable}
+              masked={masked}
               canEdit={canEdit}
               onSaved={(rules) => {
                 if (!dashboard.schema) return;
@@ -338,6 +358,24 @@ export function AppDataExplorer({
                   schema: { tables: dashboard.schema.tables.map((table) => table.name === selectedTable.name ? { ...table, rules: { read: rules.read, write: rules.update, create: rules.create, update: rules.update, delete: rules.delete } } : table) },
                 });
               }}
+              onSensitivityChanged={(fieldName, sensitive) => {
+                if (!dashboard.schema) return;
+                onDashboardChange({
+                  ...dashboard,
+                  schema: { tables: dashboard.schema.tables.map((table) => table.name === selectedTable.name
+                    ? { ...table, fields: table.fields.map((field) => field.name === fieldName ? withSensitive(field, sensitive) : field) }
+                    : table) },
+                });
+                setReload((value) => value + 1);
+              }}
+            />
+            <ExportDialog
+              open={exportOpen}
+              onOpenChange={setExportOpen}
+              projectId={projectId}
+              tableName={selectedTable.name}
+              total={page?.total ?? 0}
+              query={{ search, filters, sort }}
             />
           </>
         )}
@@ -392,12 +430,18 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [revealing, setRevealing] = useState<string | null>(null);
+  // Базовая версия строки для optimistic concurrency (долг 0.1). При конфликте обновляется на
+  // актуальную, а введённые значения сохраняются — пользователь решает, перезаписать ли чужие правки.
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState<string | undefined>(undefined);
+  const [conflict, setConflict] = useState(false);
   useEffect(() => {
     const next: AppDataRow = {};
     for (const field of table.fields) next[field.name] = existingRow ? existingRow[field.name] ?? '' : field.type === 'bool' ? false : '';
     setValues(next);
     setConfirmDelete(false);
     setRevealing(null);
+    setConflict(false);
+    setBaseUpdatedAt(existingRow && typeof existingRow['updated_at'] === 'string' ? existingRow['updated_at'] : undefined);
   }, [existingRow, table]);
   const reveal = async (column: string): Promise<void> => {
     if (!existingRow) return;
@@ -413,10 +457,20 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
     setSaving(true);
     try {
       if (isNew) await projectRepository.createAppRow(projectId, table.name, values);
-      else if (existingRow) await projectRepository.updateAppRow(projectId, table.name, String(existingRow.id), values);
+      else if (existingRow) await projectRepository.updateAppRow(projectId, table.name, String(existingRow.id), values, baseUpdatedAt);
       toast.success(isNew ? 'Запись создана' : 'Изменения сохранены');
       onSaved();
-    } catch { toast.error('Не удалось сохранить запись. Проверьте обязательные поля.'); }
+    } catch (err) {
+      if (err instanceof AppRowVersionConflictError) {
+        // Не закрываем панель и не теряем введённого: обновляем базовую версию, показываем предупреждение.
+        setConflict(true);
+        const fresh = err.currentRow;
+        setBaseUpdatedAt(fresh && typeof fresh['updated_at'] === 'string' ? fresh['updated_at'] : undefined);
+        toast.error('Запись изменена другим участником');
+      } else {
+        toast.error('Не удалось сохранить запись. Проверьте обязательные поля.');
+      }
+    }
     finally { setSaving(false); }
   };
   const remove = async (): Promise<void> => {
@@ -432,6 +486,12 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
         <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-xl">
           <SheetHeader className="border-b px-5 py-4 text-left"><SheetTitle>{isNew ? 'Новая запись' : `Запись · ${table.name}`}</SheetTitle><SheetDescription>{isNew ? 'Заполните поля схемы таблицы.' : String(existingRow?.id ?? '')}</SheetDescription></SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            {conflict && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>Запись изменена другим участником. Ваши правки сохранены в форме — повторное сохранение перезапишет чужие изменения.</span>
+              </div>
+            )}
             {existingRow && SYSTEM_COLUMNS.map((column) => <div key={column} className="grid gap-1 sm:grid-cols-[140px_1fr]"><span className="text-xs font-medium text-muted-foreground">{column}</span><span className="break-all text-sm">{displayValue(existingRow[column], null)}</span></div>)}
             {!isNew && <div className="border-t" />}
             {table.fields.map((field) => (
@@ -487,11 +547,114 @@ function FieldEditor({ field, value, sensitive, revealing, onReveal, disabled, o
   return <label className="block space-y-1.5">{label}<input type={type} step={field.type === 'int' ? '1' : field.type === 'real' ? 'any' : undefined} required={field.required} disabled={disabled} value={inputValue} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60" /></label>;
 }
 
-function PermissionsDialog({ open, onOpenChange, projectId, table, canEdit, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; projectId: string; table: AppTableSchema; canEdit: boolean; onSaved: (rules: AppCrudRules) => void }): React.ReactElement {
+function PermissionsDialog({ open, onOpenChange, projectId, table, masked, canEdit, onSaved, onSensitivityChanged }: { open: boolean; onOpenChange: (open: boolean) => void; projectId: string; table: AppTableSchema; masked: Readonly<Record<string, AppSensitiveKind>>; canEdit: boolean; onSaved: (rules: AppCrudRules) => void; onSensitivityChanged: (field: string, sensitive: AppSensitiveKind | null) => void }): React.ReactElement {
   const { projectRepository } = useContainer();
   const [rules, setRules] = useState<AppCrudRules>(() => effectiveRules(table));
   const [saving, setSaving] = useState(false);
+  const [savingField, setSavingField] = useState<string | null>(null);
   useEffect(() => { if (open) setRules(effectiveRules(table)); }, [open, table]);
   const save = async (): Promise<void> => { setSaving(true); try { const result = await projectRepository.updateAppTablePermissions(projectId, table.name, rules); onSaved(result); toast.success('Права доступа сохранены'); onOpenChange(false); } catch { toast.error('Не удалось сохранить права'); } finally { setSaving(false); } };
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Права · {table.name}</DialogTitle><DialogDescription>Кто может выполнять операции через публичный API приложения. Участники проекта с правом редактирования по-прежнему управляют данными через Dashboard.</DialogDescription></DialogHeader><div className="overflow-hidden rounded-lg border"><div className="grid grid-cols-[130px_1fr] border-b bg-muted/35 px-3 py-2 text-xs font-medium text-muted-foreground"><span>Операция</span><span>Доступ</span></div>{(['create', 'read', 'update', 'delete'] as const).map((operation) => <div key={operation} className="grid grid-cols-[130px_1fr] items-center border-b px-3 py-2.5 last:border-b-0"><span className="text-sm font-medium capitalize">{operation}</span><select value={rules[operation]} disabled={!canEdit || saving} onChange={(event) => setRules((current) => ({ ...current, [operation]: event.target.value as AppAccess }))} className="h-9 rounded-md border bg-background px-2 text-sm">{ACCESS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label} — {option.hint}</option>)}</select></div>)}</div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>{canEdit && <Button onClick={() => void save()} disabled={saving}>{saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}Сохранить</Button>}</DialogFooter></DialogContent></Dialog>;
+  const changeSensitivity = async (field: string, raw: '' | AppSensitiveKind): Promise<void> => {
+    setSavingField(field);
+    const next = raw === '' ? null : raw;
+    try {
+      await projectRepository.setAppFieldSensitivity(projectId, table.name, field, next);
+      onSensitivityChanged(field, next);
+      toast.success('Чувствительность поля обновлена');
+    } catch { toast.error('Не удалось изменить чувствительность поля'); }
+    finally { setSavingField(null); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Права · {table.name}</DialogTitle>
+          <DialogDescription>Кто может выполнять операции через публичный API приложения. Участники проекта с правом редактирования по-прежнему управляют данными через Dashboard.</DialogDescription>
+        </DialogHeader>
+        <div className="overflow-hidden rounded-lg border">
+          <div className="grid grid-cols-[130px_1fr] border-b bg-muted/35 px-3 py-2 text-xs font-medium text-muted-foreground"><span>Операция</span><span>Доступ</span></div>
+          {(['create', 'read', 'update', 'delete'] as const).map((operation) => (
+            <div key={operation} className="grid grid-cols-[130px_1fr] items-center border-b px-3 py-2.5 last:border-b-0">
+              <span className="text-sm font-medium capitalize">{operation}</span>
+              <select value={rules[operation]} disabled={!canEdit || saving} onChange={(event) => setRules((current) => ({ ...current, [operation]: event.target.value as AppAccess }))} className="h-9 rounded-md border bg-background px-2 text-sm">{ACCESS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label} — {option.hint}</option>)}</select>
+            </div>
+          ))}
+        </div>
+        <div className="mt-1">
+          <p className="text-sm font-semibold">Чувствительность полей</p>
+          <p className="mb-2 mt-0.5 text-xs leading-5 text-muted-foreground">Секреты и персональные данные маскируются в гриде, не выгружаются в CSV и недоступны для поиска, фильтра и сортировки по значению.</p>
+          <div className="overflow-hidden rounded-lg border">
+            {table.fields.length === 0 ? (
+              <p className="px-3 py-4 text-center text-xs text-muted-foreground">В таблице нет пользовательских полей.</p>
+            ) : table.fields.map((field) => {
+              const heuristicOnly = !field.sensitive && Boolean(masked[field.name]);
+              return (
+                <div key={field.name} className="grid grid-cols-[1fr_190px] items-center gap-2 border-b px-3 py-2.5 last:border-b-0">
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium">{field.name}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">{field.type}</span>
+                    {heuristicOnly && <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-500">Определено по имени — останется скрытым</p>}
+                  </div>
+                  <select value={field.sensitive ?? ''} disabled={!canEdit || savingField === field.name} onChange={(event) => void changeSensitivity(field.name, event.target.value as '' | AppSensitiveKind)} className="h-9 rounded-md border bg-background px-2 text-sm">{SENSITIVITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>
+          {canEdit && <Button onClick={() => void save()} disabled={saving}>{saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}Сохранить права</Button>}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const EXPORT_ROW_CAP = 10_000;
+
+function ExportDialog({ open, onOpenChange, projectId, tableName, total, query }: { open: boolean; onOpenChange: (open: boolean) => void; projectId: string; tableName: string; total: number; query: { search: string; filters: AppDataFilter[]; sort: { column: string; dir: 'asc' | 'desc' } } }): React.ReactElement {
+  const { projectRepository } = useContainer();
+  const [exporting, setExporting] = useState(false);
+  const willTruncate = total > EXPORT_ROW_CAP;
+  const run = async (): Promise<void> => {
+    setExporting(true);
+    try {
+      const result = await projectRepository.exportAppRows(projectId, tableName, {
+        search: query.search,
+        filters: query.filters,
+        sort: query.sort,
+      });
+      // Файл собирается на сервере (без чувствительных колонок) — здесь только отдаём его браузеру.
+      const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${tableName}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success(result.truncated ? `Выгружены первые ${result.rowCount} строк` : `Выгружено строк: ${result.rowCount}`);
+      onOpenChange(false);
+    } catch { toast.error('Не удалось выгрузить данные. Нужны права редактора проекта.'); }
+    finally { setExporting(false); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Выгрузить CSV · {tableName}</DialogTitle>
+          <DialogDescription>Будет выгружено строк: {willTruncate ? `${EXPORT_ROW_CAP.toLocaleString('ru-RU')} (первые из ${total.toLocaleString('ru-RU')})` : total.toLocaleString('ru-RU')}. Текущий поиск и фильтры учитываются.</DialogDescription>
+        </DialogHeader>
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>Чувствительные колонки (секреты и персональные данные) в файл не попадут — ни значением, ни маской.</span>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
+          <Button onClick={() => void run()} disabled={exporting}>{exporting && <Loader2 className="mr-1.5 size-4 animate-spin" />}<Download className="mr-1.5 size-4" />Выгрузить</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

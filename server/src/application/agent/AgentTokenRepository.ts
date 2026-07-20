@@ -21,6 +21,9 @@ export interface AgentTokenRepository {
   findActiveByHash(hash: string): Promise<AgentToken | null>;
   revoke(id: string, userId: string): Promise<boolean>;
   revokeProjectCapability(id: string, userId: string, parentTokenId: string): Promise<boolean>;
+  // Активные (не revoked, не истёкшие) project-scoped child-токены проекта (db/126).
+  // Раздел Agents показывает по ним «какими capabilities владеет воркер прямо сейчас».
+  listActiveProjectCapabilities(projectId: string): Promise<AgentToken[]>;
   // Обновление lastUsedAt при успешном агент-запросе. Не критично к ошибкам.
   touchLastUsed(id: string): Promise<void>;
   // Сколько активных (не revoked) токенов у юзера. Используется в RevokeAgentToken:

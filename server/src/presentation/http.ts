@@ -53,6 +53,7 @@ import { telemetryRouter } from './telemetry/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
+import type { GetProjectWorkerOverview } from '../application/agent/GetProjectWorkerOverview.js';
 import type { ListMyDispatchedProjects } from '../application/agent/ListMyDispatchedProjects.js';
 import type { SetGitTokenDelegation } from '../application/project/SetGitTokenDelegation.js';
 import type { ListGitTokenAccessLog } from '../application/project/ListGitTokenAccessLog.js';
@@ -357,6 +358,7 @@ type AppDeps = {
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
+    readonly getWorkerOverview: GetProjectWorkerOverview;
     readonly setGitTokenDelegation: SetGitTokenDelegation;
     readonly listGitTokenAccessLog: ListGitTokenAccessLog;
     readonly gitTokenDelegations: GitTokenDelegationRepository;

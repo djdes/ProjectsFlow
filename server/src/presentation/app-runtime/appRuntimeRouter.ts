@@ -10,6 +10,7 @@ import {
   AppBackendNotProvisionedError,
   AppSchemaInvalidError,
   AppTableNotAllowedError,
+  AppUniqueViolationError,
   AppUserExistsError,
   StorageQuotaExceededError,
 } from '../../domain/app-backend/errors.js';
@@ -151,6 +152,8 @@ export function appRuntimeRouter(deps: AppRuntimeDeps): Router {
   // Маппинг доменных ошибок app-backend в HTTP-коды.
   router.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (err instanceof AppUserExistsError) return res.status(409).json({ error: 'user_exists' });
+    // UNIQUE-конфликт — нейтрально, без имени колонки (не раскрываем схему и не даём оракул).
+    if (err instanceof AppUniqueViolationError) return res.status(409).json({ error: 'duplicate_value' });
     if (err instanceof AppAuthError) return res.status(401).json({ error: 'auth_failed' });
     if (err instanceof AppAccessDeniedError) return res.status(403).json({ error: 'access_denied' });
     if (err instanceof StorageQuotaExceededError) return res.status(413).json({ error: 'storage_full' });

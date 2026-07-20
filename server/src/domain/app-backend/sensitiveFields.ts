@@ -77,11 +77,21 @@ function keepHead(value: string, keep: number): string {
   return `${value.slice(0, keep)}${'•'.repeat(Math.min(8, value.length - keep))}`;
 }
 
-// Колонки таблицы, значения которых уходят клиенту только замаскированными.
+// Более сильная защита из двух вердиктов побеждает: secret строже pii, любой вердикт строже
+// «не чувствительно». Так объединение флага и эвристики никогда не ослабляет защиту.
+function strongest(a: SensitiveKind | null, b: SensitiveKind | null): SensitiveKind | null {
+  if (a === 'secret' || b === 'secret') return 'secret';
+  if (a === 'pii' || b === 'pii') return 'pii';
+  return null;
+}
+
+// Колонки таблицы, значения которых уходят клиенту только замаскированными. Это ОБЪЕДИНЕНИЕ
+// явного флага `field.sensitive` (долг 0.3) и эвристики по имени: эвристика остаётся страховочной
+// сеткой для схем, написанных воркером без флага, и не отключается отсутствием флага.
 export function sensitiveColumns(fields: readonly AppField[]): Map<string, SensitiveKind> {
   const result = new Map<string, SensitiveKind>();
   for (const field of fields) {
-    const kind = classifyField(field.name);
+    const kind = strongest(field.sensitive ?? null, classifyField(field.name));
     if (kind) result.set(field.name, kind);
   }
   return result;

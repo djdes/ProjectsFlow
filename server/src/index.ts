@@ -81,6 +81,7 @@ import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.j
 import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
 import { FileSystemSiteArtifactStorage } from './infrastructure/storage/FileSystemSiteArtifactStorage.js';
 import { DrizzleAppBackendRepository } from './infrastructure/repositories/DrizzleAppBackendRepository.js';
+import { DrizzleAppAdminAuditRepository } from './infrastructure/repositories/DrizzleAppAdminAuditRepository.js';
 import { DrizzleAppDashboardSettingsRepository } from './infrastructure/repositories/DrizzleAppDashboardSettingsRepository.js';
 import { SqliteAppDatabaseStore } from './infrastructure/app-backend/SqliteAppDatabaseStore.js';
 import { AppAuthService } from './application/app-backend/AppAuthService.js';
@@ -135,6 +136,7 @@ import { DeleteProject } from './application/project/DeleteProject.js';
 import { SetProjectDispatcher } from './application/project/SetProjectDispatcher.js';
 import { SetProjectMultiTaskWorker } from './application/project/SetProjectMultiTaskWorker.js';
 import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
+import { GetProjectWorkerOverview } from './application/agent/GetProjectWorkerOverview.js';
 import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
 import { pickDefaultDispatcherUserId } from './application/project/pickDefaultDispatcher.js';
 import { SetGitTokenDelegation } from './application/project/SetGitTokenDelegation.js';
@@ -987,6 +989,9 @@ console.log(`[projectsflow] site artifacts dir: ${siteArtifactsDir}`);
 // Один SQLite-файл на проект: apps-data/<project_id>.sqlite (квота 100 МБ на проект).
 const appsDataDir = resolvePath(process.env['APPS_DATA_DIR'] ?? 'apps-data');
 const appBackendRepo = new DrizzleAppBackendRepository(db);
+// Надёжный журнал административного аудита Data Explorer (db/136): раскрытие секретов и прочие
+// действия участников проекта живут в MariaDB, вне вытесняемого трафиком SQLite-буфера.
+const appAdminAuditRepo = new DrizzleAppAdminAuditRepository(db, idGenerator);
 const appDashboardSettingsRepo = new DrizzleAppDashboardSettingsRepository(db);
 const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
 const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
@@ -1064,8 +1069,9 @@ setInterval(
 // ===== LIVE-вкладка задачи (db/053): стрим действий Ralph-воркера =====
 // Task-scoped firehose live-событий (только для открытых SSE-вкладок; НЕ per-user bus).
 const liveEventHub = new LiveEventHub();
+const liveRepo = new DrizzleLiveRepository(db);
 const liveService = new LiveService({
-  repo: new DrizzleLiveRepository(db),
+  repo: liveRepo,
   access: { projects: projectRepo, members: projectMemberRepo },
   broadcaster: projectEventBroadcaster,
   liveEventHub,
@@ -1290,6 +1296,7 @@ const createEmailActionToken = new CreateEmailActionToken({
 const manageAppBackendData = new ManageAppBackendData({
   appBackends: appBackendRepo,
   appDb: appDatabaseStore,
+  adminAudit: appAdminAuditRepo,
   projects: projectRepo,
   members: projectMemberRepo,
 });
@@ -1661,6 +1668,12 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
       users: userRepo,
+    }),
+    getWorkerOverview: new GetProjectWorkerOverview({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      agentTokens: agentTokenRepo,
+      live: liveRepo,
     }),
     setGitTokenDelegation: new SetGitTokenDelegation({
       projects: projectRepo,

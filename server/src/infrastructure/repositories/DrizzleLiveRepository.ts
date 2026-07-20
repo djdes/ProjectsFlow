@@ -106,6 +106,24 @@ export class DrizzleLiveRepository implements LiveRepository {
     return rows.map(toSession);
   }
 
+  async listRecentProjectSessions(projectId: string, limit: number): Promise<LiveSession[]> {
+    const rows = await this.db
+      .select()
+      .from(liveSessions)
+      .where(eq(liveSessions.projectId, projectId))
+      .orderBy(desc(liveSessions.startedAt))
+      .limit(limit);
+    return rows.map(toSession);
+  }
+
+  async countRunningProjectSessions(projectId: string): Promise<number> {
+    const rows = await this.db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(liveSessions)
+      .where(and(eq(liveSessions.projectId, projectId), eq(liveSessions.status, 'running')));
+    return Number(rows[0]?.c ?? 0);
+  }
+
   async appendEvent(input: {
     sessionId: string;
     taskId: string;

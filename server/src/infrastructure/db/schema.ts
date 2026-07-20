@@ -2275,3 +2275,34 @@ export type TelegramDigestActionDeliveryRow =
   typeof telegramDigestActionDeliveries.$inferSelect;
 export type NewTelegramDigestActionDeliveryRow =
   typeof telegramDigestActionDeliveries.$inferInsert;
+
+// Надёжный журнал административного аудита Data Explorer (db/136). Живёт в MariaDB, а не в
+// per-project SQLite `_audit_log`: тот наполняет недоверенный публичный App Runtime и он
+// усекается до 2000 событий, из-за чего записи о раскрытии секретов могли вытесняться.
+// created_at — ISO-строка с миллисекундами (как в SQLite-журнале), чтобы объединять ленты по времени.
+export const appAdminAuditLog = mysqlTable(
+  'app_admin_audit_log',
+  {
+    seq: bigint('seq', { mode: 'number' }).autoincrement().primaryKey(),
+    id: char('id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    actorType: varchar('actor_type', { length: 32 }).notNull(),
+    actorId: varchar('actor_id', { length: 64 }),
+    operation: varchar('operation', { length: 80 }).notNull(),
+    tableName: varchar('table_name', { length: 64 }),
+    rowId: varchar('row_id', { length: 128 }),
+    success: tinyint('success').notNull().default(1),
+    detailJson: mediumtext('detail_json'),
+    createdAt: varchar('created_at', { length: 32 }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_app_admin_audit_id').on(t.id),
+    index('idx_app_admin_audit_project_seq').on(t.projectId, t.seq),
+    index('idx_app_admin_audit_project_op').on(t.projectId, t.operation),
+    index('idx_app_admin_audit_project_table').on(t.projectId, t.tableName),
+    index('idx_app_admin_audit_project_actor').on(t.projectId, t.actorId),
+  ],
+);
+
+export type AppAdminAuditLogRow = typeof appAdminAuditLog.$inferSelect;
+export type NewAppAdminAuditLogRow = typeof appAdminAuditLog.$inferInsert;

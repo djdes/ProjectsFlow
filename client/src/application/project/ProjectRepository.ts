@@ -97,6 +97,45 @@ export type DispatcherCandidate = {
   readonly isMember: boolean;
 };
 
+// Раздел Agents (карточка воркера). LIVE-сессия = один прогон Ralph-воркера по задаче.
+export type ProjectWorkerRunStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "timeout"
+  | "canceled";
+
+export type ProjectWorkerRun = {
+  readonly id: string;
+  readonly taskId: string;
+  readonly agentName: string | null;
+  readonly attempt: number;
+  readonly status: ProjectWorkerRunStatus;
+  readonly model: string | null;
+  readonly costUsd: number | null;
+  readonly tokensIn: number | null;
+  readonly tokensOut: number | null;
+  readonly eventCount: number;
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+};
+
+// Сводка по активным capabilities воркера (project-scoped agent-токены, db/126).
+export type ProjectWorkerCapabilities = {
+  readonly active: number;
+  readonly taskScoped: number;
+  readonly projectScoped: number;
+  readonly nextExpiryAt: string | null;
+};
+
+export type ProjectWorkerOverview = {
+  readonly dispatcherUserId: string | null;
+  readonly multiTaskWorker: boolean;
+  readonly runningCount: number;
+  readonly capabilities: ProjectWorkerCapabilities;
+  readonly recentRuns: readonly ProjectWorkerRun[];
+};
+
 export type CreateProjectInput = {
   readonly name: string;
 };
@@ -131,6 +170,8 @@ export type AppField = {
   readonly type: AppFieldType;
   readonly required?: boolean;
   readonly unique?: boolean;
+  // Явная пометка чувствительности (долг 0.3). Приоритетнее эвристики по имени, но не отменяет её.
+  readonly sensitive?: AppSensitiveKind;
 };
 export type AppTableRules = {
   readonly read: AppAccess;
@@ -273,6 +314,23 @@ export type AppCrudRules = {
   readonly update: AppAccess;
   readonly delete: AppAccess;
 };
+// Результат выгрузки CSV (долг 0.2). columns не содержит чувствительных колонок; truncated — упёрлись
+// в потолок 10 000 строк.
+export type AppRowsExport = {
+  readonly csv: string;
+  readonly rowCount: number;
+  readonly truncated: boolean;
+  readonly columns: readonly string[];
+};
+
+// Конфликт версий строки (долг 0.1). currentRow — актуальная (маскированная) версия для перезагрузки
+// панели без потери введённого. Живёт в application-слое, чтобы presentation мог ловить по типу.
+export class AppRowVersionConflictError extends Error {
+  constructor(public readonly currentRow: AppDataRow | null) {
+    super("app_row_conflict");
+    this.name = "AppRowVersionConflictError";
+  }
+}
 export type AppAuditLogEntry = {
   readonly id: string;
   readonly actorType: "runtime" | "project_member" | "system";
@@ -371,6 +429,9 @@ export interface ProjectRepository {
   // agent-токеном); setDispatcher — назначить/снять (owner-only).
   listDispatcherCandidates(projectId: string): Promise<DispatcherCandidate[]>;
   setDispatcher(projectId: string, userId: string | null): Promise<Project>;
+  // Обзор воркера проекта (раздел Agents): активные capabilities + LIVE-статус +
+  // история прогонов. read-доступ (member+).
+  getProjectWorkerOverview(projectId: string): Promise<ProjectWorkerOverview>;
   // Мультизадачный воркер проекта: вкл/выкл параллельное выполнение задач диспетчером.
   // Любой участник проекта (viewer+). Сервер вернёт обновлённый проект.
   setMultiTaskWorker(projectId: string, enabled: boolean): Promise<Project>;
@@ -431,11 +492,14 @@ export interface ProjectRepository {
     table: string,
     values: AppDataRow,
   ): Promise<AppDataRow>;
+  // expectedUpdatedAt — версия строки, которую видел клиент (optimistic concurrency, долг 0.1).
+  // При конфликте бросает AppRowVersionConflictError с актуальной строкой.
   updateAppRow(
     projectId: string,
     table: string,
     rowId: string,
     values: AppDataRow,
+    expectedUpdatedAt?: string,
   ): Promise<AppDataRow | null>;
   deleteAppRow(
     projectId: string,
@@ -448,11 +512,24 @@ export interface ProjectRepository {
     rowId: string,
     column: string,
   ): Promise<unknown>;
+  // Выгрузка таблицы в CSV (долг 0.2). Требует прав редактора; чувствительные колонки не выгружаются.
+  exportAppRows(
+    projectId: string,
+    table: string,
+    query: AppRowsQuery,
+  ): Promise<AppRowsExport>;
   updateAppTablePermissions(
     projectId: string,
     table: string,
     rules: AppCrudRules,
   ): Promise<AppCrudRules>;
+  // Переключить чувствительность поля (долг 0.3). Требует прав редактора; пишется в аудит.
+  setAppFieldSensitivity(
+    projectId: string,
+    table: string,
+    field: string,
+    sensitive: AppSensitiveKind | null,
+  ): Promise<{ readonly field: string; readonly sensitive: AppSensitiveKind | null }>;
   getAppBackendLogs(
     projectId: string,
     filters?: {

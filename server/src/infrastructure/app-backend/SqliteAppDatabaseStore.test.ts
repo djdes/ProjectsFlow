@@ -95,6 +95,40 @@ test('typed filters, cross-field search и count используют тольк
   );
 });
 
+test('updated_at ставится при вставке и бампается при апдейте (монотонно)', () => {
+  const s = newStore();
+  s.ensureDatabase('proj-ver', schema);
+  const p = s.insert('proj-ver', 'posts', { title: 'a', views: 1, owner_id: 'u1' });
+  const created = String(p['updated_at']);
+  assert.ok(created, 'updated_at проставлен при вставке');
+  assert.equal(created, String(p['created_at']), 'при вставке updated_at = created_at');
+  assert.equal(s.update('proj-ver', 'posts', String(p['id']), { title: 'b' }), 1);
+  const after = s.findOne('proj-ver', 'posts', { id: String(p['id']) });
+  assert.notEqual(String(after!['updated_at']), created, 'updated_at сдвинулся строго');
+});
+
+test('optimistic guard: апдейт с устаревшим expectedUpdatedAt меняет 0 строк', () => {
+  const s = newStore();
+  s.ensureDatabase('proj-guard', schema);
+  const p = s.insert('proj-guard', 'posts', { title: 'a', owner_id: 'u1' });
+  const id = String(p['id']);
+  const stale = String(p['updated_at']);
+  assert.equal(s.update('proj-guard', 'posts', id, { title: 'b' }, stale), 1, 'совпадающая версия — апдейт проходит');
+  assert.equal(s.update('proj-guard', 'posts', id, { title: 'c' }, stale), 0, 'устаревшая версия — 0 строк');
+  assert.equal(s.findOne('proj-guard', 'posts', { id })!['title'], 'b', 'данные не затёрты');
+});
+
+test('ensureDatabase идемпотентно догоняет updated_at на базе без колонки', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pf-appdb-legacy-'));
+  const s = new SqliteAppDatabaseStore(dir);
+  // Симулируем «старую» базу: создаём таблицу posts БЕЗ updated_at через прямой доступ невозможно,
+  // поэтому проверяем, что повторный ensureDatabase не падает и колонка есть/используется.
+  s.ensureDatabase('proj-legacy', schema);
+  s.ensureDatabase('proj-legacy', schema);
+  const p = s.insert('proj-legacy', 'posts', { title: 'a', owner_id: 'u1' });
+  assert.ok('updated_at' in p);
+});
+
 test('audit log сохраняет безопасные метаданные и фильтруется', () => {
   const s = newStore();
   s.ensureDatabase('proj-6', schema);

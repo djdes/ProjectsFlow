@@ -6,6 +6,8 @@ import type {
   ManageAppBackendData,
 } from '../../application/app-backend/ManageAppBackendData.js';
 import type { ManageAppDashboardSettings } from '../../application/app-backend/AppDashboardSettings.js';
+import { AppRowConflictError } from '../../domain/app-backend/errors.js';
+import type { SensitiveKind } from '../../domain/app-backend/sensitiveFields.js';
 
 export type AppBackendRouterDeps = {
   readonly getStatus: GetAppBackendStatus;
@@ -136,16 +138,72 @@ export function appBackendRouter(deps: AppBackendRouterDeps): Router {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const body = req.body && typeof req.body === 'object'
-          ? req.body as { values?: unknown }
+          ? req.body as { values?: unknown; expectedUpdatedAt?: unknown }
           : {};
+        const expectedUpdatedAt = typeof body.expectedUpdatedAt === 'string'
+          ? body.expectedUpdatedAt
+          : undefined;
         const row = await deps.dashboard.updateRow(
           req.params['projectId'] as string,
           req.user!.id,
           req.params['table'] as string,
           req.params['rowId'] as string,
           body.values,
+          expectedUpdatedAt,
         );
         res.status(200).json({ row });
+      } catch (error) {
+        // Конфликт версий обрабатываем здесь, а не в общем errorHandler: нужно вернуть актуальную
+        // строку в теле, чтобы клиент обновил базовую версию без потери введённого.
+        if (error instanceof AppRowConflictError) {
+          res.status(409).json({
+            error: 'app_row_conflict',
+            message: 'Запись изменена другим участником',
+            details: { row: error.currentRow },
+          });
+          return;
+        }
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/:projectId/app-backend/tables/:table/export',
+    requireAuth,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = req.body && typeof req.body === 'object' ? req.body as AppRowsQuery : {};
+        res.status(200).json(await deps.dashboard.exportRows(
+          req.params['projectId'] as string,
+          req.user!.id,
+          req.params['table'] as string,
+          body,
+        ));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.put(
+    '/:projectId/app-backend/tables/:table/fields/:field/sensitivity',
+    requireAuth,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = req.body && typeof req.body === 'object'
+          ? req.body as { sensitive?: unknown }
+          : {};
+        const sensitive: SensitiveKind | null = body.sensitive === 'secret' || body.sensitive === 'pii'
+          ? body.sensitive
+          : null;
+        res.status(200).json(await deps.dashboard.setFieldSensitivity(
+          req.params['projectId'] as string,
+          req.user!.id,
+          req.params['table'] as string,
+          req.params['field'] as string,
+          sensitive,
+        ));
       } catch (error) {
         next(error);
       }
