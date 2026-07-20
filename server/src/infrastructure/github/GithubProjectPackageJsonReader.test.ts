@@ -79,6 +79,33 @@ test('отсутствующий файл кэшируется наравне с
   assert.equal(calls.length, 1);
 });
 
+// Доступ к проекту и доступ к его репозиторию — разные авторизации: участник проекта вполне
+// может не иметь прав на приватный репозиторий. Общий на проект кэш отдал бы ему содержимое,
+// прочитанное токеном коллеги, — то есть ответил бы за GitHub «да» там, где GitHub сказал бы «нет».
+test('кэш не переносит прочитанное одним участником на другого', async () => {
+  const seen: string[] = [];
+  const reader = new GithubProjectPackageJsonReader({
+    projects: { async getById() { return { id: 'p1', gitRepoUrl: 'https://github.com/acme/magflow' } as never; } },
+    tokens: {
+      async getWithTokenByUserId(userId: string) {
+        // У второго участника GitHub не подключён — своего доступа к репозиторию нет.
+        return userId === 'with-access' ? ({ accessToken: 'tok', githubLogin: 'acme' } as never) : null;
+      },
+    },
+    api: {
+      async getRepoFile(_token: string, _fullName: string, path: string) {
+        seen.push(path);
+        return { path, sha: 's', size: 2, content: '{"private":"detail"}' };
+      },
+    },
+    now: () => 0,
+  });
+
+  assert.equal(await reader.read('p1', 'with-access'), '{"private":"detail"}');
+  assert.equal(await reader.read('p1', 'no-access'), null);
+  assert.equal(seen.length, 1, 'второй участник не должен был вызвать GitHub — но и ответ чужого чтения получить не должен');
+});
+
 test('без своего GitHub-токена в репозиторий не ходим', async () => {
   const { reader, calls } = build({ token: null, file: '{}' });
   assert.equal(await reader.read('p1', 'u1'), null);
