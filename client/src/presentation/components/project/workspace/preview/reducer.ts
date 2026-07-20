@@ -13,6 +13,7 @@ export type PreviewEditorAction =
   | { type: 'HOVER'; element: InspectedElement | null }
   | { type: 'SELECT'; element: InspectedElement | null }
   | { type: 'PATCH_START' }
+  | { type: 'PUBLISH_START' }
   | { type: 'PATCH_SUCCESS'; revision: number; draftCount: number; redoDepth: number; queuedCount: number }
   | { type: 'PATCH_ERROR'; message: string }
   | { type: 'HISTORY'; revision: number; undoDepth: number; redoDepth: number; draftCount?: number; queuedCount?: number }
@@ -53,6 +54,16 @@ export function previewEditorReducer(state: PreviewEditorState, action: PreviewE
     case 'HOVER': return { ...state, hovered: action.element };
     case 'SELECT': return { ...state, selected: action.element, hovered: null, styleOpen: false, aiOpen: false };
     case 'PATCH_START': return { ...state, saveStatus: 'saving' };
+    // Старт публикации черновика в проект. Диспатчится СИНХРОННО из exitEditMode — до
+    // смены режима: publishDraft() асинхронен (сначала ждёт очередь патчей), поэтому его
+    // собственный PATCH_START прилетает уже следующим тиком, когда React успел отрисовать
+    // выход из режима правки. Без этого действия индикатор гас, ни разу не показав, что
+    // правки сохраняются.
+    // queuedCount тут намеренно НЕ трогаем: это ответ сервера, на нём висят баннер
+    // публикации и блокировки тулбара, а откатить оптимистичное значение при неудачном
+    // запросе было бы некому — publishDraft на ошибку отвечает PATCH_ERROR. Индикатору
+    // достаточно saveStatus, чтобы сразу показать спиннер.
+    case 'PUBLISH_START': return { ...state, saveStatus: 'saving' };
     case 'PATCH_SUCCESS': return { ...state, saveStatus: action.draftCount ? 'dirty' : 'clean', revision: action.revision, undoDepth: action.draftCount, redoDepth: action.redoDepth, draftCount: action.draftCount, queuedCount: action.queuedCount, bridgeError: null };
     case 'PATCH_ERROR': return { ...state, saveStatus: 'error', bridgeError: action.message };
     case 'HISTORY': return { ...state, saveStatus: (action.draftCount ?? state.draftCount) ? 'dirty' : 'clean', revision: action.revision, undoDepth: action.undoDepth, redoDepth: action.redoDepth, draftCount: action.draftCount ?? state.draftCount, queuedCount: action.queuedCount ?? state.queuedCount };

@@ -1,9 +1,13 @@
 import { MessageSquareText, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export type StudioPanel = 'preview' | 'dashboard';
+
+// Тёмный тултип — как в Base44. Глобальный TooltipContent светлый (bg-popover) и трогать
+// его нельзя: он обслуживает ещё десяток мест. Поэтому красим точечно, здесь.
+const DARK_TOOLTIP = 'border-transparent bg-neutral-900 text-white';
 
 export function StudioTopBar({
   panel,
@@ -22,43 +26,54 @@ export function StudioTopBar({
   onOpenMobileChat: () => void;
   embedded?: 'leading' | 'trailing';
 }): React.ReactElement {
+  // hint — подсказка в тултипе: label у вкладок английский и сам по себе не объясняет,
+  // что за ним стоит.
   const items = [
-    { id: 'preview' as const, label: 'Preview' },
-    { id: 'dashboard' as const, label: 'Dashboard' },
+    { id: 'preview' as const, label: 'Preview', hint: 'Превью результата' },
+    { id: 'dashboard' as const, label: 'Dashboard', hint: 'Панель приложения' },
   ];
 
   const leading = (
     <>
       {chatHidden ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="hidden size-8 lg:inline-flex"
-          aria-label="Показать AI-чат"
-          onClick={onShowChat}
-        >
-          <PanelLeftOpen className="size-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden size-8 lg:inline-flex"
+              aria-label="Показать AI-чат"
+              onClick={onShowChat}
+            >
+              <PanelLeftOpen className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className={DARK_TOOLTIP}>Показать AI-чат</TooltipContent>
+        </Tooltip>
       ) : null}
 
       <div role="tablist" aria-label="Раздел Project Studio" className="inline-flex items-center rounded-md border bg-background p-0.5">
-        {items.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={panel === id}
-            onClick={() => onPanelChange(id)}
-            className={cn(
-              'inline-flex h-7 items-center rounded-[5px] px-2.5 text-sm font-medium transition-colors motion-reduce:transition-none',
-              panel === id
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-            )}
-          >
-            <span>{label}</span>
-          </button>
+        {items.map(({ id, label, hint }) => (
+          <Tooltip key={id}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={panel === id}
+                onClick={() => onPanelChange(id)}
+                className={cn(
+                  'inline-flex h-7 items-center rounded-[5px] px-2.5 text-sm font-medium transition-colors motion-reduce:transition-none',
+                  panel === id
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
+              >
+                <span>{label}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className={DARK_TOOLTIP}>{hint}</TooltipContent>
+          </Tooltip>
         ))}
       </div>
     </>
@@ -66,10 +81,11 @@ export function StudioTopBar({
 
   const trailing = (
     <>
-      <TooltipProvider delayDuration={550}>
-        <div className="hidden shrink-0 items-center gap-0.5 lg:flex">{actions}</div>
-      </TooltipProvider>
+      {/* TooltipProvider тут не нужен: он глобальный (main.tsx). Локальный дубль сбрасывал
+          skipDelayDuration, и соседние кнопки шапки переставали делиться задержкой. */}
+      <div className="hidden shrink-0 items-center gap-0.5 lg:flex">{actions}</div>
 
+      {/* Мобильная кнопка чата без тултипа: на тач-устройствах hover'а нет. */}
       <Button
         type="button"
         variant="outline"

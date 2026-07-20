@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { AppAuthService, AppUser } from '../../application/app-backend/AppAuthService.js';
-import type { RunAppQuery } from '../../application/app-backend/RunAppQuery.js';
+import type { BulkUpdateItem, RunAppQuery } from '../../application/app-backend/RunAppQuery.js';
 import type { Row } from '../../application/app-backend/AppDatabaseStore.js';
 import type { AppDashboardSettingsRepository } from '../../application/app-backend/AppDashboardSettings.js';
 import { DEFAULT_APP_DASHBOARD_SETTINGS } from '../../application/app-backend/AppDashboardSettings.js';
@@ -55,6 +55,15 @@ function parseSort(query: Record<string, unknown>): { column: string; dir: 'asc'
   if (!col) return undefined;
   const dir = query.dir === 'desc' ? 'desc' : 'asc';
   return { column: col, dir };
+}
+
+// Тело bulk-запроса — либо голый массив, либо { items: [...] }. Потолок и типы проверяет RunAppQuery.
+function bodyItems(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === 'object' && Array.isArray((body as { items?: unknown }).items)) {
+    return (body as { items: unknown[] }).items;
+  }
+  return [];
 }
 
 // Роутер App Runtime: /api/auth/* и /api/data/* для приложений с бэкендом. Мысли о безопасности:
@@ -129,6 +138,42 @@ export function appRuntimeRouter(deps: AppRuntimeDeps): Router {
     void deps.runQuery
       .execute({ projectId: projectId(req), table: String(req.params.table), op: 'insert', values: req.body ?? {}, currentUser: user(req) })
       .then((row) => res.status(201).json(row))
+      .catch(next);
+  });
+
+  // Bulk-создание записей (потолок 100, права построчно). Отдельный сегмент /bulk — до /:id-роутов.
+  router.post('/api/data/:table/bulk', (req: Request, res: Response, next: NextFunction) => {
+    void deps.runQuery
+      .bulkInsert({ projectId: projectId(req), table: String(req.params.table), rows: bodyItems(req.body) as Row[], currentUser: user(req) })
+      .then((rows) => res.status(201).json(rows))
+      .catch(next);
+  });
+
+  // Bulk-обновление по списку {id, values} (права построчно, потолок 100).
+  router.put('/api/data/:table/bulk', (req: Request, res: Response, next: NextFunction) => {
+    void deps.runQuery
+      .bulkUpdate({ projectId: projectId(req), table: String(req.params.table), items: bodyItems(req.body) as BulkUpdateItem[], currentUser: user(req) })
+      .then((rows) => res.json(rows))
+      .catch(next);
+  });
+
+  // Обновление по условию. Условие по чувствительной колонке отклоняется (оракул), права построчно.
+  router.post('/api/data/:table/update-many', (req: Request, res: Response, next: NextFunction) => {
+    const body = (req.body ?? {}) as { where?: Row; match?: Row; values?: Row };
+    void deps.runQuery
+      .updateMany({ projectId: projectId(req), table: String(req.params.table), where: body.where ?? body.match ?? {}, values: body.values ?? {}, currentUser: user(req) })
+      .then((result) => res.json(result))
+      .catch(next);
+  });
+
+  // Восстановление мягко удалённой записи (soft-delete + restore, права построчно).
+  router.post('/api/data/:table/:id/restore', (req: Request, res: Response, next: NextFunction) => {
+    void deps.runQuery
+      .restore({ projectId: projectId(req), table: String(req.params.table), id: String(req.params.id), currentUser: user(req) })
+      .then((row) => {
+        if (row === null) res.status(404).json({ error: 'not_found' });
+        else res.json(row);
+      })
       .catch(next);
   });
 

@@ -141,6 +141,7 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
         'owner_id TEXT',
         'created_at TEXT NOT NULL',
         'updated_at TEXT',
+        'deleted_at TEXT',
         ...t.fields.map((f) => {
           const notnull = f.required ? ' NOT NULL' : '';
           const uniq = f.unique ? ' UNIQUE' : '';
@@ -151,9 +152,14 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
       // Обратная совместимость: уже созданные (до долга 0.1) базы не имеют updated_at. Догоняем
       // идемпотентно — ADD COLUMN на существующей таблице. NULL в старых строках допустим: до первой
       // записи версия строки «неизвестна», клиент шлёт запрос без проверки версии (last-write-wins).
+      // Аналогично deleted_at (soft-delete, срез 5): NULL = строка «живая»; ставится при remove,
+      // сбрасывается restore. Только у таблиц СХЕМЫ — системные `_*` удаляются жёстко (hard delete).
       const existing = conn.db.prepare(`PRAGMA table_info("${t.name}")`).all() as { name: string }[];
       if (!existing.some((c) => c.name === 'updated_at')) {
         conn.db.exec(`ALTER TABLE "${t.name}" ADD COLUMN updated_at TEXT`);
+      }
+      if (!existing.some((c) => c.name === 'deleted_at')) {
+        conn.db.exec(`ALTER TABLE "${t.name}" ADD COLUMN deleted_at TEXT`);
       }
     }
     this.reloadColumns(conn);
@@ -223,7 +229,8 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
   select(projectId: string, table: string, opts: SelectOpts = {}): Row[] {
     const conn = this.open(projectId);
     const allowed = this.allowedCols(conn, table);
-    const { clause, params } = buildPredicate(allowed, opts.where, opts.filters, opts.search);
+    const excludeDeleted = allowed.has('deleted_at') && !opts.includeDeleted;
+    const { clause, params } = buildPredicate(allowed, opts.where, opts.filters, opts.search, excludeDeleted);
     let sql = `SELECT * FROM "${table}"${clause}`;
     if (opts.orderBy) {
       if (!allowed.has(opts.orderBy.column)) {
@@ -243,7 +250,8 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
   ): number {
     const conn = this.open(projectId);
     const allowed = this.allowedCols(conn, table);
-    const { clause, params } = buildPredicate(allowed, opts.where, opts.filters, opts.search);
+    const excludeDeleted = allowed.has('deleted_at') && !opts.includeDeleted;
+    const { clause, params } = buildPredicate(allowed, opts.where, opts.filters, opts.search, excludeDeleted);
     const row = conn.db
       .prepare(`SELECT COUNT(*) AS total FROM "${table}"${clause}`)
       .get(...params) as { total: number | bigint };
@@ -293,10 +301,31 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     return res.changes;
   }
 
+  // Удаление: у таблиц схемы (есть колонка deleted_at) — МЯГКОЕ (проставляем метку, строку можно
+  // вернуть через restore, срез 5). У системных `_*` без deleted_at — жёсткое DELETE. Повторное
+  // удаление уже удалённой строки меняет 0 строк (WHERE deleted_at IS NULL).
   remove(projectId: string, table: string, id: string): number {
     const conn = this.open(projectId);
-    this.allowedCols(conn, table);
+    const allowed = this.allowedCols(conn, table);
+    if (allowed.has('deleted_at')) {
+      const res = conn.db
+        .prepare(`UPDATE "${table}" SET "deleted_at" = ? WHERE "id" = ? AND "deleted_at" IS NULL`)
+        .run(nowIso(), id);
+      return res.changes;
+    }
     const res = conn.db.prepare(`DELETE FROM "${table}" WHERE "id" = ?`).run(id);
+    return res.changes;
+  }
+
+  // Восстановление мягко удалённой строки (срез 5). Работает только по таблицам схемы с deleted_at;
+  // сбрасывает метку, если строка была удалена. Возвращает число возвращённых строк (0 или 1).
+  restore(projectId: string, table: string, id: string): number {
+    const conn = this.open(projectId);
+    const allowed = this.allowedCols(conn, table);
+    if (!allowed.has('deleted_at')) return 0;
+    const res = conn.db
+      .prepare(`UPDATE "${table}" SET "deleted_at" = NULL WHERE "id" = ? AND "deleted_at" IS NOT NULL`)
+      .run(id);
     return res.changes;
   }
 
@@ -493,9 +522,12 @@ function buildPredicate(
   where?: WhereClause,
   filters?: readonly AppDataFilter[],
   search?: SelectOpts['search'],
+  excludeDeleted = false,
 ): { clause: string; params: unknown[] } {
   const parts: string[] = [];
   const params: unknown[] = [];
+  // Мягко удалённые строки (deleted_at IS NOT NULL) по умолчанию не попадают в выборку/счётчик.
+  if (excludeDeleted) parts.push('"deleted_at" IS NULL');
   if (where) {
     for (const [column, value] of Object.entries(where)) {
       if (!allowed.has(column)) throw new AppTableNotAllowedError(`column ${column}`);

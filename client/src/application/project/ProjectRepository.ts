@@ -192,6 +192,20 @@ export type AppBackendDashboard = {
   readonly schema: { readonly tables: readonly AppTableSchema[] } | null;
   readonly updatedAt: string | null;
 };
+// Трафик опубликованного приложения (db/137). Только агрегаты: временные ряды + грубые корзины
+// клиента. Никаких «топ путей»/фасетов по данным приложения (см. раздел 4 плана).
+export type AppTrafficUaClass = "desktop" | "mobile" | "bot" | "other";
+export type AppTraffic = {
+  readonly windowDays: number;
+  readonly totalVisits: number;
+  readonly totalSessions: number;
+  readonly perDay: readonly {
+    readonly date: string;
+    readonly visits: number;
+    readonly sessions: number;
+  }[];
+  readonly byClass: Readonly<Record<AppTrafficUaClass, number>>;
+};
 export type PendingDashboardIntegration = "disabled" | "pending";
 export type DashboardConnectionStatus =
   | "disabled"
@@ -347,6 +361,27 @@ export type AppAuditPage = {
   readonly total: number;
 };
 
+// Единая лента логов дашборда (срез 2): категории по образцу Base44.
+export type AppLogCategory = "data" | "auth" | "worker" | "publish" | "runtime";
+export type AppLogFeedEntry = {
+  readonly id: string;
+  readonly category: AppLogCategory;
+  readonly actorType: "runtime" | "project_member" | "system";
+  readonly actorId: string | null;
+  readonly operation: string;
+  readonly tableName: string | null;
+  readonly rowId: string | null;
+  readonly success: boolean;
+  readonly createdAt: string;
+  // detail приходит УЖЕ очищенным сервером (секреты/промпты/пути вычищены).
+  readonly detail: Readonly<Record<string, unknown>> | null;
+};
+export type AppLogFeedPage = {
+  readonly entries: readonly AppLogFeedEntry[];
+  // null — источники исчерпаны; иначе передать в следующий запрос для «Показать ещё».
+  readonly nextCursor: string | null;
+};
+
 export type ImportProjectRepoInput = { readonly archive: File } & (
   | {
       readonly targetMode: "new";
@@ -468,6 +503,8 @@ export interface ProjectRepository {
   // Статус бэкенда приложения (db/102): включён ли, usage/лимит, таблицы. Member-доступ (read).
   getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
   getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard>;
+  // Трафик опубликованного приложения (db/137). Member-доступ (read). Только агрегаты.
+  getAppTraffic(projectId: string, days: number): Promise<AppTraffic>;
   getAppDashboardSettings(projectId: string): Promise<AppDashboardSettings>;
   updateAppDashboardSettings(
     projectId: string,
@@ -541,6 +578,17 @@ export interface ProjectRepository {
       readonly offset?: number;
     },
   ): Promise<AppAuditPage>;
+  // Единая лента логов (срез 2): слияние всех источников с курсорной пагинацией по времени.
+  queryAppLogs(
+    projectId: string,
+    filters?: {
+      readonly category?: AppLogCategory;
+      readonly actor?: string;
+      readonly errorsOnly?: boolean;
+      readonly limit?: number;
+      readonly cursor?: string | null;
+    },
+  ): Promise<AppLogFeedPage>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

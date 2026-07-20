@@ -2306,3 +2306,25 @@ export const appAdminAuditLog = mysqlTable(
 
 export type AppAdminAuditLogRow = typeof appAdminAuditLog.$inferSelect;
 export type NewAppAdminAuditLogRow = typeof appAdminAuditLog.$inferInsert;
+
+// Privacy-preserving traffic of the PUBLISHED application (db/137). Никакого IP и raw UA:
+// session_hash — посоленный, ротируемый по дню SHA-256 (счёт уникальных сессий внутри дня, но
+// не трекинг между днями); user_agent_class — грубая корзина; path — только pathname без query.
+export const appPageVisits = mysqlTable(
+  'app_page_visits',
+  {
+    seq: bigint('seq', { mode: 'number' }).autoincrement().primaryKey(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    path: varchar('path', { length: 512 }).notNull(),
+    sessionHash: char('session_hash', { length: 64 }).notNull(),
+    userAgentClass: varchar('user_agent_class', { length: 16 }).notNull(),
+    visitDay: char('visit_day', { length: 10 }).notNull(),
+    createdAt: varchar('created_at', { length: 32 }).notNull(),
+  },
+  (t) => [
+    index('idx_app_page_visits_project_day').on(t.projectId, t.visitDay),
+  ],
+);
+
+export type AppPageVisitRow = typeof appPageVisits.$inferSelect;
+export type NewAppPageVisitRow = typeof appPageVisits.$inferInsert;

@@ -54,12 +54,14 @@ import type {
   AppDashboardSettings,
   AppRuntimeUser,
   AppSecurityScan,
+  AppTraffic,
   DispatcherCandidate,
   ProjectSite,
   ProjectWorkerOverview,
   ProjectWorkerRun,
 } from "@/application/project/ProjectRepository";
 import {
+  buildProjectApiMarkdown,
   buildProjectOpenApi,
   formatDashboardBytes,
   normalizeCustomDomain,
@@ -929,12 +931,237 @@ export function UsersSection({
   );
 }
 
+const APP_TRAFFIC_CLASS_LABELS: Record<
+  "desktop" | "mobile" | "bot" | "other",
+  string
+> = {
+  desktop: "Компьютеры",
+  mobile: "Телефоны",
+  bot: "Боты",
+  other: "Другое",
+};
+
+// Аналитика раздваивается: «Приложение» — обезличенный трафик опубликованного сайта (db/137,
+// без IP/raw UA), «Карточка проекта» — внутренние просмотры страницы проекта в ProjectsFlow.
 export function AnalyticsSection({
+  project,
   analytics,
   dashboard,
   site,
   members,
 }: DashboardContentProps): React.ReactElement {
+  const { projectRepository } = useContainer();
+  const [scope, setScope] = useState<"app" | "project">("app");
+  const published = Boolean(site?.deployedAt);
+  const [traffic, setTraffic] = useState<AppTraffic | null>(null);
+  const [trafficState, setTrafficState] = useState<
+    "idle" | "loading" | "error"
+  >("idle");
+
+  useEffect(() => {
+    if (scope !== "app" || !published) return;
+    let cancelled = false;
+    setTrafficState("loading");
+    void projectRepository
+      .getAppTraffic(project.id, 28)
+      .then((next) => {
+        if (cancelled) return;
+        setTraffic(next);
+        setTrafficState("idle");
+      })
+      .catch(() => {
+        if (!cancelled) setTrafficState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, published, project.id, projectRepository]);
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader
+        title="Аналитика"
+        description="Трафик опубликованного приложения и внутренние просмотры карточки проекта."
+        action={
+          <div className="inline-flex rounded-lg border p-0.5">
+            {(
+              [
+                ["app", "Приложение"],
+                ["project", "Карточка проекта"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setScope(value)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  scope === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
+      {scope === "app" ? (
+        <AppTrafficView
+          published={published}
+          traffic={traffic}
+          state={trafficState}
+          routes={site?.routes.length ?? 0}
+        />
+      ) : (
+        <ProjectCardAnalyticsView
+          analytics={analytics}
+          dashboard={dashboard}
+          site={site}
+          members={members}
+        />
+      )}
+    </div>
+  );
+}
+
+// Трафик опубликованного приложения. Только агрегаты (визиты/сессии по дням + грубые корзины
+// клиента) — никаких «топ путей»/фасетов по данным приложения (раздел 4 плана).
+function AppTrafficView({
+  published,
+  traffic,
+  state,
+  routes,
+}: {
+  published: boolean;
+  traffic: AppTraffic | null;
+  state: "idle" | "loading" | "error";
+  routes: number;
+}): React.ReactElement {
+  if (!published) {
+    return (
+      <div className="grid min-h-64 place-items-center rounded-xl border border-dashed bg-muted/10 px-6 text-center">
+        <div>
+          <Globe2 className="mx-auto mb-3 size-7 text-muted-foreground opacity-60" />
+          <p className="text-sm font-medium">Приложение ещё не опубликовано</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
+            Как только вы опубликуете сайт, здесь появится обезличенный трафик:
+            визиты, уникальные сессии и типы устройств. Мы не храним IP и
+            User-Agent.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (state === "loading" && !traffic) {
+    return (
+      <div className="grid min-h-64 place-items-center rounded-xl border text-sm text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    );
+  }
+  if (state === "error") {
+    return (
+      <div className="grid min-h-64 place-items-center rounded-xl border text-sm text-muted-foreground">
+        Не удалось загрузить трафик приложения.
+      </div>
+    );
+  }
+  const perDay = traffic?.perDay ?? [];
+  const dailyMax = Math.max(1, ...perDay.map((day) => day.visits), 0);
+  const metrics = [
+    { label: "Визиты", value: traffic?.totalVisits ?? 0 },
+    { label: "Уникальные сессии", value: traffic?.totalSessions ?? 0 },
+    { label: "Маршрутов сайта", value: routes },
+    { label: "Окно, дней", value: traffic?.windowDays ?? 28 },
+  ];
+  const classes = (["desktop", "mobile", "bot", "other"] as const).map(
+    (cls) => ({
+      cls,
+      label: APP_TRAFFIC_CLASS_LABELS[cls],
+      value: traffic?.byClass[cls] ?? 0,
+    }),
+  );
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <section key={metric.label} className="rounded-xl border p-4">
+            <p className="text-xs font-medium text-muted-foreground">
+              {metric.label}
+            </p>
+            <p className="mt-3 text-2xl font-semibold">{metric.value}</p>
+          </section>
+        ))}
+      </div>
+      <section className="rounded-xl border p-4">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="size-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold">Визиты по дням</h3>
+        </div>
+        {perDay.length ? (
+          <div
+            className="mt-5 flex h-44 items-end gap-1 overflow-x-auto"
+            aria-label="График визитов приложения"
+          >
+            {perDay.map((day) => (
+              <div
+                key={day.date}
+                className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-1"
+                title={`${day.date}: ${day.visits} визитов, ${day.sessions} сессий`}
+              >
+                <span
+                  className="w-full rounded-t bg-primary/75 transition-colors group-hover:bg-primary"
+                  style={{
+                    height: `${Math.max(day.visits ? 6 : 2, (day.visits / dailyMax) * 132)}px`,
+                  }}
+                />
+                <span className="hidden text-[9px] text-muted-foreground xl:block">
+                  {day.date.slice(5)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 grid min-h-28 place-items-center text-sm text-muted-foreground">
+            За выбранный период визитов не было.
+          </div>
+        )}
+      </section>
+      <section className="rounded-xl border p-4">
+        <h3 className="text-sm font-semibold">Типы клиентов</h3>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {classes.map((item) => (
+            <div key={item.cls} className="rounded-lg bg-muted/40 px-3 py-2">
+              <p className="text-xs text-muted-foreground">{item.label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums">
+                {item.value}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Обезличенная статистика: без IP и User-Agent, сессии считаются по
+          посуточно ротируемому ключу.
+        </p>
+      </section>
+    </>
+  );
+}
+
+// Внутренние просмотры карточки проекта в ProjectsFlow (существующая метрика ProjectAnalytics).
+function ProjectCardAnalyticsView({
+  analytics,
+  dashboard,
+  site,
+  members,
+}: {
+  analytics: DashboardContentProps["analytics"];
+  dashboard: DashboardContentProps["dashboard"];
+  site: DashboardContentProps["site"];
+  members: DashboardContentProps["members"];
+}): React.ReactElement {
   const tableCount = dashboard.schema?.tables.length ?? 0;
   const routes = site?.routes.length ?? 0;
   const dailyMax = Math.max(
@@ -949,11 +1176,7 @@ export function AnalyticsSection({
     { label: "Таблицы", value: tableCount },
   ];
   return (
-    <div className="space-y-5">
-      <SectionHeader
-        title="Аналитика"
-        description={`Реальные просмотры страницы проекта за ${analytics?.windowDays ?? 28} дней и техническое состояние результата.`}
-      />
+    <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
           <section key={metric.label} className="rounded-xl border p-4">
@@ -1041,7 +1264,7 @@ export function AnalyticsSection({
         В проекте {members.length} участников · опубликовано{" "}
         {site?.fileCount ?? 0} файлов.
       </p>
-    </div>
+    </>
   );
 }
 
@@ -2636,7 +2859,12 @@ export async function appRequest(path, options = {}) {
   if (!response.ok) throw new Error(await response.text());
   return response.status === 204 ? null : response.json();
 }`;
-  const llmContext = `ProjectsFlow App API\nProject: ${project.name}\nBase URL: ${runtimeUrl ?? "not published"}\n\nOpenAPI:\n${openApi}`;
+  const llmContext = buildProjectApiMarkdown(
+    project.name,
+    project.id,
+    tableNames,
+    runtimeUrl ?? undefined,
+  );
   const methods = [
     {
       method: "GET",
@@ -2659,8 +2887,32 @@ export async function appRequest(path, options = {}) {
     {
       method: "DELETE",
       suffix: "/{id}",
-      label: "Удалить запись по ID",
+      label: "Удалить запись по ID (обратимо)",
       tone: "text-red-700 bg-red-500/10 dark:text-red-300",
+    },
+    {
+      method: "POST",
+      suffix: "/bulk",
+      label: "Создать до 100 записей за запрос",
+      tone: "text-blue-700 bg-blue-500/10 dark:text-blue-300",
+    },
+    {
+      method: "PUT",
+      suffix: "/bulk",
+      label: "Обновить до 100 записей списком",
+      tone: "text-violet-700 bg-violet-500/10 dark:text-violet-300",
+    },
+    {
+      method: "POST",
+      suffix: "/update-many",
+      label: "Обновить записи по условию",
+      tone: "text-violet-700 bg-violet-500/10 dark:text-violet-300",
+    },
+    {
+      method: "POST",
+      suffix: "/{id}/restore",
+      label: "Восстановить удалённую запись",
+      tone: "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300",
     },
   ] as const;
   return (
@@ -2730,7 +2982,7 @@ export async function appRequest(path, options = {}) {
                 <div className="divide-y">
                   {methods.map((endpoint) => (
                     <div
-                      key={endpoint.method}
+                      key={`${endpoint.method} ${endpoint.suffix}`}
                       className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5"
                     >
                       <span
@@ -2759,7 +3011,7 @@ export async function appRequest(path, options = {}) {
                             `${runtimeUrl ?? ""}/api/data/${table}${endpoint.suffix}`,
                           )
                         }
-                        aria-label={`Скопировать ${endpoint.method} ${table}`}
+                        aria-label={`Скопировать ${endpoint.method} ${table}${endpoint.suffix}`}
                         disabled={!runtimeUrl}
                       >
                         <Copy className="size-3.5" />
@@ -2831,7 +3083,7 @@ export async function appRequest(path, options = {}) {
           onClick={() => void copy(llmContext)}
         >
           <Sparkles className="mr-1.5 size-3.5" />
-          Copy for LLM
+          Скопировать для LLM
         </Button>
         {runtimeUrl && (
           <Button variant="outline" size="sm" asChild>

@@ -6,6 +6,9 @@ import type {
   ManageAppBackendData,
 } from '../../application/app-backend/ManageAppBackendData.js';
 import type { ManageAppDashboardSettings } from '../../application/app-backend/AppDashboardSettings.js';
+import type { AppLogQuery, QueryAppLogs } from '../../application/app-backend/QueryAppLogs.js';
+import type { AppLogCategory } from '../../domain/app-backend/AppLogEntry.js';
+import { APP_LOG_CATEGORIES } from '../../domain/app-backend/AppLogEntry.js';
 import { AppRowConflictError } from '../../domain/app-backend/errors.js';
 import type { SensitiveKind } from '../../domain/app-backend/sensitiveFields.js';
 
@@ -13,7 +16,14 @@ export type AppBackendRouterDeps = {
   readonly getStatus: GetAppBackendStatus;
   readonly dashboard: ManageAppBackendData;
   readonly settings: ManageAppDashboardSettings;
+  // Единая лента логов (срез 2). Опционален: пока composition root не собрал источники,
+  // роут отвечает пустой страницей, а не 500 — фича включается прозрачно при wiring в index.ts.
+  readonly queryLogs?: QueryAppLogs;
 };
+
+function isLogCategory(value: unknown): value is AppLogCategory {
+  return typeof value === 'string' && (APP_LOG_CATEGORIES as readonly string[]).includes(value);
+}
 
 // Клиентское чтение статуса бэкенда приложения (cookie-auth, member проекта): включён ли,
 // usage/лимит, таблицы. Для UI-индикатора «app с бэкендом — X/100 МБ». Маунтится под /api/projects.
@@ -285,6 +295,36 @@ export function appBackendRouter(deps: AppBackendRouterDeps): Router {
             limit: numberParam(req.query['limit']),
             offset: numberParam(req.query['offset']),
           },
+        ));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // Единая лента логов (срез 2): аудит Data Explorer + рантайм + действия воркера + публикация +
+  // auth-события, слитые по времени с курсорной пагинацией. Фильтры: категория, актор, только ошибки.
+  router.get(
+    '/:projectId/app-backend/logs/feed',
+    requireAuth,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!deps.queryLogs) {
+          res.status(200).json({ entries: [], nextCursor: null });
+          return;
+        }
+        const rawLimit = Number(req.query['limit']);
+        const query: AppLogQuery = {
+          category: isLogCategory(req.query['category']) ? req.query['category'] : undefined,
+          actorId: typeof req.query['actor'] === 'string' ? req.query['actor'] : undefined,
+          errorsOnly: req.query['errors'] === '1',
+          limit: Number.isFinite(rawLimit) ? rawLimit : undefined,
+          cursor: typeof req.query['cursor'] === 'string' ? req.query['cursor'] : null,
+        };
+        res.status(200).json(await deps.queryLogs.execute(
+          req.params['projectId'] as string,
+          req.user!.id,
+          query,
         ));
       } catch (error) {
         next(error);

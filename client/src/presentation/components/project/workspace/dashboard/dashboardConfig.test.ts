@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DASHBOARD_SECTIONS,
+  buildProjectApiMarkdown,
   buildProjectOpenApi,
   formatDashboardBytes,
   normalizeCustomDomain,
@@ -31,7 +32,48 @@ test('OpenAPI document only contains requested project tables', () => {
     'project-1',
     ['orders'],
     'https://project.projectsflow.ru/',
-  )) as { paths: Record<string, unknown>; servers: Array<{ url: string }> };
-  assert.deepEqual(Object.keys(document.paths), ['/api/data/orders', '/api/data/orders/{id}']);
+  )) as {
+    openapi: string;
+    paths: Record<string, unknown>;
+    servers: Array<{ url: string }>;
+    security: Array<Record<string, unknown>>;
+    components: { securitySchemes: Record<string, { type: string; scheme?: string }>; schemas: Record<string, unknown> };
+  };
+  assert.equal(document.openapi, '3.1.0');
+  // Каждый эндпоинт — только для запрошенной таблицы; чужих таблиц в документе нет.
+  assert.deepEqual(Object.keys(document.paths).sort(), [
+    '/api/data/orders',
+    '/api/data/orders/bulk',
+    '/api/data/orders/update-many',
+    '/api/data/orders/{id}',
+    '/api/data/orders/{id}/restore',
+  ]);
   assert.deepEqual(document.servers, [{ url: 'https://project.projectsflow.ru' }]);
+  // Bearer securityScheme объявлен и применён глобально.
+  assert.equal(document.components.securitySchemes['bearerAuth']?.type, 'http');
+  assert.equal(document.components.securitySchemes['bearerAuth']?.scheme, 'bearer');
+  assert.deepEqual(document.security, [{ bearerAuth: [] }]);
+  // Служебные поля документированы (updated_date/created_by_id).
+  const service = document.components.schemas['ServiceFields'] as { properties: Record<string, unknown> };
+  assert.ok('updated_date' in service.properties);
+  assert.ok('created_by_id' in service.properties);
+  // bulk-путь несёт и POST (создать), и PUT (обновить).
+  const bulk = document.paths['/api/data/orders/bulk'] as Record<string, unknown>;
+  assert.ok('post' in bulk && 'put' in bulk);
+});
+
+test('LLM markdown collects the whole API into one document', () => {
+  const markdown = buildProjectApiMarkdown(
+    'Мой проект',
+    'project-1',
+    ['orders'],
+    'https://project.projectsflow.ru/',
+  );
+  assert.ok(markdown.includes('# ProjectsFlow App API — Мой проект'));
+  assert.ok(markdown.includes('/api/data/orders/bulk'));
+  assert.ok(markdown.includes('/api/data/orders/update-many'));
+  assert.ok(markdown.includes('/api/data/orders/{id}/restore'));
+  assert.ok(markdown.includes('Authorization: Bearer'));
+  assert.ok(markdown.includes('updated_date'));
+  assert.ok(markdown.includes('```json'));
 });

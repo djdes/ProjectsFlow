@@ -445,7 +445,17 @@ export function ProjectPreview({
   // выходим из режима правки и отдаём накопленный черновик диспетчеру, чтобы тот
   // перенёс правки в исходный код и пересобрал проект. Если правок нет — просто выходим.
   const exitEditMode = (): void => {
-    if (state.draftCount > 0 && !state.queuedCount) void publishDraft();
+    // Статус публикации выставляем ПЕРВЫМ и синхронно: publishDraft() до своего первого
+    // dispatch успевает дождаться очереди патчей, то есть его PATCH_START приходит уже
+    // следующим тиком — после того как SET_MODE отрисовал выход из режима правки. Без
+    // синхронного PUBLISH_START индикатор гаснет раньше, чем покажет «сохраняем».
+    // Условие повторяет гейт publishDraft: иначе спиннер завис бы, хотя публикация
+    // даже не стартовала.
+    const publishes = session?.remote === true && state.draftCount > 0 && !state.queuedCount;
+    if (publishes) {
+      dispatch({ type: 'PUBLISH_START' });
+      void publishDraft();
+    }
     dispatch({ type: 'SET_MODE', mode: 'preview' });
     sendBridge('set-mode', { mode: 'preview' });
   };

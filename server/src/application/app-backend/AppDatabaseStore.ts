@@ -29,6 +29,8 @@ export type SelectOpts = {
   readonly orderBy?: { readonly column: string; readonly dir: 'asc' | 'desc' };
   readonly limit?: number;
   readonly offset?: number;
+  // По умолчанию мягко удалённые строки (deleted_at IS NOT NULL) исключаются. true — вернуть и их.
+  readonly includeDeleted?: boolean;
 };
 
 export type AppAuditInput = {
@@ -78,7 +80,11 @@ export interface AppDatabaseStore {
     values: Row,
     expectedUpdatedAt?: string | null,
   ): number;
+  // Удаление: таблицы схемы (есть deleted_at) удаляются МЯГКО (soft-delete, срез 5) — строку можно
+  // вернуть через restore; системные `_*` без deleted_at — жёстко. Возвращает число затронутых строк.
   remove(projectId: string, table: string, id: string): number;
+  // Восстановление мягко удалённой строки таблицы схемы. Возвращает число возвращённых строк (0/1).
+  restore(projectId: string, table: string, id: string): number;
   // Удаление по произвольному равенству (напр. сессии по token_hash). Пустой where → 0 (никогда
   // не удаляем всю таблицу).
   removeWhere(projectId: string, table: string, where: WhereClause): number;

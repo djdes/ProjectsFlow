@@ -20,6 +20,7 @@ import type {
   ProjectSite,
   AppBackendStatus,
   AppBackendDashboard,
+  AppTraffic,
   AppDashboardSettings,
   AppDashboardSettingsPatch,
   AppSecurityScan,
@@ -31,6 +32,8 @@ import type {
   AppCrudRules,
   AppSensitiveKind,
   AppAuditPage,
+  AppLogCategory,
+  AppLogFeedPage,
   SharedMember,
 } from "@/application/project/ProjectRepository";
 import { AppRowVersionConflictError } from "@/application/project/ProjectRepository";
@@ -568,6 +571,12 @@ export class HttpProjectRepository implements ProjectRepository {
     );
   }
 
+  async getAppTraffic(projectId: string, days: number): Promise<AppTraffic> {
+    return httpClient.get<AppTraffic>(
+      `/projects/${projectId}/app-traffic?days=${days}`,
+    );
+  }
+
   async getAppDashboardSettings(
     projectId: string,
   ): Promise<AppDashboardSettings> {
@@ -770,6 +779,28 @@ export class HttpProjectRepository implements ProjectRepository {
     const suffix = query.size > 0 ? `?${query.toString()}` : "";
     return httpClient.get<AppAuditPage>(
       `/projects/${projectId}/app-backend/logs${suffix}`,
+    );
+  }
+
+  async queryAppLogs(
+    projectId: string,
+    filters: {
+      readonly category?: AppLogCategory;
+      readonly actor?: string;
+      readonly errorsOnly?: boolean;
+      readonly limit?: number;
+      readonly cursor?: string | null;
+    } = {},
+  ): Promise<AppLogFeedPage> {
+    const query = new URLSearchParams();
+    if (filters.category) query.set("category", filters.category);
+    if (filters.actor) query.set("actor", filters.actor);
+    if (filters.errorsOnly) query.set("errors", "1");
+    if (filters.limit !== undefined) query.set("limit", String(filters.limit));
+    if (filters.cursor) query.set("cursor", filters.cursor);
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return httpClient.get<AppLogFeedPage>(
+      `/projects/${projectId}/app-backend/logs/feed${suffix}`,
     );
   }
 

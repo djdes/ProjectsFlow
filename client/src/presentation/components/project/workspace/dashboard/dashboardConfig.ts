@@ -41,6 +41,22 @@ export function normalizeCustomDomain(value: string): string | null {
   return candidate;
 }
 
+// Служебные поля, которые рантайм ведёт сам и добавляет в каждую запись. Имена в доке —
+// в стиле паритета с Base44 (created_date/updated_date/created_by_id), поверх внутренних
+// колонок (created_at/updated_at/owner_id). Показываем в OpenAPI, чтобы клиент знал их форму.
+const SERVICE_FIELD_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Идентификатор записи' },
+    created_date: { type: 'string', format: 'date-time', description: 'Когда запись создана' },
+    updated_date: { type: 'string', format: 'date-time', description: 'Когда запись изменена' },
+    created_by_id: { type: 'string', nullable: true, description: 'Кто создал запись' },
+  },
+} as const;
+
+const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' } } as const;
+const okRef = { '200': { description: 'OK' } } as const;
+
 export function buildProjectOpenApi(
   projectId: string,
   tableNames: readonly string[],
@@ -59,13 +75,50 @@ export function buildProjectOpenApi(
       {
         patch: {
           summary: `Изменить запись ${table}`,
-          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          parameters: [idParam],
           responses: { '200': { description: 'OK' } },
         },
         delete: {
-          summary: `Удалить запись ${table}`,
-          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          summary: `Удалить запись ${table} (мягкое удаление, обратимо через restore)`,
+          parameters: [idParam],
           responses: { '200': { description: 'OK' } },
+        },
+      },
+    ],
+    [
+      `/api/data/${table}/bulk`,
+      {
+        post: {
+          summary: `Создать до 100 записей ${table} за один запрос`,
+          description: 'Тело — массив объектов или { items: [...] }. Права проверяются построчно.',
+          responses: { '201': { description: 'Created' } },
+        },
+        put: {
+          summary: `Обновить до 100 записей ${table} по списку { id, values }`,
+          description: 'Права (owner) проверяются построчно; чужая строка в батче отклоняет запрос.',
+          responses: okRef,
+        },
+      },
+    ],
+    [
+      `/api/data/${table}/update-many`,
+      {
+        post: {
+          summary: `Обновить записи ${table} по условию (до 100 строк)`,
+          description:
+            'Тело — { where, values }. Условие по чувствительной колонке отклоняется (утечка через счётчик). '
+            + 'Под правилом owner изменяются только собственные строки.',
+          responses: okRef,
+        },
+      },
+    ],
+    [
+      `/api/data/${table}/{id}/restore`,
+      {
+        post: {
+          summary: `Восстановить мягко удалённую запись ${table}`,
+          parameters: [idParam],
+          responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
         },
       },
     ],
@@ -74,6 +127,75 @@ export function buildProjectOpenApi(
     openapi: '3.1.0',
     info: { title: `ProjectsFlow App API · ${projectId}`, version: '1.0.0' },
     ...(serverUrl ? { servers: [{ url: serverUrl.replace(/\/$/, '') }] } : {}),
+    // Bearer-токен сессии опубликованного приложения. Приватные ключи в доке не показываются.
+    security: [{ bearerAuth: [] }],
     paths,
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer', description: 'Сессионный токен приложения' },
+      },
+      schemas: { ServiceFields: SERVICE_FIELD_SCHEMA },
+    },
   }, null, 2);
+}
+
+// «Скопировать для LLM»: вся дока API проекта одним markdown-документом — endpoints, служебные
+// поля, аутентификация и встроенный OpenAPI, чтобы отдать ассистенту одним куском.
+export function buildProjectApiMarkdown(
+  projectName: string,
+  projectId: string,
+  tableNames: readonly string[],
+  serverUrl?: string,
+): string {
+  const base = serverUrl ? serverUrl.replace(/\/$/, '') : '<адрес-появится-после-публикации>';
+  const openApi = buildProjectOpenApi(projectId, tableNames, serverUrl);
+  const tablesBlock = tableNames.length
+    ? tableNames.map((table) => {
+        const p = `${base}/api/data/${table}`;
+        return [
+          `### ${table}`,
+          '',
+          `- \`GET ${p}\` — получить и отфильтровать записи`,
+          `- \`POST ${p}\` — создать запись`,
+          `- \`PATCH ${p}/{id}\` — изменить запись по ID`,
+          `- \`DELETE ${p}/{id}\` — мягко удалить запись по ID (обратимо)`,
+          `- \`POST ${p}/bulk\` — создать до 100 записей за запрос`,
+          `- \`PUT ${p}/bulk\` — обновить до 100 записей по списку { id, values }`,
+          `- \`POST ${p}/update-many\` — обновить записи по условию { where, values }`,
+          `- \`POST ${p}/{id}/restore\` — восстановить мягко удалённую запись`,
+        ].join('\n');
+      }).join('\n\n')
+    : '_В приложении пока нет опубликованных таблиц._';
+  return [
+    `# ProjectsFlow App API — ${projectName}`,
+    '',
+    `- **Base URL:** ${serverUrl ? base : 'приложение ещё не опубликовано'}`,
+    `- **Аутентификация:** заголовок \`Authorization: Bearer <session-token>\`.`,
+    '',
+    '## Служебные поля записи',
+    '',
+    'Каждая запись содержит поля, которыми управляет рантайм:',
+    '',
+    '- `id` — идентификатор записи;',
+    '- `created_date` — когда создана;',
+    '- `updated_date` — когда изменена;',
+    '- `created_by_id` — кто создал.',
+    '',
+    '## Ограничения bulk-операций',
+    '',
+    '- Потолок батча — 100 записей за запрос.',
+    '- Права доступа применяются к каждой строке батча отдельно.',
+    '- Условие `update-many` по чувствительной колонке отклоняется.',
+    '',
+    '## Endpoints',
+    '',
+    tablesBlock,
+    '',
+    '## OpenAPI',
+    '',
+    '```json',
+    openApi,
+    '```',
+    '',
+  ].join('\n');
 }

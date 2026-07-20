@@ -7,10 +7,13 @@ import type { AppBackendRepository } from '../application/app-backend/AppBackend
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
 import type { ManageAppBackendData } from '../application/app-backend/ManageAppBackendData.js';
+import type { QueryAppLogs } from '../application/app-backend/QueryAppLogs.js';
 import type { ManageAppDashboardSettings } from '../application/app-backend/AppDashboardSettings.js';
 import type { ManageProjectRepositoryCode } from '../application/github/ManageProjectRepositoryCode.js';
 import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
+import { appTrafficRouter } from './app-backend/appTrafficRoutes.js';
+import type { GetAppTraffic } from '../application/app-backend/GetAppTraffic.js';
 import type { SiteEditorService } from '../application/site-editor/SiteEditorService.js';
 import { siteEditorRouter } from './site-editor/routes.js';
 import { siteEditorAgentRouter } from './site-editor/agentRoutes.js';
@@ -332,6 +335,13 @@ type AppDeps = {
     readonly getStatus: GetAppBackendStatus;
     readonly dashboard: ManageAppBackendData;
     readonly settings: ManageAppDashboardSettings;
+    readonly queryLogs: QueryAppLogs;
+  };
+  // Трафик опубликованного приложения (db/137). `recordRuntime` — приём визитов на site-поддомене
+  // (публично, диспатчим вручную ниже); `getAppTraffic` — чтение агрегатов в дашборде (cookie-auth).
+  readonly appTraffic: {
+    readonly getAppTraffic: GetAppTraffic;
+    readonly recordRuntime: RequestHandler;
   };
   readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
@@ -750,6 +760,31 @@ export function createApp(deps: AppDeps): CreatedApp {
     });
   }
 
+  // Приём аналитики трафика опубликованного сайта (db/137): POST /api/_analytics/visit на
+  // site-поддомене <slug>.<baseDomain>. Публично, БЕЗ cookie/CSRF — это beacon чужого origin.
+  // В отличие от app-runtime не требует активного бэкенда: обычный статический сайт тоже считаем.
+  // Гейт: валидный site-поддомен + slug принадлежит проекту. Анти-абьюз (rate-limit + дневной
+  // потолок по project_id) — внутри RecordAppVisit, т.к. эндпоинт неаутентифицирован.
+  {
+    const siteBase = deps.site.baseDomain;
+    const RESERVED_APP_SUB = new Set(['www', 'api', 'app']);
+    app.use((req, res, next) => {
+      if (!req.path.startsWith('/api/_analytics/')) return next();
+      const host = req.hostname;
+      if (host === siteBase || !host.endsWith(`.${siteBase}`)) return next();
+      const label = host.slice(0, host.length - siteBase.length - 1);
+      if (!label || label.includes('.') || RESERVED_APP_SUB.has(label) || !/^[a-z0-9-]+$/.test(label)) {
+        return next();
+      }
+      void (async () => {
+        const proj = await deps.site.lookupSiteSlug(label).catch(() => null);
+        if (!proj) return next();
+        (req as Request & { appProjectId?: string }).appProjectId = proj.id;
+        deps.appTraffic.recordRuntime(req, res, next);
+      })().catch(next);
+    });
+  }
+
   // CSRF-origin-гейт до любых мутирующих роутов: блокирует cookie-авторизованные
   // POST/PATCH/DELETE, пришедшие не с same-origin (в т.ч. с недоверенных поддоменов).
   // Bearer/agent-запросы не затрагивает — см. csrfOriginGuard. Ставим на /api, чтобы
@@ -919,7 +954,9 @@ export function createApp(deps: AppDeps): CreatedApp {
     getStatus: deps.appBackend.getStatus,
     dashboard: deps.appBackend.dashboard,
     settings: deps.appBackend.settings,
+    queryLogs: deps.appBackend.queryLogs,
   }));
+  app.use('/api/projects', appTrafficRouter({ getAppTraffic: deps.appTraffic.getAppTraffic }));
   app.use('/api/projects', repositoryCodeRouter({ repositoryCode: deps.repositoryCode }));
   app.use('/api/projects', siteEditorRouter({ service: deps.siteEditor.service }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —

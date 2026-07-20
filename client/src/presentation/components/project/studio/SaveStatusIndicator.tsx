@@ -1,12 +1,19 @@
 import * as React from 'react';
-import { CloudAlert, CloudOff, RefreshCw } from 'lucide-react';
+import { CloudAlert, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-// В lucide 0.469 нет CloudCheck, поэтому собираем «облако с галочкой» сами:
-// контур облака — из lucide (ISC, пакет уже в зависимостях), галочка дорисована
-// в том же стиле (24×24, stroke-width 2, round caps), чтобы не выбиваться из набора.
-function CloudCheck({ className }: { className?: string }): React.ReactElement {
+// Тёмный тултип — как в Base44. Глобальный TooltipContent светлый (bg-popover) и трогать
+// его нельзя: он обслуживает ещё десяток мест. Поэтому красим точечно, здесь.
+const DARK_TOOLTIP = 'max-w-[260px] border-transparent bg-neutral-900 text-white';
+
+// В lucide 0.469 нет ни CloudCheck, ни CloudX, поэтому «облако с галочкой» и «облако с
+// крестиком» собираем сами: контур облака — из lucide (ISC, пакет уже в зависимостях),
+// метка дорисована в том же стиле (24×24, stroke-width 2, round caps), чтобы иконки не
+// выбивались из набора. Ради двух глифов зависимость не обновляем.
+const CLOUD_OUTLINE = 'M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z';
+
+function CloudGlyph({ className, children }: { className?: string; children: React.ReactNode }): React.ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -18,9 +25,28 @@ function CloudCheck({ className }: { className?: string }): React.ReactElement {
       className={className}
       aria-hidden="true"
     >
-      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-      <path d="m9 14.5 2 2 4-4" />
+      <path d={CLOUD_OUTLINE} />
+      {children}
     </svg>
+  );
+}
+
+function CloudCheck({ className }: { className?: string }): React.ReactElement {
+  return (
+    <CloudGlyph className={className}>
+      <path d="m9 14.5 2 2 4-4" />
+    </CloudGlyph>
+  );
+}
+
+// Крестик занимает ту же клетку, что и галочка у CloudCheck, — иконки не «прыгают»
+// при смене состояния.
+function CloudX({ className }: { className?: string }): React.ReactElement {
+  return (
+    <CloudGlyph className={className}>
+      <path d="m10 12.5 4 4" />
+      <path d="m14 12.5-4 4" />
+    </CloudGlyph>
   );
 }
 
@@ -31,7 +57,7 @@ function CloudCheck({ className }: { className?: string }): React.ReactElement {
 // пользователя правка «сохранена» только когда она перенесена в исходный код проекта
 // и тот пересобран, — а это происходит по повторному клику по Edit.
 export type StudioSaveState = {
-  // Есть ли активный режим правки — вне его индикатор не показываем.
+  // Есть ли активный режим правки — спокойные состояния показываем только в нём.
   readonly editing: boolean;
   // Патч прямо сейчас летит на сервер (черновик).
   readonly saving: boolean;
@@ -72,10 +98,14 @@ function unsavedPhrase(count: number): string {
 // Это НЕ кнопка — статус. Кликать нечего: правки уходят на сервер сами при выходе
 // из режима правки, поэтому элемент не фокусируется и не реагирует на курсор.
 export function SaveStatusIndicator({ state }: { state: StudioSaveState }): React.ReactElement | null {
-  // Вне режима правки статуса нет — как в Base44, где облачко появляется только в Edit mode.
-  if (!state.editing) return null;
+  const busy = state.saving || state.publishing;
+  // Сохранение и ошибку показываем ВСЕГДА: и вне режима правки, и на вкладке Dashboard.
+  // Публикация идёт в фоне минутами — пользователь должен видеть, что процесс жив, а её
+  // провал не должен пройти незаметно. Спокойные состояния («сохранено», «есть
+  // несохранённые правки») остаются привязанными к режиму правки, как в Base44.
+  if (!state.editing && !busy && !state.error) return null;
 
-  const { icon: Icon, label, tone } = describe(state);
+  const { icon: Icon, label, hint, tone } = describe(state);
 
   return (
     <Tooltip>
@@ -91,10 +121,14 @@ export function SaveStatusIndicator({ state }: { state: StudioSaveState }): Reac
           aria-live="polite"
           aria-label={label}
         >
-          <Icon className={cn('size-[18px]', state.saving && 'animate-spin motion-reduce:animate-none')} />
+          {/* Крутится и на записи черновика, и на публикации: иконка у них одна. */}
+          <Icon className={cn('size-[18px]', busy && 'animate-spin motion-reduce:animate-none')} />
         </span>
       </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
+      <TooltipContent side="bottom" className={DARK_TOOLTIP}>
+        {label}
+        {hint ? <span className="mt-0.5 block text-white/70">{hint}</span> : null}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -102,21 +136,25 @@ export function SaveStatusIndicator({ state }: { state: StudioSaveState }): Reac
 function describe(state: StudioSaveState): {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  hint?: string;
   tone: 'clean' | 'dirty' | 'error';
 } {
-  if (state.publishing) return { icon: RefreshCw, label: 'Сохраняем правки в проект…', tone: 'dirty' };
-  if (state.saving) return { icon: RefreshCw, label: 'Записываем правку…', tone: 'dirty' };
+  // Ошибка идёт первой: провалившаяся публикация не должна прятаться за спиннером,
+  // если счётчик очереди почему-то остался ненулевым.
   if (state.error) return { icon: CloudAlert, label: `Правку не удалось записать: ${state.error}`, tone: 'error' };
+  if (state.publishing) return { icon: Loader2, label: 'Сохраняем правки в проект…', tone: 'dirty' };
+  if (state.saving) return { icon: Loader2, label: 'Сохраняем…', tone: 'dirty' };
   if (state.unsaved > 0) {
     return {
-      icon: CloudOff,
-      label: `${unsavedPhrase(state.unsaved)} — нажмите Edit ещё раз, чтобы сохранить в проект`,
+      icon: CloudX,
+      label: unsavedPhrase(state.unsaved),
+      hint: 'Нажмите Edit ещё раз, чтобы сохранить в проект',
       tone: 'dirty',
     };
   }
   return {
     icon: CloudCheck,
-    label: state.savedAt ? `Все правки сохранены ${formatSavedAt(state.savedAt)}` : 'Все правки сохранены',
+    label: state.savedAt ? `Сохранено ${formatSavedAt(state.savedAt)}` : 'Сохранено',
     tone: 'clean',
   };
 }

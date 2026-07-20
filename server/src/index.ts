@@ -89,8 +89,13 @@ import { RunAppQuery } from './application/app-backend/RunAppQuery.js';
 import { ProvisionAppBackend } from './application/app-backend/ProvisionAppBackend.js';
 import { GetAppBackendStatus } from './application/app-backend/GetAppBackendStatus.js';
 import { ManageAppBackendData } from './application/app-backend/ManageAppBackendData.js';
+import { QueryAppLogs, createAppLogSources } from './application/app-backend/QueryAppLogs.js';
 import { ManageAppDashboardSettings } from './application/app-backend/AppDashboardSettings.js';
 import { appRuntimeRouter } from './presentation/app-runtime/appRuntimeRouter.js';
+import { appAnalyticsRouter } from './presentation/app-runtime/appAnalyticsRoutes.js';
+import { RecordAppVisit } from './application/app-backend/RecordAppVisit.js';
+import { GetAppTraffic } from './application/app-backend/GetAppTraffic.js';
+import { DrizzleAppTrafficRepository } from './infrastructure/repositories/DrizzleAppTrafficRepository.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
@@ -997,6 +1002,21 @@ const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
 const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
 const runAppQuery = new RunAppQuery({ appBackends: appBackendRepo, appDb: appDatabaseStore });
 const appRuntime = appRuntimeRouter({ authService: appAuthService, runQuery: runAppQuery, settings: appDashboardSettingsRepo });
+// --- Трафик опубликованного приложения (db/137): приём визитов + чтение агрегатов ---
+// session_hash — посоленный, ротируемый по дню SHA-256 (обезличенный подсчёт уникальных сессий;
+// не трекинг между днями). Соль из env со стабильным fallback'ом. IP/raw UA НЕ хранятся.
+const appTrafficRepo = new DrizzleAppTrafficRepository(db);
+const appVisitRateLimiter = new InMemoryRateLimiter();
+setInterval(() => appVisitRateLimiter.pruneExpired(), 5 * 60_000).unref();
+const analyticsSalt = process.env['APP_ANALYTICS_SALT'] ?? process.env['SESSION_SECRET'] ?? 'pf-app-analytics';
+const recordAppVisit = new RecordAppVisit({
+  traffic: appTrafficRepo,
+  rateLimiter: appVisitRateLimiter,
+  hashSession: (raw) => createHash('sha256').update(`${analyticsSalt}:${raw}`).digest('hex'),
+  now,
+});
+const appAnalyticsRuntime = appAnalyticsRouter({ recordAppVisit });
+const getAppTraffic = new GetAppTraffic({ projects: projectRepo, members: projectMemberRepo, traffic: appTrafficRepo });
 // app-ключ: случайный публичный идентификатор приложения; храним только SHA-256 (как agent-токены).
 const provisionAppBackend = new ProvisionAppBackend({
   appBackends: appBackendRepo,
@@ -1070,6 +1090,20 @@ setInterval(
 // Task-scoped firehose live-событий (только для открытых SSE-вкладок; НЕ per-user bus).
 const liveEventHub = new LiveEventHub();
 const liveRepo = new DrizzleLiveRepository(db);
+// Единая лента логов дашборда (срез 2): сливает административный аудит (MariaDB, db/136),
+// рантайм-аудит приложения (per-project SQLite) и события воркера (live-сессии) в одну
+// ленту с чисткой detail от секретов. publish-источник пока не подключён — категория пустая.
+const queryAppLogs = new QueryAppLogs({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  sources: createAppLogSources({
+    adminAudit: appAdminAuditRepo,
+    appBackends: appBackendRepo,
+    appDb: appDatabaseStore,
+    live: liveRepo,
+  }),
+  now,
+});
 const liveService = new LiveService({
   repo: liveRepo,
   access: { projects: projectRepo, members: projectMemberRepo },
@@ -1905,6 +1939,11 @@ const { app, devProxyUpgrade } = createApp({
     getStatus: getAppBackendStatus,
     dashboard: manageAppBackendData,
     settings: manageAppDashboardSettings,
+    queryLogs: queryAppLogs,
+  },
+  appTraffic: {
+    getAppTraffic,
+    recordRuntime: appAnalyticsRuntime,
   },
   repositoryCode: manageProjectRepositoryCode,
   siteEditor: {
