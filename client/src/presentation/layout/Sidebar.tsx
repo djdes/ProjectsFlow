@@ -1,8 +1,12 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronsLeft, ChevronsRight, Plus, Shield } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Plus, Shield, Sparkles, SquarePen } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/sonner';
+import { useContainer } from '@/infrastructure/di/container';
+import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
+import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import {
   Tooltip,
   TooltipContent,
@@ -55,12 +59,16 @@ type SidebarProps = {
   // Узкая ширина (ресайз ниже порога): ТОЛЬКО верхний навигационный ряд без подписей
   // (иконки). Остальная панель (свитчер, список проектов) — как есть.
   navCompact?: boolean;
+  // Кнопка «Новый чат» внизу панели: создаёт беседу и отдаёт её id наверх (AppShell),
+  // который открывает правую выезжающую панель с этой беседой.
+  onOpenAiChat?: (conversationId: string) => void;
 };
 
 export function Sidebar({
   onToggleCollapse,
   collapsed = false,
   navCompact = false,
+  onOpenAiChat,
 }: SidebarProps): React.ReactElement {
   // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
   // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
@@ -75,6 +83,26 @@ export function Sidebar({
   const { animations } = useMotion();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { aiConversationRepository } = useContainer();
+  const { open: openNewProject } = useNewProjectDialog();
+
+  // «Новый чат»: создаём пустую беседу и просим AppShell открыть её в правой панели.
+  const [creatingChat, setCreatingChat] = useState(false);
+  const startNewChat = useCallback(async (): Promise<void> => {
+    if (creatingChat) return;
+    setCreatingChat(true);
+    try {
+      const conversation = await aiConversationRepository.create({ kind: 'personal', title: 'Новый чат' });
+      announceAiConversationsChanged();
+      if (onOpenAiChat) onOpenAiChat(conversation.id);
+      else navigate(`/ai/c/${conversation.id}`);
+    } catch (err) {
+      // Без этого падение создания беседы выглядит как «кнопка не работает».
+      toast.error(`Не удалось создать чат: ${(err as Error).message}`);
+    } finally {
+      setCreatingChat(false);
+    }
+  }, [aiConversationRepository, creatingChat, navigate, onOpenAiChat]);
 
   const [activeRail, setActiveRail] = useState<RailKey>(readRail);
   const setRailPersist = useCallback((k: RailKey) => {
@@ -180,13 +208,15 @@ export function Sidebar({
             ))}
           </div>
 
+          <div className="my-0.5 h-px w-6 bg-border" />
+          <RailButton onClick={() => void startNewChat()} label="Новый чат">
+            <Sparkles className="size-4" />
+          </RailButton>
+
           {user?.isAdmin && (
-            <>
-              <div className="my-0.5 h-px w-6 bg-border" />
-              <RailNavLink to="/admin" label="Администрирование">
-                <Shield className="size-4" />
-              </RailNavLink>
-            </>
+            <RailNavLink to="/admin" label="Администрирование">
+              <Shield className="size-4" />
+            </RailNavLink>
           )}
         </TooltipProvider>
       </aside>
@@ -266,13 +296,39 @@ export function Sidebar({
         </div>
       )}
 
-      {user?.isAdmin && (
-        <div className="border-t pt-2">
+      {/* Закреплённый низ панели (Notion): широкая кнопка «Новый чат» + квадратная
+          «Новый проект». Видны всем; «Администрирование» — по-прежнему только админам.
+          Строка живёт ВНЕ скролл-контейнера списка проектов, чтобы не ломать его
+          затухание краёв (.pf-scroll-fade). */}
+      <div className="border-t pt-2">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void startNewChat()}
+            disabled={creatingChat}
+            title="Новый чат"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-60"
+          >
+            <Sparkles className="size-4 shrink-0" />
+            <span className="min-w-0 truncate">Новый чат</span>
+          </button>
+          <button
+            type="button"
+            onClick={openNewProject}
+            aria-label="Новый проект"
+            title="Новый проект"
+            className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          >
+            <SquarePen className="size-4" />
+          </button>
+        </div>
+
+        {user?.isAdmin && (
           <NavLink
             to="/admin"
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
+                'mt-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
                 isActive && 'bg-active font-medium text-foreground',
               )
             }
@@ -280,8 +336,8 @@ export function Sidebar({
             <Shield className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate">Администрирование</span>
           </NavLink>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
