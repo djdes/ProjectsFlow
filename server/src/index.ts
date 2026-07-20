@@ -113,6 +113,7 @@ import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
 import { GithubProjectPackageJsonReader } from './infrastructure/github/GithubProjectPackageJsonReader.js';
 import { ConvertProjectToPlatformBackend } from './application/site/ConvertProjectToPlatformBackend.js';
+import { LaunchProject } from './application/site/LaunchProject.js';
 import { FilePlatformBackendContract } from './infrastructure/site/FilePlatformBackendContract.js';
 import { DrizzleSiteEditorRepository } from './infrastructure/repositories/DrizzleSiteEditorRepository.js';
 import { SiteEditorService } from './application/site-editor/SiteEditorService.js';
@@ -1821,6 +1822,25 @@ const { app, devProxyUpgrade } = createApp({
       }),
       packageJson: projectPackageJsonReader,
       contract: new FilePlatformBackendContract(),
+    }),
+    launchProject: new LaunchProject({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      createTask: new CreateTask({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        tasks: taskRepo,
+        users: userRepo,
+        notifications: notificationRepo,
+        email: emailSender,
+        idGen: idGenerator,
+        appUrl: appBaseUrl,
+        activityRecorder,
+      }),
+      // Best-effort: даёт брифу предупредить о проекте со своим серверным процессом.
+      packageJson: projectPackageJsonReader,
+      baseDomain: SITE_BASE_DOMAIN,
     }),
     deleteProject: new DeleteProject({
       projects: projectRepo,

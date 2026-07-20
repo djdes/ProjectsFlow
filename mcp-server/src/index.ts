@@ -43,6 +43,7 @@
 //   - pf_live_start_session          — открыть LIVE-сессию стрима действий воркера по задаче
 //   - pf_live_append_events          — дослать батч событий (<=64) в LIVE-сессию
 //   - pf_live_finish_session         — финализировать LIVE-сессию (статус + стоимость + диффы)
+//   - pf_publish_site                — опубликовать собранную статику проекта (превью/поддомен)
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -64,6 +65,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadConfig } from './config.js';
 import { ApiClient, ApiError } from './api.js';
+import { collectSiteFiles, formatBytes, resolveBuildDir } from './siteFiles.js';
 
 // Версия сервера читается из package.json в рантайме (а не хардкодом / import) —
 // rootDir=./src запрещает `import pkg from '../package.json'` (TS6059). Резолвим
@@ -1442,6 +1444,40 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'pf_publish_site',
+    description:
+      'Publish the project\'s built static site so it actually shows up in the ProjectsFlow ' +
+      'preview and on its public subdomain. THIS IS THE STEP THAT MAKES A BUILD VISIBLE: ' +
+      'running `npm run build` alone changes nothing on the platform — the preview stays empty ' +
+      'until this tool uploads the artifact. Call it at the end of any "launch/deploy/build the ' +
+      'project" task, and quote the returned url to the user. Reads the build directory from ' +
+      'disk (recursively, relative paths preserved) and uploads it; the previous artifact is ' +
+      'replaced atomically. Requires the caller to be the project dispatcher. Limits: 2000 files, ' +
+      '25 MB per file, 100 MB total. Returns slug, url, publishedAt, fileCount plus "warnings" ' +
+      'and (unless verify=false) "checks" from an HTTP probe of the published site — read them, ' +
+      'they are how you find out the site is broken before telling the user it is done.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        dir: {
+          type: 'string',
+          description:
+            'Build output directory: absolute, or relative to the working directory. ' +
+            'Omit to auto-detect the first existing of dist, build, out.',
+        },
+        verify: {
+          type: 'boolean',
+          description:
+            'Fetch the published url afterwards to confirm it really serves the site ' +
+            '(default true). Set false only when the agent has no network access to the site.',
+        },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // Input schemas для validation (zod вместо ручного парсинга).
@@ -1469,6 +1505,11 @@ const UpdateProjectInputZ = z
   .refine((v) => v.name !== undefined || v.gitRepoUrl !== undefined, {
     message: 'нужно хотя бы одно поле (name или gitRepoUrl)',
   });
+const PublishSiteInputZ = z.object({
+  projectId: z.string().min(1),
+  dir: z.string().trim().min(1).max(1000).optional(),
+  verify: z.boolean().optional(),
+});
 const ListMonitoredServersInput = z.object({ projectId: z.string().min(1).optional() });
 const RecordServerSnapshotInput = z.object({
   projectId: z.string().min(1),
@@ -2271,6 +2312,54 @@ async function main(): Promise<void> {
           );
           return jsonResult(result);
         }
+        case 'pf_publish_site': {
+          const input = PublishSiteInputZ.parse(req.params.arguments ?? {});
+          const root = await resolveBuildDir(input.dir, process.cwd());
+          const site = await collectSiteFiles(root);
+          const result = await api.publishSiteArtifact(input.projectId, site.files);
+
+          const warnings: string[] = [];
+          const hasIndex = site.files.some((f) => f.path === 'index.html');
+          if (!hasIndex) {
+            warnings.push(
+              `В сборке нет index.html в корне ${root} — по адресу ${result.url} сайт не откроется. ` +
+                `Похоже, опубликован не тот каталог.`,
+            );
+          }
+          // Публикация «прошла» ещё не значит, что сайт отдаётся. Пробуем его достать —
+          // именно этот шаг ловит «воркер отчитался готово, а превью пустое».
+          const checks = input.verify === false
+            ? null
+            : await probePublishedSite(result.url, site.files.map((f) => f.path));
+          if (checks) {
+            if (!checks.root.ok) {
+              warnings.push(
+                `Проверка ${checks.root.url} не прошла (${checks.root.detail}). ` +
+                  `Сайт может быть ещё не готов — перепроверь адрес прежде чем рапортовать «готово».`,
+              );
+            }
+            if (checks.nestedAsset && !checks.nestedAsset.ok) {
+              warnings.push(
+                `Вложенный файл ${checks.nestedAsset.url} не отдаётся (${checks.nestedAsset.detail}), ` +
+                  `хотя он есть в сборке. Обычно это значит, что вложенные каталоги не доехали ` +
+                  `и страница откроется без стилей и скриптов.`,
+              );
+            }
+          }
+
+          return jsonResult({
+            slug: result.slug,
+            url: result.url,
+            publishedAt: result.publishedAt,
+            dir: root,
+            fileCount: site.files.length,
+            totalBytes: site.totalBytes,
+            totalSize: formatBytes(site.totalBytes),
+            skipped: site.skipped,
+            warnings,
+            checks,
+          });
+        }
         default:
           return errorResult(`Unknown tool: ${name}`);
       }
@@ -2301,6 +2390,36 @@ type ToolContent =
       type: 'resource';
       resource: { uri: string; mimeType: string; blob: string };
     };
+
+type SiteProbe = { url: string; ok: boolean; status: number | null; detail: string };
+
+// Best-effort HTTP-проверка опубликованного сайта. Никогда не бросает: недоступность
+// сети у агента не должна валить успешную публикацию — она лишь попадёт в warnings.
+async function probeSiteUrl(url: string): Promise<SiteProbe> {
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(10_000),
+    });
+    return { url, ok: res.ok, status: res.status, detail: `HTTP ${res.status}` };
+  } catch (e) {
+    return { url, ok: false, status: null, detail: (e as Error).message };
+  }
+}
+
+// Дёргаем корень и — если сборка вложенная — один вложенный файл. Второй запрос отличает
+// «сайта нет вообще» от «есть index.html, но ассеты не доехали».
+async function probePublishedSite(
+  siteUrl: string,
+  paths: readonly string[],
+): Promise<{ root: SiteProbe; nestedAsset: SiteProbe | null }> {
+  const base = siteUrl.replace(/\/+$/, '');
+  const root = await probeSiteUrl(`${base}/`);
+  const nested = paths.find((p) => p.includes('/'));
+  const nestedAsset = nested ? await probeSiteUrl(`${base}/${nested}`) : null;
+  return { root, nestedAsset };
+}
 
 function jsonResult(data: unknown): { content: ToolContent[] } {
   return {

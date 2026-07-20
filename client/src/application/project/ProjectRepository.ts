@@ -530,6 +530,10 @@ export interface ProjectRepository {
   // Ставит воркеру задачу перевести проект со своего сервера на бэкенд платформы. Сервер сам
   // перепроверяет, что проект действительно серверный, и не создаёт вторую задачу к первой.
   convertProjectToPlatformBackend(projectId: string): Promise<ConversionTaskResult>;
+  // Ставит воркеру задачу «Запустить проект». Бриф (шаги сборки, обязательная публикация
+  // артефакта, критерий готовности) собирает сервер: у клиента нет ни site_slug'а, ни
+  // контракта публикации. Повторный вызов возвращает уже созданную задачу (created=false).
+  launchProject(projectId: string): Promise<ConversionTaskResult>;
   // Статус бэкенда приложения (db/102): включён ли, usage/лимит, таблицы. Member-доступ (read).
   getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
   getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard>;

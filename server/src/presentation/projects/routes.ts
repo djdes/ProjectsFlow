@@ -15,6 +15,7 @@ import type { ProjectImportAnalyzer } from '../../application/project/ProjectImp
 import { extractProjectZip } from '../../application/project/extractProjectZip.js';
 import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
 import type { ConvertProjectToPlatformBackend } from '../../application/site/ConvertProjectToPlatformBackend.js';
+import type { LaunchProject } from '../../application/site/LaunchProject.js';
 import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../../application/project/SetProjectMultiTaskWorker.js';
@@ -95,6 +96,7 @@ type Deps = {
   readonly projectImportAnalyzer: ProjectImportAnalyzer;
   readonly getProjectSite: GetProjectSite;
   readonly convertProjectToPlatformBackend: ConvertProjectToPlatformBackend;
+  readonly launchProject: LaunchProject;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
@@ -524,6 +526,21 @@ export function projectsRouter(deps: Deps): Router {
       const id = req.params.id;
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const result = await deps.convertProjectToPlatformBackend.execute(id, req.user!.id);
+      // 200, а не 201, когда задача уже была: повторный клик ничего не создал.
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Запуск проекта (кнопка «Запустить проект» в студии) ===
+  // Бриф собирает сервер: у клиента нет ни site_slug'а, ни контракта публикации, а задача
+  // из двух слов приводила к тому, что воркер принимал зелёную сборку за запуск.
+  router.post('/:id/site/launch', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const result = await deps.launchProject.execute(id, req.user!.id);
       // 200, а не 201, когда задача уже была: повторный клик ничего не создал.
       res.status(result.created ? 201 : 200).json(result);
     } catch (e) {

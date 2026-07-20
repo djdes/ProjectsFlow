@@ -65,15 +65,27 @@ const copy: Record<Action, { title: string; description: string; confirm: string
   },
 };
 
+// Задача запуска опознаётся по маркеру в брифе (его ставит сервер) либо, для задач,
+// созданных до появления брифа, по заголовку из двух слов. Заголовок теперь приходит
+// markdown-заголовком `# …`, поэтому решётки снимаем.
+const LAUNCH_TASK_MARKER = '<!-- pf:launch-project -->';
+
 function isLaunchProjectTask(task: Task): boolean {
-  const title = (task.description ?? '').split(/\r?\n/, 1)[0].replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru-RU');
+  const description = task.description ?? '';
+  if (description.includes(LAUNCH_TASK_MARKER)) return true;
+  const title = description
+    .split(/\r?\n/, 1)[0]
+    .replace(/^#+\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('ru-RU');
   return title === 'запустить проект';
 }
 
 function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBannerProps): React.ReactElement {
   const { user } = useCurrentUser();
   const { projectRepository } = useContainer();
-  const { tasks, loading, create } = useTasks(projectId);
+  const { tasks, loading, refetch } = useTasks(projectId);
   const [launchOpen, setLaunchOpen] = useState(false);
   const [launchBusy, setLaunchBusy] = useState(false);
 
@@ -88,12 +100,16 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
       // Идемпотентный догон для проектов, где GitHub подключили до появления
       // единого onboarding: перед первой задачей гарантируем делегацию и KB.
       await projectRepository.ensureAppRepo(projectId);
-      await create({
-        description: 'Запустить проект',
-        status: 'todo',
-        assigneeUserId: user.id,
-      });
-      toast.success('Задача «Запустить проект» добавлена воркеру');
+      // Текст задачи собирает сервер: только у него есть site_slug проекта и контракт
+      // публикации артефакта. Клиентская задача «Запустить проект» из двух слов приводила
+      // к тому, что воркер принимал зелёную сборку за запуск и закрывал задачу.
+      const result = await projectRepository.launchProject(projectId);
+      await refetch();
+      toast.success(
+        result.created
+          ? 'Задача «Запустить проект» добавлена воркеру'
+          : 'Задача «Запустить проект» уже в работе',
+      );
       setLaunchOpen(false);
     } catch {
       toast.error('Не удалось подготовить проект и отправить задачу');

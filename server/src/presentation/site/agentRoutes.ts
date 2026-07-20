@@ -28,6 +28,11 @@ export function siteAgentRouter(deps: SiteAgentRouterDeps): Router {
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: deps.maxSiteBytes, files: 2000 },
+    // Without this busboy reduces every filename to its basename, so "assets/app.js"
+    // arrived as "app.js" and any bundler build (Vite, CRA) published flattened and
+    // broken — the nested asset 404s. The relative path IS the contract here (see the
+    // originalname comment below), so the whole directory tree must survive upload.
+    preservePath: true,
   });
 
   router.post(

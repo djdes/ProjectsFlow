@@ -553,6 +553,20 @@ export type MyAccount = {
   }>;
 };
 
+// Результат публикации собранной статики (POST /agent/projects/:id/site-artifact).
+export type PublishSiteResult = {
+  slug: string;
+  url: string;
+  publishedAt: string;
+};
+
+// Один файл собранного сайта. path — относительный POSIX-путь внутри сборки; сервер
+// читает его из filename части multipart'а.
+export type SiteUploadFile = {
+  readonly path: string;
+  readonly data: Uint8Array;
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
@@ -597,6 +611,53 @@ export class ApiClient {
     // 204 — пустой ответ.
     if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
+  }
+
+  // Публикация собранной статики. Единственный путь, которым проект попадает в превью:
+  // без строки в site_artifacts превью пустое, сколько бы воркер ни собирал фронтенд.
+  //
+  // Тело — multipart/form-data, поле `files`; относительный путь файла едет в filename.
+  // Content-Type НЕ ставим руками — fetch сам добавит boundary. Таймаут отдельный от
+  // request(): 30s мало, чтобы залить десятки мегабайт по обычному каналу.
+  async publishSiteArtifact(
+    projectId: string,
+    files: readonly SiteUploadFile[],
+    timeoutMs = 300_000,
+  ): Promise<PublishSiteResult> {
+    const form = new FormData();
+    for (const file of files) {
+      // Каст: BlobPart требует ArrayBuffer-backed view, а Buffer из fs.readFile типизирован
+      // как ArrayBufferLike (теоретический SharedArrayBuffer). В рантайме это всегда ArrayBuffer.
+      form.append('files', new Blob([file.data as BlobPart]), file.path);
+    }
+    const path = `/agent/projects/${encodeURIComponent(projectId)}/site-artifact`;
+    let res: Response;
+    try {
+      res = await fetch(`${this.config.apiUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.config.token}`,
+          Accept: 'application/json',
+        },
+        body: form,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (e) {
+      if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') {
+        throw new ApiError(599, `timeout after ${Math.round(timeoutMs / 1000)}s on ${path}`, null);
+      }
+      throw e;
+    }
+    if (!res.ok) {
+      let detail: unknown = null;
+      try {
+        detail = await res.json();
+      } catch {
+        detail = await res.text().catch(() => null);
+      }
+      throw new ApiError(res.status, `HTTP ${res.status} from ${path}`, detail);
+    }
+    return res.json() as Promise<PublishSiteResult>;
   }
 
   async listProjects(): Promise<Project[]> {

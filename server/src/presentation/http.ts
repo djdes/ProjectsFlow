@@ -256,6 +256,7 @@ import { siteAgentRouter } from './site/agentRoutes.js';
 import type { PublishSiteArtifact } from '../application/site/PublishSiteArtifact.js';
 import type { GetProjectSite } from '../application/site/GetProjectSite.js';
 import type { ConvertProjectToPlatformBackend } from '../application/site/ConvertProjectToPlatformBackend.js';
+import type { LaunchProject } from '../application/site/LaunchProject.js';
 import type { SiteArtifactStorage } from '../application/site/SiteArtifactStorage.js';
 import type { LiveService } from '../application/live/LiveService.js';
 import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
@@ -382,6 +383,7 @@ type AppDeps = {
     readonly projectImportAnalyzer: ProjectImportAnalyzer;
     readonly getProjectSite: GetProjectSite;
     readonly convertProjectToPlatformBackend: ConvertProjectToPlatformBackend;
+    readonly launchProject: LaunchProject;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
     readonly listDispatcherCandidates: ListDispatcherCandidates;

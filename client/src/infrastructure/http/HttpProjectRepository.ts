@@ -359,6 +359,10 @@ export class HttpProjectRepository implements ProjectRepository {
     return httpClient.post<ConversionTaskResult>(`/projects/${projectId}/site/convert`, {});
   }
 
+  async launchProject(projectId: string): Promise<ConversionTaskResult> {
+    return httpClient.post<ConversionTaskResult>(`/projects/${projectId}/site/launch`, {});
+  }
+
   async getAppBackendStatus(projectId: string): Promise<AppBackendStatus> {
     return httpClient.get<AppBackendStatus>(
       `/projects/${projectId}/app-backend`,
