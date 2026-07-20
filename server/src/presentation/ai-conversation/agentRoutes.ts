@@ -153,7 +153,13 @@ function pendingDto(value: PendingAiConversationRun): unknown {
     run: runDto(value.run),
     conversationTitle: value.conversationTitle,
     projectName: value.projectName,
-    inputText: `${value.inputText}\n\n${actionProtocol(value.run.projectId)}`,
+    // Протокол действий — это ВЫДАЧА ПРАВ: с ним модель может предложить создание и
+    // удаление проектов и задач. Режим «Размышление» (mode 'chat') на то и режим, чтобы
+    // ничего не делать, поэтому права там не выдаются вовсе — модель просто рассуждает.
+    // Без этого «размышление» было бы только надписью на кнопке.
+    inputText: value.run.mode === 'studio_plan'
+      ? `${value.inputText}\n\n${actionProtocol(value.run.projectId)}`
+      : value.inputText,
     // The worker receives a bounded, already-authorized transcript only. It has
     // no conversation API, filesystem or MCP access, so follow-up answers still
     // keep context without broadening the worker capability.

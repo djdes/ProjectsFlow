@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, FileText, Paperclip, Sparkles, Square, SquareMousePointer, X } from 'lucide-react';
+import { ArrowUp, FileText, Lightbulb, Paperclip, Sparkles, Square, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -50,19 +50,22 @@ function insertPlainText(element: HTMLElement, text: string): void {
 }
 
 /**
- * Режим композера. `discuss` — обычное сообщение в чат (для проекта это read-only
- * рассуждение, mode=studio_plan). `build` — правка сайта: промпт уходит тем же путём,
- * что и из правой панели, и всегда привязан к выделенной зоне.
+ * Режим композера.
+ *
+ * `build` — режим ПО УМОЛЧАНИЮ: агент делает. Есть выделенная зона — промпт уходит
+ * правкой сайта тем же путём, что и из правой панели; зоны нет — уходит планировщику
+ * с правом предлагать действия над проектом и задачами.
+ *
+ * `discuss` — «Размышление»: агент только думает. Прав на действия ему не выдают вовсе
+ * (сервер не отдаёт actionProtocol), поэтому он физически не может ничего создать —
+ * это режим, а не просьба «не трогай».
  */
 export type AiComposerMode = 'discuss' | 'build';
 
-/** Тумблер «обсудить ↔ править». Есть только в студии проекта; без него композер прежний. */
+/** Тумблер «Размышление». Есть только в студии проекта; без него композер прежний. */
 export type AiComposerModeSwitch = {
   readonly mode: AiComposerMode;
   readonly onChange: (mode: AiComposerMode) => void;
-  // Править можно только выделенную в предпросмотре зону: job визуального редактора
-  // без элемента не существует. Нет зоны — тумблер выключен, а не «сломан при отправке».
-  readonly buildEnabled: boolean;
 };
 
 /** Программное заполнение поля (пресет на пустом чате, чип-подсказка). Токен — нонс. */
@@ -72,10 +75,12 @@ export type AiComposerInsert = {
   readonly focus?: boolean;
 };
 
-const PLACEHOLDER: Record<AiComposerMode, string> = {
-  discuss: 'Что обсудим по проекту?',
-  build: 'Что изменить в выделенной зоне?',
-};
+// Плейсхолдер объясняет, куда уйдёт текст. У build их два: с выделенной зоной правка
+// адресная, без неё — задача по проекту целиком, и путать эти два случая нельзя.
+function placeholderFor(mode: AiComposerMode, hasSelection: boolean): string {
+  if (mode === 'discuss') return 'О чём подумаем?';
+  return hasSelection ? 'Что изменить в выделенной зоне?' : 'Что сделать в проекте?';
+}
 
 export function AiComposer({
   conversationId,
@@ -112,7 +117,8 @@ export function AiComposer({
   const fileInput = useRef<HTMLInputElement | null>(null);
   const activeRunId = useAiActiveRunId(conversationId);
   const insertTokenRef = useRef<number | null>(null);
-  const mode = modeSwitch?.mode ?? 'discuss';
+  // Умолчание — «делать»: кнопка «Размышление» выключена, пока её не нажали.
+  const mode = modeSwitch?.mode ?? 'build';
 
   const updateBody = useCallback((value: string): void => {
     setBody(value);
@@ -245,7 +251,7 @@ export function AiComposer({
         {/* Плейсхолдер прячем по факту непустого DOM, а не по trim: иначе он ляжет под набранные пробелы. */}
         {body === '' && (
           <span aria-hidden="true" className="pointer-events-none absolute left-[14px] top-3 select-none truncate text-base leading-6 text-muted-foreground/70">
-            {modeSwitch ? PLACEHOLDER[mode] : 'О чём хотите подумать или что сделать?'}
+            {modeSwitch ? placeholderFor(mode, Boolean(selection)) : 'О чём хотите подумать или что сделать?'}
           </span>
         )}
         <div
@@ -311,22 +317,19 @@ export function AiComposer({
         {modeSwitch && (
           <button
             type="button"
-            aria-pressed={modeSwitch.mode === 'build'}
-            disabled={!modeSwitch.buildEnabled}
-            title={modeSwitch.buildEnabled
-              ? 'Правка выделенной зоны сайта вместо обсуждения'
-              : 'Выделите зону в предпросмотре — правка уйдёт в неё'}
-            onClick={() => modeSwitch.onChange(modeSwitch.mode === 'build' ? 'discuss' : 'build')}
+            aria-pressed={modeSwitch.mode === 'discuss'}
+            title="Только обдумать, ничего не менять"
+            onClick={() => modeSwitch.onChange(modeSwitch.mode === 'discuss' ? 'build' : 'discuss')}
             className={cn(
               'inline-flex h-7 shrink-0 items-center gap-[5px] rounded-md py-0 pl-1.5 pr-2 text-xs font-medium leading-4',
-              'transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50',
-              modeSwitch.mode === 'build'
+              'transition-colors duration-150',
+              modeSwitch.mode === 'discuss'
                 ? 'bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300'
                 : 'bg-muted text-muted-foreground hover:text-foreground',
             )}
           >
-            <SquareMousePointer className="size-4 shrink-0" aria-hidden />
-            Правка
+            <Lightbulb className="size-4 shrink-0" aria-hidden />
+            Размышление
           </button>
         )}
         {activeRunId ? (

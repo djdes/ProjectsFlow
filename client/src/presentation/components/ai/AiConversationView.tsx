@@ -70,14 +70,12 @@ export function AiConversationView({
   // Заполнение композера снаружи (пресет на пустом чате, чип-подсказка). Привязано к
   // диалогу: при переключении чата текст соседнего в поле не переезжает.
   const [insert, setInsert] = useState<(AiComposerInsert & { conversationId: string }) | null>(null);
-  const [composerMode, setComposerMode] = useState<AiComposerMode>('discuss');
-  // Намерение включить «Правку», когда выделение доедет: повтор правки сначала открывает
-  // зону в предпросмотре, а до её появления тумблер держат выключенным.
-  const [buildModeWanted, setBuildModeWanted] = useState(false);
+  // Умолчание — «делать». «Размышление» включают сознательно, когда хотят подумать,
+  // а не получить сразу правку. Тумблер доступен всегда: думать можно и вне режима
+  // правки, и без выделенной зоны.
+  const [composerMode, setComposerMode] = useState<AiComposerMode>('build');
   const personalWorkspace = !projectName && !hideHeader && !compact;
   const composerInsert = insert?.conversationId === conversationId ? insert : null;
-  // Править можно только выделенную зону: job редактора без элемента не существует.
-  const buildEnabled = Boolean(onBuild && selection);
 
   // Поле не управляется React — текст в него кладём через нонс-токен, а не перемонтируя
   // композер: после клика по чипу-подсказке фокус обязан остаться на чипе (референс R2.2).
@@ -90,24 +88,18 @@ export function AiConversationView({
     }));
   };
 
-  useEffect(() => {
-    // Зону сняли (закрыли выделение, ушли со страницы, вышли из режима правки) —
-    // править нечего, возвращаемся к обсуждению. Иначе отправка молча не сработала бы.
-    if (!buildEnabled && composerMode === 'build') setComposerMode('discuss');
-  }, [buildEnabled, composerMode]);
-
-  useEffect(() => {
-    // Зону только что попросили открыть (повтор правки) — она приедет через навигацию
-    // предпросмотра и рукопожатие моста, то есть через несколько кадров. Всё это время
-    // эффект выше держит режим «Обсуждение», поэтому намерение ждёт здесь и включает
-    // «Правку» ровно тогда, когда править станет чем.
-    if (!buildModeWanted || !buildEnabled) return;
-    setBuildModeWanted(false);
-    setComposerMode('build');
-  }, [buildEnabled, buildModeWanted]);
-
   const send = async (body: string, mode: AiComposerMode): Promise<void> => {
-    if (mode === 'build' && onBuild && selection) {
+    // «Размышление»: планировщик без прав на действия. Режим 'chat' — тот, которому
+    // сервер НЕ выдаёт actionProtocol, поэтому агент физически не создаст ни задачу,
+    // ни проект, даже если его об этом попросить.
+    if (mode === 'discuss') {
+      await state.send(body, 'chat');
+      return;
+    }
+    // Дальше режим «делать». С выделенной зоной — адресная правка сайта тем же путём,
+    // что и из правой панели; без зоны — обычный планировщик, который вправе предложить
+    // действия над проектом.
+    if (onBuild && selection) {
       // Отказ канала правки обязан вернуться сюда. Композер очищает поле ДО отправки и
       // возвращает текст только по исключению (AiComposer.submit), так что проглоченный
       // здесь отказ означал бы бесследно исчезнувший промпт.
@@ -145,7 +137,9 @@ export function AiConversationView({
       return;
     }
     onOpenSelection(zone);
-    setBuildModeWanted(true);
+    // Повтор правки — это действие, а не размышление: если «Размышление» было включено,
+    // выключаем его, иначе отправка ушла бы в планировщик и сайт остался бы прежним.
+    setComposerMode('build');
     fillComposer(body, false);
     toast.info('Зона открыта в предпросмотре — отправьте промпт, чтобы повторить правку.');
   };
@@ -283,7 +277,7 @@ export function AiConversationView({
                 insert={composerInsert}
                 selection={selection}
                 onOpenSelection={onOpenSelection}
-                modeSwitch={onBuild ? { mode: composerMode, onChange: setComposerMode, buildEnabled } : undefined}
+                modeSwitch={onBuild ? { mode: composerMode, onChange: setComposerMode } : undefined}
               />
               {!compact && <p className="pt-1.5 text-center text-[10px] text-muted-foreground">ИИ может ошибаться. Проверяйте важные ответы.</p>}
             </div>
