@@ -3,6 +3,7 @@ import type { CommentNotificationLogRepository, CommentNotificationRecord } from
 import type { ProjectMemberRepository, ProjectMemberWithUser } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
 import type { TaskCommentActorKind } from '../../domain/task/TaskComment.js';
 import type { CommentNotifyMode } from '../../domain/task/TaskComment.js';
@@ -30,6 +31,8 @@ export type DispatchCommentInput = {
     readonly body: string;
     readonly actorKind: TaskCommentActorKind;
     readonly agentName: string | null;
+    // Ответ/цитата (db/080). Автор родительского коммента входит в аудиторию mode='all'.
+    readonly replyToCommentId?: string | null;
   };
 };
 
@@ -37,6 +40,7 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly projects: ProjectRepository;
   readonly tasks: TaskRepository;
+  readonly comments: Pick<TaskCommentRepository, 'getById'>;
   readonly email: EmailSender;
   readonly tgSend: SendAgentTelegramNotification;
   readonly log: CommentNotificationLogRepository;
@@ -59,9 +63,10 @@ function clipReason(s: string): string {
 }
 
 // Оркестратор уведомлений по комментарию: единственный писатель журнала
-// comment_notifications. Резолвит получателей по выбору автора (audience), всегда
-// добавляет упомянутых (@mention) в email-канал, шлёт email + Telegram, записывает исход
-// каждого (recipient × channel). Best-effort: исключения глотаются, журнал — фактический.
+// comment_notifications. Резолвит получателей по выбору автора (audience — см. resolveBase),
+// всегда добавляет упомянутых (@mention) поверх базы в обоих каналах, шлёт email + Telegram,
+// записывает исход каждого (recipient × channel).
+// Best-effort: исключения глотаются, журнал — фактический.
 export class DispatchCommentNotifications {
   constructor(private readonly deps: Deps) {}
 
@@ -82,12 +87,13 @@ export class DispatchCommentNotifications {
 
     const nonActor = members.filter((m) => m.userId !== input.actorUserId);
 
-    // База адресации (для обоих каналов) по выбору автора.
-    const base = this.resolveBase(nonActor, input.audience);
-    const baseIds = new Set(base.map((m) => m.userId));
-
     // Упомянутые (@mention) — всегда получают email, даже если не в base и при pref-off.
     const mentionedIds = new Set(parseMentions(comment.body, members, input.actorUserId));
+
+    // База адресации (для обоих каналов) по выбору автора. Assignee типизирован как
+    // обязательный, но задача могла не найтись (удалена) — оптчейн вместо падения рассылки.
+    const base = await this.resolveBase(nonActor, input, task?.assignee?.userId ?? null);
+    const baseIds = new Set(base.map((m) => m.userId));
 
     const url = buildTaskUrl(this.deps.appUrl, input.projectId, comment.taskId, comment.id);
     const rows: CommentNotificationRecord[] = [];
@@ -127,7 +133,7 @@ export class DispatchCommentNotifications {
       }
     }
 
-    // --- Telegram-канал: только base (mention в TG — отдельный механизм, вне scope) ---
+    // --- Telegram-канал: base (kind 'comment_on_my_task') + упомянутые (kind 'mention') ---
     const tgText =
       `💬 Новый комментарий в «${escapeTgHtml(projectName)}»:\n` +
       `<i>${markdownToTelegramHtml(tgExcerpt(comment.body))}</i>\n\n` +
@@ -150,6 +156,38 @@ export class DispatchCommentNotifications {
       }
     }
 
+    // Mentions used to reach Telegram only as a side effect of the blanket 'all' fan-out.
+    // Now that 'all' is narrowed to the people involved, a mentioned bystander would lose
+    // Telegram entirely — while the 'mention' pref is on by default and promises delivery.
+    // Hence an explicit branch with kind 'mention' (mapped to the 'mention' pref in
+    // TG_KIND_TO_PREF, so it stays switchable off by the user).
+    const tgMentionText =
+      `💬 Вас упомянули в комментарии в «${escapeTgHtml(projectName)}»:\n` +
+      `<i>${markdownToTelegramHtml(tgExcerpt(comment.body))}</i>\n\n` +
+      `<a href="${url}">Открыть комментарий</a>`;
+
+    // Only for mode 'all': 'selected'/'none' are an explicit narrowing by the author and
+    // never delivered mentions over Telegram before either.
+    const tgMentionTargets =
+      input.audience.mode === 'all'
+        ? nonActor.filter((m) => mentionedIds.has(m.userId) && !baseIds.has(m.userId))
+        : [];
+    for (const m of tgMentionTargets) {
+      try {
+        const r = await this.deps.tgSend.execute({
+          userId: m.userId,
+          text: tgMentionText,
+          parseMode: 'HTML',
+          kind: 'mention',
+          taskId: comment.taskId,
+          projectId: input.projectId,
+        });
+        rows.push(this.tgRow(comment.id, m.userId, r));
+      } catch (e) {
+        rows.push(this.row(comment.id, m.userId, 'telegram', 'failed', clipReason(String(e))));
+      }
+    }
+
     try {
       await this.deps.log.recordMany(rows);
     } catch (e) {
@@ -157,16 +195,54 @@ export class DispatchCommentNotifications {
     }
   }
 
-  private resolveBase(
+  // Audience resolution.
+  //
+  // 'none'/'selected' are an explicit choice of the comment author and stay as they were.
+  //
+  // 'all' used to mean "every row of members.listByProject()". After the move to a single
+  // workspace (unified-workspace) listByProject reads membership through workspace_members,
+  // i.e. it returns EVERY member of the workspace — so every comment was blasted to people
+  // who have nothing to do with the task. Same regression that was fixed for status changes
+  // in BroadcastTelegramNotificationByTask.
+  //
+  // 'all' now means "everyone actually involved in this comment": the task assignee plus the
+  // author of the comment being replied to. Mentioned users are added on top of the base by
+  // each channel separately (e-mail: forced; Telegram: its own kind 'mention'), so they are
+  // deliberately NOT part of the base here. The comment author is always excluded (nonActor).
+  // An empty result is legitimate (unassigned task, no reply) and must not break the dispatch.
+  private async resolveBase(
     nonActor: readonly ProjectMemberWithUser[],
-    audience: DispatchCommentAudience,
-  ): ProjectMemberWithUser[] {
+    input: DispatchCommentInput,
+    assigneeUserId: string | null,
+  ): Promise<ProjectMemberWithUser[]> {
+    const audience = input.audience;
     if (audience.mode === 'none') return [];
     if (audience.mode === 'selected') {
       const want = new Set(audience.userIds ?? []);
       return nonActor.filter((m) => want.has(m.userId));
     }
-    return [...nonActor];
+
+    const involved = new Set<string>();
+    if (assigneeUserId) involved.add(assigneeUserId);
+    const replyToAuthorId = await this.replyToAuthorId(input.comment.replyToCommentId ?? null);
+    if (replyToAuthorId) involved.add(replyToAuthorId);
+
+    // Intersect with the member list: only members carry the e-mail/prefs we need. An
+    // assignee whose account is no longer in the workspace simply cannot be reached.
+    return nonActor.filter((m) => involved.has(m.userId));
+  }
+
+  // Author of the comment being replied to. Best-effort: a missing/deleted parent must not
+  // break the dispatch — the remaining recipients still get notified.
+  private async replyToAuthorId(replyToCommentId: string | null): Promise<string | null> {
+    if (!replyToCommentId) return null;
+    try {
+      const parent = await this.deps.comments.getById(replyToCommentId);
+      return parent?.ownerUserId ?? null;
+    } catch (e) {
+      console.warn('[DispatchCommentNotifications] reply-to lookup failed:', e);
+      return null;
+    }
   }
 
   private row(

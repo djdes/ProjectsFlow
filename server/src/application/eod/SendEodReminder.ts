@@ -36,8 +36,8 @@ function taskTitle(t: Task, limit = 70): string {
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
 }
 
-// EOD-напоминание (db/101, Фаза 2): каждому участнику перед уходом — актуализировать свои
-// открытые задачи; у кого пусто — предложить помочь другим; в группу — тимбилдинг-нудж.
+// EOD-напоминание (db/101, Фаза 2): участникам с открытыми задачами перед уходом —
+// актуализировать их; в группу — тимбилдинг-нудж. У кого задач нет — молчим.
 // Полностью детерминированно (без диспетчера/раннера). Всё best-effort.
 export class SendEodReminder {
   constructor(private readonly deps: Deps) {}
@@ -69,16 +69,16 @@ export class SendEodReminder {
     }
 
     const boardUrl = `${this.deps.appUrl}/p/${projectId}`;
+    // Personal DM only to people who actually have something open. Everyone else used to get
+    // a "you are all clear" DM, which is pure noise: there is nothing for them to update.
+    // The team-building nudge below still reaches the whole group chat.
     for (const m of members) {
       const myTasks = byAssignee.get(m.userId) ?? [];
-      const text =
-        myTasks.length > 0
-          ? this.withTasksMessage(project.name, myTasks, boardUrl)
-          : this.noTasksMessage(project.name, boardUrl);
+      if (myTasks.length === 0) continue;
       try {
         await this.deps.tgSend.execute({
           userId: m.userId,
-          text,
+          text: this.withTasksMessage(project.name, myTasks, boardUrl),
           parseMode: 'HTML',
           kind: 'eod_reminder',
         });
@@ -120,14 +120,6 @@ export class SendEodReminder {
       `${lines.join('\n')}${more}\n\n` +
       `Отметь статус или оставь коммент. Если завис — напиши в задаче, помогут. ` +
       `<a href="${boardUrl}">Открыть доску</a>`
-    );
-  }
-
-  private noTasksMessage(projectName: string, boardUrl: string): string {
-    return (
-      `🎉 <b>У тебя всё закрыто</b> в «${escapeHtml(projectName)}».\n` +
-      `Загляни на доску или во вкладку «Другие» — может, кому-то нужна помощь. ` +
-      `Если возьмёшь задачу — назначь себя ответственным. <a href="${boardUrl}">Открыть доску</a>`
     );
   }
 }

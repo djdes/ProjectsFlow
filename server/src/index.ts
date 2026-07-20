@@ -972,6 +972,7 @@ const dispatchCommentNotifications = new DispatchCommentNotifications({
   members: projectMemberRepo,
   projects: projectRepo,
   tasks: taskRepo,
+  comments: taskCommentRepo,
   email: emailSender,
   tgSend: sendAgentTelegramNotification,
   log: commentNotificationLogRepo,

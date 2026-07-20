@@ -793,6 +793,7 @@ export function tasksRouter(deps: Deps): Router {
             body: body.body,
             actorKind: comment.actorKind,
             agentName: comment.agentName,
+            replyToCommentId: comment.replyToCommentId,
           },
         })
         .catch((err) => console.warn('[tasks/comment-dispatch] failed:', err));

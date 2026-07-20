@@ -1242,6 +1242,7 @@ export class HandleTelegramWebhook {
           body: text,
           actorKind: 'user',
           agentName: null,
+          replyToCommentId: comment.replyToCommentId,
         },
       })
       .catch((e: unknown) => console.warn('[tg-webhook] dispatchCommentNotifications failed:', e));
