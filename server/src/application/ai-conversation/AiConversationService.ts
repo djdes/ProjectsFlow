@@ -91,14 +91,19 @@ export class AiConversationService {
     if (query.projectId) {
       await requireProjectAccess(this.deps.projectAccess, query.projectId, userId, 'read_project');
     }
+    // `scope` filters by project linkage, not by kind, because a personal conversation
+    // can now be attached to a project too:
+    //   personal → conversations with no project at all (the general assistant);
+    //   project  → conversations bound to some project (narrow with projectId).
+    // `kind` stays an independent filter, so the studio route (kind=project_studio)
+    // keeps returning exactly what it did before.
     return this.deps.repo.listForOwner(userId, {
-      ...(query.kind
-        ? { kind: query.kind }
-        : query.scope === 'personal'
-          ? { kind: 'personal' as const }
-          : query.scope === 'project'
-            ? { kind: 'project_studio' as const }
-            : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.scope === 'personal'
+        ? { projectLink: 'none' as const }
+        : query.scope === 'project'
+          ? { projectLink: 'any' as const }
+          : {}),
       ...(query.projectId ? { projectId: query.projectId } : {}),
       ...(query.search?.trim() ? { search: query.search.trim() } : {}),
       ...(query.archived !== undefined ? { archived: query.archived } : {}),
@@ -113,12 +118,16 @@ export class AiConversationService {
     if (input.kind === 'project_studio' && !projectId) {
       throw new AiConversationValidationError('projectId is required for a project studio conversation');
     }
-    if (input.kind === 'personal' && projectId) {
-      throw new AiConversationValidationError('A personal conversation cannot be linked to a project');
-    }
+    // A personal conversation MAY carry a projectId: that is how the floating chat
+    // becomes project-aware ("opened inside a project → the AI answers about it").
+    // It stays kind='personal', so it is not a studio conversation: no singleton
+    // per user×project and no studio_* run modes (see sendMessage).
 
     let workspaceId: string | null = null;
     if (projectId) {
+      // The only gate against attaching a conversation to somebody else's project.
+      // Membership (or admin bypass) with `read_project` is required — the same check
+      // every project-scoped route uses; a non-member gets 404, a too-weak role 403.
       await requireProjectAccess(this.deps.projectAccess, projectId, userId, 'read_project');
       workspaceId = await this.deps.projectAccess.projects.getWorkspaceId(projectId);
     }
@@ -230,6 +239,11 @@ export class AiConversationService {
     const conversation = await this.loadAuthorized(userId, conversationId);
     const body = input.body.trim();
     if (!body) throw new AiConversationValidationError('Message body cannot be empty');
+    // Studio modes belong to the visual editor and must not leak into an ordinary
+    // project-aware chat, which now also carries a projectId.
+    if (input.mode && input.mode !== 'chat' && conversation.kind !== 'project_studio') {
+      throw new AiConversationValidationError('Studio run modes require a project studio conversation');
+    }
     let dispatcherUserId: string | null;
     if (conversation.projectId) {
       const access = await requireProjectAccess(

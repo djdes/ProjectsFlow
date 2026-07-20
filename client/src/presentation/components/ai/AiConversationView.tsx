@@ -43,6 +43,7 @@ export function AiConversationView({
   projectName,
   projectId,
   hideHeader = false,
+  contextSlot,
   onOpenSelection,
   selection,
   onBuild,
@@ -52,6 +53,9 @@ export function AiConversationView({
   projectName?: string;
   projectId?: string;
   hideHeader?: boolean;
+  // Прослойка прямо над композером: чип контекста и подобные плашки хозяина ленты
+  // (правая AI-панель показывает там проект, к которому привязан чат).
+  contextSlot?: React.ReactNode;
   // Клик по чипу зоны в сообщении. Приходит только оттуда, где есть предпросмотр
   // (Project Studio); без него чип рисуется как read-only отметка.
   onOpenSelection?: (selection: AiSelectionRef) => void;
@@ -267,6 +271,7 @@ export function AiConversationView({
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
               {/* Подсказки живут НАД композером и приезжают из metadata последнего ответа.
                   Своего генератора у нас нет: сервер не прислал — блок не рендерится. */}
+              {contextSlot}
               <AiSuggestionChips suggestions={suggestions} onPick={(prompt) => fillComposer(prompt, false)} />
               <AiComposer
                 key={conversationId}

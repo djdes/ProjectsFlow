@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type {
   AiConversationRepository,
   CreateAiMessageRunRecord,
+  ListAiConversationsQuery,
 } from './AiConversationRepository.js';
 import { AiConversationService } from './AiConversationService.js';
 import type { AiConversation } from '../../domain/ai-conversation/AiConversation.js';
@@ -28,8 +29,18 @@ class FakeRepo implements AiConversationRepository {
   lastSend: CreateAiMessageRunRecord | null = null;
   eventSeq = 0;
 
-  async listForOwner(ownerUserId: string) {
-    return [...this.conversations.values()].filter((c) => c.ownerUserId === ownerUserId);
+  lastList: ListAiConversationsQuery | null = null;
+
+  async listForOwner(ownerUserId: string, query: ListAiConversationsQuery) {
+    this.lastList = query;
+    return [...this.conversations.values()].filter((c) => {
+      if (c.ownerUserId !== ownerUserId) return false;
+      if (query.kind && c.kind !== query.kind) return false;
+      if (query.projectId && c.projectId !== query.projectId) return false;
+      if (query.projectLink === 'none' && c.projectId !== null) return false;
+      if (query.projectLink === 'any' && c.projectId === null) return false;
+      return true;
+    });
   }
   async findById(id: string) { return this.conversations.get(id) ?? null; }
   async findProjectStudioForOwner(ownerUserId: string, projectId: string) {
@@ -181,6 +192,113 @@ test('project studio get-or-create reuses the owner project conversation', async
   assert.equal(first.id, second.id);
   assert.equal(first.title, 'Проект — ИИ');
   assert.equal(repo.conversations.size, 1);
+});
+
+test('a personal conversation may be linked to a project the caller can read', async () => {
+  const { service } = build();
+  const created = await service.create(USER, { kind: 'personal', projectId: PROJECT });
+  assert.equal(created.kind, 'personal');
+  assert.equal(created.projectId, PROJECT);
+  assert.equal(created.workspaceId, 'workspace-1');
+});
+
+test('a personal conversation cannot be linked to a project the caller cannot read', async () => {
+  const withoutAccess = build({ projectMember: false }).service;
+  await assert.rejects(
+    () => withoutAccess.create(USER, { kind: 'personal', projectId: PROJECT }),
+    /Project not found/i,
+  );
+  // Неизвестный проект тоже не проходит — гейт один и тот же.
+  const { service } = build();
+  await assert.rejects(
+    () => service.create(USER, {
+      kind: 'personal', projectId: '00000000-0000-4000-8000-0000000000ff',
+    }),
+    /Project not found/i,
+  );
+});
+
+test('a personal conversation without a project stays the general assistant', async () => {
+  const { service } = build();
+  const created = await service.create(USER, { kind: 'personal' });
+  assert.equal(created.projectId, null);
+  assert.equal(created.workspaceId, null);
+});
+
+test('a project-linked personal chat sends its project into the run context', async () => {
+  const { repo, service } = build();
+  const created = await service.create(USER, { kind: 'personal', projectId: PROJECT });
+
+  const result = await service.sendMessage(USER, created.id, {
+    body: 'Что по проекту?',
+    clientRequestId: '00000000-0000-4000-8000-000000000099',
+  });
+
+  assert.equal(repo.lastSend?.projectId, PROJECT);
+  assert.equal(repo.lastSend?.mode, 'chat');
+  // Диспетчер берётся у проекта, а не у пользователя.
+  assert.equal(result.run.dispatcherUserId, DISPATCHER);
+  assert.equal(
+    (repo.lastSend?.contextSnapshot as Record<string, unknown> | null)?.['projectId'],
+    PROJECT,
+  );
+  assert.equal(result.run.projectId, PROJECT);
+});
+
+test('studio run modes stay unavailable to an ordinary project-linked chat', async () => {
+  const { service } = build();
+  const created = await service.create(USER, { kind: 'personal', projectId: PROJECT });
+  await assert.rejects(
+    () => service.sendMessage(USER, created.id, {
+      body: 'сделай правку',
+      clientRequestId: '00000000-0000-4000-8000-000000000098',
+      mode: 'studio_edit',
+    }),
+    AiConversationValidationError,
+  );
+});
+
+test('project studio keeps its singleton, default mode and kind filter', async () => {
+  const { repo, service } = build();
+  const studio = await service.getOrCreateProjectStudio(USER, PROJECT);
+  // Обычный чат того же проекта не отбирает у студии её singleton.
+  const personal = await service.create(USER, { kind: 'personal', projectId: PROJECT });
+  assert.notEqual(personal.id, studio.id);
+  assert.equal((await service.getOrCreateProjectStudio(USER, PROJECT)).id, studio.id);
+
+  await service.sendMessage(USER, studio.id, {
+    body: 'план',
+    clientRequestId: '00000000-0000-4000-8000-000000000097',
+  });
+  assert.equal(repo.lastSend?.mode, 'studio_plan');
+
+  const studioOnly = await service.list(USER, { kind: 'project_studio', projectId: PROJECT });
+  assert.deepEqual(studioOnly.map((c) => c.id), [studio.id]);
+});
+
+test('list separates general conversations from project-linked ones', async () => {
+  const { service } = build();
+  const general = await service.create(USER, { kind: 'personal' });
+  const linked = await service.create(USER, { kind: 'personal', projectId: PROJECT });
+  const studio = await service.getOrCreateProjectStudio(USER, PROJECT);
+
+  const personalScope = await service.list(USER, { scope: 'personal' });
+  assert.deepEqual(personalScope.map((c) => c.id), [general.id]);
+
+  const projectScope = await service.list(USER, { scope: 'project', projectId: PROJECT });
+  assert.deepEqual(projectScope.map((c) => c.id).sort(), [linked.id, studio.id].sort());
+
+  const all = await service.list(USER, { scope: 'all' });
+  assert.equal(all.length, 3);
+});
+
+test('listing another project requires access before any rows are read', async () => {
+  const { repo, service } = build({ projectMember: false });
+  await assert.rejects(
+    () => service.list(USER, { scope: 'project', projectId: PROJECT }),
+    /Project not found/i,
+  );
+  assert.equal(repo.lastList, null);
 });
 
 function conversation(patch: Partial<AiConversation> = {}): AiConversation {

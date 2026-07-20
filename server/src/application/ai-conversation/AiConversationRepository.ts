@@ -21,6 +21,9 @@ export type AiMutationResult<T> = {
 export type ListAiConversationsQuery = {
   readonly kind?: AiConversationKind;
   readonly projectId?: string;
+  // Project linkage filter, independent of kind: 'none' = general conversations
+  // (project_id IS NULL), 'any' = conversations bound to some project.
+  readonly projectLink?: 'none' | 'any';
   readonly search?: string;
   readonly archived?: boolean;
   readonly before?: Date;

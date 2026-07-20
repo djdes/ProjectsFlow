@@ -1,50 +1,87 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { LifeBuoy, MessageCircle, Sparkles, X } from 'lucide-react';
+import { LifeBuoy, Plus, Sparkles, X } from 'lucide-react';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { useContainer } from '@/infrastructure/di/container';
+import { useProjects } from '@/presentation/hooks/useProjects';
+import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
 import { cn } from '@/lib/utils';
-import { HelpAssistantPanel } from './HelpAssistantPanel';
+import { HelpAiPanel } from './HelpAiPanel';
 import { HelpSupportPanel } from './HelpSupportPanel';
-import { ASSISTANT_PREVIEW_REPLY, type ChatMessage } from './assistantContent';
+import { helpAiContextKey, type HelpAiSession } from './helpAiSession';
 
-type HelpTab = 'assistant' | 'support';
+type HelpTab = 'ai' | 'support';
 type OpenHelpDetail = {
-  readonly tab?: HelpTab;
+  // 'assistant' — историческое имя вкладки ИИ, приезжает из старых вызовов.
+  readonly tab?: HelpTab | 'assistant';
   readonly prefill?: string;
 };
 
 const TABS: ReadonlyArray<{ value: HelpTab; label: string; icon: React.ReactNode }> = [
-  { value: 'assistant', label: 'Помощник', icon: <Sparkles className="size-3.5" /> },
+  { value: 'ai', label: 'ИИ', icon: <Sparkles className="size-3.5" /> },
   { value: 'support', label: 'Поддержка', icon: <LifeBuoy className="size-3.5" /> },
 ];
 
-// Плавающий виджет помощи снизу справа (в приложении). Две вкладки: «Помощник»
-// (AI-превью — пока без реальных ответов, см. план P2) и «Поддержка» (рабочая форма →
-// тикет + Telegram). Портал в <body>, fixed, над мобильным таб-баром (см. CLAUDE.md →
-// PWA-инсеты). Анимации гейтятся useMotion (reduced-motion → мгновенно).
+// Notion-геометрия: круглая кнопка 40×40 в 31px от правого и нижнего края и панель
+// шириной 360, прижатая к правому краю во всю высоту (без скругления и тени).
+const FAB_SHADOW =
+  'shadow-[0_8px_12px_rgba(25,25,25,0.027),0_2px_6px_rgba(25,25,25,0.027),0_0_0_1px_rgba(42,28,0,0.07)] ' +
+  'dark:shadow-[0_8px_12px_rgba(0,0,0,0.30),0_2px_6px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.10)]';
+
+function normalizeTab(tab: OpenHelpDetail['tab']): HelpTab | null {
+  if (tab === 'support') return 'support';
+  if (tab === 'ai' || tab === 'assistant') return 'ai';
+  return null;
+}
+
+/**
+ * Правая AI-панель приложения (референс — Notion). Круглая кнопка поверх интерфейса,
+ * по клику — немодальная панель у правого края: вкладка «ИИ» (настоящий чат) и
+ * «Поддержка» (форма → тикет + Telegram). Портал в <body>, над мобильным таб-баром
+ * (см. CLAUDE.md → PWA-инсеты). Анимации гейтятся useMotion.
+ */
 export function HelpWidget({
   defaultOpen = false,
-  defaultTab = 'assistant',
+  defaultTab = 'ai',
 }: {
   defaultOpen?: boolean;
   defaultTab?: HelpTab;
 } = {}): React.ReactElement | null {
   const { animations } = useMotion();
+  const { aiConversationRepository } = useContainer();
+  const { pathname } = useLocation();
+  const { data: projects } = useProjects();
   const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState<HelpTab>(defaultTab);
-  // Префилл для вкладки «Поддержка» при переходе из AI («Написать в поддержку»).
+  // Префилл для вкладки «Поддержка» при переходе из справочных ссылок.
   const [supportPrefill, setSupportPrefill] = useState('');
-  // Лента AI-диалога живёт здесь, чтобы «Очистить» в шапке могла её сбросить.
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const seqRef = useRef(0);
+  const [session, setSession] = useState<HelpAiSession | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  // По беседе на контекст: вернувшись в проект, пользователь получает свой чат,
+  // а не безымянную новую пустышку.
+  const sessions = useRef(new Map<string, HelpAiSession>());
 
-  // Остальные экраны открывают единый виджет помощи через DOM-событие, не создавая
-  // прямую зависимость между несвязанными presentation-компонентами.
+  // Текущий проект берём из маршрута: панель висит над всем приложением и своего
+  // роут-параметра не имеет.
+  const routeProjectId = useMemo(() => {
+    const match = /^\/projects\/([^/]+)/.exec(pathname);
+    return match ? match[1] : null;
+  }, [pathname]);
+  const routeProjectName = useMemo(() => {
+    if (!routeProjectId) return null;
+    return projects?.find((project) => project.id === routeProjectId)?.name ?? null;
+  }, [projects, routeProjectId]);
+
+  // Остальные экраны открывают панель через DOM-событие, не создавая прямую
+  // зависимость между несвязанными presentation-компонентами.
   useEffect(() => {
     const onOpenHelp = (event: Event): void => {
       const detail = (event as CustomEvent<OpenHelpDetail>).detail;
-      if (detail?.tab) setTab(detail.tab);
+      const next = normalizeTab(detail?.tab);
+      if (next) setTab(next);
       if (typeof detail?.prefill === 'string') setSupportPrefill(detail.prefill);
       setOpen(true);
     };
@@ -62,26 +99,53 @@ export function HelpWidget({
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const sendAssistant = useCallback((raw: string) => {
-    const text = raw.trim();
-    if (text.length === 0) return;
-    setMessages((prev) => {
-      const base = seqRef.current;
-      seqRef.current = base + 2;
-      return [
-        ...prev,
-        { id: base + 1, role: 'user', text },
-        { id: base + 2, role: 'assistant', text: ASSISTANT_PREVIEW_REPLY, cta: true },
-      ];
-    });
-  }, []);
+  const startSession = useCallback(
+    async (projectId: string | null, projectName: string | null, fresh = false): Promise<void> => {
+      const key = helpAiContextKey(projectId);
+      const cached = sessions.current.get(key);
+      if (cached && !fresh) {
+        setSession(cached);
+        setCreateError(null);
+        return;
+      }
+      setCreating(true);
+      setCreateError(null);
+      try {
+        const conversation = await aiConversationRepository.create({
+          kind: 'personal',
+          title: projectName ? `ИИ · ${projectName}` : 'Новый чат',
+          ...(projectId ? { projectId } : {}),
+        });
+        const next: HelpAiSession = { conversationId: conversation.id, projectId, projectName };
+        sessions.current.set(key, next);
+        setSession(next);
+        announceAiConversationsChanged();
+      } catch (reason) {
+        setCreateError(reason instanceof Error ? reason.message : 'Не удалось начать чат');
+      } finally {
+        setCreating(false);
+      }
+    },
+    [aiConversationRepository],
+  );
 
-  const clearAssistant = useCallback(() => setMessages([]), []);
+  // Ленивое создание: беседа появляется при первом показе вкладки «ИИ», а не при
+  // монтировании виджета.
+  useEffect(() => {
+    if (!open || tab !== 'ai') return;
+    if (session || creating || createError) return;
+    void startSession(routeProjectId, routeProjectName);
+  }, [open, tab, session, creating, createError, routeProjectId, routeProjectName, startSession]);
 
-  const goToSupport = useCallback((prefill: string) => {
-    setSupportPrefill(prefill);
-    setTab('support');
-  }, []);
+  const newChat = useCallback(() => {
+    const projectId = session ? session.projectId : routeProjectId;
+    const projectName = session ? session.projectName : routeProjectName;
+    void startSession(projectId, projectName, true);
+  }, [routeProjectId, routeProjectName, session, startSession]);
+
+  const startProjectChat = useCallback(() => {
+    void startSession(routeProjectId, routeProjectName);
+  }, [routeProjectId, routeProjectName, startSession]);
 
   if (typeof document === 'undefined') return null;
 
@@ -89,66 +153,29 @@ export function HelpWidget({
     ? { type: 'spring' as const, stiffness: 420, damping: 28 }
     : { duration: 0 };
   const panelTransition = animations
-    ? { type: 'spring' as const, stiffness: 380, damping: 32 }
+    ? { type: 'spring' as const, stiffness: 320, damping: 34 }
     : { duration: 0 };
 
-  const isAssistant = tab === 'assistant';
-  const showClear = isAssistant && messages.length > 0;
+  const isAi = tab === 'ai';
 
   return createPortal(
-    <div className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-3 md:bottom-6 md:right-6">
-      <AnimatePresence mode="popLayout">
+    <>
+      <AnimatePresence>
         {open && (
-          <motion.div
+          <motion.aside
             key="panel"
             role="dialog"
-            aria-label="Помощь и поддержка"
-            initial={animations ? { opacity: 0, scale: 0.94, y: 18 } : false}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={animations ? { opacity: 0, scale: 0.94, y: 18 } : { opacity: 0 }}
+            aria-label="ИИ и поддержка"
+            initial={animations ? { x: '100%' } : false}
+            animate={{ x: 0 }}
+            exit={animations ? { x: '100%' } : { opacity: 0 }}
             transition={panelTransition}
-            style={{ transformOrigin: 'bottom right' }}
-            className="pointer-events-auto flex h-[min(36rem,calc(100dvh-7rem))] w-[calc(100vw-2rem)] max-w-[24rem] flex-col overflow-hidden rounded-[1.4rem] border bg-background shadow-[0_24px_60px_-12px_rgba(0,0,0,0.32),0_8px_20px_-8px_rgba(0,0,0,0.18)]"
+            // Панель немодальная: интерфейс слева остаётся кликабельным, страница не
+            // сужается. Встык к краю окна — без скругления и тени, только разделитель.
+            className="fixed inset-y-0 right-0 z-40 flex w-full flex-col overflow-hidden border-l bg-card pt-[env(safe-area-inset-top)] sm:w-[360px]"
           >
-            {/* Шапка — фирменный синий с мягким бликом и матовым бейджем. */}
-            <div className="relative flex items-center gap-3 overflow-hidden bg-primary px-4 py-3.5 text-primary-foreground">
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 via-white/5 to-transparent"
-              />
-              <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-white/15 shadow-inner ring-1 ring-white/25 backdrop-blur-sm">
-                {isAssistant ? <Sparkles className="size-5" /> : <LifeBuoy className="size-5" />}
-              </span>
-              <div className="relative min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold leading-tight">
-                  {isAssistant ? 'AI-помощник' : 'Связаться с поддержкой'}
-                </p>
-                <p className="truncate text-xs text-primary-foreground/75">
-                  {isAssistant ? 'Подскажу, как пользоваться ProjectsFlow' : 'Ответим как можно скорее'}
-                </p>
-              </div>
-              {showClear && (
-                <button
-                  type="button"
-                  onClick={clearAssistant}
-                  className="relative shrink-0 rounded-md px-2 py-1 text-xs font-medium text-primary-foreground/80 transition-colors hover:bg-white/15 hover:text-primary-foreground"
-                >
-                  Очистить
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Закрыть"
-                className="relative grid size-8 shrink-0 place-items-center rounded-full text-primary-foreground/80 transition-colors hover:bg-white/15 hover:text-primary-foreground"
-              >
-                <X className="size-[1.05rem]" />
-              </button>
-            </div>
-
-            {/* Переключатель вкладок — мягкий iOS-сегмент с пружинной пилюлей. */}
-            <div className="px-3 pt-3">
-              <div role="tablist" className="flex rounded-xl bg-muted p-1">
+            <header className="flex shrink-0 items-center gap-2 border-b px-2.5 py-2">
+              <div role="tablist" className="flex min-w-0 flex-1 rounded-xl bg-muted p-1">
                 {TABS.map((t) => {
                   const active = t.value === tab;
                   return (
@@ -181,47 +208,72 @@ export function HelpWidget({
                   );
                 })}
               </div>
-            </div>
+              {isAi && (
+                <button
+                  type="button"
+                  onClick={newChat}
+                  disabled={creating}
+                  aria-label="Новая беседа"
+                  title="Новая беседа"
+                  className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-50"
+                >
+                  <Plus className="size-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Закрыть"
+                className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </header>
 
-            {/* Тело вкладки. */}
-            {isAssistant ? (
-              <HelpAssistantPanel
-                messages={messages}
-                onSend={sendAssistant}
-                onGoToSupport={goToSupport}
+            {isAi ? (
+              <HelpAiPanel
+                session={session}
+                creating={creating}
+                error={createError}
+                routeProjectId={routeProjectId}
+                routeProjectName={routeProjectName}
+                onRetry={startProjectChat}
+                onStartProjectChat={startProjectChat}
               />
             ) : (
               <HelpSupportPanel initialMessage={supportPrefill} />
             )}
-          </motion.div>
+          </motion.aside>
         )}
       </AnimatePresence>
 
-      {/* FAB — показываем, когда панель закрыта. */}
+      {/* FAB — показываем, когда панель закрыта. На мобиле поднят над таб-баром. */}
       <AnimatePresence>
         {!open && (
           <motion.button
             key="fab"
             type="button"
             onClick={() => setOpen(true)}
-            aria-label="Помощь и поддержка"
+            aria-label="Открыть ИИ и поддержку"
             initial={animations ? { opacity: 0, scale: 0.6 } : false}
             animate={{ opacity: 1, scale: 1 }}
             exit={animations ? { opacity: 0, scale: 0.6 } : { opacity: 0 }}
             transition={fabTransition}
             whileHover={animations ? { scale: 1.06 } : undefined}
             whileTap={animations ? { scale: 0.92 } : undefined}
-            className="pointer-events-auto relative grid size-14 place-items-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/35 ring-1 ring-black/5 transition-shadow hover:shadow-xl hover:shadow-primary/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className={cn(
+              'fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 grid size-10 place-items-center',
+              'rounded-full bg-card text-foreground/80 transition-colors hover:bg-muted/40',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              'md:bottom-[31px] md:right-[31px]',
+              FAB_SHADOW,
+            )}
           >
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-transparent"
-            />
-            <MessageCircle className="relative size-6" />
+            <Sparkles className="size-5" />
           </motion.button>
         )}
       </AnimatePresence>
-    </div>,
+    </>,
     document.body,
   );
 }

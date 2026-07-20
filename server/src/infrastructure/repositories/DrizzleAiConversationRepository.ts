@@ -72,6 +72,8 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
     const filters = [eq(aiConversations.ownerUserId, ownerUserId), isNull(aiConversations.deletedAt)];
     if (query.kind) filters.push(eq(aiConversations.kind, query.kind));
     if (query.projectId) filters.push(eq(aiConversations.projectId, query.projectId));
+    if (query.projectLink === 'none') filters.push(isNull(aiConversations.projectId));
+    else if (query.projectLink === 'any') filters.push(isNotNull(aiConversations.projectId));
     if (query.search) filters.push(like(aiConversations.title, `%${escapeLike(query.search)}%`));
     filters.push(query.archived ? isNotNull(aiConversations.archivedAt) : isNull(aiConversations.archivedAt));
     if (query.before) {
