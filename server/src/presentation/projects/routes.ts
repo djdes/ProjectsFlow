@@ -14,6 +14,7 @@ import type { ImportProjectRepo } from '../../application/project/ImportProjectR
 import type { ProjectImportAnalyzer } from '../../application/project/ProjectImportAnalyzer.js';
 import { extractProjectZip } from '../../application/project/extractProjectZip.js';
 import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
+import type { ConvertProjectToPlatformBackend } from '../../application/site/ConvertProjectToPlatformBackend.js';
 import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../../application/project/SetProjectMultiTaskWorker.js';
@@ -93,6 +94,7 @@ type Deps = {
   readonly importProjectRepo: ImportProjectRepo;
   readonly projectImportAnalyzer: ProjectImportAnalyzer;
   readonly getProjectSite: GetProjectSite;
+  readonly convertProjectToPlatformBackend: ConvertProjectToPlatformBackend;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
@@ -509,6 +511,21 @@ export function projectsRouter(deps: Deps): Router {
         // объяснение «проект со своим сервером» вместо обещания скорого Preview.
         runtime: site.runtime,
       });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Перевод проекта со своего сервера на бэкенд платформы ===
+  // Ставит воркеру задачу с готовым брифом и контрактом. Вердикт «проект серверный»
+  // пересчитывается внутри use-case'а: то, что клиент показывал плашку, ничего не доказывает.
+  router.post('/:id/site/convert', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const result = await deps.convertProjectToPlatformBackend.execute(id, req.user!.id);
+      // 200, а не 201, когда задача уже была: повторный клик ничего не создал.
+      res.status(result.created ? 201 : 200).json(result);
     } catch (e) {
       next(e);
     }

@@ -112,6 +112,8 @@ import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/Dri
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
 import { GithubProjectPackageJsonReader } from './infrastructure/github/GithubProjectPackageJsonReader.js';
+import { ConvertProjectToPlatformBackend } from './application/site/ConvertProjectToPlatformBackend.js';
+import { FilePlatformBackendContract } from './infrastructure/site/FilePlatformBackendContract.js';
 import { DrizzleSiteEditorRepository } from './infrastructure/repositories/DrizzleSiteEditorRepository.js';
 import { SiteEditorService } from './application/site-editor/SiteEditorService.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
@@ -566,6 +568,14 @@ const appBaseUrl =
   process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173';
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
+
+// Один экземпляр на процесс — внутри TTL-кэш package.json. Второй экземпляр означал бы
+// второй кэш и удвоенный поход в GitHub: читатель нужен и «Сайту проекта», и кнопке перевода.
+const projectPackageJsonReader = new GithubProjectPackageJsonReader({
+  projects: projectRepo,
+  tokens: githubTokenRepo,
+  api: githubApi,
+});
 const deviceFlowStore = new DeviceFlowStore();
 const kbRepo = new GithubKbRepository(githubApi);
 const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
@@ -1791,11 +1801,26 @@ const { app, devProxyUpgrade } = createApp({
       storage: siteArtifactStorage,
       // Даёт студии распознать проект со своим сервером и сказать об этом прямо, вместо
       // вечного «Preview появится после первого запуска». Best-effort — см. reader.
-      packageJson: new GithubProjectPackageJsonReader({
+      packageJson: projectPackageJsonReader,
+    }),
+    convertProjectToPlatformBackend: new ConvertProjectToPlatformBackend({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      sites: siteArtifactRepo,
+      tasks: taskRepo,
+      createTask: new CreateTask({
         projects: projectRepo,
-        tokens: githubTokenRepo,
-        api: githubApi,
+        members: projectMemberRepo,
+        tasks: taskRepo,
+        users: userRepo,
+        notifications: notificationRepo,
+        email: emailSender,
+        idGen: idGenerator,
+        appUrl: appBaseUrl,
+        activityRecorder,
       }),
+      packageJson: projectPackageJsonReader,
+      contract: new FilePlatformBackendContract(),
     }),
     deleteProject: new DeleteProject({
       projects: projectRepo,

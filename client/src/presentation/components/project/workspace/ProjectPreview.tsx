@@ -721,7 +721,7 @@ export function ProjectPreview({
 
   if (loadingSite) return <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Загружаем Preview…</div>;
   if (siteError) return <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed"><div className="max-w-sm text-center"><AlertCircle className="mx-auto mb-3 size-6 text-destructive" /><p className="font-medium">Не удалось получить результат проекта</p><p className="mt-1 text-sm text-muted-foreground">Проверьте соединение и попробуйте обновить Preview.</p><Button className="mt-4" variant="outline" onClick={() => window.location.reload()}>Повторить</Button></div></div>;
-  if (!site?.siteSlug || !site.deployedAt || !currentUrl || !baseUrl || !frameSrc) return <PreviewEmptyState runtime={site?.runtime ?? null} />;
+  if (!site?.siteSlug || !site.deployedAt || !currentUrl || !baseUrl || !frameSrc) return <PreviewEmptyState projectId={projectId} runtime={site?.runtime ?? null} />;
 
   return (
     <section

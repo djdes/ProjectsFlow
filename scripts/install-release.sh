@@ -28,6 +28,9 @@ required=(
   "client/dist/index.html"
   "landing/dist/index.html"
   "scripts/migrate.mjs"
+  # Не документация, а рантайм-ресурс: сервер вкладывает контракт в задачу на перевод проекта
+  # со своего сервера на бэкенд платформы. Требуем явно — релиз без него молча ломает кнопку.
+  "docs/app-backend-contract.md"
   "package.json"
   "package-lock.json"
   "server/package.json"
@@ -42,6 +45,7 @@ done
 rm -rf -- \
   "$target/db" \
   "$target/scripts" \
+  "$target/docs" \
   "$target/server/dist" \
   "$target/client/dist" \
   "$target/landing/dist"
@@ -49,6 +53,7 @@ mkdir -p -- "$target/server" "$target/client" "$target/landing"
 
 mv -- "$stage/db" "$target/db"
 mv -- "$stage/scripts" "$target/scripts"
+mv -- "$stage/docs" "$target/docs"
 mv -- "$stage/server/dist" "$target/server/dist"
 mv -- "$stage/client/dist" "$target/client/dist"
 mv -- "$stage/landing/dist" "$target/landing/dist"

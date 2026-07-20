@@ -18,6 +18,7 @@ import type {
   GitTokenDelegationStatus,
   ProjectRepository,
   ProjectSite,
+  ConversionTaskResult,
   AppBackendStatus,
   AppBackendDashboard,
   AppTraffic,
@@ -352,6 +353,10 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async getProjectSite(projectId: string): Promise<ProjectSite> {
     return httpClient.get<ProjectSite>(`/projects/${projectId}/site`);
+  }
+
+  async convertProjectToPlatformBackend(projectId: string): Promise<ConversionTaskResult> {
+    return httpClient.post<ConversionTaskResult>(`/projects/${projectId}/site/convert`, {});
   }
 
   async getAppBackendStatus(projectId: string): Promise<AppBackendStatus> {

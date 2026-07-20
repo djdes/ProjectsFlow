@@ -15,6 +15,8 @@ import {
   GranterGithubDisconnectedError,
   GranterNotOwnerAnymoreError,
   InsufficientProjectRoleError,
+  PlatformBackendContractUnavailableError,
+  ProjectAlreadyStaticError,
   NoEligibleGrantorError,
   NotProjectDispatcherError,
   NotProjectMemberForDelegationError,
@@ -208,6 +210,26 @@ export function errorHandler(
 
   if (err instanceof ProjectNotFoundError) {
     res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  // Кнопка «перевести на бэкенд платформы» нажата там, где переезжать не нужно: сервер
+  // пересчитал вердикт и не согласился с клиентом. 409 — состояние проекта, не форма запроса.
+  if (err instanceof ProjectAlreadyStaticError) {
+    res.status(409).json({
+      error: 'project_already_static',
+      message: 'Проект не приносит собственный сервер — переводить нечего',
+    });
+    return;
+  }
+
+  // Контракт не доехал до сервера (см. FilePlatformBackendContract). Задачу не создали
+  // намеренно: бриф без контракта воркер завалит. 503 — чинится релизом, а не пользователем.
+  if (err instanceof PlatformBackendContractUnavailableError) {
+    res.status(503).json({
+      error: 'contract_unavailable',
+      message: 'Описание бэкенда платформы недоступно в этой сборке — сообщите администратору',
+    });
     return;
   }
 

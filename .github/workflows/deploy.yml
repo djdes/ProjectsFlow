@@ -56,6 +56,7 @@ jobs:
             --exclude=.env \
             -czf ".deploy/$RELEASE_NAME" \
             server/dist client/dist landing/dist db scripts \
+            docs/app-backend-contract.md \
             package.json package-lock.json server/package.json \
             ecosystem.config.cjs
 

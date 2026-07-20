@@ -59,7 +59,10 @@ const archive = resolve(dist, releaseName);
 // (DB_SOCKET, prod DB_PASSWORD, NODE_ENV=production). Если шиппить локальный
 // .env — затрёшь прод-кред и сломаешь подключение к БД. См. docs/ONBOARDING.md §4.
 run(
-  `tar --force-local --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts package.json package-lock.json server/package.json ecosystem.config.cjs`,
+  // docs/app-backend-contract.md — не документация «на почитать», а рантайм-ресурс: сервер
+  // вкладывает его в задачу на перевод проекта со своего сервера на бэкенд платформы.
+  // Без него воркер получит задачу без контракта и потратит прогон впустую.
+  `tar --force-local --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts docs/app-backend-contract.md package.json package-lock.json server/package.json ecosystem.config.cjs`,
 );
 
 console.log("→ 3/4  Upload unique release");

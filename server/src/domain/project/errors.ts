@@ -163,3 +163,23 @@ export class ProjectArchiveInvalidError extends Error {
     this.name = 'ProjectArchiveInvalidError';
   }
 }
+
+// Кнопку «перевести на бэкенд платформы» нажали для проекта, которому переезжать не нужно:
+// сайт уже задеплоен либо package.json не показывает собственного сервера. Вердикт всегда
+// пересчитывается на сервере — то, что клиент показывал плашку, ничего не доказывает.
+export class ProjectAlreadyStaticError extends Error {
+  constructor() {
+    super('Project does not bring its own server');
+    this.name = 'ProjectAlreadyStaticError';
+  }
+}
+
+// Текст контракта бэкенда платформы недоступен в этой сборке (docs/app-backend-contract.md
+// не доехал до сервера). Задачу в таком случае НЕ создаём: бриф без контракта — это прогон
+// воркера впустую, а молча урезанная задача выглядит как выполненная работа.
+export class PlatformBackendContractUnavailableError extends Error {
+  constructor() {
+    super('Platform backend contract is unavailable in this build');
+    this.name = 'PlatformBackendContractUnavailableError';
+  }
+}

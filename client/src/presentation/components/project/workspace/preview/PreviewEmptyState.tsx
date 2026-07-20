@@ -1,4 +1,8 @@
-import { Monitor, ServerCog } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Loader2, Monitor, ServerCog } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/sonner';
+import { useContainer } from '@/infrastructure/di/container';
 import type { ProjectRuntimeSignals } from '@/application/project/ProjectRepository';
 
 /**
@@ -12,7 +16,13 @@ import type { ProjectRuntimeSignals } from '@/application/project/ProjectReposit
  * Поэтому текст ветвится по вердикту сервера. Вердикт консервативный: если распознать не
  * удалось, приходит null и остаётся прежний, оптимистичный текст.
  */
-export function PreviewEmptyState({ runtime }: { runtime: ProjectRuntimeSignals | null }): React.ReactElement {
+export function PreviewEmptyState({
+  projectId,
+  runtime,
+}: {
+  projectId: string;
+  runtime: ProjectRuntimeSignals | null;
+}): React.ReactElement {
   if (runtime?.kind === 'server_app') {
     return (
       <div className="grid min-h-[440px] place-items-center rounded-xl border border-dashed bg-muted/10 px-6 py-10">
@@ -42,11 +52,12 @@ export function PreviewEmptyState({ runtime }: { runtime: ProjectRuntimeSignals 
           </div>
 
           <p className="mt-5 text-sm leading-6 text-muted-foreground">
-            Что делать: попросите ассистента в чате слева перевести проект на бэкенд платформы —
-            заменить свой сервер на <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/auth</code>{' '}
-            и <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/data</code>, а внешнюю базу
-            — на базу проекта. После этого сборка публикуется как обычно и превью включится.
+            Перевод заменит свой сервер на <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/auth</code>{' '}
+            и <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/data</code>, а внешнюю базу —
+            на базу проекта. После этого сборка публикуется как обычно и превью включится.
           </p>
+
+          <ConvertButton projectId={projectId} />
         </div>
       </div>
     );
@@ -65,5 +76,62 @@ export function PreviewEmptyState({ runtime }: { runtime: ProjectRuntimeSignals 
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Ставит воркеру задачу на перевод. Бриф и контракт собирает сервер — здесь только запрос
+ * и честный ответ о том, что произошло.
+ *
+ * Кнопка намеренно не обещает результата: она создаёт задачу, а не выполняет переезд.
+ * «Заявка принята» вместо «готово» — потому что дальше работает воркер, и сколько это займёт,
+ * отсюда не видно.
+ */
+function ConvertButton({ projectId }: { projectId: string }): React.ReactElement {
+  const { projectRepository } = useContainer();
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+
+  const convert = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      const result = await projectRepository.convertProjectToPlatformBackend(projectId);
+      setDone(result.taskId);
+      toast.success(
+        result.created ? 'Задача воркеру создана' : 'Задача уже стоит в работе',
+        {
+          description: result.title,
+          action: {
+            label: 'Открыть',
+            onClick: () => { window.location.href = `/projects/${projectId}/tasks/${result.taskId}`; },
+          },
+        },
+      );
+    } catch (error) {
+      // Сервер объясняет отказ по-русски (нет прав, проект не серверный, контракт недоступен) —
+      // показываем именно его текст, а не «что-то пошло не так».
+      toast.error(error instanceof Error ? error.message : 'Не удалось создать задачу');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <a
+        href={`/projects/${projectId}/tasks/${done}`}
+        className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline"
+      >
+        Открыть задачу на перевод
+        <ArrowRight className="size-4" />
+      </a>
+    );
+  }
+
+  return (
+    <Button className="mt-5" onClick={() => void convert()} disabled={busy}>
+      {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+      Перевести на бэкенд платформы
+    </Button>
   );
 }

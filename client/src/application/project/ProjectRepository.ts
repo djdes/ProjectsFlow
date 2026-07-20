@@ -30,6 +30,14 @@ export type ProjectSite = {
   readonly runtime: ProjectRuntimeSignals | null;
 };
 
+// Результат кнопки «Перевести на бэкенд платформы»: задача воркеру с готовым брифом.
+// created=false — задача уже была, вернули её (повторный клик ничего не создал).
+export type ConversionTaskResult = {
+  readonly taskId: string;
+  readonly title: string;
+  readonly created: boolean;
+};
+
 export type ProjectRuntimeSignals = {
   readonly kind: "static" | "server_app" | "unknown";
   // Человекочитаемые причины вердикта — показываем пользователю: «не поддерживается» без
@@ -519,6 +527,9 @@ export interface ProjectRepository {
   // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до
   // деплоя — заглушка), deployedAt/fileCount из site_artifacts (null/0, пока не задеплоен).
   getProjectSite(projectId: string): Promise<ProjectSite>;
+  // Ставит воркеру задачу перевести проект со своего сервера на бэкенд платформы. Сервер сам
+  // перепроверяет, что проект действительно серверный, и не создаёт вторую задачу к первой.
+  convertProjectToPlatformBackend(projectId: string): Promise<ConversionTaskResult>;
   // Статус бэкенда приложения (db/102): включён ли, usage/лимит, таблицы. Member-доступ (read).
   getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
   getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard>;
