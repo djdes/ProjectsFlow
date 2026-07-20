@@ -96,6 +96,12 @@ import { appAnalyticsRouter } from './presentation/app-runtime/appAnalyticsRoute
 import { RecordAppVisit } from './application/app-backend/RecordAppVisit.js';
 import { GetAppTraffic } from './application/app-backend/GetAppTraffic.js';
 import { DrizzleAppTrafficRepository } from './infrastructure/repositories/DrizzleAppTrafficRepository.js';
+import { DrizzleProjectWebhookRepository } from './infrastructure/repositories/DrizzleProjectWebhookRepository.js';
+import { ManageWebhooks } from './application/integrations/ManageWebhooks.js';
+import {
+  DispatchWebhook,
+  WebhookDispatchingActivityRecorder,
+} from './application/integrations/DispatchWebhook.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
@@ -427,9 +433,28 @@ const notificationRepo = new PublishingNotificationRepository(
 const activityRepo = new DrizzleActivityRepository(db, projectMemberRepo);
 // best-effort рекордер: инжектится в мутирующие use-case'ы (создание/статус/удаление задач,
 // комментарии, создание проекта, изменения участников). Резолвит пространство по проекту.
-const activityRecorder = new ActivityRecorder({
-  activity: activityRepo,
-  resolveWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
+// Исходящие вебхуки проекта (db/138, срез 6). DispatchWebhook фан-аутит события ленты
+// подписанным вебхукам. activityRecorder — подкласс, который после записи события ленты
+// делает best-effort доставку: так «создание задачи доставляет подписанный POST» достигается
+// через wiring, без правки CreateTask и всех ~40 мест инъекции activityRecorder.
+const projectWebhookRepo = new DrizzleProjectWebhookRepository(db);
+const dispatchWebhook = new DispatchWebhook({
+  webhooks: projectWebhookRepo,
+  idGen: idGenerator,
+});
+const activityRecorder = new WebhookDispatchingActivityRecorder(
+  {
+    activity: activityRepo,
+    resolveWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
+    idGen: idGenerator,
+  },
+  dispatchWebhook,
+);
+const manageWebhooks = new ManageWebhooks({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  webhooks: projectWebhookRepo,
+  dispatcher: dispatchWebhook,
   idGen: idGenerator,
 });
 const getActivityFeed = new GetActivityFeed({
@@ -1338,6 +1363,10 @@ const manageAppDashboardSettings = new ManageAppDashboardSettings({
   projects: projectRepo,
   members: projectMemberRepo,
   settings: appDashboardSettingsRepo,
+  // Срез 4: security-скан читает схему приложения и durable-аудит (db/136), чтобы находить
+  // публичные таблицы с чувствительными колонками и недавнее снятие флага sensitive.
+  appBackends: appBackendRepo,
+  adminAudit: appAdminAuditRepo,
 });
 const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
   projects: projectRepo,
@@ -1944,6 +1973,9 @@ const { app, devProxyUpgrade } = createApp({
   appTraffic: {
     getAppTraffic,
     recordRuntime: appAnalyticsRuntime,
+  },
+  integrations: {
+    webhooks: manageWebhooks,
   },
   repositoryCode: manageProjectRepositoryCode,
   siteEditor: {

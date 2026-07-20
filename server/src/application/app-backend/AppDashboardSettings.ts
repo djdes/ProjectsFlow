@@ -2,6 +2,9 @@ import { requireProjectAccess, type ProjectAccessDeps } from '../project/project
 import { lookup, resolveCname } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { classifyField, sensitiveColumns } from '../../domain/app-backend/sensitiveFields.js';
+import type { AppBackendRepository } from './AppBackendRepository.js';
+import type { AppAdminAuditRepository } from './AppAdminAuditRepository.js';
 
 export type PendingToggle = 'disabled' | 'pending';
 export type ConnectionStatus = 'disabled' | 'pending' | 'configured' | 'error';
@@ -83,7 +86,20 @@ export interface AppDashboardSettingsRepository {
   put(projectId: string, settings: AppDashboardSettings): Promise<AppDashboardSettings>;
 }
 
-type Deps = ProjectAccessDeps & { readonly settings: AppDashboardSettingsRepository };
+type Deps = ProjectAccessDeps & {
+  readonly settings: AppDashboardSettingsRepository;
+  // Опционально: реестр бэкендов приложения (для скана схемы — публичные таблицы с
+  // чувствительными полями, поля без явного флага чувствительности). Срез 4.
+  readonly appBackends?: AppBackendRepository;
+  // Опционально: надёжный административный аудит (снятие флага чувствительности, объёмы
+  // выгрузок). Без него скан просто не выдаёт эти findings — деградирует безопасно. Срез 4.
+  readonly adminAudit?: AppAdminAuditRepository;
+};
+
+// Окна анализа аудита для скана безопасности.
+const EXPORT_WINDOW_MS = 24 * 60 * 60 * 1000; // «за сутки» из плана (срез 4)
+const EXPORT_ROW_THRESHOLD = 1_000; // выгрузка сверх этого за окно — finding
+const SENSITIVITY_REMOVAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // «недавнее» снятие флага
 
 function text(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -278,7 +294,92 @@ export class ManageAppDashboardSettings {
     if (settings.integrations.webhooks === 'error') findings.push({ code: 'webhook_error', severity: 'warning', title: 'Webhook не проходит проверку', remediation: 'Проверьте HTTPS URL и ответ сервера.' });
     if (settings.seo.robotsIndex && settings.profile.visibility !== 'public') findings.push({ code: 'indexing_private', severity: 'info', title: 'Индексация включена для закрытого приложения', remediation: 'Отключите индексацию либо измените видимость приложения.' });
     if (settings.advanced.sessionRecordings) findings.push({ code: 'recording_privacy', severity: 'info', title: 'Включены записи сессий', remediation: 'Укажите это в политике конфиденциальности и исключите чувствительные поля из записи.' });
+    // Тестовые данные на публичном приложении: демо-записи видны реальным пользователям.
+    if (settings.advanced.testData && settings.profile.visibility === 'public') {
+      findings.push({ code: 'test_data_public', severity: 'warning', title: 'Тестовые данные включены на публичном приложении', remediation: 'Отключите тестовые данные: на публичном приложении демонстрационные записи попадают к реальным пользователям.' });
+    }
+    findings.push(...(await this.scanSchemaSurfaces(projectId)));
+    findings.push(...(await this.scanAuditSurfaces(projectId)));
     return { scannedAt: new Date().toISOString(), findings };
+  }
+
+  // Скан объявленной схемы приложения (срез 4): публичное чтение таблицы с чувствительной
+  // колонкой — критично (значения секретов/PII отдаются без авторизации); поле с чувствительным
+  // именем без явного флага — защита держится только на эвристике имени.
+  private async scanSchemaSurfaces(projectId: string): Promise<AppSecurityFinding[]> {
+    const backend = await this.deps.appBackends?.getByProject(projectId);
+    const schema = backend?.schema;
+    if (!schema) return [];
+    const findings: AppSecurityFinding[] = [];
+    for (const table of schema.tables) {
+      const sensitive = sensitiveColumns(table.fields);
+      if (table.rules.read === 'anyone' && sensitive.size > 0) {
+        const columns = [...sensitive.keys()].join(', ');
+        findings.push({
+          code: `public_read_sensitive:${table.name}`,
+          severity: 'critical',
+          title: `Таблица «${table.name}» открыта на чтение всем и содержит чувствительные поля`,
+          remediation: `Ограничьте чтение таблицы (authenticated или owner) либо уберите чувствительные поля (${columns}) — сейчас их значения доступны без авторизации.`,
+        });
+      }
+      // Поле, которое ловит только эвристика имени: явный флаг надёжнее переименования колонки.
+      const unflagged = table.fields.filter((field) => !field.sensitive && classifyField(field.name));
+      if (unflagged.length > 0) {
+        const columns = unflagged.map((field) => field.name).join(', ');
+        findings.push({
+          code: `sensitive_unflagged:${table.name}`,
+          severity: 'warning',
+          title: `В таблице «${table.name}» чувствительные поля не помечены явно`,
+          remediation: `Проставьте флаг чувствительности полям (${columns}) в настройках доступа: сейчас защита держится только на имени и пропадёт при переименовании.`,
+        });
+      }
+    }
+    return findings;
+  }
+
+  // Скан надёжного административного аудита (срез 4): недавнее снятие флага чувствительности
+  // и массовые выгрузки за сутки. Важно: аудит НИКОГДА не хранит сами значения (см. раздел 4
+  // плана) — используем только факт события, число строк и имена полей/колонок.
+  private async scanAuditSurfaces(projectId: string): Promise<AppSecurityFinding[]> {
+    const audit = this.deps.adminAudit;
+    if (!audit) return [];
+    const findings: AppSecurityFinding[] = [];
+    const now = Date.now();
+
+    const sensitivity = await audit.list(projectId, { operation: 'dashboard.sensitivity_changed', limit: 100 });
+    const removed = sensitivity.rows.filter((row) => {
+      const detail = row.detail as Record<string, unknown> | null | undefined;
+      const removedFlag = detail != null && 'to' in detail && detail['to'] == null;
+      return removedFlag && Date.parse(row.createdAt) >= now - SENSITIVITY_REMOVAL_WINDOW_MS;
+    });
+    if (removed.length > 0) {
+      const fields = removed
+        .map((row) => String((row.detail as Record<string, unknown> | null | undefined)?.['field'] ?? '?'))
+        .join(', ');
+      findings.push({
+        code: 'sensitivity_flag_removed',
+        severity: 'warning',
+        title: 'Недавно снят флаг чувствительности с поля',
+        remediation: `С полей (${fields}) недавно сняли флаг чувствительности — их значения снова могут раскрываться. Убедитесь, что колонка действительно не содержит секретов или PII.`,
+      });
+    }
+
+    const exports = await audit.list(projectId, { operation: 'dashboard.export', limit: 200 });
+    const exportedRows = exports.rows
+      .filter((row) => Date.parse(row.createdAt) >= now - EXPORT_WINDOW_MS)
+      .reduce((sum, row) => {
+        const rows = (row.detail as Record<string, unknown> | null | undefined)?.['rows'];
+        return sum + (typeof rows === 'number' && Number.isFinite(rows) ? rows : 0);
+      }, 0);
+    if (exportedRows > EXPORT_ROW_THRESHOLD) {
+      findings.push({
+        code: 'export_volume_high',
+        severity: 'warning',
+        title: `За сутки выгружено строк: ${exportedRows}`,
+        remediation: 'Проверьте, кто и зачем выгружает большие объёмы данных: массовая выгрузка — частый вектор утечки. Ограничьте доступ к экспорту при необходимости.',
+      });
+    }
+    return findings;
   }
 }
 

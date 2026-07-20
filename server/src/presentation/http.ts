@@ -14,6 +14,8 @@ import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
 import { appTrafficRouter } from './app-backend/appTrafficRoutes.js';
 import type { GetAppTraffic } from '../application/app-backend/GetAppTraffic.js';
+import { integrationsRouter } from './integrations/routes.js';
+import type { ManageWebhooks } from '../application/integrations/ManageWebhooks.js';
 import type { SiteEditorService } from '../application/site-editor/SiteEditorService.js';
 import { siteEditorRouter } from './site-editor/routes.js';
 import { siteEditorAgentRouter } from './site-editor/agentRoutes.js';
@@ -342,6 +344,10 @@ type AppDeps = {
   readonly appTraffic: {
     readonly getAppTraffic: GetAppTraffic;
     readonly recordRuntime: RequestHandler;
+  };
+  // Исходящие вебхуки проекта (db/138, срез 6 Integrations). Управление подписками (cookie-auth).
+  readonly integrations: {
+    readonly webhooks: ManageWebhooks;
   };
   readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
@@ -957,6 +963,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     queryLogs: deps.appBackend.queryLogs,
   }));
   app.use('/api/projects', appTrafficRouter({ getAppTraffic: deps.appTraffic.getAppTraffic }));
+  app.use('/api/projects', integrationsRouter({ webhooks: deps.integrations.webhooks }));
   app.use('/api/projects', repositoryCodeRouter({ repositoryCode: deps.repositoryCode }));
   app.use('/api/projects', siteEditorRouter({ service: deps.siteEditor.service }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —

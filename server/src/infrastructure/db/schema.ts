@@ -2328,3 +2328,25 @@ export const appPageVisits = mysqlTable(
 
 export type AppPageVisitRow = typeof appPageVisits.$inferSelect;
 export type NewAppPageVisitRow = typeof appPageVisits.$inferInsert;
+
+// Исходящие вебхуки проекта (db/138, срез 6 Integrations). Подписка = URL + набор событий.
+// secret_hash — SHA-256 hex секрета подписи (открытый секрет не хранится, показан один раз при
+// создании; служит HMAC-ключом доставки). events_json — JSON-массив событий (или ["*"]).
+export const projectWebhooks = mysqlTable(
+  'project_webhooks',
+  {
+    id: char('id', { length: 36 }).notNull().primaryKey(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    url: varchar('url', { length: 2048 }).notNull(),
+    secretHash: char('secret_hash', { length: 64 }).notNull(),
+    eventsJson: text('events_json').notNull(),
+    enabled: tinyint('enabled').notNull().default(1),
+    lastStatus: varchar('last_status', { length: 64 }),
+    lastAt: varchar('last_at', { length: 32 }),
+    createdAt: varchar('created_at', { length: 32 }).notNull(),
+  },
+  (t) => [index('idx_project_webhooks_project').on(t.projectId)],
+);
+
+export type ProjectWebhookRow = typeof projectWebhooks.$inferSelect;
+export type NewProjectWebhookRow = typeof projectWebhooks.$inferInsert;
