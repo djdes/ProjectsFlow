@@ -3,6 +3,7 @@ import { Grid2X2, Monitor, MoreHorizontal, MousePointer2, RefreshCw, Redo2, Rock
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 // Тёмный тултип берём из шапки студии: тулбар стоит в той же строке, что и StudioTopBar,
 // и разъезжаться по стилям им нельзя. Своей копии константы здесь быть не должно.
 import { DARK_TOOLTIP } from '@/presentation/components/project/studio/StudioTopBar';
