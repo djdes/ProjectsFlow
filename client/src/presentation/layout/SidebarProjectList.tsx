@@ -455,6 +455,10 @@ export function SidebarProjectList(): React.ReactElement {
   const { collapsed: archivedCollapsed, toggle: toggleArchivedCollapsed } =
     useSidebarSectionCollapse('archived', true);
   const [query, setQuery] = useState('');
+  // Список реально прокручен → сверху проявляется затухание (.pf-scroll-fade-top в
+  // globals.css). Постоянная верхняя маска гасила бы липкие заголовки секций, а в
+  // исходном положении у Notion верхнего затухания нет вовсе (MEASURED.md §5).
+  const [listScrolled, setListScrolled] = useState(false);
   // Поиск ищет И по проектам (по имени, мгновенно), И по задачам (по описанию, дебаунс).
   const taskSearch = useSidebarTaskSearch(query);
 
@@ -606,7 +610,16 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="pf-scroll-visible pf-scroll-fade -mx-1 min-h-0 flex-1 space-y-4 px-1">
+      <div
+        className="pf-scroll-visible pf-scroll-fade pf-scroll-fade-top -mx-1 min-h-0 flex-1 space-y-4 px-1"
+        data-pf-list-scrolled={listScrolled ? 'true' : 'false'}
+        // Флаг переключается только на границе 0↔1 — лишних ре-рендеров на каждый кадр
+        // прокрутки нет.
+        onScroll={(e) => {
+          const next = e.currentTarget.scrollTop > 0;
+          setListScrolled((v) => (v === next ? v : next));
+        }}
+      >
         {/* Вне поиска — «Недавнее» (недавно открытые задачи). В поиске — найденные задачи
             (блок «Задачи»: 3 → «ещё» до 10, сортировка по дате создания, подсветка). */}
         {searching ? (

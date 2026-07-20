@@ -16,7 +16,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useProjects } from '@/presentation/hooks/useProjects';
@@ -28,6 +32,11 @@ import { ProjectIconView } from '@/presentation/components/project/projectIconVi
 // Каждый сегмент с иконкой, hover-подсветкой и дропдауном навигации, который
 // раскрывается ПРИ НАВЕДЕНИИ (не по клику): «Проекты» → переход к любому проекту;
 // сегмент проекта → переключение между его видами.
+// Меню «Проекты» двухуровневое, как в Notion: наведение на проект в списке раскрывает
+// вложенное окно с его разделами, и клик по разделу ведёт сразу в нужный режим —
+// не приходится сначала открывать проект, а потом искать вкладку.
+// На тач-устройствах ховера нет, поэтому там тап по строке проекта раскрывает подменю
+// (см. onClick у DropdownMenuSubTrigger) — иначе вложенный уровень был бы недостижим.
 
 export type ProjectViewKey = 'board' | 'overview' | 'kb' | 'monitoring' | 'finance';
 
@@ -106,6 +115,35 @@ const segmentClass = (current?: boolean): string =>
 const CURRENT_DROPDOWN_ITEM_CLASS =
   'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/[0.08]';
 
+// Список разделов проекта рендерится в двух местах — в дропдауне сегмента проекта и во
+// вложенном подменю каждого проекта из списка «Проекты». Поэтому он компонент, а не
+// скопированный второй раз VIEWS.map: список маршрутов должен оставаться единственным.
+// activeKey передаётся только для проекта, который открыт сейчас — у остальных проектов
+// в подменю подсвечивать нечего.
+function ViewMenuItems({
+  projectId,
+  activeKey,
+}: {
+  projectId: string;
+  activeKey?: ProjectViewKey;
+}): React.ReactElement {
+  const navigate = useNavigate();
+  return (
+    <>
+      {VIEWS.map(({ key, label, Icon, path }) => (
+        <DropdownMenuItem
+          key={key}
+          onSelect={() => navigate(path(projectId))}
+          className={cn(key === activeKey && CURRENT_DROPDOWN_ITEM_CLASS)}
+        >
+          <Icon />
+          {label}
+        </DropdownMenuItem>
+      ))}
+    </>
+  );
+}
+
 // Четвёртый сегмент крошек на ОТДЕЛЬНОЙ странице задачи: название текущей задачи +
 // hover-дропдаун с недавно редактированными задачами того же проекта для быстрого
 // перехода. На обычных страницах проекта не передаётся.
@@ -141,6 +179,12 @@ export function ProjectBreadcrumbs({
   const projectsMenu = useHoverMenu();
   const viewsMenu = useHoverMenu();
   const taskMenu = useHoverMenu();
+  // Тип указателя последнего нажатия по строке проекта. Внутри самого click отличить
+  // мышь от тапа надёжно нельзя (у синтезированного click pointerType в части браузеров
+  // пустой), поэтому запоминаем его на pointerdown — он приходит непосредственно перед
+  // click по тому же элементу. Дефолт 'mouse' — на случай клика без pointerdown
+  // (программный .click(), часть ассистивных технологий): это прежнее поведение.
+  const rowPointerType = useRef<string>('mouse');
   const currentView = VIEWS.find((v) => v.key === view);
   const collapsed = useSidebarCollapsed();
 
@@ -165,7 +209,11 @@ export function ProjectBreadcrumbs({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="max-h-80 w-56 overflow-y-auto"
+          // Геометрия панели крошки по замерам Notion (MEASURED.md §6): ширина 240,
+          // радиус 10px, отступ от крошки ~4px. Общий DropdownMenuContent даёт
+          // rounded-md (6px) и sideOffset 8, поэтому перекрываем на месте.
+          sideOffset={4}
+          className="max-h-80 w-60 overflow-y-auto rounded-[10px]"
           onMouseEnter={projectsMenu.openNow}
           onMouseLeave={projectsMenu.closeSoon}
           onCloseAutoFocus={(e) => e.preventDefault()}
@@ -173,14 +221,74 @@ export function ProjectBreadcrumbs({
           <DropdownMenuLabel>Перейти к проекту</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {allProjects.map((p) => (
-            <DropdownMenuItem
-              key={p.id}
-              onSelect={() => navigate(`/projects/${p.id}`)}
-              className={cn(p.id === projectId && CURRENT_DROPDOWN_ITEM_CLASS)}
-            >
-              <ProjectChip name={p.name} icon={p.icon} />
-              <span className="truncate">{p.name}</span>
-            </DropdownMenuItem>
+            <DropdownMenuSub key={p.id}>
+              <DropdownMenuSubTrigger
+                className={cn(
+                  // transition-colors и focus:text-accent-foreground есть у DropdownMenuItem,
+                  // но не у SubTrigger — без них строки проектов подсвечивались рывком и не
+                  // меняли цвет текста, хотя пункты подменю (те же Item) в этом же меню
+                  // анимируются. Дублируем, чтобы список выглядел однородно.
+                  'min-w-0 transition-colors focus:text-accent-foreground data-[state=open]:text-accent-foreground',
+                  p.id === projectId && CURRENT_DROPDOWN_ITEM_CLASS,
+                )}
+                onPointerDown={(e) => {
+                  rowPointerType.current = e.pointerType || 'mouse';
+                }}
+                onClick={(e) => {
+                  // Тач и перо: ховера нет, а Radix раскрывает подменю указателем только для
+                  // мыши (onPointerMove обёрнут в whenMouse), поэтому click — единственный
+                  // путь к подменю с пальца. Отдаём его Radix: тап раскрывает подменю, раздел
+                  // выбирается вторым тапом. Прежний однотапный переход на доску стоит на
+                  // телефоне один лишний тап («Доска задач» — первый пункт подменю), зато
+                  // раздел достижим вообще: гасить click здесь, как для мыши, значило бы
+                  // оставить телефон без этой фичи (крошки видны на страницах проекта,
+                  // мониторинга и финансов без брейкпоинта).
+                  if (rowPointerType.current !== 'mouse') return;
+                  // Мышь: подменю и так раскрывается ховером, поэтому клик по самой строке
+                  // сохраняем как быстрый переход на доску — это самый частый сценарий,
+                  // гонять за ним в подменю — лишний шаг.
+                  // preventDefault гасит штатную реакцию Radix (раскрыть подменю по клику),
+                  // а закрыть меню приходится вручную: SubTrigger — не Item и события
+                  // выбора не шлёт.
+                  e.preventDefault();
+                  projectsMenu.setOpen(false);
+                  navigate(`/projects/${p.id}`);
+                }}
+              >
+                <ProjectChip name={p.name} icon={p.icon} />
+                <span className="min-w-0 truncate">{p.name}</span>
+              </DropdownMenuSubTrigger>
+              {/* Портал обязателен: без него подменю обрежется скроллом родительского
+                  списка (у него overflow-y-auto под длинный список проектов). */}
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent
+                  // Своих hover-обработчиков здесь быть НЕ ДОЛЖНО. React рассылает
+                  // mouseenter/mouseleave по ФАЙБЕР-дереву, а не по DOM (react-dom идёт по
+                  // fiber.return и проскакивает портал), и останавливается НА общем предке,
+                  // исключая его. Общий предок пары «пункт подменю ↔ строка проекта» — сам
+                  // DropdownMenuContent, поэтому его пара обработчиков уже покрывает все
+                  // переходы:
+                  //   • список → подменю: leave у Content не зовётся, меню живо;
+                  //   • подменю → обратно в список: то же самое, меню живо;
+                  //   • подменю → мимо меню: цепочка leave идёт ЧЕРЕЗ Content → closeSoon;
+                  //   • обратно в меню (в любую панель): enter тоже идёт через Content →
+                  //     openNow отменяет таймер.
+                  // Дубль closeSoon на подменю ронял ВСЁ меню при возврате курсора из
+                  // подменю в список проектов: таймер запускался, а onMouseEnter у Content
+                  // в этом переходе не срабатывает и отменить его было некому.
+                  //
+                  // -4px = внутренний padding контента: так первый пункт подменю встаёт
+                  // ровно напротив строки проекта, а не ниже неё.
+                  alignOffset={-4}
+                  className="w-60 rounded-[10px]"
+                >
+                  <ViewMenuItems
+                    projectId={p.id}
+                    activeKey={p.id === projectId ? view : undefined}
+                  />
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -200,23 +308,16 @@ export function ProjectBreadcrumbs({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="w-52"
+          // Тот же список разделов, что и в подменю «Проекты» → та же геометрия (MEASURED.md §6).
+          sideOffset={4}
+          className="w-60 rounded-[10px]"
           onMouseEnter={viewsMenu.openNow}
           onMouseLeave={viewsMenu.closeSoon}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           <DropdownMenuLabel>Разделы проекта</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {VIEWS.map(({ key, label, Icon, path }) => (
-            <DropdownMenuItem
-              key={key}
-              onSelect={() => navigate(path(projectId))}
-              className={cn(key === view && CURRENT_DROPDOWN_ITEM_CLASS)}
-            >
-              <Icon />
-              {label}
-            </DropdownMenuItem>
-          ))}
+          <ViewMenuItems projectId={projectId} activeKey={view} />
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -235,7 +336,11 @@ export function ProjectBreadcrumbs({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="max-h-80 w-64 overflow-y-auto"
+              // Радиус и отступ — как у соседних панелей этой же строки. Ширину оставляем
+              // 256: здесь длинные названия задач, а 240 из MEASURED.md §6 снято с панели
+              // навигации, не с этого списка.
+              sideOffset={4}
+              className="max-h-80 w-64 overflow-y-auto rounded-[10px]"
               onMouseEnter={taskMenu.openNow}
               onMouseLeave={taskMenu.closeSoon}
               onCloseAutoFocus={(e) => e.preventDefault()}

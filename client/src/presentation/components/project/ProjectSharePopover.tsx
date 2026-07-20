@@ -253,12 +253,21 @@ export function ProjectSharePopover({ project, members, canInvite, isOwner, comp
           size="sm"
           className={cn(
             'gap-1.5 text-muted-foreground hover:text-foreground',
-            compact ? 'size-10 px-0 sm:size-9' : 'h-8 px-2',
+            // 28px / 14px — высота и кегль кнопок верхней панели в Notion (MEASURED.md §3).
+            // Дубли с sm: обязательны: у size="sm" в самом варианте лежат sm:h-9/sm:px-3/
+            // sm:text-xs, и без явного sm-аналога они перебивают базовые классы на десктопе
+            // (медиазапрос идёт в CSS позже). Кегль задаём на самой кнопке, а не на <span> —
+            // иначе на десктопе у любого будущего текста прямо в кнопке остаётся sm:text-xs.
+            // Базовая (мобильная) высота — h-10, а не h-7: non-compact ветка достижима с
+            // телефона (эти же действия рендерятся в портале окна активности), а глобальный
+            // min-height:44px из globals.css до Button не достаёт — в его базовых классах
+            // есть подстрока `size-`. Compact-ветка (мобильная шапка) остаётся крупной.
+            compact ? 'size-10 px-0 sm:size-9' : 'h-10 px-2 text-sm sm:h-7 sm:px-2 sm:text-sm',
           )}
           aria-label="Поделиться"
         >
           <Share2 className="size-4" />
-          {!compact && <span className="text-sm">Поделиться</span>}
+          {!compact && <span>Поделиться</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent

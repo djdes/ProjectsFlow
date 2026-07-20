@@ -88,6 +88,11 @@ type Props = {
   disabled?: boolean;
   // Крупный вариант (для большого заголовка проекта в шапке страницы, Notion-style).
   big?: boolean;
+  // Иконка стоит в ОДНОМ flex-ряду с названием проекта (шапка страницы задач). Тогда на
+  // десктопе её сторона равна строке названия, чтобы высоту ряда задавало название.
+  // Без флага крупный вариант остаётся 48px на всех ширинах — так он живёт в «Обзоре»
+  // Студии, где иконка стоит в собственной 64px-рамке и ни с чем не выравнивается.
+  titleRow?: boolean;
   // 'inline' (по умолчанию) — квадрат-иконка рядом с заголовком. 'head' — текстовая кнопка
   // «Добавить иконку» в ряду hover-действий шапки (когда иконки нет, чтобы название не
   // получало лишний левый отступ от пустого инлайн-триггера).
@@ -97,12 +102,28 @@ type Props = {
 // Иконка проекта рядом с заголовком. Клик открывает пикер с тремя вкладками (Notion-style):
 // «Эмодзи» (категории + недавние), «Иконки» (lucide), «Загрузить» (файл/ссылка). Сверху —
 // фильтр, справа — «случайная» и «убрать». Сама иконка занимает квадрат целиком.
-export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false, big = false, variant = 'inline' }: Props): React.ReactElement {
+export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false, big = false, titleRow = false, variant = 'inline' }: Props): React.ReactElement {
   const { submit, saving } = useUpdateProject();
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [tab, setTab] = useState<'emoji' | 'icons' | 'upload'>('emoji');
   const [query, setQuery] = useState('');
+
+  // Геометрия крупного варианта.
+  // `titleRow`: сторона квадрата на десктопе = ровно одна строка названия проекта
+  // (EditableProjectTitle рендерит text-[2rem] × leading-[1.2] = 38.4px = 2.4rem). Всё, что
+  // выше строки, начинает задавать высоту flex-ряда: при size-12 (48px) ряд выходил 48px
+  // вместо эталонных 38px (MEASURED.md §2 — название y=80, h=38), само название центрировалось
+  // на 4.8px ниже, а вкладки и доска под ним съезжали на 9.6px. Теперь высоту ряда держит
+  // название, как в эталоне. Мобилу оставляем 48px: там это тач-цель, а не декор (глобальное
+  // min-height:44px сюда не достаёт — в классе есть подстрока `size-`).
+  const bigBoxClass = titleRow ? 'size-12 sm:size-[2.4rem]' : 'size-12';
+  // Эмодзи — 0.78 стороны квадрата: чуть меньше, чтобы глиф гарантированно влез целиком
+  // (37.6/48 на мобиле, 30/38.4 на десктопе).
+  const bigEmojiClass = titleRow ? 'text-[2.35rem] sm:text-[1.875rem]' : 'text-[2.35rem]';
+  // pixelSize уходит в inline-style (lucide-иконки), медиазапросом его не переключить — для
+  // ряда названия берём одно число с той же долей стороны, что и раньше: 32/38.4 = 40/48 = 0.83.
+  const bigPixelSize = titleRow ? 32 : 40;
 
   const choose = async (next: string | null): Promise<void> => {
     if (disabled) return;
@@ -122,11 +143,18 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
       <PopoverTrigger asChild>
         {variant === 'head' ? (
           // Текстовая кнопка «Добавить иконку» для ряда hover-действий шапки (Notion-style).
+          // Геометрия — 1:1 с соседней HeadToolButton (TasksPage): sm:min-h-7 + sm:py-0 даёт
+          // ровно 28px, как у ряда-контейнера (sm:h-7) и как в MEASURED.md §2. Без них
+          // натуральная высота была 31.5px (19.5 текста + 12 паддинга): кнопка вылезала из
+          // ряда на 1.75px сверху и снизу, съедала зазор до названия, а её ховер-подложка
+          // была выше подложки соседней кнопки. Мобильные min-h-10/py-1.5 не трогаем —
+          // это тач-цель (плюс глобальный min-height:44px из globals.css: в классе нет
+          // подстроки `size-`, значит правило действует и здесь, как у HeadToolButton).
           <button
             type="button"
             disabled={saving || disabled}
             aria-label="Добавить иконку проекта"
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:min-h-7 sm:py-0"
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : <FolderIcon className="size-4" />}
             Добавить иконку
@@ -140,7 +168,7 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
             className={cn(
               'shrink-0 cursor-pointer select-none leading-none disabled:opacity-50',
               icon || saving
-                ? cn('grid place-items-center overflow-hidden rounded-md', big ? 'size-12' : 'size-9')
+                ? cn('grid place-items-center overflow-hidden rounded-md', big ? bigBoxClass : 'size-9')
                 : cn('grid place-items-center rounded-md', 'size-9'),
             )}
           >
@@ -149,9 +177,8 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
             ) : icon ? (
               <ProjectIconView
                 icon={icon}
-                pixelSize={big ? 40 : 26}
-                // Чуть меньше стороны квадрата — эмодзи гарантированно влезает целиком.
-                className={big ? 'text-[2.35rem]' : 'text-[1.5rem]'}
+                pixelSize={big ? bigPixelSize : 26}
+                className={big ? bigEmojiClass : 'text-[1.5rem]'}
               />
             ) : (
               <FolderIcon className="size-8 text-muted-foreground" />

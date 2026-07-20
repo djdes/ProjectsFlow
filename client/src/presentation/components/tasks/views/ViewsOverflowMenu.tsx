@@ -28,7 +28,12 @@ import { toast } from '@/components/ui/sonner';
 import type { BoardView, BoardViewType } from '@/domain/project/BoardView';
 import { BOARD_VIEW_TYPES, BOARD_VIEW_TYPE_LABELS } from '@/domain/project/BoardView';
 import { DropdownEntries, type MenuEntry } from './menuEntries';
-import { VIEW_TYPE_ICONS, ViewIconGlyph, type ViewIconLike } from './ProjectBoardViews';
+import {
+  VIEWS_MORE_METRICS_CLASS,
+  VIEW_TYPE_ICONS,
+  ViewIconGlyph,
+  type ViewIconLike,
+} from './ProjectBoardViews';
 
 type Props = {
   views: BoardView[];
@@ -209,6 +214,15 @@ export function ViewsOverflowMenu({
     setOpen(false);
     onCreate(type);
   };
+  // Кнопка стоит в ряду вкладок, поэтому геометрия у неё — общая константа из
+  // ProjectBoardViews (16px/40px, как у вкладок; было 13px без высоты — в переполненном
+  // ряду сразу читались два типоразмера). Ту же константу мерит линейка переполнения,
+  // так что размер здесь в одиночку менять нельзя.
+  const triggerClass = cn(
+    VIEWS_MORE_METRICS_CLASS,
+    'text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
+    open && 'bg-accent/60 text-foreground',
+  );
   return (
     <span ref={rootRef} className="relative inline-flex shrink-0">
       <button
@@ -216,10 +230,7 @@ export function ViewsOverflowMenu({
         onClick={toggleOpen}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={cn(
-          'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
-          open && 'bg-accent/60 text-foreground',
-        )}
+        className={triggerClass}
       >
         {label}
       </button>

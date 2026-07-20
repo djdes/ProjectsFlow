@@ -158,6 +158,13 @@ export function TasksPage(): React.ReactElement {
   }
 
   const canEdit = data.role === 'owner' || data.role === 'editor';
+  // Блок описания рендерим, только когда он реально что-то показывает. У редактора это всегда
+  // так: пустое поле — это плейсхолдер «Добавьте описание проекта…», т.е. сам способ описание
+  // завести. А наблюдателю ProjectDescription при пустом описании возвращает null, и обёртка
+  // оставляла бы 12px мёртвого mt перед вкладками. Эталонные 40px (sm:pb-10 ниже) считаются
+  // от НИЖНЕГО ВИДИМОГО элемента шапки, поэтому невидимых узлов внутри неё быть не должно.
+  const descriptionVisible =
+    !descriptionHidden && (canEdit || (data.description ?? '').trim().length > 0);
   const addRandomCover = async (): Promise<void> => {
     if (coverBusy) return;
     setCoverBusy(true);
@@ -203,7 +210,9 @@ export function TasksPage(): React.ReactElement {
         variant="ghost"
         size="icon"
         className={cn(
-          compact ? 'size-10 sm:size-9' : 'size-8',
+          // Иконочные кнопки шапки в Notion — 28×28. Compact-ветка (мобильная, под палец)
+          // остаётся крупной: ужимать touch-target нельзя.
+          compact ? 'size-10 sm:size-9' : 'size-7',
           data.isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground',
         )}
         disabled={favoriteBusy}
@@ -336,14 +345,36 @@ export function TasksPage(): React.ReactElement {
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
         className={cn(
-          // Отступ сверху одинаковый независимо от обложки (Notion-style): небольшой зазор
-          // до кнопок-действий, затем такой же небольшой до названия проекта.
-          'group/head shrink-0 pb-4 pt-3 sm:pb-6 sm:pt-4',
+          // Вертикальный ритм Notion (десктоп, MEASURED.md §2): низ строки крошек → верх
+          // названия = 36px; низ ПОСЛЕДНЕГО ВИДИМОГО элемента шапки → ряд вкладок = 40px
+          // (sm:pb-10; сам ряд вкладок верхнего отступа не имеет, так что зазор целиком наш).
+          // В эталоне под названием сразу шли вкладки — у нас между ними может стоять
+          // описание, и тогда 40px отсчитываются от него (см. descriptionVisible выше:
+          // невидимых узлов, которые молча раздували бы этот зазор, в шапке нет).
+          'group/head shrink-0 pb-4 pt-3 sm:pb-10',
+          // Верхний отступ зависит от того, что стоит ВЫШЕ блока.
+          //  • Без обложки сверху строка крошек (h-11). Ряд «Добавить обложку/описание» в
+          //    Notion живёт ВНУТРИ 36px-зазора, а не раздвигает контент: 4 (pt-1) + 28 (ряд)
+          //    + 4 (mb-1) = 36. Без права редактирования ряда нет — все 36px даёт pt-9.
+          //  • С обложкой сверху full-bleed картинка, у неё нет собственного нижнего отступа,
+          //    и те же 4px читаются как слипание кнопок с кромкой фото. Эталон снят со
+          //    страницы БЕЗ обложки, числа для этого случая в MEASURED.md нет — берём 16px до
+          //    ряда (pt-4, значение до перехода на нотионовский ритм) и держим название на
+          //    той же горизонтали, когда ряда нет: 16 + 28 + 4 = 48 (pt-12).
+          data.coverUrl
+            ? (canEdit ? 'sm:pt-4' : 'sm:pt-12')
+            : (canEdit ? 'sm:pt-1' : 'sm:pt-9'),
         )}
       >
         {canEdit && (
           // На тач-устройствах hover нет — на мобиле панель видна всегда, на sm+ по наведению.
-          <div className="mb-2 flex h-8 items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
+          // Высота ряда на десктопе — ровно 28px как в Notion (y=48, h=28); снизу зазор 4px
+          // (sm:mb-1), сверху — отступ обёртки (4px над крошками, 16px под обложкой, см. выше).
+          // Обе кнопки внутри (HeadToolButton и ProjectIconPicker variant="head") приведены к
+          // той же 28px-высоте, иначе их ховер-подложки вылезали бы из ряда разной высотой.
+          // Мобильные размеры не трогаем: там ряд виден всегда и живёт по touch-метрикам.
+          // Скрытие — по-прежнему через opacity, чтобы появление по ховеру не дёргало вёрстку.
+          <div className="mb-2 flex h-8 items-center gap-1 opacity-100 transition-opacity duration-150 sm:mb-1 sm:h-7 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
             {!data.icon && (
               <ProjectIconPicker projectId={data.id} icon={data.icon} variant="head" />
             )}
@@ -364,12 +395,15 @@ export function TasksPage(): React.ReactElement {
           </div>
         )}
         {/* Инлайн-иконка (квадрат) — ТОЛЬКО когда иконка задана, иначе название начинается
-            строго слева без отступа (пустой триггер больше не занимает место). */}
+            строго слева без отступа (пустой триггер больше не занимает место).
+            titleRow — иконка в одном ряду с названием: на десктопе её сторона равна строке
+            названия (38.4px), поэтому высоту ряда задаёт название, а не иконка. Без флага
+            ряд был бы 48px по иконке и весь ритм ниже уезжал на 9.6px (MEASURED.md §2). */}
         <div className="flex min-w-0 items-center gap-2">
-          {data.icon && <ProjectIconPicker projectId={data.id} icon={data.icon} big />}
+          {data.icon && <ProjectIconPicker projectId={data.id} icon={data.icon} big titleRow />}
           <EditableProjectTitle projectId={data.id} name={data.name} />
         </div>
-        {!descriptionHidden && (
+        {descriptionVisible && (
           // #1: небольшой левый отступ (pl-3 ≈ 12px) — описание чуть отодвинуто от края (как в
           // Notion), не прижато вплотную под иконку.
           // #2: max-w — правый край описания заканчивается «чуть дальше центра» (как в Notion),
@@ -413,6 +447,9 @@ export function TasksPage(): React.ReactElement {
 }
 
 // Мелкая ghost-кнопка панели над заголовком (добавить обложку / скрыть описание).
+// sm:min-h-7 + sm:py-0 — кнопка ровно 28px, как ряд-контейнер (sm:h-7) и как Notion.
+// С прежними min-h-9/py-1.5 она была выше контейнера и её ховер-подложка вылезала
+// в зазор до названия. Мобильные min-h-10/py-1.5 не трогаем: touch-target.
 function HeadToolButton({
   children,
   ...props
@@ -420,7 +457,7 @@ function HeadToolButton({
   return (
     <button
       type="button"
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60 sm:min-h-9"
+      className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60 sm:min-h-7 sm:py-0"
       {...props}
     >
       {children}

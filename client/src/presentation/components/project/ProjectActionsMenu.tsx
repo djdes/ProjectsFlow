@@ -288,7 +288,9 @@ export function ProjectActionsMenu({
             variant="ghost"
             size="icon"
             className={cn(
-              compact ? 'size-10 sm:size-9' : 'size-8',
+              // Иконочные кнопки шапки в Notion — 28×28. Compact-ветка (мобильная,
+              // под палец) остаётся крупной: ужимать touch-target нельзя.
+              compact ? 'size-10 sm:size-9' : 'size-7',
               'text-muted-foreground hover:text-foreground',
             )}
             disabled={busyAction !== null}

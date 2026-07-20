@@ -164,6 +164,30 @@ export type ViewTabDisplay = 'text-icon' | 'text' | 'icon';
 // Зазор между вкладками (gap-0.5) — участвует в расчёте, сколько вкладок влезает.
 const TAB_GAP = 2;
 
+// === Метрики ряда вкладок: ОДИН источник для реальных кнопок и для невидимой линейки ===
+// По линейке (tabsMeasureRef) считается переполнение ряда («ещё N…»), поэтому любое
+// расхождение классов реплики и оригинала тихо врёт в расчёте. Чтобы они не разъезжались,
+// геометрия вынесена в константы, а состояния (цвет, ховер, подчёркивание) добавляются
+// поверх и на размеры не влияют.
+
+// Вкладка. Метрика снята с Notion (MEASURED.md §2): высота 40, шрифт 16px, вес 400.
+// Вес ОДИНАКОВ у активной и неактивной: раньше активная была 500, из-за чего линейка
+// мерила все вкладки по 500 «с запасом», а ширина вкладки прыгала при переключении.
+const TAB_METRICS_CLASS =
+  'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-base font-normal';
+
+// Кнопка «ещё N…» стоит в том же ряду — метрика у неё та же (была 13px и без высоты:
+// в переполненном ряду рядом оказывались два типоразмера). Экспортируется, потому что
+// сама кнопка живёт в ViewsOverflowMenu; импорт обратно безопасен — константа читается
+// на рендере, а не на инициализации модуля (тем же способом там берётся VIEW_TYPE_ICONS).
+export const VIEWS_MORE_METRICS_CLASS =
+  'inline-flex h-10 shrink-0 items-center gap-1 rounded-md px-2 text-base font-normal';
+
+// Ховер-«+» в конце ряда. Реплика обязана совпадать по размеру с кнопкой: пока реплика
+// была size-7 (28px) против size-9 (36px) у кнопки, ветка «влезают все» недосчитывала
+// 8px — ряд признавался помещающимся, и «+» срезался overflow-hidden контейнера.
+const PLUS_METRICS_CLASS = 'inline-flex size-9 shrink-0';
+
 const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
   has: 'Есть срок',
   none: 'Без срока',
@@ -786,11 +810,14 @@ export function ProjectBoardViews({
       {/* Строка вкладок + тулбар вью (Notion-style). На узком экране ряд вкладок
           сворачивается в одну кнопку «Активная вью ⌄». Строка остаётся в обычном
           потоке страницы и уезжает вверх вместе с контентом — закрепляются только
-          действительно полезные заголовки колонок/таблицы. */}
+          действительно полезные заголовки колонок/таблицы.
+          pb-2 = 8px: у Notion низ вкладок 198 → шапка доски 206 (MEASURED.md §2), а
+          доска ниже идёт вплотную, без собственного верхнего паддинга, — значит этот
+          паддинг и есть итоговый зазор до контента. */}
       <div
         id="pf-views-tabs-row"
         style={{ marginRight: rightPanelWidth }}
-        className="group/tabs relative z-30 flex items-center gap-0.5 bg-background pb-1 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
+        className="group/tabs relative z-30 flex items-center gap-0.5 bg-background pb-2 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">
@@ -891,13 +918,15 @@ export function ProjectBoardViews({
           className="relative hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden md:flex"
         >
           {/* Линейка: невидимые реплики ВСЕХ вкладок + «ещё N…» + «+» — по ним
-              считаем, сколько вкладок влезает до тулбара (Notion). */}
+              считаем, сколько вкладок влезает до тулбара (Notion). Классы реплик
+              берутся из тех же констант, что и реальные кнопки, — руками их не
+              дублируем: разъехавшиеся числа тихо врут в расчёте переполнения. */}
           <div
             ref={tabsMeasureRef}
             aria-hidden
             className="pointer-events-none invisible absolute left-0 top-0 flex items-center whitespace-nowrap"
           >
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium">
+            <span className={TAB_METRICS_CLASS}>
               {displayFor(DEFAULT_VIEW_ID) !== 'text' && (
                 <LayoutGrid className="size-3.5 shrink-0" />
               )}
@@ -906,10 +935,7 @@ export function ProjectBoardViews({
               )}
             </span>
             {allViewsSorted.map((v) => (
-              <span
-                key={v.id}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium"
-              >
+              <span key={v.id} className={TAB_METRICS_CLASS}>
                 {displayFor(v.id) !== 'text' && (
                   <ViewIconGlyph
                     icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
@@ -921,10 +947,11 @@ export function ProjectBoardViews({
                 )}
               </span>
             ))}
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium">
-              ещё {allViewsSorted.length}…
-            </span>
-            <span className="inline-flex size-7 shrink-0" />
+            {/* Счётчик в реплике — по ВСЕМ вью, хотя настоящая кнопка показывает только
+                скрытые: реплика заведомо не уже настоящей, т.е. ошибка направлена в
+                безопасную сторону (лишний символ ширины, а не недостающий). */}
+            <span className={VIEWS_MORE_METRICS_CLASS}>ещё {allViewsSorted.length}…</span>
+            <span className={PLUS_METRICS_CLASS} />
           </div>
           <ViewTab
             icon={VIEW_TYPE_ICONS.kanban}
@@ -977,7 +1004,10 @@ export function ProjectBoardViews({
                   type="button"
                   aria-label="Новое отображение"
                   title="Новое отображение"
-                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100"
+                  className={cn(
+                    PLUS_METRICS_CLASS,
+                    'items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100',
+                  )}
                 >
                   <Plus className="size-4" />
                 </button>
@@ -1065,17 +1095,23 @@ export function ProjectBoardViews({
             aria-label="Открыть Студию"
             title="Открыть Студию"
             onClick={() => navigate(`/projects/${projectId}/studio`)}
-            className="ml-1 size-10 rounded-lg max-sm:size-10 sm:size-9"
+            className="ml-1 size-10 rounded-md max-sm:size-10 sm:size-9 md:size-7"
           >
             <PanelsTopLeft className="size-4" />
           </Button>
-          {/* Скругление задаёт обёртка, а половинки внутри — rounded-none. Иначе они рисуют
-              собственные 6px внутри 8px-обрезки, и группа выглядит менее скруглённой, чем
-              задумано (обрезка не «дорисовывает» угол, она только срезает). */}
-          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-lg">
+          {/* Кнопка New у Notion: 28px высотой, радиус 6px, шрифт 14px (MEASURED.md §3).
+              Скругление задаёт обёртка (rounded-md = 6px), а половинки внутри —
+              rounded-none: свои углы внутри обрезки они бы только «срезали», и группа
+              выглядела бы менее скруглённой, чем задумано.
+              `sm:text-sm` у левой половинки обязателен: в варианте size="sm" базовым
+              классом лежит sm:text-xs, и без явного перебоя десктоп уехал бы на 12px.
+              Высота: 28px только с md — там начинается десктопная раскладка ряда. Между
+              sm и md работает `sm:h-9` из самого варианта (36px), иначе primary-CTA на
+              сенсорном планшете превращается в 28px-мишень. */}
+          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-md">
             <Button
               size="sm"
-              className="h-10 rounded-none px-3.5 text-sm font-semibold sm:h-9 sm:text-[13px]"
+              className="h-10 rounded-none px-3.5 text-sm font-medium sm:text-sm md:h-7"
               onClick={() => requestCreate('backlog')}
             >
               Создать
@@ -1085,7 +1121,7 @@ export function ProjectBoardViews({
                 <Button
                   size="sm"
                   aria-label="Создать в колонке…"
-                  className="h-10 rounded-none border-l border-primary-foreground/20 px-2 sm:h-9"
+                  className="h-10 rounded-none border-l border-primary-foreground/20 px-2 md:h-7"
                 >
                   <ChevronDown className="size-3.5" />
                 </Button>
@@ -1904,7 +1940,14 @@ function ToolbarIcon({
       title={label}
       onClick={onClick}
       className={cn(
-        'inline-flex size-10 items-center justify-center rounded-md transition-colors hover:bg-accent sm:size-9',
+        // Desktop 28px — размер иконочных кнопок Notion (MEASURED.md §3) и уже
+        // действующий размер соседних Фильтра/Сортировки. Мобильные 40px не трогаем:
+        // это тач-цель, там правит не эталон, а палец.
+        // Порог именно md: десктопная раскладка ряда включается на md (тулбар — `hidden
+        // md:flex`, компактный переключатель — `md:hidden`). На sm ряд ещё мобильный, и
+        // 28px там дают и разнобой с соседним переключателем (36px), и мелкую тач-цель
+        // на планшете — глобальный min-height:44px действует только до 639px.
+        'inline-flex size-10 items-center justify-center rounded-md transition-colors hover:bg-accent sm:size-9 md:size-7',
         active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
       )}
     >
@@ -2306,10 +2349,19 @@ function ViewTab({
       tabs[next]?.click();
     },
   };
+  // Геометрия — общая с линейкой переполнения (TAB_METRICS_CLASS, там же метрика
+  // из MEASURED.md §2). Здесь только состояния.
+  // Активная вкладка — подчёркивание и цвет текста, а НЕ заливка: §2/§3 заливку вкладки
+  // не фиксируют, а на высоте 40px плашка читается как кнопка, а не как вкладка.
+  // Подчёркивание — absolute-псевдоэлемент: в поток он не входит, ширину вкладки не
+  // меняет, поэтому линейка остаётся точной. По той же причине вес у активной 400, как
+  // у остальных: иначе вкладка меняла бы ширину при переключении.
   const tabClass = cn(
-    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full py-1 pl-2 pr-2 text-[13px] font-medium transition-colors duration-150 motion-reduce:transition-none',
+    TAB_METRICS_CLASS,
+    'relative transition-colors duration-150 motion-reduce:transition-none',
+    "after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-foreground after:opacity-0 after:transition-opacity after:content-[''] motion-reduce:after:transition-none",
     active
-      ? 'bg-accent text-foreground'
+      ? 'text-foreground after:opacity-100 hover:bg-accent/60 data-[state=open]:bg-accent/60'
       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
   );
   const inner = (

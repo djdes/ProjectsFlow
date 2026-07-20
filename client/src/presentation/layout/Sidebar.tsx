@@ -56,6 +56,10 @@ type SidebarProps = {
   onToggleCollapse?: () => void;
   // Свёрнутый режим (desktop, кнопка-бургер): узкий icon-rail вместо полной панели.
   collapsed?: boolean;
+  // Плавающий предпросмотр свёрнутой панели (ховер по бургеру). Панель уже «открыта»,
+  // поэтому кнопка в её шапке не сворачивает, а ЗАКРЕПЛЯЕТ — меняем иконку и подпись,
+  // иначе стрелка «свернуть» делает ровно противоположное своей подписи.
+  peek?: boolean;
   // Узкая ширина (ресайз ниже порога): ТОЛЬКО верхний навигационный ряд без подписей
   // (иконки). Остальная панель (свитчер, список проектов) — как есть.
   navCompact?: boolean;
@@ -66,6 +70,7 @@ type SidebarProps = {
 export function Sidebar({
   onToggleCollapse,
   collapsed = false,
+  peek = false,
   navCompact = false,
   onNavigate,
 }: SidebarProps): React.ReactElement {
@@ -143,17 +148,19 @@ export function Sidebar({
   const showChat = activeRail === 'chat';
 
   // Rail: слева вкладки-переключатели (Главная/Чат — активная разворачивается с подписью),
-  // справа icon-кнопки действий (Входящие/Поиск — без активного состояния, клик = действие).
+  // справа icon-кнопки действий (Задача/Входящие/Поиск — без активного состояния,
+  // клик = действие). Порядок в массиве задаёт и порядок внутри своей группы.
   const railItems: RailItem[] = [
     { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" />, variant: 'tab' },
     { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable, variant: 'tab' },
     {
-      // Центральная акцентная кнопка «Задача» (как «+» в YouTube) — открывает AddTaskDialog.
+      // «Задача» (открывает AddTaskDialog) — первая в правой группе. Раньше была залитым
+      // акцентным кружком посреди ряда; в Notion все кнопки рейла одинаково серые,
+      // выделяется только активная вкладка.
       key: 'add',
       label: 'Задача',
       icon: <Plus className="size-5" />,
       variant: 'action',
-      accent: true,
       onAction: openAddTask,
     },
     {
@@ -254,15 +261,19 @@ export function Sidebar({
                 <button
                   type="button"
                   onClick={onToggleCollapse}
-                  aria-label="Свернуть панель"
-                  // Кнопка сворачивания появляется только при наведении на левую панель (Notion).
-                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-hover hover:text-foreground focus-visible:opacity-100 group-hover/sidebar:opacity-100"
+                  aria-label={peek ? 'Закрепить панель' : 'Свернуть панель'}
+                  className={cn(
+                    'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-opacity hover:bg-hover hover:text-foreground focus-visible:opacity-100 group-hover/sidebar:opacity-100',
+                    // Кнопка сворачивания появляется только при наведении на панель (Notion).
+                    // В подсмотре она — основной способ закрепить панель, поэтому видна сразу.
+                    peek ? 'opacity-100' : 'opacity-0',
+                  )}
                 >
-                  <ChevronsLeft className="size-5" />
+                  {peek ? <ChevronsRight className="size-5" /> : <ChevronsLeft className="size-5" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="flex items-center gap-1.5">
-                <span>Свернуть панель</span>
+                <span>{peek ? 'Закрепить панель' : 'Свернуть панель'}</span>
                 <kbd className="rounded bg-foreground/10 px-1 text-[10px] leading-4">Ctrl+\</kbd>
               </TooltipContent>
             </Tooltip>

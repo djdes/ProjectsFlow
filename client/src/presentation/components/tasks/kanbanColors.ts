@@ -1,70 +1,85 @@
 import type { KanbanColor } from '@/domain/kanban/KanbanSettings';
 
 export type KanbanColorClasses = {
-  // Цветная «пилюля» вокруг заголовка колонки.
+  // Залитая «пилюля» заголовка колонки: фон + цвет текста (Notion: h=20px, radius 10px).
   readonly pill: string;
-  // Очень мягкая тонировка тела колонки (header pill + soft body — стиль Notion).
+  // Тонировка тела колонки. Намеренно почти прозрачная (3–5% альфы в светлой теме):
+  // колонку отделяет от фона не заливка, а белые карточки с кольцом поверх неё.
   readonly body: string;
-  // Сплошной свотч для пикера цвета.
+  // Сплошной свотч цвета: точка 8×8 внутри пилюли и кружок в пикере цветов.
   readonly dot: string;
+  // Цветное кольцо карточки — третий слой её тени. Отдаём через CSS-переменную
+  // --pf-card-ring, чтобы карточка не знала про колонку: она просто читает var()
+  // (с нейтральным фолбэком, если её рендерят вне доски).
+  readonly ring: string;
 };
 
 // ВАЖНО: только статические литеральные классы — Tailwind JIT не видит интерполированные имена.
-// Notion-calm: цвет колонки несёт маленькая точка-маркер (`dot`) рядом с подписью, а тело
-// колонки — почти-нейтральная едва заметная тонировка низкой насыщенности (/25 в светлой,
-// /[0.05] в тёмной), чтобы доска читалась спокойно, без громких заливок. `pill` оставлен
-// в типе для обратной совместимости (используется как приглушённый текстовый цвет, если нужно).
-// `gray` — тёплый stone (в пару к тёплым нейтралям темы).
+// Значения светлой темы для gray/blue/green сняты с живой страницы Notion (см.
+// reference/notion-project-page/MEASURED.md), остальные цвета выведены по той же логике:
+// тело колонки 3–5% альфы, пилюля 11–20%, кольцо карточки ~9%. Тёмная тема строится
+// зеркально: подложки светлеют (белый/осветлённый оттенок поверх графита), текст пилюли —
+// светлый тон того же цвета. `gray` — тёплый (в пару к тёплым нейтралям темы).
 export const KANBAN_COLOR_CLASSES: Record<KanbanColor, KanbanColorClasses> = {
   default: {
-    pill: 'text-muted-foreground',
-    body: 'bg-muted/40 sm:bg-muted/25',
+    pill: 'bg-[rgba(55,53,47,0.08)] text-[rgb(85,83,78)] dark:bg-[rgba(255,255,255,0.09)] dark:text-[rgb(196,194,189)]',
+    body: 'bg-[rgba(55,53,47,0.03)] dark:bg-[rgba(255,255,255,0.045)]',
     dot: 'bg-muted-foreground/40',
+    ring: '[--pf-card-ring:rgba(55,53,47,0.07)] dark:[--pf-card-ring:rgba(255,255,255,0.09)]',
   },
   gray: {
-    pill: 'text-stone-600 dark:text-stone-300',
-    body: 'bg-stone-100/40 dark:bg-stone-500/[0.05]',
-    dot: 'bg-stone-400',
+    pill: 'bg-[rgba(28,19,1,0.11)] text-[rgb(73,72,70)] dark:bg-[rgba(255,255,255,0.1)] dark:text-[rgb(191,189,184)]',
+    body: 'bg-[rgba(66,35,3,0.03)] dark:bg-[rgba(255,255,255,0.045)]',
+    dot: 'bg-[rgb(142,139,134)]',
+    ring: '[--pf-card-ring:rgba(42,28,0,0.07)] dark:[--pf-card-ring:rgba(255,255,255,0.09)]',
   },
   brown: {
-    pill: 'text-amber-800 dark:text-amber-200',
-    body: 'bg-amber-100/25 dark:bg-amber-800/[0.05]',
-    dot: 'bg-amber-700',
+    pill: 'bg-[rgba(125,72,35,0.16)] text-[rgb(94,68,52)] dark:bg-[rgba(190,130,90,0.22)] dark:text-[rgb(216,176,150)]',
+    body: 'bg-[rgba(125,72,35,0.04)] dark:bg-[rgba(190,130,90,0.07)]',
+    dot: 'bg-[rgb(159,107,64)]',
+    ring: '[--pf-card-ring:rgba(125,72,35,0.09)] dark:[--pf-card-ring:rgba(190,130,90,0.14)]',
   },
   orange: {
-    pill: 'text-orange-700 dark:text-orange-200',
-    body: 'bg-orange-100/25 dark:bg-orange-500/[0.05]',
-    dot: 'bg-orange-500',
+    pill: 'bg-[rgba(233,113,0,0.18)] text-[rgb(122,71,17)] dark:bg-[rgba(255,150,60,0.22)] dark:text-[rgb(247,186,132)]',
+    body: 'bg-[rgba(233,113,0,0.05)] dark:bg-[rgba(255,150,60,0.07)]',
+    dot: 'bg-[rgb(232,131,26)]',
+    ring: '[--pf-card-ring:rgba(233,113,0,0.09)] dark:[--pf-card-ring:rgba(255,150,60,0.14)]',
   },
   yellow: {
-    pill: 'text-yellow-700 dark:text-yellow-100',
-    body: 'bg-yellow-100/25 dark:bg-yellow-500/[0.05]',
-    dot: 'bg-yellow-400',
+    pill: 'bg-[rgba(219,158,0,0.2)] text-[rgb(112,86,17)] dark:bg-[rgba(255,205,80,0.22)] dark:text-[rgb(245,214,133)]',
+    body: 'bg-[rgba(219,158,0,0.055)] dark:bg-[rgba(255,205,80,0.07)]',
+    dot: 'bg-[rgb(223,171,45)]',
+    ring: '[--pf-card-ring:rgba(219,158,0,0.1)] dark:[--pf-card-ring:rgba(255,205,80,0.14)]',
   },
   green: {
-    pill: 'text-green-700 dark:text-green-200',
-    body: 'bg-green-100/25 dark:bg-green-500/[0.05]',
-    dot: 'bg-green-500',
+    pill: 'bg-[rgba(0,96,38,0.157)] text-[rgb(42,83,60)] dark:bg-[rgba(80,190,130,0.22)] dark:text-[rgb(152,214,178)]',
+    body: 'bg-[rgba(3,87,31,0.035)] dark:bg-[rgba(80,190,130,0.07)]',
+    dot: 'bg-[rgb(70,161,113)]',
+    ring: '[--pf-card-ring:rgba(0,100,45,0.09)] dark:[--pf-card-ring:rgba(80,190,130,0.14)]',
   },
   blue: {
-    pill: 'text-blue-700 dark:text-blue-200',
-    body: 'bg-blue-100/25 dark:bg-blue-500/[0.05]',
-    dot: 'bg-blue-500',
+    pill: 'bg-[rgba(0,118,217,0.204)] text-[rgb(38,74,114)] dark:bg-[rgba(70,160,240,0.22)] dark:text-[rgb(150,196,240)]',
+    body: 'bg-[rgba(0,128,213,0.047)] dark:bg-[rgba(70,160,240,0.07)]',
+    dot: 'bg-[rgb(39,131,222)]',
+    ring: '[--pf-card-ring:rgba(0,124,215,0.094)] dark:[--pf-card-ring:rgba(70,160,240,0.14)]',
   },
   purple: {
-    pill: 'text-purple-700 dark:text-purple-200',
-    body: 'bg-purple-100/25 dark:bg-purple-500/[0.05]',
-    dot: 'bg-purple-500',
+    pill: 'bg-[rgba(124,77,196,0.18)] text-[rgb(83,58,120)] dark:bg-[rgba(170,130,240,0.22)] dark:text-[rgb(198,175,240)]',
+    body: 'bg-[rgba(124,77,196,0.045)] dark:bg-[rgba(170,130,240,0.07)]',
+    dot: 'bg-[rgb(150,105,205)]',
+    ring: '[--pf-card-ring:rgba(124,77,196,0.09)] dark:[--pf-card-ring:rgba(170,130,240,0.14)]',
   },
   pink: {
-    pill: 'text-pink-700 dark:text-pink-200',
-    body: 'bg-pink-100/25 dark:bg-pink-500/[0.05]',
-    dot: 'bg-pink-500',
+    pill: 'bg-[rgba(210,57,137,0.17)] text-[rgb(122,50,93)] dark:bg-[rgba(240,110,180,0.22)] dark:text-[rgb(240,168,205)]',
+    body: 'bg-[rgba(210,57,137,0.045)] dark:bg-[rgba(240,110,180,0.07)]',
+    dot: 'bg-[rgb(216,95,161)]',
+    ring: '[--pf-card-ring:rgba(210,57,137,0.09)] dark:[--pf-card-ring:rgba(240,110,180,0.14)]',
   },
   red: {
-    pill: 'text-red-700 dark:text-red-200',
-    body: 'bg-red-100/25 dark:bg-red-500/[0.05]',
-    dot: 'bg-red-500',
+    pill: 'bg-[rgba(219,47,42,0.17)] text-[rgb(122,45,42)] dark:bg-[rgba(240,90,85,0.22)] dark:text-[rgb(240,158,155)]',
+    body: 'bg-[rgba(219,47,42,0.045)] dark:bg-[rgba(240,90,85,0.07)]',
+    dot: 'bg-[rgb(226,85,80)]',
+    ring: '[--pf-card-ring:rgba(219,47,42,0.09)] dark:[--pf-card-ring:rgba(240,90,85,0.14)]',
   },
 };
 

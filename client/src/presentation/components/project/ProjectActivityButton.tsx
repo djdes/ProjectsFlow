@@ -101,9 +101,18 @@ export function ProjectActivityButton({
           <Button
             variant="ghost"
             size="sm"
+            // 28px / 14px — высота и кегль кнопок верхней панели в Notion (MEASURED.md §3).
+            // Дубли с sm: обязательны: у size="sm" в самом варианте лежат sm:h-9/sm:px-3/
+            // sm:text-xs, и без явного sm-аналога они перебивают базовые классы на десктопе
+            // (медиазапрос идёт в CSS позже).
+            // Базовая (мобильная) высота — h-10, а не h-7: этот триггер живёт в строке крошек
+            // `hidden sm:flex`, но его окно активности портализуется в body и переживает
+            // display:none предка, поэтому non-compact ветка достижима с телефона. Глобальный
+            // min-height:44px из globals.css сюда не достаёт (в базовых классах Button есть
+            // подстрока `size-`), так что 40px нужно задать руками.
             className={compact
               ? 'size-10 px-0 text-muted-foreground hover:text-foreground sm:size-9'
-              : 'h-8 px-2 text-sm font-normal text-muted-foreground hover:text-foreground'}
+              : 'h-10 px-2 text-sm font-normal text-muted-foreground hover:text-foreground sm:h-7 sm:px-2 sm:text-sm'}
             onClick={() => onOpenChange(true)}
             aria-label={compact ? label : undefined}
           >

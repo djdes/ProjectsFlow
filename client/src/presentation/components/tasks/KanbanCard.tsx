@@ -149,8 +149,8 @@ function KanbanCardImpl({
       task.status === 'awaiting_clarification',
   );
 
-  // Выполненная задача — для зелёного hover-затемнения и зелёного градиента оверлея
-  // (иначе на зелёной карточке нижний градиент from-card давал нейтральную полосу).
+  // Выполненная задача — зелёный хайрлайн-маркер готовности. Заливки НЕТ: по замерам Notion
+  // карточка не залитая плашка, а белая карточка на цветном кольце колонки.
   const doneCard = !preview && task.status === 'done';
 
   // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
@@ -308,14 +308,26 @@ function KanbanCardImpl({
           // лишнего «воздуха». При hover — только маленькая корзина (оверлей ниже).
           // Мобила — колонка (текст сверху, ряд мета/действий снизу); десктоп — как было
           // (строка: чекбокс + текст, действия/мета плавающими оверлеями).
-          'group relative flex select-none flex-col gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 outline-none sm:flex-row sm:items-start dark:border-white/[0.08]',
+          'group relative flex select-none flex-col gap-1.5 rounded-[10px] border border-transparent bg-card px-2 py-1.5 outline-none sm:flex-row sm:items-start',
+          // Ключ к «нотионовскому» виду доски: карточка НЕ залита цветом колонки, а белая
+          // (bg-card) и приподнята над её слабой тонировкой. Отделяют её не бордер, а две
+          // мягкие тени + третий слой — цветное кольцо в 1px. Цвет кольца отдаёт колонка
+          // через --pf-card-ring (KanbanColumn), фолбэк — нейтральный: карточку могут
+          // отрисовать и вне доски. Бордер оставлен ПРОЗРАЧНЫМ намеренно — хайрлайн теперь
+          // рисует кольцо, но модификаторы ниже (done / open / selected / приоритет)
+          // продолжают красить бордер ровно как раньше.
+          'shadow-[0_4px_12px_rgba(25,25,25,0.027),0_1px_2px_rgba(25,25,25,0.02),0_0_0_1px_var(--pf-card-ring,rgba(42,28,0,0.07))]',
+          // На графите мягкая светлая тень не читается — в тёмной теме тени плотнее,
+          // а кольцо, наоборот, светлое.
+          'dark:shadow-[0_4px_12px_rgba(0,0,0,0.28),0_1px_2px_rgba(0,0,0,0.2),0_0_0_1px_var(--pf-card-ring,rgba(255,255,255,0.09))]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[border-color,opacity,background-color] duration-150 ease-out',
-          // Done-карточка: мягкая зелёная заливка (Notion-style спокойный маркер
-          // готовности). На hover — МЯГКОЕ зелёное затемнение (не резкое); текст за
-          // кнопками снизу скрывается зелёным градиентом-оверлеем (ниже), как у черновиков.
-          doneCard && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.1] dark:hover:bg-success/[0.14]',
+          // Done-карточка: только зелёный хайрлайн, БЕЗ заливки. Заливка тем же цветом, что
+          // и колонка, — ровно то, от чего уходит редизайн (замеры Notion §4: белая карточка
+          // на цветном кольце). Побочно: плашки мета/действий на hover'е красятся сплошным
+          // bg-card, и на незалитой карточке они наконец сходятся с ней в цвете.
+          doneCard && 'border-success/25 hover:border-success/45',
           // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
           // спокойный индикатор важности в стиле Todoist (меняется в дравере).
           task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
@@ -334,7 +346,10 @@ function KanbanCardImpl({
               // граница. Tilt/scale делаем НЕ здесь, а на motion-обёртке в KanbanBoard —
               // иначе CSS-transform запекается в snapshot DragOverlay и при drop остаётся
               // «висеть наклонённым», пока внешний transform лерпится к месту.
-              'cursor-grabbing border-foreground/30 shadow-2xl ring-2 ring-primary/20'
+              // dark:shadow-2xl обязателен: базовая тень объявлена и в dark:-варианте, а он
+              // специфичнее одиночного shadow-2xl — без него в тёмной теме оверлей остался
+              // бы с обычной тенью карточки.
+              'cursor-grabbing border-foreground/30 shadow-2xl ring-2 ring-primary/20 dark:shadow-2xl'
             : // На hover'е карточка кликабельна (открывает диалог) → cursor-pointer.
               // grabbing включается только когда юзер реально потащил (isDragging ниже).
               'cursor-pointer',

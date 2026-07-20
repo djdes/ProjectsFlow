@@ -989,10 +989,12 @@ export function KanbanBoard({
       <div className="space-y-6">
         <div className="h-24 animate-pulse rounded-xl bg-muted" />
         <div className="flex gap-3 overflow-x-auto">
+          {/* Геометрия скелета = геометрия настоящей колонки (276px / radius 10px,
+              замеры Notion) — иначе доска дёргается на месте в момент загрузки. */}
           {VISIBLE_STATUSES.map((s) => (
             <div
               key={s}
-              className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-xl bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted"
+              className="h-64 w-[92vw] max-w-[24rem] shrink-0 animate-pulse rounded-[10px] bg-muted/60 sm:w-[276px] sm:max-w-none sm:bg-muted"
             />
           ))}
         </div>

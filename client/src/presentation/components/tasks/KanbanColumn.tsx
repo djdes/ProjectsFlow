@@ -59,12 +59,21 @@ function scrollParents(element: HTMLElement): Array<HTMLElement | Window> {
 }
 
 export type KanbanColumnColorClasses = {
+  // Залитая пилюля вокруг названия колонки: фон + цвет текста (Notion-стиль).
   readonly pill: string;
+  // Тонировка колонки целиком — шапка и тело единым блоком, один фон на оба.
   readonly body: string;
-  // Маленький цветной маркер-точка рядом с подписью колонки (Notion-стиль:
-  // спокойный нейтральный заголовок + точка цвета вместо громкой заливки-пилюли).
+  // Точка 8×8 внутри пилюли (она же свотч в пикере цветов).
   readonly dot: string;
+  // Класс, объявляющий --pf-card-ring — цветное кольцо карточек этой колонки.
+  // Карточка читает переменную сама (KanbanCard), знать про колонку ей не нужно.
+  readonly ring: string;
 };
+
+// Фолбэк-тонировка колонки, когда цвет не передан. Живёт отдельной константой, потому что
+// её обязана повторить ОТКРЕПЛЁННАЯ шапка: position:fixed уносит её из колонки, и подложку
+// (страница + тонировка) она докрашивает сама — иначе на стыке видна полоса другого тона.
+const DEFAULT_COLUMN_TINT = 'bg-[rgba(55,53,47,0.03)] dark:bg-[rgba(255,255,255,0.045)]';
 
 type InlineCreateInput = {
   description: string;
@@ -408,8 +417,12 @@ export function KanbanColumn({
         // экрана, ровно ОДИН магнит на колонку (snap-always запрещает проскок мимо — каждая
         // колонка обязательная остановка). 92vw оставляет узкие «пипки» соседей по краям —
         // видно, что доска листается. На sm+ снап выключен (sm:snap-none) — свободный скролл.
-        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center snap-always flex-col rounded-xl sm:w-72 sm:max-w-none',
-        colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
+        // Замеры Notion: колонка 276px, скругление 10px. Шапка и тело — ОДИН блок с общим
+        // фоном (у Notion это 10px 10px 0 0 + 0 0 10px 10px), поэтому фон и радиус живут здесь.
+        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center snap-always flex-col rounded-[10px] sm:w-[276px] sm:max-w-none',
+        colorClasses?.body ?? DEFAULT_COLUMN_TINT,
+        // Объявляет --pf-card-ring: карточки внутри наследуют цвет своего кольца.
+        colorClasses?.ring,
       )}
     >
       <div ref={headerSlotRef} className="shrink-0" style={pinnedHeader ? { height: pinnedHeader.height } : undefined}>
@@ -417,16 +430,47 @@ export function KanbanColumn({
           ref={headerRef}
           style={pinnedHeaderStyle}
           className={cn(
-          'flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-2.5',
-          // Notion: шапка колонки липнет при скролле страницы (заголовки колонок остаются
-          // видны). На мобиле — СПЛОШНОЙ фон без backdrop-blur (blur при вертикальном скролле
-          // доски дико тормозит iOS Safari). Фрост оставляем только на десктопе (sm+).
-          stickyHeaderTop != null &&
-            'z-30 rounded-t-xl bg-muted dark:bg-muted sm:bg-muted/85 sm:backdrop-blur-md sm:dark:bg-muted/90',
+          // Замеры Notion: шапка колонки ровно 40px. 6+6 паддинга + самый высокий элемент
+          // ряда (кнопка «+», на десктопе 28px) = 40. Пилюля 20px встаёт по центру, под ней
+          // остаётся 10px, ещё 8px даёт p-2 тела — до первой карточки 18px, как в эталоне.
+          // min-h-10 держит те же 40px и когда правой группы нет вовсе (read-only доска):
+          // шапки всех колонок обязаны быть одной высоты, иначе карточки стартуют вразнобой.
+          'flex min-h-10 shrink-0 items-center justify-between gap-2 px-3 py-1.5',
           // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
-          selectionMode && 'rounded-t-xl bg-primary/10',
+          selectionMode && 'rounded-t-[10px] bg-primary/10',
+          // Своя заливка нужна шапке ТОЛЬКО пока она реально откреплена (position: fixed):
+          // иначе сквозь неё просвечивали бы уезжающие карточки. В обычном состоянии шапка
+          // прозрачная — сквозь неё видна тонировка колонки, шапка и тело читаются как один
+          // блок (Notion). Фон сплошной, без backdrop-blur: blur при вертикальном скролле
+          // доски дико тормозит iOS Safari. Здесь только НЕПРОЗРАЧНАЯ база: тонировку колонки
+          // и подсветку выделения возвращают слои ниже — одним классом их не сложить, twMerge
+          // оставил бы от двух bg-* только последний (из-за этого у закреплённой шапки и
+          // пропадала подсветка выделения).
+          pinnedHeader != null && 'z-30 rounded-t-[10px] bg-background',
           )}
         >
+        {/* Слои открепленной шапки. Она ушла из потока колонки, поэтому тонировку колонки
+            (а в режиме выделения — и акцент) докрашивает сама: без этого в тёмной теме под
+            закреплённой шапкой видна полоса-стык (фон 9% против колонки ~13%). -z-10 внутри
+            её же stacking-контекста (fixed + z-30) кладёт слои ПОВЕРХ bg-background, но ПОД
+            содержимое шапки. */}
+        {pinnedHeader != null && (
+          <>
+            <span
+              aria-hidden
+              className={cn(
+                'pointer-events-none absolute inset-0 -z-10 rounded-t-[10px]',
+                colorClasses?.body ?? DEFAULT_COLUMN_TINT,
+              )}
+            />
+            {selectionMode && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -z-10 rounded-t-[10px] bg-primary/10"
+              />
+            )}
+          </>
+        )}
         {selectionMode ? (
           <>
             <span className="min-w-0 truncate text-xs font-medium">
@@ -436,7 +480,12 @@ export function KanbanColumn({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs"
+                // sm:h-6 обязателен: базовый h-6 не перебивает sm:h-9 из варианта size="sm"
+                // (медиазапрос идёт после базовых утилит) — без него шапка в режиме выделения
+                // была на 8px выше обычной. max-sm:h-11 держит тач-цель 44px на мобиле:
+                // глобальное правило globals.css сюда не достаёт (в классе Button есть
+                // подстрока `size-` из [&_svg…]:size-[1.05em]).
+                className="h-6 px-2 text-xs max-sm:h-11 sm:h-6"
                 onClick={onSelectAll}
               >
                 Все
@@ -444,7 +493,8 @@ export function KanbanColumn({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs"
+                // Размеры — как у «Все» выше (см. комментарий там).
+                className="h-6 px-2 text-xs max-sm:h-11 sm:h-6"
                 onClick={onSelectNone}
               >
                 Никого
@@ -466,12 +516,24 @@ export function KanbanColumn({
             <div className="flex min-w-0 items-center gap-1.5">
               {label.length > 0 && (
                 <>
-                  {/* Цветная точка вместо громкой пилюли-заливки — спокойный Notion-маркер колонки. */}
+                  {/* Замеры Notion: залитая пилюля 20px высотой, radius 10px, текст 14px,
+                      точка 8×8 внутри. Цвет колонки живёт ЗДЕСЬ (11–20% альфы), а тело
+                      колонки почти прозрачное — так доска не выглядит залитой.
+                      min-h-5, а не h-5: на мобиле globals.css форсит 16px шрифта в поле
+                      переименования, и пилюля обязана подрасти под него. leading-5 вместо
+                      leading-none: 14px-строка в 14px-боксе резала выносные кириллицы
+                      (у, р, д) — у названия стоит truncate, т.е. overflow:hidden. */}
                   <span
-                    className={cn('size-2 shrink-0 rounded-full', colorClasses?.dot ?? 'bg-muted-foreground/40')}
-                    aria-hidden
-                  />
-                  <div className="min-w-0">
+                    className={cn(
+                      'flex min-h-5 min-w-0 max-w-full items-center gap-1.5 rounded-[10px] px-2 text-sm leading-5',
+                      colorClasses?.pill ??
+                        'bg-[rgba(55,53,47,0.08)] text-[rgb(85,83,78)] dark:bg-[rgba(255,255,255,0.09)] dark:text-[rgb(196,194,189)]',
+                    )}
+                  >
+                    <span
+                      className={cn('size-2 shrink-0 rounded-full', colorClasses?.dot ?? 'bg-muted-foreground/40')}
+                      aria-hidden
+                    />
                     {editingLabel ? (
                       <input
                         autoFocus
@@ -482,7 +544,12 @@ export function KanbanColumn({
                         onBlur={commitRename}
                         maxLength={40}
                         aria-label="Название колонки"
-                        className="w-full max-w-[10rem] rounded border bg-background px-1 py-0 text-[13px] font-medium leading-snug text-foreground focus:border-foreground/30 focus:outline-none"
+                        // Высоту задаёт line-height, а НЕ h-*: globals.css форсит на всех
+                        // input под 640px font-size:16px !important (анти-зум iOS), и в
+                        // фиксированном боксе 16px-шрифт обрезал бы выносные кириллицы
+                        // (у, р, д, б). 20px хватает под 14px десктопа, 24px — под
+                        // форсированные 16px; пилюля-родитель на min-h-5 подрастает следом.
+                        className="w-full min-w-0 max-w-[10rem] rounded-[4px] bg-background/80 px-1 py-0 text-sm font-medium leading-5 text-foreground outline-none focus:ring-1 focus:ring-foreground/25 max-sm:leading-6"
                       />
                     ) : (
                       <span
@@ -498,20 +565,27 @@ export function KanbanColumn({
                         }
                         title={onRename ? 'Переименовать колонку' : undefined}
                         className={cn(
-                          'inline-block max-w-full truncate text-[13px] font-medium leading-snug text-foreground/80',
+                          'min-w-0 truncate font-medium',
+                          // Внутри залитой пилюли hover-плашка выглядела бы заплаткой —
+                          // «кликабельность» показываем лёгким прозрачным откликом.
                           onRename &&
-                            'cursor-text rounded px-0.5 outline-none hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring',
+                            'cursor-text rounded-[4px] outline-none hover:opacity-75 focus-visible:ring-1 focus-visible:ring-ring',
                         )}
                       >
                         {label}
                       </span>
                     )}
-                    {STATUS_SUBTITLE[status] && !editingLabel && (
-                      <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
-                        {STATUS_SUBTITLE[status]}
-                      </p>
-                    )}
-                  </div>
+                  </span>
+                  {/* Подзаголовок (напр. «Claude Opus») — в ТОЙ ЖЕ строке, что и пилюля.
+                      Под пилюлей он делал шапку «Воркера» выше соседних, и первая карточка
+                      этой колонки начиналась ниже; у Notion все шапки строго одной высоты.
+                      leading-4, а не leading-tight: 10px-строке нужен запас, иначе truncate
+                      (overflow:hidden) срезает хвост «p» в «Opus». */}
+                  {STATUS_SUBTITLE[status] && !editingLabel && (
+                    <span className="min-w-0 truncate text-[10px] leading-4 text-muted-foreground/60">
+                      {STATUS_SUBTITLE[status]}
+                    </span>
+                  )}
                 </>
               )}
               <span className="shrink-0 px-0.5 text-xs tabular-nums text-muted-foreground/70">
@@ -541,14 +615,18 @@ export function KanbanColumn({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8"
+                  // 28px на десктопе — самый высокий элемент шапки, он и задаёт эталонные
+                  // 40px (6+28+6). Мобильный размер приходит из варианта icon
+                  // (max-sm:size-11 = 44px, тач-цель): медиазапрос идёт после базовых утилит,
+                  // поэтому базовый size-8 его не перебивает.
+                  className="size-8 sm:size-7"
                 // Не крадём фокус у открытой карточки создания — иначе её blur-commit закроет
                 // сессию раньше, чем «+» успеет открыть новую сверху.
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => (onInlineCreate ? openInlineAtTop() : onCreate(status))}
                   aria-label="Добавить задачу"
                 >
-                  <Plus className="size-5" />
+                  <Plus className="size-5 sm:size-4" />
                 </Button>
               )}
             </div>
@@ -562,8 +640,15 @@ export function KanbanColumn({
         ref={setNodeRef}
         className={cn(
           // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
+          // p-2 + gap-2 = замеры Notion: паддинг 8px (276 − 16 = 260 ширина карточки),
+          // вертикальный зазор между карточками 8px.
           'flex min-h-[4rem] flex-col gap-2 p-2 transition-colors',
-          isOver && !lockOffer && 'bg-muted/60',
+          // Подсветка цели дропа. Серый bg-muted/60 читался заплаткой, а 2% чёрного поверх
+          // уже тонированной колонки не читались вовсе — состояние было мёртвым. Берём цвет
+          // акцента (тот же синий, что у полоски-индикатора): от тонировки колонки он
+          // отличается и светлотой, и тоном, при этом остаётся мягким. rounded-b — у колонки
+          // без композера тело доходит до низа, квадратные углы вылезали бы за её скругление.
+          isOver && !lockOffer && 'rounded-b-[10px] bg-primary/[0.08] dark:bg-primary/[0.14]',
         )}
       >
         {/* I6: на free-тарифе колонка «Воркер» — не список задач, а оффер (в обычном потоке,
@@ -788,8 +873,10 @@ function InlineNewCard({
     if (t) onOpenFull(t);
   };
 
+  // Радиус 10px — как у обычной карточки (замеры Notion), чтобы карточка создания
+  // не выбивалась из ряда.
   return (
-    <div className="group/new rounded-xl border bg-card p-2 ring-1 ring-primary/20">
+    <div className="group/new rounded-[10px] border bg-card p-2 ring-1 ring-primary/20">
       {/* items-start: иконка стоит рядом с ПЕРВОЙ строкой (при многострочном названии остаётся
           сверху); при однострочном — визуально по центру. gap-1.5 — компактно. */}
       <div className="flex items-start gap-1.5">

@@ -179,9 +179,9 @@ export function AppShell(): React.ReactElement {
   const navCompact = !collapsed && sidebarWidth < SIDEBAR_COMPACT_WIDTH;
   const { animations } = useMotion();
 
-  // Свёрнутая панель: наведение на бургер (или на предпросмотр) показывает плавающий
-  // предпросмотр панели; клик по бургеру — закрепляет её открытой. Таймер на закрытие
-  // «сшивает» зазор между бургером и оверлеем, чтобы предпросмотр не мигал.
+  // Свёрнутая панель: наведение на бургер, на левый край экрана или на сам предпросмотр
+  // показывает плавающий предпросмотр панели; клик по бургеру — закрепляет её открытой.
+  // Таймер на закрытие «сшивает» зазоры между этими зонами, чтобы предпросмотр не мигал.
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<number | null>(null);
   const openPeek = useCallback((): void => {
@@ -196,9 +196,17 @@ export function AppShell(): React.ReactElement {
     peekTimer.current = window.setTimeout(() => setPeek(false), 140);
   }, []);
   // Смена маршрута (клик по проекту в предпросмотре) — прячем предпросмотр.
+  //
+  // `collapsed` в зависимостях закрывает так: закрепить панель можно не только бургером
+  // (он сбрасывает peek сам), но и кнопкой в шапке предпросмотра, хоткеем Ctrl+\ и ручкой
+  // ширины. Те пути peek не трогали, он оставался true — и при СЛЕДУЮЩЕМ сворачивании
+  // предпросмотр выезжал сразу, без наведения. Курсор в этот момент вне его, значит
+  // mouseleave не придёт, closePeekSoon не запустится, и панель висит поверх контента,
+  // перехватывая клики. Сброс на любую смену состояния убирает весь класс этих путей —
+  // вместо того чтобы помнить про setPeek в каждом новом месте.
   useEffect(() => {
     setPeek(false);
-  }, [pathname]);
+  }, [pathname, collapsed]);
 
   // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
   // которой и является AppShell (рендерится внутри ProtectedRoute).
@@ -259,6 +267,15 @@ export function AppShell(): React.ReactElement {
                 Контент (обложка, синяя плашка) при этом растянут до левого края. */}
             {collapsed && !(studioRoute && studioChatHidden) && (
               <>
+                {/* Курсор «упёрся» в левый край экрана → панель выезжает так же, как по
+                    наведению на бургер (Notion). Полоса 4px ловит движение к краю и почти
+                    не отбирает клики у контента, который в свёрнутом виде дотянут до края. */}
+                <div
+                  aria-hidden
+                  onMouseEnter={openPeek}
+                  onMouseLeave={closePeekSoon}
+                  className="absolute left-0 top-0 z-[105] h-full w-1"
+                />
                 <TooltipProvider delayDuration={550} skipDelayDuration={120}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -271,7 +288,18 @@ export function AppShell(): React.ReactElement {
                           toggleCollapse();
                         }}
                         aria-label="Показать боковую панель"
-                        className="absolute left-2 top-1.5 z-[110] grid size-8 place-items-center rounded-md bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-hover hover:text-foreground"
+                        // Бургер сливается с фоном страницы: ни заливки, ни тени — подложка
+                        // появляется только на hover.
+                        // Геометрия по MEASURED.md §3 (иконки хрома у Notion 28×28, радиус 6):
+                        // size-7 + top-2 ставит центр на y=22 — ровно центр строки крошек
+                        // (h-11, items-center), а правый край на x=36, т.е. на 4px левее их
+                        // pl-10 (ProjectBreadcrumbs при collapsed).
+                        // z ВЫШЕ предпросмотра (z-100) и оверлей начинается НИЖЕ бургера
+                        // (top-11): подсмотр открывается по наведению на этот же бургер, и
+                        // если панель ложится поверх него, браузер шлёт бургеру mouseleave —
+                        // ховер срывается (тултип мёртв), а клик «закрепить» уходит в
+                        // переключатель пространства, который оказывается под курсором.
+                        className="absolute left-2 top-2 z-[101] grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Menu className="size-4" />
                       </button>
@@ -285,7 +313,12 @@ export function AppShell(): React.ReactElement {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {/* Плавающий предпросмотр панели — оверлей поверх контента (не двигает его). */}
+                {/* Плавающий предпросмотр панели — оверлей поверх контента (не двигает его).
+                    top-11 = высота строки верхнего хрома: панель начинается ПОД бургером и
+                    не накрывает его — иначе выехавшая панель перехватывает ховер и клик
+                    «закрепить» попадает в её же переключатель пространства.
+                    Выравнивать подсмотр по закреплённой панели всё равно не по чему:
+                    закреплённая — колонка грида от x=0/y=0, а подсмотр стоит на left-1.5. */}
                 <AnimatePresence>
                   {peek && (
                     <motion.div
@@ -297,10 +330,14 @@ export function AppShell(): React.ReactElement {
                       onMouseEnter={openPeek}
                       onMouseLeave={closePeekSoon}
                       style={{ width: sidebarWidth }}
-                      className="absolute bottom-3 left-1.5 top-12 z-[100] overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
+                      className="absolute bottom-3 left-1.5 top-11 z-[100] overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
                     >
+                      {/* peek — второй путь к закреплению (кроме бургера): кнопка в шапке
+                          панели в этом режиме не сворачивает, а закрепляет, поэтому там
+                          другая иконка/подпись и она видна сразу, а не по ховеру. */}
                       <Sidebar
                         collapsed={false}
+                        peek
                         navCompact={sidebarWidth < SIDEBAR_COMPACT_WIDTH}
                         onToggleCollapse={toggleCollapse}
                       />
