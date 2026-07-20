@@ -169,19 +169,27 @@
      выглядели бы полуобрезанными, хотя скрывать нечего. Стороны включает JS через
      data-атрибуты (см. useScrollFade), здесь — только представление. */
   .pf-scroll-fade {
-    --pf-fade-top: 0px;
+    /* Низ закреплённого (sticky) заголовка секции. Выше него маска непрозрачна — сам
+       заголовок «Мои проекты»/«Избранное»/«Архив» гаснуть не должен, гаснет только
+       контент, уезжающий под него. 0 — когда ни один заголовок не прилип. */
+    --pf-fade-start: 0px;
+    --pf-fade-size: 0px;
     --pf-fade-bottom: 0px;
     -webkit-mask-image: linear-gradient(
       to bottom,
-      transparent 0,
-      #000 var(--pf-fade-top),
+      #000 0,
+      #000 var(--pf-fade-start),
+      transparent var(--pf-fade-start),
+      #000 calc(var(--pf-fade-start) + var(--pf-fade-size)),
       #000 calc(100% - var(--pf-fade-bottom)),
       transparent 100%
     );
     mask-image: linear-gradient(
       to bottom,
-      transparent 0,
-      #000 var(--pf-fade-top),
+      #000 0,
+      #000 var(--pf-fade-start),
+      transparent var(--pf-fade-start),
+      #000 calc(var(--pf-fade-start) + var(--pf-fade-size)),
       #000 calc(100% - var(--pf-fade-bottom)),
       transparent 100%
     );
@@ -189,7 +197,7 @@
   /* 32px ≈ высота строки проекта: меньше (пробовали 22px) — градиент задевал только
      отступы, а текст и иконка оставались резкими, и затухание не читалось. */
   .pf-scroll-fade[data-fade-top='true'] {
-    --pf-fade-top: 32px;
+    --pf-fade-size: 32px;
   }
   .pf-scroll-fade[data-fade-bottom='true'] {
     --pf-fade-bottom: 32px;
