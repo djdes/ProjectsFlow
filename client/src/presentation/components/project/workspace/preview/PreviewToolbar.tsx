@@ -2,7 +2,6 @@ import { useEffect, useId, useRef } from 'react';
 import { Grid2X2, Monitor, MoreHorizontal, MousePointer2, RefreshCw, Redo2, Rocket, Smartphone, Tablet, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { PreviewDevice, PreviewMode, SaveStatus } from './types';
 
@@ -11,10 +10,6 @@ const DEVICES: Array<{ value: PreviewDevice; label: string; icon: typeof Monitor
   { value: 'tablet', label: 'Планшет', icon: Tablet },
   { value: 'mobile', label: 'Телефон', icon: Smartphone },
 ];
-
-// Тёмный тултип — как в Base44. Глобальный TooltipContent светлый (bg-popover) и трогать
-// его нельзя: он обслуживает ещё десяток мест. Поэтому красим точечно, здесь.
-const DARK_TOOLTIP = 'border-transparent bg-neutral-900 text-white';
 
 export function PreviewToolbar({
   mode, device, path, draftPath, routes, routeMenuOpen, saveStatus, undoDepth, redoDepth, draftCount, queuedCount,
