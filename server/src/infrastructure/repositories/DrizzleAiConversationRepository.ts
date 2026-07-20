@@ -851,19 +851,20 @@ function toEvent(row: AiConversationEventRow): AiConversationEvent {
 }
 
 /**
- * Дописать шаги/источники в metadata ассистентского сообщения, не трогая остальное.
- * Отсутствующее поле (воркер старой версии) не должно стирать уже записанное —
- * иначе ретрай завершения обнулял бы ленту шагов.
+ * Дописать шаги/источники/подсказки в metadata ассистентского сообщения, не трогая
+ * остальное. Отсутствующее поле (воркер старой версии) не должно стирать уже
+ * записанное — иначе ретрай завершения обнулял бы ленту шагов.
  */
 function mergeMessageMetadata(
   current: Record<string, unknown> | null,
   input: AiRunCompletionPayload,
 ): Record<string, unknown> | null {
-  if (input.steps == null && input.knowledge == null) return current;
+  if (input.steps == null && input.knowledge == null && input.suggestions == null) return current;
   return {
     ...(current ?? {}),
     ...(input.steps == null ? {} : { steps: input.steps }),
     ...(input.knowledge == null ? {} : { knowledge: input.knowledge }),
+    ...(input.suggestions == null ? {} : { suggestions: input.suggestions }),
   };
 }
 

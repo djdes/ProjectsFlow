@@ -6,6 +6,7 @@ import type { AiAgentStep } from '../../domain/ai-conversation/AiAgentStep.js';
 import type { AiConversationEvent } from '../../domain/ai-conversation/AiConversationEvent.js';
 import type { AiKnowledgeSource } from '../../domain/ai-conversation/AiKnowledgeSource.js';
 import type { AiConversationMessage } from '../../domain/ai-conversation/AiMessage.js';
+import type { AiSuggestion } from '../../domain/ai-conversation/AiSuggestion.js';
 import type {
   AiConversationRun,
   AiConversationRunMode,
@@ -96,10 +97,12 @@ export type AiRunCompletionPayload = {
   readonly tokensIn: number | null;
   readonly tokensOut: number | null;
   readonly costUsd: number | null;
-  // Шаги и просмотренные источники едут в metadata_json ассистентского сообщения.
-  // null = воркер их не прислал; уже записанные значения при этом не затираются.
+  // Шаги, просмотренные источники и подсказки следующего хода едут в metadata_json
+  // ассистентского сообщения. null = воркер их не прислал; уже записанные значения при
+  // этом не затираются.
   readonly steps?: readonly AiAgentStep[] | null;
   readonly knowledge?: readonly AiKnowledgeSource[] | null;
+  readonly suggestions?: readonly AiSuggestion[] | null;
   readonly requestId?: string | null;
 };
 

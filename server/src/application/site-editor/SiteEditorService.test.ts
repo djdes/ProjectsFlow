@@ -589,6 +589,25 @@ test('an older worker that reports no summary still closes the chat run', async 
   });
 });
 
+test('the words the worker puts next to the patch reach the chat without a summary field', async () => {
+  const fixture = createFixture();
+  const job = await queueEditJob(fixture, 'preview-ai-chat-result-message');
+
+  // Ровно то, что шлёт боевой воркер (site-editor-worker.ps1, Invoke-ElementEdit):
+  // @{ patch = ...; message = ... } и никакого summary. Без фолбэка на result.message
+  // в чат уходила бы фраза-заглушка, хотя ИИ написал, что именно он сделал.
+  await fixture.service.completeJob({
+    projectId: PROJECT_ID,
+    userId: DISPATCHER_ID,
+    jobId: job.id,
+    artifactVersion: ARTIFACT_VERSION,
+    status: 'succeeded',
+    result: { patch: { kind: 'text', value: 'Каталог товаров' }, message: 'Увеличил заголовок до 40px' },
+  });
+
+  assert.equal(fixture.chat.closed[0]?.summary, 'Увеличил заголовок до 40px');
+});
+
 test('a failed job closes the chat run so the answer is not left spinning', async () => {
   const fixture = createFixture();
   const job = await queueEditJob(fixture, 'preview-ai-chat-failed');

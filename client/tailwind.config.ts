@@ -70,6 +70,8 @@ const config: Config = {
           foreground: 'hsl(var(--popover-foreground))',
         },
         sidebar: 'hsl(var(--sidebar))',
+        // Заливка пузыря сообщения пользователя в ИИ-чате.
+        'message-bubble': 'hsl(var(--message-bubble))',
         // Notion-style мягкие заливки интерактивных поверхностей (hover/active/selection).
         // Содержат собственную альфу — поэтому var() напрямую, без hsl()-обёртки.
         hover: 'var(--hover)',

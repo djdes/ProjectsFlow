@@ -48,6 +48,22 @@ type Deps = ProjectAccessDeps & {
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
 
+// Максимум совпадает с полем `summary` в completeJobSchema: слова ИИ уходят в тело
+// сообщения чата, откуда бы они ни приехали.
+const MAX_CHAT_SUMMARY = 10_000;
+
+/**
+ * Слова ИИ, приехавшие в результате job'а. Отдельного `summary` боевой воркер
+ * визуального редактора не шлёт, но ответ модели у него есть — он кладёт его в
+ * `result.message` рядом с патчем. Без этого фолбэка в чат на КАЖДУЮ правку уходила бы
+ * одна и та же фраза-заглушка, хотя ИИ написал, что именно он сделал.
+ */
+function summaryFromJobResult(result: ProjectEditJob['result']): string | null {
+  const message = result?.['message'];
+  if (typeof message !== 'string') return null;
+  return message.trim().slice(0, MAX_CHAT_SUMMARY) || null;
+}
+
 function normalizeJobResultPatch(candidate: unknown): { kind: SitePatchKind; payload: Readonly<Record<string, unknown>> } | null {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
   const patch = candidate as Record<string, unknown>;
@@ -443,7 +459,8 @@ export class SiteEditorService {
       await this.deps.chat.closeEditRun({
         jobId: job.id,
         status: job.status === 'succeeded' ? 'succeeded' : 'failed',
-        summary: summary ?? null,
+        // Явный `summary` воркера — приоритетнее; иначе берём слова модели из результата.
+        summary: summary?.trim() || summaryFromJobResult(job.result),
         steps: steps ?? null,
         error: job.error,
       });

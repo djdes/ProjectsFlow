@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, Monitor, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
 import { siteResultUrl } from '@/lib/publicBoardUrl';
+import type { AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
 import type { ProjectSite } from '@/application/project/ProjectRepository';
 import type { SiteEditorAiJob, SiteEditorPatch, SiteEditorPersistedPatch, SiteEditorSession } from '@/application/site-editor/SiteEditorRepository';
 import { AiPromptSheet } from './preview/AiPromptSheet';
@@ -47,6 +48,27 @@ export type PreviewSelectionRequest = {
   token: number;
 };
 
+/**
+ * Запрос «выполни вот эту правку», пришедший из левого чата в режиме «Правка».
+ *
+ * Промпт исполняется здесь, а не в чате: job визуального редактора требует открытую
+ * сессию редактора и снапшот выделенного элемента, а они живут только в этом
+ * компоненте. Токен — тот же нонс, что и у запроса выделения.
+ */
+export type PreviewEditRequest = {
+  prompt: string;
+  token: number;
+  /**
+   * Ответ каналу правки: `null` — job создан и ответ придёт в чат, строка — правка
+   * не ушла (нет зоны, редактор занят предыдущей правкой, сервер не принял job).
+   *
+   * Без этого ответа отправитель терял бы промпт молча: композер очищает поле ДО
+   * того, как узнает результат, и возвращает текст только по исключению. Зовётся
+   * ровно один раз на запрос.
+   */
+  onSettled?: (error: string | null) => void;
+};
+
 export type ProjectPreviewProps = {
   projectId: string;
   initialPath?: string;
@@ -59,6 +81,10 @@ export type ProjectPreviewProps = {
   // индикатор в шапке ЛЕВОЙ панели, а не кнопки в этом тулбаре.
   onSaveStateChange?: (state: StudioSaveState) => void;
   requestedSelection?: PreviewSelectionRequest | null;
+  // Текущее выделение поднимается наверх тем же приёмом, что и статус сохранения:
+  // левый чат должен знать, к чему привяжется его правка, ещё до отправки.
+  onSelectionChange?: (selection: AiSelectionRef | null) => void;
+  editRequest?: PreviewEditRequest | null;
   // Правка ушла в работу — её ответ придёт в чат проекта. Даёт хосту раскрыть
   // панель чата, если она свёрнута.
   onEditRunStarted?: () => void;
@@ -74,6 +100,8 @@ export function ProjectPreview({
   studioLayout = false,
   onSaveStateChange,
   requestedSelection,
+  onSelectionChange,
+  editRequest,
   onEditRunStarted,
 }: ProjectPreviewProps): React.ReactElement {
   const { projectRepository, siteEditorRepository, openSiteEditorSession, applySiteEditorPatch, startSiteEditorAiJob } = useContainer();
@@ -128,6 +156,7 @@ export function ProjectPreview({
   const pendingSelectionRef = useRef<{ selector: string; route: string } | null>(null);
   const selectionTokenRef = useRef<number | null>(null);
   const selectionSentAtRef = useRef(0);
+  const editRequestTokenRef = useRef<number | null>(null);
 
   useEffect(() => {
     statePathRef.current = state.path;
@@ -385,11 +414,13 @@ export function ProjectPreview({
     if (mode !== 'edit') { pendingSelectionRef.current = null; sendBridge('set-mode', { mode: 'preview' }); }
   };
 
-  // Мемоизирован, потому что на него завязан эффект перехода к зоне из чата: без
-  // стабильной ссылки эффект пересобирался бы на каждый рендер.
-  const applyPath = useCallback((raw: string): void => {
+  // Ядро перехода на другую страницу превью. Мемоизировано, потому что на него завязан
+  // эффект перехода к зоне из чата: без стабильной ссылки он пересобирался бы на каждый
+  // рендер. `false` — перейти прямо сейчас нельзя: путь не разобран или сайт ещё не
+  // загружен (baseUrl приезжает асинхронно, вместе с ответом getProjectSite).
+  const navigatePath = useCallback((raw: string): boolean => {
     const normalized = normalizePreviewPath(raw);
-    if (!normalized || !baseUrl) { toast.error('Укажите путь внутри сайта, например /catalog'); return; }
+    if (!normalized || !baseUrl) return false;
     if (session?.remote) void siteEditorRepository.closeSession(projectId, session.id).catch(() => undefined);
     setSession(null);
     setPersistedPatches([]);
@@ -399,7 +430,15 @@ export function ProjectPreview({
     setFrameSrc(joinPreviewUrl(baseUrl, normalized));
     onPathChange?.(normalized);
     resetFrame();
+    return true;
   }, [baseUrl, onPathChange, projectId, resetFrame, session, siteEditorRepository]);
+
+  // Путь, введённый руками в тулбаре: тут ошибка — прямой ответ на действие
+  // пользователя. Программные переходы через эту ветку НЕ идут (см. эффект запроса
+  // зоны): у них «путь ещё нельзя применить» — норма, а не ошибка ввода.
+  const applyPath = useCallback((raw: string): void => {
+    if (!navigatePath(raw)) toast.error('Укажите путь внутри сайта, например /catalog');
+  }, [navigatePath]);
 
   const reload = (): void => resetFrame();
 
@@ -425,8 +464,12 @@ export function ProjectPreview({
     const route = normalizePreviewPath(requestedSelection.route) ?? '/';
     pendingSelectionRef.current = { selector: requestedSelection.selector, route };
     if (state.mode !== 'edit') dispatch({ type: 'SET_MODE', mode: 'edit' });
-    if (route !== statePathRef.current) applyPath(route);
-  }, [applyPath, requestedSelection, state.mode]);
+    // Превью могли смонтировать прямо сейчас (переход с дашборда по клику в чипе): тогда
+    // baseUrl ещё не приехал и перейти нечем. Ждать не надо — страница уже положила тот
+    // же путь в query, и его применит эффект первичного маршрута, а селектор дождётся
+    // своего в очереди. Ругаться на «неверный путь» здесь нельзя: пользователь его не вводил.
+    if (route !== statePathRef.current) navigatePath(route);
+  }, [navigatePath, requestedSelection, state.mode]);
 
   useEffect(() => {
     if (state.mode !== 'edit' || state.bridgeStatus !== 'ready') return;
@@ -514,6 +557,28 @@ export function ProjectPreview({
     });
   }, [onSaveStateChange, savedAt, state.bridgeError, state.draftCount, state.mode, state.queuedCount, state.saveStatus]);
 
+  // Выделенная зона в терминах домена чата — ровно тот тип, которым чат рисует чип в
+  // пузыре. Снапшот (исходник, вычисленные стили) наружу НЕ отдаём: он нужен только
+  // job'у, а в чате из него ничего не рисуется. Мемоизация обязательна — иначе новый
+  // объект на каждый рендер гонял бы состояние страницы по кругу.
+  const selectedZone = useMemo<AiSelectionRef | null>(() => {
+    if (!state.selected) return null;
+    return {
+      kind: 'site_element',
+      route: state.path,
+      selector: state.selected.locator.selector,
+      tagName: state.selected.locator.tagName.toLowerCase(),
+      label: state.selected.label || null,
+      artifactVersion: null,
+      jobId: null,
+    };
+  }, [state.path, state.selected]);
+
+  useEffect(() => { onSelectionChange?.(selectedZone); }, [onSelectionChange, selectedZone]);
+  // Предпросмотр размонтировали (ушли на дашборд) — выделения больше нет ни на экране,
+  // ни в сессии редактора. Не погасив его, чат предлагал бы правку в никуда.
+  useEffect(() => () => onSelectionChange?.(null), [onSelectionChange]);
+
   // Повторный клик по Edit — единственный «сам собой» срабатывающий путь сохранения:
   // выходим из режима правки и отдаём накопленный черновик диспетчеру, чтобы тот
   // перенёс правки в исходный код и пересобрал проект. Если правок нет — просто выходим.
@@ -554,14 +619,38 @@ export function ProjectPreview({
     }
   };
 
-  const submitAi = (rawPrompt: string): void => {
-    if (!state.selected || !session?.remote) { dispatch({ type: 'AI_STATUS', status: 'error', message: 'Editor backend не подключён.' }); return; }
+  /**
+   * Отправка промпта в job визуального редактора.
+   *
+   * `onSettled` — обратная связь для отправителя, у которого нет своей панели статуса.
+   * Панели правой колонки его не передают: им хватает `aiStatus`, они и так на экране.
+   * А промпт из левого чата так молча и пропадал бы: `AI_STATUS` рисуется только внутри
+   * AiPromptSheet/CodeSheet, а они в этот момент закрыты.
+   */
+  const submitAi = (rawPrompt: string, onSettled?: (error: string | null) => void): void => {
+    // Отчитаться обязаны ровно один раз: по этому ответу отправитель решает, возвращать
+    // ли текст в поле ввода.
+    let settled = false;
+    const settle = (error: string | null): void => {
+      if (settled) return;
+      settled = true;
+      onSettled?.(error);
+    };
+    const refuse = (message: string): void => {
+      dispatch({ type: 'AI_STATUS', status: 'error', message });
+      settle(message);
+    };
+    if (!state.selected || !session?.remote) { refuse('Editor backend не подключён.'); return; }
     const prompt = sanitizePrompt(rawPrompt);
-    if (!prompt) return;
+    if (!prompt) { refuse('Опишите, что изменить в выделенной зоне.'); return; }
     const sessionId = session.id;
     const snapshot = capSnapshot(state.selected);
     const submission = aiSubmissionRef.current.start(async (idempotencyKey, signal) => {
       const initial = await startSiteEditorAiJob.execute(projectId, sessionId, prompt, snapshot, idempotencyKey);
+      // Job создан — промпт уже лёг в ленту чата серверным путём редактора, и возвращать
+      // текст в поле нельзя: он бы задвоился. Всё, что случится дальше, закрывает
+      // сообщение в чате, а не теряет его.
+      settle(null);
       return pollSiteEditorAiJob(initial, {
         signal,
         load: (jobId) => siteEditorRepository.getAiJob(projectId, sessionId, jobId),
@@ -575,7 +664,9 @@ export function ProjectPreview({
         },
       });
     });
-    if (!submission.accepted) return;
+    // Координатор держит ровно одну правку за раз. Отказ здесь — единственный случай,
+    // когда промпт не ушёл вообще никуда, поэтому молчать нельзя ни в одной поверхности.
+    if (!submission.accepted) { refuse('Предыдущая правка ещё выполняется — дождитесь ответа и повторите.'); return; }
     // Промпт правки уходит в чат проекта, туда же придёт ответ. Если панель чата
     // свёрнута, обратная связь ушла бы в невидимое место — раскрываем её.
     onEditRunStarted?.();
@@ -591,11 +682,41 @@ export function ProjectPreview({
         dispatch({ type: 'AI_STATUS', status: 'error', message: job.error ?? 'ИИ не смог применить изменение.' });
       }
     }).catch((error: unknown) => {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      if (activeSessionIdRef.current !== sessionId) return;
+      const aborted = error instanceof DOMException && error.name === 'AbortError';
+      // Если job так и не создался (сервер отверг запрос — artifact_conflict,
+      // dispatcher_not_configured), отчитываемся ДО проверки живой сессии: отправитель
+      // ждёт ответа независимо от того, смотрит ли пользователь всё ещё на эту страницу.
+      settle(aborted ? 'Правка отменена.' : siteEditorAiErrorMessage(error));
+      if (aborted || activeSessionIdRef.current !== sessionId) return;
       dispatch({ type: 'AI_STATUS', status: 'error', message: siteEditorAiErrorMessage(error) });
     });
   };
+
+  // Ссылка на актуальный submitAi: сама функция пересоздаётся каждый рендер и деп'ом
+  // эффекта быть не может. Синхронизация объявлена ПЕРВОЙ, поэтому в одном коммите ref
+  // успевает обновиться раньше, чем сработает запрос правки из чата.
+  const submitAiRef = useRef(submitAi);
+  useEffect(() => { submitAiRef.current = submitAi; });
+
+  // Правка, запрошенная из левого чата в режиме «Правка». Отдельный канал нужен потому,
+  // что чат не владеет ни сессией редактора, ни снапшотом элемента, — а job'у нужны оба.
+  // Реагируем на токен, а не на текст: два одинаковых промпта подряд — это две правки.
+  useEffect(() => {
+    if (!editRequest || editRequestTokenRef.current === editRequest.token) return;
+    editRequestTokenRef.current = editRequest.token;
+    const settle = editRequest.onSettled;
+    // Чат включает режим «Правка» только при живом выделении, но между отправкой и этим
+    // эффектом зона могла пропасть (перезагрузка фрейма, переход на другую страницу).
+    // submitAi в таком случае молча пишет статус в лист, которого на экране нет.
+    if (!state.selected || !session?.remote) {
+      const message = 'Правку некуда применить: выделите зону в предпросмотре и повторите.';
+      // Есть обратная связь — отвечаем ей: отправитель и текст вернёт, и ошибку покажет
+      // сам. Тост остаётся страховкой для канала, позванного без колбэка.
+      if (settle) settle(message); else toast.error(message);
+      return;
+    }
+    submitAiRef.current(editRequest.prompt, settle);
+  }, [editRequest, session, state.selected]);
 
   if (loadingSite) return <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Загружаем Preview…</div>;
   if (siteError) return <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed"><div className="max-w-sm text-center"><AlertCircle className="mx-auto mb-3 size-6 text-destructive" /><p className="font-medium">Не удалось получить результат проекта</p><p className="mt-1 text-sm text-muted-foreground">Проверьте соединение и попробуйте обновить Preview.</p><Button className="mt-4" variant="outline" onClick={() => window.location.reload()}>Повторить</Button></div></div>;

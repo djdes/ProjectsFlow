@@ -11,6 +11,12 @@ import {
   MAX_AI_KNOWLEDGE_SOURCES,
   normalizeKnowledgeSources,
 } from '../../domain/ai-conversation/AiKnowledgeSource.js';
+import {
+  MAX_AI_SUGGESTION_PROMPT,
+  MAX_AI_SUGGESTION_TITLE,
+  MAX_AI_SUGGESTIONS,
+  normalizeAiSuggestions,
+} from '../../domain/ai-conversation/AiSuggestion.js';
 import type { AiConversationRun, PendingAiConversationRun } from '../../domain/ai-conversation/AiRun.js';
 import {
   AiConversationCompletionConflictError,
@@ -26,8 +32,9 @@ type Deps = {
   readonly service: AiConversationService;
 };
 
-// Шаги и источники опциональны: воркер, который их не шлёт, обязан продолжать
-// работать ровно как раньше — блок шагов и панели просто не появятся.
+// Шаги, источники и подсказки опциональны: воркер, который их не шлёт, обязан
+// продолжать работать ровно как раньше — блок шагов, панели и ряд подсказок просто
+// не появятся.
 const knowledgeSchema = z.object({
   id: z.string().min(1).max(80),
   kind: z.enum(['project', 'task', 'kb_page', 'document']),
@@ -35,6 +42,16 @@ const knowledgeSchema = z.object({
   subtitle: z.string().max(200).nullable().optional(),
   href: z.string().max(300).nullable().optional(),
 }).strict();
+
+// Голая строка — законная краткая форма подсказки: подпись совпадает с промптом.
+const suggestionSchema = z.union([
+  z.string().min(1).max(MAX_AI_SUGGESTION_PROMPT),
+  z.object({
+    id: z.string().min(1).max(80).optional(),
+    title: z.string().max(MAX_AI_SUGGESTION_TITLE).optional(),
+    prompt: z.string().min(1).max(MAX_AI_SUGGESTION_PROMPT),
+  }).strict(),
+]);
 
 const completeSchema = z.object({
   leaseToken: z.string().min(20).max(256),
@@ -46,6 +63,7 @@ const completeSchema = z.object({
   costUsd: z.number().nonnegative().nullable().optional(),
   steps: z.array(agentStepSchema).max(MAX_AI_AGENT_STEPS).nullable().optional(),
   knowledge: z.array(knowledgeSchema).max(MAX_AI_KNOWLEDGE_SOURCES).nullable().optional(),
+  suggestions: z.array(suggestionSchema).max(MAX_AI_SUGGESTIONS).nullable().optional(),
 }).strict();
 
 const failSchema = z.object({
@@ -103,6 +121,7 @@ export function aiConversationAgentRouter(deps: Deps): Router {
         costUsd: body.costUsd ?? null,
         steps: body.steps == null ? null : normalizeAgentSteps(body.steps),
         knowledge: body.knowledge == null ? null : normalizeKnowledgeSources(body.knowledge),
+        suggestions: body.suggestions == null ? null : normalizeAiSuggestions(body.suggestions),
         requestId: req.header('x-request-id') ?? null,
       });
       res.json({ run: runDto(result.run), assistantMessage: result.assistantMessage });
@@ -166,6 +185,7 @@ function actionProtocol(projectId: string | null): string {
     'For ordinary questions that require no mutation, do not emit a projectsflow-actions block.',
     'PROGRESS REPORTING (optional, sent on the /complete call, NOT inside the answer body): "steps":[{"kind":"thought|query|read|write|review","detail":"one short sentence","durationMs":1200}] — at most 50. Do not send a label: the server writes the human-readable Russian one from "kind".',
     'CONTEXT REPORTING (optional, same call): "knowledge":[{"kind":"project|task|kb_page|document","id":"<entity id>","title":"...","subtitle":"...","href":"/projects/..."}] — the objects you actually looked at, at most 50. "href" must be a site-relative path.',
+    'FOLLOW-UP SUGGESTIONS (optional, same call): "suggestions":[{"title":"Добавить галерею","prompt":"Добавь галерею проектов под шапкой"}] — 3 to 5 next steps the user may plausibly want. The UI shows "title" on a chip and puts "prompt" into the composer without sending it, so write the prompt as the user would phrase it, in Russian. Omit the field when nothing useful follows.',
   ].join('\n');
 }
 

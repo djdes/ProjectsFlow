@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, FileText, Paperclip, Sparkles, Square, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowUp, FileText, Paperclip, Sparkles, Square, SquareMousePointer, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
+import type { AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
+import { AiSelectionChip } from './AiSelectionChip';
 import { composeAiMessage, prepareAiAttachment, type AiAttachmentDraft } from './aiAttachments';
 import { useAiActiveRunId } from './aiActiveRun';
 import {
@@ -47,18 +49,57 @@ function insertPlainText(element: HTMLElement, text: string): void {
   selection.addRange(range);
 }
 
+/**
+ * Режим композера. `discuss` — обычное сообщение в чат (для проекта это read-only
+ * рассуждение, mode=studio_plan). `build` — правка сайта: промпт уходит тем же путём,
+ * что и из правой панели, и всегда привязан к выделенной зоне.
+ */
+export type AiComposerMode = 'discuss' | 'build';
+
+/** Тумблер «обсудить ↔ править». Есть только в студии проекта; без него композер прежний. */
+export type AiComposerModeSwitch = {
+  readonly mode: AiComposerMode;
+  readonly onChange: (mode: AiComposerMode) => void;
+  // Править можно только выделенную в предпросмотре зону: job визуального редактора
+  // без элемента не существует. Нет зоны — тумблер выключен, а не «сломан при отправке».
+  readonly buildEnabled: boolean;
+};
+
+/** Программное заполнение поля (пресет на пустом чате, чип-подсказка). Токен — нонс. */
+export type AiComposerInsert = {
+  readonly text: string;
+  readonly token: number;
+  readonly focus?: boolean;
+};
+
+const PLACEHOLDER: Record<AiComposerMode, string> = {
+  discuss: 'Что обсудим по проекту?',
+  build: 'Что изменить в выделенной зоне?',
+};
+
 export function AiComposer({
   conversationId,
   sending,
   onSend,
   compact = false,
   autoFocus = false,
+  modeSwitch,
+  selection,
+  onOpenSelection,
+  insert,
 }: {
   conversationId: string | null;
   sending: boolean;
-  onSend: (body: string) => Promise<void>;
+  onSend: (body: string, mode: AiComposerMode) => Promise<void>;
   compact?: boolean;
   autoFocus?: boolean;
+  modeSwitch?: AiComposerModeSwitch;
+  // Зона, выделенная в предпросмотре прямо сейчас. У base44 композер о выделении молчит
+  // и узнать о нём можно только по отправленному пузырю — здесь по прямому требованию
+  // владельца зона видна ДО отправки.
+  selection?: AiSelectionRef | null;
+  onOpenSelection?: (selection: AiSelectionRef) => void;
+  insert?: AiComposerInsert | null;
 }): React.ReactElement {
   const { aiConversationRepository } = useContainer();
   const storageKey = `pf-ai-draft:${conversationId ?? 'new'}`;
@@ -70,22 +111,24 @@ export function AiComposer({
   const editor = useRef<HTMLDivElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const activeRunId = useAiActiveRunId(conversationId);
+  const insertTokenRef = useRef<number | null>(null);
+  const mode = modeSwitch?.mode ?? 'discuss';
 
-  const updateBody = (value: string): void => {
+  const updateBody = useCallback((value: string): void => {
     setBody(value);
     try {
       if (value) sessionStorage.setItem(storageKey, value);
       else sessionStorage.removeItem(storageKey);
     } catch { /* sessionStorage unavailable */ }
-  };
+  }, [storageKey]);
 
   // Поле не управляется React: содержимое живёт в DOM, чтобы каретка не прыгала на
   // каждый ввод. Программные изменения текста идут только через этот хелпер.
-  const setEditorText = (value: string): void => {
+  const setEditorText = useCallback((value: string): void => {
     const element = editor.current;
     if (element) element.textContent = value;
     updateBody(value);
-  };
+  }, [updateBody]);
 
   const syncFromEditor = (): void => {
     const element = editor.current;
@@ -114,6 +157,20 @@ export function AiComposer({
     element.focus();
     moveCaretToEnd(element);
   }, [autoFocus]);
+
+  // Заполнение поля снаружи. Реагируем на токен, а не на текст: повторный клик по тому
+  // же чипу-подсказке обязан сработать снова. Композер при этом НЕ перемонтируется —
+  // иначе слетал бы фокус, а в референсе после клика по чипу он остаётся на чипе.
+  useEffect(() => {
+    if (!insert || insertTokenRef.current === insert.token) return;
+    insertTokenRef.current = insert.token;
+    setEditorText(insert.text);
+    if (!insert.focus) return;
+    const element = editor.current;
+    if (!element) return;
+    element.focus();
+    moveCaretToEnd(element);
+  }, [insert, setEditorText]);
 
   const addFiles = async (files: FileList | File[]): Promise<void> => {
     const selected = [...files].slice(0, Math.max(0, 8 - attachments.length));
@@ -147,7 +204,7 @@ export function AiComposer({
     setEditorText('');
     setAttachments([]);
     try {
-      await onSend(value);
+      await onSend(value, mode);
       try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
     } catch {
       setEditorText(previousBody);
@@ -175,11 +232,20 @@ export function AiComposer({
       'rounded-2xl border bg-card shadow-[0_12px_40px_rgba(15,23,42,0.08)] transition focus-within:ring-2 focus-within:ring-ring',
       compact ? 'pb-2' : 'pb-3',
     )}>
+      {/* Выделенная зона — над полем ввода, как бейдж в отправленном пузыре. Показываем
+          её независимо от режима: выделение принадлежит рабочей области, а не режиму,
+          и его появление/исчезновение не должно выглядеть как побочный эффект тумблера. */}
+      {selection && (
+        <div className="flex min-w-0 items-center gap-2 px-3 pt-2.5">
+          <AiSelectionChip selection={selection} onOpen={onOpenSelection} />
+          <span className="min-w-0 truncate text-[11px] leading-4 text-muted-foreground">Выделенная зона</span>
+        </div>
+      )}
       <div className="relative">
         {/* Плейсхолдер прячем по факту непустого DOM, а не по trim: иначе он ляжет под набранные пробелы. */}
         {body === '' && (
           <span aria-hidden="true" className="pointer-events-none absolute left-[14px] top-3 select-none truncate text-base leading-6 text-muted-foreground/70">
-            О чём хотите подумать или что сделать?
+            {modeSwitch ? PLACEHOLDER[mode] : 'О чём хотите подумать или что сделать?'}
           </span>
         )}
         <div
@@ -240,6 +306,29 @@ export function AiComposer({
         <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
         <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
         <div className="flex-1" />
+        {/* Чистый тумблер: коробка кнопки не меняется, меняются только заливка/цвет и
+            плейсхолдер поля. Черновик и фокус остаются на месте — поле не перемонтируется. */}
+        {modeSwitch && (
+          <button
+            type="button"
+            aria-pressed={modeSwitch.mode === 'build'}
+            disabled={!modeSwitch.buildEnabled}
+            title={modeSwitch.buildEnabled
+              ? 'Правка выделенной зоны сайта вместо обсуждения'
+              : 'Выделите зону в предпросмотре — правка уйдёт в неё'}
+            onClick={() => modeSwitch.onChange(modeSwitch.mode === 'build' ? 'discuss' : 'build')}
+            className={cn(
+              'inline-flex h-7 shrink-0 items-center gap-[5px] rounded-md py-0 pl-1.5 pr-2 text-xs font-medium leading-4',
+              'transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50',
+              modeSwitch.mode === 'build'
+                ? 'bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300'
+                : 'bg-muted text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <SquareMousePointer className="size-4 shrink-0" aria-hidden />
+            Правка
+          </button>
+        )}
         {activeRunId ? (
           <button
             type="button"

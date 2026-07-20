@@ -11,6 +11,8 @@ export function StudioMobileChatSheet({
   projectId,
   projectName,
   onOpenSelection,
+  selection,
+  onBuild,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -20,6 +22,9 @@ export function StudioMobileChatSheet({
   // На мобиле лист перекрывает превью, поэтому владелец состояния закрывает его сам —
   // здесь только проброс клика по чипу зоны.
   onOpenSelection?: (selection: AiSelectionRef) => void;
+  // Тот же вид чата, что и в панели: зона и режим «Правка» работают и здесь.
+  selection?: AiSelectionRef | null;
+  onBuild?: (prompt: string) => void | Promise<void>;
 }): React.ReactElement {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -30,7 +35,7 @@ export function StudioMobileChatSheet({
         className="w-[min(94vw,420px)] max-w-none p-0 lg:hidden"
       >
         <SheetTitle className="sr-only">AI-чат проекта {projectName}</SheetTitle>
-        <AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} onOpenSelection={onOpenSelection} />
+        <AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} onOpenSelection={onOpenSelection} selection={selection} onBuild={onBuild} />
         <Button
           type="button"
           variant="ghost"

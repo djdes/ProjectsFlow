@@ -161,12 +161,23 @@ loop:
 GET  /api/agent/pending-site-editor-jobs?limit=20      ← глобальная очередь, поллить эту
 GET  /api/agent/projects/:projectId/site-editor/artifact
 POST /api/agent/projects/:projectId/site-editor/jobs/:jobId/claim     { artifactVersion }
-POST /api/agent/projects/:projectId/site-editor/jobs/:jobId/complete  { artifactVersion, status, result?, error? }
+POST /api/agent/projects/:projectId/site-editor/jobs/:jobId/complete  { artifactVersion, status, result?, error?, summary?, steps? }
 ```
 
 Есть и per-project `GET /projects/:projectId/site-editor/jobs/pending`, но полагаться
 на него не стоит: обходить проекты по одному дорого, глобальная очередь для того и
 заведена.
+
+**Правка элемента приходит из чата проекта и туда же обязана вернуться.** Промпт юзера
+уже лежит в диалоге отдельным сообщением, а рядом висит ассистентское «печатает…» —
+его закрывает именно `complete`. Что попадёт в это сообщение:
+
+- `summary` — слова ИИ о том, что он сделал («Увеличил заголовок до 40px»). Если поля
+  нет, сервер берёт `result.message` (боевой воркер кладёт слова модели туда, рядом
+  с патчем). Нет ни того, ни другого — в чат уйдёт общая фраза-заглушка.
+- `steps` — `[{ kind: 'thought|query|read|write|review', detail, durationMs }]`,
+  максимум 50. Рисуются сворачиваемым блоком «Рассуждения ИИ» над ответом. Не шлёшь —
+  блока просто нет. `label` не отправляй: человекочитаемую подпись пишет сервер.
 
 MCP-эквиваленты: `pf_list_pending_site_editor_jobs`, `pf_claim_site_editor_job`,
 `pf_complete_site_editor_job`.

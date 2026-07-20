@@ -13,3 +13,13 @@ test('accepts only the exact protocol version and session nonce', () => {
 test('creates a versioned host envelope', () => {
   assert.deepEqual(createHostMessage('n', 'navigate', { path: '/catalog' }), { protocol: SITE_EDITOR_PROTOCOL, version: SITE_EDITOR_VERSION, sessionNonce: 'n', type: 'navigate', payload: { path: '/catalog' } });
 });
+
+test('carries the select command inside the v1 envelope', () => {
+  // Команда выделения зоны добавлена аддитивно. Версия обязана остаться прежней:
+  // скрипт моста кешируется на 300 секунд, и бамп разом отрезал бы все живые бриджи,
+  // тогда как незнакомый тип старый мост просто игнорирует.
+  assert.equal(SITE_EDITOR_VERSION, 1);
+  assert.deepEqual(createHostMessage('n', 'select', { selector: 'main > h1' }), {
+    protocol: SITE_EDITOR_PROTOCOL, version: 1, sessionNonce: 'n', type: 'select', payload: { selector: 'main > h1' },
+  });
+});

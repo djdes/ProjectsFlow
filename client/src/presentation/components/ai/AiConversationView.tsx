@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Archive, ArrowDown, Bot, CheckCircle2, ChevronDown, Copy, FileText, Image, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, Plus, RefreshCw, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, User } from 'lucide-react';
+import { AlertCircle, Archive, ArrowDown, CheckCircle2, ChevronDown, Copy, FileText, Image, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, Plus, RefreshCw, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -12,12 +12,13 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { AiConversation, AiMessage } from '@/domain/ai-chat/AiConversation';
 import { readAiAgentSteps } from '@/domain/ai-chat/AiAgentStep';
 import { readAiSelectionRef, type AiSelectionRef } from '@/domain/ai-chat/AiSelectionRef';
+import { readAiSuggestions } from '@/domain/ai-chat/AiSuggestion';
 import type { AiActionBatchStatus } from '@/domain/ai-action/AiActionBatch';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AiComposer } from './AiComposer';
+import { AiComposer, type AiComposerInsert, type AiComposerMode } from './AiComposer';
 import { AiComposerPresets } from './AiComposerPresets';
 import { extractAiAttachments } from './aiAttachments';
 import { AiActionPlanCard, extractAiActionPlan } from './AiActionPlanCard';
@@ -25,6 +26,16 @@ import { AiAgentStepsBlock } from './AiAgentStepsBlock';
 import { AiKnowledgePanel } from './AiKnowledgePanel';
 import { AiArtifactsPanel } from './AiArtifactsPanel';
 import { AiSelectionChip } from './AiSelectionChip';
+import { AiSuggestionChips } from './AiSuggestionChips';
+import { formatRelativeTime } from './relativeTime';
+
+/**
+ * Одна ли это зона. Сравниваем маршрут и селектор: собственного id у зоны нет, а
+ * artifactVersion/jobId меняются от правки к правке и для сравнения не годятся.
+ */
+function isSameZone(a: AiSelectionRef, b: AiSelectionRef): boolean {
+  return a.route === b.route && a.selector === b.selector;
+}
 
 export function AiConversationView({
   conversationId,
@@ -33,6 +44,8 @@ export function AiConversationView({
   projectId,
   hideHeader = false,
   onOpenSelection,
+  selection,
+  onBuild,
 }: {
   conversationId: string;
   compact?: boolean;
@@ -42,21 +55,99 @@ export function AiConversationView({
   // Клик по чипу зоны в сообщении. Приходит только оттуда, где есть предпросмотр
   // (Project Studio); без него чип рисуется как read-only отметка.
   onOpenSelection?: (selection: AiSelectionRef) => void;
+  // Зона, выделенная в предпросмотре прямо сейчас, — поднята из правой панели.
+  selection?: AiSelectionRef | null;
+  // Отправка в режиме «Правка»: промпт уходит в job визуального редактора (тот же путь,
+  // что и у правой панели), а пару сообщений в ленте создаёт сервер. Нет колбэка —
+  // нет и режима: тумблер не показывается. Отклонённый промис = правку не приняли.
+  onBuild?: (prompt: string) => void | Promise<void>;
 }): React.ReactElement {
   const state = useAiConversation(conversationId);
   const scrollArea = useRef<HTMLDivElement | null>(null);
   const wasNearBottom = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1280);
-  const [presetPick, setPresetPick] = useState<{ conversationId: string; seed: number } | null>(null);
+  // Заполнение композера снаружи (пресет на пустом чате, чип-подсказка). Привязано к
+  // диалогу: при переключении чата текст соседнего в поле не переезжает.
+  const [insert, setInsert] = useState<(AiComposerInsert & { conversationId: string }) | null>(null);
+  const [composerMode, setComposerMode] = useState<AiComposerMode>('discuss');
+  // Намерение включить «Правку», когда выделение доедет: повтор правки сначала открывает
+  // зону в предпросмотре, а до её появления тумблер держат выключенным.
+  const [buildModeWanted, setBuildModeWanted] = useState(false);
   const personalWorkspace = !projectName && !hideHeader && !compact;
-  const presetApplied = presetPick?.conversationId === conversationId;
+  const composerInsert = insert?.conversationId === conversationId ? insert : null;
+  // Править можно только выделенную зону: job редактора без элемента не существует.
+  const buildEnabled = Boolean(onBuild && selection);
 
-  // Композер держит текст в DOM и поднимает черновик из sessionStorage только при
-  // монтировании — поэтому пресет пишет черновик и перемонтирует композер через key.
-  const applyPreset = (prompt: string): void => {
-    try { sessionStorage.setItem(`pf-ai-draft:${conversationId}`, prompt); } catch { /* sessionStorage unavailable */ }
-    setPresetPick((current) => ({ conversationId, seed: (current?.conversationId === conversationId ? current.seed : 0) + 1 }));
+  // Поле не управляется React — текст в него кладём через нонс-токен, а не перемонтируя
+  // композер: после клика по чипу-подсказке фокус обязан остаться на чипе (референс R2.2).
+  const fillComposer = (text: string, focus: boolean): void => {
+    setInsert((current) => ({
+      conversationId,
+      text,
+      focus,
+      token: (current?.conversationId === conversationId ? current.token : 0) + 1,
+    }));
+  };
+
+  useEffect(() => {
+    // Зону сняли (закрыли выделение, ушли со страницы, вышли из режима правки) —
+    // править нечего, возвращаемся к обсуждению. Иначе отправка молча не сработала бы.
+    if (!buildEnabled && composerMode === 'build') setComposerMode('discuss');
+  }, [buildEnabled, composerMode]);
+
+  useEffect(() => {
+    // Зону только что попросили открыть (повтор правки) — она приедет через навигацию
+    // предпросмотра и рукопожатие моста, то есть через несколько кадров. Всё это время
+    // эффект выше держит режим «Обсуждение», поэтому намерение ждёт здесь и включает
+    // «Правку» ровно тогда, когда править станет чем.
+    if (!buildModeWanted || !buildEnabled) return;
+    setBuildModeWanted(false);
+    setComposerMode('build');
+  }, [buildEnabled, buildModeWanted]);
+
+  const send = async (body: string, mode: AiComposerMode): Promise<void> => {
+    if (mode === 'build' && onBuild && selection) {
+      // Отказ канала правки обязан вернуться сюда. Композер очищает поле ДО отправки и
+      // возвращает текст только по исключению (AiComposer.submit), так что проглоченный
+      // здесь отказ означал бы бесследно исчезнувший промпт.
+      try {
+        await onBuild(body);
+      } catch (error) {
+        toast.error(error instanceof Error && error.message ? error.message : 'Не удалось отправить правку.');
+        throw error;
+      }
+      return;
+    }
+    await state.send(body, projectName ? 'studio_plan' : 'chat');
+  };
+
+  /**
+   * Повтор неудавшегося ответа. У правки элемента путь принципиально другой: сайт меняет
+   * только канал «Правка», а обычное сообщение в чат создало бы текстовый ответ ПРО
+   * изменение — пользователь считал бы, что повторил, хотя на сайте ничего не произошло.
+   */
+  const retry = async (body: string, zone: AiSelectionRef | null): Promise<void> => {
+    if (!zone || !onBuild) {
+      await state.send(body, projectName ? 'studio_plan' : 'chat');
+      return;
+    }
+    // Та же зона всё ещё выделена — повторяем правку сразу, одним кликом.
+    if (selection && isSameZone(selection, zone)) {
+      await send(body, 'build');
+      return;
+    }
+    // Зоны под рукой нет, а job редактора без неё не существует. Открываем её в
+    // предпросмотре и кладём промпт в композер: отправку оставляем пользователю, потому
+    // что выделение приедет только через навигацию и рукопожатие моста.
+    if (!onOpenSelection) {
+      toast.error('Откройте зону в предпросмотре, чтобы повторить правку.');
+      return;
+    }
+    onOpenSelection(zone);
+    setBuildModeWanted(true);
+    fillComposer(body, false);
+    toast.info('Зона открыта в предпросмотре — отправьте промпт, чтобы повторить правку.');
   };
 
   useEffect(() => {
@@ -75,7 +166,12 @@ export function AiConversationView({
 
   useEffect(() => {
     if (!wasNearBottom.current) return;
-    const frame = window.requestAnimationFrame(() => scrollToLatest(state.messages.length > 1 ? 'smooth' : 'auto'));
+    // Во время стрима лента должна быть прижата к низу НЕПРЕРЫВНО: ответ растёт кусками
+    // по 5–16 символов каждые 30–1500 мс, и плавная прокрутка на каждый кусок не успевает
+    // доехать — низ ленты всё время «догоняет» текст. Плавность оставляем только для
+    // готовых сообщений, где скачок был бы заметен.
+    const streaming = state.messages.some((message) => message.role === 'assistant' && (message.status === 'queued' || message.status === 'running'));
+    const frame = window.requestAnimationFrame(() => scrollToLatest(streaming || state.messages.length <= 1 ? 'auto' : 'smooth'));
     return () => window.cancelAnimationFrame(frame);
     // Keep the surrounding application shell in place: only this conversation
     // viewport is allowed to scroll when a new message arrives.
@@ -84,6 +180,11 @@ export function AiConversationView({
   if (state.loading && state.messages.length === 0) {
     return <div className="grid h-full place-items-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>;
   }
+
+  // Подсказки — свойство последнего ответа: новый ход заменяет предыдущий набор,
+  // как в референсе. Сообщения без поля `suggestions` просто не дают блока.
+  const lastAssistant = [...state.messages].reverse().find((message) => message.role === 'assistant');
+  const suggestions = readAiSuggestions(lastAssistant?.metadata);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
@@ -118,7 +219,10 @@ export function AiConversationView({
                 setShowJumpToLatest(!nearBottom);
               }}
             >
-              <div className={cn('mx-auto flex min-h-full min-w-0 w-full flex-col px-4 py-6', compact ? 'max-w-3xl gap-4' : 'max-w-4xl gap-6')}>
+              {/* Шаг колонки — 10px, как в референсе. Больше не нужно: ряд действий под
+                  каждым сообщением смонтирован всегда и сам работает разделителем, а
+                  прежние 24px превращали ленту в редкую лесенку. */}
+              <div className={cn('mx-auto flex min-h-full min-w-0 w-full flex-col gap-2.5 px-4 py-6', compact ? 'max-w-3xl' : 'max-w-4xl')}>
                 {state.messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
                     <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-foreground text-background shadow-lg"><Sparkles className="size-7" /></div>
@@ -126,7 +230,7 @@ export function AiConversationView({
                     <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
                       {projectName ? 'Обсуждайте код, интерфейс и данные проекта. Любое изменение сайта будет предложением и потребует явного подтверждения.' : 'Задайте вопрос, продумайте идею или разберите задачу. История сохранится здесь автоматически.'}
                     </p>
-                    {!compact && <AiComposerPresets className="mt-6 w-full max-w-2xl" disabled={state.sending} onPick={applyPreset} />}
+                    {!compact && <AiComposerPresets className="mt-6 w-full max-w-2xl" disabled={state.sending} onPick={(prompt) => fillComposer(prompt, true)} />}
                   </div>
                 ) : state.messages.map((message, index) => {
                   const previousUser = [...state.messages.slice(0, index)].reverse().find((item) => item.role === 'user');
@@ -134,9 +238,9 @@ export function AiConversationView({
                     <ConversationMessage
                       key={message.id}
                       message={message}
-                      previousUserBody={previousUser?.body}
+                      previousUser={previousUser}
                       sending={state.sending}
-                      onRetry={(body) => state.send(body, projectName ? 'studio_plan' : 'chat')}
+                      onRetry={retry}
                       projectId={projectId}
                       onOpenSelection={onOpenSelection}
                     />
@@ -146,26 +250,40 @@ export function AiConversationView({
                 <div aria-hidden="true" />
               </div>
             </div>
-            {showJumpToLatest && (
-              <button
-                type="button"
-                onClick={() => scrollToLatest()}
-                aria-label="Перейти к последнему сообщению"
-                className="absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background/95 text-muted-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:text-foreground"
-              >
-                <ArrowDown className="size-4" />
-              </button>
-            )}
+            {/* Кнопка «вниз» висит НАД лентой и не входит в её поток: она прижата к низу
+                области прокрутки, поэтому композер не перекрывает и высоты не добавляет.
+                Держим её смонтированной и гасим прозрачностью — так появление плавное,
+                а не рывком. */}
+            <button
+              type="button"
+              onClick={() => scrollToLatest()}
+              aria-label="Перейти к последнему сообщению"
+              aria-hidden={!showJumpToLatest}
+              tabIndex={showJumpToLatest ? 0 : -1}
+              className={cn(
+                'absolute bottom-4 left-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background/95 text-muted-foreground shadow-lg backdrop-blur',
+                'transition-opacity duration-300 hover:text-foreground',
+                showJumpToLatest ? 'opacity-100' : 'pointer-events-none opacity-0',
+              )}
+            >
+              <ArrowDown className="size-4" />
+            </button>
           </div>
           <div className="shrink-0 border-t bg-background/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
+              {/* Подсказки живут НАД композером и приезжают из metadata последнего ответа.
+                  Своего генератора у нас нет: сервер не прислал — блок не рендерится. */}
+              <AiSuggestionChips suggestions={suggestions} onPick={(prompt) => fillComposer(prompt, false)} />
               <AiComposer
-                key={presetApplied ? `${conversationId}:${presetPick.seed}` : conversationId}
+                key={conversationId}
                 conversationId={conversationId}
                 sending={state.sending}
-                onSend={(body) => state.send(body, projectName ? 'studio_plan' : 'chat')}
+                onSend={send}
                 compact={compact}
-                autoFocus={presetApplied}
+                insert={composerInsert}
+                selection={selection}
+                onOpenSelection={onOpenSelection}
+                modeSwitch={onBuild ? { mode: composerMode, onChange: setComposerMode, buildEnabled } : undefined}
               />
               {!compact && <p className="pt-1.5 text-center text-[10px] text-muted-foreground">ИИ может ошибаться. Проверяйте важные ответы.</p>}
             </div>
@@ -324,7 +442,7 @@ function AiConversationHeader({
   );
 }
 
-function ConversationMessage({ message, previousUserBody, sending, onRetry, projectId, onOpenSelection }: { message: AiMessage; previousUserBody?: string; sending: boolean; onRetry: (body: string) => Promise<void>; projectId?: string; onOpenSelection?: (selection: AiSelectionRef) => void }): React.ReactElement {
+function ConversationMessage({ message, previousUser, sending, onRetry, projectId, onOpenSelection }: { message: AiMessage; previousUser?: AiMessage; sending: boolean; onRetry: (body: string, zone: AiSelectionRef | null) => Promise<void>; projectId?: string; onOpenSelection?: (selection: AiSelectionRef) => void }): React.ReactElement {
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
   // Статус батча поднят сюда только ради шага «Требуется подтверждение»: он обязан
   // стоять последним в блоке шагов, то есть НАД телом ответа, а сама карточка
@@ -336,6 +454,10 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
   // Зона правки приезжает только в пользовательском сообщении — это отметка того,
   // к чему был привязан промпт, а не часть ответа.
   const selection = message.role === 'user' ? readAiSelectionRef(message.metadata) : null;
+  // На повтор уходит промпт предыдущего пользовательского сообщения, а его зона (её
+  // проставляет только серверный путь редактора) отличает правку элемента от вопроса.
+  const retryBody = previousUser?.body;
+  const retryZone = previousUser ? readAiSelectionRef(previousUser.metadata) : null;
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(message.body);
@@ -345,10 +467,26 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
     }
   };
   const user = message.role === 'user';
+  // У пустого ассистентского пузыря копировать ещё нечего, и его место занято
+  // индикатором «Формирую ответ» — там ряда действий нет.
+  const showActions = Boolean(message.body);
   return (
-    <article className={cn('group flex gap-3', user && 'justify-end')}>
-      {!user && <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background"><Bot className="size-4" /></div>}
-      <div className={cn('min-w-0 max-w-full overflow-hidden text-sm leading-6', user ? 'max-w-[85%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5' : 'max-w-[calc(100%-2.5rem)] flex-1')}>
+    // Две формы сообщения (референс §2): у ассистента НЕТ ни пузыря, ни аватара — ответ
+    // идёт простым текстом во всю ширину колонки; пузырь и аватар есть только у
+    // пользователя, причём аватар стоит НАД пузырём, а не сбоку.
+    <article
+      data-message-role={message.role}
+      className={cn('group/chat-bubble flex w-full min-w-0 flex-col gap-1.5', user ? 'items-end pl-4' : 'items-start')}
+    >
+      {user && (
+        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-primary" aria-hidden>
+          <User className="size-3.5" />
+        </span>
+      )}
+      <div className={cn(
+        'min-w-0 max-w-full overflow-hidden text-sm leading-6',
+        user ? 'select-text rounded-md bg-message-bubble p-3' : 'w-full',
+      )}>
         {!user && <AiAgentStepsBlock steps={steps} needsReview={batchStatus === 'pending_review'} />}
         {/* Как в референсе: бейдж зоны — первый ребёнок внутри пузыря, над текстом
             промпта. Контейнер с переносом — зон в одном сообщении может стать больше. */}
@@ -363,13 +501,64 @@ function ConversationMessage({ message, previousUserBody, sending, onRetry, proj
           <div className="flex items-center gap-2 py-1 text-muted-foreground"><span className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.3s]" /><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.15s]" /><i className="size-1.5 animate-bounce rounded-full bg-current" /></span><span className="text-xs">Формирую ответ</span></div>
         )}
         {message.role === 'assistant' && message.status === 'failed' && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-destructive"><AlertCircle className="size-3.5" /> Ответ не сформирован.{previousUserBody && <button type="button" disabled={sending} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-destructive/10 disabled:opacity-50" onClick={() => void onRetry(previousUserBody).catch(() => undefined)}><RefreshCw className="size-3" />Повторить</button>}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-destructive"><AlertCircle className="size-3.5" /> {retryZone ? 'Правка не выполнена.' : 'Ответ не сформирован.'}{retryBody && <button type="button" disabled={sending} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-destructive/10 disabled:opacity-50" onClick={() => void onRetry(retryBody, retryZone).catch(() => undefined)}><RefreshCw className="size-3" />{retryZone ? 'Повторить правку' : 'Повторить'}</button>}</div>
         )}
-        {message.role === 'assistant' && message.status === 'completed' && <div className="mt-3 flex items-center gap-1 text-muted-foreground"><button type="button" onClick={() => void copy()} className="grid size-7 place-items-center rounded-md hover:bg-muted hover:text-foreground" aria-label="Копировать ответ"><Copy className="size-3.5" /></button><button type="button" onClick={() => setReaction((value) => value === 'up' ? null : 'up')} className={cn('grid size-7 place-items-center rounded-md hover:bg-muted hover:text-foreground', reaction === 'up' && 'bg-muted text-foreground')} aria-label="Хороший ответ"><ThumbsUp className="size-3.5" /></button><button type="button" onClick={() => setReaction((value) => value === 'down' ? null : 'down')} className={cn('grid size-7 place-items-center rounded-md hover:bg-muted hover:text-foreground', reaction === 'down' && 'bg-muted text-foreground')} aria-label="Плохой ответ"><ThumbsDown className="size-3.5" /></button><span className="ml-1 inline-flex items-center gap-1 text-[10px]"><CheckCircle2 className="size-3" />ИИ завершил</span></div>}
-        {user && message.body && <div className="mt-1 flex justify-end opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"><button type="button" onClick={() => void copy()} className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-background/70 hover:text-foreground" aria-label="Копировать сообщение"><Copy className="size-3" /></button></div>}
       </div>
-      {user && <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><User className="size-4" /></div>}
+      {showActions && (
+        <MessageActions
+          message={message}
+          user={user}
+          reaction={reaction}
+          onReaction={setReaction}
+          onCopy={() => void copy()}
+        />
+      )}
     </article>
+  );
+}
+
+/**
+ * Ряд действий под сообщением. Ключевое из референса (§2): ряд смонтирован ВСЕГДА и
+ * занимает своё место, а по наведению лишь проявляется прозрачностью за 150 мс — иначе
+ * лента дёргалась бы на каждое движение курсора. Относительное время с точным
+ * в `title` — оттуда же.
+ */
+function MessageActions({
+  message,
+  user,
+  reaction,
+  onReaction,
+  onCopy,
+}: {
+  message: AiMessage;
+  user: boolean;
+  reaction: 'up' | 'down' | null;
+  onReaction: (value: 'up' | 'down' | null) => void;
+  onCopy: () => void;
+}): React.ReactElement {
+  const createdAt = Date.parse(message.createdAt);
+  const exact = Number.isFinite(createdAt)
+    ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(createdAt)
+    : '';
+  return (
+    <div className={cn(
+      'flex w-full items-center gap-2 text-xs text-muted-foreground',
+      'opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/chat-bubble:opacity-100',
+      user ? 'justify-end' : 'justify-start',
+    )}>
+      {Number.isFinite(createdAt) && (
+        <time dateTime={message.createdAt} title={exact} className="truncate leading-4">{formatRelativeTime(createdAt)}</time>
+      )}
+      <span className="flex items-center gap-0.5">
+        <button type="button" onClick={onCopy} className="grid size-6 place-items-center rounded hover:bg-hover hover:text-foreground" aria-label={user ? 'Копировать сообщение' : 'Копировать ответ'}><Copy className="size-3.5" /></button>
+        {!user && (
+          <>
+            <button type="button" onClick={() => onReaction(reaction === 'up' ? null : 'up')} className={cn('grid size-6 place-items-center rounded hover:bg-hover hover:text-foreground', reaction === 'up' && 'bg-hover text-foreground')} aria-label="Хороший ответ"><ThumbsUp className="size-3.5" /></button>
+            <button type="button" onClick={() => onReaction(reaction === 'down' ? null : 'down')} className={cn('grid size-6 place-items-center rounded hover:bg-hover hover:text-foreground', reaction === 'down' && 'bg-hover text-foreground')} aria-label="Плохой ответ"><ThumbsDown className="size-3.5" /></button>
+          </>
+        )}
+      </span>
+    </div>
   );
 }
 

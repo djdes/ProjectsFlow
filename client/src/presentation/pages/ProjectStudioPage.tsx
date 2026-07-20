@@ -26,7 +26,7 @@ import {
   type DashboardSection,
 } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import { normalizePreviewPath } from '@/presentation/components/project/workspace/preview/path';
-import type { PreviewSelectionRequest } from '@/presentation/components/project/workspace/ProjectPreview';
+import type { PreviewEditRequest, PreviewSelectionRequest } from '@/presentation/components/project/workspace/ProjectPreview';
 
 type StudioData = {
   project: Project;
@@ -74,6 +74,11 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
   // Зона, которую попросили выделить из чата. Живёт здесь, потому что переход к ней —
   // это смена panel/path, а ими владеет страница.
   const [requestedSelection, setRequestedSelection] = useState<PreviewSelectionRequest | null>(null);
+  // Обратное направление: что выделено в превью прямо сейчас. Поднято тем же приёмом,
+  // что и статус сохранения, — иначе левый чат не может знать, к чему привяжет правку.
+  const [selection, setSelection] = useState<AiSelectionRef | null>(null);
+  // И третий канал: промпт из чата, который должно выполнить превью (см. PreviewEditRequest).
+  const [editRequest, setEditRequest] = useState<PreviewEditRequest | null>(null);
   const splitPane = useStudioSplitPane();
 
   // Studio starts as a focused workspace. This signal runs once for the mounted
@@ -169,12 +174,31 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
   // Клик по чипу зоны в сообщении: открываем предпросмотр на той же странице и просим
   // его войти в Edit и выделить элемент. Токен — нонс: повторный клик по тому же чипу
   // обязан сработать снова, поэтому пересобираем запрос с новым номером.
-  const openSelection = useCallback((selection: AiSelectionRef): void => {
-    const route = normalizePreviewPath(selection.route) ?? '/';
+  const openSelection = useCallback((target: AiSelectionRef): void => {
+    const route = normalizePreviewPath(target.route) ?? '/';
     setMobileChatOpen(false);
     updateQuery({ panel: 'preview', path: route });
-    setRequestedSelection((current) => ({ selector: selection.selector, route, token: (current?.token ?? 0) + 1 }));
+    setRequestedSelection((current) => ({ selector: target.selector, route, token: (current?.token ?? 0) + 1 }));
   }, [updateQuery]);
+  // Отправка из левого чата в режиме «Правка». Сам job создаёт превью — здесь только
+  // передача промпта: тот же нонс-приём, повторный одинаковый промпт обязан сработать.
+  // Промис живёт до ответа превью: не приняло правку — чат покажет причину, а композер
+  // по этому же реджекту вернёт набранный текст в поле.
+  const requestEdit = useCallback((prompt: string): Promise<void> => {
+    // Исполнитель запроса — смонтированное превью. С открытым дашбордом его нет, и
+    // обещание не сдержал бы никто: композер ждал бы ответа вечно, а промпт при этом
+    // уже стёрт из поля. Отвечаем сразу — чат покажет причину и вернёт текст.
+    if (panel !== 'preview') {
+      return Promise.reject(new Error('Откройте предпросмотр — правка применяется к выделенной зоне.'));
+    }
+    return new Promise<void>((resolve, reject) => {
+      setEditRequest((current) => ({
+        prompt,
+        token: (current?.token ?? 0) + 1,
+        onSettled: (error) => { if (error) reject(new Error(error)); else resolve(); },
+      }));
+    });
+  }, [panel]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('pf:studio-chat-hidden', { detail: { hidden: splitPane.hidden } }));
@@ -243,7 +267,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   return (
     <main className="flex h-full min-h-[520px] w-full overflow-hidden bg-background" aria-label={`Project Studio — ${data.project.name}`}>
-      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} saveState={saveState} onOpenDashboardSection={openDashboardSection} onOpenSelection={openSelection} />
+      <StudioChatPane conversationId={data.conversationId} projectId={data.project.id} projectName={data.project.name} projectIcon={data.project.icon} splitPane={splitPane} saveState={saveState} onOpenDashboardSection={openDashboardSection} onOpenSelection={openSelection} selection={selection} onBuild={requestEdit} />
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Рабочая область проекта">
         {panel === 'dashboard' && (
@@ -279,6 +303,8 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
           onOpenAutomation={() => setAutomationOpen(true)}
           onSaveStateChange={setSaveState}
           requestedSelection={requestedSelection}
+          onSelectionChange={setSelection}
+          editRequest={editRequest}
           onEditRunStarted={() => splitPane.setHidden(false)}
           previewToolbarLeading={(
             <StudioTopBar
@@ -322,6 +348,8 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
         projectId={data.project.id}
         projectName={data.project.name}
         onOpenSelection={openSelection}
+        selection={selection}
+        onBuild={requestEdit}
       />
       <AutomationDialog
         open={automationOpen}

@@ -27,6 +27,8 @@ export function StudioChatPane({
   saveState,
   onOpenDashboardSection,
   onOpenSelection,
+  selection,
+  onBuild,
 }: {
   conversationId: string;
   projectId: string;
@@ -39,6 +41,11 @@ export function StudioChatPane({
   // Клик по чипу зоны в сообщении: открыть предпросмотр на нужной странице и выделить
   // тот же элемент. Владелец состояния — страница студии.
   onOpenSelection?: (selection: AiSelectionRef) => void;
+  // Зона, выделенная в превью прямо сейчас, — тоже поднята страницей студии.
+  selection?: AiSelectionRef | null;
+  // Отправка в режиме «Правка»: промпт уходит в job визуального редактора. Промис
+  // отклоняется, если правку не приняли, — по нему чат вернёт текст в композер.
+  onBuild?: (prompt: string) => void | Promise<void>;
 }): React.ReactElement {
   const [themeOpen, setThemeOpen] = useState(false);
   // Бургер открывает основную панель — когда она и так открыта, кнопка бессмысленна
@@ -123,7 +130,7 @@ export function StudioChatPane({
               <TooltipContent side="bottom" className={DARK_TOOLTIP}>Скрыть панель чата</TooltipContent>
             </Tooltip>
           </header>
-          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} hideHeader onOpenSelection={onOpenSelection} /></div>
+          <div className="min-h-0 flex-1"><AiConversationView conversationId={conversationId} projectId={projectId} projectName={projectName} hideHeader onOpenSelection={onOpenSelection} selection={selection} onBuild={onBuild} /></div>
         </div>
       </aside>
       {!splitPane.hidden && (
