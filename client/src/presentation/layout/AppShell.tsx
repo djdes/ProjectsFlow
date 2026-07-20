@@ -269,10 +269,10 @@ export function AppShell(): React.ReactElement {
                     </TooltipTrigger>
                     <TooltipContent
                       side="right"
-                      className="flex items-center gap-1.5 border-transparent bg-neutral-900 text-white"
+                      className="flex items-center gap-1.5 border-transparent bg-foreground text-background"
                     >
                       <span>Закрепить панель</span>
-                      <kbd className="rounded bg-white/15 px-1 text-[10px] leading-4">Ctrl+\</kbd>
+                      <kbd className="rounded bg-background/15 px-1 text-[10px] leading-4">Ctrl+\</kbd>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

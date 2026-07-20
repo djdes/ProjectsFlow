@@ -338,7 +338,7 @@ export function ActivityItem({
                       <Clock className="size-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
+                  <TooltipContent side="left" className="border-transparent bg-foreground text-background">
                     История версий
                   </TooltipContent>
                 </Tooltip>
