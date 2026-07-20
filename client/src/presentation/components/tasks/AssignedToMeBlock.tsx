@@ -808,7 +808,7 @@ export function AssignedToMeBlock({
           className={cn(
             // Как у основной доски: каждая колонка заканчивается под своей последней
             // задачей, а не растягивается до высоты самой длинной соседней колонки.
-            'flex items-start snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
+            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto pb-2',
             bleedNegClass,
             bleedPadClass,
           )}
@@ -851,7 +851,7 @@ export function AssignedToMeBlock({
           ref={setHScrollRef}
           onScroll={onHScroll}
           className={cn(
-            'flex items-start snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
+            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto pb-2',
             bleedNegClass,
             bleedPadClass,
           )}

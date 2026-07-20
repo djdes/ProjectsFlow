@@ -9,7 +9,13 @@ const EVENT = 'pf:task-hiding-changed';
 
 export function getTaskHiding(): boolean {
   try {
-    return localStorage.getItem(KEY) === '1';
+    const v = localStorage.getItem(KEY);
+    if (v === '1') return true;
+    if (v === '0') return false;
+    // Не задано: на ТАЧ-устройствах (телефон/PWA, pointer: coarse) включаем по умолчанию —
+    // колонка рендерит первые 4 карточки + «Показать ещё». Иначе сотни тяжёлых карточек
+    // (markdown-тело + аватары в каждой) вешают скролл на iPhone. Десктоп — показываем все.
+    return window.matchMedia('(pointer: coarse)').matches;
   } catch {
     return false;
   }
