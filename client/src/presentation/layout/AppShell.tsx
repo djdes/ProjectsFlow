@@ -36,7 +36,6 @@ import { useNotificationStream } from '@/presentation/hooks/useNotificationStrea
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
-import { AiChatPanel } from '@/presentation/components/ai/AiChatPanel';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
@@ -57,12 +56,6 @@ export function AppShell(): React.ReactElement {
   // Ширина открытого справа окна. Основной <main> остаётся неизменным; значение используют
   // только элементы, которым разрешено сужаться под панелью (плашка и строка отображений).
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
-  // Беседа ИИ, открытая в правой выезжающей панели (кнопка «Новый чат» внизу сайдбара).
-  // null — панель закрыта.
-  const [aiChatId, setAiChatId] = useState<string | null>(null);
-  const closeAiChat = useCallback((open: boolean): void => {
-    if (!open) setAiChatId(null);
-  }, []);
   const { pathname } = useLocation();
   const studioRoute = /\/projects\/[^/]+\/studio(?:\/|$)/.test(pathname);
   const immersiveRoute = pathname === '/ai' || pathname.startsWith('/ai/') || studioRoute;
@@ -232,12 +225,7 @@ export function AppShell(): React.ReactElement {
             style={{ gridTemplateColumns: collapsed ? '1fr' : `${sidebarWidth}px 1fr` }}
           >
             {!collapsed && (
-              <Sidebar
-                collapsed={collapsed}
-                navCompact={navCompact}
-                onToggleCollapse={toggleCollapse}
-                onOpenAiChat={setAiChatId}
-              />
+              <Sidebar collapsed={collapsed} navCompact={navCompact} onToggleCollapse={toggleCollapse} />
             )}
             {/* Ручка ресайза панели: тонкая полоса на её правом крае. Тяга → шире/уже,
                 клик → свернуть (Ctrl+\), на hover — чёрная подсказка справа. */}
@@ -306,7 +294,6 @@ export function AppShell(): React.ReactElement {
                         collapsed={false}
                         navCompact={sidebarWidth < SIDEBAR_COMPACT_WIDTH}
                         onToggleCollapse={toggleCollapse}
-                        onOpenAiChat={setAiChatId}
                       />
                     </motion.div>
                   )}
@@ -350,13 +337,7 @@ export function AppShell(): React.ReactElement {
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent side="left" showClose={false} className="w-[88vw] max-w-sm p-0">
                 <div className="h-full">
-                  <Sidebar
-                    onOpenAiChat={(id) => {
-                      // На мобиле drawer перекрывает панель — закрываем его перед открытием чата.
-                      setDrawerOpen(false);
-                      setAiChatId(id);
-                    }}
-                  />
+                  <Sidebar onNavigate={() => setDrawerOpen(false)} />
                 </div>
                 {/* Свой крестик — выровнен по строке шапки Sidebar (p-3, иконки size-8),
                     чтобы быть на одной линии с колокольчиком, а не ниже (как дефолтный top-4). */}
@@ -372,8 +353,6 @@ export function AppShell(): React.ReactElement {
             </Sheet>
           </div>
         )}
-        {/* Правая выезжающая панель с беседой ИИ (кнопка «Новый чат» внизу сайдбара). */}
-        <AiChatPanel conversationId={aiChatId} onOpenChange={closeAiChat} />
         {/* Плавающий виджет помощи/поддержки — снизу справа, портал в body, над таб-баром. */}
         <HelpWidget />
         {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
