@@ -6,7 +6,9 @@ import {
   BookOpen,
   Bot,
   Download,
+  Eye,
   EyeOff,
+  Globe,
   History,
   Link as LinkIcon,
   LayoutGrid,
@@ -14,6 +16,7 @@ import {
   PanelsTopLeft,
   Search,
   Settings,
+  Sparkles,
   Trash2,
   Wallet,
   type LucideIcon,
@@ -28,9 +31,19 @@ import {
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useTaskHiding, setTaskHiding } from '@/presentation/components/tasks/taskHidingSetting';
+import {
+  useProjectBannersHidden,
+  setProjectBannersHidden,
+} from './projectBannersSetting';
 import type { Project } from '@/domain/project/Project';
 import { taskTitle } from '@/presentation/components/tasks/views/viewShared';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
@@ -78,12 +91,16 @@ export function ProjectActionsMenu({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const taskHiding = useTaskHiding();
+  const bannersHidden = useProjectBannersHidden();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<'archive' | 'delete' | 'export' | null>(null);
   const projectId = project.id;
   const isOwner = project.role === 'owner';
   const canEdit = isOwner || project.role === 'editor';
+  // Зеркало условия рендера в TasksPage: онбординг GitHub появляется только у
+  // не-inbox проектов и только при праве редактирования.
+  const showGithubBanner = canEdit && !project.isInbox;
 
   const copyLink = (): void => {
     void navigator.clipboard
@@ -307,6 +324,16 @@ export function ProjectActionsMenu({
               <Switch checked={taskHiding} onCheckedChange={setTaskHiding} />
             </label>
           )}
+          {/* Тумблер «Скрыть плашки» — только на странице задач (только там живёт
+              #pf-sticky-banners). При наведении сбоку всплывает предпросмотр того,
+              что именно скрывается. */}
+          {!query && mode === 'tasks' && (
+            <BannersHidingRow
+              hidden={bannersHidden}
+              onToggle={() => setProjectBannersHidden(!bannersHidden)}
+              showGithubPreview={showGithubBanner}
+            />
+          )}
           <div className="max-h-96 overflow-y-auto">
             {filtered.map((a, i) => {
               const prev = filtered[i - 1];
@@ -389,5 +416,103 @@ export function ProjectActionsMenu({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// Строка-тумблер «Скрыть плашки» / «Показать плашки» с предпросмотром по наведению.
+//
+// Предпросмотр — Radix Tooltip, а не абсолютно позиционированный блок внутри поповера:
+// у PopoverContent есть overflow-y-auto (значит и overflow-x: auto), поэтому всё, что
+// вылезает за его рамку, обрезалось бы. Tooltip рендерится в портал на уровне body,
+// поэтому не обрезается, не перехватывает клики и не закрывает сам поповер (Radix
+// закрывает поповер только по pointerdown/focus СНАРУЖИ, а мы лишь наводим мышь).
+// Свой TooltipProvider — чтобы строка работала независимо от того, обёрнута ли
+// вызывающая страница в провайдер.
+function BannersHidingRow({
+  hidden,
+  onToggle,
+  showGithubPreview,
+}: {
+  hidden: boolean;
+  onToggle: () => void;
+  showGithubPreview: boolean;
+}): React.ReactElement {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-pressed={hidden}
+            className="mb-1 flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
+          >
+            {hidden ? (
+              <Eye className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <EyeOff className="size-4 shrink-0 text-muted-foreground" />
+            )}
+            <span className="min-w-0 flex-1 truncate">
+              {hidden ? 'Показать плашки' : 'Скрыть плашки'}
+            </span>
+            <span
+              className={cn(
+                'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                hidden ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
+              )}
+            >
+              {hidden ? 'скрыты' : 'видны'}
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left" align="start" className="w-64 p-2">
+          <BannersPreview showGithub={showGithubPreview} />
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// Миниатюры плашек: не настоящие компоненты (они тянут данные, диалоги и поллинг),
+// а узнаваемые «обложки» — те же фоны/иконки/первая строка текста, что и в оригиналах.
+// Цвета копируются из самих плашек вместе с их dark:-вариантами.
+function BannersPreview({ showGithub }: { showGithub: boolean }): React.ReactElement {
+  return (
+    <div className="space-y-1.5">
+      <p className="px-0.5 text-[11px] font-medium text-muted-foreground">
+        Плашки над доской проекта
+      </p>
+      {showGithub && (
+        <div className="flex items-center gap-2 rounded-md border border-indigo-950/10 bg-[linear-gradient(105deg,#f5f7ff_0%,#f7f3ff_45%,#f0f9ff_100%)] px-2 py-1.5 dark:border-white/10 dark:bg-[linear-gradient(105deg,#171a2c_0%,#21192d_48%,#13232d_100%)]">
+          <span className="grid size-5 shrink-0 place-items-center rounded bg-white shadow-sm ring-1 ring-black/5 dark:bg-white/10 dark:ring-white/10">
+            <Sparkles className="size-3 text-violet-600 dark:text-violet-300" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[11px] font-semibold text-foreground">
+              Подключите код проекта
+            </span>
+            <span className="block truncate text-[10px] text-muted-foreground">
+              Онбординг GitHub и запуск проекта
+            </span>
+          </span>
+        </div>
+      )}
+      <div className="flex items-center gap-2 rounded-md border border-black/[0.05] bg-[#e8f3f9] px-2 py-1.5 dark:border-white/[0.06] dark:bg-[#1d2a31]">
+        <span className="grid size-5 shrink-0 place-items-center rounded bg-white/70 dark:bg-white/10">
+          <Globe className="size-3 text-[#37352f] opacity-70 dark:text-blue-100" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[11px] font-semibold text-[#37352f] dark:text-blue-50">
+            Результат опубликован
+          </span>
+          <span className="block truncate text-[10px] text-[#37352f]/60 dark:text-blue-100/60">
+            Ссылка на опубликованный сайт
+          </span>
+        </span>
+      </div>
+      <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
+        Настройка общая для всех проектов и сохраняется между сессиями.
+      </p>
+    </div>
   );
 }

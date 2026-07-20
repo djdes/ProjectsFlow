@@ -20,6 +20,7 @@ import { ProjectSharePopover } from '@/presentation/components/project/ProjectSh
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectGithubOnboardingBanner } from '@/presentation/components/project/ProjectGithubOnboardingBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
+import { useProjectBannersHidden } from '@/presentation/components/project/projectBannersSetting';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
 import { randomCover } from '@/presentation/components/project/coverGallery';
@@ -30,6 +31,8 @@ export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data, loading, notFound } = useProject(projectId ?? '');
   const { projectFinanceRepository, monitoringRepository, projectRepository } = useContainer();
+  // Глобальный тумблер «Скрыть плашки» («⋯» в правом верхнем углу страницы).
+  const bannersHidden = useProjectBannersHidden();
   // Гейт видимости кнопки «Финансы»: дёргаем summary только чтобы проверить доступ.
   // Сумму больше не показываем (раньше был чип в шапке), сам блок Доход/Расход/Прибыль
   // живёт на странице /finance.
@@ -292,8 +295,20 @@ export function TasksPage(): React.ReactElement {
       {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-[35] isolate">
-        {!data.isInbox && canEdit && (
+      {/* Контейнер рендерится ВСЕГДА, даже когда плашки скрыты тумблером «⋯ → Скрыть
+          плашки»: его высоту наблюдают ResizeObserver'ы липких офсетов (useBoardStickyTop,
+          TableView). Если убрать сам узел, наблюдатели потеряли бы цель и шапки колонок
+          остались бы на старом офсете. Пустой контейнер честно даёт высоту 0. */}
+      <div
+        id="pf-sticky-banners"
+        className={cn(
+          'sticky top-11 z-[35] isolate',
+          // pf-sticky-surface рисует тень при скролле — у пустого (0px) контейнера она
+          // выродилась бы в лишнюю линию под крошками, поэтому класс только когда есть контент.
+          !bannersHidden && 'pf-sticky-surface',
+        )}
+      >
+        {!bannersHidden && !data.isInbox && canEdit && (
           <ProjectGithubOnboardingBanner
             projectId={data.id}
             projectName={data.name}
@@ -301,7 +316,7 @@ export function TasksPage(): React.ReactElement {
             shiftForOverlay
           />
         )}
-        <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
+        {!bannersHidden && <ProjectPublishedBanner projectId={data.id} shiftForOverlay />}
       </div>
 
       {/* #3: обложка проекта — во всю ширину, над заголовком (если задана). */}
