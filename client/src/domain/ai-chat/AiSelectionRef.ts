@@ -31,13 +31,32 @@ const MAX_JOB_ID = 36;
 const CONTROL_CHARS = /[\p{Cc}\p{Cf}]+/gu;
 
 /**
+ * metadata сообщения — JSON-колонка. Сервер отдаёт её разобранной, но mysql2 умеет
+ * вернуть ту же колонку строкой, и один такой случай уже стоил нам молча пропавшего
+ * чипа зоны: парсер отбрасывал не-объект и возвращал null. Строку разбираем здесь,
+ * чтобы поломка транспорта больше не превращалась в «фича не работает».
+ */
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'string') {
+    try {
+      return asObject(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/**
  * Достать ссылку на зону из metadata сообщения. Как и у шагов агента, кривой вход
  * молча отбрасывается: сообщение обязано отрисоваться и без чипа — промпт
  * пользователю важнее полноты телеметрии.
  */
 export function readAiSelectionRef(metadata: unknown): AiSelectionRef | null {
-  if (!metadata || typeof metadata !== 'object') return null;
-  const value = (metadata as Record<string, unknown>)['selection'];
+  const container = asObject(metadata);
+  if (!container) return null;
+  const value = container['selection'];
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   if (raw['kind'] !== 'site_element') return null;

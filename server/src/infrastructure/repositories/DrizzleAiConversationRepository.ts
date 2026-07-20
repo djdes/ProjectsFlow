@@ -44,6 +44,7 @@ import {
   AiConversationRunStateConflictError,
   AiConversationVersionConflictError,
 } from '../../domain/ai-conversation/errors.js';
+import { parseJsonCol } from './jsonCol.js';
 import type { Database } from '../db/index.js';
 import {
   aiConversationAuditEvents,
@@ -799,7 +800,10 @@ function toMessage(row: AiConversationMessageRow): AiConversationMessage {
     clientRequestId: row.clientRequestId ?? null,
     runId: row.runId ?? null,
     model: row.model ?? null,
-    metadata: row.metadataJson ?? null,
+    // JSON-колонка приезжает из mysql2 СТРОКОЙ, а домен и DTO обещают объект. Без разбора
+    // клиент получал `metadata` строкой, и всё, что её читает (ссылка на зону, шаги
+    // рассуждений), молча отваливалось: их парсеры отбрасывают не-объект.
+    metadata: parseJsonCol<Readonly<Record<string, unknown>> | null>(row.metadataJson, null),
     errorCode: row.errorCode ?? null,
     errorRetryable: row.errorRetryable,
     deletedAt: row.deletedAt ?? null,
