@@ -319,15 +319,59 @@ export class SiteEditorService {
   async sweepStaleRunningJobs(olderThanMinutes = 20, limit = 100): Promise<number> {
     const cutoff = new Date(this.now().getTime() - olderThanMinutes * 60_000);
     const stale = await this.deps.repository.listStaleRunningJobs(cutoff, limit);
+    return this.failStaleJobs(
+      stale,
+      `worker did not report back within ${olderThanMinutes} min — правки возвращены в черновик`,
+    );
+  }
+
+  /**
+   * Подметает job'ы, которые так и не забрали из очереди: раннер выключен, не настроен
+   * или у проекта нет живого диспетчера.
+   *
+   * Для правки элемента это просто неудачная попытка, но для публикации черновиков —
+   * тупик: publishDraft отказывается работать, пока `queuedCount > 0`, а клиент при
+   * открытии сессии воскрешает job из `publishJobId`. В итоге один непринятый job
+   * навсегда показывает «Сохраняем правки в проект…» и блокирует сохранение — ровно та
+   * поломка, из-за которой правки «каждый раз сохраняются и не применяются».
+   *
+   * Порог заметно больше, чем у running: занятый воркер имеет право подумать, а вот
+   * час в очереди означает, что забирать задачу некому.
+   */
+  async sweepStaleQueuedJobs(olderThanMinutes = 60, limit = 100): Promise<number> {
+    const cutoff = new Date(this.now().getTime() - olderThanMinutes * 60_000);
+    const stale = await this.deps.repository.listStaleQueuedJobs(cutoff, limit);
+    return this.failStaleJobs(
+      stale,
+      `никто не забрал задачу из очереди за ${olderThanMinutes} мин — правки возвращены в черновик`,
+    );
+  }
+
+  private async failStaleJobs(stale: readonly ProjectEditJob[], error: string): Promise<number> {
     let swept = 0;
     for (const job of stale) {
+      // completeJob по контракту закрывает только running — так задумано, чтобы воркер не
+      // мог отчитаться за задачу, которую не забирал. Поэтому непринятый job подметаем в
+      // два шага: сначала забираем его от имени того же диспетчера, потом проваливаем.
+      // Иначе подметание очереди тихо не делало бы ничего (первая версия этого метода
+      // именно так и молчала, пока тест не поймал).
+      if (job.status === 'queued') {
+        const claimed = await this.deps.repository.claimJob(
+          job.projectId,
+          job.id,
+          job.dispatcherUserId,
+          this.now(),
+        );
+        // Не забрался — значит его только что взял живой воркер. Пусть работает.
+        if (!claimed) continue;
+      }
       const done = await this.deps.repository.completeJob({
         projectId: job.projectId,
         jobId: job.id,
         dispatcherUserId: job.dispatcherUserId,
         status: 'failed',
         result: null,
-        error: `worker did not report back within ${olderThanMinutes} min — правки возвращены в черновик`,
+        error,
         finishedAt: this.now(),
       });
       if (!done) continue;

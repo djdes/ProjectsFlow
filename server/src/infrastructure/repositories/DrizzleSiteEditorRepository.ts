@@ -375,6 +375,14 @@ export class DrizzleSiteEditorRepository implements SiteEditorRepository {
     return rows.map(toJob);
   }
 
+  async listStaleQueuedJobs(createdBefore: Date, limit: number): Promise<readonly ProjectEditJob[]> {
+    const rows = await this.db.select().from(projectEditJobs).where(and(
+      eq(projectEditJobs.status, 'queued'),
+      lt(projectEditJobs.createdAt, createdBefore),
+    )).orderBy(asc(projectEditJobs.createdAt)).limit(limit);
+    return rows.map(toJob);
+  }
+
   async claimJob(projectId: string, jobId: string, dispatcherUserId: string, claimedAt: Date): Promise<ProjectEditJob | null> {
     const result = await this.db.update(projectEditJobs).set({ status: 'running', claimedAt }).where(and(
       eq(projectEditJobs.projectId, projectId),

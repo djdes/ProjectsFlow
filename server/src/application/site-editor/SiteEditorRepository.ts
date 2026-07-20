@@ -74,6 +74,11 @@ export interface SiteEditorRepository {
   // Job'ы, зависшие в running: воркер забрал задачу и умер, не отчитавшись. Без подметания
   // они висят вечно, а пользователь смотрит на спиннер, который никогда не остановится.
   listStaleRunningJobs(claimedBefore: Date, limit: number): Promise<readonly ProjectEditJob[]>;
+  // Job'ы, зависшие в queued: раннер выключен, не настроен или у проекта нет живого
+  // диспетчера — задачу просто некому забрать. Для правки элемента это лишь неудача, но
+  // для публикации черновиков это ТУПИК: publishDraft отказывается работать, пока есть
+  // очередь, поэтому один непринятый job навсегда блокирует сохранение правок в проект.
+  listStaleQueuedJobs(createdBefore: Date, limit: number): Promise<readonly ProjectEditJob[]>;
   completeJob(input: {
     readonly projectId: string;
     readonly jobId: string;

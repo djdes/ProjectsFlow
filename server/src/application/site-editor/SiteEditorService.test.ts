@@ -55,6 +55,9 @@ function patchSnapshot(revision: number, patches: readonly SitePatch[]): SitePat
 class InMemorySiteEditorRepository implements SiteEditorRepository {
   readonly sessions: SiteEditorSession[] = [];
   readonly jobs = new Map<string, ProjectEditJob>();
+  // Часы фикстуры: без них createdAt job'а был бы реальным «сейчас», и проверки на
+  // «провисел в очереди час» ничего бы не проверяли — курсор всегда оказывался в прошлом.
+  now: () => Date = () => new Date();
   private readonly snapshots = new Map<string, SitePatchSnapshot>();
   private readonly patches = new Map<string, SitePatch>();
 
@@ -181,7 +184,7 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
       && job.createdBy === input.createdBy
       && job.idempotencyKey === input.idempotencyKey);
     if (existing) return existing;
-    const now = new Date();
+    const now = this.now();
     const job: ProjectEditJob = {
       ...input,
       status: 'queued',
@@ -216,6 +219,12 @@ class InMemorySiteEditorRepository implements SiteEditorRepository {
   async listStaleRunningJobs(claimedBefore: Date, limit: number): Promise<readonly ProjectEditJob[]> {
     return [...this.jobs.values()]
       .filter((job) => job.status === 'running' && job.claimedAt !== null && job.claimedAt < claimedBefore)
+      .slice(0, limit);
+  }
+
+  async listStaleQueuedJobs(createdBefore: Date, limit: number): Promise<readonly ProjectEditJob[]> {
+    return [...this.jobs.values()]
+      .filter((job) => job.status === 'queued' && job.createdAt < createdBefore)
       .slice(0, limit);
   }
 
@@ -281,6 +290,7 @@ function createFixture() {
   const repository = new InMemorySiteEditorRepository();
   const chat = new RecordingChatSink();
   let currentTime = new Date('2026-07-18T10:00:00.000Z');
+  repository.now = () => currentTime;
   let currentArtifact = ARTIFACT_VERSION;
   let sequence = 0;
   const project = {
@@ -624,6 +634,61 @@ test('a failed job closes the chat run so the answer is not left spinning', asyn
   const [closed] = fixture.chat.closed;
   assert.equal(closed?.status, 'failed');
   assert.match(closed?.error ?? '', /selector no longer matches/);
+});
+
+// Регрессия боевой поломки: publish-job провисел в queued 7 часов (раннер его не забрал),
+// а publishDraft отказывается стартовать, пока queuedCount > 0. В итоге каждый вход в Edit
+// показывал «Сохраняем правки в проект…», и правки не применялись НИКОГДА. Подметание
+// running такой job не видело — он не был claimed.
+test('a job nobody ever claimed is swept too, or publishing stays blocked forever', async () => {
+  const fixture = createFixture();
+  const job = await fixture.service.createJob({
+    projectId: PROJECT_ID,
+    userId: EDITOR_ID,
+    route: '/catalog',
+    locator: { ...locator, textFingerprint: 'Каталог' },
+    domSnapshot: '<h1>Каталог</h1>',
+    computedStyles: {},
+    prompt: 'Apply the approved visual-editor patches',
+    idempotencyKey: 'publish-never-claimed',
+    operation: 'edit_code',
+    artifactVersion: ARTIFACT_VERSION,
+  });
+
+  // Час в очереди: занятый воркер имеет право подумать, но не столько.
+  fixture.setTime('2026-07-18T11:30:00.000Z');
+
+  // Подметание running его не трогает — он не был забран.
+  assert.equal(await fixture.service.sweepStaleRunningJobs(), 0);
+  assert.equal(await fixture.service.sweepStaleQueuedJobs(), 1);
+
+  const swept = await fixture.service.getJob(PROJECT_ID, DISPATCHER_ID, job.id);
+  assert.equal(swept.status, 'failed');
+
+  // И чат не остаётся с вечным «печатает…» на мёртвой правке.
+  const [closed] = fixture.chat.closed;
+  assert.equal(closed?.jobId, job.id);
+  assert.equal(closed?.status, 'failed');
+  assert.match(closed?.error ?? '', /никто не забрал/);
+});
+
+test('a freshly queued job is left alone by the sweep', async () => {
+  const fixture = createFixture();
+  await fixture.service.createJob({
+    projectId: PROJECT_ID,
+    userId: EDITOR_ID,
+    route: '/catalog',
+    locator: { ...locator, textFingerprint: 'Каталог' },
+    domSnapshot: '<h1>Каталог</h1>',
+    computedStyles: {},
+    prompt: 'Сделай заголовок крупнее',
+    idempotencyKey: 'publish-still-fresh',
+    operation: 'edit_code',
+    artifactVersion: ARTIFACT_VERSION,
+  });
+
+  fixture.setTime('2026-07-18T10:30:00.000Z');
+  assert.equal(await fixture.service.sweepStaleQueuedJobs(), 0);
 });
 
 test('sweeping a dead worker also closes the chat run it abandoned', async () => {
