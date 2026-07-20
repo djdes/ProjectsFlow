@@ -42,6 +42,10 @@ export interface ProjectRepository {
   // Возвращает inbox-проект юзера если он есть. Не создаёт — для создания см. GetOrCreateInbox.
   // Остаётся per-owner потому что inbox personal: 1 user = 1 inbox (см. spec секцию 7, решение 3).
   findInboxByOwner(ownerId: string): Promise<Project | null>;
+  // Batch-версия findInboxByOwner: inbox-проекты сразу нескольких владельцев (одним
+  // запросом). Нужна ленте «Личные · <Имя>» во входящих, где владельцев — весь круг
+  // коллег caller'а. Владельцы без inbox'а просто отсутствуют в результате.
+  listInboxesByOwners(ownerIds: readonly string[]): Promise<Project[]>;
   create(input: CreateProjectInput): Promise<Project>;
   // АТОМАРНО: создаёт проект + добавляет owner'а как member с role='owner'.
   // Без этой связки можно было получить orphan-проект (project существует, но в

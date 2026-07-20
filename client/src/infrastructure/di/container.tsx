@@ -15,6 +15,7 @@ import { HttpAgentTokenRepository } from "@/infrastructure/http/HttpAgentTokenRe
 import { HttpAgentDeviceRepository } from "@/infrastructure/http/HttpAgentDeviceRepository";
 import { HttpAiPromptRepository } from "@/infrastructure/http/HttpAiPromptRepository";
 import { HttpAutomationRepository } from "@/infrastructure/http/HttpAutomationRepository";
+import { HttpWorkflowRepository } from "@/infrastructure/http/HttpWorkflowRepository";
 import { HttpAdminRepository } from "@/infrastructure/http/HttpAdminRepository";
 import { HttpEmployeeRepository } from "@/infrastructure/http/HttpEmployeeRepository";
 import { HttpProjectFinanceRepository } from "@/infrastructure/http/HttpProjectFinanceRepository";
@@ -40,6 +41,7 @@ import { ImproveTaskDescription } from "@/application/ai/ImproveTaskDescription"
 import { ComposeTasks } from "@/application/ai/ComposeTasks";
 import type { AiPromptRepository } from "@/application/ai/AiPromptRepository";
 import type { AutomationRepository } from "@/application/automation/AutomationRepository";
+import type { WorkflowRepository } from "@/application/automation/WorkflowRepository";
 import { SearchTasks } from "@/application/task/SearchTasks";
 import { ResolveDestructiveTargets } from "@/application/ai-action/ResolveDestructiveTargets";
 import { ListProjects } from "@/application/project/ListProjects";
@@ -136,6 +138,7 @@ type Container = {
   improveTaskDescription: ImproveTaskDescription;
   composeTasks: ComposeTasks;
   automationRepository: AutomationRepository;
+  workflowRepository: WorkflowRepository;
   userRepository: UserRepository;
   listWorkspaces: ListWorkspaces;
   createWorkspace: CreateWorkspace;
@@ -179,6 +182,7 @@ function buildContainer(): Container {
   const aiConversationRepo = new HttpAiConversationRepository();
   const aiActionBatchRepo = new HttpAiActionBatchRepository();
   const automationRepo = new HttpAutomationRepository();
+  const workflowRepo = new HttpWorkflowRepository();
   const adminRepo = new HttpAdminRepository();
   const employeeRepo = new HttpEmployeeRepository();
   const projectFinanceRepo = new HttpProjectFinanceRepository();
@@ -235,6 +239,7 @@ function buildContainer(): Container {
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     composeTasks: new ComposeTasks(aiPromptRepo),
     automationRepository: automationRepo,
+    workflowRepository: workflowRepo,
     userRepository: userRepo,
     listWorkspaces: new ListWorkspaces(workspaceRepo),
     createWorkspace: new CreateWorkspace(workspaceRepo),

@@ -1,8 +1,12 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronsLeft, ChevronsRight, Plus, Shield } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Plus, Shield, Sparkles, SquarePen } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/sonner';
+import { useContainer } from '@/infrastructure/di/container';
+import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
+import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import {
   Tooltip,
   TooltipContent,
@@ -55,12 +59,15 @@ type SidebarProps = {
   // Узкая ширина (ресайз ниже порога): ТОЛЬКО верхний навигационный ряд без подписей
   // (иконки). Остальная панель (свитчер, список проектов) — как есть.
   navCompact?: boolean;
+  // Мобильный drawer: закрыть панель после перехода (иначе чат откроется под ней).
+  onNavigate?: () => void;
 };
 
 export function Sidebar({
   onToggleCollapse,
   collapsed = false,
   navCompact = false,
+  onNavigate,
 }: SidebarProps): React.ReactElement {
   // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
   // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
@@ -75,6 +82,42 @@ export function Sidebar({
   const { animations } = useMotion();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { aiConversationRepository } = useContainer();
+  const { open: openNewProject } = useNewProjectDialog();
+
+  // «Новый чат»: создаём пустую беседу и открываем её в ГЛАВНОМ окне (/ai/c/:id) —
+  // на весь экран, левая панель остаётся на месте.
+  const [creatingChat, setCreatingChat] = useState(false);
+  const startNewChat = useCallback(async (): Promise<void> => {
+    if (creatingChat) return;
+    setCreatingChat(true);
+    try {
+      const conversation = await aiConversationRepository.create({ kind: 'personal', title: 'Новый чат' });
+      announceAiConversationsChanged();
+      navigate(`/ai/c/${conversation.id}`);
+      onNavigate?.();
+    } catch (err) {
+      // Без этого падение создания беседы выглядит как «кнопка не работает».
+      toast.error(`Не удалось создать чат: ${(err as Error).message}`);
+    } finally {
+      setCreatingChat(false);
+    }
+  }, [aiConversationRepository, creatingChat, navigate, onNavigate]);
+
+  // Ctrl/⌘+O — как в Notion (подпись есть на самой кнопке, поэтому сочетание должно работать).
+  // Игнорируем, когда фокус в поле ввода: там Ctrl+O пользователю не нужен.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== 'o') return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      e.preventDefault();
+      void startNewChat();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [startNewChat]);
 
   const [activeRail, setActiveRail] = useState<RailKey>(readRail);
   const setRailPersist = useCallback((k: RailKey) => {
@@ -180,13 +223,15 @@ export function Sidebar({
             ))}
           </div>
 
+          <div className="my-0.5 h-px w-6 bg-border" />
+          <RailButton onClick={() => void startNewChat()} label="Новый чат">
+            <Sparkles className="size-4" />
+          </RailButton>
+
           {user?.isAdmin && (
-            <>
-              <div className="my-0.5 h-px w-6 bg-border" />
-              <RailNavLink to="/admin" label="Администрирование">
-                <Shield className="size-4" />
-              </RailNavLink>
-            </>
+            <RailNavLink to="/admin" label="Администрирование">
+              <Shield className="size-4" />
+            </RailNavLink>
           )}
         </TooltipProvider>
       </aside>
@@ -266,13 +311,56 @@ export function Sidebar({
         </div>
       )}
 
-      {user?.isAdmin && (
-        <div className="border-t pt-2">
+      {/* Закреплённый низ панели (Notion): широкая кнопка «Новый чат» + квадратная
+          «Новый проект». Видны всем; «Администрирование» — по-прежнему только админам.
+          Строка живёт ВНЕ скролл-контейнера списка проектов, чтобы не ломать его
+          затухание краёв (.pf-scroll-fade). */}
+      <div className="border-t pt-2">
+        {/* Геометрия и тени сняты с Notion через CDP (кнопка New chat в подвале сайдбара):
+            высота 40, радиус 999px, зазор 10px, круглая кнопка 40×40, трёхслойная мягкая
+            тень с hairline-обводкой последним слоем. Белый фон заменён на bg-card, чтобы
+            не ломалась тёмная тема; для неё же отдельный вариант тени. */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => void startNewChat()}
+            disabled={creatingChat}
+            title="Новый чат"
+            className={cn(
+              'inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-card px-3',
+              'text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 disabled:opacity-60',
+              'shadow-[0_8px_12px_rgba(25,25,25,0.027),0_2px_6px_rgba(25,25,25,0.027),0_0_0_1px_rgba(42,28,0,0.07)]',
+              'dark:shadow-[0_8px_12px_rgba(0,0,0,0.30),0_2px_6px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.10)]',
+            )}
+          >
+            <Sparkles className="size-5 shrink-0" />
+            <span className="min-w-0 truncate">Новый чат</span>
+            <kbd className="shrink-0 rounded-[4px] bg-[rgba(66,35,3,0.03)] px-1 py-0.5 text-xs font-medium text-muted-foreground/70 dark:bg-white/[0.06]">
+              Ctrl+O
+            </kbd>
+          </button>
+          <button
+            type="button"
+            onClick={openNewProject}
+            aria-label="Новый проект"
+            title="Новый проект"
+            className={cn(
+              'grid size-10 shrink-0 place-items-center rounded-full bg-card text-foreground/80',
+              'transition-colors hover:bg-muted/40',
+              'shadow-[0_8px_12px_rgba(25,25,25,0.027),0_2px_6px_rgba(25,25,25,0.027),0_0_0_1px_rgba(42,28,0,0.07)]',
+              'dark:shadow-[0_8px_12px_rgba(0,0,0,0.30),0_2px_6px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.10)]',
+            )}
+          >
+            <SquarePen className="size-[22px]" />
+          </button>
+        </div>
+
+        {user?.isAdmin && (
           <NavLink
             to="/admin"
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
+                'mt-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
                 isActive && 'bg-active font-medium text-foreground',
               )
             }
@@ -280,8 +368,8 @@ export function Sidebar({
             <Shield className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate">Администрирование</span>
           </NavLink>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }

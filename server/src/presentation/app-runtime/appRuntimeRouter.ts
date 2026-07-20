@@ -34,6 +34,26 @@ function bearerToken(req: Request): string {
   return h && h.startsWith('Bearer ') ? h.slice(7).trim() : '';
 }
 
+// Cookie с nonce для двойной проверки OAuth-state (привязка flow к браузеру). httpOnly.
+const OAUTH_NONCE_COOKIE = 'pf_app_oauth_nonce';
+
+// Схема запроса для построения canonical redirect_uri колбэка. За прокси https не виден в req.protocol —
+// на site-поддомене прод всегда https; localhost оставляем http для разработки.
+function requestScheme(req: Request): 'https' | 'http' {
+  const host = String(req.headers.host ?? '');
+  const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  return isLocal ? 'http' : 'https';
+}
+
+function callbackRedirectUri(req: Request): string {
+  return `${requestScheme(req)}://${String(req.headers.host ?? '')}/api/auth/google/callback`;
+}
+
+// Безопасный путь возврата внутри приложения (не открытый редирект): только same-origin путь.
+function safeReturnTo(raw: unknown): string {
+  return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+}
+
 function numQ(v: unknown): number | undefined {
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
@@ -99,14 +119,60 @@ export function appRuntimeRouter(deps: AppRuntimeDeps): Router {
   router.get('/api/auth/config', (req: Request, res: Response, next: NextFunction) => {
     void deps.settings.get(projectId(req)).then((settings) => {
       const auth = settings?.auth ?? DEFAULT_APP_DASHBOARD_SETTINGS.auth;
+      // Google — реальный статус из конфига провайдера (client_id/secret сохранены и включены).
+      const google = deps.authService.googleConfigStatus(projectId(req));
       res.json({ emailPassword: auth.emailPassword, providers: {
-        google: auth.google === 'pending' ? 'setup_required' : 'disabled',
+        google: google.configured && google.enabled ? 'enabled' : google.configured ? 'setup_required' : 'disabled',
         microsoft: auth.microsoft === 'pending' ? 'setup_required' : 'disabled',
         facebook: auth.facebook === 'pending' ? 'setup_required' : 'disabled',
         apple: auth.apple === 'pending' ? 'setup_required' : 'disabled',
         sso: auth.sso === 'pending' ? 'setup_required' : 'disabled',
       } });
     }).catch(next);
+  });
+
+  // Старт входа через Google (OAuth 2.0 / OpenID Connect). Браузерная навигация: ставим httpOnly
+  // cookie с nonce (двойная проверка против CSRF) и редиректим на Google. redirect_uri фиксирован
+  // как canonical callback этого приложения (host → projectId host-middleware'ом, подделать нельзя).
+  router.get('/api/auth/google/start', (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const redirectUri = callbackRedirectUri(req);
+      const { authorizationUrl, nonce } = deps.authService.beginGoogleSignIn(projectId(req), {
+        redirectUri,
+        returnTo: safeReturnTo(req.query['returnTo']),
+      });
+      res.cookie(OAUTH_NONCE_COOKIE, nonce, {
+        httpOnly: true,
+        secure: requestScheme(req) === 'https',
+        sameSite: 'lax', // отправляется при top-level GET-редиректе обратно из Google.
+        maxAge: 10 * 60 * 1000,
+        path: '/api/auth/google',
+      });
+      res.redirect(authorizationUrl);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Колбэк Google: обмен кода, проверка id_token, вход. Успех — редирект на returnTo с токеном в
+  // fragment (`#pf_app_token=`, не в query — не утекает в логи/Referer). Ошибка — редирект с флагом.
+  router.get('/api/auth/google/callback', (req: Request, res: Response, next: NextFunction) => {
+    void (async () => {
+      res.clearCookie(OAUTH_NONCE_COOKIE, { path: '/api/auth/google' });
+      try {
+        const { session, returnTo } = await deps.authService.completeGoogleSignIn(projectId(req), {
+          code: typeof req.query['code'] === 'string' ? req.query['code'] : '',
+          state: typeof req.query['state'] === 'string' ? req.query['state'] : '',
+          cookieNonce: typeof req.cookies?.[OAUTH_NONCE_COOKIE] === 'string' ? req.cookies[OAUTH_NONCE_COOKIE] : '',
+          redirectUri: callbackRedirectUri(req),
+        });
+        const target = new URL(returnTo, `${requestScheme(req)}://${String(req.headers.host ?? '')}`);
+        res.redirect(`${target.pathname}${target.search}#pf_app_token=${encodeURIComponent(session.token)}`);
+      } catch {
+        // Не раскрываем причину пользователю (CSRF/tamper/verify) — нейтральный флаг ошибки.
+        res.redirect('/?app_auth_error=google');
+      }
+    })().catch(next);
   });
 
   router.post('/api/auth/signout', (req: Request, res: Response) => {

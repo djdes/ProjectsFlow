@@ -24,6 +24,7 @@ import type {
   AppDashboardSettings,
   AppDashboardSettingsPatch,
   AppSecurityScan,
+  GoogleAuthProviderStatus,
   AppRuntimeUser,
   AppRowsQuery,
   AppRowsPage,
@@ -615,6 +616,32 @@ export class HttpProjectRepository implements ProjectRepository {
     return httpClient.post<AppSecurityScan>(
       `/projects/${projectId}/app-dashboard/security/scan`,
       {},
+    );
+  }
+
+  async getGoogleAuthProvider(
+    projectId: string,
+  ): Promise<GoogleAuthProviderStatus> {
+    return httpClient.get<GoogleAuthProviderStatus>(
+      `/projects/${projectId}/app-dashboard/auth/google`,
+    );
+  }
+
+  async saveGoogleAuthProvider(
+    projectId: string,
+    input: { readonly clientId: string; readonly clientSecret: string; readonly enabled: boolean },
+  ): Promise<GoogleAuthProviderStatus> {
+    return httpClient.put<GoogleAuthProviderStatus>(
+      `/projects/${projectId}/app-dashboard/auth/google`,
+      input,
+    );
+  }
+
+  async disableGoogleAuthProvider(
+    projectId: string,
+  ): Promise<GoogleAuthProviderStatus> {
+    return httpClient.delete<GoogleAuthProviderStatus>(
+      `/projects/${projectId}/app-dashboard/auth/google`,
     );
   }
 

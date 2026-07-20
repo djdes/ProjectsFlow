@@ -212,6 +212,12 @@ export type DashboardConnectionStatus =
   | "pending"
   | "configured"
   | "error";
+// Статус конфига Google-провайдера входа (срез 9). client_secret write-only — сюда НЕ входит.
+export type GoogleAuthProviderStatus = {
+  readonly configured: boolean;
+  readonly enabled: boolean;
+  readonly clientId: string;
+};
 export type AppDashboardSettings = {
   readonly profile: {
     readonly description: string;
@@ -513,6 +519,13 @@ export interface ProjectRepository {
   verifyAppCustomDomain(projectId: string): Promise<AppDashboardSettings>;
   testAppWebhook(projectId: string): Promise<AppDashboardSettings>;
   scanAppSecurity(projectId: string): Promise<AppSecurityScan>;
+  // Google-провайдер входа (срез 9): чтение статуса, сохранение конфига, отключение.
+  getGoogleAuthProvider(projectId: string): Promise<GoogleAuthProviderStatus>;
+  saveGoogleAuthProvider(
+    projectId: string,
+    input: { readonly clientId: string; readonly clientSecret: string; readonly enabled: boolean },
+  ): Promise<GoogleAuthProviderStatus>;
+  disableGoogleAuthProvider(projectId: string): Promise<GoogleAuthProviderStatus>;
   listAppRuntimeUsers(projectId: string): Promise<readonly AppRuntimeUser[]>;
   revokeAppRuntimeUserSessions(
     projectId: string,

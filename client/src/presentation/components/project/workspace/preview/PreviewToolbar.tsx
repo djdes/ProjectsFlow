@@ -2,7 +2,6 @@ import { useEffect, useId, useRef } from 'react';
 import { Grid2X2, Monitor, MoreHorizontal, MousePointer2, RefreshCw, Redo2, Rocket, Smartphone, Tablet, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 // Тёмный тултип берём из шапки студии: тулбар стоит в той же строке, что и StudioTopBar,
 // и разъезжаться по стилям им нельзя. Своей копии константы здесь быть не должно.

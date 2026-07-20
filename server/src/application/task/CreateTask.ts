@@ -14,6 +14,7 @@ import type { EmailSender } from '../notifications/EmailSender.js';
 import { renderTaskAssigneeEmail } from '../notifications/emails/taskAssigneeEmail.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import type { Project } from '../../domain/project/Project.js';
+import { moscowDateOnly } from '../../domain/time/moscowDate.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -27,6 +28,9 @@ type Deps = {
   readonly appUrl: string;
   // Лента действий (best-effort). Опционально — старые caller'ы/тесты не ломаются.
   readonly activityRecorder?: ActivityRecorder;
+  // Источник времени для дефолтного срока «сегодня». Опционален, чтобы не переписывать
+  // 4 места сборки в index.ts; тесты инжектят фиксированные часы вместо глобального Date.
+  readonly now?: () => Date;
 };
 
 export type CreateTaskCommand = {
@@ -61,6 +65,18 @@ export type CreateTaskCommand = {
   // воркера по такой задаче должен списываться на владельца проекта, а не на безлимитного
   // админа — иначе автоматизация = бесплатный расход подписки.
   readonly attributeToOwner?: boolean;
+  // Opt-in: allow creating the task directly in ANOTHER user's inbox project. Needed for
+  // delegation flows (Telegram composer) where the AI resolved an assignee but no project —
+  // such a task must land in the assignee's inbox, not in the author's one. Narrowly gated
+  // in resolveTargetProject(): inbox-only, assignee must be the inbox owner, and the actor
+  // must already share a project with him. Everything else falls back to the normal
+  // membership gate, so this never widens access to regular projects.
+  readonly allowInboxDelegation?: boolean;
+  // Opt-out от дефолтного срока «сегодня»: true — сохранить ПУСТОЙ срок как пустой.
+  // Нужен копированию/импорту (ClonePublicBoard), где задача-источник осознанно без срока:
+  // штамповать ей сегодняшнюю дату — исказить копируемую доску. Обычное создание
+  // (UI, Telegram, MCP, автоматизация) флаг не ставит и получает «сегодня».
+  readonly preserveEmptyDeadline?: boolean;
 };
 
 const POSITION_STEP = 1024;
@@ -72,12 +88,7 @@ export class CreateTask {
     const description = input.description.trim();
     if (description.length === 0) throw new TaskDescriptionEmptyError();
 
-    const { project } = await requireProjectAccess(
-      this.deps,
-      input.projectId,
-      input.ownerUserId,
-      'create_task',
-    );
+    const project = await this.resolveTargetProject(input);
     // Создатель для метеринга: обычно actor; для автоматизации — владелец проекта.
     const createdBy = input.attributeToOwner ? project.ownerId : input.ownerUserId;
     const assigneeUserId = input.assigneeUserId ?? createdBy;
@@ -120,7 +131,7 @@ export class CreateTask {
       status: input.status,
       position,
       ralphMode: input.ralphMode,
-      deadline: input.deadline ?? null,
+      deadline: this.resolveDeadline(input),
       startDate: input.startDate ?? null,
       parentTaskId,
       priority: input.priority ?? null,
@@ -139,6 +150,55 @@ export class CreateTask {
       });
     }
     return task;
+  }
+
+  // Новая задача без срока получает срок «сегодня» — единая точка для всех источников
+  // создания (UI, Telegram-композер, MCP/агент, автоматизация), поэтому правило работает
+  // «где угодно» без правок вызывающих мест.
+  //
+  // Почему пустое значение = «сегодня», а не «намеренно без срока»: на создании нечего
+  // «снимать» — семантика «null = очистить срок» живёт только в PATCH/UpdateTask (см.
+  // updateTaskSchema), который не тронут. К тому же create-роуты схлопывают отсутствующее
+  // поле в null (`body.deadline ?? null`), а клиент шлёт null, когда дату просто не выбрали,
+  // — различить «не указали» и «осознанно без срока» по null/undefined тут невозможно.
+  // Поэтому осознанное «без срока» выражается явным флагом preserveEmptyDeadline.
+  private resolveDeadline(input: CreateTaskCommand): string | null {
+    if (input.deadline) return input.deadline;
+    if (input.preserveEmptyDeadline) return null;
+    return moscowDateOnly((this.deps.now ?? (() => new Date()))());
+  }
+
+  // Normal path: the usual membership gate. Delegation path (opt-in, see
+  // `allowInboxDelegation`): the actor is NOT a member of the target project, and that is
+  // fine ONLY when all of the following hold:
+  //   1. the project is an inbox (never a regular project);
+  //   2. the task is assigned to the inbox owner himself — the actor cannot drop work on a
+  //      third party through someone else's inbox;
+  //   3. the actor already shares at least one project with that inbox owner — the same
+  //      relation `validateAssignee` requires for inbox assignees.
+  // If any condition fails we fall through to requireProjectAccess, which throws the usual
+  // ProjectNotFoundError/InsufficientProjectRoleError. This grants write-once, not read:
+  // every later read/update of the task still goes through the normal access check.
+  private async resolveTargetProject(input: CreateTaskCommand): Promise<Project> {
+    if (input.allowInboxDelegation && input.assigneeUserId) {
+      const candidate = await this.deps.projects.getById(input.projectId);
+      if (
+        candidate &&
+        candidate.isInbox &&
+        candidate.ownerId !== input.ownerUserId &&
+        input.assigneeUserId === candidate.ownerId
+      ) {
+        const shared = await this.deps.members.listSharedUsers(input.ownerUserId);
+        if (shared.some((u) => u.id === candidate.ownerId)) return candidate;
+      }
+    }
+    const { project } = await requireProjectAccess(
+      this.deps,
+      input.projectId,
+      input.ownerUserId,
+      'create_task',
+    );
+    return project;
   }
 
   private async validateAssignee(project: Project, assigneeUserId: string): Promise<void> {

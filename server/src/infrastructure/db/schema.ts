@@ -2350,3 +2350,26 @@ export const projectWebhooks = mysqlTable(
 
 export type ProjectWebhookRow = typeof projectWebhooks.$inferSelect;
 export type NewProjectWebhookRow = typeof projectWebhooks.$inferInsert;
+
+// Правила «событие → действие» проекта (db/139, срез 8 Workflows). Одно правило = один
+// триггер + одно действие из ЗАМКНУТЫХ наборов (см. domain/automation/WorkflowRule.ts).
+// trigger_json/action_json — сериализованные discriminated-union. enabled сбрасывается в 0
+// автоматически, если правило зациклилось (RunWorkflow, MAX_CONSECUTIVE_FIRES).
+export const projectWorkflows = mysqlTable(
+  'project_workflows',
+  {
+    id: char('id', { length: 36 }).notNull().primaryKey(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    triggerJson: text('trigger_json').notNull(),
+    actionJson: text('action_json').notNull(),
+    enabled: tinyint('enabled').notNull().default(1),
+    lastStatus: varchar('last_status', { length: 64 }),
+    lastRunAt: varchar('last_run_at', { length: 32 }),
+    createdAt: varchar('created_at', { length: 32 }).notNull(),
+  },
+  (t) => [index('idx_project_workflows_project').on(t.projectId)],
+);
+
+export type ProjectWorkflowRow = typeof projectWorkflows.$inferSelect;
+export type NewProjectWorkflowRow = typeof projectWorkflows.$inferInsert;

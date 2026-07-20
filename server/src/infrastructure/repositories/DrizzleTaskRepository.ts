@@ -159,6 +159,14 @@ export class DrizzleTaskRepository implements TaskRepository {
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
+  async listByProjects(projectIds: readonly string[]): Promise<Task[]> {
+    if (projectIds.length === 0) return [];
+    const rows = await this.baseSelect()
+      .where(activeTasks(inArray(tasks.projectId, [...projectIds])))
+      .orderBy(asc(tasks.projectId), asc(tasks.status), asc(tasks.position), asc(tasks.id));
+    return rows.map((r) => toTask(r as TaskRowJoined));
+  }
+
   async listAssignedTo(userId: string): Promise<Task[]> {
     const rows = await this.baseSelect()
       .where(activeTasks(eq(tasks.assigneeUserId, userId)))

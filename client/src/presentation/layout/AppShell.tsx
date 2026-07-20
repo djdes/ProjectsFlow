@@ -337,7 +337,7 @@ export function AppShell(): React.ReactElement {
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent side="left" showClose={false} className="w-[88vw] max-w-sm p-0">
                 <div className="h-full">
-                  <Sidebar />
+                  <Sidebar onNavigate={() => setDrawerOpen(false)} />
                 </div>
                 {/* Свой крестик — выровнен по строке шапки Sidebar (p-3, иконки size-8),
                     чтобы быть на одной линии с колокольчиком, а не ниже (как дефолтный top-4). */}

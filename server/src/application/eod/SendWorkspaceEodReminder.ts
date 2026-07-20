@@ -11,17 +11,11 @@ import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { Task } from '../../domain/task/Task.js';
 import { escapeHtml, formatDeadlineRemainingRu } from '../../domain/task/digestFormat.js';
 import { telegramDigestTaskTitle } from '../task/digest/buildTaskDigest.js';
+import { moscowDateOnly } from '../../domain/time/moscowDate.js';
 
 const MAX_TASKS_PER_PERSON = 30;
 
-function mskDateOnly(at: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(at);
-}
+const mskDateOnly = moscowDateOnly;
 
 function needsEodAttention(task: Task, today: string): boolean {
   return task.status !== 'done' && task.deadline !== null && task.deadline <= today;

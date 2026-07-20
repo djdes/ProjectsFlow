@@ -3,6 +3,7 @@ import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import { prepareKbContext } from './prepareKbContext.js';
+import { moscowDateOnly } from '../../domain/time/moscowDate.js';
 
 // Сколько проектов-кандидатов максимум кладём в контекст compose-job'а и общий потолок.
 const MAX_PROJECTS = 40;
@@ -23,11 +24,9 @@ type Deps = {
 };
 
 // Сегодняшняя дата в формате YYYY-MM-DD. Нужна модели, чтобы резолвить относительные
-// сроки («на сегодня», «до конца недели»). Считаем в фиксированной зоне продукта
-// (пользователи в РФ): UTC-сервер около полуночи иначе даёт «сегодня» на день вперёд.
-// en-CA форматирует дату ровно как YYYY-MM-DD.
+// сроки («на сегодня», «до конца недели»). Зона продукта — см. moscowDateOnly.
 function todayIso(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
+  return moscowDateOnly(new Date());
 }
 
 export type ComposeCandidate = {
