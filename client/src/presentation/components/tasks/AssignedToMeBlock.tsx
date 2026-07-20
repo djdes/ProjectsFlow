@@ -890,7 +890,7 @@ export function AssignedToMeBlock({
               id={`group-${grouping}-${group.key}`}
               data={dropData}
               highlight={boardDragActive}
-              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
+              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-center flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
             >
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
@@ -1079,7 +1079,7 @@ function TimeBucketColumn({
       // серых колонок доски ниже. На мобиле альфа выше, в dark ещё выше. Не поднимать выше
       // /[0.09]//[0.11] — начинает «светиться».
       className={cn(
-        'flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
+        'flex w-[86vw] max-w-[22rem] shrink-0 snap-center flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
         isOver && 'ring-2 ring-inset ring-primary',
       )}
     >
@@ -1152,7 +1152,7 @@ function PhantomDropColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-all duration-200 sm:w-44',
+        'flex w-40 shrink-0 snap-center flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-all duration-200 sm:w-44',
         isOver && 'scale-[1.02] border-primary bg-primary/[0.08]',
       )}
     >
@@ -1861,6 +1861,83 @@ function AcceptedCard({
   const { title, body } = splitTitleBody(item.description ?? '');
   // Название проекта — всегда видимая пилюля в правом верхнем углу (инбокс → «Личные»).
   const projectLabel = item.isInbox ? 'Личные' : item.projectName;
+
+  // Кнопки действий (чекбокс + удалить). Рендерятся в ДВУХ раскладках: десктоп — плавающий
+  // оверлей по hover, мобила — статичный ряд под текстом. big=true → тач-размер (size-9).
+  const renderActions = (big: boolean): React.ReactNode => (
+    <>
+      <InboxCheckbox
+        task={item}
+        lastDoneTaskId={null}
+        lastTodoTaskId={null}
+        onChanged={onChanged}
+        disabled={!item.canModify}
+        variant="toolbar"
+      />
+      {/* Удаление показываем только при правах — кнопка, которая заведомо упадёт, хуже её
+          отсутствия. Чекбокс же остаётся видимым (disabled) как индикатор статуса. */}
+      {item.canModify && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
+            big ? 'size-9' : 'size-6',
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label="Удалить"
+        >
+          <Trash2 className={big ? 'size-4' : 'size-3'} />
+        </Button>
+      )}
+    </>
+  );
+
+  // Мета-бейджи (дата/ответственный/коммиты/вложения/комменты/приоритет/срок). Десктоп —
+  // нижний левый оверлей по hover, мобила — тот же контент в статичном нижнем ряду.
+  const metaInner = (
+    <>
+      {/* Дата создания — при сортировке «по дате создания». */}
+      {showCreatedAt && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+          <CalendarDays className="size-3" />
+          {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(item.createdAt)}
+        </span>
+      )}
+      <AssigneeBadge assignee={item.assignee} />
+      {(item.commitCount ?? 0) > 0 && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-blue-600 dark:text-blue-400">
+          <GitCommit className="size-3" />
+          {item.commitCount}
+        </span>
+      )}
+      {(item.attachmentCount ?? 0) > 0 && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400">
+          <ImageIcon className="size-3" />
+          {item.attachmentCount}
+        </span>
+      )}
+      {(item.commentCount ?? 0) > 0 && (
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-violet-600 dark:text-violet-400">
+          <MessageSquare className="size-3" />
+          {item.commentCount}
+        </span>
+      )}
+      <RalphModeBadge mode={item.ralphMode} />
+      {item.priority !== null && item.priority !== undefined && (
+        <PriorityBadge priority={item.priority} />
+      )}
+      {item.deadline ? (
+        <DeadlineBadge deadline={item.deadline} status={item.status} />
+      ) : (
+        <span className="whitespace-nowrap text-muted-foreground/50">без срока</span>
+      )}
+    </>
+  );
+
   return (
     <div
       className={cn(
@@ -1880,48 +1957,24 @@ function AcceptedCard({
           <span className="truncate">{projectLabel}</span>
         </div>
       )}
-      <div className="relative flex items-start gap-1.5 px-2 py-2">
-        {/* Действия — в ПРАВОМ ВЕРХНЕМ углу, один в один с карточкой доски проекта
-            (см. KanbanCard): «выполнено» + «удалить». В покое скрыты, текст идёт на всю
-            ширину; на hover/фокусе всплывают. На тач всегда видимы. Сплошной bg-card
-            маскирует текст под кнопками. */}
+      {/* Моб: колонка (текст сверху, ряд мета/действий снизу); десктоп — строка с
+          плавающими оверлеями (как на доске проекта, см. KanbanCard). */}
+      <div className="relative flex flex-col gap-1.5 px-2 py-2 sm:flex-row sm:items-start">
+        {/* Действия — ДЕСКТОП: оверлей в правом верхнем углу (по hover/фокусу). На мобиле
+            скрыт (hidden) — действия в статичном нижнем ряду (ниже), текст виден целиком. */}
         <div
-          // top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки
-          // НЕЗАВИСИМО от её высоты — как на досках проектов.
-          className="pointer-events-none absolute right-1 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
+          className="pointer-events-none absolute right-1 top-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
-          <InboxCheckbox
-            task={item}
-            lastDoneTaskId={null}
-            lastTodoTaskId={null}
-            onChanged={onChanged}
-            disabled={!item.canModify}
-            variant="toolbar"
-          />
-          {/* Удаление показываем только при правах — кнопка, которая заведомо упадёт, хуже её
-              отсутствия. Чекбокс же остаётся видимым (disabled) как индикатор статуса. */}
-          {item.canModify && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              aria-label="Удалить"
-            >
-              <Trash2 className="size-3 max-sm:size-3.5" />
-            </Button>
-          )}
+          {renderActions(false)}
         </div>
         <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
-          <div className="line-clamp-4 text-sm leading-snug">
-            <TaskTitleText title={title} />
+          // Моб: весь текст задачи (line-clamp-none). Заголовок полужирный, как на доске.
+          <div className="line-clamp-4 max-sm:line-clamp-none text-sm leading-snug">
+            <TaskTitleText title={title} className="font-medium text-foreground" />
             {body.trim() && (
               <Markdown
                 className={cn(
@@ -1937,44 +1990,19 @@ function AcceptedCard({
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}
       </div>
-      {/* Параметры (ответственный/коммиты/вложения/комменты/приоритет/СРОК) — как на досках: локальная
-          плашка снизу-слева, всплывает при наведении (запрос 4). Срок показываем ВСЕГДА (запрос 5). */}
-      <div className="pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.08]">
-        {/* Дата создания — при сортировке «по дате создания» (запрос: показывать её по наведению). */}
-        {showCreatedAt && (
-          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-            <CalendarDays className="size-3" />
-            {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(item.createdAt)}
-          </span>
-        )}
-        <AssigneeBadge assignee={item.assignee} />
-        {(item.commitCount ?? 0) > 0 && (
-          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-blue-600 dark:text-blue-400">
-            <GitCommit className="size-3" />
-            {item.commitCount}
-          </span>
-        )}
-        {(item.attachmentCount ?? 0) > 0 && (
-          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400">
-            <ImageIcon className="size-3" />
-            {item.attachmentCount}
-          </span>
-        )}
-        {(item.commentCount ?? 0) > 0 && (
-          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-violet-600 dark:text-violet-400">
-            <MessageSquare className="size-3" />
-            {item.commentCount}
-          </span>
-        )}
-        <RalphModeBadge mode={item.ralphMode} />
-        {item.priority !== null && item.priority !== undefined && (
-          <PriorityBadge priority={item.priority} />
-        )}
-        {item.deadline ? (
-          <DeadlineBadge deadline={item.deadline} status={item.status} />
-        ) : (
-          <span className="whitespace-nowrap text-muted-foreground/50">без срока</span>
-        )}
+        {/* Параметры — ДЕСКТОП: нижний левый оверлей по hover. На мобиле скрыт (hidden). */}
+        <div className="pointer-events-none absolute bottom-1 left-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]">
+          {metaInner}
+        </div>
+        {/* Параметры/действия — МОБИЛА: статичный ряд под текстом (всегда виден, крупные кнопки). */}
+        <div
+          className="mt-0.5 flex items-center justify-between gap-2 border-t border-black/[0.05] pt-1 text-[11px] text-muted-foreground sm:hidden dark:border-white/[0.06]"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 overflow-hidden">{metaInner}</span>
+          <span className="flex shrink-0 items-center gap-1">{renderActions(true)}</span>
         </div>
       </div>
     </div>
