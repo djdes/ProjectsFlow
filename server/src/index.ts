@@ -111,6 +111,7 @@ import {
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
+import { GithubProjectPackageJsonReader } from './infrastructure/github/GithubProjectPackageJsonReader.js';
 import { DrizzleSiteEditorRepository } from './infrastructure/repositories/DrizzleSiteEditorRepository.js';
 import { SiteEditorService } from './application/site-editor/SiteEditorService.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
@@ -1788,6 +1789,13 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       sites: siteArtifactRepo,
       storage: siteArtifactStorage,
+      // Даёт студии распознать проект со своим сервером и сказать об этом прямо, вместо
+      // вечного «Preview появится после первого запуска». Best-effort — см. reader.
+      packageJson: new GithubProjectPackageJsonReader({
+        projects: projectRepo,
+        tokens: githubTokenRepo,
+        api: githubApi,
+      }),
     }),
     deleteProject: new DeleteProject({
       projects: projectRepo,

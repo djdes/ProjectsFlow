@@ -505,6 +505,9 @@ export function projectsRouter(deps: Deps): Router {
         deployedAt: site.deployedAt ? site.deployedAt.toISOString() : null,
         fileCount: site.fileCount,
         routes: site.routes,
+        // Заполнено, только пока сайт не задеплоен: студия по нему решает, показать ли
+        // объяснение «проект со своим сервером» вместо обещания скорого Preview.
+        runtime: site.runtime,
       });
     } catch (e) {
       next(e);

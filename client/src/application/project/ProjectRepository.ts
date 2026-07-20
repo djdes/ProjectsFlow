@@ -22,6 +22,19 @@ export type ProjectSite = {
   readonly deployedAt: string | null;
   readonly fileCount: number;
   readonly routes: readonly string[];
+  // Вид проекта — приходит, только пока сайт не задеплоен, и только если сервер смог его
+  // определить. 'server_app' означает, что проект приносит свой серверный процесс: платформа
+  // его не исполняет, значит Preview не появится сам и нужна конверсия на бэкенд платформы.
+  // null — сервер промолчал (нет package.json, нет доступа к репозиторию, сомнительный
+  // случай); ведём себя как раньше.
+  readonly runtime: ProjectRuntimeSignals | null;
+};
+
+export type ProjectRuntimeSignals = {
+  readonly kind: "static" | "server_app" | "unknown";
+  // Человекочитаемые причины вердикта — показываем пользователю: «не поддерживается» без
+  // объяснения читается как поломка платформы.
+  readonly reasons: readonly string[];
 };
 
 // Бэкенд приложения проекта (SQLite-per-project, db/102). status='none' — бэкенд не заведён

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, Monitor, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
@@ -13,6 +13,7 @@ import { AiPromptSheet } from './preview/AiPromptSheet';
 import { CanvasRouteMap } from './preview/CanvasRouteMap';
 import { CodeSheet } from './preview/CodeSheet';
 import { PreviewCanvas } from './preview/PreviewCanvas';
+import { PreviewEmptyState } from './preview/PreviewEmptyState';
 import { PreviewToolbar } from './preview/PreviewToolbar';
 import {
   pollSiteEditorAiJob,
@@ -720,7 +721,7 @@ export function ProjectPreview({
 
   if (loadingSite) return <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Загружаем Preview…</div>;
   if (siteError) return <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed"><div className="max-w-sm text-center"><AlertCircle className="mx-auto mb-3 size-6 text-destructive" /><p className="font-medium">Не удалось получить результат проекта</p><p className="mt-1 text-sm text-muted-foreground">Проверьте соединение и попробуйте обновить Preview.</p><Button className="mt-4" variant="outline" onClick={() => window.location.reload()}>Повторить</Button></div></div>;
-  if (!site?.siteSlug || !site.deployedAt || !currentUrl || !baseUrl || !frameSrc) return <div className="grid min-h-[440px] place-items-center rounded-xl border border-dashed bg-muted/10 px-6"><div className="max-w-md text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-blue-500/10 text-blue-600"><Monitor className="size-6" /></span><h2 className="mt-4 text-lg font-semibold">Preview появится после первого запуска</h2><p className="mt-1.5 text-sm leading-6 text-muted-foreground">Как только воркер опубликует результат, сайт откроется здесь автоматически — без перезагрузки страницы.</p></div></div>;
+  if (!site?.siteSlug || !site.deployedAt || !currentUrl || !baseUrl || !frameSrc) return <PreviewEmptyState runtime={site?.runtime ?? null} />;
 
   return (
     <section
