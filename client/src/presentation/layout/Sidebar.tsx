@@ -223,7 +223,6 @@ export function Sidebar({
             ))}
           </div>
 
-          <div className="my-0.5 h-px w-6 bg-border" />
           <RailButton onClick={() => void startNewChat()} label="Новый чат">
             <Sparkles className="size-4" />
           </RailButton>
@@ -315,7 +314,9 @@ export function Sidebar({
           «Новый проект». Видны всем; «Администрирование» — по-прежнему только админам.
           Строка живёт ВНЕ скролл-контейнера списка проектов, чтобы не ломать его
           затухание краёв (.pf-scroll-fade). */}
-      <div className="border-t pt-2">
+      {/* Без border-t: в Notion над этими кнопками разделителя нет, панель заканчивается
+          самими кнопками. Отступ сверху даёт gap грида. */}
+      <div className="pt-1">
         {/* Геометрия и тени сняты с Notion через CDP (кнопка New chat в подвале сайдбара):
             высота 40, радиус 999px, зазор 10px, круглая кнопка 40×40, трёхслойная мягкая
             тень с hairline-обводкой последним слоем. Белый фон заменён на bg-card, чтобы
