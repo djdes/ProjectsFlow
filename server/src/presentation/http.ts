@@ -152,6 +152,7 @@ import type { TaskPropertyRepository } from '../application/task/TaskPropertyRep
 import type { TaskVersionRecorder } from '../application/task/TaskVersionRecorder.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAssignedToOthers.js';
+import type { ListPersonalTasksOfColleagues } from '../application/task/ListPersonalTasksOfColleagues.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { ChangeTaskAssignee } from '../application/task/ChangeTaskAssignee.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
@@ -604,6 +605,7 @@ type AppDeps = {
   readonly assignees: {
     readonly listAssignedToMe: ListTasksAssignedToMe;
     readonly listAssignedToOthers: ListTasksAssignedToOthers;
+    readonly listPersonalOfColleagues: ListPersonalTasksOfColleagues;
     readonly assignToProject: MoveTaskToProject;
     readonly changeAssignee: ChangeTaskAssignee;
   };

@@ -1147,13 +1147,20 @@ export class TelegramComposerService {
     }
 
     try {
-      const targetId = draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
+      // Same rule as finalizeSegments: no project + a delegate → the assignee's inbox.
+      const delegateUserId =
+        draft.assigneeUserId && draft.assigneeUserId !== userId ? draft.assigneeUserId : null;
+      const inboxOwnerId = delegateUserId ?? userId;
+      const delegatedInbox = !draft.projectId && inboxOwnerId !== userId;
+      const targetId =
+        draft.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId)).id;
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
         description: text,
         status: draft.targetStatus ?? DEFAULT_COLUMN,
         assigneeUserId: draft.assigneeUserId ?? userId,
+        allowInboxDelegation: delegatedInbox,
       });
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
@@ -2128,9 +2135,16 @@ export class TelegramComposerService {
           failed += 1;
           continue;
         }
-        const targetId = seg.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
         const assigneeUserId =
           seg.assigneeUserId && seg.assigneeUserId !== userId ? seg.assigneeUserId : null;
+        // No project resolved but somebody is responsible → the task belongs in the
+        // ASSIGNEE's inbox, not the author's. Otherwise a delegated task silently rots in
+        // the author's inbox and gets re-sent days later as a duplicate. Authorship
+        // (ownerUserId → created_by) stays with the sender.
+        const inboxOwnerId = assigneeUserId ?? userId;
+        const delegatedInbox = !seg.projectId && inboxOwnerId !== userId;
+        const targetId =
+          seg.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId)).id;
         const task = await this.deps.createTask.execute({
           projectId: targetId,
           ownerUserId: userId,
@@ -2138,6 +2152,7 @@ export class TelegramComposerService {
           status: seg.targetStatus ?? DEFAULT_COLUMN,
           deadline: seg.deadline,
           assigneeUserId: assigneeUserId ?? userId,
+          allowInboxDelegation: delegatedInbox,
         });
         created += 1;
         if (created === 1) {

@@ -66,6 +66,9 @@ export interface TaskRepository {
   // Батч-выборка задач по id (для верхнего личного канбана — задачи из разных проектов).
   // Порядок результата не гарантируется; вызывающий строит Map по id.
   listByIds(taskIds: readonly string[]): Promise<Task[]>;
+  // Живые задачи сразу нескольких проектов одним запросом. Порядок — как в listByProject
+  // (project, status, position). Access-check делает вызывающий use-case.
+  listByProjects(projectIds: readonly string[]): Promise<Task[]>;
   // Все задачи, где userId — текущий ответственный (в любых проектах).
   listAssignedTo(userId: string): Promise<Task[]>;
   // Все выборки выше и getById отдают ТОЛЬКО живые задачи: удалённая задача (db/134)

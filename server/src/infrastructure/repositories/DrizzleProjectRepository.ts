@@ -114,6 +114,15 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return row ? toProject(row) : null;
   }
 
+  async listInboxesByOwners(ownerIds: readonly string[]): Promise<Project[]> {
+    if (ownerIds.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(and(inArray(projects.ownerId, [...ownerIds]), eq(projects.isInbox, true)));
+    return rows.map(toProject);
+  }
+
   async create(input: CreateProjectInput): Promise<Project> {
     try {
       await this.db.insert(projects).values({

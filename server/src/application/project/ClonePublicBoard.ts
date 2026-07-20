@@ -65,6 +65,9 @@ export class ClonePublicBoard {
           coverPosition: t.coverPosition,
           status: t.status,
           deadline: t.deadline,
+          // Копия доски должна повторять источник: задача без срока остаётся без срока,
+          // а не получает дефолтное «сегодня».
+          preserveEmptyDeadline: true,
           priority: t.priority,
           afterTaskId: after,
         });

@@ -170,6 +170,7 @@ import { DrizzleTaskCommentRepository } from './infrastructure/repositories/Driz
 import { DrizzleTaskBillingAttributionRepository } from './infrastructure/repositories/DrizzleTaskBillingAttributionRepository.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { ListTasksAssignedToOthers } from './application/task/ListTasksAssignedToOthers.js';
+import { ListPersonalTasksOfColleagues } from './application/task/ListPersonalTasksOfColleagues.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { ChangeTaskAssignee } from './application/task/ChangeTaskAssignee.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
@@ -2339,6 +2340,14 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     listAssignedToOthers: new ListTasksAssignedToOthers({
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
+    }),
+    listPersonalOfColleagues: new ListPersonalTasksOfColleagues({
+      projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,

@@ -35,6 +35,7 @@ import {
   Inbox as InboxIcon,
   ListFilter,
   MessageSquare,
+  Trash2,
   Users,
   X,
   type LucideIcon,
@@ -77,6 +78,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { RalphModeBadge } from './RalphMode';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import type { UnifiedDndRef } from './unifiedDndTypes';
 import {
   asAssignedInboxBlockTask,
@@ -205,6 +207,17 @@ function readStoredTab(): AssigneeTab | null {
   }
 }
 
+// «Скрыть личные» на вкладке «Другим»: личные доски коллег могут занимать много колонок,
+// поэтому выбор запоминаем между сессиями. По умолчанию — показывать.
+const HIDE_PERSONAL_STORAGE_KEY = 'pf.inbox.hidePersonal';
+function readStoredHidePersonal(): boolean {
+  try {
+    return localStorage.getItem(HIDE_PERSONAL_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function AssignedToMeBlock({
   boardTasks,
   inboxProjectId,
@@ -223,6 +236,9 @@ export function AssignedToMeBlock({
   const { data: allProjects } = useProjectsContext();
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
+  // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
+  // Сервер отдаёт их только по кругу общих рабочих пространств и всегда canModify: false.
+  const [colleaguePersonalTasks, setColleaguePersonalTasks] = useState<AssignedTask[]>([]);
   const [tab, setTab] = useState<AssigneeTab>(() => readStoredTab() ?? 'toMe');
   // Зафиксирован ли стартовый выбор вкладки: сохранённый выбор фиксирует его сразу,
   // иначе авто-переключение выполняется один раз после загрузки обоих источников.
@@ -240,6 +256,20 @@ export function AssignedToMeBlock({
   // Фильтры вкладки «Другим»: ответственный и проект. null = все.
   const [filterTo, setFilterTo] = useState<string | null>(null);
   const [filterProject, setFilterProject] = useState<string | null>(null);
+  // «Скрыть личные» — вкладка «Другим» может быть плотно забита личными досками коллег.
+  // Персистим за браузером (как выбор вкладки), сервера это не касается.
+  const [hidePersonal, setHidePersonal] = useState<boolean>(() => readStoredHidePersonal());
+  const handleHidePersonalChange = useCallback((next: boolean): void => {
+    try {
+      localStorage.setItem(HIDE_PERSONAL_STORAGE_KEY, next ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+    setHidePersonal(next);
+  }, []);
+  // Подтверждение удаления карточки (кнопка-корзина в hover-панели).
+  const [deleteTarget, setDeleteTarget] = useState<InboxBlockTask | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
   // Персист гор. скролла ряда канбанов (по вкладке+группировке): старт слева, reload сохраняет.
   const { setRef: setHScrollRef, onScroll: onHScroll } = usePersistentScrollLeft(
@@ -258,12 +288,14 @@ export function AssignedToMeBlock({
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const [mine, byMe] = await Promise.all([
+      const [mine, byMe, personal] = await Promise.all([
         taskAssigneeRepository.listMine(),
         taskAssigneeRepository.listOthers(),
+        taskAssigneeRepository.listColleaguesPersonal(),
       ]);
       setTasks(mine);
       setByMeTasks(byMe);
+      setColleaguePersonalTasks(personal);
     } catch (e) {
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     }
@@ -277,12 +309,14 @@ export function AssignedToMeBlock({
     Promise.all([
       taskAssigneeRepository.listMine(),
       taskAssigneeRepository.listOthers(),
+      taskAssigneeRepository.listColleaguesPersonal(),
       userRepository.getUiPrefs(),
     ])
-      .then(([mine, byMe, prefs]) => {
+      .then(([mine, byMe, personal, prefs]) => {
         if (cancelled) return;
         setTasks(mine);
         setByMeTasks(byMe);
+        setColleaguePersonalTasks(personal);
         // Сортировка ПЕРСИСТИТСЯ за аккаунтом (users.ui_prefs) — при перезагрузке та же.
         // (Была session-only «точка 4» — юзер передумал 2026-07-11.)
         if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
@@ -313,6 +347,32 @@ export function AssignedToMeBlock({
   const handleToggled = (): void => {
     void refresh();
     onChanged?.();
+  };
+
+  // Удаление карточки блока — через тот же стильный диалог, что и на досках проектов
+  // (не нативный confirm). handleDelete лишь открывает окно, удаляет confirmDelete.
+  const handleDelete = (item: InboxBlockTask): void => {
+    setDeleteTarget(item);
+  };
+  const confirmDelete = async (): Promise<void> => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      // projectId берём у самой задачи: в блоке лежат задачи из РАЗНЫХ проектов,
+      // а не только из инбокса.
+      await taskRepository.delete(deleteTarget.projectId, deleteTarget.id);
+      toast.success('Задача удалена');
+      // Личные задачи блока — зеркала карточек нижней доски, её тоже надо перечитать.
+      if (isPersonalInboxBlockTask(deleteTarget)) {
+        await externalDnd?.current.board?.refetch();
+      }
+      setDeleteTarget(null);
+      handleToggled();
+    } catch (err) {
+      toast.error(`Не удалось удалить: ${(err as Error).message}`);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleDrawerSubmit = async (input: {
@@ -347,18 +407,23 @@ export function AssignedToMeBlock({
       }),
     [tasks, boardTasks, inboxProjectId, user],
   );
-  const byMeDisplayTasks = useMemo(
-    () => byMeTasks.map(asAssignedInboxBlockTask),
-    [byMeTasks],
-  );
+  // Вкладка «Другим» = задачи, делегированные мной + личные доски коллег. Дедуп по id:
+  // задача, которую я делегировал коллеге в ЕГО инбокс, приезжает из обоих источников.
+  const byMeDisplayTasks = useMemo(() => {
+    const seen = new Set(byMeTasks.map((t) => t.id));
+    return [
+      ...byMeTasks,
+      ...colleaguePersonalTasks.filter((t) => !seen.has(t.id)),
+    ].map(asAssignedInboxBlockTask);
+  }, [byMeTasks, colleaguePersonalTasks]);
   const toMeVisible = useMemo(
     () => (hideDone ? toMeTasks.filter(notDone) : toMeTasks),
     [toMeTasks, hideDone],
   );
-  const byMeVisibleAll = useMemo(
-    () => (hideDone ? byMeDisplayTasks.filter(notDone) : byMeDisplayTasks),
-    [byMeDisplayTasks, hideDone],
-  );
+  const byMeVisibleAll = useMemo(() => {
+    const afterDone = hideDone ? byMeDisplayTasks.filter(notDone) : byMeDisplayTasks;
+    return hidePersonal ? afterDone.filter((t) => !t.isInbox) : afterDone;
+  }, [byMeDisplayTasks, hideDone, hidePersonal]);
   // Фильтры «ответственный / проект» — только вкладка «Другим», поверх hide-done.
   // Предикат вынесен: им же различаем причину пустоты (фильтры vs скрытые done).
   const matchesByMeFilters = useCallback(
@@ -391,26 +456,28 @@ export function AssignedToMeBlock({
   const filterOptions = useMemo(() => {
     const to = new Map<string, string>();
     const projects = new Map<string, string>();
-    for (const t of byMeTasks) {
+    // Берём объединённый список (делегированные + личные доски коллег), иначе коллеги,
+    // у которых есть только личные задачи, не попадали бы в меню фильтров.
+    for (const t of byMeDisplayTasks) {
       to.set(t.assignee.userId, t.assignee.displayName);
-      projects.set(t.projectId, t.isInbox ? 'Личные' : t.projectName);
+      projects.set(t.projectId, t.isInbox ? `Личные · ${t.assignee.displayName}` : t.projectName);
     }
     const toArr = (m: Map<string, string>): { id: string; name: string }[] =>
       [...m.entries()]
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     return { to: toArr(to), projects: toArr(projects) };
-  }, [byMeTasks]);
+  }, [byMeDisplayTasks]);
   // Проект-фильтр сбрасываем, если проект исчез из данных (архив/удаление) — иначе вкладка
   // выглядела бы пустой без причины. Фильтр ответственного НЕ сбрасываем: клик по аватару
   // участника выставляет фильтр даже на того, у кого сейчас нет задач — держим выбор
   // активным и показываем пустое состояние. (Раньше сброс срабатывал сразу после клика по
   // участнику без задач → «фильтр сбрасывался, аватар не выделялся».)
   useEffect(() => {
-    if (filterProject && !byMeTasks.some((t) => t.projectId === filterProject)) {
+    if (filterProject && !byMeDisplayTasks.some((t) => t.projectId === filterProject)) {
       setFilterProject(null);
     }
-  }, [byMeTasks, filterProject]);
+  }, [byMeDisplayTasks, filterProject]);
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
   // Направление = активная вкладка: влияет на подпись inbox-групп («Личные · кто/кому»).
   const groups = useMemo(
@@ -627,6 +694,10 @@ export function AssignedToMeBlock({
       onGroupingChange={handleGroupingChange}
       hideDone={hideDone}
       onHideDoneChange={onHideDoneChange}
+      // «Скрыть личные» — только там, где личные доски коллег реально мешают.
+      showHidePersonal={tab === 'byMe'}
+      hidePersonal={hidePersonal}
+      onHidePersonalChange={handleHidePersonalChange}
       options={filterOptions}
       to={filterTo}
       project={filterProject}
@@ -760,6 +831,7 @@ export function AssignedToMeBlock({
                         item={item}
                         onOpen={() => setDrawerTask(item)}
                         onChanged={handleToggled}
+                        onDelete={() => handleDelete(item)}
                       />
                     </DraggableTask>
                   )}
@@ -834,6 +906,7 @@ export function AssignedToMeBlock({
                       item={item}
                       onOpen={() => setDrawerTask(item)}
                       onChanged={handleToggled}
+                      onDelete={() => handleDelete(item)}
                       showCreatedAt={grouping === 'created'}
                       hideProjectLabel={grouping === 'project'}
                     />
@@ -875,6 +948,17 @@ export function AssignedToMeBlock({
         projectName={drawerTask && !drawerTask.isInbox ? drawerTask.projectName : undefined}
         isInbox={drawerTask?.isInbox ?? false}
         aiProjectId={drawerTask && !drawerTask.isInbox ? drawerTask.projectId : null}
+      />
+
+      {/* Удаление карточки из hover-панели — тот же диалог, что и на досках проектов. */}
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        taskLabel={deleteTarget ? plainTaskTitle(deleteTarget.description ?? '') : null}
+        onConfirm={() => void confirmDelete()}
+        busy={deleting}
       />
 
       {/* Дроп в колонку «Будущее» → выбор конкретного срока (неделя / конец месяца / день). */}
@@ -1480,6 +1564,9 @@ function InboxFiltersPopover({
   onGroupingChange,
   hideDone,
   onHideDoneChange,
+  showHidePersonal,
+  hidePersonal,
+  onHidePersonalChange,
   options,
   to,
   project,
@@ -1493,6 +1580,9 @@ function InboxFiltersPopover({
   onGroupingChange: (g: AssignedGrouping) => void;
   hideDone: boolean;
   onHideDoneChange?: (v: boolean) => void;
+  showHidePersonal: boolean;
+  hidePersonal: boolean;
+  onHidePersonalChange: (v: boolean) => void;
   options: {
     to: { id: string; name: string }[];
     projects: { id: string; name: string }[];
@@ -1506,7 +1596,8 @@ function InboxFiltersPopover({
   const activeFilterCount = showFilters ? [to, project].filter((v) => v !== null).length : 0;
   // Бейдж на кнопке = сколько «нестандартного» включено (фильтры + скрытие выполненных),
   // чтобы было видно активность, не открывая поповер. Сортировка — выбор, не «активный фильтр».
-  const badgeCount = activeFilterCount + (hideDone ? 1 : 0);
+  const badgeCount =
+    activeFilterCount + (hideDone ? 1 : 0) + (showHidePersonal && hidePersonal ? 1 : 0);
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -1532,6 +1623,10 @@ function InboxFiltersPopover({
           {/* Скрыть выполненные — всегда (действует и на доску ниже). */}
           <div className="px-1">
             <HideDoneRow value={hideDone} onChange={onHideDoneChange} />
+            {/* Скрыть личные — только вкладка «Другим» (личные доски коллег). */}
+            {showHidePersonal && (
+              <HidePersonalRow value={hidePersonal} onChange={onHidePersonalChange} />
+            )}
           </div>
 
           {/* Сортировка верхнего личного блока — когда есть задачи (иначе вкладок нет). */}
@@ -1588,6 +1683,36 @@ function InboxFiltersPopover({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+// Строка-тумблер «скрыть/показать личные» — только вкладка «Другим», где к делегированным
+// задачам примешиваются личные доски коллег. Зеркалит вёрстку HideDoneRow.
+function HidePersonalRow({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      aria-pressed={value}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+    >
+      <InboxIcon className="size-3.5 shrink-0" />
+      <span className="flex-1 text-left">Скрыть личные</span>
+      <span
+        className={cn(
+          'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+          value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
+        )}
+      >
+        {value ? 'скрыты' : 'видны'}
+      </span>
+    </button>
   );
 }
 
@@ -1717,12 +1842,14 @@ function AcceptedCard({
   item,
   onOpen,
   onChanged,
+  onDelete,
   showCreatedAt = false,
   hideProjectLabel = false,
 }: {
   item: InboxBlockTask;
   onOpen: () => void;
   onChanged: () => void;
+  onDelete: () => void;
   // При сортировке «по дате создания» показываем дату создания в мета-строке (по наведению).
   showCreatedAt?: boolean;
   // При сортировке «по проекту» колонка уже названа проектом — ярлык на карточке не нужен.
@@ -1754,10 +1881,14 @@ function AcceptedCard({
         </div>
       )}
       <div className="relative flex items-start gap-1.5 px-2 py-2">
-        {/* Чекбокс — hover-оверлей слева-сверху (как на досках): в покое скрыт, текст на всю
-            ширину; при наведении наслаивается на начало текста. На тач всегда виден. */}
+        {/* Действия — в ПРАВОМ ВЕРХНЕМ углу, один в один с карточкой доски проекта
+            (см. KanbanCard): «выполнено» + «удалить». В покое скрыты, текст идёт на всю
+            ширину; на hover/фокусе всплывают. На тач всегда видимы. Сплошной bg-card
+            маскирует текст под кнопками. */}
         <div
-          className="pointer-events-none absolute left-1 top-1 z-20 rounded-full bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
+          // top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки
+          // НЕЗАВИСИМО от её высоты — как на досках проектов.
+          className="pointer-events-none absolute right-1 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
@@ -1768,7 +1899,24 @@ function AcceptedCard({
             lastTodoTaskId={null}
             onChanged={onChanged}
             disabled={!item.canModify}
+            variant="toolbar"
           />
+          {/* Удаление показываем только при правах — кнопка, которая заведомо упадёт, хуже её
+              отсутствия. Чекбокс же остаётся видимым (disabled) как индикатор статуса. */}
+          {item.canModify && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-8"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              aria-label="Удалить"
+            >
+              <Trash2 className="size-3 max-sm:size-3.5" />
+            </Button>
+          )}
         </div>
         <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
