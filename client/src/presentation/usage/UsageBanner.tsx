@@ -66,10 +66,11 @@ export function UsageBanner(): React.ReactElement | null {
         type="button"
         onClick={() => usageDialog.open()}
         className={cn(
-          'flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left text-sm shadow-lg backdrop-blur',
+          // Сплошной bg-card без backdrop-blur (iOS-перф): баннер плавающий над скроллом.
+          'flex w-full items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-left text-sm shadow-lg',
           blocked
-            ? 'border-destructive/40 bg-destructive/10 text-destructive'
-            : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+            ? 'border-destructive/40 text-destructive'
+            : 'border-amber-500/40 text-amber-700 dark:text-amber-300',
         )}
       >
         <TriangleAlert className="size-4 shrink-0" />

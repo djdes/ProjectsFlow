@@ -890,7 +890,7 @@ export function AssignedToMeBlock({
               id={`group-${grouping}-${group.key}`}
               data={dropData}
               highlight={boardDragActive}
-              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-center flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
+              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
             >
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
@@ -1079,7 +1079,7 @@ function TimeBucketColumn({
       // серых колонок доски ниже. На мобиле альфа выше, в dark ещё выше. Не поднимать выше
       // /[0.09]//[0.11] — начинает «светиться».
       className={cn(
-        'flex w-[86vw] max-w-[22rem] shrink-0 snap-center flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
+        'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
         isOver && 'ring-2 ring-inset ring-primary',
       )}
     >
@@ -1152,7 +1152,7 @@ function PhantomDropColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-40 shrink-0 snap-center flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-all duration-200 sm:w-44',
+        'flex w-40 shrink-0 snap-center snap-always flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-all duration-200 sm:w-44',
         isOver && 'scale-[1.02] border-primary bg-primary/[0.08]',
       )}
     >

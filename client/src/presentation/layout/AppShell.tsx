@@ -344,7 +344,11 @@ export function AppShell(): React.ReactElement {
             </main>
             <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-              <SheetContent side="left" showClose={false} className="w-[88vw] max-w-sm p-0">
+              <SheetContent
+                side="left"
+                showClose={false}
+                className="w-[88vw] max-w-sm p-0 data-[state=closed]:duration-150 data-[state=open]:duration-200"
+              >
                 <div className="h-full">
                   <Sidebar onNavigate={() => setDrawerOpen(false)} />
                 </div>
@@ -477,7 +481,10 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => setDragIndex(null)}
-        className="relative mx-auto flex max-w-md touch-none select-none items-stretch gap-1 rounded-[1.55rem] border border-white/20 bg-background/65 p-1 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.35)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-background/55 dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.6)]"
+        // iOS-перф: НЕ используем backdrop-blur на таб-баре — «стеклянная» панель постоянно
+        // висит поверх скролла, а backdrop-filter пересчитывается каждый кадр (главный тормоз
+        // на iPhone Safari). Делаем СПЛОШНОЙ фон — визуально чисто, скролл плавный.
+        className="relative mx-auto flex max-w-md touch-none select-none items-stretch gap-1 rounded-[1.55rem] border border-black/10 bg-background p-1 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]"
       >
         {/* верхний блик стекла */}
         <span

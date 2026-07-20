@@ -37,9 +37,13 @@
       (function () {
         try {
           var m = localStorage.getItem('pf-motion');
+          // По умолчанию (нет сохранённого выбора) анимации выключены на тач-устройствах
+          // (pointer: coarse — телефон/PWA) и при OS reduce-motion. Синхронно с MotionProvider.
           var off =
             m === 'off' ||
-            (m === null && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            (m === null &&
+              (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+                window.matchMedia('(pointer: coarse)').matches));
           if (off) document.documentElement.classList.add('pf-no-motion');
         } catch (_) {
           /* localStorage недоступен */

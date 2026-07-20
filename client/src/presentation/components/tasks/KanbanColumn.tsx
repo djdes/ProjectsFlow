@@ -404,10 +404,11 @@ export function KanbanColumn({
         // на hover колонки проявляем «тихие» иконки шапки (Notion-style).
         // Высота — по контенту (Notion single-scroll): колонка растёт вниз, свой скролл не нужен —
         // скроллится вся страница целиком.
-        // snap-center (моб): при свайпе колонка магнитно встаёт по ЦЕНТРУ экрана (92vw
-        // оставляет узкие «пипки» соседей по краям — видно, что доска листается). На sm+
-        // снап выключен на контейнере (sm:snap-none) — десктоп скроллит свободно.
-        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center flex-col rounded-xl sm:w-72 sm:max-w-none',
+        // snap-center + snap-always (моб): при свайпе колонка магнитно встаёт по ЦЕНТРУ
+        // экрана, ровно ОДИН магнит на колонку (snap-always запрещает проскок мимо — каждая
+        // колонка обязательная остановка). 92vw оставляет узкие «пипки» соседей по краям —
+        // видно, что доска листается. На sm+ снап выключен (sm:snap-none) — свободный скролл.
+        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center snap-always flex-col rounded-xl sm:w-72 sm:max-w-none',
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >
@@ -417,10 +418,11 @@ export function KanbanColumn({
           style={pinnedHeaderStyle}
           className={cn(
           'flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-2.5',
-          // Notion: шапка колонки липнет при скролле страницы (заголовки колонок
-          // остаются видны). Фрост-фон (bg-muted/85 + blur) прячет карточки, уезжающие
-          // под неё, и сохраняет тон колонки.
-          stickyHeaderTop != null && 'z-30 rounded-t-xl bg-muted/85 backdrop-blur-md dark:bg-muted/90',
+          // Notion: шапка колонки липнет при скролле страницы (заголовки колонок остаются
+          // видны). На мобиле — СПЛОШНОЙ фон без backdrop-blur (blur при вертикальном скролле
+          // доски дико тормозит iOS Safari). Фрост оставляем только на десктопе (sm+).
+          stickyHeaderTop != null &&
+            'z-30 rounded-t-xl bg-muted dark:bg-muted sm:bg-muted/85 sm:backdrop-blur-md sm:dark:bg-muted/90',
           // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
           selectionMode && 'rounded-t-xl bg-primary/10',
           )}

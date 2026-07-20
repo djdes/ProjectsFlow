@@ -17,9 +17,15 @@ function readInitial(storageKey: string): boolean {
   } catch {
     /* localStorage недоступен */
   }
-  // Если пользователь сам выставил OS-уровень reduce-motion — стартуем выключенными.
   try {
-    return !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // OS-уровень reduce-motion → стартуем выключенными.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    // Тач-устройства (телефон/планшет/PWA) по умолчанию БЕЗ анимаций: framer-motion
+    // (layout/spring) и CSS-переходы на мобиле — главный источник лагов и «глюков» при
+    // скролле. Пользователь может включить обратно тумблером в профиле. Десктоп (mouse) —
+    // с анимациями как раньше.
+    if (window.matchMedia('(pointer: coarse)').matches) return false;
+    return true;
   } catch {
     return true;
   }
