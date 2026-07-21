@@ -124,12 +124,19 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* iOS: гасим горизонтальный «свайп назад/вперёд». overscroll-behavior-x: none не даёт
-     горизонтальному overscroll (на краях лент/страницы) уходить в навигацию истории Safari
-     и в рабер-бенд. Горизонтальный скролл доски при этом работает как обычно. */
+  /* iOS: гасим горизонтальный «свайп назад/вперёд» + рабер-бенд. overscroll-behavior: none
+     на корне не даёт краевому overscroll уходить в навигацию истории Safari. overflow-x:
+     clip запрещает странице скроллиться по горизонтали вообще (нечему рубер-бендить —
+     горизонтально скроллятся только вложенные ленты доски, у них своя overscroll-x-none).
+     Основной жест-гард — в useEdgeSwipe (preventDefault у краёв), это CSS-страховка. */
+  html,
+  body,
+  #root {
+    overscroll-behavior: none;
+  }
   html,
   body {
-    overscroll-behavior-x: none;
+    overflow-x: clip;
   }
 
   /* Notion-style выделение текста — мягкий синий тинт во всём приложении. */

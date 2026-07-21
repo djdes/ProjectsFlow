@@ -25,7 +25,7 @@ export function useEdgeSwipe({
   open,
   onOpen,
   onClose,
-  edgePx = 28,
+  edgePx = 22,
   thresholdPx = 44,
 }: Opts): void {
   const ref = useRef({ open, onOpen, onClose });
@@ -72,23 +72,35 @@ export function useEdgeSwipe({
       if (!t) return;
       const dx = t.clientX - sx;
       const dy = t.clientY - sy;
-      if (dir === 0) {
-        if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) dir = 1;
-        else if (Math.abs(dy) > 6) {
-          edge = null; // вертикаль — отдаём странице обычный скролл
-          return;
-        } else return;
+      const s = ref.current;
+
+      if (s.open) {
+        // Панель открыта: гасим только ГОРИЗОНТАЛЬ (закрытие), вертикаль отдаём скроллу сайдбара.
+        if (dir === 0) {
+          if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) dir = 1;
+          else if (Math.abs(dy) > 6) {
+            edge = null;
+            return;
+          } else return;
+        }
+        e.preventDefault();
+        if (!fired && dx < -thresholdPx) {
+          fired = true;
+          s.onClose();
+        }
+        return;
       }
-      // Горизонтальный краевой жест — гасим системный back/forward.
+
+      // Панель закрыта, касание НАЧАЛОСЬ У КРАЯ: системный свайп назад/вперёд iOS надо гасить
+      // с ПЕРВОГО же кадра движения — если ждать определения направления (6px), WebKit успевает
+      // инициировать жест, и preventDefault уже не помогает (жалоба «ты не убрал айфоновские
+      // свайпы»). Поэтому preventDefault сразу, ещё до анализа направления. Цена — вертикальный
+      // скролл в узкой кромке (edgePx) у самого края не работает; приемлемо ради отключения свайпа.
       e.preventDefault();
       if (fired) return;
-      const s = ref.current;
-      if (!s.open && edge === 'left' && dx > thresholdPx) {
+      if (edge === 'left' && dx > thresholdPx && Math.abs(dx) > Math.abs(dy)) {
         fired = true;
         s.onOpen();
-      } else if (s.open && dx < -thresholdPx) {
-        fired = true;
-        s.onClose();
       }
     };
 

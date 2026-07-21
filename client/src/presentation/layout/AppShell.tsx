@@ -531,8 +531,8 @@ function MobileBottomNav(): React.ReactElement {
     draggingRef.current = true;
     movedRef.current = false;
     e.currentTarget.setPointerCapture(e.pointerId);
-    // Во время драга стекло догоняет палец быстро; после отпускания вернём плавный snap.
-    if (glassRef.current) glassRef.current.style.transitionDuration = '110ms';
+    // Во время драга — БЕЗ перехода: стекло стоит строго под пальцем 1:1 (никакого «догоняния»).
+    if (glassRef.current) glassRef.current.style.transition = 'none';
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
     if (!draggingRef.current) return;
@@ -542,9 +542,9 @@ function MobileBottomNav(): React.ReactElement {
   const finishDrag = (clientX: number): void => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
-    if (glassRef.current) glassRef.current.style.transitionDuration = '';
+    // Возвращаем плавный переход из класса → snap до вкладки анимируется.
+    if (glassRef.current) glassRef.current.style.transition = '';
     const idx = indexFromX(clientX);
-    // Плавно доводим стекло до вкладки (даже если маршрут не сменится — snap назад к центру).
     snapTo(idx);
     items[idx]?.run();
   };
@@ -564,7 +564,7 @@ function MobileBottomNav(): React.ReactElement {
         onPointerCancel={() => {
           if (!draggingRef.current) return;
           draggingRef.current = false;
-          if (glassRef.current) glassRef.current.style.transitionDuration = '';
+          if (glassRef.current) glassRef.current.style.transition = '';
           snapTo(activeIndex);
         }}
         className="relative mx-auto flex max-w-md touch-none select-none items-stretch rounded-[1.55rem] border border-black/10 bg-background p-1.5 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]"
@@ -579,7 +579,7 @@ function MobileBottomNav(): React.ReactElement {
           <span
             ref={glassRef}
             aria-hidden
-            className="pf-nav-glass pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.15rem] bg-gradient-to-b from-white/80 to-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_7px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.06] transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:from-white/[0.16] dark:to-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_7px_rgba(0,0,0,0.35)] dark:ring-white/[0.12]"
+            className="pf-nav-glass pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.15rem] bg-gradient-to-b from-white/90 via-white/70 to-white/45 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.9),inset_0_-1px_2px_rgba(0,0,0,0.05),0_4px_10px_-2px_rgba(0,0,0,0.18)] ring-1 ring-white/50 transition-transform duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:from-white/[0.2] dark:via-white/[0.1] dark:to-white/[0.04] dark:shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.25),inset_0_-1px_2px_rgba(0,0,0,0.3),0_4px_10px_-2px_rgba(0,0,0,0.45)] dark:ring-white/[0.14]"
             style={{ width: 'calc((100% - 0.75rem) / 3)', transform: `translateX(${activeIndex * 100}%)` }}
           />
         )}
