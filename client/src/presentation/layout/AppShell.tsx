@@ -496,13 +496,79 @@ function MobileBottomNav(): React.ReactElement {
   ];
   const activeIndex = items.findIndex((i) => i.active);
 
-  // Парящая панель (сплошной фон — без backdrop-blur ради iOS-перф). Один «ликвид-стекло»
-  // индикатор ПЛАВНО скользит к активной вкладке чистым CSS-transform (без framer-motion и
-  // без per-pixel ре-рендеров) — класс pf-nav-glass выведен из-под html.pf-no-motion, чтобы
-  // движение оставалось шёлковым даже при выключенных на мобиле анимациях.
+  const innerRef = useRef<HTMLDivElement>(null);
+  const glassRef = useRef<HTMLSpanElement>(null);
+  const draggingRef = useRef(false);
+  const movedRef = useRef(false);
+
+  const metrics = (): { left: number; pad: number; innerW: number; gw: number } | null => {
+    const inner = innerRef.current;
+    if (!inner) return null;
+    const r = inner.getBoundingClientRect();
+    const pad = 6; // p-1.5 = 0.375rem
+    const innerW = r.width - pad * 2;
+    return { left: r.left, pad, innerW, gw: innerW / items.length };
+  };
+  // Стекло следует за пальцем (прямой DOM-transform, БЕЗ ре-рендера — плавно).
+  const followFinger = (clientX: number): void => {
+    const g = glassRef.current;
+    const m = metrics();
+    if (!g || !m) return;
+    const x = Math.max(0, Math.min(m.innerW - m.gw, clientX - m.left - m.pad - m.gw / 2));
+    g.style.transform = `translateX(${x}px)`;
+  };
+  const indexFromX = (clientX: number): number => {
+    const m = metrics();
+    if (!m) return activeIndex;
+    return Math.max(0, Math.min(items.length - 1, Math.floor((clientX - m.left - m.pad) / m.gw)));
+  };
+  const snapTo = (i: number): void => {
+    const g = glassRef.current;
+    if (g) g.style.transform = `translateX(${i * 100}%)`;
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+    draggingRef.current = true;
+    movedRef.current = false;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    // Во время драга стекло догоняет палец быстро; после отпускания вернём плавный snap.
+    if (glassRef.current) glassRef.current.style.transitionDuration = '110ms';
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
+    if (!draggingRef.current) return;
+    movedRef.current = true;
+    followFinger(e.clientX);
+  };
+  const finishDrag = (clientX: number): void => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    if (glassRef.current) glassRef.current.style.transitionDuration = '';
+    const idx = indexFromX(clientX);
+    // Плавно доводим стекло до вкладки (даже если маршрут не сменится — snap назад к центру).
+    snapTo(idx);
+    items[idx]?.run();
+  };
+
+  // Парящая панель (сплошной фон — без backdrop-blur ради iOS-перф). «Ликвид-стекло»
+  // индикатор двигается прямым CSS-transform: зажми и веди пальцем — облачко едет за пальцем,
+  // на отпускании доезжает до вкладки и переключает её. Класс pf-nav-glass выведен из-под
+  // html.pf-no-motion, чтобы движение оставалось шёлковым даже при выключенных на мобиле анимациях.
   return (
     <nav className="shrink-0 px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.15rem)]">
-      <div className="relative mx-auto flex max-w-md select-none items-stretch rounded-[1.55rem] border border-black/10 bg-background p-1.5 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]">
+      <div
+        ref={innerRef}
+        data-pf-no-edge-swipe
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => finishDrag(e.clientX)}
+        onPointerCancel={() => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          if (glassRef.current) glassRef.current.style.transitionDuration = '';
+          snapTo(activeIndex);
+        }}
+        className="relative mx-auto flex max-w-md touch-none select-none items-stretch rounded-[1.55rem] border border-black/10 bg-background p-1.5 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]"
+      >
         {/* верхний блик стекла */}
         <span
           aria-hidden
@@ -511,6 +577,7 @@ function MobileBottomNav(): React.ReactElement {
         {/* Ликвид-стекло индикатор — ширина ровно в одну вкладку, едет translateX'ом. */}
         {activeIndex >= 0 && (
           <span
+            ref={glassRef}
             aria-hidden
             className="pf-nav-glass pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.15rem] bg-gradient-to-b from-white/80 to-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_7px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.06] transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:from-white/[0.16] dark:to-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_7px_rgba(0,0,0,0.35)] dark:ring-white/[0.12]"
             style={{ width: 'calc((100% - 0.75rem) / 3)', transform: `translateX(${activeIndex * 100}%)` }}
@@ -527,7 +594,13 @@ function MobileBottomNav(): React.ReactElement {
               type="button"
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
-              onClick={() => item.run()}
+              // Тап/драг ловит контейнер (pointer). Клавиатуре оставляем прямой вызов.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  item.run();
+                }
+              }}
               className={cn(
                 'relative z-10 flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] py-1.5 text-[10px] leading-none transition-colors duration-200',
                 isActive ? 'text-foreground' : 'text-muted-foreground',

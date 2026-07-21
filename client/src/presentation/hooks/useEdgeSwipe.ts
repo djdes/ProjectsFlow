@@ -47,6 +47,12 @@ export function useEdgeSwipe({
         edge = null;
         return;
       }
+      // Зоны, которые сами обрабатывают горизонтальный жест (напр. drag таб-бара) —
+      // не перехватываем, иначе жест «уедет» в открытие панели.
+      if ((e.target as Element | null)?.closest?.('[data-pf-no-edge-swipe]')) {
+        edge = null;
+        return;
+      }
       const t = e.touches[0]!;
       sx = t.clientX;
       sy = t.clientY;
