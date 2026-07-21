@@ -809,6 +809,9 @@ export function AssignedToMeBlock({
             // Как у основной доски: каждая колонка заканчивается под своей последней
             // задачей, а не растягивается до высоты самой длинной соседней колонки.
             'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto pb-2',
+            // Хвостовой спейсер (моб): последняя колонка доскролливается до ЦЕНТРА
+            // (col = min(86vw, 22rem) → peek = (100vw − col)/2). На десктопе выключен.
+            "after:shrink-0 after:content-[''] after:w-[max(7vw,calc(50vw_-_11rem))] sm:after:hidden",
             bleedNegClass,
             bleedPadClass,
           )}
@@ -852,6 +855,9 @@ export function AssignedToMeBlock({
           onScroll={onHScroll}
           className={cn(
             'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto pb-2',
+            // Хвостовой спейсер (моб): последняя колонка доскролливается до ЦЕНТРА
+            // (col = min(86vw, 22rem) → peek = (100vw − col)/2). На десктопе выключен.
+            "after:shrink-0 after:content-[''] after:w-[max(7vw,calc(50vw_-_11rem))] sm:after:hidden",
             bleedNegClass,
             bleedPadClass,
           )}

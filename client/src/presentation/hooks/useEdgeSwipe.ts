@@ -1,85 +1,115 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 type Opts = {
-  // Жест активен только на мобиле (передаём !isDesktop). На десктопе слушатели не вешаем.
+  // Тонкая полоса-ловушка у левого края экрана (жест «открыть»). Non-passive обработчик
+  // на ней блокирует скролл доски во время свайпа.
+  edgeRef: RefObject<HTMLElement | null>;
+  // Жест активен только на мобиле (передаём !isDesktop).
   enabled: boolean;
-  // Открыт ли сейчас drawer (нужно, чтобы отличать «открыть» от «закрыть»).
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
-  // Зона у левого края экрана, из которой засчитывается жест «открыть» (px).
-  edgePx?: number;
-  // Порог горизонтального смещения, после которого жест срабатывает СРАЗУ (px).
+  // Порог горизонтального смещения, после которого панель открывается/закрывается (px).
   thresholdPx?: number;
 };
 
-// iPhone-style edge-swipe для мобильного drawer (левая панель):
-//   • свайп от ЛЕВОГО КРАЯ вправо  → открыть панель;
-//   • свайп ВЛЕВО (когда открыта)  → закрыть.
-// Срабатывает ПРЯМО ВО ВРЕМЯ движения (на touchmove), как только палец прошёл порог —
-// панель реагирует мгновенно, не дожидаясь отпускания пальца. Слушатели пассивные, ничего
-// не preventDefault'им; вертикальный скролл и горизонтальный скролл доски (жест не от края
-// / вертикально-доминантный) не затрагиваются.
+// iPhone-style edge-swipe для мобильной левой панели:
+//   • тянешь ОТ САМОГО ЛЕВОГО КРАЯ вправо → панель открывается (доска при этом НЕ скроллится,
+//     т.к. жест начинается на полосе-ловушке и мы preventDefault'им горизонталь);
+//   • свайп ВЛЕВО когда открыта → закрывается.
+// Направление определяется по первым ~8px: горизонталь → перехватываем (открытие),
+// вертикаль → отпускаем (обычный скролл страницы работает).
 export function useEdgeSwipe({
+  edgeRef,
   enabled,
   open,
   onOpen,
   onClose,
-  edgePx = 30,
-  thresholdPx = 40,
+  thresholdPx = 44,
 }: Opts): void {
-  // Свежие значения в ref — чтобы не переподписывать слушатели на каждый рендер.
   const ref = useRef({ open, onOpen, onClose });
   useEffect(() => {
     ref.current = { open, onOpen, onClose };
   });
 
+  // ОТКРЫТИЕ — с полосы-ловушки у левого края. Non-passive: preventDefault горизонтали
+  // не даёт доске прокрутиться под пальцем.
+  useEffect(() => {
+    const el = edgeRef.current;
+    if (!enabled || !el) return;
+
+    let sx = 0;
+    let sy = 0;
+    let dir = 0; // 0 — не решено, 1 — горизонталь, -1 — вертикаль
+    let opened = false;
+
+    const onStart = (e: TouchEvent): void => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0]!;
+      sx = t.clientX;
+      sy = t.clientY;
+      dir = 0;
+      opened = false;
+    };
+    const onMove = (e: TouchEvent): void => {
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      if (dir === 0) {
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) dir = 1;
+        else if (Math.abs(dy) > 8) {
+          dir = -1;
+          return;
+        } else return;
+      }
+      if (dir !== 1) return; // вертикальный скролл не трогаем
+      e.preventDefault(); // блокируем горизонтальный скролл доски
+      if (!opened && dx > thresholdPx) {
+        opened = true;
+        ref.current.onOpen();
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+    };
+  }, [edgeRef, enabled, thresholdPx]);
+
+  // ЗАКРЫТИЕ — свайп влево, когда панель открыта (по всему окну, passive).
   useEffect(() => {
     if (!enabled) return;
-
-    let startX = 0;
-    let startY = 0;
-    let fromEdge = false;
+    let sx = 0;
+    let sy = 0;
     let tracking = false;
-    let fired = false; // один срабат на жест
-
+    let done = false;
     const onStart = (e: TouchEvent): void => {
       if (e.touches.length !== 1) {
         tracking = false;
         return;
       }
       const t = e.touches[0]!;
-      startX = t.clientX;
-      startY = t.clientY;
-      fromEdge = startX <= edgePx;
+      sx = t.clientX;
+      sy = t.clientY;
       tracking = true;
-      fired = false;
+      done = false;
     };
-
     const onMove = (e: TouchEvent): void => {
-      if (!tracking || fired) return;
+      if (!tracking || done || !ref.current.open) return;
       const t = e.touches[0];
       if (!t) return;
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-      // Преимущественно горизонтальное движение, иначе это скролл — не трогаем.
-      if (Math.abs(dx) < Math.abs(dy)) return;
-      if (Math.abs(dx) < thresholdPx) return;
-
-      const s = ref.current;
-      if (!s.open && fromEdge && dx > 0) {
-        fired = true;
-        s.onOpen();
-      } else if (s.open && dx < 0) {
-        fired = true;
-        s.onClose();
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      if (dx < -thresholdPx && Math.abs(dx) > Math.abs(dy)) {
+        done = true;
+        ref.current.onClose();
       }
     };
-
     const onEnd = (): void => {
       tracking = false;
     };
-
     window.addEventListener('touchstart', onStart, { passive: true });
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('touchend', onEnd, { passive: true });
@@ -90,5 +120,5 @@ export function useEdgeSwipe({
       window.removeEventListener('touchend', onEnd);
       window.removeEventListener('touchcancel', onEnd);
     };
-  }, [enabled, edgePx, thresholdPx]);
+  }, [enabled, thresholdPx]);
 }

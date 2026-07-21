@@ -473,6 +473,16 @@ a:focus-visible {
 
   html.pf-no-motion .pf-claude-agent-icon { animation: none; }
   html.pf-no-motion .pf-tg-login-btn::after { animation: none; opacity: 0; }
+
+  /* Мобильный drawer (левая панель) ОБЯЗАН плавно выезжать даже когда анимации на мобиле
+     выключены (pf-no-motion): жест «вытянуть с края» без анимации выглядит рывком. Класс-
+     специфичность перебивает html.pf-no-motion * { …duration: 0.01ms !important }. */
+  html.pf-no-motion [data-pf-drawer-content],
+  html.pf-no-motion [data-pf-drawer-content]::before,
+  html.pf-no-motion [data-pf-drawer-content]::after {
+    animation-duration: 220ms !important;
+    transition-duration: 220ms !important;
+  }
 }
 
 /* Tiptap WYSIWYG-редактор (RichTextEditor): placeholder, mention, task-list. */
