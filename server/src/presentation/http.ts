@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express, { type Express, type Request, type RequestHandler } from 'express';
+import express, { type Express, type Request, type Response, type RequestHandler } from 'express';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
@@ -1181,6 +1181,16 @@ export function createApp(deps: AppDeps): CreatedApp {
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const clientDist = resolve(moduleDir, '../../../client/dist');
   const landingDist = resolve(moduleDir, '../../../landing/dist');
+
+  // SPA index.html ОБЯЗАН отдаваться с no-cache: он ссылается на контент-хешированные
+  // бандлы (/assets/index-<hash>.js), и если браузер (особенно iOS PWA — без service
+  // worker'а он агрессивно держит стартовый документ в HTTP-кеше) закеширует старый
+  // index.html, то новые деплои «не применяются» — грузятся старые бандлы. no-cache
+  // заставляет ревалидировать документ на каждой навигации → новые хеши подхватываются.
+  const sendClientIndex = (res: Response): void => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.sendFile(resolve(clientDist, 'index.html'));
+  };
   const hasClient = existsSync(clientDist);
   const hasLanding = existsSync(landingDist);
   const isDev = process.env['NODE_ENV'] !== 'production';
@@ -1266,7 +1276,7 @@ export function createApp(deps: AppDeps): CreatedApp {
         // экран). Признак ассета — наличие расширения в пути.
         if (!isDev && hasClient) {
           if (isAssetReq) return next();
-          res.sendFile(resolve(clientDist, 'index.html'));
+          sendClientIndex(res);
           return;
         }
         return next();
@@ -1325,7 +1335,7 @@ export function createApp(deps: AppDeps): CreatedApp {
         return;
       }
       if (hasClient) {
-        res.sendFile(resolve(clientDist, 'index.html'));
+        sendClientIndex(res);
         return;
       }
     }
@@ -1336,7 +1346,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     }
     // Без лендинга и без SPA — fallback в SPA если он есть.
     if (isDev && viteProxy) viteProxy(req, res, next);
-    else if (hasClient) res.sendFile(resolve(clientDist, 'index.html'));
+    else if (hasClient) sendClientIndex(res);
     else res.status(503).send('Frontend not available');
   });
 
@@ -1364,7 +1374,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       return;
     }
     if (hasClient) {
-      res.sendFile(resolve(clientDist, 'index.html'));
+      sendClientIndex(res);
       return;
     }
     next();
