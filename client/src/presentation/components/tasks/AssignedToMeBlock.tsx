@@ -839,8 +839,9 @@ export function AssignedToMeBlock({
               )}
             </TimeBucketColumn>
           ))}
-          {/* Хвостовой спейсер (моб): последняя колонка доскролливается до ЦЕНТРА. */}
-          <div aria-hidden className="w-16 shrink-0 sm:hidden" />
+          {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
+              ЦЕНТРУ и через snap, и через max-scroll (iOS). Ширина = «пипке» соседа. */}
+          <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
         </div>
       ) : (
         // Прочие сортировки (проект / дата создания / приоритет): горизонтальные КОЛОНКИ-канбаны —
@@ -924,8 +925,9 @@ export function AssignedToMeBlock({
             </GroupDropColumn>
             );
           })}
-          {/* Хвостовой спейсер (моб): последняя колонка доскролливается до ЦЕНТРА. */}
-          <div aria-hidden className="w-16 shrink-0 sm:hidden" />
+          {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
+              ЦЕНТРУ и через snap, и через max-scroll (iOS). Ширина = «пипке» соседа. */}
+          <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
         </div>
       )}
 
