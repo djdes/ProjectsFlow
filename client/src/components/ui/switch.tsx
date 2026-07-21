@@ -23,15 +23,17 @@ export function Switch({
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background',
-        checked ? 'bg-primary' : 'bg-input',
+        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background',
+        // Off-состояние: заметный светло-серый трек. В тёмной теме bg-input сливался с фоном,
+        // а тёмный ползунок читался как «чёрный эллипс» — поэтому ползунок теперь всегда белый.
+        checked ? 'bg-primary' : 'bg-black/15 dark:bg-white/20',
         disabled && 'cursor-not-allowed opacity-50',
       )}
     >
       <span
         className={cn(
-          'inline-block size-4 transform rounded-full bg-background shadow transition-transform',
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5',
+          'inline-block size-5 transform rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform',
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5',
         )}
       />
     </button>

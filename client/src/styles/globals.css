@@ -124,6 +124,14 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* iOS: гасим горизонтальный «свайп назад/вперёд». overscroll-behavior-x: none не даёт
+     горизонтальному overscroll (на краях лент/страницы) уходить в навигацию истории Safari
+     и в рабер-бенд. Горизонтальный скролл доски при этом работает как обычно. */
+  html,
+  body {
+    overscroll-behavior-x: none;
+  }
+
   /* Notion-style выделение текста — мягкий синий тинт во всём приложении. */
   ::selection {
     background: var(--selection);
@@ -489,6 +497,12 @@ a:focus-visible {
   html.pf-no-motion [data-pf-drawer-content]::after {
     animation-duration: 220ms !important;
     transition-duration: 220ms !important;
+  }
+
+  /* «Ликвид-стекло» индикатор таб-бара тоже обязан плавно скользить даже при выключенных
+     на мобиле анимациях — иначе он телепортируется между вкладками. */
+  html.pf-no-motion .pf-nav-glass {
+    transition-duration: 380ms !important;
   }
 }
 

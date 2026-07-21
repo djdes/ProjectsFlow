@@ -8,12 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  AnimatedChat,
-  AnimatedFolder,
-  AnimatedInbox,
-  AnimatedUser,
-} from '@/presentation/components/nav/AnimatedNavIcons';
+import { AnimatedInbox, AnimatedUser } from '@/presentation/components/nav/AnimatedNavIcons';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -402,7 +397,7 @@ export function AppShell(): React.ReactElement {
                 <Outlet />
               </PageTransition>
             </main>
-            <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
+            <MobileBottomNav />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent
                 side="left"
@@ -501,144 +496,57 @@ type NavItem = {
 // Парящая стеклянная панель (iOS-26 / Telegram glass). Жест: зажать и провести пальцем по
 // панели — стеклянный индикатор пружинисто едет за пальцем (motion layout), на отпускании
 // выбирается вкладка под ним. Обычный тап и клавиатура (Enter/Space) тоже работают.
-function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): React.ReactElement {
-  const { count: actionable } = useActionableUnreadCount();
-  const { animations } = useMotion();
+function MobileBottomNav(): React.ReactElement {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Индекс вкладки под пальцем во время жеста (null — жеста нет).
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  // «Поп» иконки при срабатывании вкладки (как в Telegram): index — какая, id растёт на
-  // каждом срабатывании, чтобы анимация перезапускалась (через смену key у motion-иконки).
-  const [pop, setPop] = useState<{ index: number; id: number }>({ index: -1, id: 0 });
-
+  // Три вкладки: Входящие · ИИ · Профиль (все route-based).
   const items: NavItem[] = [
     { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/') },
-    { key: 'projects', label: 'Проекты', icon: <AnimatedFolder className="size-5" />, active: false, run: onOpenProjects },
-    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: actionable, active: false, run: () => { try { localStorage.setItem('pf_sidebar_rail', 'chat'); } catch { /* ignore */ } onOpenProjects(); } },
     { key: 'ai', label: 'ИИ', icon: <Sparkles className="size-5" />, active: pathname === '/ai' || pathname.startsWith('/ai/'), run: () => navigate('/ai') },
     { key: 'profile', label: 'Профиль', icon: <AnimatedUser className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
   ];
   const activeIndex = items.findIndex((i) => i.active);
-  // Подсвечено: палец во время жеста, иначе — активный маршрут (−1 = ничего, напр. внутри проекта).
-  const highlight = dragIndex ?? activeIndex;
 
-  // Какая вкладка под точкой X — панель из равных flex-ячеек, делим ширину на их число.
-  const indexFromX = (clientX: number): number | null => {
-    const el = containerRef.current;
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    const ratio = (clientX - r.left) / r.width;
-    return Math.min(items.length - 1, Math.max(0, Math.floor(ratio * items.length)));
-  };
-
-  // Срабатывание вкладки: действие + триггер «попа» иконки.
-  const select = (i: number): void => {
-    items[i]?.run();
-    setPop((p) => ({ index: i, id: p.id + 1 }));
-  };
-
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDragIndex(indexFromX(e.clientX));
-  };
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
-    if (dragIndex === null) return;
-    const i = indexFromX(e.clientX);
-    if (i !== null) setDragIndex(i);
-  };
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>): void => {
-    if (dragIndex === null) return;
-    select(indexFromX(e.clientX) ?? dragIndex);
-    setDragIndex(null);
-  };
-
-  const glassTransition = animations
-    ? { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.7 }
-    : { duration: 0 };
-
-  // Парящая стеклянная панель: внешний <nav> держит отступы (эффект парения + safe-area
-  // снизу), внутренний слой — frosted glass (blur + saturate + полупрозрачность + тень).
-  // В потоке flex (shrink-0): контент страницы останавливается над панелью, оверлапа нет.
-  // См. CLAUDE.md → «Правка мобильной вёрстки / PWA под iPhone».
+  // Парящая панель (сплошной фон — без backdrop-blur ради iOS-перф). Один «ликвид-стекло»
+  // индикатор ПЛАВНО скользит к активной вкладке чистым CSS-transform (без framer-motion и
+  // без per-pixel ре-рендеров) — класс pf-nav-glass выведен из-под html.pf-no-motion, чтобы
+  // движение оставалось шёлковым даже при выключенных на мобиле анимациях.
   return (
     <nav className="shrink-0 px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.15rem)]">
-      <div
-        ref={containerRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={() => setDragIndex(null)}
-        // iOS-перф: НЕ используем backdrop-blur на таб-баре — «стеклянная» панель постоянно
-        // висит поверх скролла, а backdrop-filter пересчитывается каждый кадр (главный тормоз
-        // на iPhone Safari). Делаем СПЛОШНОЙ фон — визуально чисто, скролл плавный.
-        className="relative mx-auto flex max-w-md touch-none select-none items-stretch gap-1 rounded-[1.55rem] border border-black/10 bg-background p-1 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]"
-      >
+      <div className="relative mx-auto flex max-w-md select-none items-stretch rounded-[1.55rem] border border-black/10 bg-background p-1.5 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]">
         {/* верхний блик стекла */}
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-white/20"
         />
-        {items.map((item, idx) => {
-          const isHighlighted = idx === highlight;
-          const isUnderFinger = dragIndex !== null && idx === dragIndex;
-          // «Живые» иконки получают active → оживают внутренние части (как в рейле сайдбара).
+        {/* Ликвид-стекло индикатор — ширина ровно в одну вкладку, едет translateX'ом. */}
+        {activeIndex >= 0 && (
+          <span
+            aria-hidden
+            className="pf-nav-glass pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.15rem] bg-gradient-to-b from-white/80 to-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_7px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.06] transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:from-white/[0.16] dark:to-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_7px_rgba(0,0,0,0.35)] dark:ring-white/[0.12]"
+            style={{ width: 'calc((100% - 0.75rem) / 3)', transform: `translateX(${activeIndex * 100}%)` }}
+          />
+        )}
+        {items.map((item) => {
+          const isActive = item.active;
           const icon = isValidElement(item.icon)
-            ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: isHighlighted })
+            ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: isActive })
             : item.icon;
           return (
             <button
               key={item.key}
               type="button"
               aria-label={item.label}
-              aria-current={item.active ? 'page' : undefined}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  select(idx);
-                }
-              }}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => item.run()}
               className={cn(
-                'relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] py-1.5 text-[10px] leading-none transition-colors duration-200',
-                isHighlighted ? 'text-foreground' : 'text-muted-foreground',
+                'relative z-10 flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] py-1.5 text-[10px] leading-none transition-colors duration-200',
+                isActive ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
-              {/* Стеклянный индикатор: один на панель (layoutId) — пружинисто переезжает между вкладками. */}
-              {isHighlighted && (
-                <motion.span
-                  aria-hidden
-                  layoutId="pf-nav-glass"
-                  transition={glassTransition}
-                  className="absolute inset-0 rounded-[1.15rem] bg-background/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.04] dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.3)] dark:ring-white/10"
-                />
-              )}
-              <span className="relative z-10 inline-flex">
-                {animations ? (
-                  <motion.span
-                    // key растёт при срабатывании → motion перезапускает «поп» (как иконки в Telegram).
-                    key={pop.index === idx ? pop.id : 'idle'}
-                    className="inline-flex"
-                    initial={pop.index === idx ? { scale: 0.55 } : false}
-                    animate={{ scale: isUnderFinger ? 1.14 : 1, y: isUnderFinger ? -2 : 0 }}
-                    transition={{ type: 'spring', stiffness: 620, damping: 15, mass: 0.7 }}
-                  >
-                    {icon}
-                  </motion.span>
-                ) : (
-                  icon
-                )}
-                {/* Бейдж непрочитанного (U5): раньше сверялось с key 'notifications',
-                    которого нет среди вкладок (inbox|projects|chat|profile) — индикатор
-                    не рендерился никогда. Теперь показываем на любой вкладке с badge>0. */}
-                {(item.badge ?? 0) > 0 && (
-                  <span className="absolute -right-1.5 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
-                    {(item.badge ?? 0) > 99 ? '99+' : item.badge}
-                  </span>
-                )}
-              </span>
-              <span className="relative z-10">{item.label}</span>
+              <span className="relative inline-flex">{icon}</span>
+              <span>{item.label}</span>
             </button>
           );
         })}
