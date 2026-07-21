@@ -22,7 +22,11 @@ export function AiComposerPresets({
 }): React.ReactElement {
   return (
     <div className={className}>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      {/* Адаптив по ширине КОНТЕЙНЕРА, а не вьюпорта (lg:grid-cols-4 ломал ряд в узкой
+          боковой панели студии: viewport ≥1024 → всегда 4 колонки в 280–360px). auto-fit +
+          minmax(7rem) сам подбирает число колонок под доступную ширину: узкая панель — 2,
+          широкая страница — до 4. Работает и на ПК, и на мобиле. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
         {AI_COMPOSER_PRESETS.map(({ icon: Icon, title, prompt }) => (
           <button
             key={title}

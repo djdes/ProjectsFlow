@@ -368,10 +368,13 @@ export function AppShell(): React.ReactElement {
               <Button
                 variant="ghost"
                 size="icon"
+                className="size-9 shrink-0"
                 onClick={() => setDrawerOpen(true)}
                 aria-label="Открыть меню"
               >
-                <Menu />
+                {/* Явный size-5: без него lucide рисует 24px, и на тач-экранах чёткость плывёт
+                    (иконка выглядит «раздвоенной»/жирной). Совпадает с бургером десктопа. */}
+                <Menu className="size-5" />
               </Button>
               <MobileWorkspaceTitle />
             </header>
