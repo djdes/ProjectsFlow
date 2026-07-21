@@ -27,6 +27,19 @@ import { randomCover } from '@/presentation/components/project/coverGallery';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 
+// Ключ и чтение переключателя «Скрыть описание» — пер-проектные, живут вне компонента,
+// чтобы их можно было звать из инициализатора состояния и при смене проекта в рендере.
+const descriptionStoreKey = (projectId: string | undefined): string =>
+  `pf:project-description-hidden:${projectId ?? ''}`;
+
+function readDescriptionHidden(projectId: string | undefined): boolean {
+  try {
+    return localStorage.getItem(descriptionStoreKey(projectId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data, loading, notFound } = useProject(projectId ?? '');
@@ -75,7 +88,30 @@ export function TasksPage(): React.ReactElement {
   // Участники для аватар-стека в шапке (только совместные проекты).
   const [members, setMembers] = useState<ProjectMember[]>([]);
   // #3: описание можно скрыть/показать (Notion-style toggle над заголовком).
-  const [descriptionHidden, setDescriptionHidden] = useState(false);
+  // Состояние переживает перезагрузку и хранится ПЕР-ПРОЕКТ: скрыв описание в одном проекте,
+  // пользователь не ждёт, что оно исчезнет во всех. localStorage, а не sessionStorage (как у
+  // окна активности выше): «скрыл — значит скрыто» относится к проекту вообще, а не к вкладке.
+  //
+  // Хранит projectId вместе со значением и пересчитывается ПРЯМО В РЕНДЕРЕ при его смене:
+  // страница не перемонтируется при переходе между проектами (маршрут тот же, меняется только
+  // параметр), поэтому инициализатор useState отработал бы один раз и состояние протекло бы
+  // из предыдущего проекта. Сброс эффектом дал бы кадр с чужим значением — описание мигало бы.
+  const [descriptionState, setDescriptionState] = useState(() => ({
+    projectId,
+    hidden: readDescriptionHidden(projectId),
+  }));
+  if (descriptionState.projectId !== projectId) {
+    setDescriptionState({ projectId, hidden: readDescriptionHidden(projectId) });
+  }
+  const descriptionHidden = descriptionState.hidden;
+  const setDescriptionHidden = (hidden: boolean): void => {
+    setDescriptionState({ projectId, hidden });
+    try {
+      localStorage.setItem(descriptionStoreKey(projectId), hidden ? '1' : '0');
+    } catch {
+      /* localStorage недоступен — состояние просто не переживёт перезагрузку */
+    }
+  };
   const [coverBusy, setCoverBusy] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const { submit: submitProject } = useUpdateProject();
@@ -88,11 +124,6 @@ export function TasksPage(): React.ReactElement {
       document.title = 'ProjectsFlow';
     };
   }, [data?.name]);
-
-  // Сброс «описание скрыто» при переходе на другой проект (страница не перемонтируется).
-  useEffect(() => {
-    setDescriptionHidden(false);
-  }, [projectId]);
 
   useEffect(() => {
     if (!projectId || !data) {
@@ -390,7 +421,7 @@ export function TasksPage(): React.ReactElement {
                 {coverBusy ? 'Добавляем…' : 'Добавить обложку'}
               </HeadToolButton>
             )}
-            <HeadToolButton onClick={() => setDescriptionHidden((h) => !h)}>
+            <HeadToolButton onClick={() => setDescriptionHidden(!descriptionHidden)}>
               <Text className="size-4" />
               {descriptionHidden ? 'Показать описание' : 'Скрыть описание'}
             </HeadToolButton>
