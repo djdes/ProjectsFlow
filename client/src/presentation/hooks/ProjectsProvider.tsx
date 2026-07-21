@@ -60,20 +60,32 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
     refresh();
   }, [refresh]);
 
-  // Live-обновление списка: при изменении проекта (rename и т.п.) или задач (счётчик
-  // taskCount в сайдбаре) перезагружаем список. Debounce коалесцирует серию событий.
+  // Live-обновление списка проектов.
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const schedule = (): void => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(refresh, 400);
+    let projectTimer: ReturnType<typeof setTimeout> | null = null;
+    let taskTimer: ReturnType<typeof setTimeout> | null = null;
+    // PROJECT_CHANGED — редкое, юзер-инициированное (rename/create): быстрый debounce.
+    const onProject = (): void => {
+      if (projectTimer) clearTimeout(projectTimer);
+      projectTimer = setTimeout(refresh, 400);
     };
-    window.addEventListener(PROJECT_CHANGED_EVENT, schedule);
-    window.addEventListener(TASK_CHANGED_EVENT, schedule);
+    // TASK_CHANGED — при активном воркере валит ПОТОКОМ (SSE), а список проектов от него по
+    // сути не меняется (нужен лишь для taskCount в сайдбаре). Рефетч всего дерева на каждый
+    // тик = «тап срабатывает через секунды». Жёстко коалесцируем: не чаще раза в 5с.
+    const onTask = (): void => {
+      if (taskTimer) return;
+      taskTimer = setTimeout(() => {
+        taskTimer = null;
+        refresh();
+      }, 5000);
+    };
+    window.addEventListener(PROJECT_CHANGED_EVENT, onProject);
+    window.addEventListener(TASK_CHANGED_EVENT, onTask);
     return () => {
-      if (timer) clearTimeout(timer);
-      window.removeEventListener(PROJECT_CHANGED_EVENT, schedule);
-      window.removeEventListener(TASK_CHANGED_EVENT, schedule);
+      if (projectTimer) clearTimeout(projectTimer);
+      if (taskTimer) clearTimeout(taskTimer);
+      window.removeEventListener(PROJECT_CHANGED_EVENT, onProject);
+      window.removeEventListener(TASK_CHANGED_EVENT, onTask);
     };
   }, [refresh]);
 

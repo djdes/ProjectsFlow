@@ -65,12 +65,17 @@ export function UsageProvider({ children }: { children: ReactNode }): React.Reac
     };
   }, [refresh]);
 
-  // Активность воркера двигает задачи → расход изменился. Debounce коалесцирует серию.
+  // Активность воркера двигает задачи → расход изменился. SSE-поток task-событий при
+  // активном воркере валит часто, а refresh() ре-рендерит всё дерево (провайдер на верхушке).
+  // Жёстко коалесцируем: не чаще раза в 5с (плюс есть периодический polling выше).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const schedule = (): void => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(refresh, 1500);
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        refresh();
+      }, 5000);
     };
     window.addEventListener(TASK_CHANGED_EVENT, schedule);
     return () => {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -65,7 +66,12 @@ const BASE_PROSE = cn(
   '[&_table]:block [&_table]:w-fit [&_table]:max-w-full [&_table]:overflow-x-auto',
 );
 
-export function Markdown({
+// memo: полный remark/rehype-парсинг синхронный и дорогой; на досках он висит в каждой
+// карточке. Пропсы примитивны (children/className — строки, onCheckboxToggle обычно undefined),
+// поэтому shallow-compare реально отсекает перепарс, когда тело не менялось (главный виновник
+// «тап через секунды»: при активном воркере рефетч задач ре-рендерил карточки, и каждая
+// перепарсивала markdown заново). См. диагностику перф.
+function MarkdownImpl({
   children,
   className,
   onCheckboxToggle,
@@ -125,6 +131,8 @@ export function Markdown({
     </div>
   );
 }
+
+export const Markdown = memo(MarkdownImpl);
 
 // Пресет для «карточного» рендера (kanban-карточка, строки списка, inbox). Текст
 // прижат (нулевые отступы блоков), заголовки не «раздуваются» (выглядят как жирный

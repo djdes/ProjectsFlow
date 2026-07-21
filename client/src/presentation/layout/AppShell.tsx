@@ -73,9 +73,7 @@ export function AppShell(): React.ReactElement {
   }, [pathname]);
   // iPhone-style жест: тянешь от левого края — панель открывается (доска не скроллится),
   // свайп влево — закрывается. Только на мобиле; на десктопе панель управляется иначе.
-  const edgeSwipeRef = useRef<HTMLDivElement>(null);
   useEdgeSwipe({
-    edgeRef: edgeSwipeRef,
     enabled: !isDesktop,
     open: drawerOpen,
     onOpen: () => setDrawerOpen(true),
@@ -366,16 +364,6 @@ export function AppShell(): React.ReactElement {
           </div>
         ) : (
           <div className="flex h-dvh flex-col bg-background text-foreground">
-            {/* Полоса-ловушка edge-swipe: тянешь отсюда (у левого края) вправо — открывается
-                панель, доска под пальцем не скроллится (touch-action:pan-y отдаёт вертикальный
-                скролл браузеру, горизонталь — нам). Ограничена контентом: не накрывает бургер
-                сверху и таб-бар снизу. z ниже drawer'а — когда открыт, не мешает. */}
-            <div
-              ref={edgeSwipeRef}
-              aria-hidden
-              className="fixed left-0 top-11 bottom-24 z-[46] w-5"
-              style={{ touchAction: 'pan-y' }}
-            />
             <header className="flex min-h-11 shrink-0 items-center gap-2 border-b px-2">
               <Button
                 variant="ghost"
