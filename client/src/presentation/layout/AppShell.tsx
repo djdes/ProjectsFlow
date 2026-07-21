@@ -34,6 +34,7 @@ import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionP
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
+import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
@@ -179,6 +180,11 @@ export function AppShell(): React.ReactElement {
   const navCompact = !collapsed && sidebarWidth < SIDEBAR_COMPACT_WIDTH;
   const { animations } = useMotion();
 
+  // Единственное условие «плавающий бургер сейчас на экране»: им и рисуем кнопку, и
+  // помечаем корень для globals.css. Разводить эти два места нельзя — разъехавшись, они
+  // дают либо бургер поверх текста, либо пустой отступ на странице, где бургера нет.
+  const floatingBurger = isDesktop && collapsed && !(studioRoute && studioChatHidden);
+
   // Свёрнутая панель: наведение на бургер, на левый край экрана или на сам предпросмотр
   // показывает плавающий предпросмотр панели; клик по бургеру — закрепляет её открытой.
   // Таймер на закрытие «сшивает» зазоры между этими зонами, чтобы предпросмотр не мигал.
@@ -238,6 +244,9 @@ export function AppShell(): React.ReactElement {
               // Пока тянем ручку — гасим выделение текста.
               sidebarDragging && 'select-none',
             )}
+            // Отступ под плавающий бургер выдаёт globals.css по этому атрибуту — страницам
+            // достаточно повесить .pf-burger-gap, считать пиксели им не нужно.
+            data-pf-floating-burger={floatingBurger ? 'true' : 'false'}
             // Свёрнутая панель скрывается ЦЕЛИКОМ (Notion-style); развёрнутая — тянется ручкой.
             style={{ gridTemplateColumns: collapsed ? '1fr' : `${sidebarWidth}px 1fr` }}
           >
@@ -265,7 +274,7 @@ export function AppShell(): React.ReactElement {
             )}
             {/* Свёрнутая панель (Notion-style): бургер сверху-слева + предпросмотр на hover.
                 Контент (обложка, синяя плашка) при этом растянут до левого края. */}
-            {collapsed && !(studioRoute && studioChatHidden) && (
+            {floatingBurger && (
               <>
                 {/* Курсор «упёрся» в левый край экрана → панель выезжает так же, как по
                     наведению на бургер (Notion). Полоса 4px ловит движение к краю и почти
@@ -289,19 +298,21 @@ export function AppShell(): React.ReactElement {
                         }}
                         aria-label="Показать боковую панель"
                         // Бургер сливается с фоном страницы: ни заливки, ни тени — подложка
-                        // появляется только на hover.
-                        // Геометрия по MEASURED.md §3 (иконки хрома у Notion 28×28, радиус 6):
-                        // size-7 + top-2 ставит центр на y=22 — ровно центр строки крошек
-                        // (h-11, items-center), а правый край на x=36, т.е. на 4px левее их
-                        // pl-10 (ProjectBreadcrumbs при collapsed).
+                        // появляется только на hover. Радиус 6px — по MEASURED.md §3.
+                        // Геометрия: size-8 + top-1.5 держит центр на y=22 — ровно центр
+                        // строки крошек (h-11, items-center); правый край x=40, под него и
+                        // считан отступ .pf-burger-gap в globals.css (44px). Размер выбран
+                        // крупнее нотионовских 28×28 по просьбе пользователя.
                         // z ВЫШЕ предпросмотра (z-100) и оверлей начинается НИЖЕ бургера
-                        // (top-11): подсмотр открывается по наведению на этот же бургер, и
-                        // если панель ложится поверх него, браузер шлёт бургеру mouseleave —
-                        // ховер срывается (тултип мёртв), а клик «закрепить» уходит в
-                        // переключатель пространства, который оказывается под курсором.
-                        className="absolute left-2 top-2 z-[101] grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                        // (top-11 = 44 > 38, низ кнопки): подсмотр открывается по наведению
+                        // на этот же бургер, и если панель ложится поверх него, браузер шлёт
+                        // бургеру mouseleave — ховер срывается (тултип мёртв), а клик
+                        // «закрепить» уходит в переключатель пространства, который
+                        // оказывается под курсором.
+                        className="absolute left-2 top-1.5 z-[101] grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                       >
-                        <Menu className="size-4" />
+                        <Menu className="size-5" />
+                        <BurgerUnreadBadge />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent
@@ -431,6 +442,35 @@ function MobileWorkspaceTitle(): React.ReactElement {
     <span className="flex min-w-0 items-center gap-1.5">
       <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-5 text-[10px]" />
       <span className="truncate text-sm font-semibold">{workspace.name}</span>
+    </span>
+  );
+}
+
+// Бейдж непрочитанного в правом верхнем углу свёрнутого бургера. Пока панель свёрнута,
+// её собственный счётчик (rail-кнопка «Чат») не виден вообще — сигнал «есть что
+// посмотреть» иначе теряется до разворота панели. Сумма ровно та же, что у «Чата»
+// в Sidebar (chatUnread + actionable): разные слагаемые в двух состояниях одной панели
+// читались бы как разные цифры об одном и том же.
+// Отдельный компонент, а не хуки в теле AppShell: useActiveChatUnread ходит в
+// WorkspacesProvider, который AppShell сам монтирует ниже по дереву, — из своего же тела
+// его контекст не виден.
+function BurgerUnreadBadge(): React.ReactElement | null {
+  const { count: actionable } = useActionableUnreadCount();
+  const chatUnread = useActiveChatUnread();
+  const total = chatUnread + actionable;
+  // Ноль не показываем вовсе: пустая точка на кнопке читается как «что-то есть».
+  if (total <= 0) return null;
+  return (
+    <span
+      // Стиль и клампинг «99+» — как у бейджей рейла (SidebarNavRail), чтобы значок
+      // выглядел одинаково в обоих состояниях панели.
+      // pointer-events-none: бейдж свисает за угол кнопки, а на кнопке висит ховер,
+      // открывающий предпросмотр панели, — «дырка» в её углу срывала бы и ховер, и клик.
+      // Смещение всего на 0.5 (2px): правый край бейджа остаётся внутри 44px, под которые
+      // страницы уступают место, иначе цифра наезжала бы на крошки.
+      className="pointer-events-none absolute -right-0.5 -top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground"
+    >
+      {total > 99 ? '99+' : total}
     </span>
   );
 }

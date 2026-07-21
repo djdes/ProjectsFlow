@@ -322,12 +322,17 @@ function MonitoringCard(): React.ReactElement {
 export function ProfilePage(): React.ReactElement {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6">
-      <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
-        <Link to="/">
-          <ArrowLeft />
-          Назад к&nbsp;проектам
-        </Link>
-      </Button>
+      {/* pf-burger-gap на ОБЁРТКЕ, а не на кнопке: правило даёт padding-left, и на ghost-кнопке
+          он раздул бы её ховер-подложку на всю ширину отступа и перебил -ml-3, которым кнопка
+          выровнена по тексту ниже. flex — чтобы не заводить строчный бокс со strut'ом. */}
+      <div className="pf-burger-gap flex">
+        <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
+          <Link to="/">
+            <ArrowLeft />
+            Назад к&nbsp;проектам
+          </Link>
+        </Button>
+      </div>
 
       <h1 className="text-xl font-semibold tracking-tight">Настройки</h1>
 

@@ -61,12 +61,18 @@ export function KbPage(): React.ReactElement {
 
   const sidebarContent = (
     <aside className="flex h-full flex-col overflow-y-auto p-3">
-      <Button asChild variant="ghost" size="sm" className="mb-3 -ml-2 gap-1">
-        <Link to={`/projects/${project.id}`}>
-          <ArrowLeft className="size-3.5" />
-          К проекту
-        </Link>
-      </Button>
+      {/* Обёртка, а не маркер на самой кнопке: правило даёт padding-left, и на кнопке он
+          раздул бы её ghost-подложку на ширину отступа, а заодно перекрыл бы -ml-2,
+          которым она выровнена по тексту дерева ниже. flex — чтобы обёртка не заводила
+          строчный бокс и не добавляла лишних пикселей под кнопкой. */}
+      <div className="pf-burger-gap mb-3 flex">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 gap-1">
+          <Link to={`/projects/${project.id}`}>
+            <ArrowLeft className="size-3.5" />
+            К проекту
+          </Link>
+        </Button>
+      </div>
       <p className="px-2 pb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
         {project.name} / KB
       </p>

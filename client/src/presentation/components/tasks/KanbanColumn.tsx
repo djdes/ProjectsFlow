@@ -68,6 +68,8 @@ export type KanbanColumnColorClasses = {
   // Класс, объявляющий --pf-card-ring — цветное кольцо карточек этой колонки.
   // Карточка читает переменную сама (KanbanCard), знать про колонку ей не нужно.
   readonly ring: string;
+  // Цвет текста «пустой карточки» внизу колонки — кнопки «Создать задачу» (Notion §5b).
+  readonly action: string;
 };
 
 // Фолбэк-тонировка колонки, когда цвет не передан. Живёт отдельной константой, потому что
@@ -579,10 +581,22 @@ export function KanbanColumn({
                   {/* Подзаголовок (напр. «Claude Opus») — в ТОЙ ЖЕ строке, что и пилюля.
                       Под пилюлей он делал шапку «Воркера» выше соседних, и первая карточка
                       этой колонки начиналась ниже; у Notion все шапки строго одной высоты.
+                      flex-1 (= flex:1 1 0%) — то, что даёт НАЗВАНИЮ приоритет над
+                      подзаголовком: базовая ширина подзаголовка 0, поэтому он живёт только
+                      на СВОБОДНОМ месте строки и в дефиците ширины не отнимает у пилюли ни
+                      пикселя (вес сжатия = shrink × базовая ширина = 0). Пока место есть —
+                      дорастает до своего текста; места меньше — сам ужимается по truncate;
+                      места нет — схлопывается в ноль и исчезает, и только ПОСЛЕ этого
+                      начинает резаться название колонки. Раньше оба сжимались вместе, и
+                      «Воркер» превращался в многоточие ради «Claude Opus».
+                      title — чтобы ужатый подзаголовок можно было дочитать наведением.
                       leading-4, а не leading-tight: 10px-строке нужен запас, иначе truncate
                       (overflow:hidden) срезает хвост «p» в «Opus». */}
                   {STATUS_SUBTITLE[status] && !editingLabel && (
-                    <span className="min-w-0 truncate text-[10px] leading-4 text-muted-foreground/60">
+                    <span
+                      title={STATUS_SUBTITLE[status]}
+                      className="min-w-0 flex-1 truncate text-[10px] leading-4 text-muted-foreground/60"
+                    >
                       {STATUS_SUBTITLE[status]}
                     </span>
                   )}
@@ -739,7 +753,26 @@ export function KanbanColumn({
             <button
               type="button"
               onClick={() => onComposingChange?.(true)}
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className={cn(
+                // Замеры Notion §5b: внизу колонки не кнопка, а «ПУСТАЯ КАРТОЧКА» — та же
+                // геометрия, что у карточек (260×40 = ширина колонки минус 8px паддинга
+                // тела с каждой стороны, radius 10px, внутренние отступы 0 10px), но без
+                // заливки: держит форму одно кольцо в 1px.
+                // Высота ровно 40px (h-10) только на десктопе: на мобиле globals.css поднимает
+                // кнопкам без явного size-* min-height до 44px (тач-цель Apple HIG), и
+                // min-height бьёт height — так и задумано, тач-цель не урезаем.
+                'flex h-10 w-full items-center gap-1.5 rounded-[10px] bg-transparent px-2.5 text-[15px] font-normal transition-colors',
+                // Кольцо — ТО ЖЕ, что у карточек этой колонки: читаем --pf-card-ring, которую
+                // объявляет корень колонки (colorClasses.ring). Второго источника цвета нет.
+                // Фолбэки (нейтральные) повторяют KanbanCard — на случай рендера вне доски.
+                'shadow-[0_0_0_1px_var(--pf-card-ring,rgba(42,28,0,0.07))] dark:shadow-[0_0_0_1px_var(--pf-card-ring,rgba(255,255,255,0.09))]',
+                // Текст — акцент колонки (у Notion он в цвет статуса, а не серый).
+                colorClasses?.action ?? 'text-[rgb(95,94,89)] dark:text-[rgb(155,153,148)]',
+                // Ховер — прозрачная подложка, а не bg-accent: сплошной серый поверх
+                // тонированной колонки читался бы заплаткой (та же логика, что у подсветки
+                // цели дропа выше).
+                'hover:bg-[rgba(55,53,47,0.045)] dark:hover:bg-[rgba(255,255,255,0.05)]',
+              )}
             >
               <Plus className="size-4" />
               Создать задачу

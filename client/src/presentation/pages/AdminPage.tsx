@@ -43,7 +43,8 @@ export function AdminPage(): React.ReactElement {
 
   return (
     <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
-      <div className="flex items-center gap-2.5">
+      {/* pf-burger-gap — уступаем место плавающему бургеру свёрнутой панели. */}
+      <div className="pf-burger-gap flex items-center gap-2.5">
         <Shield className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Администрирование</h1>
       </div>

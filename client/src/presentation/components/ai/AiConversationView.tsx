@@ -384,7 +384,11 @@ function AiConversationHeader({
 
   return (
     <>
-      <header className="flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
+      {/* pf-burger-gap: шапка начинается от левого края окна, и тёмная кнопка Sparkles
+          вставала ровно под плавающий бургер свёрнутой панели. Отступ (и условие, при
+          котором он нужен) живёт в globals.css — здесь только маркер; левый паддинг
+          строки правило перекрывает собой. */}
+      <header className="pf-burger-gap flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
         <button type="button" onClick={() => navigate('/ai')} className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background" aria-label="Открыть главную ProjectsFlow ИИ"><Sparkles className="size-4" /></button>
         <button type="button" onClick={() => navigate('/ai')} className="hidden rounded-md px-1.5 py-1 text-sm font-semibold hover:bg-hover sm:inline-flex">ProjectsFlow ИИ</button>
         <span className="text-muted-foreground">/</span>

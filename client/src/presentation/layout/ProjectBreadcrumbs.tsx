@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useProjects } from '@/presentation/hooks/useProjects';
-import { useSidebarCollapsed } from './sidebarCollapsedContext';
 import { avatarColor } from './projectIcons';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 
@@ -186,15 +185,15 @@ export function ProjectBreadcrumbs({
   // (программный .click(), часть ассистивных технологий): это прежнее поведение.
   const rowPointerType = useRef<string>('mouse');
   const currentView = VIEWS.find((v) => v.key === view);
-  const collapsed = useSidebarCollapsed();
 
   return (
     <nav
-      className={cn(
-        'flex min-w-0 items-center gap-0.5 text-sm',
-        // Свёрнутая панель → уступаем место плавающему бургеру в углу.
-        collapsed && 'pl-10',
-      )}
+      // pf-burger-gap — общий маркер «здесь может стоять плавающий бургер». Величину и
+      // условие держит одно правило в globals.css, включаемое атрибутом на корне AppShell.
+      // Раньше эта строка считала отступ сама (collapsed && 'pl-10'), и после того как бургер
+      // подрос, у неё осталось 40px против 44px у всех остальных строк — одна и та же шапка
+      // прыгала на 4px при переходе «Входящие ↔ проект». Второй источник числа убран.
+      className="pf-burger-gap flex min-w-0 items-center gap-0.5 text-sm"
       aria-label="Хлебные крошки"
     >
       {/* Сегмент «Проекты» — дропдаун со всеми проектами для быстрого перехода. */}

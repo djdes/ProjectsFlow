@@ -167,26 +167,38 @@ const TAB_GAP = 2;
 // === Метрики ряда вкладок: ОДИН источник для реальных кнопок и для невидимой линейки ===
 // По линейке (tabsMeasureRef) считается переполнение ряда («ещё N…»), поэтому любое
 // расхождение классов реплики и оригинала тихо врёт в расчёте. Чтобы они не разъезжались,
-// геометрия вынесена в константы, а состояния (цвет, ховер, подчёркивание) добавляются
+// геометрия вынесена в константы, а состояния (цвет, заливка, ховер) добавляются
 // поверх и на размеры не влияют.
 
-// Вкладка. Метрика снята с Notion (MEASURED.md §2): высота 40, шрифт 16px, вес 400.
-// Вес ОДИНАКОВ у активной и неактивной: раньше активная была 500, из-за чего линейка
-// мерила все вкладки по 500 «с запасом», а ширина вкладки прыгала при переключении.
+// Вкладка. Метрика снята с Notion (MEASURED.md §5a): пилюля 32px высотой, овал
+// (radius 20 — на высоте 32 браузер клампит его до полной пилюли), паддинг 6/12,
+// текст 14px/500. Прежние 16px/400 с подчёркиванием — от ошибочного первого замера:
+// мерили ОБЁРТКУ ряда (её 40px — это пилюля 32 + по 4px), а не саму вкладку.
+// Вертикальные 6px не пишем отдельно: h-8 при line-height 20px даёт ровно их, а дубль
+// height+padding только путает при следующей правке.
+// Вес 500 стоит и на НЕактивной: §5a фиксирует вес только для активной, а разный вес
+// менял бы ширину вкладки при переключении — линейка мерит все реплики одной константой
+// и начала бы врать, ряд бы дёргался. Активную отличают заливка и цвет текста, как в Notion.
 const TAB_METRICS_CLASS =
-  'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-base font-normal';
+  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[20px] px-3 text-sm font-medium';
 
 // Кнопка «ещё N…» стоит в том же ряду — метрика у неё та же (была 13px и без высоты:
 // в переполненном ряду рядом оказывались два типоразмера). Экспортируется, потому что
 // сама кнопка живёт в ViewsOverflowMenu; импорт обратно безопасен — константа читается
 // на рендере, а не на инициализации модуля (тем же способом там берётся VIEW_TYPE_ICONS).
+// gap-1 (у вкладок 1.5) — внутренний зазор до шеврона; на ряд не влияет, а реплика берёт
+// ту же константу, так что расчёт переполнения остаётся точным.
 export const VIEWS_MORE_METRICS_CLASS =
-  'inline-flex h-10 shrink-0 items-center gap-1 rounded-md px-2 text-base font-normal';
+  'inline-flex h-8 shrink-0 items-center gap-1 rounded-[20px] px-3 text-sm font-medium';
 
 // Ховер-«+» в конце ряда. Реплика обязана совпадать по размеру с кнопкой: пока реплика
 // была size-7 (28px) против size-9 (36px) у кнопки, ветка «влезают все» недосчитывала
 // 8px — ряд признавался помещающимся, и «+» срезался overflow-hidden контейнера.
-const PLUS_METRICS_CLASS = 'inline-flex size-9 shrink-0';
+// 32px, а не прежние 36: ряд по §5a ровно 40px (пилюля 32 + по 4px), и «+» на 36px стал бы
+// самым высоким в ряду — он один растянул бы строку до 44px. У Notion иконочные кнопки
+// как раз 32×32 (§5). size-* в классе обязателен: по нему глобальное правило
+// `button:not([class*='size-'])` из globals.css не навешивает мобильные min-height 44px.
+const PLUS_METRICS_CLASS = 'inline-flex size-8 shrink-0';
 
 const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
   has: 'Есть срок',
@@ -911,11 +923,15 @@ export function ProjectBoardViews({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {/* py-1 — те самые «по 4px сверху и снизу» из §5a: пилюля 32 + 8 = ряд 40px, как
+            у Notion (§2). Держать их на контейнере, а не на вкладке, важно вдвойне:
+            (1) высота пилюли остаётся ровно 32, (2) паддинг вертикальный, поэтому
+            wrap.clientWidth (доступная ширина в расчёте переполнения) не меняется. */}
         <div
           ref={tabsWrapRef}
           role="tablist"
           aria-label="Отображения проекта"
-          className="relative hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden md:flex"
+          className="relative hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden py-1 md:flex"
         >
           {/* Линейка: невидимые реплики ВСЕХ вкладок + «ещё N…» + «+» — по ним
               считаем, сколько вкладок влезает до тулбара (Notion). Классы реплик
@@ -1006,7 +1022,10 @@ export function ProjectBoardViews({
                   title="Новое отображение"
                   className={cn(
                     PLUS_METRICS_CLASS,
-                    'items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100',
+                    // rounded-full и bg-hover — чтобы «+» читался из той же семьи, что
+                    // соседние овальные пилюли вкладок; на ширину ни то, ни другое не
+                    // влияет, так что реплика в линейке остаётся точной.
+                    'items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-hover hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100',
                   )}
                 >
                   <Plus className="size-4" />
@@ -2350,19 +2369,21 @@ function ViewTab({
     },
   };
   // Геометрия — общая с линейкой переполнения (TAB_METRICS_CLASS, там же метрика
-  // из MEASURED.md §2). Здесь только состояния.
-  // Активная вкладка — подчёркивание и цвет текста, а НЕ заливка: §2/§3 заливку вкладки
-  // не фиксируют, а на высоте 40px плашка читается как кнопка, а не как вкладка.
-  // Подчёркивание — absolute-псевдоэлемент: в поток он не входит, ширину вкладки не
-  // меняет, поэтому линейка остаётся точной. По той же причине вес у активной 400, как
-  // у остальных: иначе вкладка меняла бы ширину при переключении.
+  // из MEASURED.md §5a). Здесь ТОЛЬКО состояния, и ни одно не имеет права менять ширину:
+  // иначе вкладка разойдётся со своей репликой в линейке и расчёт «ещё N…» поедет.
+  // Активная — овальная пилюля с лёгкой заливкой (§5a: rgba(42,28,0,0.07)). Это токен
+  // --active (rgba(55,53,47,0.08) — тот же тёплый чернильный тинт), а не литерал: у него
+  // уже выведен тёмный аналог (белый 8%, сопоставимая заметность на графите).
+  // Подчёркивания больше нет — его дал ошибочный первый замер.
   const tabClass = cn(
     TAB_METRICS_CLASS,
-    'relative transition-colors duration-150 motion-reduce:transition-none',
-    "after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-foreground after:opacity-0 after:transition-opacity after:content-[''] motion-reduce:after:transition-none",
+    'transition-colors duration-150 motion-reduce:transition-none',
+    // Ховер и открытое меню на активной — ступень плотнее заливки: у --active более
+    // плотной ступени нет, а по активной вкладке кликают ради меню, и когда курсор
+    // уходит в раскрытое меню, вкладка не должна «гаснуть» до обычного состояния.
     active
-      ? 'text-foreground after:opacity-100 hover:bg-accent/60 data-[state=open]:bg-accent/60'
-      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+      ? 'bg-active text-foreground hover:bg-foreground/[0.12] data-[state=open]:bg-foreground/[0.12] dark:hover:bg-white/[0.12] dark:data-[state=open]:bg-white/[0.12]'
+      : 'text-muted-foreground hover:bg-hover hover:text-foreground data-[state=open]:bg-hover',
   );
   const inner = (
     <>

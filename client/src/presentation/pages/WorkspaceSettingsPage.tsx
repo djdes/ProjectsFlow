@@ -98,12 +98,16 @@ export function WorkspaceSettingsPage(): React.ReactElement {
   if (!workspace) {
     return (
       <div className="mx-auto max-w-2xl space-y-4 p-6">
-        <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
-          <Link to="/">
-            <ArrowLeft />
-            На&nbsp;главную
-          </Link>
-        </Button>
+        {/* Обёртка ради pf-burger-gap: отступ должен двигать кнопку, не перекрывая её
+            -ml-3 (им она выровнена по тексту ниже) и не растягивая ghost-подложку. */}
+        <div className="pf-burger-gap flex">
+          <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
+            <Link to="/">
+              <ArrowLeft />
+              На&nbsp;главную
+            </Link>
+          </Button>
+        </div>
         <p className="text-muted-foreground">Пространство не&nbsp;найдено или у&nbsp;вас нет доступа.</p>
       </div>
     );
@@ -111,12 +115,16 @@ export function WorkspaceSettingsPage(): React.ReactElement {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6">
-      <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
-        <Link to="/">
-          <ArrowLeft />
-          Назад
-        </Link>
-      </Button>
+      {/* Обёртка ради pf-burger-gap — см. комментарий в ветке «пространство не найдено».
+          Заметно только на узком окне: шире max-w-2xl колонка отъезжает от бургера сама. */}
+      <div className="pf-burger-gap flex">
+        <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
+          <Link to="/">
+            <ArrowLeft />
+            Назад
+          </Link>
+        </Button>
+      </div>
 
       <div className="flex items-center gap-3">
         <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-9 text-base" />

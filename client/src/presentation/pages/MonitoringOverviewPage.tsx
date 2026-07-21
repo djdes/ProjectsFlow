@@ -71,7 +71,9 @@ export function MonitoringOverviewPage(): React.ReactElement {
   return (
     <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+        {/* pf-burger-gap на группе с заголовком, а не на всей строке: кнопка «Алерты»
+            прижата вправо (justify-between) и под бургер не попадает. */}
+        <div className="pf-burger-gap flex items-center gap-2.5">
           <Activity className="size-5 text-primary" />
           <h1 className="text-xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
         </div>

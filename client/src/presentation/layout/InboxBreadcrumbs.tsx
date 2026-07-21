@@ -71,7 +71,12 @@ export function InboxBreadcrumbs(): React.ReactElement {
   };
 
   return (
-    <nav className="flex min-w-0 items-center gap-0.5 text-sm" aria-label="Хлебные крошки">
+    <nav
+      // pf-burger-gap — маркер «здесь может стоять плавающий бургер свёрнутой панели».
+      // Сам отступ и условие его появления задаёт globals.css по data-атрибуту AppShell.
+      className="pf-burger-gap flex min-w-0 items-center gap-0.5 text-sm"
+      aria-label="Хлебные крошки"
+    >
       {/* Сегмент пространства — hover-дропдаун для быстрого переключения между пространствами. */}
       <DropdownMenu open={wsMenu.open} onOpenChange={wsMenu.setOpen} modal={false}>
         <DropdownMenuTrigger
