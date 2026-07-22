@@ -23,7 +23,6 @@ import {
   CalendarDays,
   CalendarOff,
   CalendarRange,
-  Check,
   Eye,
   EyeOff,
   ArrowRight,
@@ -510,14 +509,10 @@ export function AssignedToMeBlock({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const anchorRef = useRef<string | null>(null); // якорь Shift-диапазона
   const selectionColumns = grouping === 'deadline' ? kanbanGroups : groups;
-  // ВЫДЕЛЯЕМЫ только задачи, которые caller реально может менять. Задача без canModify
-  // в выбор не попадает вовсе — ни кликом, ни протяжкой, ни через «Все». Это тот же
-  // контракт, что уже действует на карточке (корзина спрятана, чекбокс и drag выключены),
-  // и он честнее альтернативы «выделить, а потом отчитаться „3 без прав“»: пользователь
-  // не набирает пачку, часть которой заведомо не выполнится.
-  const selectableGroups = selectionColumns.map((g) =>
-    g.items.filter((t) => t.canModify).map((t) => t.id),
-  );
+  // Выделяются ЛЮБЫЕ задачи колонки, включая те, что caller изменить не может (личные
+  // доски коллег сервер отдаёт с canModify: false). Пользователь просил не ограничивать
+  // выбор; задачи без прав просто попадут в «не удалось» при выполнении действия.
+  const selectableGroups = selectionColumns.map((g) => g.items.map((t) => t.id));
   const selectionOrderedIds = selectableGroups.flat();
   const selectableIds = new Set(selectionOrderedIds);
   const taskById = useMemo(() => new Map(visibleTasks.map((t) => [t.id, t])), [visibleTasks]);
@@ -2146,9 +2141,10 @@ function AcceptedCard({
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 }): React.ReactElement {
   const isDone = item.status === 'done';
-  // Без прав задачу нельзя ни изменить, ни удалить — в массовое действие её брать не за чем,
-  // поэтому в режиме выделения такая карточка приглушена и не откликается на выбор.
-  const selectable = selecting && item.canModify;
+  // Выделять можно ЛЮБУЮ карточку, в том числе без прав на изменение: пользователь хочет
+  // собирать пачку свободно. Действие по такой задаче честно попадёт в «не удалось» —
+  // это лучше, чем карточка, которая молча не откликается на клик.
+  const selectable = selecting;
   // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
   // line-clamp-4 — видно только название (запросы 3, 4).
   const { title, body } = splitTitleBody(item.description ?? '');
@@ -2244,13 +2240,12 @@ function AcceptedCard({
       role={selecting ? 'button' : undefined}
       tabIndex={selecting ? 0 : undefined}
       aria-pressed={selectable ? selected : undefined}
-      title={selecting && !item.canModify ? 'Нет прав на изменение этой задачи' : undefined}
       className={cn(
         'group relative flex cursor-pointer select-none flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-colors duration-150 dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
-        selectable && selected && 'border-primary ring-2 ring-primary/60',
-        // Недоступная для выбора карточка в режиме выделения: приглушена и не кликабельна.
-        selecting && !item.canModify && 'cursor-default opacity-45',
+        // Выбор показываем ТОЛЬКО рамкой и кольцом. Кружок-отметку в левом верхнем углу
+        // убрали: он повторял вид старого круглого чекбокса «готово» и читался как он.
+        selected && 'border-primary ring-2 ring-primary/60',
       )}
       onClick={(e) => {
         if (selecting) {
@@ -2273,21 +2268,6 @@ function AcceptedCard({
         onOpen();
       }}
     >
-      {/* Кружок-отметка выбора (как на карточке доски проекта). У карточки без прав его
-          нет вовсе — визуально видно, что она вне пачки. */}
-      {selectable && (
-        <span
-          aria-hidden
-          className={cn(
-            'absolute left-1.5 top-1.5 z-20 grid size-5 place-items-center rounded-full border-2 transition-colors',
-            selected
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-muted-foreground/40 bg-card',
-          )}
-        >
-          {selected && <Check className="size-3" strokeWidth={3} />}
-        </span>
-      )}
       {/* Название проекта — полоса-заголовок. Скрываем при сортировке по проекту (колонка = проект). */}
       {!hideProjectLabel && (
         <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
