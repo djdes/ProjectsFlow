@@ -69,6 +69,7 @@ import {
   selectNone,
   type SelectModifiers,
 } from './selection/selectionReducer';
+import { useDragSelect } from './selection/useDragSelect';
 import { KanbanHiddenColumnsMenu } from './KanbanHiddenColumnsMenu';
 import { KANBAN_COLOR_CLASSES } from './kanbanColors';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
@@ -128,6 +129,11 @@ type Props = {
   viewFilters?: ViewFilters;
   viewSort?: ViewSort | null;
   canEdit?: boolean;
+  // Режим выделения СРАЗУ ВО ВСЕХ колонках, управляемый снаружи (кнопка в шапке
+  // «Входящих»). undefined/false — прежнее поведение: выделение включается по колонке
+  // из её шапки/меню и живёт только внутри неё.
+  selectionActive?: boolean;
+  onSelectionActiveChange?: (active: boolean) => void;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -282,6 +288,8 @@ export function KanbanBoard({
   viewFilters,
   viewSort = null,
   canEdit = true,
+  selectionActive = false,
+  onSelectionActiveChange,
 }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
@@ -669,11 +677,26 @@ export function KanbanBoard({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const anchorRef = useRef<string | null>(null); // якорь для Shift-диапазона
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
-  // Визуальный порядок карточек активной колонки — для диапазона и «выделить всё».
-  // Должен совпадать с тем, что реально отрисовано: при hideDone done-колонка пуста.
-  const selectionOrderedIds =
-    selectionStatus && !(hideDone && selectionStatus === 'done')
-      ? grouped[selectionStatus].map((t) => t.id)
+  // Режим «вся доска» (инбокс) против пер-колоночного (доски проектов).
+  const boardSelection = selectionActive;
+  const selectionOn = boardSelection || selectionStatus !== null;
+  // Видимый порядок карточек по колонкам — ровно то, что реально отрисовано (те же
+  // фильтры и hideDone, что в рендере колонок ниже). Нужен и для Shift-диапазона, и
+  // для «Все», и для дозаполнения пропусков при быстрой протяжке.
+  const shownSelectionStatuses = VISIBLE_KANBAN_STATUSES.filter(
+    (s) => !isColumnHidden(settings?.[s]),
+  );
+  const columnSelectionIds = new Map<VisibleKanbanStatus, string[]>(
+    shownSelectionStatuses.map((s) => [
+      s,
+      filterTasks(hideDone && s === 'done' ? [] : grouped[s]).map((t) => t.id),
+    ]),
+  );
+  const selectionGroups = shownSelectionStatuses.map((s) => columnSelectionIds.get(s) ?? []);
+  const selectionOrderedIds = boardSelection
+    ? selectionGroups.flat()
+    : selectionStatus
+      ? (columnSelectionIds.get(selectionStatus) ?? [])
       : [];
 
   const enterSelection = (status: VisibleKanbanStatus): void => {
@@ -685,7 +708,15 @@ export function KanbanBoard({
     setSelectionStatus(null);
     setSelectedIds(new Set());
     anchorRef.current = null;
-  }, []);
+    onSelectionActiveChange?.(false);
+  }, [onSelectionActiveChange]);
+  // Внешний тумблер выключили — выбор уходит вместе с режимом. На досках проектов
+  // boardSelection всегда false, эффект отработает один раз на пустом выборе (no-op).
+  useEffect(() => {
+    if (boardSelection) return;
+    setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+    anchorRef.current = null;
+  }, [boardSelection]);
   const handleSelectToggle = (taskId: string, mods: SelectModifiers): void => {
     // Валидируем якорь: после bulk-операций / внешних (SSE) изменений он мог указывать
     // на исчезнувшую карточку — тогда трактуем как «нет якоря» и начинаем диапазон
@@ -697,26 +728,59 @@ export function KanbanBoard({
     setSelectedIds((prev) => nextSelection(prev, taskId, mods, selectionOrderedIds, anchor));
     anchorRef.current = nextAnchor(taskId, mods, anchor);
   };
-  const handleSelectAll = (): void => {
-    setSelectedIds(selectAll(selectionOrderedIds));
+  // «Все» / «Очистить» в шапке колонки — работают по СВОЕЙ колонке. В пер-колоночном
+  // режиме выбор и так ограничен ей, в режиме «вся доска» — объединяем/вычитаем.
+  const handleSelectAllIn = (status: VisibleKanbanStatus): void => {
+    const ids = columnSelectionIds.get(status) ?? [];
+    setSelectedIds((prev) => {
+      if (!boardSelection) return selectAll(ids);
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
     anchorRef.current = null;
   };
-  const handleSelectNone = (): void => {
-    setSelectedIds(selectNone());
+  const handleSelectNoneIn = (status: VisibleKanbanStatus): void => {
+    const ids = columnSelectionIds.get(status) ?? [];
+    setSelectedIds((prev) => {
+      if (!boardSelection) return selectNone();
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
     anchorRef.current = null;
   };
+
+  // Мультивыделение протяжкой: зажал на карточке и провёл — все пройденные попадают в
+  // выбор. Живёт рядом с поштучным кликом (shift/ctrl не трогаем): пока указатель не
+  // сдвинулся на порог, жест остаётся обычным кликом.
+  const dragSelect = useDragSelect({
+    enabled: selectionOn,
+    orderedGroups: () => selectionGroups,
+    getSelection: () => selectedIds,
+    onPaint: (ids) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.add(id);
+        return next;
+      });
+      anchorRef.current = ids[ids.length - 1] ?? anchorRef.current;
+    },
+    onRestore: (snapshot) => setSelectedIds(new Set(snapshot)),
+  });
 
   // Esc выходит из режима выделения (слушаем только пока режим активен).
   // defaultPrevented пропускаем: открытый Radix-дропдаун/диалог уже обработал Esc
   // (закрылся) и вызвал preventDefault — не хотим заодно гасить весь режим.
+  // Протяжка в этот момент перехватывает Esc раньше (capture) и отменяет только жест.
   useEffect(() => {
-    if (selectionStatus === null) return;
+    if (!selectionOn) return;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && !e.defaultPrevented) exitSelection();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectionStatus, exitSelection]);
+  }, [selectionOn, exitSelection]);
 
   // hideDone скрывает done-колонку целиком — выходим из выделения, чтобы не оставлять
   // «подвисший» режим (счётчик и кнопки) на пустой невидимой колонке.
@@ -1208,13 +1272,21 @@ export function KanbanBoard({
                 composerStorageKey={composerKey(status)}
                 composing={composingStatus === status}
                 onComposingChange={(open) => (open ? openComposer(status) : closeComposer())}
-                selectionMode={selectionStatus === status}
-                selectedIds={selectionStatus === status ? selectedIds : undefined}
+                selectionMode={boardSelection || selectionStatus === status}
+                selectedIds={
+                  boardSelection || selectionStatus === status ? selectedIds : undefined
+                }
+                selectedCount={
+                  (columnSelectionIds.get(status) ?? []).filter((id) => selectedIds.has(id)).length
+                }
                 onSelectToggle={handleSelectToggle}
-                onSelectAll={handleSelectAll}
-                onSelectNone={handleSelectNone}
+                onSelectAll={() => handleSelectAllIn(status)}
+                onSelectNone={() => handleSelectNoneIn(status)}
                 onExitSelection={exitSelection}
-                onEnterSelection={canEdit ? () => enterSelection(status) : undefined}
+                onDragSelectStart={dragSelect.onPointerDown}
+                onEnterSelection={
+                  canEdit && !boardSelection ? () => enterSelection(status) : undefined
+                }
                 columnMenu={canEdit ? (
                   <KanbanColumnMenu
                     status={status}
@@ -1337,7 +1409,7 @@ export function KanbanBoard({
           задачи добавляются кнопкой «+»/«Создать задачу» в колонке. */}
 
       {/* Панель массовых действий — поверх доски, когда выбрана хотя бы одна задача. */}
-      {selectionStatus !== null && selectedIds.size > 0 && (
+      {selectionOn && selectedIds.size > 0 && (
         <BulkActionBar
           selectedIds={selectionOrderedIds.filter((id) => selectedIds.has(id))}
           projectId={projectId}

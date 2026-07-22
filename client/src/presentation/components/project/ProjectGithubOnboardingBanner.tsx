@@ -29,6 +29,8 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Task } from '@/domain/task/Task';
+import { ProjectBannerDismissButton } from './ProjectBannerDismissButton';
+import { useProjectBannersHidden } from './projectBannersSetting';
 import {
   announceProjectSitePublished,
   PROJECT_SITE_PUBLISHED_EVENT,
@@ -132,7 +134,8 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
 
   return (
     <>
-      <div className="border-b border-violet-950/10 bg-[linear-gradient(105deg,#eef2ff_0%,#f5f3ff_48%,#ecfeff_100%)] px-4 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#172036_0%,#261b3a_50%,#123039_100%)] sm:px-8">
+      <div className="relative border-b border-violet-950/10 bg-[linear-gradient(105deg,#eef2ff_0%,#f5f3ff_48%,#ecfeff_100%)] px-4 pr-9 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#172036_0%,#261b3a_50%,#123039_100%)] sm:px-8 sm:pr-10">
+        <ProjectBannerDismissButton />
         <div
           className="mx-auto flex max-w-[1180px] animate-in flex-col gap-3 fade-in slide-in-from-top-2 duration-500 transition-[margin] xl:flex-row xl:items-center xl:justify-between motion-reduce:animate-none"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
@@ -213,6 +216,9 @@ export function ProjectGithubOnboardingBanner({
 }: Props): React.ReactElement | null {
   const { connection } = useGithubConnection();
   const { projectRepository } = useContainer();
+  // Общая настройка «плашки скрыты» — та же, что включает крестик и тумблер в меню «⋯».
+  // Гейт продублирован здесь, чтобы плашка гасла независимо от места рендера.
+  const bannersHidden = useProjectBannersHidden();
   const [intro, setIntro] = useState<Action | null>(null);
   const [pending, setPending] = useState<Action | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -295,6 +301,8 @@ export function ProjectGithubOnboardingBanner({
     openAction(action);
   };
 
+  if (bannersHidden) return null;
+
   if (gitRepoUrl) {
     if (siteState !== 'pending') return null;
     return <ProjectLaunchBanner projectId={projectId} shiftForOverlay={shiftForOverlay} />;
@@ -302,7 +310,8 @@ export function ProjectGithubOnboardingBanner({
 
   return (
     <>
-      <div className="border-b border-indigo-950/10 bg-[linear-gradient(105deg,#f5f7ff_0%,#f7f3ff_45%,#f0f9ff_100%)] px-4 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#171a2c_0%,#21192d_48%,#13232d_100%)] sm:px-8">
+      <div className="relative border-b border-indigo-950/10 bg-[linear-gradient(105deg,#f5f7ff_0%,#f7f3ff_45%,#f0f9ff_100%)] px-4 pr-9 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#171a2c_0%,#21192d_48%,#13232d_100%)] sm:px-8 sm:pr-10">
+        <ProjectBannerDismissButton />
         <div
           className="mx-auto flex max-w-[1180px] flex-col gap-3 transition-[margin] duration-300 xl:flex-row xl:items-center xl:justify-between"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}

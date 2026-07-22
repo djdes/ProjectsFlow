@@ -1514,13 +1514,13 @@ function AssigneeTabs({
     <div className="-ml-2 flex items-center gap-0.5">
       <TabButton
         active={tab === 'toMe'}
-        label="Для меня"
+        label="Мои"
         count={toMeCount}
         onClick={() => onChange('toMe')}
       />
       <TabButton
         active={tab === 'byMe'}
-        label="Другим"
+        label="Для всех"
         count={byMeCount}
         onClick={() => onChange('byMe')}
       />

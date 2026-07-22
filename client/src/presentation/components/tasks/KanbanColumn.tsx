@@ -154,14 +154,21 @@ type Props = {
   // === Режим мультивыделения (включается из меню колонки) ===
   // Активен ли режим выделения для ЭТОЙ колонки.
   selectionMode?: boolean;
-  // Множество выбранных id (глобальное, но в режиме содержит только id этой колонки).
+  // Множество выбранных id. В режиме «вся доска» (инбокс) — общее на все колонки,
+  // поэтому счётчик для шапки приходит отдельным пропом selectedCount.
   selectedIds?: ReadonlySet<string>;
+  // Сколько задач ЭТОЙ колонки в выборе (для подписи «Выбрано N» в шапке).
+  selectedCount?: number;
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
+  // «Все» / «Очистить» — выбрать или снять все задачи ЭТОЙ колонки.
   onSelectAll?: () => void;
   onSelectNone?: () => void;
   onExitSelection?: () => void;
   // Прямой вход в режим выделения из шапки (минуя меню-троеточие).
   onEnterSelection?: () => void;
+  // Старт протяжки-выделения (см. useDragSelect). Вешается на контейнер карточек:
+  // в режиме выделения dnd-сенсоры к карточкам не привязаны, жест наш.
+  onDragSelectStart?: (e: React.PointerEvent<HTMLElement>) => void;
 };
 
 // Дата-корзина для группировки «Готово»: Сегодня / Вчера / Ранее.
@@ -211,11 +218,13 @@ export function KanbanColumn({
   onComposingChange,
   selectionMode = false,
   selectedIds,
+  selectedCount,
   onSelectToggle,
   onSelectAll,
   onSelectNone,
   onExitSelection,
   onEnterSelection,
+  onDragSelectStart,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -476,7 +485,7 @@ export function KanbanColumn({
         {selectionMode ? (
           <>
             <span className="min-w-0 truncate text-xs font-medium">
-              Выбрано {selectedIds?.size ?? 0}
+              Выбрано {selectedCount ?? selectedIds?.size ?? 0}
             </span>
             <div className="flex shrink-0 items-center gap-0.5">
               <Button
@@ -499,7 +508,7 @@ export function KanbanColumn({
                 className="h-6 px-2 text-xs max-sm:h-11 sm:h-6"
                 onClick={onSelectNone}
               >
-                Никого
+                Очистить
               </Button>
               <Button
                 variant="ghost"
@@ -654,6 +663,9 @@ export function KanbanColumn({
       <div className="relative flex flex-col">
       <div
         ref={setNodeRef}
+        // Протяжка-выделение стартует только в режиме выделения (хук сам пассивен вне его,
+        // но лишний слушатель на обычной доске не вешаем).
+        onPointerDown={selectionMode ? onDragSelectStart : undefined}
         className={cn(
           // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
           // p-2 + gap-2 = замеры Notion: паддинг 8px (276 − 16 = 260 ширина карточки),

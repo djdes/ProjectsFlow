@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Globe, X } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { useContainer } from '@/infrastructure/di/container';
 import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
 import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
+import { ProjectBannerDismissButton } from './ProjectBannerDismissButton';
+import { useProjectBannersHidden } from './projectBannersSetting';
 import {
   announceProjectSitePublished,
   PROJECT_SITE_PUBLISHED_EVENT,
@@ -17,15 +19,12 @@ type Props = {
   shiftForOverlay?: boolean;
 };
 
-// Событие синхронизации закрытия между экземплярами плашки (она рендерится и под крошками,
-// и в выехавшем справа окне задачи): закрытие в одном месте гасит все копии этого проекта.
-// Закрытие живёт только в памяти — при обновлении страницы плашка возвращается (по требованию).
-const DISMISS_EVENT = 'pf:published-banner-dismissed';
-
-// Модульный in-memory-набор закрытых проектов — чтобы экземпляр, смонтированный ПОСЛЕ закрытия
-// (напр. плашка в окне задачи, которое открыли уже после закрытия плашки на главном), тоже
-// стартовал скрытым. Живёт до перезагрузки страницы (плашка возвращается на refresh — по требованию).
-const dismissedProjects = new Set<string>();
+// Собственной памяти о закрытии у плашки больше нет: раньше крестик писал projectId в модульный
+// in-memory-набор и рассылал событие между экземплярами. Теперь крестик включает ОБЩУЮ настройку
+// «плашки скрыты» (pf:project-banners-hidden), а она и так глобальна и переживает перезагрузку,
+// поэтому локальный флаг стал лишним слоем — он бы только мешал: пользователь вернул бы плашки
+// тумблером в «⋯», а эта осталась бы скрытой по своей старой памяти. Мигрировать нечего —
+// флаг жил лишь до перезагрузки страницы.
 
 // Кнопка плашки — белая «пилюля» «Открыть результат» (как в Notion).
 const BTN =
@@ -43,8 +42,9 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
   // плашку показываем только после реального деплоя воркера (deployedAt).
   const [site, setSite] = useState<{ slug: string } | null>(null);
 
-  // Только in-memory: refresh страницы возвращает плашку.
-  const [dismissed, setDismissed] = useState(() => dismissedProjects.has(projectId));
+  // Гейт стоит и здесь, а не только у места рендера: эту же плашку рисует выехавшее справа
+  // окно задачи, и после закрытия крестиком не должна остаться видимой ни одна копия.
+  const bannersHidden = useProjectBannersHidden();
 
   // Пока результата нет — лёгкий поллинг. После первого деплоя плашка появляется сама,
   // без перезагрузки страницы и без промежуточного состояния «в разработке».
@@ -91,28 +91,11 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
     return () => window.removeEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
   }, [projectId]);
 
-  useEffect(() => {
-    setDismissed(dismissedProjects.has(projectId));
-    const onDismiss = (e: Event): void => {
-      if ((e as CustomEvent<string>).detail === projectId) setDismissed(true);
-    };
-    window.addEventListener(DISMISS_EVENT, onDismiss);
-    return () => window.removeEventListener(DISMISS_EVENT, onDismiss);
-  }, [projectId]);
-
-  if (dismissed) return null;
+  if (bannersHidden) return null;
   if (!site) return null;
 
   const address = siteResultDisplayUrl(site.slug);
   const url = siteResultUrl(site.slug);
-
-  const close = (): void => {
-    // ВАЖНО: пишем в модульный набор — иначе плашка, смонтированная ПОЗЖЕ (окно задачи открыли
-    // после закрытия на главном), не узнает о закрытии (событие ловят только уже смонтированные).
-    dismissedProjects.add(projectId);
-    setDismissed(true);
-    window.dispatchEvent(new CustomEvent(DISMISS_EVENT, { detail: projectId }));
-  };
 
   return (
     <div
@@ -132,14 +115,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
           Открыть результат
         </a>
       </div>
-      <button
-        type="button"
-        onClick={close}
-        aria-label="Скрыть"
-        className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-[#37352f]/40 transition-colors hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50"
-      >
-        <X className="size-3.5" />
-      </button>
+      <ProjectBannerDismissButton className="top-1/2 -translate-y-1/2 text-[#37352f]/40 hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50" />
     </div>
   );
 }

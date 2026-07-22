@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
+import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { fadeInUp } from '@/presentation/components/motion/presets';
@@ -41,6 +42,9 @@ export function InboxPage(): React.ReactElement {
   // Слот в шапке для фильтров/сортировки блока ответственных: сам блок рендерит их сюда через
   // portal (состояние остаётся в блоке, а визуально контролы стоят в строке с «Входящие»).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
+  // Режим выделения нижней доски, включается кнопкой в шапке страницы (рядом с «Фильтрами»).
+  // Живёт здесь, а не в доске: доска пересоздаётся по refetchKey, состояние бы слетало.
+  const [selectionActive, setSelectionActive] = useState(false);
   // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
   // TaskListView. Меняется при смене ответственного/toggle в AssignedToMeBlock,
   // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
@@ -131,6 +135,19 @@ export function InboxPage(): React.ReactElement {
               скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим») — слева, сразу
               за заголовком, чтобы не «летала» в одиночестве у правого края. */}
           <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-1" />
+          {/* Выделение задач нижней доски: включает режим сразу во ВСЕХ её колонках,
+              в шапке каждой появляются «Все»/«Очистить», снизу — панель действий. */}
+          <Button
+            type="button"
+            variant={selectionActive ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-xs max-sm:h-9"
+            aria-pressed={selectionActive}
+            onClick={() => setSelectionActive((v) => !v)}
+          >
+            <ListChecks className="size-4" />
+            {selectionActive ? 'Отменить выделение' : 'Выделить'}
+          </Button>
         </div>
 
         {/* Единый DnD (#5): один DndContext на блок ответственных И доску — карточку доски
@@ -165,6 +182,8 @@ export function InboxPage(): React.ReactElement {
               bleedPadClass={KANBAN_BLEED_PAD}
               externalDnd={dndRegistry}
               onBoardTasksChange={handleBoardTasksChange}
+              selectionActive={selectionActive}
+              onSelectionActiveChange={setSelectionActive}
             />
           </motion.div>
         </InboxUnifiedDnd>
