@@ -46,6 +46,8 @@ function makeHarness(opts?: {
   kanbanByProject?: Record<string, any>;
   // Telegram @username → userId. В TG людей упоминают именно так, и модель повторяет за текстом.
   telegramUsernames?: Record<string, string>;
+  // Фиксированные часы: «конец недели» иначе плавал бы по дню прогона тестов.
+  now?: () => Date;
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
@@ -321,6 +323,7 @@ function makeHarness(opts?: {
     idGen: () => 'uuid',
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
+    ...(opts?.now ? { now: opts.now } : {}),
   };
 
   const service = new TelegramComposerService(deps as any);
@@ -732,6 +735,69 @@ test('AI: имя ответственного без id → сопоставля
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
   assert.equal(h.assigneeMessages.length, 1); // ответственному ушло уведомление
+});
+
+// Явное @упоминание в тексте задачи. Раньше этот путь резолвил ТОЛЬКО по отображаемому имени,
+// поэтому «@hotspotping сделай» не находил никого, хотя у пользователя привязан ровно один TG.
+test('явное @упоминание резолвится по Telegram @username', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    shared: [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }],
+    telegramUsernames: { hotspotping: 'u2' },
+    aiOutcome: 'enqueue-throw', // без AI — ручной путь
+  });
+  await h.service.startFromMessage(111, 500, '+Альфа Обнови билд @hotspotping');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.equal(h.drafts.get(draftId)!.assigneeUserId, 'u2');
+});
+
+// Срок по умолчанию: без него CreateTask ставит «сегодня», и задача из чата сразу просрочена.
+test('без явного срока сегменту ставится конец недели (пятница)', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    now: () => new Date(2026, 6, 22, 12, 0, 0), // среда, 22.07.2026
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сделать это');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.deadline, '2026-07-24');
+});
+
+test('явно указанный моделью срок не перебивается', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    now: () => new Date(2026, 6, 22, 12, 0, 0),
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: '2026-08-15',
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сделать это до 15 августа');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.deadline, '2026-08-15');
 });
 
 // Ровно тот случай, что был в проде: модель вернула Telegram @username («hotspotping»),

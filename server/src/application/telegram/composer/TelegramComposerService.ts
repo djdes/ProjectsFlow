@@ -26,6 +26,7 @@ import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
+import { endOfWeekDeadline } from './defaultDeadline.js';
 import {
   VISIBLE_KANBAN_STATUSES,
   type VisibleKanbanStatus,
@@ -68,6 +69,9 @@ type Deps = {
   readonly idGen: () => string;
   readonly shortIdGen: () => string;
   readonly appUrl: string;
+  // Источник времени для срока по умолчанию. Необязателен — прод берёт системные часы;
+  // тесты подставляют фиксированную дату, иначе «конец недели» плавал бы по дню прогона.
+  readonly now?: () => Date;
   // AI-перефраз сообщения в задачи (простой/быстрый compose pass-1). Best-effort: если
   // диспетчер офлайн / job упал / таймаут — конструктор откатывается на ручной флоу.
   readonly enqueueAiPromptJob: EnqueueAiPromptJob;
@@ -812,13 +816,8 @@ export class TelegramComposerService {
     let assigneeUserId: string | null = null;
     let offeredMembers: TelegramDraftOffered['members'] | undefined;
     if (parsed.assigneeQuery !== null) {
-      const candidates = projectId
-        ? (await this.deps.members.listByProject(projectId)).map((m) => ({
-            id: m.userId,
-            displayName: m.user.displayName,
-          }))
-        : await this.deps.members.listSharedUsers(userId);
-      const r = fuzzyMatch(parsed.assigneeQuery, candidates, (u) => u.displayName);
+      const candidates = await this.assigneeCandidates(userId, projectId);
+      const r = await this.matchAssignee(parsed.assigneeQuery, candidates);
       if (r.unique) {
         assigneeUserId = r.unique.id;
       } else {
@@ -1160,6 +1159,9 @@ export class TelegramComposerService {
         description: text,
         status: draft.targetStatus ?? DEFAULT_COLUMN,
         assigneeUserId: draft.assigneeUserId ?? userId,
+        // Ручной путь (без AI-сегментов) срока не собирает вовсе — без явного значения
+        // CreateTask поставил бы «сегодня». Держим то же правило, что и для сегментов.
+        deadline: endOfWeekDeadline(this.now()),
         allowInboxDelegation: delegatedInbox,
       });
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
@@ -1403,13 +1405,61 @@ export class TelegramComposerService {
     assigneeQuery: string | null,
   ): Promise<string | null> {
     if (!assigneeQuery?.trim()) return null;
-    const candidates = projectId
+    const candidates = await this.assigneeCandidates(userId, projectId);
+    return (await this.matchAssignee(assigneeQuery, candidates)).unique?.id ?? null;
+  }
+
+  private now(): Date {
+    return this.deps.now ? this.deps.now() : new Date();
+  }
+
+  // Кого вообще можно назначить: участники проекта, а без проекта — люди, с которыми автор
+  // делит хотя бы один проект.
+  private async assigneeCandidates(
+    userId: string,
+    projectId: string | null,
+  ): Promise<readonly { id: string; displayName: string }[]> {
+    return projectId
       ? (await this.deps.members.listByProject(projectId)).map((member) => ({
           id: member.userId,
           displayName: member.user.displayName,
         }))
       : await this.deps.members.listSharedUsers(userId);
-    return fuzzyMatch(assigneeQuery, candidates, (candidate) => candidate.displayName).unique?.id ?? null;
+  }
+
+  /**
+   * Единый резолв «кого назвали» → участник. Один порядок для ВСЕХ путей: явное @упоминание
+   * в тексте, ручная карточка и AI-сегменты.
+   *
+   * 1. Telegram @username. В TG людей зовут именно так, а у пользователя может быть привязан
+   *    ровно один Telegram — значит username однозначно указывает на аккаунт. Раньше это
+   *    работало только в «@Бот @Человек», а при постановке задачи `@hotspotping` не находился
+   *    ни по одному пути: резолв шёл лишь по отображаемому имени в ProjectsFlow.
+   * 2. Отображаемое имя — фоллбэк для «Вася», «для Олега» и т.п.
+   *
+   * Найденного по username сверяем со списком кандидатов: метод ищет по всей базе, а назначить
+   * можно только участника — иначе CreateTask отвергнет ассайни уже при создании.
+   */
+  private async matchAssignee(
+    query: string,
+    candidates: readonly { id: string; displayName: string }[],
+  ): Promise<{
+    unique: { id: string; displayName: string } | null;
+    matches: readonly { id: string; displayName: string }[];
+  }> {
+    const clean = query.trim();
+    if (clean.length === 0) return { unique: null, matches: [] };
+    try {
+      const byUsername = await this.deps.users.findUserIdByTelegramUsername(clean);
+      const member = byUsername ? candidates.find((c) => c.id === byUsername) : undefined;
+      if (member) return { unique: member, matches: [member] };
+    } catch (err) {
+      // Резолв по username — уточнение, а не условие: падение справочника не должно ломать
+      // приём задачи, дальше отработает совпадение по имени.
+      console.warn('[tg-composer] telegram username lookup failed:', err);
+    }
+    const r = fuzzyMatch(clean, candidates, (c) => c.displayName);
+    return { unique: r.unique ?? null, matches: r.matches };
   }
 
   // Опрос compose-job: до COMPOSE_MAX_ATTEMPTS long-poll'ов (≈150с в проде; в тестах мок
@@ -1443,7 +1493,10 @@ export class TelegramComposerService {
         projectName: hintProjectId ? null : s.projectName,
         assigneeUserId: await this.resolveSegmentAssignee(s, projectId, creatorUserId),
         assigneeName: s.assigneeName,
-        deadline: s.deadline,
+        // Срока нет — ставим конец недели ЗДЕСЬ, а не при создании: так он попадает в карточку,
+        // пользователь его видит и может поменять пресетом до подтверждения. Оставить пустым
+        // нельзя — CreateTask тогда проставит «сегодня», и задача из чата сразу просрочена.
+        deadline: s.deadline ?? endOfWeekDeadline(this.now()),
         included: true,
         targetStatus: null, // дефолт 'backlog' (ЧЕРНОВИКИ) пока пользователь не выбрал колонку
       });
@@ -1468,23 +1521,8 @@ export class TelegramComposerService {
     const name = seg.assigneeName?.trim();
     if (!name) return null;
     try {
-      const candidates = projectId
-        ? (await this.deps.members.listByProject(projectId)).map((m) => ({
-            id: m.userId,
-            displayName: m.user.displayName,
-          }))
-        : await this.deps.members.listSharedUsers(creatorUserId);
-
-      // 1) Telegram @username. В TG людей зовут именно так, и модель повторяет за текстом:
-      //    в проде это были «hotspotping» и «mrlinux0» — по displayName они не находятся
-      //    в принципе. Тот же порядок резолва, что и в «@Бот @Человек» (HandleTelegramWebhook).
-      //    Найденного проверяем по списку кандидатов: метод ищет по всей базе, а назначать
-      //    можно только участника — иначе CreateTask отвергнет ассайни и сегмент упадёт.
-      const byUsername = await this.deps.users.findUserIdByTelegramUsername(name);
-      if (byUsername && candidates.some((c) => c.id === byUsername)) return byUsername;
-
-      // 2) Отображаемое имя — фоллбэк для «Вася», «Олег» и т.п.
-      return fuzzyMatch(name, candidates, (u) => u.displayName).unique?.id ?? null;
+      const candidates = await this.assigneeCandidates(creatorUserId, projectId);
+      return (await this.matchAssignee(name, candidates)).unique?.id ?? null;
     } catch (err) {
       // Резолв ответственного — украшение, а не условие создания задачи: список участников
       // недоступен → создаём на автора, как и раньше.
