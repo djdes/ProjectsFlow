@@ -14,8 +14,17 @@ import type { AttachmentStorage } from '../task/AttachmentStorage.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
-import { buildAssigneeMenu, buildAssigneeTaskCards, resolveAssigneeByName } from './assigneeBrowse.js';
+import {
+  buildAssigneeMenu,
+  buildAssigneeTaskCards,
+  resolveAssigneeByName,
+  collectAssigneeProjectTasks,
+} from './assigneeBrowse.js';
 import { parseComposerMessage } from './composer/parseComposerMessage.js';
+import {
+  buildWorkspaceAssigneeDigestMessage,
+  buildWorkspaceAssigneeDigestRichMessage,
+} from '../digest/SendWorkspaceAssigneeDigest.js';
 import {
   taskActionKeyboard,
   taskCompletedKeyboard,
@@ -1385,6 +1394,70 @@ export class HandleTelegramWebhook {
     return true;
   }
 
+  // Сводка открытых задач ОДНОГО человека — в формате «сводки по ответственным» (одно rich-
+  // сообщение, задачи сгруппированы по проектам). false = задач нет. Тот же билдер, что у
+  // ежедневной сводки (buildWorkspaceAssigneeDigest*), чтобы вид был единый.
+  private async sendAssigneeDigest(
+    chatId: number,
+    viewerUserId: string,
+    assigneeUserId: string,
+  ): Promise<boolean> {
+    const { displayName, projects } = await collectAssigneeProjectTasks(
+      this.assigneeDeps(),
+      viewerUserId,
+      assigneeUserId,
+    );
+    if (projects.length === 0) return false;
+
+    // Ссылка нужна билдеру только для @mention в заголовке. Если привязки TG нет (нашёлся по
+    // имени) — синтетическая заглушка: имя покажется как есть.
+    const link =
+      (await this.deps.users.getTelegramLink(assigneeUserId).catch(() => null)) ?? {
+        telegramUserId: 0,
+        telegramUsername: null,
+        telegramFirstName: null,
+        telegramPhotoUrl: null,
+        telegramAuthDate: null,
+        tgChatId: null,
+        tgStartedAt: null,
+        tgPairedAt: null,
+        prefs: null,
+      };
+    const name = displayName ?? 'Участник';
+    const richHtml = buildWorkspaceAssigneeDigestRichMessage({
+      displayName: name,
+      telegramLink: link,
+      projects,
+      appUrl: this.deps.appUrl,
+    });
+    const fallbackHtml = buildWorkspaceAssigneeDigestMessage({
+      displayName: name,
+      telegramLink: link,
+      projects,
+      appUrl: this.deps.appUrl,
+    });
+
+    let ok = false;
+    let allowFallback = !this.deps.client.sendRichMessage;
+    if (this.deps.client.sendRichMessage) {
+      try {
+        const res = await this.deps.client.sendRichMessage({ chatId, html: richHtml });
+        if (res.kind === 'ok') ok = true;
+        else allowFallback = res.kind === 'error' && res.deliveryUnknown !== true;
+      } catch (err) {
+        console.warn('[tg-webhook] assignee digest rich failed:', err);
+        allowFallback = false;
+      }
+    }
+    if (!ok && allowFallback) {
+      const res = await this.deps.client
+        .sendMessage({ chatId, text: fallbackHtml, parseMode: 'HTML', disableWebPagePreview: true })
+        .catch(() => null);
+      ok = res?.kind === 'ok';
+    }
+    return ok;
+  }
+
   // «@Bot @Человек» (в группе) / «@Человек» (в личке) без текста задачи → открытые задачи
   // этого человека по проектам (сводка «что осталось»). Резолв имени — среди тех, у кого есть
   // открытые задачи (fuzzyMatch по displayName); неоднозначность → кнопки выбора; нет — подсказка.
@@ -1418,7 +1491,7 @@ export class HandleTelegramWebhook {
     if (assigneeQuery.length > 0) {
       const byUsername = await this.deps.users.findUserIdByTelegramUsername(assigneeQuery);
       if (byUsername) {
-        const sent = await this.sendAssigneeCards(chatId, ownerUserId, byUsername);
+        const sent = await this.sendAssigneeDigest(chatId, ownerUserId, byUsername);
         if (!sent) {
           await this.reply(chatId, `✨ У @${escapeHtml(assigneeQuery)} нет открытых задач в проектах.`);
         }
@@ -1449,7 +1522,7 @@ export class HandleTelegramWebhook {
       await this.reply(chatId, '🔎 Уточни, кто именно:', { inline_keyboard: rows });
       return;
     }
-    const sent = await this.sendAssigneeCards(chatId, ownerUserId, res.assigneeUserId);
+    const sent = await this.sendAssigneeDigest(chatId, ownerUserId, res.assigneeUserId);
     if (!sent) {
       await this.reply(chatId, `✨ У «${escapeHtml(res.assigneeName)}» нет открытых задач.`);
     }

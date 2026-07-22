@@ -31,6 +31,7 @@ function makeHarness(opts?: {
       async findUserIdByTelegramUsername(u: string) {
         return opts?.usernames?.[u.trim().replace(/^@/, '').toLowerCase()] ?? null;
       },
+      async getTelegramLink() { return null; },
     },
     members: {
       async listProjectsForUser() { return opts?.projects ?? []; },
@@ -481,20 +482,20 @@ function groupMentionUpdate(text: string): TelegramUpdate {
   } as any;
 }
 
-test('@Bot @username: резолв по Telegram @username → карточки задач человека', async () => {
+test('@Bot @username: резолв по Telegram @username → rich-сводка задач человека', async () => {
   const h = makeHarness({ ...seed, groupOwnerId: 'viewer1', usernames: { oleg_tg: 'u-oleg' } });
   await h.h.execute(groupMentionUpdate('@ProjectsFlow_Bot @oleg_tg'));
-  assert.equal(h.sent.length, 2, 'заголовок + 1 карточка');
-  assert.ok(h.sent[0]!.text.includes('Олег'));
-  assert.ok(h.sent[1]!.text.includes('Задача Олега'));
-  assert.equal(h.upserts.length, 1);
+  // Единый вид «сводки по ответственным» — одно rich-сообщение, а не N карточек.
+  assert.equal(h.sentRich.length, 1);
+  assert.ok(h.sentRich[0]!.html.includes('Задача Олега'));
+  assert.equal(h.sent.length, 0, 'per-task карточек нет');
 });
 
 test('@Bot @имя: фоллбэк по displayName, когда @username не сматчился', async () => {
   const h = makeHarness({ ...seed, groupOwnerId: 'viewer1' }); // usernames пуст → username lookup=null
   await h.h.execute(groupMentionUpdate('@ProjectsFlow_Bot @Олег'));
-  assert.equal(h.sent.length, 2);
-  assert.ok(h.sent[0]!.text.includes('Олег'));
+  assert.equal(h.sentRich.length, 1);
+  assert.ok(h.sentRich[0]!.html.includes('Задача Олега'));
 });
 
 test('@Bot @неизвестный → «не нашёл» (одно сообщение-подсказка)', async () => {

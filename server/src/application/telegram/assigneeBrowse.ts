@@ -107,6 +107,35 @@ export async function buildAssigneeMenu(
   return { text, keyboard: { inline_keyboard: keyboardRows } };
 }
 
+// Открытые задачи ОДНОГО ответственного, сгруппированные по проекту — форма, которую ест
+// сводка по ответственным (buildWorkspaceAssigneeDigest*). Охват — проекты viewer'а.
+export type AssigneeProjectGroup = { readonly project: { id: string; name: string }; readonly tasks: Task[] };
+export type AssigneeProjectTasks = {
+  readonly displayName: string | null;
+  readonly totalCount: number;
+  readonly projects: AssigneeProjectGroup[];
+};
+
+export async function collectAssigneeProjectTasks(
+  deps: AssigneeBrowseDeps,
+  viewerUserId: string,
+  assigneeUserId: string,
+): Promise<AssigneeProjectTasks> {
+  const { rows } = await collectOpenTasks(deps, viewerUserId);
+  const matching = rows.filter((r) => r.task.assignee.userId === assigneeUserId);
+  const displayName = matching[0]?.task.assignee.displayName ?? null;
+  const byProject = new Map<string, { project: { id: string; name: string }; tasks: Task[] }>();
+  for (const r of matching) {
+    let bucket = byProject.get(r.projectId);
+    if (!bucket) {
+      bucket = { project: { id: r.projectId, name: r.projectName }, tasks: [] };
+      byProject.set(r.projectId, bucket);
+    }
+    bucket.tasks.push(r.task);
+  }
+  return { displayName, totalCount: matching.length, projects: [...byProject.values()] };
+}
+
 // Резолв «@Человек» (из TG-упоминания) → конкретный ответственный. Кандидаты — только те,
 // у кого ЕСТЬ открытые задачи в проектах viewer'а (о ком вообще есть что показать). Матч —
 // fuzzyMatch по displayName (exact → prefix → substring), тот же приём, что в композере.
