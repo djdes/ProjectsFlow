@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { telegramTaskDrafts, type TelegramTaskDraftRow } from '../db/schema.js';
 import type {
@@ -112,6 +112,7 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
         ? legacyPhotosToAttachments(photos, segments)
         : cloneAttachments(storedAttachments),
     targetStatus: r.targetStatus,
+    awaitingTextSeg: r.awaitingTextSeg ?? null,
     status: r.status,
     createdAt: r.createdAt,
     autoCreateAt: r.autoCreateAt,
@@ -243,6 +244,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
     if (patch.tgMessageId !== undefined) set.tgMessageId = patch.tgMessageId;
     if (patch.sourceKey !== undefined) set.sourceKey = patch.sourceKey;
     if (patch.targetStatus !== undefined) set.targetStatus = patch.targetStatus;
+    if (patch.awaitingTextSeg !== undefined) set.awaitingTextSeg = patch.awaitingTextSeg;
     if (patch.status !== undefined) set.status = patch.status;
     return set;
   }
@@ -262,6 +264,28 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
       .orderBy(asc(telegramTaskDrafts.autoCreateAt))
       .limit(Math.max(1, Math.min(limit, 100)));
     return rows.map(toDomain);
+  }
+
+  async findAwaitingText(creatorUserId: string, tgChatId: number): Promise<TelegramTaskDraft | null> {
+    const rows = await this.db
+      .select()
+      .from(telegramTaskDrafts)
+      .where(
+        and(
+          eq(telegramTaskDrafts.creatorUserId, creatorUserId),
+          eq(telegramTaskDrafts.tgChatId, tgChatId),
+          isNotNull(telegramTaskDrafts.awaitingTextSeg),
+          // Только живой черновик: подтверждённый/отменённый/истёкший править нечего, а его
+          // «ожидание» иначе съело бы следующее нормальное сообщение пользователя.
+          eq(telegramTaskDrafts.status, 'composing'),
+          gt(telegramTaskDrafts.expiresAt, sql`CURRENT_TIMESTAMP`),
+        ),
+      )
+      // Ждущих может оказаться несколько (нажал «Текст» в двух карточках) — правим последнюю.
+      .orderBy(desc(telegramTaskDrafts.createdAt))
+      .limit(1);
+    const row = rows[0];
+    return row ? toDomain(row) : null;
   }
 
   async claimForConfirmation(id: string, dueOnly: boolean): Promise<TelegramTaskDraft | null> {

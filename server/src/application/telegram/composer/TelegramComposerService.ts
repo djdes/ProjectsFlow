@@ -175,6 +175,7 @@ type ParsedCallback =
   // --- AI-сегменты (compose) ---
   | { readonly kind: 'seg-create'; readonly draftId: string }
   | { readonly kind: 'seg-edit'; readonly draftId: string; readonly seg: number }
+  | { readonly kind: 'seg-text'; readonly draftId: string; readonly seg: number }
   | { readonly kind: 'seg-back'; readonly draftId: string }
   | { readonly kind: 'seg-toggle'; readonly draftId: string; readonly seg: number }
   | {
@@ -240,6 +241,11 @@ function parseCallback(data: string | undefined): ParsedCallback {
       const [draftId, segStr] = rest.split(':');
       if (!draftId || segStr === undefined) return null;
       return { kind: 'seg-toggle', draftId, seg: toIdx(segStr) };
+    }
+    case 'aw': {
+      const [draftId, segStr] = rest.split(':');
+      if (!draftId || segStr === undefined) return null;
+      return { kind: 'seg-text', draftId, seg: toIdx(segStr) };
     }
     case 'al': {
       const [draftId, segStr, preset] = rest.split(':');
@@ -505,6 +511,11 @@ export class TelegramComposerService {
       await this.send(chatId, this.notLinkedText());
       return;
     }
+
+    // Пользователь нажал «📝 Текст» и прислал новую формулировку — это правка карточки, а не
+    // новая задача. Проверяем ДО идемпотентности и разбора: иначе ответ уехал бы в отдельную
+    // задачу, и в доске появился бы дубль с исправленным текстом.
+    if (await this.tryApplyPendingText(userId, chatId, rawText)) return;
 
     if (options.sourceKey) {
       const existing = await this.deps.drafts.findBySourceKey(options.sourceKey);
@@ -985,6 +996,8 @@ export class TelegramComposerService {
         return this.finalizeSegments(draft, userId, chatId, messageId, cq.id);
       case 'seg-edit':
         return this.onSegEdit(cq, draft, cb.seg, chatId, messageId);
+      case 'seg-text':
+        return this.onSegTextRequest(cq, draft, cb.seg, chatId);
       case 'seg-back':
         return this.onSegBack(cq, draft, chatId, messageId);
       case 'seg-toggle':
@@ -1870,7 +1883,12 @@ export class TelegramComposerService {
         { text: '📁 Проект', callback_data: `ap:${draft.id}:${idx}:?` },
         { text: '👤 Ответственный', callback_data: `ad:${draft.id}:${idx}:?` },
       ],
-      [{ text: '📊 Колонка', callback_data: `as:${draft.id}:${idx}:?` }],
+      [
+        { text: '📊 Колонка', callback_data: `as:${draft.id}:${idx}:?` },
+        // Формулировку AI угадывает не всегда, а поправить её было нечем: приходилось отменять
+        // карточку и надиктовывать заново.
+        { text: '📝 Текст', callback_data: `aw:${draft.id}:${idx}` },
+      ],
       [
         { text: '📅 Сегодня', callback_data: `al:${draft.id}:${idx}:today` },
         { text: 'Завтра', callback_data: `al:${draft.id}:${idx}:tom` },
@@ -1927,6 +1945,75 @@ export class TelegramComposerService {
     const card = await this.renderSegmentEdit(draft, idx);
     if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
     await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  // Нажали «📝 Текст»: запоминаем, какой сегмент ждёт формулировку, и просим прислать её
+  // ОТВЕТОМ на это сообщение. force_reply открывает поле ответа сразу — иначе в групповом чате
+  // пользователю пришлось бы вручную выбирать «Ответить», а без reply мы не отличим новый
+  // текст от новой задачи.
+  private async onSegTextRequest(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    idx: number,
+    chatId: number,
+  ): Promise<void> {
+    const segs = draft.segments ?? [];
+    if (!segs[idx]) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Задача не найдена.', showAlert: true });
+      return;
+    }
+    await this.deps.drafts.patch(draft.id, { awaitingTextSeg: idx });
+    await this.send(
+      chatId,
+      `📝 Пришли новый текст задачи <b>${idx + 1}</b> ответом на это сообщение.\n` +
+        `<i>Первая строка станет заголовком.</i>`,
+      // force_reply вместо кнопок: открывает поле ответа сразу. Без reply мы бы не отличили
+      // новый текст от новой задачи, а в группе пользователю пришлось бы жать «Ответить» руками.
+      { force_reply: true, selective: true },
+    );
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  /**
+   * Пришёл ответ на просьбу прислать текст. Возвращает true, если сообщение поглощено правкой —
+   * тогда вызывающий НЕ создаёт из него новую задачу.
+   *
+   * Проверяем, что правит автор черновика: карточка живёт в общем чате, и сосед не должен
+   * переписывать чужую задачу своим ответом.
+   */
+  async tryApplyPendingText(userId: string, chatId: number, text: string): Promise<boolean> {
+    let draft: TelegramTaskDraft | null;
+    try {
+      draft = await this.deps.drafts.findAwaitingText(userId, chatId);
+    } catch (err) {
+      // Проверка «не правка ли это» не должна съедать сообщение: при сбое считаем, что ничего
+      // не ждём, и текст уходит в обычный флоу — задача создастся, пусть и без правки.
+      console.warn('[tg-composer] awaiting-text lookup failed:', err);
+      return false;
+    }
+    if (!draft || draft.awaitingTextSeg === null) return false;
+    const body = text.trim();
+    if (body.length === 0) return false;
+
+    const idx = draft.awaitingTextSeg;
+    const segs = (draft.segments ?? []).slice();
+    const seg = segs[idx];
+    if (!seg) {
+      await this.deps.drafts.patch(draft.id, { awaitingTextSeg: null });
+      return false;
+    }
+    // Первая строка — заголовок, остальное — тело. Тот же разрез, что у AI-сегментов, чтобы
+    // карточка и созданная задача выглядели одинаково независимо от источника текста.
+    const [firstLine, ...restLines] = body.split('\n');
+    const title = (firstLine ?? '').trim();
+    const rest = restLines.join('\n').trim();
+    segs[idx] = { ...seg, title, body: rest.length > 0 ? rest : title };
+    const updated =
+      (await this.deps.drafts.patch(draft.id, { segments: segs, awaitingTextSeg: null })) ?? draft;
+
+    const card = await this.renderSegmentEdit(updated, idx);
+    await this.send(chatId, card.text, card.replyMarkup);
+    return true;
   }
 
   private async onSegBack(
@@ -2518,7 +2605,12 @@ export class TelegramComposerService {
     return `👋 Сначала привяжи аккаунт: открой <a href="${profileUrl}">${profileUrl}</a> и нажми «Login with Telegram», затем отправь /start.`;
   }
 
-  private async send(chatId: number, text: string, replyMarkup?: InlineKeyboardMarkup): Promise<void> {
+  // replyMarkup — не только inline-клавиатура: для просьбы прислать текст уходит ForceReply.
+  private async send(
+    chatId: number,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup | { force_reply: true; selective?: boolean },
+  ): Promise<void> {
     await this.deps.client
       .sendMessage({ chatId, text, parseMode: 'HTML', disableWebPagePreview: true, replyMarkup })
       .catch((err: unknown) => console.warn('[tg-composer] send failed:', err));

@@ -101,6 +101,9 @@ export type TelegramTaskDraft = {
   // Колонка канбана для РУЧНОГО флоу (одиночная задача). null = дефолт 'backlog'.
   // Для AI-флоу колонка хранится per-segment в segments[].targetStatus. См. db/068.
   readonly targetStatus: VisibleKanbanStatus | null;
+  // Правка формулировки: индекс сегмента, который ждёт новый текст от пользователя.
+  // null — ничего не ждём; MANUAL_TEXT_SEG (-1) — ручной черновик без сегментов. См. db/140.
+  readonly awaitingTextSeg: number | null;
   readonly status: TelegramTaskDraftStatus;
   readonly createdAt: Date;
   readonly autoCreateAt: Date | null;
@@ -141,10 +144,19 @@ export type TelegramTaskDraftPatch = {
   readonly sourceKey?: string | null;
   readonly targetStatus?: VisibleKanbanStatus | null;
   readonly status?: TelegramTaskDraftStatus;
+  readonly awaitingTextSeg?: number | null;
 };
+
+// Ручной черновик (без AI-сегментов) — текст один, индексировать нечего. Отдельное значение,
+// а не 0: нулевой индекс — это первый сегмент AI-карточки, их нельзя путать.
+export const MANUAL_TEXT_SEG = -1;
 
 export interface TelegramTaskDraftRepository {
   create(input: CreateTelegramTaskDraftInput): Promise<TelegramTaskDraft>;
+  // Черновик этого автора в этом чате, ожидающий новый текст (awaiting_text_seg IS NOT NULL).
+  // Ограничен автором и чатом: карточка живёт в общем чате, и сосед не должен переписать
+  // чужую задачу своим ответом. null — никто ничего не ждёт, сообщение обрабатывается обычно.
+  findAwaitingText(creatorUserId: string, tgChatId: number): Promise<TelegramTaskDraft | null>;
   // NULL если черновик не найден ИЛИ истёк (expires_at < now). Истёкшие не удаляем здесь —
   // это делает deleteExpired (фоновая чистка), но трактуем как отсутствующие.
   getById(id: string): Promise<TelegramTaskDraft | null>;

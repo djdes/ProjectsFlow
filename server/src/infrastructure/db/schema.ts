@@ -174,6 +174,9 @@ export const telegramTaskDrafts = mysqlTable(
     attachments: json('attachments').$type<TelegramDraftAttachment[] | null>(),
     // Колонка канбана для ручного (одиночного) флоу; null = дефолт 'backlog'. См. db/068.
     targetStatus: varchar('target_status', { length: 20 }).$type<VisibleKanbanStatus | null>(),
+    // Какой сегмент ждёт новый текст от пользователя (правка формулировки). NULL — не ждём,
+    // -1 — ручной черновик без сегментов. См. db/140.
+    awaitingTextSeg: int('awaiting_text_seg'),
     status: mysqlEnum('status', ['composing', 'confirming', 'confirmed', 'cancelled', 'expired'])
       .notNull()
       .default('composing'),

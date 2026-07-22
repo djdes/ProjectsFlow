@@ -109,6 +109,21 @@ function makeHarness(opts?: {
     async findBySourceKey(sourceKey: string) {
       return [...drafts.values()].find((draft) => draft.sourceKey === sourceKey) ?? null;
     },
+    // Ждущий новый текст черновик этого автора в этом чате. Живой (composing) — как в SQL.
+    async findAwaitingText(creatorUserId: string, tgChatId: number) {
+      return (
+        [...drafts.values()]
+          .filter(
+            (d) =>
+              d.creatorUserId === creatorUserId &&
+              d.tgChatId === tgChatId &&
+              d.awaitingTextSeg !== null &&
+              d.awaitingTextSeg !== undefined &&
+              d.status === 'composing',
+          )
+          .pop() ?? null
+      );
+    },
     async patch(id: string, patch: any) {
       const cur = drafts.get(id);
       if (!cur) return null;
@@ -735,6 +750,71 @@ test('AI: имя ответственного без id → сопоставля
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
   assert.equal(h.assigneeMessages.length, 1); // ответственному ушло уведомление
+});
+
+// Правка формулировки: AI не всегда попадает в смысл, а поправить текст было нечем —
+// оставалось отменить карточку и надиктовать заново.
+test('правка текста: ответ на просьбу меняет сегмент, а не создаёт вторую задачу', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Кривая формулировка',
+        simpleBody: 'Непонятно что',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сделать что-то');
+  const draftId = [...h.drafts.keys()][0]!;
+
+  await h.service.handleCallback(cq(`aw:${draftId}:0`)); // нажали «📝 Текст»
+  assert.equal(h.drafts.get(draftId)!.awaitingTextSeg, 0);
+
+  // Следующее сообщение — это правка, а НЕ новая задача.
+  await h.service.startFromMessage(111, 500, 'Починить экспорт\nВыгрузка ломается на кириллице');
+  assert.equal(h.drafts.size, 1, 'второй черновик означал бы, что ответ приняли за новую задачу');
+  const seg = h.drafts.get(draftId)!.segments![0]!;
+  assert.equal(seg.title, 'Починить экспорт');
+  assert.equal(seg.body, 'Выгрузка ломается на кириллице');
+  assert.equal(h.drafts.get(draftId)!.awaitingTextSeg, null, 'ожидание должно сбрасываться');
+
+  // И правка не создала задачу сама по себе — создаёт по-прежнему кнопка.
+  assert.equal(h.createTaskCalls.length, 0);
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.ok(h.createTaskCalls[0]!.description.includes('Починить экспорт'));
+});
+
+test('правка текста: следующее сообщение после правки снова создаёт задачу', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'первая');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`aw:${draftId}:0`));
+  await h.service.startFromMessage(111, 500, 'Новый текст'); // поглощено правкой
+  await h.service.startFromMessage(111, 500, 'вторая задача'); // уже обычное сообщение
+
+  assert.equal(h.drafts.size, 2, 'после сброса ожидания сообщение снова становится задачей');
 });
 
 // Явное @упоминание в тексте задачи. Раньше этот путь резолвил ТОЛЬКО по отображаемому имени,
