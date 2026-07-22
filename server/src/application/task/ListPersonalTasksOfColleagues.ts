@@ -25,8 +25,10 @@ type Deps = {
  * передаёт ни одного id. Задачи из НЕ-inbox проектов сюда не попадают по построению
  * (берём только projects.is_inbox = 1 владельца-коллеги).
  *
- * Доступ на запись НЕ выдаётся: caller не member чужого inbox'а, поэтому canModify=false,
- * а любая мутация всё равно упрётся в requireProjectAccess на своём роуте.
+ * Право на действие совпадает с правом на просмотр: раз задача видна в этом списке, её можно
+ * перевести в другую колонку и удалить (см. isInboxColleague в taskAuthorization — там та же
+ * граница listSharedUsers). Раньше здесь стоял canModify=false, и карточка выглядела живой,
+ * а действия молча упирались в 404.
  */
 export class ListPersonalTasksOfColleagues {
   constructor(private readonly deps: Deps) {}
@@ -67,8 +69,8 @@ export class ListPersonalTasksOfColleagues {
         projectId: project.id,
         projectName: project.name,
         isInbox: true,
-        // Чужой inbox: membership'а нет, значит и права менять нет.
-        canModify: false,
+        // Коллега по общему пространству: видит задачу — значит может менять статус и удалять.
+        canModify: true,
         commitCount: commitCounts.get(task.id) ?? 0,
         attachmentCount: attachmentCounts.get(task.id) ?? 0,
         commentCount: commentCounts.get(task.id) ?? 0,

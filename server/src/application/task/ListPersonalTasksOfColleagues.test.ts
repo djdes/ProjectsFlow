@@ -81,7 +81,10 @@ test('colleague personal inbox tasks are returned with inbox context', async () 
   assert.equal(items[0]!.projectId, 'bob-inbox');
   assert.equal(items[0]!.projectName, 'Входящие');
   assert.equal(items[0]!.isInbox, true);
-  assert.equal(items[0]!.canModify, false);
+  // Право на действие совпадает с правом на просмотр: раз задача коллеги видна, её можно
+  // перевести в другую колонку и удалить. Раньше здесь стояло false, и карточка выглядела
+  // живой, а действия молча упирались в 404.
+  assert.equal(items[0]!.canModify, true);
   assert.equal(items[0]!.commitCount, 2);
   assert.equal(items[0]!.attachmentCount, 3);
   assert.equal(items[0]!.commentCount, 4);
