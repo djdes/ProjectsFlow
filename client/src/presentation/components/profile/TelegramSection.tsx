@@ -181,7 +181,9 @@ export function TelegramSection(): React.ReactElement {
                 />
               )}
               <div className="min-w-0 flex-1">
-                <p className="font-medium">
+                {/* break-words: длинный @username переносится внутри блока, а не вылезает
+                    вправо под кнопку «Открыть» (была перекрыта на узком экране). */}
+                <p className="break-words font-medium [overflow-wrap:anywhere]">
                   ✅ Привязан: {status.telegramFirstName ?? ''}
                   {status.telegramUsername && (
                     <span className="ml-1 text-muted-foreground">
@@ -196,7 +198,7 @@ export function TelegramSection(): React.ReactElement {
                 )}
               </div>
               {status.botDeepLink && (
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="sm" className="shrink-0">
                   <a href={status.botDeepLink} target="_blank" rel="noopener">
                     <ExternalLink className="size-3.5" />
                     {status.tgStarted ? 'Открыть' : 'Start'}
