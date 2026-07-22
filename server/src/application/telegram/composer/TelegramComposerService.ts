@@ -622,7 +622,7 @@ export class TelegramComposerService {
         }
         stopSpinner = null;
       }
-      const segments = this.toDraftSegments(parsedSegs, hint.projectId);
+      const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId);
       const updated = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
@@ -1428,21 +1428,59 @@ export class TelegramComposerService {
 
   // Парсинг-результат → доменные сегменты черновика. hintProjectId (если задан +Проектом)
   // пинит все сегменты в этот проект (ответственного оставляем — провалидируется при создании).
-  private toDraftSegments(
+  private async toDraftSegments(
     parsed: ParsedComposeSegment[],
     hintProjectId: string | null,
-  ): TelegramDraftSegment[] {
-    return parsed.map((s) => ({
-      title: s.title,
-      body: s.body,
-      projectId: hintProjectId ?? s.projectId,
-      projectName: hintProjectId ? null : s.projectName,
-      assigneeUserId: s.assigneeUserId,
-      assigneeName: s.assigneeName,
-      deadline: s.deadline,
-      included: true,
-      targetStatus: null, // дефолт 'backlog' (ЧЕРНОВИКИ) пока пользователь не выбрал колонку
-    }));
+    creatorUserId: string,
+  ): Promise<TelegramDraftSegment[]> {
+    const out: TelegramDraftSegment[] = [];
+    for (const s of parsed) {
+      const projectId = hintProjectId ?? s.projectId;
+      out.push({
+        title: s.title,
+        body: s.body,
+        projectId,
+        projectName: hintProjectId ? null : s.projectName,
+        assigneeUserId: await this.resolveSegmentAssignee(s, projectId, creatorUserId),
+        assigneeName: s.assigneeName,
+        deadline: s.deadline,
+        included: true,
+        targetStatus: null, // дефолт 'backlog' (ЧЕРНОВИКИ) пока пользователь не выбрал колонку
+      });
+    }
+    return out;
+  }
+
+  // Модель часто называет ответственного, но не возвращает его id. В проде это выглядело так:
+  // {"assigneeUserId":null,"assigneeName":"hotspotping"} — карточка показывала имя, а в задачу
+  // уходил `assigneeUserId ?? userId`, то есть автор. Пользователь видел «ответственный
+  // определён» и получал задачу на себя.
+  //
+  // Сопоставляем имя тем же fuzzyMatch по тем же кандидатам, что и ручной путь (см. резолв
+  // @упоминания выше) — отдельной эвристики заводить не надо. Не совпало однозначно → null,
+  // и тогда карточка честно покажет автора, а не имя, которое всё равно не применится.
+  private async resolveSegmentAssignee(
+    seg: ParsedComposeSegment,
+    projectId: string | null,
+    creatorUserId: string,
+  ): Promise<string | null> {
+    if (seg.assigneeUserId) return seg.assigneeUserId;
+    const name = seg.assigneeName?.trim();
+    if (!name) return null;
+    try {
+      const candidates = projectId
+        ? (await this.deps.members.listByProject(projectId)).map((m) => ({
+            id: m.userId,
+            displayName: m.user.displayName,
+          }))
+        : await this.deps.members.listSharedUsers(creatorUserId);
+      return fuzzyMatch(name, candidates, (u) => u.displayName).unique?.id ?? null;
+    } catch (err) {
+      // Резолв ответственного — украшение, а не условие создания задачи: список участников
+      // недоступен → создаём на автора, как и раньше.
+      console.warn('[tg-composer] segment assignee resolve failed:', err);
+      return null;
+    }
   }
 
   private async projNameOf(projectId: string | null): Promise<string> {
@@ -1485,8 +1523,13 @@ export class TelegramComposerService {
     return resolveColumnLabel(settings?.[s], s);
   }
 
-  // Имя ответственного для показа: по userId (если сматчился), сырое имя-подсказка
-  // из текста либо создатель как обязательный fallback.
+  // Имя ответственного для показа. Показываем ТОЛЬКО того, кто реально станет ответственным:
+  // сматчился участник — его, иначе создателя (именно он и будет назначен при создании).
+  //
+  // Раньше здесь был третий вариант — показать сырое `assigneeName` от модели, когда id не
+  // сматчился. Это и вводило в заблуждение: карточка обещала одного ответственного, а задача
+  // уезжала на автора. Имя без id теперь не показываем: карточка должна отражать результат,
+  // а не намерение модели.
   private async assigneeLabelOf(
     seg: TelegramDraftSegment,
     fallbackUserId: string,
@@ -1498,7 +1541,6 @@ export class TelegramComposerService {
         'Ответственный'
       );
     }
-    if (seg.assigneeName) return seg.assigneeName;
     return (await this.deps.users.getById(fallbackUserId))?.displayName ?? 'Вы';
   }
 
