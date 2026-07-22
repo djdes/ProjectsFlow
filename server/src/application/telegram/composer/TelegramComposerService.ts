@@ -1474,6 +1474,16 @@ export class TelegramComposerService {
             displayName: m.user.displayName,
           }))
         : await this.deps.members.listSharedUsers(creatorUserId);
+
+      // 1) Telegram @username. В TG людей зовут именно так, и модель повторяет за текстом:
+      //    в проде это были «hotspotping» и «mrlinux0» — по displayName они не находятся
+      //    в принципе. Тот же порядок резолва, что и в «@Бот @Человек» (HandleTelegramWebhook).
+      //    Найденного проверяем по списку кандидатов: метод ищет по всей базе, а назначать
+      //    можно только участника — иначе CreateTask отвергнет ассайни и сегмент упадёт.
+      const byUsername = await this.deps.users.findUserIdByTelegramUsername(name);
+      if (byUsername && candidates.some((c) => c.id === byUsername)) return byUsername;
+
+      // 2) Отображаемое имя — фоллбэк для «Вася», «Олег» и т.п.
       return fuzzyMatch(name, candidates, (u) => u.displayName).unique?.id ?? null;
     } catch (err) {
       // Резолв ответственного — украшение, а не условие создания задачи: список участников

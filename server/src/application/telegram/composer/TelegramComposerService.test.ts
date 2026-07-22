@@ -44,12 +44,15 @@ function makeHarness(opts?: {
   aiGate?: Promise<void>;
   // Per-project kanban settings (кастомные подписи/скрытость колонок) для пикера.
   kanbanByProject?: Record<string, any>;
+  // Telegram @username → userId. В TG людей упоминают именно так, и модель повторяет за текстом.
+  telegramUsernames?: Record<string, string>;
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
   const aiSegments = opts?.aiSegments;
   const aiOutcome = opts?.aiOutcome ?? (aiSegments ? undefined : 'enqueue-throw');
   const kanbanByProject = opts?.kanbanByProject ?? {};
+  const telegramUsernames = opts?.telegramUsernames ?? {};
 
   const drafts = new Map<string, TelegramTaskDraft>();
   let seq = 0;
@@ -229,6 +232,11 @@ function makeHarness(opts?: {
     users: {
       async findUserIdByTelegramUserId(tgId: number) {
         return tgId === 111 ? 'u1' : tgId === 222 ? 'u2' : null;
+      },
+      // Регистронезависимо и без ведущего @ — как в настоящем DrizzleUserRepository.
+      async findUserIdByTelegramUsername(username: string) {
+        const clean = username.trim().replace(/^@/, '').toLowerCase();
+        return telegramUsernames[clean] ?? null;
       },
       async getById(id: string) {
         const u = shared.find((x) => x.id === id);
@@ -724,6 +732,64 @@ test('AI: имя ответственного без id → сопоставля
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
   assert.equal(h.assigneeMessages.length, 1); // ответственному ушло уведомление
+});
+
+// Ровно тот случай, что был в проде: модель вернула Telegram @username («hotspotping»),
+// а по отображаемому имени такой не находится в принципе — нужен резолв по username.
+test('AI: ответственный по Telegram @username сопоставляется с участником', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    shared: [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }],
+    telegramUsernames: { hotspotping: 'u2' },
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: 'hotspotping',
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, '@hotspotping сделай это');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
+});
+
+// Username есть в базе, но человек не участник проекта — назначать его нельзя (CreateTask
+// такого ассайни отвергнет и сегмент упадёт). Тихо оставляем автора.
+test('AI: @username не-участника не назначается', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    shared: [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }],
+    telegramUsernames: { stranger: 'u9' },
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: 'stranger',
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сделать это');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u1');
 });
 
 // Обратная сторона: имя, которое ни с кем не сматчилось, НЕ должно выглядеть как назначение.
