@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildAssigneeMenu,
   buildAssigneeTaskCards,
+  resolveAssigneeByName,
   ASSIGNEE_CARDS_LIMIT,
   type AssigneeBrowseDeps,
 } from './assigneeBrowse.js';
@@ -195,4 +196,58 @@ test('cards: лимит 12, totalCount — полный', async () => {
   const res = await buildAssigneeTaskCards(deps, 'viewer', 'viewer', 'https://pf.test');
   assert.equal(res.cards.length, ASSIGNEE_CARDS_LIMIT);
   assert.equal(res.totalCount, 15);
+});
+
+// --- resolveAssigneeByName («@Человек» из TG → ответственный по открытым задачам) ---
+
+const resolveSeed: Seed = {
+  projects: [{ id: 'p1', name: 'Сайт' }],
+  tasksByProject: {
+    p1: [
+      { id: 't1', description: 'A', assigneeUserId: 'u-oleg', assigneeDisplayName: 'Олег Петров' },
+      { id: 't2', description: 'B', assigneeUserId: 'u-oleg', assigneeDisplayName: 'Олег Петров' },
+      { id: 't3', description: 'C', assigneeUserId: 'u-olga', assigneeDisplayName: 'Ольга Сидорова' },
+    ],
+  },
+};
+
+test('resolve: точный/префиксный матч по displayName → ok', async () => {
+  const res = await resolveAssigneeByName(makeDeps(resolveSeed), 'viewer', 'Олег');
+  assert.equal(res.kind, 'ok');
+  if (res.kind === 'ok') {
+    assert.equal(res.assigneeUserId, 'u-oleg');
+    assert.equal(res.assigneeName, 'Олег Петров');
+  }
+});
+
+test('resolve: неоднозначность (substring «Ол» → Олег и Ольга) → ambiguous с опциями', async () => {
+  const res = await resolveAssigneeByName(makeDeps(resolveSeed), 'viewer', 'Ол');
+  assert.equal(res.kind, 'ambiguous');
+  if (res.kind === 'ambiguous') {
+    const ids = res.options.map((o) => o.userId).sort();
+    assert.deepEqual(ids, ['u-oleg', 'u-olga']);
+    assert.equal(res.options.find((o) => o.userId === 'u-oleg')?.count, 2);
+  }
+});
+
+test('resolve: нет совпадения → none', async () => {
+  const res = await resolveAssigneeByName(makeDeps(resolveSeed), 'viewer', 'Вася');
+  assert.equal(res.kind, 'none');
+});
+
+test('resolve: нет проектов/открытых задач → no_projects', async () => {
+  const empty = await resolveAssigneeByName(makeDeps({}), 'viewer', 'Олег');
+  assert.equal(empty.kind, 'no_projects');
+  const doneOnly = await resolveAssigneeByName(
+    makeDeps({ projects: [{ id: 'p1', name: 'X' }], tasksByProject: { p1: [{ id: 't', description: 'x', status: 'done' }] } }),
+    'viewer',
+    'Олег',
+  );
+  assert.equal(doneOnly.kind, 'no_projects');
+});
+
+test('resolve: пустой query (@ без имени) → ambiguous со всеми', async () => {
+  const res = await resolveAssigneeByName(makeDeps(resolveSeed), 'viewer', '');
+  assert.equal(res.kind, 'ambiguous');
+  if (res.kind === 'ambiguous') assert.equal(res.options.length, 2);
 });

@@ -14,7 +14,8 @@ import type { AttachmentStorage } from '../task/AttachmentStorage.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
-import { buildAssigneeMenu, buildAssigneeTaskCards } from './assigneeBrowse.js';
+import { buildAssigneeMenu, buildAssigneeTaskCards, resolveAssigneeByName } from './assigneeBrowse.js';
+import { parseComposerMessage } from './composer/parseComposerMessage.js';
 import {
   taskActionKeyboard,
   taskCompletedKeyboard,
@@ -455,6 +456,16 @@ export class HandleTelegramWebhook {
     // вырезания @упоминания текст пуст. Упоминание с текстом — ниже, composer как раньше.
     if (isGroup && text.length === 0 && attachments.length === 0) {
       return this.handleGroupAssigneeMenu(chatId);
+    }
+
+    // «@Человек» без текста задачи (в группе @упоминание бота уже вырезано выше) → сводка
+    // открытых задач этого человека по проектам. «@Человек» С текстом («купить молоко @Ваня»)
+    // — это создание задачи (композер ниже), сюда НЕ попадает.
+    if (attachments.length === 0) {
+      const parsed = parseComposerMessage(text);
+      if (parsed.assigneeQuery !== null && parsed.taskText.trim().length === 0) {
+        return this.handleAssigneeTasksRequest(chatId, tgUserId, isGroup, parsed.assigneeQuery);
+      }
     }
 
     // Routing по первому слову.
@@ -1323,19 +1334,32 @@ export class HandleTelegramWebhook {
       return;
     }
     const assigneeUserId = (cq.data ?? '').slice('ba:'.length);
-    const result = await buildAssigneeTaskCards(
-      this.assigneeDeps(),
-      userId,
-      assigneeUserId,
-      this.deps.appUrl,
-    );
-    if (result.cards.length === 0) {
+    const sent = await this.sendAssigneeCards(chatId, userId, assigneeUserId);
+    if (!sent) {
       await this.deps.client.answerCallbackQuery(cq.id, {
         text: 'Открытых задач не нашлось.',
         showAlert: true,
       });
       return;
     }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  // Отрисовать карточки открытых задач ответственного (заголовок + карточка на задачу).
+  // false = задач нет. Каждая карточка регистрируется в telegram_task_messages (reply на неё
+  // становится комментарием к задаче). Общий код для кнопки ba:<id> и текстового «@Человек».
+  private async sendAssigneeCards(
+    chatId: number,
+    viewerUserId: string,
+    assigneeUserId: string,
+  ): Promise<boolean> {
+    const result = await buildAssigneeTaskCards(
+      this.assigneeDeps(),
+      viewerUserId,
+      assigneeUserId,
+      this.deps.appUrl,
+    );
+    if (result.cards.length === 0) return false;
     const who = result.assigneeName ?? 'Ответственный';
     const extra =
       result.totalCount > result.cards.length
@@ -1349,7 +1373,7 @@ export class HandleTelegramWebhook {
           await this.deps.taskMessages.upsert({
             tgChatId: chatId,
             tgMessageId: messageId,
-            recipientUserId: userId,
+            recipientUserId: viewerUserId,
             taskId: card.taskId,
             projectId: card.projectId,
           });
@@ -1358,7 +1382,57 @@ export class HandleTelegramWebhook {
         }
       }
     }
-    await this.deps.client.answerCallbackQuery(cq.id);
+    return true;
+  }
+
+  // «@Bot @Человек» (в группе) / «@Человек» (в личке) без текста задачи → открытые задачи
+  // этого человека по проектам (сводка «что осталось»). Резолв имени — среди тех, у кого есть
+  // открытые задачи (fuzzyMatch по displayName); неоднозначность → кнопки выбора; нет — подсказка.
+  private async handleAssigneeTasksRequest(
+    chatId: number,
+    tgUserId: number,
+    isGroup: boolean,
+    assigneeQuery: string,
+  ): Promise<void> {
+    const ownerUserId = isGroup
+      ? await this.deps.groupOwners.getOwnerUserId(chatId)
+      : await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    if (!ownerUserId) {
+      await this.reply(
+        chatId,
+        isGroup
+          ? '⚠️ Группа не привязана к аккаунту. Отправь /start, чтобы привязать её к себе.'
+          : '⚠️ Сначала привяжи Telegram через /profile.',
+      );
+      return;
+    }
+
+    const res = await resolveAssigneeByName(this.assigneeDeps(), ownerUserId, assigneeQuery);
+    if (res.kind === 'no_projects') {
+      await this.reply(chatId, '📭 Пока нет проектов с открытыми задачами.');
+      return;
+    }
+    if (res.kind === 'none') {
+      await this.reply(
+        chatId,
+        `🤷 Не нашёл «${escapeHtml(assigneeQuery)}» среди тех, у кого есть открытые задачи. Проверь имя или открой меню: /tasks`,
+      );
+      return;
+    }
+    if (res.kind === 'ambiguous') {
+      const rows = chunk2(
+        res.options.map((o) => ({
+          text: `👤 ${o.name.slice(0, 32)} (${o.count})`,
+          callback_data: `ba:${o.userId}`,
+        })),
+      );
+      await this.reply(chatId, '🔎 Уточни, кто именно:', { inline_keyboard: rows });
+      return;
+    }
+    const sent = await this.sendAssigneeCards(chatId, ownerUserId, res.assigneeUserId);
+    if (!sent) {
+      await this.reply(chatId, `✨ У «${escapeHtml(res.assigneeName)}» нет открытых задач.`);
+    }
   }
 
   private async handleBrowseCallback(cq: TelegramCallbackQuery): Promise<void> {

@@ -6,6 +6,7 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { Task } from '../../domain/task/Task.js';
 import { taskActionKeyboard } from './taskActionKeyboard.js';
+import { fuzzyMatch } from './composer/fuzzyMatch.js';
 import {
   splitDescription,
   formatDeadlineRu,
@@ -104,6 +105,44 @@ export async function buildAssigneeMenu(
       ? '✨ Открытых задач нет.'
       : `👥 <b>Задачи по ответственным</b> — открытых: ${rows.length}${overflowNote}`;
   return { text, keyboard: { inline_keyboard: keyboardRows } };
+}
+
+// Резолв «@Человек» (из TG-упоминания) → конкретный ответственный. Кандидаты — только те,
+// у кого ЕСТЬ открытые задачи в проектах viewer'а (о ком вообще есть что показать). Матч —
+// fuzzyMatch по displayName (exact → prefix → substring), тот же приём, что в композере.
+export type AssigneeResolution =
+  | { readonly kind: 'ok'; readonly assigneeUserId: string; readonly assigneeName: string }
+  | { readonly kind: 'none' } // query не сматчился ни с кем
+  | { readonly kind: 'ambiguous'; readonly options: { userId: string; name: string; count: number }[] }
+  | { readonly kind: 'no_projects' }; // у viewer'а нет проектов с открытыми задачами
+
+export async function resolveAssigneeByName(
+  deps: AssigneeBrowseDeps,
+  viewerUserId: string,
+  query: string,
+): Promise<AssigneeResolution> {
+  const { hasProjects, rows } = await collectOpenTasks(deps, viewerUserId);
+  if (!hasProjects || rows.length === 0) return { kind: 'no_projects' };
+
+  const byAssignee = new Map<string, { name: string; count: number }>();
+  for (const r of rows) {
+    const { userId, displayName } = r.task.assignee;
+    const e = byAssignee.get(userId);
+    if (e) e.count += 1;
+    else byAssignee.set(userId, { name: displayName, count: 1 });
+  }
+  const candidates = [...byAssignee.entries()].map(([userId, e]) => ({
+    userId,
+    name: e.name,
+    count: e.count,
+  }));
+
+  const res = fuzzyMatch(query, candidates, (c) => c.name);
+  if (res.unique) {
+    return { kind: 'ok', assigneeUserId: res.unique.userId, assigneeName: res.unique.name };
+  }
+  if (res.matches.length === 0) return { kind: 'none' };
+  return { kind: 'ambiguous', options: res.matches.slice(0, ASSIGNEE_MENU_LIMIT).map((m) => ({ ...m })) };
 }
 
 // Разбивка кнопок по 2 в ряд (та же вёрстка, что в /tasks-браузере).
