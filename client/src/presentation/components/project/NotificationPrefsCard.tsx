@@ -17,8 +17,8 @@ export function NotificationPrefsCard({ projectId }: { projectId: string }): Rea
       <div className="rounded-md border">
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 border-b px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:gap-x-4">
           <span>Событие</span>
-          <span className="w-10 text-center sm:w-12">Команда</span>
-          <span className="w-10 text-center sm:w-12">MCP</span>
+          <span className="w-12 text-center">Команда</span>
+          <span className="w-12 text-center">MCP</span>
         </div>
         {NOTIF_EVENT_LABELS.map(({ type, label }) => (
           <div
@@ -26,7 +26,7 @@ export function NotificationPrefsCard({ projectId }: { projectId: string }): Rea
             className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 px-3 py-2 text-sm sm:gap-x-4"
           >
             <span className="truncate">{label}</span>
-            <span className="flex w-10 justify-center sm:w-12">
+            <span className="flex w-12 justify-center">
               <Switch
                 checked={resolvePref(prefs, type, 'team')}
                 onCheckedChange={(v) => toggle(type, 'team', v)}
@@ -34,7 +34,7 @@ export function NotificationPrefsCard({ projectId }: { projectId: string }): Rea
                 aria-label={`${label}: от команды`}
               />
             </span>
-            <span className="flex w-10 justify-center sm:w-12">
+            <span className="flex w-12 justify-center">
               <Switch
                 checked={resolvePref(prefs, type, 'mcp')}
                 onCheckedChange={(v) => toggle(type, 'mcp', v)}
