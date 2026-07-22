@@ -1407,6 +1407,26 @@ export class HandleTelegramWebhook {
       return;
     }
 
+    // Случайно просочившееся упоминание САМОГО бота (@Bot) — не «человек», показываем меню.
+    const bu = this.deps.botUsername;
+    if (bu && assigneeQuery.toLowerCase() === bu.toLowerCase()) {
+      return this.sendAssigneeMenu(chatId, ownerUserId);
+    }
+
+    // 1) Резолв по Telegram @username — в TG людей упоминают именно так (@hotspotping), а не
+    //    по отображаемому имени. Нашли пользователя → сразу его карточки.
+    if (assigneeQuery.length > 0) {
+      const byUsername = await this.deps.users.findUserIdByTelegramUsername(assigneeQuery);
+      if (byUsername) {
+        const sent = await this.sendAssigneeCards(chatId, ownerUserId, byUsername);
+        if (!sent) {
+          await this.reply(chatId, `✨ У @${escapeHtml(assigneeQuery)} нет открытых задач в проектах.`);
+        }
+        return;
+      }
+    }
+
+    // 2) Фоллбэк: по отображаемому имени среди тех, у кого есть открытые задачи.
     const res = await resolveAssigneeByName(this.assigneeDeps(), ownerUserId, assigneeQuery);
     if (res.kind === 'no_projects') {
       await this.reply(chatId, '📭 Пока нет проектов с открытыми задачами.');

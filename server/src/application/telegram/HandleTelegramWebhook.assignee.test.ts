@@ -11,6 +11,10 @@ function makeHarness(opts?: {
   task?: any;
   attachments?: any[];
   richResult?: 'ok' | 'error' | 'delivery_unknown' | 'forbidden' | 'rate_limited' | 'missing';
+  // Резолв TG @username → userId (для теста «@Bot @username»). Ключи в lower-case.
+  usernames?: Record<string, string>;
+  // Владелец привязки группы (для групповых сообщений). null = не привязана.
+  groupOwnerId?: string | null;
 }) {
   const sent: { chatId: number; text: string; replyMarkup: any }[] = [];
   const sentRich: any[] = [];
@@ -22,7 +26,12 @@ function makeHarness(opts?: {
   const userId = opts && 'userId' in opts ? opts.userId! : 'viewer1';
 
   const deps = {
-    users: { async findUserIdByTelegramUserId() { return userId; } },
+    users: {
+      async findUserIdByTelegramUserId() { return userId; },
+      async findUserIdByTelegramUsername(u: string) {
+        return opts?.usernames?.[u.trim().replace(/^@/, '').toLowerCase()] ?? null;
+      },
+    },
     members: {
       async listProjectsForUser() { return opts?.projects ?? []; },
       async findForProject() { return { role: 'editor' }; },
@@ -94,7 +103,7 @@ function makeHarness(opts?: {
       async findByMessage() { return null; },
       async upsert(i: any) { upserts.push(i); },
     },
-    groupOwners: { async getOwnerUserId() { return null; } },
+    groupOwners: { async getOwnerUserId() { return opts?.groupOwnerId ?? null; } },
     createComment: {},
     moveTask: {},
     confirmCloseProposal: {},
@@ -457,3 +466,48 @@ for (const richResult of ['delivery_unknown', 'forbidden', 'rate_limited'] as co
     assert.equal(h.upserts.length, 0);
   });
 }
+
+// --- «@Bot @Человек» в группе → открытые задачи человека ---
+
+function groupMentionUpdate(text: string): TelegramUpdate {
+  return {
+    update_id: 1,
+    message: {
+      message_id: 10,
+      from: { id: 111 },
+      chat: { id: -100, type: 'supergroup', title: 'Группа' },
+      text,
+    },
+  } as any;
+}
+
+test('@Bot @username: резолв по Telegram @username → карточки задач человека', async () => {
+  const h = makeHarness({ ...seed, groupOwnerId: 'viewer1', usernames: { oleg_tg: 'u-oleg' } });
+  await h.h.execute(groupMentionUpdate('@ProjectsFlow_Bot @oleg_tg'));
+  assert.equal(h.sent.length, 2, 'заголовок + 1 карточка');
+  assert.ok(h.sent[0]!.text.includes('Олег'));
+  assert.ok(h.sent[1]!.text.includes('Задача Олега'));
+  assert.equal(h.upserts.length, 1);
+});
+
+test('@Bot @имя: фоллбэк по displayName, когда @username не сматчился', async () => {
+  const h = makeHarness({ ...seed, groupOwnerId: 'viewer1' }); // usernames пуст → username lookup=null
+  await h.h.execute(groupMentionUpdate('@ProjectsFlow_Bot @Олег'));
+  assert.equal(h.sent.length, 2);
+  assert.ok(h.sent[0]!.text.includes('Олег'));
+});
+
+test('@Bot @неизвестный → «не нашёл» (одно сообщение-подсказка)', async () => {
+  const h = makeHarness({ ...seed, groupOwnerId: 'viewer1' });
+  await h.h.execute(groupMentionUpdate('@ProjectsFlow_Bot @ktonibud'));
+  assert.equal(h.sent.length, 1);
+  assert.ok(h.sent[0]!.text.includes('Не нашёл'));
+});
+
+test('@Bot @Bot (упоминание самого бота) → меню по ответственным, не «не нашёл»', async () => {
+  const h = makeHarness({ ...seed, groupOwnerId: 'viewer1' });
+  await h.h.execute(groupMentionUpdate('@ProjectsFlow_Bot @ProjectsFlow_Bot'));
+  assert.equal(h.sent.length, 1);
+  const kb = h.sent[0]!.replyMarkup?.inline_keyboard?.flat() ?? [];
+  assert.ok(kb.some((b: any) => (b.callback_data ?? '').startsWith('ba:')), 'меню по ответственным');
+});

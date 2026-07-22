@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { users, type UserRow } from '../db/schema.js';
 import type { User, UserWithSecrets } from '../../domain/user/User.js';
@@ -148,6 +148,17 @@ export class DrizzleUserRepository implements UserRepository {
       .select({ id: users.id })
       .from(users)
       .where(eq(users.telegramUserId, telegramUserId))
+      .limit(1);
+    return rows[0]?.id ?? null;
+  }
+
+  async findUserIdByTelegramUsername(username: string): Promise<string | null> {
+    const clean = username.trim().replace(/^@/, '').toLowerCase();
+    if (clean.length === 0) return null;
+    const rows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.telegramUsername}) = ${clean}`)
       .limit(1);
     return rows[0]?.id ?? null;
   }

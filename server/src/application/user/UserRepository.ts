@@ -50,6 +50,10 @@ export interface UserRepository {
   findUsersWithTelegram(userIds: readonly string[]): Promise<Set<string>>;
   // Для verify/connect: проверка что этот telegram_user_id ещё не привязан к другому юзеру.
   findUserIdByTelegramUserId(telegramUserId: number): Promise<string | null>;
+  // Резолв Telegram @username → userId (регистронезависимо, без ведущего @). Нужен, чтобы
+  // «@Человек» из TG-упоминания (люди пишутся именно @username) резолвился в пользователя.
+  // null — такого telegram_username нет ни у кого.
+  findUserIdByTelegramUsername(username: string): Promise<string | null>;
   // Полный upsert привязки (после verify Login Widget). НЕ затрагивает prefs и
   // tg_chat_id/tg_started_at (те ставятся отдельно через webhook /start).
   saveTelegramLink(userId: string, input: TelegramLinkInput): Promise<void>;
