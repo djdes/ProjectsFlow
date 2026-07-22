@@ -299,12 +299,21 @@ export function ProjectActionsMenu({
             <MoreHorizontal className="size-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 p-1.5">
+        <PopoverContent
+          align="end"
+          className="w-72 p-1.5"
+          onOpenAutoFocus={(e) => {
+            // На ТАЧ-устройствах не переводим фокус в поле поиска при открытии — иначе сразу
+            // всплывает экранная клавиатура. На десктопе (мышь) автофокус оставляем (быстрый ввод).
+            if (typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches) {
+              e.preventDefault();
+            }
+          }}
+        >
           {/* Поиск действий (Notion Search actions…). */}
           <div className="relative px-0.5 pb-1.5">
             <Search className="pointer-events-none absolute left-2.5 top-[9px] size-3.5 text-muted-foreground/60" />
             <input
-              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
