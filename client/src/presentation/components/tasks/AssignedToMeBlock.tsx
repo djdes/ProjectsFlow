@@ -23,6 +23,7 @@ import {
   CalendarDays,
   CalendarOff,
   CalendarRange,
+  Check,
   Eye,
   EyeOff,
   ArrowRight,
@@ -69,6 +70,14 @@ import {
   type AssigneeDirection,
 } from './assignedGrouping';
 import { ColumnPreviewList } from './ColumnPreview';
+import { BulkActionBar } from './BulkActionBar';
+import {
+  nextAnchor,
+  nextSelection,
+  type SelectModifiers,
+} from './selection/selectionReducer';
+import { useDragSelect } from './selection/useDragSelect';
+import { useCrossProjectBulkActions } from '@/presentation/hooks/useCrossProjectBulkActions';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
@@ -112,6 +121,11 @@ type Props = {
   // Единый DnD «Входящих» (#5): если задан — блок НЕ рендерит свой DndContext/DragOverlay
   // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры в этом реестре.
   externalDnd?: UnifiedDndRef | null;
+  // Режим мультивыделения СРАЗУ ВО ВСЕХ колонках блока: кнопка «Выделить» живёт в шапке
+  // страницы «Входящие», поэтому состояние приходит снаружи. Выключение (Esc, крестик на
+  // панели действий, полностью успешное массовое действие) блок сообщает обратно.
+  selectionActive?: boolean;
+  onSelectionActiveChange?: (active: boolean) => void;
 };
 
 // Тип вкладки блока ответственных: «Для меня» / «Другим».
@@ -228,6 +242,8 @@ export function AssignedToMeBlock({
   bleedNegClass = '',
   bleedPadClass = '',
   externalDnd = null,
+  selectionActive = false,
+  onSelectionActiveChange,
 }: Props): React.ReactElement | null {
   const { taskAssigneeRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
@@ -487,6 +503,128 @@ export function AssignedToMeBlock({
   // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
   const kanbanGroups = useMemo(() => groupAssignedByTime(visibleTasks, new Date()), [visibleTasks]);
+
+  // === Мультивыделение по ВСЕМУ блоку (кнопка «Выделить» в шапке страницы) ===
+  // Колонки блока — это либо 3 временных бакета (сортировка «по дедлайну»), либо группы
+  // выбранной сортировки. Выделение работает одинаково в обоих раскладах.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const anchorRef = useRef<string | null>(null); // якорь Shift-диапазона
+  const selectionColumns = grouping === 'deadline' ? kanbanGroups : groups;
+  // ВЫДЕЛЯЕМЫ только задачи, которые caller реально может менять. Задача без canModify
+  // в выбор не попадает вовсе — ни кликом, ни протяжкой, ни через «Все». Это тот же
+  // контракт, что уже действует на карточке (корзина спрятана, чекбокс и drag выключены),
+  // и он честнее альтернативы «выделить, а потом отчитаться „3 без прав“»: пользователь
+  // не набирает пачку, часть которой заведомо не выполнится.
+  const selectableGroups = selectionColumns.map((g) =>
+    g.items.filter((t) => t.canModify).map((t) => t.id),
+  );
+  const selectionOrderedIds = selectableGroups.flat();
+  const selectableIds = new Set(selectionOrderedIds);
+  const taskById = useMemo(() => new Map(visibleTasks.map((t) => [t.id, t])), [visibleTasks]);
+  // Выбранные в визуальном порядке колонок — их же получает панель действий.
+  const orderedSelectedIds = selectionOrderedIds.filter((id) => selectedIds.has(id));
+
+  const exitSelection = useCallback((): void => {
+    onSelectionActiveChange?.(false);
+  }, [onSelectionActiveChange]);
+  // Режим выключили снаружи — выбор уходит вместе с ним.
+  useEffect(() => {
+    if (selectionActive) return;
+    setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+    anchorRef.current = null;
+  }, [selectionActive]);
+
+  const handleSelectToggle = (taskId: string, mods: SelectModifiers): void => {
+    if (!selectableIds.has(taskId)) return;
+    // Якорь мог указать на исчезнувшую карточку (refetch/SSE) — тогда начинаем диапазон
+    // заново от кликнутой, иначе Shift навсегда деградировал бы в одиночный тогл.
+    const anchor =
+      anchorRef.current && selectableIds.has(anchorRef.current) ? anchorRef.current : null;
+    setSelectedIds((prev) => nextSelection(prev, taskId, mods, selectionOrderedIds, anchor));
+    anchorRef.current = nextAnchor(taskId, mods, anchor);
+  };
+  // «Все» / «Очистить» в шапке колонки — по СВОЕЙ колонке: объединяем/вычитаем, чтобы
+  // не сносить выбор, набранный в соседних.
+  const handleSelectAllIn = (ids: readonly string[]): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+    anchorRef.current = null;
+  };
+  const handleSelectNoneIn = (ids: readonly string[]): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+    anchorRef.current = null;
+  };
+
+  // Данные шапки колонки по её порядковому номеру (selectableGroups идёт в том же
+  // порядке, что и selectionColumns). null — режим выделения выключен. Возвращаем ЧИСТЫЕ
+  // данные, без колбэков: замыкания, пишущие anchorRef, нельзя создавать в рендере
+  // (react-hooks/refs) — сами обработчики передаются в JSX ссылками.
+  const columnSelectionAt = (index: number): ColumnSelection | null => {
+    if (!selectionActive) return null;
+    const ids = selectableGroups[index] ?? [];
+    return { count: ids.filter((id) => selectedIds.has(id)).length, ids };
+  };
+
+  // Протяжка мышью — тот же хук, что и на доске проекта (прокрас карточек под указателем).
+  // В режиме выделения карточки блока не таскаются (см. DraggableTask), сенсоров на них
+  // нет — жест наш целиком.
+  const dragSelect = useDragSelect({
+    enabled: selectionActive,
+    orderedGroups: () => selectableGroups,
+    getSelection: () => selectedIds,
+    onPaint: (ids) => {
+      const own = ids.filter((id) => selectableIds.has(id));
+      const last = own[own.length - 1];
+      if (last === undefined) return;
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of own) next.add(id);
+        return next;
+      });
+      anchorRef.current = last;
+    },
+    onRestore: (snapshot) => setSelectedIds(new Set(snapshot)),
+  });
+
+  // Esc выходит из режима. defaultPrevented пропускаем: открытый Radix-дропдаун/диалог
+  // уже обработал Esc. Протяжка перехватывает Esc раньше (capture) и гасит только жест.
+  useEffect(() => {
+    if (!selectionActive) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !e.defaultPrevented) exitSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectionActive, exitSelection]);
+
+  // Массовые действия веером по проектам (задачи блока — из разных проектов).
+  const selectedRefs = orderedSelectedIds.flatMap((id) => {
+    const t = taskById.get(id);
+    return t ? [{ id, projectId: t.projectId }] : [];
+  });
+  // Плоская функция, не useCallback: чтение реестра DnD (ref) внутри мемоизации ловит
+  // react-hooks/preserve-manual-memoization — так же устроены соседние handleToggled/
+  // confirmDelete. Мемоизацию берёт на себя React Compiler.
+  const refreshAfterBulk = async (): Promise<void> => {
+    await refresh();
+    await externalDnd?.current.board?.refetch();
+    onChanged?.();
+  };
+  const crossProjectBulk = useCrossProjectBulkActions({
+    refs: selectedRefs,
+    onAfter: refreshAfterBulk,
+  });
+  // Проект набора: одно значение — экспорт-дайджест (project-scoped) доступен;
+  // несколько — панель его гасит.
+  const selectedProjectIds = new Set(selectedRefs.map((r) => r.projectId));
+  const bulkProjectId = selectedProjectIds.size === 1 ? [...selectedProjectIds][0] ?? null : null;
 
   // === Drag'ом между временными колонками меняем ДЕДЛАЙН (не статус). ===
   // Карточку тащит только тот, у кого есть права (`canModify`). 8px-порог у мыши — клик по
@@ -813,10 +951,19 @@ export function AssignedToMeBlock({
             bleedPadClass,
           )}
         >
-          {kanbanGroups.map((group) => (
+          {kanbanGroups.map((group, index) => (
             // Дроп-зона (drag-срок/ответственный) + пагинация «первые 4 + Показать ещё» +
             // перетаскиваемые карточки. Все три фичи вместе (мердж main ↔ feat/s2-usage).
-            <TimeBucketColumn key={group.key} bucket={group.key} label={group.label} count={group.items.length}>
+            <TimeBucketColumn
+              key={group.key}
+              bucket={group.key}
+              label={group.label}
+              count={group.items.length}
+              selection={columnSelectionAt(index)}
+              onSelectAll={handleSelectAllIn}
+              onSelectNone={handleSelectNoneIn}
+              onCardsPointerDown={dragSelect.onPointerDown}
+            >
               {group.items.length === 0 ? (
                 <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
               ) : (
@@ -826,12 +973,20 @@ export function AssignedToMeBlock({
                   key={[tab, filterTo ?? '', filterProject ?? ''].join('|')}
                   items={group.items}
                   renderItem={(item) => (
-                    <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
+                    <DraggableTask
+                      key={item.id}
+                      item={item}
+                      disabled={!item.canModify}
+                      selecting={selectionActive}
+                    >
                       <AcceptedCard
                         item={item}
                         onOpen={() => setDrawerTask(item)}
                         onChanged={handleToggled}
                         onDelete={() => handleDelete(item)}
+                        selecting={selectionActive}
+                        selected={selectedIds.has(item.id)}
+                        onSelectToggle={handleSelectToggle}
                       />
                     </DraggableTask>
                   )}
@@ -877,7 +1032,7 @@ export function AssignedToMeBlock({
               hint="Бросьте сюда, чтобы выбрать приоритет"
             />
           )}
-          {groups.map((group) => {
+          {groups.map((group, index) => {
             // Смысл дропа карточки доски на колонку: project → перенос задачи в проект
             // («Личные» — не цель, задача и так в инбоксе); priority → смена приоритета;
             // created — колонки не принимают (дату создания не изменить).
@@ -887,6 +1042,7 @@ export function AssignedToMeBlock({
                 : grouping === 'priority'
                   ? { type: 'group', grouping: 'priority', priority: group.key }
                   : null;
+            const columnSelection = columnSelectionAt(index);
             return (
             <GroupDropColumn
               key={group.key}
@@ -898,18 +1054,34 @@ export function AssignedToMeBlock({
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
                 <span className="truncate">{group.label}</span>
-                <span className="ml-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                  {group.items.length}
-                </span>
+                {columnSelection ? (
+                  <ColumnSelectionControls
+                    selection={columnSelection}
+                    onAll={handleSelectAllIn}
+                    onNone={handleSelectNoneIn}
+                  />
+                ) : (
+                  <span className="ml-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                    {group.items.length}
+                  </span>
+                )}
               </div>
-              <div className="flex flex-col gap-1.5 p-1.5">
+              <div
+                onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
+                className="flex flex-col gap-1.5 p-1.5"
+              >
                 {/* Каппинг «первые 4 + Показать ещё» (на тач включён по умолчанию) — иначе
                     колонка рендерит все свои карточки и вешает скролл на мобиле. */}
                 <ColumnPreviewList
                   key={[grouping, group.key].join('|')}
                   items={group.items}
                   renderItem={(item) => (
-                    <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
+                    <DraggableTask
+                      key={item.id}
+                      item={item}
+                      disabled={!item.canModify}
+                      selecting={selectionActive}
+                    >
                       <AcceptedCard
                         item={item}
                         onOpen={() => setDrawerTask(item)}
@@ -917,6 +1089,9 @@ export function AssignedToMeBlock({
                         onDelete={() => handleDelete(item)}
                         showCreatedAt={grouping === 'created'}
                         hideProjectLabel={grouping === 'project'}
+                        selecting={selectionActive}
+                        selected={selectedIds.has(item.id)}
+                        onSelectToggle={handleSelectToggle}
                       />
                     </DraggableTask>
                   )}
@@ -972,6 +1147,23 @@ export function AssignedToMeBlock({
         onConfirm={() => void confirmDelete()}
         busy={deleting}
       />
+
+      {/* Панель массовых действий — та же, что на доске проекта. Задачи блока живут в РАЗНЫХ
+          проектах, поэтому действия разворачиваются веером (useCrossProjectBulkActions), а
+          «В колонку» и экспорт гасятся: колонки настраиваются в каждом проекте своими, а
+          дайджест сервер рендерит одним project-scoped запросом. */}
+      {selectionActive && orderedSelectedIds.length > 0 && (
+        <BulkActionBar
+          selectedIds={orderedSelectedIds}
+          projectId={bulkProjectId}
+          isInbox
+          currentUserId={user?.id ?? null}
+          moveTargets={[]}
+          moveDisabledReason="Колонки у каждого проекта свои — переносите задачи на его доске"
+          bulk={crossProjectBulk}
+          onExit={exitSelection}
+        />
+      )}
 
       {/* Дроп в колонку «Будущее» → выбор конкретного срока (неделя / конец месяца / день). */}
       <FutureDeadlineDialog
@@ -1070,17 +1262,75 @@ export function TaskDragPill({ title }: { title: string }): React.ReactElement {
   );
 }
 
+// Состояние выделения одной колонки блока: сколько её задач в выборе и как выбрать/снять
+// всю колонку. Колонки блока разные (временной бакет / группа сортировки), а шапка у них
+// в режиме выделения одинаковая — см. ColumnSelectionControls.
+type ColumnSelection = {
+  // Сколько задач ЭТОЙ колонки сейчас в выборе.
+  readonly count: number;
+  // Выделяемые задачи колонки (без прав — не в счёт): их и получают «Все»/«Очистить».
+  readonly ids: readonly string[];
+};
+
+// «Выбрано N» + «Все» / «Очистить» в шапке колонки блока (зеркало шапки KanbanColumn на
+// доске проекта). Кнопки действуют только по своей колонке.
+function ColumnSelectionControls({
+  selection,
+  onAll,
+  onNone,
+}: {
+  selection: ColumnSelection;
+  onAll: (ids: readonly string[]) => void;
+  onNone: (ids: readonly string[]) => void;
+}): React.ReactElement {
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-0.5">
+      <span className="tabular-nums text-[10px] text-muted-foreground">
+        Выбрано {selection.count}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-1.5 text-[11px] max-sm:h-9"
+        disabled={selection.ids.length === 0}
+        onClick={() => onAll(selection.ids)}
+      >
+        Все
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-1.5 text-[11px] max-sm:h-9"
+        disabled={selection.count === 0}
+        onClick={() => onNone(selection.ids)}
+      >
+        Очистить
+      </Button>
+    </span>
+  );
+}
+
 // Колонка канбана «по времени» = drop-зона. При наведении таскаемой карточки колонка
 // подсвечивается (ring), сигналя, что дроп сменит срок на этот бакет.
 function TimeBucketColumn({
   bucket,
   label,
   count,
+  selection = null,
+  onSelectAll,
+  onSelectNone,
+  onCardsPointerDown,
   children,
 }: {
   bucket: string;
   label: string;
   count: number;
+  // Режим выделения: счётчик + «Все»/«Очистить» по ЭТОЙ колонке. null — режим выключен.
+  selection?: ColumnSelection | null;
+  onSelectAll?: (ids: readonly string[]) => void;
+  onSelectNone?: (ids: readonly string[]) => void;
+  // Старт протяжки-выделения (см. useDragSelect) — на контейнере карточек.
+  onCardsPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
   children: React.ReactNode;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `bucket-${bucket}`, data: { type: 'bucket', bucket } });
@@ -1098,9 +1348,23 @@ function TimeBucketColumn({
       <div className="flex items-center gap-1.5 border-b border-black/[0.06] px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground dark:border-white/[0.06]">
         <TimeBucketIcon bucket={bucket} />
         <span className="min-w-0 truncate">{label}</span>
-        <span className="shrink-0 text-muted-foreground/60">{count}</span>
+        {selection && onSelectAll && onSelectNone ? (
+          <ColumnSelectionControls
+            selection={selection}
+            onAll={onSelectAll}
+            onNone={onSelectNone}
+          />
+        ) : (
+          <span className="shrink-0 text-muted-foreground/60">{count}</span>
+        )}
       </div>
-      <div className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2">{children}</div>
+      <div
+        // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
+        onPointerDown={selection ? onCardsPointerDown : undefined}
+        className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2"
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -1178,13 +1442,17 @@ function PhantomDropColumn({
 // Обёртка-«ручка» drag'а вокруг карточки задачи. Клик (без сдвига ≥8px) проходит внутрь —
 // открывается drawer / тогается чекбокс; долгий тап на мобиле стартует драг (см. sensors).
 // disabled — нет прав менять задачу (canModify=false): карточка не таскается.
+// selecting — режим выделения: dnd отключён полностью (как в KanbanCard), слушатели не
+// навешиваются, чтобы протяжка-выделение не превращалась в перенос карточки.
 function DraggableTask({
   item,
   disabled,
+  selecting = false,
   children,
 }: {
   item: InboxBlockTask;
   disabled: boolean;
+  selecting?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   // id с префиксом: в едином контексте «Входящих» та же задача может одновременно висеть
@@ -1193,14 +1461,17 @@ function DraggableTask({
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `assigned-${item.id}`,
     data: { type: 'task', item },
-    disabled,
+    disabled: disabled || selecting,
   });
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={cn(!disabled && 'cursor-grab active:cursor-grabbing', isDragging && 'opacity-30')}
+      {...(selecting ? {} : listeners)}
+      {...(selecting ? {} : attributes)}
+      className={cn(
+        !disabled && !selecting && 'cursor-grab active:cursor-grabbing',
+        isDragging && 'opacity-30',
+      )}
     >
       {children}
     </div>
@@ -1857,6 +2128,9 @@ function AcceptedCard({
   onDelete,
   showCreatedAt = false,
   hideProjectLabel = false,
+  selecting = false,
+  selected = false,
+  onSelectToggle,
 }: {
   item: InboxBlockTask;
   onOpen: () => void;
@@ -1866,8 +2140,15 @@ function AcceptedCard({
   showCreatedAt?: boolean;
   // При сортировке «по проекту» колонка уже названа проектом — ярлык на карточке не нужен.
   hideProjectLabel?: boolean;
+  // Режим выделения: клик тогает выбор вместо открытия дравера, действия карточки скрыты.
+  selecting?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 }): React.ReactElement {
   const isDone = item.status === 'done';
+  // Без прав задачу нельзя ни изменить, ни удалить — в массовое действие её брать не за чем,
+  // поэтому в режиме выделения такая карточка приглушена и не откликается на выбор.
+  const selectable = selecting && item.canModify;
   // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
   // line-clamp-4 — видно только название (запросы 3, 4).
   const { title, body } = splitTitleBody(item.description ?? '');
@@ -1876,7 +2157,10 @@ function AcceptedCard({
 
   // Кнопки действий (чекбокс + удалить). Рендерятся в ДВУХ раскладках: десктоп — плавающий
   // оверлей по hover, мобила — статичный ряд под текстом. big=true → тач-размер (size-9).
-  const renderActions = (big: boolean): React.ReactNode => (
+  // В режиме выделения действий нет: карточка целиком — цель выбора, а «выполнить»/«удалить»
+  // на ней конфликтовали бы с кликом-тоглом (и есть в панели массовых действий).
+  const renderActions = (big: boolean): React.ReactNode =>
+    selecting ? null : (
     <>
       <InboxCheckbox
         task={item}
@@ -1952,12 +2236,58 @@ function AcceptedCard({
 
   return (
     <div
+      // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
+      data-pf-task-id={item.id}
+      // Вне режима выделения role/tabIndex приходят от dnd-kit на обёртке DraggableTask —
+      // второй кнопки внутри кнопки не создаём. В режиме выделения атрибуты сняты, и
+      // фокусируемость с ролью возвращает карточка.
+      role={selecting ? 'button' : undefined}
+      tabIndex={selecting ? 0 : undefined}
+      aria-pressed={selectable ? selected : undefined}
+      title={selecting && !item.canModify ? 'Нет прав на изменение этой задачи' : undefined}
       className={cn(
-        'group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-colors duration-150 dark:border-white/[0.08]',
+        'group relative flex cursor-pointer select-none flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-colors duration-150 dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
+        selectable && selected && 'border-primary ring-2 ring-primary/60',
+        // Недоступная для выбора карточка в режиме выделения: приглушена и не кликабельна.
+        selecting && !item.canModify && 'cursor-default opacity-45',
       )}
-      onClick={onOpen}
+      onClick={(e) => {
+        if (selecting) {
+          if (selectable) {
+            onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
+          }
+          return;
+        }
+        onOpen();
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        if (selecting) {
+          if (selectable) {
+            onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
+          }
+          return;
+        }
+        onOpen();
+      }}
     >
+      {/* Кружок-отметка выбора (как на карточке доски проекта). У карточки без прав его
+          нет вовсе — визуально видно, что она вне пачки. */}
+      {selectable && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-1.5 top-1.5 z-20 grid size-5 place-items-center rounded-full border-2 transition-colors',
+            selected
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-muted-foreground/40 bg-card',
+          )}
+        >
+          {selected && <Check className="size-3" strokeWidth={3} />}
+        </span>
+      )}
       {/* Название проекта — полоса-заголовок. Скрываем при сортировке по проекту (колонка = проект). */}
       {!hideProjectLabel && (
         <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
@@ -1974,14 +2304,16 @@ function AcceptedCard({
       <div className="relative flex flex-col gap-1.5 px-2 py-2 sm:flex-row sm:items-start">
         {/* Действия — ДЕСКТОП: оверлей в правом верхнем углу (по hover/фокусу). На мобиле
             скрыт (hidden) — действия в статичном нижнем ряду (ниже), текст виден целиком. */}
-        <div
-          className="pointer-events-none absolute right-1 top-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-        >
-          {renderActions(false)}
-        </div>
+        {!selecting && (
+          <div
+            className="pointer-events-none absolute right-1 top-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            {renderActions(false)}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
           // Моб: весь текст задачи (line-clamp-none). Заголовок полужирный, как на доске.
@@ -2006,15 +2338,23 @@ function AcceptedCard({
         <div className="pointer-events-none absolute bottom-1 left-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]">
           {metaInner}
         </div>
-        {/* Параметры/действия — МОБИЛА: статичный ряд под текстом (всегда виден, крупные кнопки). */}
+        {/* Параметры/действия — МОБИЛА: статичный ряд под текстом (всегда виден, крупные кнопки).
+            В режиме выделения ряд не перехватывает клики — тап по нему тогает выбор карточки,
+            как и по остальной её площади (тач-протяжки нет, клик обязан работать везде). */}
         <div
           className="mt-0.5 flex items-center justify-between gap-2 border-t border-black/[0.05] pt-1 text-[11px] text-muted-foreground sm:hidden dark:border-white/[0.06]"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
+          {...(selecting
+            ? {}
+            : {
+                onClick: (e: React.MouseEvent) => e.stopPropagation(),
+                onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+                onTouchStart: (e: React.TouchEvent) => e.stopPropagation(),
+              })}
         >
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 overflow-hidden">{metaInner}</span>
-          <span className="flex shrink-0 items-center gap-1">{renderActions(true)}</span>
+          {!selecting && (
+            <span className="flex shrink-0 items-center gap-1">{renderActions(true)}</span>
+          )}
         </div>
       </div>
     </div>

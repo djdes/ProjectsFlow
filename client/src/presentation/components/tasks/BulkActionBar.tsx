@@ -50,11 +50,17 @@ type MoveTarget = { status: TaskStatus; label: string };
 type Props = {
   // Выбранные id (в визуальном порядке колонки).
   selectedIds: string[];
-  projectId: string;
+  // Проект выбранного набора. null = задачи из РАЗНЫХ проектов (верхний блок
+  // «Входящих»): действия, у которых эндпоинт project-scoped (экспорт-дайджест),
+  // недоступны — гасим их с подсказкой вместо заведомо падающего запроса.
+  projectId: string | null;
   isInbox: boolean;
   currentUserId: string | null;
-  // Колонки-цели для «В колонку» (видимые, с резолвнутыми подписями).
+  // Колонки-цели для «В колонку» (видимые, с резолвнутыми подписями). Пустой список —
+  // действие недоступно (см. moveDisabledReason).
   moveTargets: MoveTarget[];
+  // Подсказка на выключенной кнопке «В колонку», когда целей нет.
+  moveDisabledReason?: string | null;
   bulk: BulkTaskActions;
   onExit: () => void;
 };
@@ -67,6 +73,7 @@ export function BulkActionBar({
   projectId,
   isInbox,
   moveTargets,
+  moveDisabledReason = null,
   bulk,
   onExit,
 }: Props): React.ReactElement | null {
@@ -88,9 +95,12 @@ export function BulkActionBar({
   // Любой участник проекта может стать ответственным, включая viewer и caller'а.
   useEffect(() => {
     let cancelled = false;
-    const load = isInbox
-      ? projectRepository.listSharedMembers()
-      : projectRepository.listMembers(projectId).then((list) =>
+    // Разные проекты (projectId=null) — пул кандидатов такой же, как у инбокса:
+    // участники пространства. Членство в конкретном проекте проверит сервер.
+    const load =
+      isInbox || projectId === null
+        ? projectRepository.listSharedMembers()
+        : projectRepository.listMembers(projectId).then((list) =>
           list.map((m) => ({
               id: m.userId,
               displayName: m.user.displayName,
@@ -123,6 +133,8 @@ export function BulkActionBar({
 
   // Telegram-группа проекта (для опции «В группу» при отправке в Telegram).
   useEffect(() => {
+    // Набор из разных проектов — группы «проекта» не существует, экспорт и так выключен.
+    if (projectId === null) return;
     let cancelled = false;
     digestSettingsRepository
       .get(projectId)
@@ -168,10 +180,17 @@ export function BulkActionBar({
   };
 
   const disabled = busy || exporting;
+  // Дайджест рендерит СЕРВЕР одним project-scoped запросом. Для набора из разных
+  // проектов такого запроса нет, а склеивать несколько отчётов на клиенте — подделка
+  // серверного формата. Гасим кнопки с честной подсказкой.
+  const exportDisabledReason =
+    projectId === null ? 'Доступно, когда выбраны задачи одного проекта' : null;
+  const exportDisabled = disabled || exportDisabledReason !== null;
+  const moveDisabled = disabled || moveTargets.length === 0;
 
   // Копирование: запрос стартует синхронно в onClick (сохраняем user-gesture для буфера).
   const handleCopy = (): void => {
-    if (disabled) return;
+    if (exportDisabled || projectId === null) return;
     const produce = taskRepository
       .digest(projectId, { taskIds: selectedIds, channel: 'clipboard' })
       .then((r) => r.text);
@@ -182,7 +201,7 @@ export function BulkActionBar({
 
   // Отправка дайджеста выбранным получателям (email/Telegram).
   const handleSend = async (recipients: DigestRecipient[]): Promise<void> => {
-    if (!exportChannel || exporting) return;
+    if (!exportChannel || exporting || projectId === null) return;
     setExporting(true);
     try {
       const res = await taskRepository.digest(projectId, {
@@ -311,7 +330,13 @@ export function BulkActionBar({
         {/* В колонку */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={disabled} className="h-8 gap-1.5 px-2 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={moveDisabled}
+              title={moveTargets.length === 0 ? (moveDisabledReason ?? undefined) : undefined}
+              className="h-8 gap-1.5 px-2 text-xs"
+            >
               <Columns3 className="size-3.5" />
               В колонку
               <ChevronDown className="size-3 opacity-60" />
@@ -366,7 +391,8 @@ export function BulkActionBar({
         <Button
           variant="ghost"
           size="sm"
-          disabled={disabled}
+          disabled={exportDisabled}
+          title={exportDisabledReason ?? undefined}
           className="h-8 gap-1.5 px-2 text-xs"
           onClick={handleCopy}
         >
@@ -376,7 +402,8 @@ export function BulkActionBar({
         <Button
           variant="ghost"
           size="sm"
-          disabled={disabled}
+          disabled={exportDisabled}
+          title={exportDisabledReason ?? undefined}
           className="h-8 gap-1.5 px-2 text-xs"
           onClick={() => setExportChannel('email')}
         >
@@ -386,7 +413,8 @@ export function BulkActionBar({
         <Button
           variant="ghost"
           size="sm"
-          disabled={disabled}
+          disabled={exportDisabled}
+          title={exportDisabledReason ?? undefined}
           className="h-8 gap-1.5 px-2 text-xs"
           onClick={() => setExportChannel('telegram')}
         >

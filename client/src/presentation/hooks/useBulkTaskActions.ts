@@ -8,9 +8,11 @@ import type { UseTasks } from './useTasks';
 export type BulkResult = { ok: number; failed: number };
 
 // Гоняет worker'ы пулом с ограниченной конкуррентностью; собирает ok/failed.
-async function runPool(
-  ids: readonly string[],
-  worker: (id: string) => Promise<void>,
+// Дженерик по элементу: «Входящие» гоняют пары (id, projectId), см.
+// useCrossProjectBulkActions.
+export async function runPool<T>(
+  items: readonly T[],
+  worker: (item: T) => Promise<void>,
   concurrency = 5,
 ): Promise<BulkResult> {
   let ok = 0;
@@ -18,17 +20,17 @@ async function runPool(
   let cursor = 0;
   const runOne = async (): Promise<void> => {
     for (;;) {
-      const id = ids[cursor++];
-      if (id === undefined) return;
+      const item = items[cursor++];
+      if (item === undefined) return;
       try {
-        await worker(id);
+        await worker(item);
         ok += 1;
       } catch {
         failed += 1;
       }
     }
   };
-  const lanes = Array.from({ length: Math.min(concurrency, ids.length) }, () => runOne());
+  const lanes = Array.from({ length: Math.min(concurrency, items.length) }, () => runOne());
   await Promise.all(lanes);
   return { ok, failed };
 }

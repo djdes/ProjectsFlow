@@ -42,8 +42,9 @@ export function InboxPage(): React.ReactElement {
   // Слот в шапке для фильтров/сортировки блока ответственных: сам блок рендерит их сюда через
   // portal (состояние остаётся в блоке, а визуально контролы стоят в строке с «Входящие»).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
-  // Режим выделения нижней доски, включается кнопкой в шапке страницы (рядом с «Фильтрами»).
-  // Живёт здесь, а не в доске: доска пересоздаётся по refetchKey, состояние бы слетало.
+  // Режим выделения ВЕРХНЕГО блока (вкладки «Мои»/«Для всех»), включается кнопкой в шапке
+  // страницы рядом с «Фильтрами». Нижняя доска живёт по-прежнему: там режим включается
+  // по колонке из её шапки. Состояние здесь, а не в блоке, — кнопка снаружи блока.
   const [selectionActive, setSelectionActive] = useState(false);
   // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
   // TaskListView. Меняется при смене ответственного/toggle в AssignedToMeBlock,
@@ -135,7 +136,7 @@ export function InboxPage(): React.ReactElement {
               скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим») — слева, сразу
               за заголовком, чтобы не «летала» в одиночестве у правого края. */}
           <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-1" />
-          {/* Выделение задач нижней доски: включает режим сразу во ВСЕХ её колонках,
+          {/* Выделение задач ВЕРХНЕГО блока: режим включается сразу во всех его колонках,
               в шапке каждой появляются «Все»/«Очистить», снизу — панель действий. */}
           <Button
             type="button"
@@ -163,6 +164,8 @@ export function InboxPage(): React.ReactElement {
             bleedNegClass={KANBAN_BLEED_NEG}
             bleedPadClass={KANBAN_BLEED_PAD}
             externalDnd={dndRegistry}
+            selectionActive={selectionActive}
+            onSelectionActiveChange={setSelectionActive}
           />
 
           {/* Мягкое появление доски при входе — fadeInUp, гейтится useMotion(). */}
@@ -182,8 +185,6 @@ export function InboxPage(): React.ReactElement {
               bleedPadClass={KANBAN_BLEED_PAD}
               externalDnd={dndRegistry}
               onBoardTasksChange={handleBoardTasksChange}
-              selectionActive={selectionActive}
-              onSelectionActiveChange={setSelectionActive}
             />
           </motion.div>
         </InboxUnifiedDnd>
