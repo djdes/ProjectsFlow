@@ -26,8 +26,9 @@ export function quickPromoteNext(status: TaskStatus): TaskStatus | null {
   return ADVANCE_NEXT[visible] ?? null;
 }
 
-// Optional small subtitle rendered under the main label in column header.
-// Currently only for `todo` (ВОРКЕР · Claude Opus). null/undefined = no subtitle.
+// Optional small subtitle rendered next to the main label in column header.
+// Только для `todo` (Воркер). Коротко «Opus»: полное «Claude Opus» отъедало ширину
+// у названия и резалось многоточием («Claude Op…»). null/undefined = без подписи.
 export const STATUS_SUBTITLE: Partial<Record<TaskStatus, string>> = {
-  todo: 'Claude Opus',
+  todo: 'Opus',
 };
