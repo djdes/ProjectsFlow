@@ -3,6 +3,7 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { AutomationRepository } from '../automation/AutomationRepository.js';
 import { defaultAutomationConfig } from '../automation/criteria.js';
+import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import type { ListProjectCommits } from '../github/ListProjectCommits.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import {
@@ -20,6 +21,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly listProjectCommits: ListProjectCommits;
   readonly commitSyncJobs: CommitSyncJobRepository;
+  readonly tokens: Pick<GithubTokenRepository, 'getByUserId'>;
 };
 
 // Системный путь (вызывает планировщик): ставит commit-sync job для проекта.
@@ -51,13 +53,18 @@ export class EnqueueCommitSyncJob {
     // Даже без открытых задач прогон нужен для содержательного обзора коммитов:
     // в Telegram должен прийти честный итог «всё хорошо» или замечания по изменениям.
 
-    // Коммиты тянем токеном диспетчера (он — участник проекта, read_project проходит).
-    // Нет GitHub-токена / репозитория → пропускаем прогон (планировщик пометит дату).
+    // Репозиторий читаем токеном того, у кого GitHub реально подключён: диспетчер, если он
+    // привязал аккаунт, иначе — владелец проекта (он завёл репозиторий). Центральный
+    // agent-runner (типовой диспетчер, напр. admin@) обычно без GitHub — без этого фолбэка
+    // сверка падала бы «недоступна» у всех таких проектов. Нет токена ни у кого / нет
+    // репозитория → пропускаем прогон (планировщик пометит дату).
+    const dispatcherGithub = await this.deps.tokens.getByUserId(dispatcherUserId);
+    const repoReaderId = dispatcherGithub ? dispatcherUserId : (project.ownerId ?? dispatcherUserId);
     let commits;
     try {
       commits = await this.deps.listProjectCommits.execute(
         projectId,
-        dispatcherUserId,
+        repoReaderId,
         COMMIT_FETCH_LIMIT,
         {
           detailSince: new Date(now.getTime() - commitReviewWindowHours(now) * 3_600_000),

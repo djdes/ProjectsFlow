@@ -1474,6 +1474,7 @@ const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
     api: githubApi,
   }),
   commitSyncJobs: commitSyncJobRepo,
+  tokens: githubTokenRepo,
 });
 const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
   commitSyncJobs: commitSyncJobRepo,
