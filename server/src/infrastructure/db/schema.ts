@@ -1520,6 +1520,8 @@ export const projectAutomation = mysqlTable('project_automation', {
   commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(true),
   commitSyncHour: tinyint('commit_sync_hour').notNull().default(17),
   commitSyncMinute: tinyint('commit_sync_minute').notNull().default(0),
+  // Дни недели сверки (JSON [0..6], 0=вс). NULL = каждый день. См. db/141.
+  commitSyncDays: text('commit_sync_days'),
   commitSyncThresholdHours: int('commit_sync_threshold_hours').notNull().default(70),
   commitSyncLastRunOn: date('commit_sync_last_run_on', { mode: 'string' }),
   // EOD/BOD-автоматизации (db/101).

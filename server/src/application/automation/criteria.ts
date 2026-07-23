@@ -135,6 +135,7 @@ export function defaultAutomationConfig(projectId: string): AutomationConfig {
     commitSyncEnabled: true,
     commitSyncHour: 17,
     commitSyncMinute: 0,
+    commitSyncDaysOfWeek: [0, 1, 2, 3, 4, 5, 6], // каждый день
     commitSyncThresholdHours: 70,
     commitSyncLastRunOn: null,
     commitSyncAction: 'propose',

@@ -1,9 +1,9 @@
 import type { AutomationRepository } from '../../application/automation/AutomationRepository.js';
 import type { EnqueueCommitSyncJob } from '../../application/commit-sync/EnqueueCommitSyncJob.js';
 
-// «Сейчас» в Europe/Moscow → { hour 0..23, minute 0..59, date 'YYYY-MM-DD' }.
-// Зеркало DailyDigestScheduler.mskNow.
-function mskNow(): { hour: number; minute: number; date: string } {
+// «Сейчас» в Europe/Moscow → { hour 0..23, minute 0..59, date 'YYYY-MM-DD', dayOfWeek 0..6 }.
+// Зеркало WorkspaceAssigneeDigestScheduler.mskNow (dayOfWeek: 0=вс, как getUTCDay).
+function mskNow(): { hour: number; minute: number; date: string; dayOfWeek: number } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Moscow',
     year: 'numeric',
@@ -14,10 +14,14 @@ function mskNow(): { hour: number; minute: number; date: string } {
     hour12: false,
   }).formatToParts(new Date());
   const get = (t: string): string => parts.find((p) => p.type === t)?.value ?? '';
+  const date = `${get('year')}-${get('month')}-${get('day')}`;
+  const [year, month, day] = date.split('-').map(Number);
+  const dayOfWeek = new Date(Date.UTC(year!, (month ?? 1) - 1, day!)).getUTCDay();
   return {
     hour: Number(get('hour')) % 24,
     minute: Number(get('minute')),
-    date: `${get('year')}-${get('month')}-${get('day')}`,
+    date,
+    dayOfWeek,
   };
 }
 
@@ -63,6 +67,8 @@ export class CommitSyncScheduler {
     const nowMin = now.hour * 60 + now.minute;
     const due = await this.deps.automation.listCommitSyncEnabled();
     for (const s of due) {
+      // Не тот день недели — пропускаем (per-project дни, db/141).
+      if (!s.daysOfWeek.includes(now.dayOfWeek)) continue;
       const schedMin = s.hour * 60 + s.minute;
       if (nowMin < schedMin || s.lastRunOn === now.date) continue;
       try {

@@ -54,6 +54,8 @@ export type AutomationConfig = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  // Дни недели сверки (0..6, 0=вс). Всегда заполнен: NULL в БД = каждый день [0..6]. db/141.
+  readonly commitSyncDaysOfWeek: readonly number[];
   readonly commitSyncThresholdHours: number;
   readonly commitSyncLastRunOn: string | null;
   // EOD/BOD-автоматизации (db/101). commitSyncAction — что делать с совпадениями commit-sync

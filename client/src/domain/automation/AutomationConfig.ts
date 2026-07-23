@@ -47,6 +47,8 @@ export type AutomationConfig = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  // Дни недели сверки (0..6, 0=вс). Пусто/NULL на сервере = каждый день.
+  readonly commitSyncDaysOfWeek: readonly number[];
   readonly commitSyncThresholdHours: number;
   // Что делать с совпадением: 'auto' — сразу переносить задачу в готово; 'propose' — предлагать
   // закрыть кнопкой (участник подтверждает).

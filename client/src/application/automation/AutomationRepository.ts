@@ -23,6 +23,7 @@ export type SaveAutomationInput = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  readonly commitSyncDaysOfWeek: readonly number[];
   readonly commitSyncThresholdHours: number;
   readonly commitSyncAction: 'propose' | 'auto';
   readonly assigneeDigestEnabled: boolean;

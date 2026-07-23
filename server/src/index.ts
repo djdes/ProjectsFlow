@@ -259,7 +259,9 @@ import { DailyDigestScheduler } from './infrastructure/scheduler/DailyDigestSche
 import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceAssigneeDigest.js';
 import { TelegramDigestActionService } from './application/digest/TelegramDigestActionService.js';
 import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
+import { BulkSetWorkspaceCommitSync } from './application/commit-sync/BulkSetWorkspaceCommitSync.js';
 import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
+import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
@@ -1672,6 +1674,11 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   send: sendWorkspaceAssigneeDigest,
   projects: projectRepo,
 });
+// Мастер-действие «включить сверку коммитов по всем проектам пространства» (db/141).
+const bulkSetWorkspaceCommitSync = new BulkSetWorkspaceCommitSync({
+  workspaces: workspaceRepo,
+  automation: automationRepo,
+});
 
 const projectImportAnalyzer = new ProjectImportAnalyzer();
 
@@ -1938,6 +1945,7 @@ const { app, devProxyUpgrade } = createApp({
   workspaces: {
     service: workspaceService,
     assigneeDigest: manageWorkspaceAssigneeDigest,
+    bulkCommitSync: bulkSetWorkspaceCommitSync,
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo,
@@ -2871,10 +2879,18 @@ const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   settings: workspaceAssigneeDigestRepo,
   send: sendWorkspaceAssigneeDigest,
   projects: projectRepo,
-  enqueueCommitSync: enqueueCommitSyncJob,
   sendEodReminder: sendWorkspaceEodReminder,
 });
 workspaceAssigneeDigestScheduler.start();
+
+// Сверка коммитов теперь per-project (db/141): у каждого проекта своё время и дни, а тумблер
+// «Сверка коммитов» реально включает/выключает. Раньше её гонял воркспейс-планировщик выше
+// одним временем на всё пространство с forceEnabled — теперь эта ветка оттуда убрана.
+const commitSyncScheduler = new CommitSyncScheduler({
+  automation: automationRepo,
+  enqueue: enqueueCommitSyncJob,
+});
+commitSyncScheduler.start();
 
 const server = app.listen(config.port, () => {
   console.log(

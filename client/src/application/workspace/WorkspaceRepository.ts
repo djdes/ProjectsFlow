@@ -55,4 +55,10 @@ export interface WorkspaceRepository {
   sendAssigneeDigestNow(id: string): Promise<WorkspaceAssigneeDigestSendResult>;
   listAssigneeDigestGroups(id: string): Promise<WorkspaceAssigneeDigestGroup[]>;
   resolveAssigneeDigestGroup(id: string, chatId: number): Promise<{ title: string | null }>;
+  // Мастер-действие: включить/выключить сверку коммитов во ВСЕХ проектах пространства + задать
+  // время/дни. Возвращает число затронутых проектов.
+  applyCommitSyncToAll(
+    id: string,
+    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+  ): Promise<{ affected: number }>;
 }

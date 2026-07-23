@@ -34,6 +34,8 @@ export type SaveAutomationCommand = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  // undefined — не менять (старый клиент не шлёт).
+  readonly commitSyncDaysOfWeek?: readonly number[];
   readonly commitSyncThresholdHours: number;
   // undefined — не менять (старый клиент не шлёт поле).
   readonly commitSyncAction?: 'propose' | 'auto';
@@ -100,6 +102,7 @@ export class SaveAutomationConfig {
       commitSyncEnabled: input.commitSyncEnabled,
       commitSyncHour: input.commitSyncHour,
       commitSyncMinute: input.commitSyncMinute,
+      commitSyncDaysOfWeek: input.commitSyncDaysOfWeek ?? baseline.commitSyncDaysOfWeek,
       commitSyncThresholdHours: input.commitSyncThresholdHours,
       commitSyncAction: input.commitSyncAction ?? baseline.commitSyncAction,
       assigneeDigestEnabled:

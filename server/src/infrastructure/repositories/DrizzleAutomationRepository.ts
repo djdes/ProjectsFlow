@@ -16,6 +16,21 @@ import {
   type ProjectAutomationRow,
 } from '../db/schema.js';
 
+// Дни недели сверки: 0..6. NULL/битый JSON/пусто → «каждый день». Дубли и мусор отсекаем,
+// чтобы кривая строка в БД не уронила планировщик.
+const ALL_DAYS: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
+function parseCommitSyncDays(json: string | null | undefined): number[] {
+  if (!json) return [...ALL_DAYS];
+  try {
+    const value: unknown = JSON.parse(json);
+    if (!Array.isArray(value)) return [...ALL_DAYS];
+    const days = [...new Set(value.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+    return days.length > 0 ? days : [...ALL_DAYS];
+  } catch {
+    return [...ALL_DAYS];
+  }
+}
+
 export class DrizzleAutomationRepository implements AutomationRepository {
   constructor(private readonly db: Database) {}
 
@@ -68,6 +83,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
         commitSyncEnabled: input.commitSyncEnabled,
         commitSyncHour: input.commitSyncHour,
         commitSyncMinute: input.commitSyncMinute,
+        commitSyncDays: JSON.stringify([...input.commitSyncDaysOfWeek]),
         commitSyncThresholdHours: input.commitSyncThresholdHours,
         commitSyncAction: input.commitSyncAction,
         assigneeDigestEnabled: input.assigneeDigestEnabled,
@@ -91,6 +107,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
           commitSyncEnabled: input.commitSyncEnabled,
           commitSyncHour: input.commitSyncHour,
           commitSyncMinute: input.commitSyncMinute,
+          commitSyncDays: JSON.stringify([...input.commitSyncDaysOfWeek]),
           commitSyncThresholdHours: input.commitSyncThresholdHours,
           commitSyncAction: input.commitSyncAction,
           assigneeDigestEnabled: input.assigneeDigestEnabled,
@@ -165,6 +182,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
       projectId: string;
       hour: number;
       minute: number;
+      daysOfWeek: readonly number[];
       lastRunOn: string | null;
     }>
   > {
@@ -173,6 +191,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
         projectId: projectAutomation.projectId,
         hour: projectAutomation.commitSyncHour,
         minute: projectAutomation.commitSyncMinute,
+        days: projectAutomation.commitSyncDays,
         lastRunOn: projectAutomation.commitSyncLastRunOn,
       })
       .from(projectAutomation)
@@ -181,8 +200,43 @@ export class DrizzleAutomationRepository implements AutomationRepository {
       projectId: r.projectId,
       hour: r.hour,
       minute: r.minute,
+      daysOfWeek: parseCommitSyncDays(r.days),
       lastRunOn: r.lastRunOn ?? null,
     }));
+  }
+
+  // Массовое включение сверки по всему пространству (мастер-действие). Создаёт строку
+  // project_automation, если её не было (insert-if-not-exists), и проставляет enabled/время/дни.
+  // Остальные поля новой строки берут дефолты БД. Затрагивает только проекты этого пространства.
+  async bulkSetCommitSync(
+    workspaceId: string,
+    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+  ): Promise<number> {
+    const rows = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.workspaceId, workspaceId));
+    const days = JSON.stringify([...input.daysOfWeek]);
+    for (const { id } of rows) {
+      await this.db
+        .insert(projectAutomation)
+        .values({
+          projectId: id,
+          commitSyncEnabled: input.enabled,
+          commitSyncHour: input.hour,
+          commitSyncMinute: input.minute,
+          commitSyncDays: days,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            commitSyncEnabled: input.enabled,
+            commitSyncHour: input.hour,
+            commitSyncMinute: input.minute,
+            commitSyncDays: days,
+          },
+        });
+    }
+    return rows.length;
   }
 
   async markCommitSyncRun(projectId: string, dateMsk: string): Promise<void> {
@@ -287,6 +341,7 @@ function rowToConfigBase(row: ProjectAutomationRow): Omit<AutomationConfig, 'cri
     commitSyncEnabled: row.commitSyncEnabled,
     commitSyncHour: row.commitSyncHour,
     commitSyncMinute: row.commitSyncMinute,
+    commitSyncDaysOfWeek: parseCommitSyncDays(row.commitSyncDays),
     commitSyncThresholdHours: row.commitSyncThresholdHours,
     commitSyncLastRunOn: row.commitSyncLastRunOn ?? null,
     commitSyncAction: row.commitSyncAction,

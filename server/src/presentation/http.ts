@@ -210,6 +210,7 @@ import { projectsRouter } from './projects/routes.js';
 import { workspacesRouter } from './workspaces/routes.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
+import type { BulkSetWorkspaceCommitSync } from '../application/commit-sync/BulkSetWorkspaceCommitSync.js';
 import type { WorkspaceRepository } from '../application/workspace/WorkspaceRepository.js';
 import { activityFeedRouter } from './activity/routes.js';
 import type { GetActivityFeed } from '../application/activity/GetActivityFeed.js';
@@ -431,6 +432,7 @@ type AppDeps = {
   readonly workspaces: {
     readonly service: WorkspaceService;
     readonly assigneeDigest: ManageWorkspaceAssigneeDigest;
+    readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
     readonly invites: {
       readonly create: CreateWorkspaceInvite;
       readonly list: ListWorkspaceInvites;

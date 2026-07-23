@@ -1,6 +1,5 @@
 import type { WorkspaceAssigneeDigestRepository } from '../../application/digest/WorkspaceAssigneeDigestRepository.js';
 import type { SendWorkspaceAssigneeDigest } from '../../application/digest/SendWorkspaceAssigneeDigest.js';
-import type { EnqueueCommitSyncJob } from '../../application/commit-sync/EnqueueCommitSyncJob.js';
 import type { SendWorkspaceEodReminder } from '../../application/eod/SendWorkspaceEodReminder.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 
@@ -35,7 +34,6 @@ export class WorkspaceAssigneeDigestScheduler {
       readonly settings: WorkspaceAssigneeDigestRepository;
       readonly send: SendWorkspaceAssigneeDigest;
       readonly projects: ProjectRepository;
-      readonly enqueueCommitSync: EnqueueCommitSyncJob;
       readonly sendEodReminder: SendWorkspaceEodReminder;
     },
   ) {}
@@ -78,33 +76,9 @@ export class WorkspaceAssigneeDigestScheduler {
           }
         }
 
-        const commitMinutes = item.commitSyncHour * 60 + item.commitSyncMinute;
-        if (
-          item.commitSyncEnabled &&
-          nowMinutes >= commitMinutes &&
-          item.commitSyncLastSentOn !== now.date
-        ) {
-          try {
-            const configured = new Set(item.projectIds);
-            const projects = (await this.deps.projects.listByWorkspace(item.workspaceId)).filter(
-              (project) => item.projectMode === 'all' || configured.has(project.id),
-            );
-            for (const project of projects) {
-              // forceEnabled НЕ ставим: пусть per-project тумблер «Сверка коммитов» реально
-              // управляет — выключил у проекта, и в ежедневный прогон он не попадает, даже
-              // если пространство сверку включило. Раньше здесь стоял forceEnabled:true, и
-              // тумблер в окне проекта был декоративным. Ручной запуск («Сверить сейчас») форсит
-              // отдельно, мимо этого пути.
-              await this.deps.enqueueCommitSync.execute(project.id, at);
-            }
-          } catch (error) {
-            console.warn('[workspace-commit-sync] enqueue failed', item.workspaceId, error);
-          } finally {
-            await this.deps.settings
-              .markCommitSyncSent(item.workspaceId, now.date)
-              .catch(() => undefined);
-          }
-        }
+        // Сверка коммитов больше НЕ здесь: ею владеет per-project CommitSyncScheduler (db/141),
+        // где у каждого проекта своё время и дни, а per-project тумблер реально включает/выключает.
+        // Раньше эта ветка форсила сверку по всему пространству одним временем.
 
         const eodMinutes = item.eodReminderHour * 60 + item.eodReminderMinute;
         if (

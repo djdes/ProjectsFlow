@@ -78,6 +78,8 @@ const saveBodySchema = z
     commitSyncEnabled: z.boolean().optional().default(false),
     commitSyncHour: z.number().int().min(0).max(23).optional().default(3),
     commitSyncMinute: z.number().int().min(0).max(59).optional().default(0),
+    // Дни недели сверки (0..6). Опционально: старый клиент не шлёт — режим остаётся как в БД.
+    commitSyncDaysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional(),
     commitSyncThresholdHours: z.number().int().min(1).max(8760).optional().default(70),
     // Что делать с совпадением: 'auto' — сервер сразу переносит задачу в готово; 'propose' —
     // предлагает закрыть кнопкой (участник подтверждает). Опционально: старый клиент не шлёт
@@ -179,6 +181,7 @@ export function buildAutomationRouter(deps: Deps): Router {
           commitSyncEnabled: body.commitSyncEnabled,
           commitSyncHour: body.commitSyncHour,
           commitSyncMinute: body.commitSyncMinute,
+          commitSyncDaysOfWeek: body.commitSyncDaysOfWeek,
           commitSyncThresholdHours: body.commitSyncThresholdHours,
           commitSyncAction: body.commitSyncAction,
           assigneeDigestEnabled: body.assigneeDigestEnabled,
@@ -216,6 +219,7 @@ function automationConfigToDto(config: AutomationConfig): {
   commitSyncEnabled: boolean;
   commitSyncHour: number;
   commitSyncMinute: number;
+  commitSyncDaysOfWeek: readonly number[];
   commitSyncThresholdHours: number;
   commitSyncAction: 'propose' | 'auto';
   commitSyncLastRunOn: string | null;
@@ -250,6 +254,7 @@ function automationConfigToDto(config: AutomationConfig): {
     commitSyncEnabled: config.commitSyncEnabled,
     commitSyncHour: config.commitSyncHour,
     commitSyncMinute: config.commitSyncMinute,
+    commitSyncDaysOfWeek: config.commitSyncDaysOfWeek,
     commitSyncThresholdHours: config.commitSyncThresholdHours,
     commitSyncAction: config.commitSyncAction,
     commitSyncLastRunOn: config.commitSyncLastRunOn,

@@ -29,6 +29,7 @@ export type SaveAutomationInput = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  readonly commitSyncDaysOfWeek: readonly number[];
   readonly commitSyncThresholdHours: number;
   readonly commitSyncAction: 'propose' | 'auto';
   readonly assigneeDigestEnabled: boolean;
@@ -84,9 +85,22 @@ export type AutomationRepository = {
       readonly projectId: string;
       readonly hour: number;
       readonly minute: number;
+      // Дни недели (0..6). Пусто/NULL в БД нормализуется в «каждый день» здесь.
+      readonly daysOfWeek: readonly number[];
       readonly lastRunOn: string | null;
     }>
   >;
+  // Массово включить/выключить сверку у ВСЕХ проектов пространства + задать время/дни (db/141).
+  // Мастер-действие из окна пространства «включить сверку по всем». Возвращает число затронутых.
+  bulkSetCommitSync(
+    workspaceId: string,
+    input: {
+      readonly enabled: boolean;
+      readonly hour: number;
+      readonly minute: number;
+      readonly daysOfWeek: readonly number[];
+    },
+  ): Promise<number>;
   // Пометить commit-sync прогон выполненным сегодня (МSK-дата 'YYYY-MM-DD').
   markCommitSyncRun(projectId: string, dateMsk: string): Promise<void>;
 

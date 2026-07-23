@@ -18,22 +18,15 @@ function harness(daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5])
       }];
     },
     async markSent() { calls.push('mark:digest'); },
-    async markCommitSyncSent() { calls.push('mark:commit'); },
     async markEodReminderSent() { calls.push('mark:eod'); },
   };
+  // Сверка коммитов больше НЕ в этом планировщике (её ведёт per-project CommitSyncScheduler,
+  // db/141) — поэтому ни enqueueCommitSync-дока, ни 'commit'/'mark:commit' в ожидаемых вызовах.
   const scheduler = new WorkspaceAssigneeDigestScheduler({
     settings: settings as never,
     send: { async execute() { calls.push('digest'); } } as never,
     projects: {
       async listByWorkspace() { return [{ id: 'p1', name: 'DocsFlow', icon: null }]; },
-    } as never,
-    enqueueCommitSync: {
-      // Плановый прогон больше НЕ форсит: per-project тумблер «Сверка коммитов» реально
-      // управляет включением. forceEnabled остаётся только у ручного «Сверить сейчас».
-      async execute(_projectId: string, _at: Date, opts?: { forceEnabled?: boolean }) {
-        assert.notEqual(opts?.forceEnabled, true);
-        calls.push('commit');
-      },
     } as never,
     sendEodReminder: { async execute() { calls.push('eod'); } } as never,
   });
@@ -51,7 +44,6 @@ test('workspace Telegram schedule can run on a selected weekend day', async () =
   await scheduler.tick(new Date('2026-07-18T14:21:00.000Z')); // Saturday 17:21 MSK
   assert.deepEqual(calls, [
     'digest', 'mark:digest',
-    'commit', 'mark:commit',
     'eod', 'mark:eod',
   ]);
 });
@@ -61,7 +53,6 @@ test('workspace Telegram schedule runs all due weekday automations once', async 
   await scheduler.tick(new Date('2026-07-17T14:21:00.000Z')); // Friday 17:21 MSK
   assert.deepEqual(calls, [
     'digest', 'mark:digest',
-    'commit', 'mark:commit',
     'eod', 'mark:eod',
   ]);
 });

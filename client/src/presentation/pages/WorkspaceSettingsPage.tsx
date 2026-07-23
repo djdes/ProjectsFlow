@@ -255,6 +255,7 @@ function AssigneeDigestCard({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [applyingCommitSync, setApplyingCommitSync] = useState(false);
   const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
@@ -422,6 +423,31 @@ function AssigneeDigestCard({
       toast.error((error as Error).message || 'Не удалось отправить тест');
     } finally {
       setSending(false);
+    }
+  };
+
+  // Мастер-действие: применить сверку коммитов (вкл/выкл + время + дни) КО ВСЕМ проектам
+  // пространства разом. Пишет per-project конфиг напрямую, поэтому в каждом окне автоматизации
+  // отразится именно это. Дни берём из общего набора «Дни отправки» (draft.daysOfWeek).
+  const applyCommitSyncToAll = async (): Promise<void> => {
+    if (applyingCommitSync || !draft) return;
+    setApplyingCommitSync(true);
+    try {
+      const { affected } = await workspaceRepository.applyCommitSyncToAll(workspaceId, {
+        enabled: draft.commitSyncEnabled,
+        hour: draft.commitSyncHour,
+        minute: draft.commitSyncMinute,
+        daysOfWeek: draft.daysOfWeek,
+      });
+      toast.success(
+        draft.commitSyncEnabled
+          ? `Сверка коммитов включена во всех проектах (${affected})`
+          : `Сверка коммитов выключена во всех проектах (${affected})`,
+      );
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось применить ко всем проектам');
+    } finally {
+      setApplyingCommitSync(false);
     }
   };
 
@@ -642,7 +668,22 @@ function AssigneeDigestCard({
                   }
                 />
                 <span className="text-xs text-muted-foreground">
-                  предложить завершить найденные задачи в группе
+                  расписание сверки по умолчанию для всех проектов
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canManage || applyingCommitSync}
+                  onClick={() => void applyCommitSyncToAll()}
+                >
+                  {applyingCommitSync && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                  Применить ко всем проектам
+                </Button>
+                <span className="w-full text-xs text-muted-foreground">
+                  Запишет тумблер, время и дни (из «Дней отправки» ниже) во все проекты
+                  пространства — в каждом окне автоматизации отразится это. Дальше каждый проект
+                  можно донастроить отдельно.
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">

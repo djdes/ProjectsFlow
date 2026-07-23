@@ -222,4 +222,11 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
   ): Promise<{ title: string | null }> {
     return httpClient.post(`/workspaces/${id}/assignee-digest/group/resolve`, { chatId });
   }
+
+  async applyCommitSyncToAll(
+    id: string,
+    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+  ): Promise<{ affected: number }> {
+    return httpClient.post(`/workspaces/${id}/commit-sync/apply-all`, input);
+  }
 }

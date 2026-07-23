@@ -8,7 +8,9 @@ import type { CreateWorkspaceInvite } from '../../application/workspace/CreateWo
 import type { ListWorkspaceInvites } from '../../application/workspace/ListWorkspaceInvites.js';
 import type { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
 import type { ManageWorkspaceAssigneeDigest } from '../../application/digest/ManageWorkspaceAssigneeDigest.js';
+import type { BulkSetWorkspaceCommitSync } from '../../application/commit-sync/BulkSetWorkspaceCommitSync.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { z } from 'zod';
 import {
   addMemberSchema,
   changeRoleSchema,
@@ -20,6 +22,14 @@ import {
   setCurrentSchema,
   updateWorkspaceSchema,
 } from './schemas.js';
+
+// Мастер-действие «включить сверку коммитов по всем проектам пространства».
+const bulkCommitSyncSchema = z.object({
+  enabled: z.boolean(),
+  hour: z.number().int().min(0).max(23).default(17),
+  minute: z.number().int().min(0).max(59).default(0),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7).default([0, 1, 2, 3, 4, 5, 6]),
+});
 
 type WorkspaceDto = {
   id: string;
@@ -114,6 +124,7 @@ type Deps = {
     readonly delete: DeleteWorkspaceInvite;
   };
   readonly assigneeDigest: ManageWorkspaceAssigneeDigest;
+  readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
   readonly appUrl: string;
 };
 
@@ -229,6 +240,25 @@ export function workspacesRouter(deps: Deps): Router {
         const result = await deps.assigneeDigest.sendNow(
           req.params.id as string,
           req.user!.id,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // POST /:id/commit-sync/apply-all — включить/выключить сверку коммитов во ВСЕХ проектах
+  // пространства разом + задать время и дни. Каждый проект дальше гоняется своим расписанием.
+  router.post(
+    '/:id/commit-sync/apply-all',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = bulkCommitSyncSchema.parse(req.body);
+        const result = await deps.bulkCommitSync.execute(
+          req.params.id as string,
+          req.user!.id,
+          body,
         );
         res.json(result);
       } catch (error) {

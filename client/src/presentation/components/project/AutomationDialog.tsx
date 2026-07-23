@@ -88,6 +88,7 @@ type Draft = {
   commitSyncEnabled: boolean;
   commitSyncHour: number;
   commitSyncMinute: number;
+  commitSyncDaysOfWeek: ScheduleDay[];
   commitSyncThresholdHours: number;
   commitSyncAction: 'propose' | 'auto';
   // Read-only (в payload не идёт): дата последнего прогона для подписи под кнопкой.
@@ -305,6 +306,7 @@ function toDraft(config: AutomationConfig): Draft {
     commitSyncEnabled: config.commitSyncEnabled,
     commitSyncHour: config.commitSyncHour,
     commitSyncMinute: config.commitSyncMinute,
+    commitSyncDaysOfWeek: [...config.commitSyncDaysOfWeek] as ScheduleDay[],
     commitSyncThresholdHours: config.commitSyncThresholdHours,
     commitSyncAction: config.commitSyncAction,
     commitSyncLastRunOn: config.commitSyncLastRunOn,
@@ -560,6 +562,7 @@ export function AutomationDialog({
         commitSyncEnabled: draft.commitSyncEnabled,
         commitSyncHour: draft.commitSyncHour,
         commitSyncMinute: draft.commitSyncMinute,
+        commitSyncDaysOfWeek: draft.commitSyncDaysOfWeek,
         commitSyncThresholdHours: draft.commitSyncThresholdHours,
         commitSyncAction: draft.commitSyncAction,
         assigneeDigestEnabled: draft.assigneeDigestEnabled,
@@ -1027,7 +1030,43 @@ export function AutomationDialog({
                   </RadioGroup>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Время (МSK)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.commitSyncHour}
+                    onChange={(e) =>
+                      update({ commitSyncHour: Math.min(23, Math.max(0, Number(e.target.value) || 0)) })
+                    }
+                    className="h-8 w-16"
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={draft.commitSyncMinute}
+                    onChange={(e) =>
+                      update({ commitSyncMinute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
+                    }
+                    className="h-8 w-16"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <FieldGroupLabel>Дни сверки</FieldGroupLabel>
+                  <ScheduleDayPicker
+                    value={draft.commitSyncDaysOfWeek}
+                    onChange={(commitSyncDaysOfWeek) => update({ commitSyncDaysOfWeek })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Сверка запустится только в выбранные дни по московскому времени.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                   <Button
                     type="button"
                     variant="outline"
