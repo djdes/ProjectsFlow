@@ -89,6 +89,9 @@ type Draft = {
   commitSyncHour: number;
   commitSyncMinute: number;
   commitSyncThresholdHours: number;
+  commitSyncAction: 'propose' | 'auto';
+  // Read-only (в payload не идёт): дата последнего прогона для подписи под кнопкой.
+  commitSyncLastRunOn: string | null;
   assigneeDigestEnabled: boolean;
   criteria: DraftCriterion[];
 };
@@ -303,6 +306,8 @@ function toDraft(config: AutomationConfig): Draft {
     commitSyncHour: config.commitSyncHour,
     commitSyncMinute: config.commitSyncMinute,
     commitSyncThresholdHours: config.commitSyncThresholdHours,
+    commitSyncAction: config.commitSyncAction,
+    commitSyncLastRunOn: config.commitSyncLastRunOn,
     assigneeDigestEnabled: config.assigneeDigestEnabled,
     criteria: config.criteria.map((c) => ({
       key: c.key,
@@ -331,6 +336,7 @@ export function AutomationDialog({
   const [digest, setDigest] = useState<DigestDraft | null>(null);
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [sendingNow, setSendingNow] = useState(false);
+  const [syncingNow, setSyncingNow] = useState(false);
   // Мультизадачный воркер сохраняется отдельным PATCH'ом сразу (как и раньше) — поэтому
   // держим его в собственном стейте, а не в draft. Мастер-переключатель агрегирует его.
   const [multiTaskWorker, setMultiTaskWorker] = useState(multiTaskWorkerInitial);
@@ -475,6 +481,28 @@ export function AutomationDialog({
     if (restore.multiTaskWorker !== multiTaskWorker) void toggleMultiTaskWorker(restore.multiTaskWorker);
   };
 
+  // «Сверить сейчас»: ставит сверку немедленно, мимо расписания. Использует СОХРАНЁННЫЕ
+  // настройки проекта (сервер читает конфиг из БД при постановке) — поэтому если пользователь
+  // только что сменил режим в форме, но не сохранил, прогон пойдёт со старым режимом.
+  const handleSyncNow = async (): Promise<void> => {
+    if (syncingNow) return;
+    setSyncingNow(true);
+    try {
+      const res = await automationRepository.runCommitSyncNow(projectId);
+      if (res.status === 'queued') {
+        toast.success('Сверка запущена — результат появится через минуту-другую');
+      } else if (res.status === 'already_running') {
+        toast.message('Сверка уже идёт');
+      } else {
+        toast.error('Сверка недоступна: у проекта нет диспетчера или доступа к GitHub');
+      }
+    } catch (err) {
+      toast.error((err as Error).message ?? 'Не удалось запустить сверку');
+    } finally {
+      setSyncingNow(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!draft) return;
@@ -533,6 +561,7 @@ export function AutomationDialog({
         commitSyncHour: draft.commitSyncHour,
         commitSyncMinute: draft.commitSyncMinute,
         commitSyncThresholdHours: draft.commitSyncThresholdHours,
+        commitSyncAction: draft.commitSyncAction,
         assigneeDigestEnabled: draft.assigneeDigestEnabled,
         criteria: draft.criteria.map((c) => ({
           key: c.key,
@@ -957,6 +986,72 @@ export function AutomationDialog({
                 одном блоке (агрегируется мастером). Поля группы (chat_id/название) видны
                 всегда — они нужны и для отправки «в группу», и для экспорта задач; расписание,
                 получатели и колонки появляются, когда сводка включена. */}
+            {/* Сверка коммитов (db/072): воркер раз в день (или по кнопке) сопоставляет свежие
+                коммиты с открытыми задачами и, найдя реализацию, закрывает задачу. */}
+            <AutomationCard
+              icon={RefreshCw}
+              title="Сверка коммитов"
+              description="Раз в день воркер сверяет коммиты репозитория с открытыми задачами. Нашёл коммит, который реализует задачу, — задача уходит в «Готово»."
+              toggle={{
+                checked: draft.commitSyncEnabled,
+                onCheckedChange: (v) => update({ commitSyncEnabled: v }),
+                ariaLabel: 'Сверка коммитов',
+              }}
+            >
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <FieldGroupLabel>Что делать с совпадением</FieldGroupLabel>
+                  <RadioGroup
+                    value={draft.commitSyncAction}
+                    onValueChange={(v) => update({ commitSyncAction: v as 'propose' | 'auto' })}
+                    className="gap-2"
+                  >
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <RadioGroupItem value="auto" className="mt-0.5" />
+                      <span>
+                        <span className="font-medium">Переносить в «Готово» автоматически</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Есть коммит с реализацией — задача сразу закрывается, без подтверждения.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <RadioGroupItem value="propose" className="mt-0.5" />
+                      <span>
+                        <span className="font-medium">Предлагать закрыть</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Бот пишет предложение с кнопкой ✅ — задачу закрывает участник.
+                        </span>
+                      </span>
+                    </label>
+                  </RadioGroup>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleSyncNow()}
+                    disabled={syncingNow}
+                  >
+                    {syncingNow ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1.5 size-3.5" />
+                    )}
+                    Сверить сейчас
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Запустит сверку немедленно.
+                    {draft.commitSyncLastRunOn
+                      ? ` Последний прогон: ${draft.commitSyncLastRunOn}.`
+                      : ''}
+                  </span>
+                </div>
+              </div>
+            </AutomationCard>
+
             <AutomationCard
               icon={CalendarClock}
               title="Ежедневная сводка по задачам"

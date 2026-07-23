@@ -30,6 +30,7 @@ export type SaveAutomationInput = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  readonly commitSyncAction: 'propose' | 'auto';
   readonly assigneeDigestEnabled: boolean;
   // run_status выставляется отдельно (resetRun/markStopped) — здесь не трогаем.
   readonly criteria: ReadonlyArray<{

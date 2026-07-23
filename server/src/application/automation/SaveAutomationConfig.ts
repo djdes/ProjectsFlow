@@ -35,6 +35,8 @@ export type SaveAutomationCommand = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  // undefined — не менять (старый клиент не шлёт поле).
+  readonly commitSyncAction?: 'propose' | 'auto';
   readonly assigneeDigestEnabled?: boolean;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
@@ -99,6 +101,7 @@ export class SaveAutomationConfig {
       commitSyncHour: input.commitSyncHour,
       commitSyncMinute: input.commitSyncMinute,
       commitSyncThresholdHours: input.commitSyncThresholdHours,
+      commitSyncAction: input.commitSyncAction ?? baseline.commitSyncAction,
       assigneeDigestEnabled:
         input.assigneeDigestEnabled ?? baseline.assigneeDigestEnabled,
       criteria: input.criteria,

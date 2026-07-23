@@ -227,6 +227,7 @@ import { CommitSyncJobCleanup } from './application/commit-sync/CommitSyncJobCle
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
 import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
 import { SaveAutomationConfig } from './application/automation/SaveAutomationConfig.js';
+import { RunCommitSyncNow } from './application/commit-sync/RunCommitSyncNow.js';
 import { GetAutomationForDispatcher } from './application/automation/GetAutomationForDispatcher.js';
 import { RecordAutomationTask } from './application/automation/RecordAutomationTask.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
@@ -2784,6 +2785,13 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       automation: automationRepo,
+    }),
+    // Ручной запуск сверки коммитов «Сверить сейчас» (кнопка в окне автоматизации).
+    runCommitSyncNow: new RunCommitSyncNow({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      enqueue: enqueueCommitSyncJob,
+      commitSyncJobs: commitSyncJobRepo,
     }),
     getAutomationForDispatcher: new GetAutomationForDispatcher({
       projects: projectRepo,

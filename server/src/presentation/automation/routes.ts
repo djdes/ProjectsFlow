@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AutomationConfig } from '../../domain/automation/Automation.js';
 import type { GetAutomationConfig } from '../../application/automation/GetAutomationConfig.js';
 import type { SaveAutomationConfig } from '../../application/automation/SaveAutomationConfig.js';
+import type { RunCommitSyncNow } from '../../application/commit-sync/RunCommitSyncNow.js';
 import { AUTOMATION_CRITERIA_BY_KEY } from '../../application/automation/criteria.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -78,6 +79,10 @@ const saveBodySchema = z
     commitSyncHour: z.number().int().min(0).max(23).optional().default(3),
     commitSyncMinute: z.number().int().min(0).max(59).optional().default(0),
     commitSyncThresholdHours: z.number().int().min(1).max(8760).optional().default(70),
+    // Что делать с совпадением: 'auto' — сервер сразу переносит задачу в готово; 'propose' —
+    // предлагает закрыть кнопкой (участник подтверждает). Опционально: старый клиент не шлёт
+    // поле, и режим остаётся тем, что в БД.
+    commitSyncAction: z.enum(['propose', 'auto']).optional(),
     assigneeDigestEnabled: z.boolean().optional(),
     criteria: z.array(criterionSchema).max(20),
   })
@@ -99,10 +104,34 @@ const saveBodySchema = z
 type Deps = {
   readonly getAutomationConfig: GetAutomationConfig;
   readonly saveAutomationConfig: SaveAutomationConfig;
+  readonly runCommitSyncNow: RunCommitSyncNow;
 };
 
 export function buildAutomationRouter(deps: Deps): Router {
   const r = Router();
+
+  // POST /api/projects/:projectId/commit-sync/run — ручная сверка «Сверить сейчас» (editor+).
+  // Ставит job немедленно (мимо ежедневного расписания); раннер подхватит в течение минуты.
+  r.post(
+    '/projects/:projectId/commit-sync/run',
+    requireAuth,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const result = await deps.runCommitSyncNow.execute(projectId, req.user!.id);
+        if (result.ok) {
+          res.status(202).json({ status: 'queued', jobId: result.jobId });
+          return;
+        }
+        // already_running — 409 (не ошибка клиента, состояние), unavailable — 422.
+        res
+          .status(result.reason === 'already_running' ? 409 : 422)
+          .json({ status: result.reason });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // GET /api/projects/:projectId/automation — конфиг для диалога настроек.
   r.get(
@@ -151,6 +180,7 @@ export function buildAutomationRouter(deps: Deps): Router {
           commitSyncHour: body.commitSyncHour,
           commitSyncMinute: body.commitSyncMinute,
           commitSyncThresholdHours: body.commitSyncThresholdHours,
+          commitSyncAction: body.commitSyncAction,
           assigneeDigestEnabled: body.assigneeDigestEnabled,
           criteria: body.criteria,
         });
@@ -187,6 +217,7 @@ function automationConfigToDto(config: AutomationConfig): {
   commitSyncHour: number;
   commitSyncMinute: number;
   commitSyncThresholdHours: number;
+  commitSyncAction: 'propose' | 'auto';
   commitSyncLastRunOn: string | null;
   assigneeDigestEnabled: boolean;
   criteria: ReadonlyArray<{
@@ -220,6 +251,7 @@ function automationConfigToDto(config: AutomationConfig): {
     commitSyncHour: config.commitSyncHour,
     commitSyncMinute: config.commitSyncMinute,
     commitSyncThresholdHours: config.commitSyncThresholdHours,
+    commitSyncAction: config.commitSyncAction,
     commitSyncLastRunOn: config.commitSyncLastRunOn,
     assigneeDigestEnabled: config.assigneeDigestEnabled,
     criteria: config.criteria.map((c) => ({

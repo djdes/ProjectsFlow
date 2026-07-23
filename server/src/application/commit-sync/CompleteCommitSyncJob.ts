@@ -50,12 +50,14 @@ export type CompleteCommitSyncJobInput = {
   readonly tokensOut?: number | null;
 };
 
-// Завершение commit-sync job'а. ИИ вернул только совпадения коммит↔задача; ПОРОГ и
-// перемещения применяет СЕРВЕР детерминированно по сохранённому committedAt (commits_json) —
-// не доверяя таймстемпам от модели. Правило:
-//   ageHours < threshold && задача todo      → in_progress
-//   ageHours >= threshold                    → done
-//   ageHours < threshold && уже in_progress  → no-op
+// Завершение commit-sync job'а. ИИ вернул только совпадения коммит↔задача (коммит, который
+// РЕАЛИЗУЕТ задачу — см. промпт в prepareCommitSyncContext). Перемещения применяет СЕРВЕР.
+//
+// Правило (action='auto'): совпадение → задача сразу в done, НЕЗАВИСИМО от возраста коммита.
+// Раньше здесь был возрастной порог (свежий коммит → in_progress, старый → done). Он мешал
+// реальному циклу: за день закрывается много задач, часть за час — и все они «зависали» в
+// работе вместо готово. Раз промпт отбирает только коммиты, которые задачу ЗАКРЫВАЮТ, отдельная
+// ступень in_progress не нужна: реализовано — значит готово.
 // Идемпотентно: двигаем только задачи, всё ещё в todo/in_progress.
 export class CompleteCommitSyncJob {
   constructor(private readonly deps: Deps) {}
@@ -105,10 +107,7 @@ export class CompleteCommitSyncJob {
     }
 
     const commitSnapshot = parseCommitsJson(job.commitsJson);
-    const now = new Date();
-    const threshold = job.thresholdHours;
 
-    let toInProgress = 0;
     let toDone = 0;
     let skipped = 0;
     // На одну задачу применяем максимум один переход за прогон (первое валидное совпадение).
@@ -117,12 +116,11 @@ export class CompleteCommitSyncJob {
     for (const m of matches) {
       if (handledTasks.has(m.taskId)) continue;
 
-      const commit = commitSnapshot[m.commitSha];
-      if (!commit) {
+      // Коммит должен быть в снапшоте прогона — защита от галлюцинированного sha.
+      if (!commitSnapshot[m.commitSha]) {
         skipped++;
         continue;
       }
-      const ageHours = (now.getTime() - new Date(commit.committedAt).getTime()) / 3_600_000;
 
       const task = await this.deps.tasks.getById(m.taskId);
       if (!task || task.projectId !== job.projectId) {
@@ -134,32 +132,20 @@ export class CompleteCommitSyncJob {
         continue;
       }
 
-      let moved = false;
-      if (ageHours >= threshold) {
-        // Старый коммит → готово. Снимок status_before_done как в MoveTask.
-        await this.deps.tasks.update(
-          task.id,
-          { status: 'done', statusBeforeDone: task.status },
-          job.dispatcherUserId,
-        );
-        toDone++;
-        moved = true;
-      } else if (task.status === 'todo') {
-        // Свежий коммит, задача в черновике → в работу.
-        await this.deps.tasks.update(task.id, { status: 'in_progress' }, job.dispatcherUserId);
-        toInProgress++;
-        moved = true;
-      }
-
-      if (moved) {
-        handledTasks.add(task.id);
-        await this.tryLinkCommit(job.projectId, job.dispatcherUserId, task, m.commitSha);
-      }
+      // Совпадение = коммит РЕАЛИЗУЕТ задачу (см. промпт) → сразу в готово, без учёта возраста.
+      // status_before_done — снимок текущей колонки, как в MoveTask (для «вернуть из готово»).
+      await this.deps.tasks.update(
+        task.id,
+        { status: 'done', statusBeforeDone: task.status },
+        job.dispatcherUserId,
+      );
+      toDone++;
+      handledTasks.add(task.id);
+      await this.tryLinkCommit(job.projectId, job.dispatcherUserId, task, m.commitSha);
     }
 
     const resultSummary =
-      `Совпадений: ${matches.length}. Перемещено: в работу — ${toInProgress}, ` +
-      `в готово — ${toDone}. Пропущено — ${skipped}.`;
+      `Совпадений: ${matches.length}. Перемещено в готово — ${toDone}. Пропущено — ${skipped}.`;
 
     await this.deps.commitSyncJobs.complete({
       id: input.jobId,

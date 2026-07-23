@@ -90,9 +90,12 @@ export class WorkspaceAssigneeDigestScheduler {
               (project) => item.projectMode === 'all' || configured.has(project.id),
             );
             for (const project of projects) {
-              await this.deps.enqueueCommitSync.execute(project.id, at, {
-                forceEnabled: true,
-              });
+              // forceEnabled НЕ ставим: пусть per-project тумблер «Сверка коммитов» реально
+              // управляет — выключил у проекта, и в ежедневный прогон он не попадает, даже
+              // если пространство сверку включило. Раньше здесь стоял forceEnabled:true, и
+              // тумблер в окне проекта был декоративным. Ручной запуск («Сверить сейчас») форсит
+              // отдельно, мимо этого пути.
+              await this.deps.enqueueCommitSync.execute(project.id, at);
             }
           } catch (error) {
             console.warn('[workspace-commit-sync] enqueue failed', item.workspaceId, error);

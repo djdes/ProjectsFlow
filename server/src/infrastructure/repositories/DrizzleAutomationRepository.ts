@@ -69,6 +69,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
         commitSyncHour: input.commitSyncHour,
         commitSyncMinute: input.commitSyncMinute,
         commitSyncThresholdHours: input.commitSyncThresholdHours,
+        commitSyncAction: input.commitSyncAction,
         assigneeDigestEnabled: input.assigneeDigestEnabled,
       })
       .onDuplicateKeyUpdate({
@@ -91,6 +92,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
           commitSyncHour: input.commitSyncHour,
           commitSyncMinute: input.commitSyncMinute,
           commitSyncThresholdHours: input.commitSyncThresholdHours,
+          commitSyncAction: input.commitSyncAction,
           assigneeDigestEnabled: input.assigneeDigestEnabled,
         },
       });

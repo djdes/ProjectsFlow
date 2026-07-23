@@ -28,8 +28,10 @@ function harness(daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5])
       async listByWorkspace() { return [{ id: 'p1', name: 'DocsFlow', icon: null }]; },
     } as never,
     enqueueCommitSync: {
-      async execute(_projectId: string, _at: Date, opts: { forceEnabled?: boolean }) {
-        assert.equal(opts.forceEnabled, true);
+      // Плановый прогон больше НЕ форсит: per-project тумблер «Сверка коммитов» реально
+      // управляет включением. forceEnabled остаётся только у ручного «Сверить сейчас».
+      async execute(_projectId: string, _at: Date, opts?: { forceEnabled?: boolean }) {
+        assert.notEqual(opts?.forceEnabled, true);
         calls.push('commit');
       },
     } as never,

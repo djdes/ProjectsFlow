@@ -48,6 +48,9 @@ export type AutomationConfig = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  // Что делать с совпадением: 'auto' — сразу переносить задачу в готово; 'propose' — предлагать
+  // закрыть кнопкой (участник подтверждает).
+  readonly commitSyncAction: 'propose' | 'auto';
   // Read-only: МSK-дата последнего прогона ('YYYY-MM-DD') или null.
   readonly commitSyncLastRunOn: string | null;
   // Include this project in the workspace-level Telegram digest grouped by assignee.

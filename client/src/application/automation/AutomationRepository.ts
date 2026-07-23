@@ -24,6 +24,7 @@ export type SaveAutomationInput = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  readonly commitSyncAction: 'propose' | 'auto';
   readonly assigneeDigestEnabled: boolean;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
@@ -33,7 +34,15 @@ export type SaveAutomationInput = {
   }>;
 };
 
+// Результат ручного запуска сверки коммитов «Сверить сейчас».
+export type RunCommitSyncResult =
+  | { readonly status: 'queued'; readonly jobId: string }
+  | { readonly status: 'already_running' }
+  | { readonly status: 'unavailable' };
+
 export interface AutomationRepository {
   get(projectId: string): Promise<AutomationConfig>;
   save(projectId: string, input: SaveAutomationInput): Promise<AutomationConfig>;
+  // Поставить сверку коммитов немедленно (мимо расписания). Раннер подхватит job.
+  runCommitSyncNow(projectId: string): Promise<RunCommitSyncResult>;
 }
