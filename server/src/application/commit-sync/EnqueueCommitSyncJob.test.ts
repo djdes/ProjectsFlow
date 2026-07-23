@@ -49,8 +49,8 @@ test('daily commit review is queued even when there are no open tasks or commits
   const result = await useCase.execute('p1', new Date('2026-07-17T14:00:00.000Z'));
   assert.equal(result?.id, 'job1');
   assert.ok(created);
-  assert.match(String(created!['context']), /открытых задач нет/);
-  assert.match(String(created!['context']), /новых коммитов нет/);
+  assert.match(String(created!['context']), /черновиков нет/);
+  assert.match(String(created!['context']), /коммитов нет/);
   assert.equal(created!['commitsJson'], '{}');
 });
 

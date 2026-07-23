@@ -52,9 +52,10 @@ function harness(job: ReturnType<typeof buildJob>, task: { id: string; projectId
   return { svc, updated, getCompleted: () => completed };
 }
 
-test('auto: свежий коммит-совпадение → задача сразу в done (порог игнорируется)', async () => {
+test('auto: свежий коммит-совпадение → задача-черновик сразу в done (порог игнорируется)', async () => {
   const job = buildJob();
-  const task = { id: 't1', projectId: 'p1', status: 'todo' };
+  // Сверка двигает только черновики (первая колонка) — см. move-guard в CompleteCommitSyncJob.
+  const task = { id: 't1', projectId: 'p1', status: 'backlog' };
   const h = harness(job, task);
 
   await h.svc.execute({
@@ -67,14 +68,14 @@ test('auto: свежий коммит-совпадение → задача ср
 
   assert.equal(h.updated.length, 1);
   assert.equal(h.updated[0]!.status, 'done');
-  assert.equal(h.updated[0]!.statusBeforeDone, 'todo'); // снимок для «вернуть из готово»
+  assert.equal(h.updated[0]!.statusBeforeDone, 'backlog'); // снимок для «вернуть из готово»
   assert.equal(h.getCompleted()!.status, 'succeeded');
   assert.ok(/в готово — 1/.test(h.getCompleted()!.summary ?? ''));
 });
 
 test('auto: коммита нет в снапшоте прогона → задачу не трогаем', async () => {
   const job = buildJob();
-  const task = { id: 't1', projectId: 'p1', status: 'todo' };
+  const task = { id: 't1', projectId: 'p1', status: 'backlog' };
   const h = harness(job, task);
 
   await h.svc.execute({

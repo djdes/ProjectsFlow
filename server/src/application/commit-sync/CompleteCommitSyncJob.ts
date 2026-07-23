@@ -90,28 +90,25 @@ export class CompleteCommitSyncJob {
     }
 
     const rawMatches = (input.matches ?? []).slice(0, MAX_MATCHES);
-    const embeddedReview = extractEmbeddedReview(rawMatches);
+    // Старые MCP-клиенты могли слать служебные записи обзора (__commit_review*). Обзор коммитов на
+    // значимость убран — сверка теперь только сопоставляет черновики с коммитами, поэтому такие
+    // записи просто отбрасываем.
     const matches = rawMatches.filter((match) => !match.taskId.startsWith('__commit_review'));
-    const effectiveInput: CompleteCommitSyncJobInput = {
-      ...input,
-      matches,
-      reviews: input.reviews ?? embeddedReview.reviews,
-      overallSummary: input.overallSummary ?? embeddedReview.overallSummary,
-    };
 
     // Ветка propose (db/101): НЕ двигаем задачи, а создаём предложения закрыть (human-in-the-loop).
     // Подтвердить сможет любой участник (TG-кнопка / in-app).
     if (job.action === 'propose') {
-      await this.runProposeBranch(job, effectiveInput, matches);
+      await this.runProposeBranch(job, input, matches);
       return;
     }
 
     const commitSnapshot = parseCommitsJson(job.commitsJson);
 
-    let toDone = 0;
     let skipped = 0;
     // На одну задачу применяем максимум один переход за прогон (первое валидное совпадение).
     const handledTasks = new Set<string>();
+    // Реально закрытые задачи — для короткой сводки «что закрыто» в Telegram.
+    const moved: CommitSyncMatch[] = [];
 
     for (const m of matches) {
       if (handledTasks.has(m.taskId)) continue;
@@ -127,25 +124,27 @@ export class CompleteCommitSyncJob {
         skipped++;
         continue;
       }
-      if (task.status !== 'todo' && task.status !== 'in_progress') {
+      // Двигаем только черновики (первая колонка). Если задача уже уехала в другую колонку между
+      // постановкой прогона и завершением — значит с ней уже работают руками, не трогаем.
+      if (task.status !== 'backlog') {
         skipped++;
         continue;
       }
 
-      // Совпадение = коммит РЕАЛИЗУЕТ задачу (см. промпт) → сразу в готово, без учёта возраста.
+      // Совпадение = коммит РЕАЛИЗУЕТ черновик (см. промпт) → сразу в готово.
       // status_before_done — снимок текущей колонки, как в MoveTask (для «вернуть из готово»).
       await this.deps.tasks.update(
         task.id,
         { status: 'done', statusBeforeDone: task.status },
         job.dispatcherUserId,
       );
-      toDone++;
       handledTasks.add(task.id);
+      moved.push(m);
       await this.tryLinkCommit(job.projectId, job.dispatcherUserId, task, m.commitSha);
     }
 
     const resultSummary =
-      `Совпадений: ${matches.length}. Перемещено в готово — ${toDone}. Пропущено — ${skipped}.`;
+      `Совпадений: ${matches.length}. Перемещено в готово — ${moved.length}. Пропущено — ${skipped}.`;
 
     await this.deps.commitSyncJobs.complete({
       id: input.jobId,
@@ -158,7 +157,7 @@ export class CompleteCommitSyncJob {
       tokensOut: input.tokensOut ?? null,
     });
     this.meterUsage(job, input);
-    await this.sendReview(job, effectiveInput, matches, commitSnapshot);
+    await this.sendSummary(job, 'auto', moved);
   }
 
   // Ветка propose (db/101): создаём предложения закрыть по совпадениям (через
@@ -199,26 +198,25 @@ export class CompleteCommitSyncJob {
       tokensOut: input.tokensOut ?? null,
     });
     this.meterUsage(job, input);
-    await this.sendReview(job, input, matches, parseCommitsJson(job.commitsJson));
+    await this.sendSummary(job, 'propose', matches);
   }
 
-  private async sendReview(
+  // Короткая сводка в Telegram-группу: что закрыто (auto) / что предложено закрыть (propose).
+  // Молчит, если двигать/предлагать нечего. Разбор коммитов на значимость убран.
+  private async sendSummary(
     job: CommitSyncJob,
-    input: CompleteCommitSyncJobInput,
+    mode: 'auto' | 'propose',
     matches: readonly CommitSyncMatch[],
-    commits: CommitSyncSnapshot,
   ): Promise<void> {
-    if (!this.deps.sendReview) return;
+    if (!this.deps.sendReview || matches.length === 0) return;
     await this.deps.sendReview
       .execute({
         projectId: job.projectId,
         dispatcherUserId: job.dispatcherUserId,
-        commits,
+        mode,
         matches,
-        reviews: (input.reviews ?? []).slice(0, 50),
-        overallSummary: input.overallSummary ?? null,
       })
-      .catch((error) => console.warn('[commit-sync] Telegram review failed', job.id, error));
+      .catch((error) => console.warn('[commit-sync] Telegram summary failed', job.id, error));
   }
 
   // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).

@@ -1483,10 +1483,7 @@ const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJo
 const sendWorkspaceCommitReview = new SendWorkspaceCommitReview({
   settings: workspaceAssigneeDigestRepo,
   projects: projectRepo,
-  members: projectMemberRepo,
   tasks: taskRepo,
-  users: userRepo,
-  githubTokens: githubTokenRepo,
   telegram: telegramClient,
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,

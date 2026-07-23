@@ -49,9 +49,11 @@ export class EnqueueCommitSyncJob {
     if (await this.deps.commitSyncJobs.existsActiveForProject(projectId)) return null;
 
     const allTasks = await this.deps.tasks.listByProject(projectId);
-    const openTasks = allTasks.filter((t) => t.status === 'todo' || t.status === 'in_progress');
-    // Даже без открытых задач прогон нужен для содержательного обзора коммитов:
-    // в Telegram должен прийти честный итог «всё хорошо» или замечания по изменениям.
+    // Сверка сопоставляет коммиты ТОЛЬКО с задачами в первой колонке «Черновики» (backlog):
+    // это черновики-заготовки, которые владелец реализует и коммитит. Задачи в «Воркер»(todo)/
+    // «Вручную»(manual) сверка не трогает — там свой ручной/агентный флоу. См. запрос владельца.
+    const openTasks = allTasks.filter((t) => t.status === 'backlog');
+    // Даже без черновиков прогон ставим (планировщик пометит дату) — сопоставлять просто нечего.
 
     // Репозиторий читаем токеном того, у кого GitHub реально подключён: диспетчер, если он
     // привязал аккаунт, иначе — владелец проекта (он завёл репозиторий). Центральный

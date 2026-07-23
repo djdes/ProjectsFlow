@@ -3,163 +3,89 @@ import test from 'node:test';
 import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { SendWorkspaceCommitReview } from './SendWorkspaceCommitReview.js';
 
-test('commit review mentions only the author needing attention and has in-table task actions', async () => {
-  const rich: Array<{ html: string; replyMarkup?: unknown }> = [];
+function groupSettings() {
+  return {
+    ...defaultWorkspaceAssigneeDigestSettings('w1'),
+    commitSyncEnabled: true,
+    telegramGroupChatId: -100,
+    projectMode: 'all' as const,
+  };
+}
+
+test('auto summary lists closed drafts without a confirm button', async () => {
+  const rich: Array<{ html: string }> = [];
   const attached: string[][] = [];
-  const actionToken = 'd'.repeat(32);
   const service = new SendWorkspaceCommitReview({
-    settings: {
-      async get() {
-        return {
-          ...defaultWorkspaceAssigneeDigestSettings('w1'),
-          commitSyncEnabled: true,
-          telegramGroupChatId: -100,
-          projectMode: 'all' as const,
-        };
-      },
-    } as never,
+    settings: { async get() { return groupSettings(); } } as never,
     projects: {
-      async getById() {
-        return { id: 'p1', name: 'OrdersFlow' };
-      },
-      async getWorkspaceId() {
-        return 'w1';
-      },
-    } as never,
-    members: {
-      async listByProject() {
-        return [
-          { userId: 'u1', user: { displayName: 'Анна' } },
-          { userId: 'u2', user: { displayName: 'Борис' } },
-        ];
-      },
-    } as never,
-    githubTokens: {
-      async getByUserId(userId: string) {
-        return { githubLogin: userId === 'u1' ? 'anna-dev' : 'boris-dev' };
-      },
-    } as never,
-    users: {
-      async getTelegramLink(userId: string) {
-        return {
-          telegramUserId: userId === 'u1' ? 101 : 102,
-          telegramUsername: userId === 'u1' ? 'anna_pf' : 'boris_pf',
-        };
-      },
+      async getById() { return { id: 'p1', name: 'OrdersFlow' }; },
+      async getWorkspaceId() { return 'w1'; },
     } as never,
     tasks: {
+      // В auto-режиме задача уже закрыта (status='done') — кнопка ✓ не нужна.
       async getById() {
-        return {
-          id: 't1',
-          projectId: 'p1',
-          status: 'todo',
-          description: 'Проверить обработку заказа',
-        };
+        return { id: 't1', projectId: 'p1', status: 'done', description: 'Экспорт заказов' };
       },
     } as never,
     createEmailActionToken: {
-      async execute() {
-        return actionToken;
-      },
+      async execute() { throw new Error('auto режим не должен создавать complete-токен'); },
     } as never,
     telegramDigestActions: {
-      async attach(input: { tokens: string[] }) {
-        attached.push(input.tokens);
-      },
+      async attach(input: { tokens: string[] }) { attached.push(input.tokens); },
     } as never,
     telegram: {
-      async sendRichMessage(input: any) {
+      async sendRichMessage(input: { html: string }) {
         rich.push(input);
         return { kind: 'ok' as const, messageId: 9 };
       },
-      async sendMessage() {
-        throw new Error('fallback must not be used');
-      },
+      async sendMessage() { throw new Error('fallback must not be used'); },
     } as never,
     appUrl: 'https://projectsflow.ru',
   });
 
-  const commits = {
-    ['a'.repeat(40)]: {
-      committedAt: '2026-07-17T10:00:00.000Z',
-      message: 'risky change',
-      htmlUrl: 'https://github.test/a',
-      authorName: 'Anna Git',
-      authorLogin: 'anna-dev',
-    },
-    ['b'.repeat(40)]: {
-      committedAt: '2026-07-17T11:00:00.000Z',
-      message: 'good change',
-      htmlUrl: 'https://github.test/b',
-      authorName: 'Boris Git',
-      authorLogin: 'boris-dev',
-    },
-  };
   assert.equal(
     await service.execute({
       projectId: 'p1',
       dispatcherUserId: 'u1',
-      commits,
-      matches: [{ taskId: 't1', commitSha: 'a'.repeat(40), reason: 'matches' }],
-      reviews: [
-        { commitSha: 'a'.repeat(40), verdict: 'attention', summary: 'Нужно проверить откат.' },
-        { commitSha: 'b'.repeat(40), verdict: 'good', summary: 'Изменение аккуратное.' },
-      ],
-      overallSummary: 'Один коммит требует проверки.',
+      mode: 'auto',
+      matches: [{ taskId: 't1', commitSha: 'a'.repeat(40), reason: 'реализует' }],
     }),
     true,
   );
 
   assert.equal(rich.length, 1);
-  assert.match(rich[0]!.html, /@anna_pf/);
-  assert.doesNotMatch(rich[0]!.html, /@boris_pf/);
-  assert.doesNotMatch(rich[0]!.html, /Борис/);
-  assert.doesNotMatch(rich[0]!.html, /Изменение аккуратное/);
-  assert.match(rich[0]!.html, /Проверить обработку заказа/);
-  assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${actionToken}`));
-  assert.match(rich[0]!.html, />✓<\/a> · <a [^>]+>↗<\/a>/);
-  assert.equal(rich[0]!.replyMarkup, undefined);
-  assert.deepEqual(attached, [[actionToken]]);
+  assert.match(rich[0]!.html, /Закрыто по коммитам/);
+  assert.match(rich[0]!.html, /Экспорт заказов/);
+  assert.doesNotMatch(rich[0]!.html, /✓ закрыть/);
+  assert.doesNotMatch(rich[0]!.html, /Значимые коммиты|verdict|⚠️/);
+  assert.deepEqual(attached, [[]]);
 });
 
-test('commit review stays silent without commits and sends one short all-good message for clean commits', async () => {
-  let sent = 0;
-  const html: string[] = [];
+test('propose summary lists proposed drafts with a confirm link', async () => {
+  const rich: Array<{ html: string }> = [];
+  const attached: string[][] = [];
+  const token = 'd'.repeat(32);
   const service = new SendWorkspaceCommitReview({
-    settings: {
-      async get() {
-        return {
-          ...defaultWorkspaceAssigneeDigestSettings('w1'),
-          commitSyncEnabled: true,
-          telegramGroupChatId: -100,
-          projectMode: 'all' as const,
-        };
-      },
-    } as never,
+    settings: { async get() { return groupSettings(); } } as never,
     projects: {
+      async getById() { return { id: 'p1', name: 'OrdersFlow' }; },
+      async getWorkspaceId() { return 'w1'; },
+    } as never,
+    tasks: {
       async getById() {
-        return { id: 'p1', name: 'OrdersFlow' };
-      },
-      async getWorkspaceId() {
-        return 'w1';
+        return { id: 't1', projectId: 'p1', status: 'backlog', description: 'Проверить обработку заказа' };
       },
     } as never,
-    members: { async listByProject() { return []; } } as never,
-    githubTokens: { async getByUserId() { return null; } } as never,
-    users: { async getTelegramLink() { return null; } } as never,
-    tasks: { async getById() { return null; } } as never,
-    createEmailActionToken: { async execute() { return 'unused'; } } as never,
-    telegramDigestActions: { async attach() {} } as never,
+    createEmailActionToken: { async execute() { return token; } } as never,
+    telegramDigestActions: {
+      async attach(input: { tokens: string[] }) { attached.push(input.tokens); },
+    } as never,
     telegram: {
       async sendRichMessage(input: { html: string }) {
-        sent += 1;
-        html.push(input.html);
-        return { kind: 'ok' as const, messageId: sent };
+        rich.push(input);
+        return { kind: 'ok' as const, messageId: 9 };
       },
-      async sendMessage() {
-        sent += 1;
-        return { kind: 'ok' as const, messageId: sent };
-      },
+      async sendMessage() { throw new Error('fallback must not be used'); },
     } as never,
     appUrl: 'https://projectsflow.ru',
   });
@@ -168,35 +94,52 @@ test('commit review stays silent without commits and sends one short all-good me
     await service.execute({
       projectId: 'p1',
       dispatcherUserId: 'u1',
-      commits: {},
-      matches: [],
-      reviews: [],
-      overallSummary: 'За сегодня новых коммитов нет. Всё отлично.',
+      mode: 'propose',
+      matches: [{ taskId: 't1', commitSha: 'a'.repeat(40), reason: 'реализует' }],
     }),
-    false,
+    true,
   );
 
-  const sha = 'c'.repeat(40);
+  assert.equal(rich.length, 1);
+  assert.match(rich[0]!.html, /Предложено закрыть/);
+  assert.match(rich[0]!.html, /Проверить обработку заказа/);
+  assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${token}`));
+  assert.match(rich[0]!.html, /✓ закрыть/);
+  assert.deepEqual(attached, [[token]]);
+});
+
+test('summary stays silent when there is nothing to report', async () => {
+  let sent = 0;
+  const service = new SendWorkspaceCommitReview({
+    settings: { async get() { return groupSettings(); } } as never,
+    projects: {
+      async getById() { return { id: 'p1', name: 'OrdersFlow' }; },
+      async getWorkspaceId() { return 'w1'; },
+    } as never,
+    tasks: { async getById() { return null; } } as never,
+    createEmailActionToken: { async execute() { return 'unused'; } } as never,
+    telegramDigestActions: { async attach() {} } as never,
+    telegram: {
+      async sendRichMessage() { sent += 1; return { kind: 'ok' as const, messageId: sent }; },
+      async sendMessage() { sent += 1; return { kind: 'ok' as const, messageId: sent }; },
+    } as never,
+    appUrl: 'https://projectsflow.ru',
+  });
+
+  // Пустой список совпадений — молчок.
+  assert.equal(
+    await service.execute({ projectId: 'p1', dispatcherUserId: 'u1', mode: 'auto', matches: [] }),
+    false,
+  );
+  // Задача не нашлась (getById → null) — тоже молчок.
   assert.equal(
     await service.execute({
       projectId: 'p1',
       dispatcherUserId: 'u1',
-      commits: {
-        [sha]: {
-          committedAt: '2026-07-17T10:00:00.000Z',
-          message: 'safe change',
-          htmlUrl: 'https://github.test/c',
-          authorName: 'Developer',
-          authorLogin: 'developer',
-        },
-      },
-      matches: [],
-      reviews: [{ commitSha: sha, verdict: 'good', summary: 'Всё хорошо.' }],
-      overallSummary: 'Проверка пройдена.',
+      mode: 'auto',
+      matches: [{ taskId: 'gone', commitSha: 'x', reason: 'r' }],
     }),
-    true,
+    false,
   );
-  assert.equal(sent, 1);
-  assert.match(html[0]!, /Все коммиты в порядке/);
-  assert.doesNotMatch(html[0]!, /safe change|Всё хорошо/);
+  assert.equal(sent, 0);
 });

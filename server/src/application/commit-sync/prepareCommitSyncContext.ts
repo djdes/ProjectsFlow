@@ -95,51 +95,30 @@ export function prepareCommitSyncContext(params: {
     };
   }
 
-  const reviewWindowHours = commitReviewWindowHours(now);
-  const reviewCutoff = now.getTime() - reviewWindowHours * 3_600_000;
-  const allReviewCommits = commits.filter(
-    (commit) => commit.committedAt.getTime() >= reviewCutoff && commit.committedAt <= now,
-  );
-  const reviewCommits = allReviewCommits.slice(0, MAX_REVIEW_COMMITS);
-  const reviewShas = new Set(allReviewCommits.map((commit) => commit.sha));
-  const olderCommits = commits
-    .filter((commit) => !reviewShas.has(commit.sha))
-    .slice(0, MAX_OLDER_COMMITS);
+  // Коммиты для сопоставления: свежие сверху, с деталями где есть (diff помогает точности).
+  const matchCommits = [...commits]
+    .sort((a, b) => b.committedAt.getTime() - a.committedAt.getTime())
+    .slice(0, MAX_REVIEW_COMMITS + MAX_OLDER_COMMITS);
 
   let context =
-    `Проведи две связанные проверки проекта.\n\n` +
-    `1. Найди коммиты, которые РЕАЛИЗУЮТ (закрывают) открытую задачу — её уже можно считать ` +
+    `Сопоставь задачи-черновики проекта с коммитами репозитория.\n\n` +
+    `Найди коммиты, которые РЕАЛИЗУЮТ (закрывают) черновик — задачу уже можно считать ` +
     `выполненной. Это НЕ поиск по id и НЕ «как-то связано»: верни совпадение, только если код ` +
     `коммита действительно закрывает задачу целиком. Частичный прогресс, наброски, соседние ` +
-    `правки — НЕ совпадение. Сервер по каждому совпадению сразу переносит задачу в «Готово», ` +
-    `поэтому ложное совпадение закроет незавершённую задачу — будь строг. Статус ставит сервер.\n\n` +
-    `2. Проверь КАЖДЫЙ коммит из сегодняшнего обзора за последние ${reviewWindowHours} ч. ` +
-    `Нельзя пропускать коммиты: общий итог «всё хорошо» допустим только после проверки каждого. ` +
-    `Для аккуратного или служебного изменения используй verdict=good, ` +
-    `для слабого, рискованного, незавершённого или требующего проверки — verdict=attention. ` +
-    `Автора не выдумывай: сервер сам возьмёт его из GitHub и при необходимости упомянет в Telegram. ` +
-    `Если замечаний нет, прямо напиши это в overallSummary; reviews может быть пустым.\n\n` +
-    `ЗАДАЧИ (todo и in_progress):\n${taskLines.length > 0 ? taskLines.join('\n') : '(открытых задач нет)'}\n\n` +
-    `КОММИТЫ ДЛЯ СЕГОДНЯШНЕГО ОБЗОРА:\n${
-      reviewCommits.length > 0
-        ? reviewCommits.map((commit) => formatCommit(commit, now)).join('\n')
-        : '(за выбранный период новых коммитов нет)'
+    `правки — НЕ совпадение. По каждому совпадению сервер сразу закрывает задачу (или создаёт ` +
+    `предложение закрыть), поэтому ложное совпадение закроет незавершённую задачу — будь строг. ` +
+    `Разбирать коммиты на «качество/значимость» НЕ нужно — только точное сопоставление с задачами.\n\n` +
+    `ЗАДАЧИ (колонка «Черновики»):\n${taskLines.length > 0 ? taskLines.join('\n') : '(черновиков нет)'}\n\n` +
+    `КОММИТЫ:\n${
+      matchCommits.length > 0
+        ? matchCommits.map((commit) => formatCommit(commit, now)).join('\n')
+        : '(коммитов нет)'
     }\n\n` +
-    `БОЛЕЕ СТАРЫЕ КОММИТЫ (только для сопоставления с задачами):\n${
-      olderCommits.length > 0
-        ? olderCommits.map((commit) => formatCommit(commit, now)).join('\n')
-        : '(нет)'
-    }\n\n` +
-    `ОТВЕТ: для совместимости с установленным диспетчером верни СТРОГО JSON-объект только с полем matches:\n` +
-    `{"matches":[` +
-    `{"taskId":"<реальный id задачи>","commitSha":"<полный sha>","reason":"<кратко почему>"},` +
-    `{"taskId":"__commit_review__:good|attention","commitSha":"<полный sha из сегодняшнего обзора>",` +
-    `"reason":"<одно конкретное предложение о качестве/риске>"},` +
-    `{"taskId":"__commit_review_summary__","commitSha":"-","reason":"<общий итог; если проблем нет — так и напиши>"}` +
-    `]}\n` +
-    `Записи __commit_review__ — это служебный формат обзора, не реальные задачи. ` +
-    `Верни ровно одну такую запись для КАЖДОГО коммита сегодняшнего обзора; итоговая запись summary нужна всегда. ` +
-    `Только коммиты, которые ЗАКРЫВАЮТ задачу целиком. Статус задачи ставит сервер.`;
+    `ОТВЕТ: верни СТРОГО JSON-объект только с полем matches:\n` +
+    `{"matches":[{"taskId":"<реальный id черновика>","commitSha":"<полный sha>",` +
+    `"reason":"<кратко почему этот коммит закрывает задачу>"}]}\n` +
+    `Только коммиты, которые ЗАКРЫВАЮТ задачу целиком. Если совпадений нет — верни {"matches":[]}. ` +
+    `Статус задачи ставит сервер.`;
 
   if (context.length > MAX_CONTEXT_CHARS) {
     const responseStart = context.indexOf('\n\nОТВЕТ:');

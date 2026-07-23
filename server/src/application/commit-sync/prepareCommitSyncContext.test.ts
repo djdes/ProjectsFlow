@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { prepareCommitSyncContext } from './prepareCommitSyncContext.js';
 
-test('commit context requires a verdict for every reviewed commit and keeps author metadata', () => {
+test('commit context asks only to match drafts with commits — no significance review', () => {
   const now = new Date('2026-07-17T14:00:00.000Z'); // Friday 17:00 MSK
   const result = prepareCommitSyncContext({
-    tasks: [],
+    tasks: [{ id: 't1', description: 'Экспорт заказов\nдетали', status: 'backlog' } as never],
     thresholdHours: 24,
     now,
     commits: [
@@ -18,29 +18,24 @@ test('commit context requires a verdict for every reviewed commit and keeps auth
         committedAt: new Date('2026-07-17T10:00:00.000Z'),
         htmlUrl: 'https://github.test/a',
       },
-      {
-        sha: 'b'.repeat(40),
-        message: 'fix: payment retry',
-        authorName: 'Boris Dev',
-        authorLogin: 'boris-dev',
-        authorAvatarUrl: null,
-        committedAt: new Date('2026-07-16T20:00:00.000Z'),
-        htmlUrl: 'https://github.test/b',
-      },
     ],
   });
 
-  assert.match(result.context, /КОММИТЫ ДЛЯ СЕГОДНЯШНЕГО ОБЗОРА/);
-  assert.match(result.context, /Проверь КАЖДЫЙ коммит/);
-  assert.match(result.context, /ровно одну такую запись для КАЖДОГО коммита/);
-  assert.match(result.context, /__commit_review__:good\|attention/);
-  assert.match(result.context, /__commit_review_summary__/);
+  // Только сопоставление задача↔коммит.
+  assert.match(result.context, /Сопоставь задачи-черновики/);
+  assert.match(result.context, /ЗАДАЧИ \(колонка «Черновики»\)/);
+  assert.match(result.context, /taskId=t1/);
   assert.match(result.context, /author=Anna Dev \(@anna-dev\)/);
+  // Разбора коммитов на значимость больше нет.
+  assert.doesNotMatch(result.context, /__commit_review/);
+  assert.doesNotMatch(result.context, /verdict/);
+  assert.doesNotMatch(result.context, /обзор/i);
+  // Снапшот коммитов сохраняется — нужен на этапе complete для защиты от галлюцинированного sha.
   assert.equal(result.commits['a'.repeat(40)]?.authorLogin, 'anna-dev');
-  assert.equal(result.commits['b'.repeat(40)]?.htmlUrl, 'https://github.test/b');
+  assert.equal(result.commits['a'.repeat(40)]?.htmlUrl, 'https://github.test/a');
 });
 
-test('Monday review window includes the weekend', () => {
+test('commit context lists commits for matching and marks the empty draft column', () => {
   const now = new Date('2026-07-20T14:00:00.000Z');
   const result = prepareCommitSyncContext({
     tasks: [],
@@ -58,6 +53,6 @@ test('Monday review window includes the weekend', () => {
       },
     ],
   });
-  assert.match(result.context, /последние 72 ч/);
-  assert.match(result.context, new RegExp(`КОММИТЫ ДЛЯ СЕГОДНЯШНЕГО ОБЗОРА:[\\s\\S]*sha=${'c'.repeat(40)}`));
+  assert.match(result.context, new RegExp(`КОММИТЫ:[\\s\\S]*sha=${'c'.repeat(40)}`));
+  assert.match(result.context, /черновиков нет/);
 });
