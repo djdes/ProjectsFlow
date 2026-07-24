@@ -31,6 +31,9 @@ type Props = {
   onRemovePending?: (id: string) => void;
   // Активные загрузки — прогресс-бары под чипами (create И edit).
   uploads?: readonly UploadChip[];
+  // Отмена загрузки тем, кто грузит: одного файла (× на баре) и всей пачки («Отменить все»).
+  onCancelUpload?: (id: string) => void;
+  onCancelAll?: () => void;
 };
 
 // Строка вложений в ряду свойств задачи. Единый вид в create и edit: чипы файлов
@@ -44,6 +47,8 @@ export function TaskDrawerAttachmentRow({
   pending = [],
   onRemovePending,
   uploads = [],
+  onCancelUpload,
+  onCancelAll,
 }: Props): React.ReactElement | null {
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
   // id вложения, для которого идёт удаление (дизейблит кнопку + спиннер).
@@ -185,6 +190,15 @@ export function TaskDrawerAttachmentRow({
       {/* Прогресс-бары активных загрузок — прямо в строке файлов. */}
       {uploads.length > 0 && (
         <div className="flex flex-col gap-1.5">
+          {uploads.length > 1 && onCancelAll && (
+            <button
+              type="button"
+              onClick={onCancelAll}
+              className="self-start text-[11px] text-muted-foreground underline-offset-2 transition-colors hover:text-destructive hover:underline"
+            >
+              Отменить все ({uploads.length})
+            </button>
+          )}
           {uploads.map((u) => (
             <div key={u.id} className="flex items-center gap-2">
               <FileText className="size-3.5 shrink-0 text-muted-foreground" />
@@ -193,6 +207,17 @@ export function TaskDrawerAttachmentRow({
               <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{u.progress}%</span>
               {u.etaSec !== null && (
                 <span className="shrink-0 text-[10px] text-muted-foreground/70">{etaText(u.etaSec)}</span>
+              )}
+              {onCancelUpload && (
+                <button
+                  type="button"
+                  onClick={() => onCancelUpload(u.id)}
+                  className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
+                  aria-label={`Отменить загрузку ${u.name}`}
+                  title="Отменить загрузку"
+                >
+                  <X className="size-2.5" />
+                </button>
               )}
             </div>
           ))}

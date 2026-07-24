@@ -105,11 +105,13 @@ export interface TaskRepository {
   syncCommits(projectId: string): Promise<SyncCommitsResult>;
   listAttachments(projectId: string, taskId: string): Promise<TaskAttachment[]>;
   // onProgress — опциональный колбэк прогресса аплоада (loaded/total байт) для прогресс-бара.
+  // signal — опциональный AbortSignal: прерывает загрузку (кнопка «отменить» у того, кто грузит).
   uploadAttachment(
     projectId: string,
     taskId: string,
     file: File,
     onProgress?: (loaded: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<TaskAttachment>;
   deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void>;
   uploadCommentAttachment(

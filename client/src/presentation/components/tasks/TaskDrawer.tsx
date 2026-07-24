@@ -890,6 +890,16 @@ export function TaskDrawer({
   const dragDepth = useRef(0);
   // Активные аплоады (edit-mode) — прогресс-бары под рядом свойств «Файлы».
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  // AbortController'ы активных загрузок по uploadId — для кнопки «отменить» (весь файл / вся пачка).
+  const uploadControllersRef = useRef<Map<string, AbortController>>(new Map());
+  // Отменить одну загрузку по id (кнопка «×» на прогресс-баре).
+  const cancelUpload = (uploadId: string): void => {
+    uploadControllersRef.current.get(uploadId)?.abort();
+  };
+  // Отменить все текущие загрузки (кнопка «Отменить все»).
+  const cancelAllUploads = (): void => {
+    for (const controller of uploadControllersRef.current.values()) controller.abort();
+  };
   // Императивные handle'ы редакторов — для «+ Подзадача» (вставить пункт и сфокусироваться).
   const bodyEditorRef = useRef<RichTextEditorHandle>(null);
   const createEditorRef = useRef<RichTextEditorHandle>(null);
@@ -1298,12 +1308,14 @@ export function TaskDrawer({
   };
 
   // Direct upload for edit-mode (paste, drag&drop, «+ Файл»). Каждый файл получает
-  // прогресс-бар (uploads); грузим параллельно — несколько баров одновременно.
+  // прогресс-бар (uploads) с кнопкой «×» (отмена одного файла) + «Отменить все» на пачку.
   const uploadFilesDirectly = async (files: File[]): Promise<void> => {
     if (state?.mode !== 'edit') return;
     const { projectId, id } = state.task;
     const items = files.map((file) => ({ uploadId: crypto.randomUUID(), file }));
     const startedAt = Date.now();
+    // Каждой загрузке — свой AbortController (кнопки отмены дёргают их по uploadId).
+    for (const it of items) uploadControllersRef.current.set(it.uploadId, new AbortController());
     setUploads((prev) => [
       ...prev,
       ...items.map((it) => ({ id: it.uploadId, name: it.file.name, progress: 0, startedAt, etaSec: null })),
@@ -1311,23 +1323,34 @@ export function TaskDrawer({
     // Заливаем с ограничением параллелизма: мало файлов — все разом (как раньше), от порога —
     // не больше UPLOAD_CONCURRENCY одновременно, чтобы пачка не забивала аплинк (см. pace.ts).
     await runFilesLimited(items, async ({ uploadId, file }) => {
+      const controller = uploadControllersRef.current.get(uploadId);
       try {
-        await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
-          setUploads((prev) =>
-            prev.map((u) =>
-              u.id === uploadId
-                ? {
-                    ...u,
-                    progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
-                    etaSec: computeEtaSec(u.startedAt, loaded, total),
-                  }
-                : u,
-            ),
-          );
-        });
+        await taskRepository.uploadAttachment(
+          projectId,
+          id,
+          file,
+          (loaded, total) => {
+            setUploads((prev) =>
+              prev.map((u) =>
+                u.id === uploadId
+                  ? {
+                      ...u,
+                      progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                      etaSec: computeEtaSec(u.startedAt, loaded, total),
+                    }
+                  : u,
+              ),
+            );
+          },
+          controller?.signal,
+        );
       } catch (err) {
-        toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
+        // Отмена пользователем — не ошибка, тост не показываем.
+        if (!controller?.signal.aborted) {
+          toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
+        }
       } finally {
+        uploadControllersRef.current.delete(uploadId);
         setUploads((prev) => prev.filter((u) => u.id !== uploadId));
       }
     });
@@ -1511,29 +1534,41 @@ export function TaskDrawer({
       // С ПРОГРЕСС-БАРОМ (тот же uploads-стейт + инлайн-бар в строке «Файлы», что и в edit).
       if (state?.mode === 'create' && pendingFiles.length > 0) {
         const startedAt = Date.now();
+        // Свой AbortController на файл — те же кнопки отмены, что и в edit-режиме.
+        for (const pf of pendingFiles) uploadControllersRef.current.set(pf.id, new AbortController());
         setUploads(
           pendingFiles.map((pf) => ({ id: pf.id, name: pf.file.name, progress: 0, startedAt, etaSec: null })),
         );
         let ok = 0;
         for (const pf of pendingFiles) {
+          const controller = uploadControllersRef.current.get(pf.id);
           try {
-            await taskRepository.uploadAttachment(task.projectId, task.id, pf.file, (loaded, total) => {
-              setUploads((prev) =>
-                prev.map((u) =>
-                  u.id === pf.id
-                    ? {
-                        ...u,
-                        progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
-                        etaSec: computeEtaSec(u.startedAt, loaded, total),
-                      }
-                    : u,
-                ),
-              );
-            });
+            await taskRepository.uploadAttachment(
+              task.projectId,
+              task.id,
+              pf.file,
+              (loaded, total) => {
+                setUploads((prev) =>
+                  prev.map((u) =>
+                    u.id === pf.id
+                      ? {
+                          ...u,
+                          progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                          etaSec: computeEtaSec(u.startedAt, loaded, total),
+                        }
+                      : u,
+                  ),
+                );
+              },
+              controller?.signal,
+            );
             ok += 1;
           } catch (err) {
-            toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+            if (!controller?.signal.aborted) {
+              toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+            }
           } finally {
+            uploadControllersRef.current.delete(pf.id);
             setUploads((prev) => prev.filter((u) => u.id !== pf.id));
           }
         }
@@ -2225,6 +2260,8 @@ export function TaskDrawer({
                           }}
                           onDelete={deleteAttachmentDirectly}
                           uploads={uploads}
+                          onCancelUpload={cancelUpload}
+                          onCancelAll={cancelAllUploads}
                         />
                       </div>
                     ),
@@ -2604,6 +2641,8 @@ export function TaskDrawer({
                           })
                         }
                         uploads={uploads}
+                        onCancelUpload={cancelUpload}
+                        onCancelAll={cancelAllUploads}
                       />
                     </div>
                   </PropertyRow>

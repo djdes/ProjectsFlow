@@ -140,14 +140,22 @@ function uploadFile(
   url: string,
   file: File,
   onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<TaskAttachment> {
   return new Promise<TaskAttachment>((resolve, reject) => {
+    // Уже отменили до старта (в очереди троттлинга дошла до отменённого файла) — не шлём запрос.
+    if (signal?.aborted) {
+      reject(new Error('Загрузка отменена'));
+      return;
+    }
     const form = new FormData();
     form.append('file', file);
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
     xhr.withCredentials = true;
+    // Отмена: кнопка «×» у того, кто грузит, дёргает signal → прерываем XHR (xhr.onabort ниже).
+    if (signal) signal.addEventListener('abort', () => xhr.abort(), { once: true });
 
     if (onProgress) {
       xhr.upload.onprogress = (e: ProgressEvent): void => {
@@ -305,8 +313,14 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     file: File,
     onProgress?: (loaded: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<TaskAttachment> {
-    return uploadFile(`/api/projects/${projectId}/tasks/${taskId}/attachments`, file, onProgress);
+    return uploadFile(
+      `/api/projects/${projectId}/tasks/${taskId}/attachments`,
+      file,
+      onProgress,
+      signal,
+    );
   }
   async deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void> {
     await httpClient.delete<void>(
