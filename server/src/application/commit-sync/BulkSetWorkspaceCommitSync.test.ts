@@ -8,10 +8,10 @@ import { WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
 const WORKSPACE_ID = 'workspace-1';
 const MEMBER_ID = 'member-1';
 
-type BulkArgs = Parameters<AutomationRepository['bulkSetCommitSync']>[1];
+type ScheduleArgs = Parameters<AutomationRepository['bulkSetCommitSyncSchedule']>[1];
 
 function makeUseCase() {
-  let lastArgs: BulkArgs | null = null;
+  let lastArgs: ScheduleArgs | null = null;
 
   const workspaces = {
     async getMembership(workspaceId: string, userId: string) {
@@ -21,11 +21,11 @@ function makeUseCase() {
   } as unknown as WorkspaceRepository;
 
   const automation = {
-    async bulkSetCommitSync(_workspaceId: string, input: BulkArgs) {
+    async bulkSetCommitSyncSchedule(_workspaceId: string, input: ScheduleArgs) {
       lastArgs = input;
       return 3;
     },
-  } as unknown as Pick<AutomationRepository, 'bulkSetCommitSync'>;
+  } as unknown as Pick<AutomationRepository, 'bulkSetCommitSyncSchedule'>;
 
   return {
     useCase: new BulkSetWorkspaceCommitSync({ workspaces, automation }),
@@ -33,11 +33,10 @@ function makeUseCase() {
   };
 }
 
-test('bulk commit-sync propagates the mode to all projects', async () => {
+test('bulk commit-sync applies the shared schedule to all projects (no enabled)', async () => {
   const { useCase, getLastArgs } = makeUseCase();
 
   const { affected } = await useCase.execute(WORKSPACE_ID, MEMBER_ID, {
-    enabled: true,
     hour: 18,
     minute: 30,
     daysOfWeek: [1, 2, 3],
@@ -46,15 +45,17 @@ test('bulk commit-sync propagates the mode to all projects', async () => {
 
   assert.equal(affected, 3);
   assert.equal(getLastArgs()?.action, 'auto');
-  assert.equal(getLastArgs()?.enabled, true);
+  assert.equal(getLastArgs()?.hour, 18);
+  assert.equal(getLastArgs()?.minute, 30);
   assert.deepEqual([...(getLastArgs()?.daysOfWeek ?? [])], [1, 2, 3]);
+  // enabled больше не часть расписания — режим/время не должны нести флаг включённости.
+  assert.equal('enabled' in (getLastArgs() as object), false);
 });
 
 test('bulk commit-sync treats an empty day list as every day', async () => {
   const { useCase, getLastArgs } = makeUseCase();
 
   await useCase.execute(WORKSPACE_ID, MEMBER_ID, {
-    enabled: false,
     hour: 17,
     minute: 0,
     daysOfWeek: [],
@@ -71,7 +72,6 @@ test('bulk commit-sync stays closed to non-members', async () => {
   await assert.rejects(
     () =>
       useCase.execute(WORKSPACE_ID, 'outsider', {
-        enabled: true,
         hour: 17,
         minute: 0,
         daysOfWeek: [1, 2, 3, 4, 5],

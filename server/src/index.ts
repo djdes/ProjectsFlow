@@ -264,6 +264,8 @@ import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceA
 import { TelegramDigestActionService } from './application/digest/TelegramDigestActionService.js';
 import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
 import { BulkSetWorkspaceCommitSync } from './application/commit-sync/BulkSetWorkspaceCommitSync.js';
+import { ListWorkspaceCommitSyncProjects } from './application/commit-sync/ListWorkspaceCommitSyncProjects.js';
+import { SetWorkspaceCommitSyncProjects } from './application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
@@ -1703,8 +1705,17 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   send: sendWorkspaceAssigneeDigest,
   projects: projectRepo,
 });
-// Мастер-действие «включить сверку коммитов по всем проектам пространства» (db/141).
+// Применить общее расписание сверки коммитов ко всем проектам пространства (db/141).
 const bulkSetWorkspaceCommitSync = new BulkSetWorkspaceCommitSync({
+  workspaces: workspaceRepo,
+  automation: automationRepo,
+});
+// Чеклист «какие проекты пространства включены в сверку» (пер-проектный commit_sync_enabled).
+const listWorkspaceCommitSyncProjects = new ListWorkspaceCommitSyncProjects({
+  workspaces: workspaceRepo,
+  automation: automationRepo,
+});
+const setWorkspaceCommitSyncProjects = new SetWorkspaceCommitSyncProjects({
   workspaces: workspaceRepo,
   automation: automationRepo,
 });
@@ -1975,6 +1986,8 @@ const { app, devProxyUpgrade } = createApp({
     service: workspaceService,
     assigneeDigest: manageWorkspaceAssigneeDigest,
     bulkCommitSync: bulkSetWorkspaceCommitSync,
+    listCommitSyncProjects: listWorkspaceCommitSyncProjects,
+    setCommitSyncProjects: setWorkspaceCommitSyncProjects,
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo,

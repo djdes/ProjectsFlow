@@ -55,17 +55,27 @@ export interface WorkspaceRepository {
   sendAssigneeDigestNow(id: string): Promise<WorkspaceAssigneeDigestSendResult>;
   listAssigneeDigestGroups(id: string): Promise<WorkspaceAssigneeDigestGroup[]>;
   resolveAssigneeDigestGroup(id: string, chatId: number): Promise<{ title: string | null }>;
-  // Мастер-действие: включить/выключить сверку коммитов во ВСЕХ проектах пространства + задать
-  // время/дни. Возвращает число затронутых проектов.
+  // Применить ОБЩЕЕ расписание сверки коммитов (время/дни/режим) ко ВСЕМ проектам пространства.
+  // Включённость проектов сюда НЕ входит — она пер-проектная (см. setCommitSyncProjects).
+  // Возвращает число затронутых проектов.
   applyCommitSyncToAll(
     id: string,
     input: {
-      enabled: boolean;
       hour: number;
       minute: number;
       daysOfWeek: readonly number[];
       // Режим сверки: 'auto' — переносить задачи, 'propose' — только оповещать.
       action: 'propose' | 'auto';
     },
+  ): Promise<{ affected: number }>;
+  // Проекты пространства + их пер-проектный флаг «включён в сверку коммитов» (для чеклиста).
+  listCommitSyncProjects(
+    id: string,
+  ): Promise<Array<{ id: string; name: string; icon: string | null; commitSyncEnabled: boolean }>>;
+  // Записать пер-проектную включённость сверки из чеклиста: проекты из списка включаются,
+  // остальные проекты пространства выключаются. Возвращает число затронутых проектов.
+  setCommitSyncProjects(
+    id: string,
+    enabledProjectIds: readonly string[],
   ): Promise<{ affected: number }>;
 }

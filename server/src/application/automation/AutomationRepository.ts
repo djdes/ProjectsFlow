@@ -90,18 +90,40 @@ export type AutomationRepository = {
       readonly lastRunOn: string | null;
     }>
   >;
-  // Массово включить/выключить сверку у ВСЕХ проектов пространства + задать время/дни (db/141).
-  // Мастер-действие из окна пространства «включить сверку по всем». Возвращает число затронутых.
-  bulkSetCommitSync(
+  // Применить ОБЩЕЕ расписание сверки (время/дни/режим) ко ВСЕМ проектам пространства (db/141).
+  // Enabled НЕ трогается: включённость проектов — пер-проектная, задаётся из чеклиста через
+  // setCommitSyncEnabledProjects. Сбрасывает commit_sync_last_run_on (смена времени → пере-арм).
+  // На вставку новой строки (у проекта не было автоматизации) enabled=false, чтобы расписание
+  // не включало сверку молча. Возвращает число затронутых проектов.
+  bulkSetCommitSyncSchedule(
     workspaceId: string,
     input: {
-      readonly enabled: boolean;
       readonly hour: number;
       readonly minute: number;
       readonly daysOfWeek: readonly number[];
       // Режим сверки: 'auto' — переносить задачи, 'propose' — только оповещать.
       readonly action: 'propose' | 'auto';
     },
+  ): Promise<number>;
+  // Проекты пространства (без «Входящих») с их пер-проектным флагом commit_sync_enabled
+  // (left join project_automation, дефолт false при отсутствии строки). Для чеклиста в UI.
+  listWorkspaceProjectsCommitSync(
+    workspaceId: string,
+  ): Promise<
+    ReadonlyArray<{
+      readonly id: string;
+      readonly name: string;
+      readonly icon: string | null;
+      readonly commitSyncEnabled: boolean;
+    }>
+  >;
+  // Пер-проектная включённость сверки из чеклиста: для проектов из enabledProjectIds
+  // commit_sync_enabled=true, для остальных проектов пространства — false (строка создаётся
+  // при необходимости). У проектов, переходящих OFF→ON, сбрасывает commit_sync_last_run_on,
+  // чтобы новосверяемый проект запустился на следующем тике. Возвращает число затронутых проектов.
+  setCommitSyncEnabledProjects(
+    workspaceId: string,
+    enabledProjectIds: readonly string[],
   ): Promise<number>;
   // Пометить commit-sync прогон выполненным сегодня (МSK-дата 'YYYY-MM-DD').
   markCommitSyncRun(projectId: string, dateMsk: string): Promise<void>;

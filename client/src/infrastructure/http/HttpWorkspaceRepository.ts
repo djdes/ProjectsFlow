@@ -226,7 +226,6 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
   async applyCommitSyncToAll(
     id: string,
     input: {
-      enabled: boolean;
       hour: number;
       minute: number;
       daysOfWeek: readonly number[];
@@ -234,5 +233,23 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
     },
   ): Promise<{ affected: number }> {
     return httpClient.post(`/workspaces/${id}/commit-sync/apply-all`, input);
+  }
+
+  async listCommitSyncProjects(
+    id: string,
+  ): Promise<Array<{ id: string; name: string; icon: string | null; commitSyncEnabled: boolean }>> {
+    const { projects } = await httpClient.get<{
+      projects: Array<{ id: string; name: string; icon: string | null; commitSyncEnabled: boolean }>;
+    }>(`/workspaces/${id}/commit-sync/projects`);
+    return projects;
+  }
+
+  async setCommitSyncProjects(
+    id: string,
+    enabledProjectIds: readonly string[],
+  ): Promise<{ affected: number }> {
+    return httpClient.put(`/workspaces/${id}/commit-sync/projects`, {
+      enabledProjectIds: [...enabledProjectIds],
+    });
   }
 }

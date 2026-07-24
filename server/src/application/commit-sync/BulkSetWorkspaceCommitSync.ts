@@ -4,11 +4,10 @@ import type { AutomationRepository } from '../automation/AutomationRepository.js
 
 type Deps = {
   readonly workspaces: WorkspaceRepository;
-  readonly automation: Pick<AutomationRepository, 'bulkSetCommitSync'>;
+  readonly automation: Pick<AutomationRepository, 'bulkSetCommitSyncSchedule'>;
 };
 
 export type BulkSetWorkspaceCommitSyncInput = {
-  readonly enabled: boolean;
   readonly hour: number;
   readonly minute: number;
   readonly daysOfWeek: readonly number[];
@@ -17,13 +16,12 @@ export type BulkSetWorkspaceCommitSyncInput = {
 };
 
 /**
- * Мастер-действие пространства «включить сверку коммитов по всем проектам».
+ * Применить ОБЩЕЕ расписание сверки коммитов (время/дни/режим) ко всем проектам пространства.
  *
- * Пишет тумблер + время + дни во ВСЕ проекты пространства разом, а не хранит отдельную
- * воркспейс-настройку: пользователь просил, чтобы «включилось во всех окнах автоматизаций
- * проектов». То есть это не второй источник правды, а bulk-запись per-project конфига —
- * дальше каждый проект гоняется своим CommitSyncScheduler по этим значениям, и его окно
- * автоматизации показывает ровно то, что применили.
+ * Расписание в модели общее: одно на пространство, применяется во все окна автоматизаций
+ * проектов. Включённость же (какие проекты сверяются) — пер-проектная и задаётся отдельно из
+ * чеклиста (SetWorkspaceCommitSyncProjects). Поэтому здесь enabled НЕ трогается — только
+ * время/дни/режим, дальше каждый проект гоняется своим CommitSyncScheduler.
  *
  * Гейт — участник пространства (как у настроек дайджеста). Возвращает число затронутых проектов.
  */
@@ -38,8 +36,7 @@ export class BulkSetWorkspaceCommitSync {
     await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
     // Пустой список дней бессмыслен (сверка не запустится никогда) — трактуем как «каждый день».
     const days = input.daysOfWeek.length > 0 ? input.daysOfWeek : [0, 1, 2, 3, 4, 5, 6];
-    const affected = await this.deps.automation.bulkSetCommitSync(workspaceId, {
-      enabled: input.enabled,
+    const affected = await this.deps.automation.bulkSetCommitSyncSchedule(workspaceId, {
       hour: input.hour,
       minute: input.minute,
       daysOfWeek: days,

@@ -9,6 +9,8 @@ import type { ListWorkspaceInvites } from '../../application/workspace/ListWorks
 import type { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
 import type { ManageWorkspaceAssigneeDigest } from '../../application/digest/ManageWorkspaceAssigneeDigest.js';
 import type { BulkSetWorkspaceCommitSync } from '../../application/commit-sync/BulkSetWorkspaceCommitSync.js';
+import type { ListWorkspaceCommitSyncProjects } from '../../application/commit-sync/ListWorkspaceCommitSyncProjects.js';
+import type { SetWorkspaceCommitSyncProjects } from '../../application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { z } from 'zod';
 import {
@@ -23,14 +25,19 @@ import {
   updateWorkspaceSchema,
 } from './schemas.js';
 
-// Мастер-действие «включить сверку коммитов по всем проектам пространства».
+// Применить ОБЩЕЕ расписание сверки (время/дни/режим) ко всем проектам пространства.
+// Enabled здесь нет: включённость пер-проектная, задаётся отдельным чеклист-эндпоинтом.
 const bulkCommitSyncSchema = z.object({
-  enabled: z.boolean(),
   hour: z.number().int().min(0).max(23).default(17),
   minute: z.number().int().min(0).max(59).default(0),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7).default([0, 1, 2, 3, 4, 5, 6]),
   // Режим сверки: 'auto' — переносить задачи, 'propose' — только оповещать.
   action: z.enum(['propose', 'auto']).default('propose'),
+});
+
+// Пер-проектная включённость сверки из чеклиста: список id включённых проектов.
+const setCommitSyncProjectsSchema = z.object({
+  enabledProjectIds: z.array(z.string()).max(1000).default([]),
 });
 
 type WorkspaceDto = {
@@ -127,6 +134,8 @@ type Deps = {
   };
   readonly assigneeDigest: ManageWorkspaceAssigneeDigest;
   readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
+  readonly listCommitSyncProjects: ListWorkspaceCommitSyncProjects;
+  readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
   readonly appUrl: string;
 };
 
@@ -250,8 +259,8 @@ export function workspacesRouter(deps: Deps): Router {
     },
   );
 
-  // POST /:id/commit-sync/apply-all — включить/выключить сверку коммитов во ВСЕХ проектах
-  // пространства разом + задать время и дни. Каждый проект дальше гоняется своим расписанием.
+  // POST /:id/commit-sync/apply-all — применить ОБЩЕЕ расписание сверки (время/дни/режим) ко
+  // всем проектам пространства. Включённость проектов не трогается — она пер-проектная (ниже).
   router.post(
     '/:id/commit-sync/apply-all',
     async (req: Request, res: Response, next: NextFunction) => {
@@ -261,6 +270,41 @@ export function workspacesRouter(deps: Deps): Router {
           req.params.id as string,
           req.user!.id,
           body,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // GET /:id/commit-sync/projects — проекты пространства + пер-проектный флаг сверки (чеклист).
+  router.get(
+    '/:id/commit-sync/projects',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projects = await deps.listCommitSyncProjects.execute(
+          req.params.id as string,
+          req.user!.id,
+        );
+        res.json({ projects });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // PUT /:id/commit-sync/projects — пер-проектная включённость сверки из чеклиста: проекты из
+  // списка включаются, остальные проекты пространства выключаются.
+  router.put(
+    '/:id/commit-sync/projects',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = setCommitSyncProjectsSchema.parse(req.body);
+        const result = await deps.setCommitSyncProjects.execute(
+          req.params.id as string,
+          req.user!.id,
+          body.enabledProjectIds,
         );
         res.json(result);
       } catch (error) {
