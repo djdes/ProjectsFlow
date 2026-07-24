@@ -12,6 +12,8 @@ export type BulkSetWorkspaceCommitSyncInput = {
   readonly hour: number;
   readonly minute: number;
   readonly daysOfWeek: readonly number[];
+  // Режим сверки: 'auto' — переносить задачи автоматически, 'propose' — только оповещать.
+  readonly action: 'propose' | 'auto';
 };
 
 /**
@@ -41,6 +43,7 @@ export class BulkSetWorkspaceCommitSync {
       hour: input.hour,
       minute: input.minute,
       daysOfWeek: days,
+      action: input.action,
     });
     return { affected };
   }

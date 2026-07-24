@@ -29,6 +29,8 @@ const bulkCommitSyncSchema = z.object({
   hour: z.number().int().min(0).max(23).default(17),
   minute: z.number().int().min(0).max(59).default(0),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7).default([0, 1, 2, 3, 4, 5, 6]),
+  // Режим сверки: 'auto' — переносить задачи, 'propose' — только оповещать.
+  action: z.enum(['propose', 'auto']).default('propose'),
 });
 
 type WorkspaceDto = {

@@ -99,6 +99,8 @@ export type AutomationRepository = {
       readonly hour: number;
       readonly minute: number;
       readonly daysOfWeek: readonly number[];
+      // Режим сверки: 'auto' — переносить задачи, 'propose' — только оповещать.
+      readonly action: 'propose' | 'auto';
     },
   ): Promise<number>;
   // Пометить commit-sync прогон выполненным сегодня (МSK-дата 'YYYY-MM-DD').

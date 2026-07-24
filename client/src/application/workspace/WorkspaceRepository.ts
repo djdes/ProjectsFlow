@@ -59,6 +59,13 @@ export interface WorkspaceRepository {
   // время/дни. Возвращает число затронутых проектов.
   applyCommitSyncToAll(
     id: string,
-    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+    input: {
+      enabled: boolean;
+      hour: number;
+      minute: number;
+      daysOfWeek: readonly number[];
+      // Режим сверки: 'auto' — переносить задачи, 'propose' — только оповещать.
+      action: 'propose' | 'auto';
+    },
   ): Promise<{ affected: number }>;
 }

@@ -48,6 +48,7 @@ import type {
   WorkspaceAssigneeDigestGroup,
   WorkspaceAssigneeDigestMember,
   WorkspaceAssigneeDigestRecipientMode,
+  WorkspaceCommitSyncAction,
   WorkspaceDigestProjectMode,
 } from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { useContainer } from '@/infrastructure/di/container';
@@ -235,6 +236,7 @@ type AssigneeDigestDraft = {
   commitSyncEnabled: boolean;
   commitSyncHour: number;
   commitSyncMinute: number;
+  commitSyncAction: WorkspaceCommitSyncAction;
   eodReminderEnabled: boolean;
   eodReminderHour: number;
   eodReminderMinute: number;
@@ -285,6 +287,7 @@ function AssigneeDigestCard({
           commitSyncEnabled: result.settings.commitSyncEnabled,
           commitSyncHour: result.settings.commitSyncHour,
           commitSyncMinute: result.settings.commitSyncMinute,
+          commitSyncAction: result.settings.commitSyncAction,
           eodReminderEnabled: result.settings.eodReminderEnabled,
           eodReminderHour: result.settings.eodReminderHour,
           eodReminderMinute: result.settings.eodReminderMinute,
@@ -363,6 +366,7 @@ function AssigneeDigestCard({
         commitSyncEnabled: draft.commitSyncEnabled,
         commitSyncHour: draft.commitSyncHour,
         commitSyncMinute: draft.commitSyncMinute,
+        commitSyncAction: draft.commitSyncAction,
         eodReminderEnabled: draft.eodReminderEnabled,
         eodReminderHour: draft.eodReminderHour,
         eodReminderMinute: draft.eodReminderMinute,
@@ -378,6 +382,7 @@ function AssigneeDigestCard({
         commitSyncEnabled: settings.commitSyncEnabled,
         commitSyncHour: settings.commitSyncHour,
         commitSyncMinute: settings.commitSyncMinute,
+        commitSyncAction: settings.commitSyncAction,
         eodReminderEnabled: settings.eodReminderEnabled,
         eodReminderHour: settings.eodReminderHour,
         eodReminderMinute: settings.eodReminderMinute,
@@ -426,7 +431,7 @@ function AssigneeDigestCard({
     }
   };
 
-  // Мастер-действие: применить сверку коммитов (вкл/выкл + время + дни) КО ВСЕМ проектам
+  // Мастер-действие: применить сверку коммитов (вкл/выкл + время + дни + режим) КО ВСЕМ проектам
   // пространства разом. Пишет per-project конфиг напрямую, поэтому в каждом окне автоматизации
   // отразится именно это. Дни берём из общего набора «Дни отправки» (draft.daysOfWeek).
   const applyCommitSyncToAll = async (): Promise<void> => {
@@ -438,6 +443,7 @@ function AssigneeDigestCard({
         hour: draft.commitSyncHour,
         minute: draft.commitSyncMinute,
         daysOfWeek: draft.daysOfWeek,
+        action: draft.commitSyncAction,
       });
       toast.success(
         draft.commitSyncEnabled
@@ -670,6 +676,51 @@ function AssigneeDigestCard({
                 <span className="text-xs text-muted-foreground">
                   расписание сверки по умолчанию для всех проектов
                 </span>
+                <div className="flex w-full flex-col gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Что делать при совпадении коммитов
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        {
+                          value: 'auto',
+                          title: 'Переносить автоматически',
+                          hint: 'Задачи с совпавшими коммитами закрываются сами.',
+                        },
+                        {
+                          value: 'propose',
+                          title: 'Просто оповестить',
+                          hint: 'Бот предложит закрыть — переносите вручную.',
+                        },
+                      ] as const
+                    ).map((option) => (
+                      <label
+                        key={option.value}
+                        className={cn(
+                          'flex min-w-[13rem] flex-1 items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
+                          draft.commitSyncAction === option.value
+                            ? 'border-primary bg-primary/5'
+                            : 'border-input hover:bg-accent',
+                          canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name={`commit-sync-action-${workspaceId}`}
+                          className="mt-0.5"
+                          checked={draft.commitSyncAction === option.value}
+                          disabled={!canManage}
+                          onChange={() => update({ commitSyncAction: option.value })}
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-medium text-foreground">{option.title}</span>
+                          <span className="block text-xs text-muted-foreground">{option.hint}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -681,9 +732,9 @@ function AssigneeDigestCard({
                   Применить ко всем проектам
                 </Button>
                 <span className="w-full text-xs text-muted-foreground">
-                  Запишет тумблер, время и дни (из «Дней отправки» ниже) во все проекты
-                  пространства — в каждом окне автоматизации отразится это. Дальше каждый проект
-                  можно донастроить отдельно.
+                  Запишет тумблер, время, дни (из «Дней отправки» ниже) и режим сверки во все
+                  проекты пространства — в каждом окне автоматизации отразится это. Дальше каждый
+                  проект можно донастроить отдельно.
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">

@@ -1720,6 +1720,8 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
     commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(false),
     commitSyncHour: tinyint('commit_sync_hour').notNull().default(17),
     commitSyncMinute: tinyint('commit_sync_minute').notNull().default(0),
+    // Режим сверки коммитов пространства: 'auto' — переносить задачи, 'propose' — только оповещать.
+    commitSyncAction: mysqlEnum('commit_sync_action', ['propose', 'auto']).notNull().default('propose'),
     commitSyncLastSentOn: date('commit_sync_last_sent_on', { mode: 'string' }),
     eodReminderEnabled: boolean('eod_reminder_enabled').notNull().default(false),
     eodReminderHour: tinyint('eod_reminder_hour').notNull().default(17),

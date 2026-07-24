@@ -1,5 +1,6 @@
 import type {
   WorkspaceAssigneeDigestRecipientMode,
+  WorkspaceCommitSyncAction,
   WorkspaceDigestProjectMode,
   WorkspaceAssigneeDigestSettings,
 } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
@@ -23,6 +24,7 @@ export type SaveWorkspaceAssigneeDigestSettingsInput = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  readonly commitSyncAction: WorkspaceCommitSyncAction;
   readonly eodReminderEnabled: boolean;
   readonly eodReminderHour: number;
   readonly eodReminderMinute: number;

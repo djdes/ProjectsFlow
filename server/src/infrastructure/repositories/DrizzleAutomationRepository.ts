@@ -210,7 +210,13 @@ export class DrizzleAutomationRepository implements AutomationRepository {
   // Остальные поля новой строки берут дефолты БД. Затрагивает только проекты этого пространства.
   async bulkSetCommitSync(
     workspaceId: string,
-    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+    input: {
+      enabled: boolean;
+      hour: number;
+      minute: number;
+      daysOfWeek: readonly number[];
+      action: 'propose' | 'auto';
+    },
   ): Promise<number> {
     const rows = await this.db
       .select({ id: projects.id })
@@ -226,6 +232,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
           commitSyncHour: input.hour,
           commitSyncMinute: input.minute,
           commitSyncDays: days,
+          commitSyncAction: input.action,
         })
         .onDuplicateKeyUpdate({
           set: {
@@ -233,6 +240,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
             commitSyncHour: input.hour,
             commitSyncMinute: input.minute,
             commitSyncDays: days,
+            commitSyncAction: input.action,
           },
         });
     }

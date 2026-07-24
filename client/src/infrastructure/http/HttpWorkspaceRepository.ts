@@ -225,7 +225,13 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
 
   async applyCommitSyncToAll(
     id: string,
-    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+    input: {
+      enabled: boolean;
+      hour: number;
+      minute: number;
+      daysOfWeek: readonly number[];
+      action: 'propose' | 'auto';
+    },
   ): Promise<{ affected: number }> {
     return httpClient.post(`/workspaces/${id}/commit-sync/apply-all`, input);
   }
