@@ -385,13 +385,16 @@ export function AssignedToMeBlock({
   // тогда карточка сразу попадает в эту же колонку. Без модального окна (как «+» на доске).
   const [composingProject, setComposingProject] = useState<string | null>(null);
   const createInProjectColumn = useCallback(
-    async (projectId: string, title: string): Promise<void> => {
+    async (projectId: string, projectName: string, title: string): Promise<void> => {
       if (!user) return;
       await taskRepository.create(projectId, {
         description: title,
         status: 'backlog',
         assigneeUserId: user.id,
       });
+      // Задача назначена на меня → живёт во вкладке «Мои». Тост, чтобы создание с вкладки
+      // «Для всех» не выглядело «беззвучным» (карточка появляется в соседней вкладке).
+      toast.success(`Создано в «${projectName}» · вкладка «Мои»`);
       await refresh();
       onChanged?.();
     },
@@ -945,11 +948,6 @@ export function AssignedToMeBlock({
             «кому». Во время drag добавляется тихая подпись-подсказка слева. */}
         {members.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 px-0.5">
-            {dragActive && (
-              <span className="mr-0.5 shrink-0 text-[11px] font-medium text-primary/70">
-                Перетащите на участника →
-              </span>
-            )}
             {members.map((m) => (
               <UserCube
                 key={m.id}
@@ -1083,10 +1081,11 @@ export function AssignedToMeBlock({
             // #2 (af1ebf44): колонка = реальный проект (группировка по проекту, не «Личные»).
             // Тогда её название кликабельно (→ страница проекта), а по ховеру доступна «+».
             const isProjectColumn = grouping === 'project' && !group.isInbox;
-            // «+» создаёт задачу в этом проекте на текущего юзера — осмысленно только на
-            // вкладке «Для меня» и там, где у юзера есть право менять (есть свои задачи).
-            const canQuickAdd =
-              isProjectColumn && tab === 'toMe' && group.items.some((i) => i.canModify);
+            // «+» на колонке-проекте — на ОБЕИХ вкладках («Мои» И «Для всех»: юзер спросил
+            // «где плюсы» на «Для всех»). Гейт по canModify: показываем там, где у юзера есть
+            // право менять задачи проекта (≈ право создавать). Задача создаётся в этом проекте
+            // на текущего юзера, поэтому попадёт во вкладку «Мои» (о чём говорит тост).
+            const canQuickAdd = isProjectColumn && group.items.some((i) => i.canModify);
             return (
             <GroupDropColumn
               key={group.key}
@@ -1143,7 +1142,7 @@ export function AssignedToMeBlock({
                 {/* #2: инлайн-создание сверху колонки-проекта (как «+» на доске), без окна. */}
                 {composingProject === group.key && (
                   <InlineQuickAdd
-                    onCreate={(title) => createInProjectColumn(group.key, title)}
+                    onCreate={(title) => createInProjectColumn(group.key, group.label, title)}
                     onClose={() => setComposingProject(null)}
                   />
                 )}
