@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import type { CommitSyncJob, CommitSyncStatus } from '../../domain/commit-sync/CommitSyncJob.js';
 import type {
@@ -183,17 +183,48 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
   async cancelStale(input: {
     olderThan: Date;
     statuses: ReadonlyArray<Extract<CommitSyncStatus, 'queued' | 'running'>>;
+    onlyUnbatched?: boolean;
   }): Promise<number> {
+    const conditions = [
+      inArray(commitSyncJobs.status, [...input.statuses] as CommitSyncStatus[]),
+      lt(commitSyncJobs.createdAt, input.olderThan),
+    ];
+    // Manual «Сверить сейчас» has no batch/progress → age-cancel only unbatched rows, so a big
+    // batch that a slow runner is still clearing is never swept out from under it here.
+    if (input.onlyUnbatched) conditions.push(isNull(commitSyncJobs.batchKey));
     const result = await this.db
       .update(commitSyncJobs)
       .set({ status: 'cancelled', error: 'dispatcher_timeout', finishedAt: sql`CURRENT_TIMESTAMP` })
-      .where(
-        and(
-          inArray(commitSyncJobs.status, [...input.statuses] as CommitSyncStatus[]),
-          lt(commitSyncJobs.createdAt, input.olderThan),
-        ),
-      );
+      .where(and(...conditions));
     return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+  }
+
+  async cancelStalledBatches(input: { stalledBefore: Date }): Promise<number> {
+    // Cancel unfinished jobs of batches whose latest activity is older than `stalledBefore`.
+    // Last activity = GREATEST(latest finished_at, latest claimed_at); if a job was never
+    // claimed/finished its MAX is NULL, so fall back to the batch's earliest created_at (a batch
+    // is enqueued in one tick, so MIN(created_at) is effectively the batch creation time). The
+    // derived-table wrapper is required because MySQL forbids selecting from the table being
+    // updated directly.
+    const result = await this.db.execute(sql`
+      UPDATE commit_sync_jobs
+      SET status = 'cancelled', error = 'dispatcher_timeout', finished_at = CURRENT_TIMESTAMP
+      WHERE status IN ('queued', 'running')
+        AND batch_key IN (
+          SELECT batch_key FROM (
+            SELECT batch_key
+            FROM commit_sync_jobs
+            WHERE batch_key IS NOT NULL
+            GROUP BY batch_key
+            HAVING SUM(status IN ('queued', 'running')) > 0
+               AND GREATEST(
+                     IFNULL(MAX(finished_at), MIN(created_at)),
+                     IFNULL(MAX(claimed_at), MIN(created_at))
+                   ) < ${input.stalledBefore}
+          ) stalled
+        )
+    `);
+    return affectedRows(result);
   }
 
   async deleteTerminal(input: { olderThan: Date }): Promise<number> {

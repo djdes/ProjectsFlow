@@ -57,7 +57,18 @@ export type CommitSyncJobRepository = {
   cancelStale(input: {
     readonly olderThan: Date;
     readonly statuses: ReadonlyArray<Extract<CommitSyncStatus, 'queued' | 'running'>>;
+    // When true, touch only unbatched jobs (batch_key IS NULL) — the manual «Сверить сейчас»
+    // path that has no batch/progress message. Default false = every job (absolute backstop).
+    readonly onlyUnbatched?: boolean;
   }): Promise<number>;
+  /**
+   * Отменить незавершённые (queued/running) задания ЗАСТОЙНЫХ батчей. Батч застоен, если его
+   * «последняя активность» — самый свежий finished_at/claimed_at среди его заданий, а если ни
+   * одного не было — created_at батча — старше `stalledBefore`. Работающий раннер регулярно
+   * берёт/завершает задания и сбрасывает этот таймер, поэтому НИКОГДА не обрубается на полпути;
+   * а раннер, который стоит, даёт батчу перейти порог и закрыться. Возвращает число отменённых.
+   */
+  cancelStalledBatches(input: { readonly stalledBefore: Date }): Promise<number>;
   deleteTerminal(input: { readonly olderThan: Date }): Promise<number>;
 
   // --- Батчинг сводок (db/143) ---
