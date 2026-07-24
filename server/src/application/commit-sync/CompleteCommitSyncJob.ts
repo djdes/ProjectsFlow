@@ -17,6 +17,7 @@ import type { CreateCloseProposals } from '../close-proposal/CreateCloseProposal
 import type { PrepareCommitReviewResult } from './PrepareCommitReviewResult.js';
 import { serializeCommitReviewResult } from './CommitReviewResult.js';
 import type { FlushCommitSyncBatch } from './FlushCommitSyncBatch.js';
+import type { CommitSyncBatchProgress } from './CommitSyncBatchProgress.js';
 import type {
   CommitSyncSnapshot,
   CommitSyncSnapshotEntry,
@@ -39,6 +40,8 @@ type Deps = {
   readonly prepareReview?: PrepareCommitReviewResult;
   // Батчинг сводок (db/143): после завершения job'а пытаемся собрать/отправить сообщение батча.
   readonly flush?: FlushCommitSyncBatch;
+  // Живой прогресс (db/145): при завершении каждого job'а батча перерисовываем прогресс-сообщение.
+  readonly progress?: Pick<CommitSyncBatchProgress, 'refresh'>;
 };
 
 export type CompleteCommitSyncJobInput = {
@@ -234,7 +237,16 @@ export class CompleteCommitSyncJob {
 
   // Паттерн «последний гасит свет»: после завершения любого job'а даём батчу схлопнуться в одно
   // сообщение (или, для ручного прогона без batch_key, отправиться сразу). Best-effort.
+  //
+  // Перед этим — перерисовываем «прогресс-сообщение» батча (db/145) из АКТУАЛЬНОГО состояния всех
+  // job'ов (у завершённого проекта ✅/⚠️, у остальных ⏳). Финальное удаление прогресса и отправку
+  // итога делает сам сборщик внутри flush (flushBatch), поэтому здесь только edit.
   private async triggerFlush(job: CommitSyncJob): Promise<void> {
+    if (job.batchKey && this.deps.progress) {
+      await this.deps.progress
+        .refresh(job.batchKey)
+        .catch((error) => console.warn('[commit-sync] progress refresh failed', job.id, error));
+    }
     if (!this.deps.flush) return;
     await this.deps.flush
       .flushForJob(job)

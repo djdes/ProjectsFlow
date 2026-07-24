@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import type { CommitSyncJob, CommitSyncStatus } from '../../domain/commit-sync/CommitSyncJob.js';
 import type {
+  CommitSyncBatchStatus,
   CommitSyncJobRepository,
   NewCommitSyncJobInput,
   PendingCommitSyncJob,
@@ -117,6 +118,25 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
       .from(commitSyncJobs)
       .where(eq(commitSyncJobs.batchKey, batchKey));
     return rows.map(rowToJob);
+  }
+
+  async listBatchStatuses(batchKey: string): Promise<CommitSyncBatchStatus[]> {
+    const rows = await this.db
+      .select({
+        projectId: commitSyncJobs.projectId,
+        projectName: projects.name,
+        status: commitSyncJobs.status,
+        createdAt: commitSyncJobs.createdAt,
+      })
+      .from(commitSyncJobs)
+      .leftJoin(projects, eq(projects.id, commitSyncJobs.projectId))
+      .where(eq(commitSyncJobs.batchKey, batchKey))
+      .orderBy(asc(commitSyncJobs.createdAt));
+    return rows.map((r) => ({
+      projectId: r.projectId,
+      projectName: r.projectName ?? null,
+      status: r.status,
+    }));
   }
 
   async tryMarkBatchFlushed(batchKey: string): Promise<boolean> {

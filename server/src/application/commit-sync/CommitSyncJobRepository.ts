@@ -25,6 +25,14 @@ export type PendingCommitSyncJob = {
   readonly createdAt: Date;
 };
 
+// Строка для «прогресс-сообщения» батча (db/145): проект + его текущий статус. Порядок стабильный
+// (по createdAt), чтобы список проектов не «прыгал» между правками сообщения.
+export type CommitSyncBatchStatus = {
+  readonly projectId: string;
+  readonly projectName: string | null;
+  readonly status: CommitSyncStatus;
+};
+
 export type CommitSyncJobRepository = {
   create(input: NewCommitSyncJobInput): Promise<CommitSyncJob>;
   findById(id: string): Promise<CommitSyncJob | null>;
@@ -55,6 +63,11 @@ export type CommitSyncJobRepository = {
   // --- Батчинг сводок (db/143) ---
   /** Все job'ы батча (для агрегации сборщиком). */
   listByBatchKey(batchKey: string): Promise<CommitSyncJob[]>;
+  /**
+   * Проекты батча + их текущий статус для «прогресс-сообщения» (db/145). Порядок стабильный
+   * (по createdAt) — список проектов не «прыгает» между правками сообщения.
+   */
+  listBatchStatuses(batchKey: string): Promise<CommitSyncBatchStatus[]>;
   /**
    * Атомарно пометить весь батч отправленным (SET batch_flushed_at на все строки), НО только если
    * не осталось незавершённых job'ов и флаг ещё не стоял. true — этот вызов выбран сборщиком.

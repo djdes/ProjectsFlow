@@ -1,5 +1,6 @@
 import type { AutomationRepository } from '../../application/automation/AutomationRepository.js';
 import type { EnqueueCommitSyncJob } from '../../application/commit-sync/EnqueueCommitSyncJob.js';
+import type { CommitSyncBatchProgress } from '../../application/commit-sync/CommitSyncBatchProgress.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import type { WorkspaceAssigneeDigestRepository } from '../../application/digest/WorkspaceAssigneeDigestRepository.js';
 
@@ -42,6 +43,9 @@ export class CommitSyncScheduler {
       // Резолв Telegram-группы проекта для ключа батча (проект → пространство → настройки сводки).
       projects: Pick<ProjectRepository, 'getWorkspaceId'>;
       settings: Pick<WorkspaceAssigneeDigestRepository, 'get'>;
+      // Живой прогресс сверки (db/145). Опционален: после того как все job'ы батча поставлены,
+      // шлём ОДНО «прогресс-сообщение» в группу. Отсутствие — без прогресса (тесты/старый wiring).
+      progress?: Pick<CommitSyncBatchProgress, 'start'>;
     },
   ) {}
 
@@ -74,6 +78,10 @@ export class CommitSyncScheduler {
     const now = mskNow();
     const nowMin = now.hour * 60 + now.minute;
     const due = await this.deps.automation.listCommitSyncEnabled();
+    // Ключи батчей, для которых в этом тике реально поставлены job'ы — по ним после цикла шлём один
+    // прогресс на батч. Все проекты группы@время попадают в один тик (каждый метит lastRunOn=date),
+    // поэтому «батч сформирован» = конец цикла постановки.
+    const startedBatches = new Set<string>();
     for (const s of due) {
       // Не тот день недели — пропускаем (per-project дни, db/141).
       if (!s.daysOfWeek.includes(now.dayOfWeek)) continue;
@@ -83,13 +91,22 @@ export class CommitSyncScheduler {
         // Ключ батча по РАСПИСАННОМУ времени проекта (s.hour/s.minute), а не now — чтобы catch-up
         // после простоя всё равно группировал проекты, назначенные на один час:минуту.
         const batchKey = await this.batchKeyFor(s.projectId, now.date, s.hour, s.minute);
-        await this.deps.enqueue.execute(s.projectId, new Date(), { batchKey });
+        const job = await this.deps.enqueue.execute(s.projectId, new Date(), { batchKey });
+        // Прогресс только для плановых батчей (batchKey != null) и только если job реально создан.
+        if (job?.batchKey) startedBatches.add(job.batchKey);
       } catch (e) {
         console.warn('[commit-sync] enqueue failed', s.projectId, e);
       } finally {
         // Помечаем запуск в любом случае — чтобы не ретраить каждую минуту (как digest).
         await this.deps.automation.markCommitSyncRun(s.projectId, now.date).catch(() => {});
       }
+    }
+    // Батч сформирован (все job'ы поставлены) → шлём одно прогресс-сообщение на батч. start() сам
+    // застолбит прогресс атомарно (ровно один на батч) и пропустит одиночные батчи (<2 проектов).
+    for (const batchKey of startedBatches) {
+      await this.deps.progress
+        ?.start(batchKey)
+        .catch((e) => console.warn('[commit-sync] progress start failed', batchKey, e));
     }
   }
 

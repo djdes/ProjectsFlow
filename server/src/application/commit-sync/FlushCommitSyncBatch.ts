@@ -2,10 +2,14 @@ import type { CommitSyncJob } from '../../domain/commit-sync/CommitSyncJob.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import { parseCommitReviewResult, type CommitReviewResult } from './CommitReviewResult.js';
 import type { SendWorkspaceCommitReview } from './SendWorkspaceCommitReview.js';
+import type { CommitSyncBatchProgress } from './CommitSyncBatchProgress.js';
 
 type Deps = {
   readonly commitSyncJobs: CommitSyncJobRepository;
   readonly sendReview: SendWorkspaceCommitReview;
+  // Живой прогресс (db/145): при финале батча удаляем прогресс-сообщение перед отправкой итога.
+  // Опционален — для ручного прогона (без batch_key) прогресса нет.
+  readonly progress?: Pick<CommitSyncBatchProgress, 'clear'>;
   // Подменяемое «сейчас» для детерминированной даты в заголовке (тесты).
   readonly now?: () => Date;
 };
@@ -34,6 +38,14 @@ export class FlushCommitSyncBatch {
     // job'ов и NULL-флаге). Ровно один вызов получит true — он и есть сборщик.
     const claimed = await this.deps.commitSyncJobs.tryMarkBatchFlushed(batchKey);
     if (!claimed) return;
+    // Сборщик выбран (ровно один на батч) → удаляем живое прогресс-сообщение (db/145), затем шлём
+    // итог. clear чистит строку и когда message_id ещё не проставился / прогресса не было (одиночный
+    // батч, ручной прогон) — тогда просто no-op. Идёт ДО send: «удалить прогресс и прислать новое».
+    if (this.deps.progress) {
+      await this.deps.progress
+        .clear(batchKey)
+        .catch((error) => console.warn('[commit-sync] progress clear failed', batchKey, error));
+    }
     const jobs = await this.deps.commitSyncJobs.listByBatchKey(batchKey);
     await this.send(jobs);
   }

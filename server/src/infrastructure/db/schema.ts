@@ -1424,6 +1424,21 @@ export const commitSyncJobs = mysqlTable(
 export type CommitSyncJobRow = typeof commitSyncJobs.$inferSelect;
 export type NewCommitSyncJobRow = typeof commitSyncJobs.$inferInsert;
 
+// commit_sync_batch_progress — миграция db/145. Одна строка на многопроектный плановый батч сверки:
+// живое «прогресс-сообщение» в Telegram-группе (заголовок + список проектов с ⏳/✅/⚠️). batch_key —
+// PK, чтобы гарантировать «ровно один прогресс на батч» (атомарный INSERT-claim). message_id — id
+// отправленного сообщения (NULL между claim и первой успешной отправкой). Когда весь батч терминален
+// — сообщение удаляется, строка чистится, вместо него шлётся свёрнутый итог.
+export const commitSyncBatchProgress = mysqlTable('commit_sync_batch_progress', {
+  batchKey: varchar('batch_key', { length: 120 }).primaryKey(),
+  chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+  messageId: bigint('message_id', { mode: 'number' }),
+  createdAt: createdAtCol(),
+});
+
+export type CommitSyncBatchProgressRow = typeof commitSyncBatchProgress.$inferSelect;
+export type NewCommitSyncBatchProgressRow = typeof commitSyncBatchProgress.$inferInsert;
+
 // ============================================================================
 // task_close_proposals — миграция db/101. Предложения закрыть задачу (commit-sync в
 // режиме action='propose'). Идемпотентность подтверждения + аудит + in-app карточка.

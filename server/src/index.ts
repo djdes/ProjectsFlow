@@ -221,6 +221,8 @@ import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitS
 import { SendWorkspaceCommitReview } from './application/commit-sync/SendWorkspaceCommitReview.js';
 import { PrepareCommitReviewResult } from './application/commit-sync/PrepareCommitReviewResult.js';
 import { FlushCommitSyncBatch } from './application/commit-sync/FlushCommitSyncBatch.js';
+import { CommitSyncBatchProgress } from './application/commit-sync/CommitSyncBatchProgress.js';
+import { DrizzleCommitSyncBatchProgressRepository } from './infrastructure/repositories/DrizzleCommitSyncBatchProgressRepository.js';
 import { DrizzleCloseProposalRepository } from './infrastructure/repositories/DrizzleCloseProposalRepository.js';
 import { CreateCloseProposals } from './application/close-proposal/CreateCloseProposals.js';
 import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseProposal.js';
@@ -1495,9 +1497,19 @@ const prepareCommitReviewResult = new PrepareCommitReviewResult({
   createEmailActionToken,
   appUrl: appBaseUrl,
 });
+// Живой прогресс сверки коммитов в Telegram (db/145): одно редактируемое сообщение на многопроектный
+// плановый батч (⏳→✅/⚠️), удаляется в финале и заменяется свёрнутым итогом.
+const commitSyncBatchProgressRepo = new DrizzleCommitSyncBatchProgressRepository(db);
+const commitSyncBatchProgress = new CommitSyncBatchProgress({
+  telegram: telegramClient,
+  commitSyncJobs: commitSyncJobRepo,
+  progress: commitSyncBatchProgressRepo,
+});
 const flushCommitSyncBatch = new FlushCommitSyncBatch({
   commitSyncJobs: commitSyncJobRepo,
   sendReview: sendWorkspaceCommitReview,
+  // Финал батча: удалить прогресс-сообщение перед отправкой итога (db/145).
+  progress: commitSyncBatchProgress,
 });
 const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
@@ -1507,6 +1519,8 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
   createProposals: createCloseProposals,
   prepareReview: prepareCommitReviewResult,
   flush: flushCommitSyncBatch,
+  // Перерисовка прогресс-сообщения при завершении каждого job'а батча (db/145).
+  progress: commitSyncBatchProgress,
   // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
   linkCommit: new LinkCommit({
     projects: projectRepo,
@@ -2907,6 +2921,8 @@ const commitSyncScheduler = new CommitSyncScheduler({
   // Резолв Telegram-группы проекта для ключа батча (db/143).
   projects: projectRepo,
   settings: workspaceAssigneeDigestRepo,
+  // Живой прогресс (db/145): после постановки всех job'ов батча шлём одно прогресс-сообщение.
+  progress: commitSyncBatchProgress,
 });
 commitSyncScheduler.start();
 
