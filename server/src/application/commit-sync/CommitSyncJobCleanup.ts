@@ -1,7 +1,12 @@
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import type { FlushCommitSyncBatch } from './FlushCommitSyncBatch.js';
 
-const STALE_AFTER_MS = 5 * 60 * 1000;
+// A single agent-runner processes commit-sync jobs serially (GitHub fetch + task match,
+// ~10s each). At 5 minutes a workspace with dozens of projects timed out roughly half its
+// jobs with `dispatcher_timeout` before the runner reached them (seen in prod: 27 done /
+// 32 cancelled). 15 minutes lets one runner clear a large batch; the digest still flushes
+// as soon as the LAST job finishes, so this only raises the ceiling, not the usual latency.
+const STALE_AFTER_MS = 15 * 60 * 1000;
 const TERMINAL_RETENTION_MS = 7 * 24 * 3600 * 1000;
 
 type Deps = {
