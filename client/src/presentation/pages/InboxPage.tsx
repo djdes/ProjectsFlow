@@ -119,14 +119,18 @@ export function InboxPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её
+    // родительский <main overflow-y-auto> целиком (Notion single-scroll, как страницы
+    // проекта). Тогда закреплённый снизу горизонтальный скролл-бар доски (SyncedStickyScrollbar)
+    // прилипает к низу вьюпорта так же, как на проектах, — а не к внутреннему скролл-порту.
+    <div className="flex min-h-full flex-col">
       {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие». Прячем на мобиле. */}
       <div className="hidden h-11 items-center px-2.5 sm:flex">
         <InboxBreadcrumbs />
       </div>
 
       {/* Тело страницы: отступы по краям — как на доске проекта (px-6/14/24). Только канбан. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-6 pb-3 pt-2 sm:gap-4 sm:px-14 sm:pb-6 sm:pt-1 lg:px-24">
+      <div className="flex flex-1 flex-col gap-1.5 px-6 pb-3 pt-2 sm:gap-4 sm:px-14 sm:pb-6 sm:pt-1 lg:px-24">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="flex items-center gap-3">
             <AnimatedInbox active className="size-5 text-primary" />
@@ -170,7 +174,7 @@ export function InboxPage(): React.ReactElement {
 
           {/* Мягкое появление доски при входе — fadeInUp, гейтится useMotion(). */}
           <motion.div
-            className="flex min-h-0 flex-1 flex-col"
+            className="flex flex-1 flex-col"
             variants={fadeInUp}
             initial={animations ? 'hidden' : false}
             animate="visible"
