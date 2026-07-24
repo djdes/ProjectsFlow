@@ -71,6 +71,7 @@ import {
   type AssigneeDirection,
 } from './assignedGrouping';
 import { ColumnPreviewList } from './ColumnPreview';
+import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { BulkActionBar } from './BulkActionBar';
 import {
   nextAnchor,
@@ -292,6 +293,17 @@ export function AssignedToMeBlock({
   // Персист гор. скролла ряда канбанов (по вкладке+группировке): старт слева, reload сохраняет.
   const { setRef: setHScrollRef, onScroll: onHScroll } = usePersistentScrollLeft(
     `pf:inbox-hscroll:${tab}:${grouping}`,
+  );
+  // Закреплённый снизу вьюпорта горизонтальный скролл-бар ряда верхних канбанов (как на
+  // досках проектов): держим ref на сам скролл-контейнер, чтобы SyncedStickyScrollbar
+  // зеркалил его scrollLeft. Комбинированный callback-ref — и persist-скролл, и sticky-бар.
+  const hScrollElRef = useRef<HTMLDivElement>(null);
+  const setRowRef = useCallback(
+    (el: HTMLDivElement | null): void => {
+      hScrollElRef.current = el;
+      setHScrollRef(el);
+    },
+    [setHScrollRef],
   );
   const [loading, setLoading] = useState(true);
   const [drawerTask, setDrawerTask] = useState<InboxBlockTask | null>(null);
@@ -966,7 +978,7 @@ export function AssignedToMeBlock({
         // Drag между колонками меняет дедлайн; drag на аватар участника — назначает его. Ряд
         // колонок full-bleed'ится за паддинг страницы (как доска проекта).
         <div
-          ref={setHScrollRef}
+          ref={setRowRef}
           onScroll={onHScroll}
           className={cn(
             // Как у основной доски: каждая колонка заканчивается под своей последней
@@ -1031,7 +1043,7 @@ export function AssignedToMeBlock({
         // смыслу сортировки, а первой в ряду появляется фантомная колонка (см. план
         // inbox-grouped-dnd): «Другой проект…» / инфо «Сюда нельзя» / «Другой приоритет…».
         <div
-          ref={setHScrollRef}
+          ref={setRowRef}
           onScroll={onHScroll}
           className={cn(
             'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pb-2',
@@ -1116,8 +1128,9 @@ export function AssignedToMeBlock({
                     onClick={() =>
                       setComposingProject((p) => (p === group.key ? null : group.key))
                     }
-                    // На тач-экранах кнопка видна всегда (ховера нет); на десктопе — по наведению.
-                    className="shrink-0 rounded-md p-0.5 text-muted-foreground opacity-100 transition-colors hover:bg-background hover:text-foreground sm:opacity-0 sm:group-hover/col:opacity-100"
+                    // Всегда видна (как «+» в шапке колонок на досках проекта) — юзер жаловался,
+                    // что hover-only «+» не заметен. Тихий muted, ярче по наведению.
+                    className="shrink-0 rounded-md p-0.5 text-muted-foreground/70 transition-colors hover:bg-background hover:text-foreground"
                   >
                     <Plus className="size-4" />
                   </button>
@@ -1169,6 +1182,12 @@ export function AssignedToMeBlock({
           <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
         </div>
       )}
+
+      {/* Закреплённый снизу вьюпорта горизонтальный скролл ряда верхних канбанов — как на
+          досках проектов (запрос юзера: «скролл всегда закреплён снизу при скролле страницы»).
+          Прилипает к низу вьюпорта, пока зона #assigned-to-me в поле зрения; рендерится
+          только при переполнении и только на десктопе (на мобиле ряд листается свайпом). */}
+      <SyncedStickyScrollbar key={grouping} targetRef={hScrollElRef} className={bleedNegClass} />
 
       {/* Hairline-линейка замыкает персональную зону перед основной доской. В канбане
           уезжает full-bleed теми же отрицательными маржинами, что и ряд колонок (в list
