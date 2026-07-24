@@ -422,8 +422,19 @@ export function KanbanBoard({
     if (dialog) closeComposer();
   }, [dialog, closeComposer]);
 
-  // «Создать» из общего toolbar отображений. Шаблон, как и в остальных видах,
-  // создаёт задачу сразу; обычная кнопка открывает полноценный drawer в выбранной колонке.
+  // Императивный запрос inline-создания: открыть «+»-композер СВЕРХУ нужной колонки (как
+  // клик по «+»), без модального окна создания. nonce растёт на каждый запрос — колонка
+  // ловит его сменой (см. KanbanColumn.openInlineSeq).
+  const [inlineCreateReq, setInlineCreateReq] = useState<{ status: TaskStatus; nonce: number } | null>(
+    null,
+  );
+  const triggerInlineCreate = useCallback((s: TaskStatus): void => {
+    setInlineCreateReq((prev) => ({ status: s, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
+  // «Создать» из общего toolbar отображений. Шаблон, как и в остальных видах, создаёт
+  // задачу сразу; обычная кнопка открывает inline-создание в выбранной колонке (без окна —
+  // задача создаётся прямо в колонке, как по «+»). Колонки backlog видны на канбане всегда.
   useEffect(() => {
     if (!createRequest || !canEdit) return;
     const tpl = createRequest.template;
@@ -437,7 +448,7 @@ export function KanbanBoard({
         .then(() => toast.success(`Создано из шаблона «${tpl.name}»`))
         .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
     } else {
-      setDialog({ mode: 'create', status: createRequest.status });
+      triggerInlineCreate(createRequest.status);
     }
     // create меняется вместе с useTasks; seq в request гарантирует один запуск клика.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1162,7 +1173,7 @@ export function KanbanBoard({
               : 'В проекте пока нет задач.'}
           </p>
           <div className="flex items-center gap-1.5">
-            {canEdit && <Button size="sm" className="h-9 gap-1.5 px-2.5 text-xs" onClick={() => setDialog({ mode: 'create', status: 'backlog' })}>
+            {canEdit && <Button size="sm" className="h-9 gap-1.5 px-2.5 text-xs" onClick={() => triggerInlineCreate('backlog')}>
               <Plus className="size-3.5" />
               Создать задачу
             </Button>}
@@ -1246,6 +1257,7 @@ export function KanbanBoard({
                 composerStorageKey={composerKey(status)}
                 composing={composingStatus === status}
                 onComposingChange={(open) => (open ? openComposer(status) : closeComposer())}
+                openInlineSeq={inlineCreateReq?.status === status ? inlineCreateReq.nonce : 0}
                 selectionMode={selectionStatus === status}
                 selectedIds={selectionStatus === status ? selectedIds : undefined}
                 selectedCount={

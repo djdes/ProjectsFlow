@@ -169,6 +169,10 @@ type Props = {
   // Старт протяжки-выделения (см. useDragSelect). Вешается на контейнер карточек:
   // в режиме выделения dnd-сенсоры к карточкам не привязаны, жест наш.
   onDragSelectStart?: (e: React.PointerEvent<HTMLElement>) => void;
+  // Императивный сигнал «открой inline-создание СВЕРХУ этой колонки» — так синяя
+  // «Создать» (и пустое состояние доски) ведут себя как клик по «+» в колонке, без
+  // модального окна. Меняющееся положительное число = новый запрос (см. openInlineAtTop).
+  openInlineSeq?: number;
 };
 
 // Дата-корзина для группировки «Готово»: Сегодня / Вчера / Ранее.
@@ -225,6 +229,7 @@ export function KanbanColumn({
   onExitSelection,
   onEnterSelection,
   onDragSelectStart,
+  openInlineSeq = 0,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -260,6 +265,17 @@ export function KanbanColumn({
     setInlineCreating(true);
     setRefocusSignal((s) => s + 1);
   };
+  // Внешний императивный запрос (синяя «Создать» / пустое состояние доски) открывает
+  // inline-создание сверху этой колонки — как клик по «+». Реагируем на смену
+  // положительного seq (0 = нет запроса) и подскролливаем колонку в вид.
+  useEffect(() => {
+    if (!openInlineSeq || openInlineSeq <= 0 || !onInlineCreate) return;
+    openInlineAtTop();
+    columnRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+    // openInlineAtTop пересоздаётся каждый рендер, но эффект должен срабатывать только на
+    // смену seq — иначе он гонялся бы на любом ререндере колонки.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openInlineSeq]);
   const handleInlineCreate = async (name: string, taskIcon: string | null): Promise<Task | null> => {
     if (!onInlineCreate) return null;
     // afterTaskId = последняя созданная в сессии → новая встаёт ПОД ней (порядок создания).
