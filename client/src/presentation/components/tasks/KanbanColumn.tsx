@@ -817,7 +817,7 @@ export function KanbanColumn({
 // Notion-style карточка создания: поле названия сразу в потоке колонки. Enter — сохранить и
 // открыть следующую (быстрый ввод); клик вне карточки — сохранить и закрыть; Esc — отмена;
 // «открыть справа» — сохранить и открыть задачу в окне справа.
-function InlineNewCard({
+export function InlineNewCard({
   onCreate,
   onCreated,
   onClose,

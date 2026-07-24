@@ -72,6 +72,7 @@ import {
 } from './assignedGrouping';
 import { ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
+import { InlineNewCard } from './KanbanColumn';
 import { BulkActionBar } from './BulkActionBar';
 import {
   nextAnchor,
@@ -384,19 +385,21 @@ export function AssignedToMeBlock({
   // по projectId колонки; создаём задачу в backlog проекта, назначенную на текущего юзера, —
   // тогда карточка сразу попадает в эту же колонку. Без модального окна (как «+» на доске).
   const [composingProject, setComposingProject] = useState<string | null>(null);
+  // Создаёт задачу в проекте на текущего юзера (backlog) и возвращает её — сигнатура под
+  // InlineNewCard (тот же композер, что и в нижних канбанах: Enter создаёт и оставляет поле
+  // для следующей, иконки, blur-commit). refresh() подтягивает свежую карточку в колонку.
   const createInProjectColumn = useCallback(
-    async (projectId: string, projectName: string, title: string): Promise<void> => {
-      if (!user) return;
-      await taskRepository.create(projectId, {
-        description: title,
+    async (projectId: string, name: string, icon: string | null): Promise<Task | null> => {
+      if (!user) return null;
+      const created = await taskRepository.create(projectId, {
+        description: name,
         status: 'backlog',
+        icon,
         assigneeUserId: user.id,
       });
-      // Задача назначена на меня → живёт во вкладке «Мои». Тост, чтобы создание с вкладки
-      // «Для всех» не выглядело «беззвучным» (карточка появляется в соседней вкладке).
-      toast.success(`Создано в «${projectName}» · вкладка «Мои»`);
       await refresh();
       onChanged?.();
+      return created;
     },
     [user, taskRepository, refresh, onChanged],
   );
@@ -1139,11 +1142,14 @@ export function AssignedToMeBlock({
                 onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
                 className="flex flex-col gap-1.5 p-1.5"
               >
-                {/* #2: инлайн-создание сверху колонки-проекта (как «+» на доске), без окна. */}
+                {/* #2: инлайн-создание сверху колонки-проекта — ТОТ ЖЕ композер, что и в
+                    нижних канбанах (InlineNewCard): плавно, Enter создаёт и оставляет поле для
+                    следующей, иконки, blur-commit. Без модального окна. */}
                 {composingProject === group.key && (
-                  <InlineQuickAdd
-                    onCreate={(title) => createInProjectColumn(group.key, group.label, title)}
+                  <InlineNewCard
+                    onCreate={(name, icon) => createInProjectColumn(group.key, name, icon)}
                     onClose={() => setComposingProject(null)}
+                    onOpenFull={() => setComposingProject(null)}
                   />
                 )}
                 {/* Каппинг «первые 4 + Показать ещё» (на тач включён по умолчанию) — иначе
@@ -1556,63 +1562,6 @@ function DraggableTask({
       )}
     >
       {children}
-    </div>
-  );
-}
-
-// #2 (af1ebf44): лёгкий inline-композер сверху колонки-проекта верхнего блока «Входящих».
-// Полный аналог «+» на доске проекта: авто-фокус, Enter — создать и остаться в поле (цепочка),
-// Escape/пустой blur — закрыть. Без модального окна.
-function InlineQuickAdd({
-  onCreate,
-  onClose,
-}: {
-  onCreate: (title: string) => Promise<void>;
-  onClose: () => void;
-}): React.ReactElement {
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-  const submit = async (): Promise<void> => {
-    const title = value.trim();
-    if (!title || busy) return;
-    setBusy(true);
-    try {
-      await onCreate(title);
-      setValue('');
-      ref.current?.focus();
-    } catch (e) {
-      toast.error(`Не удалось создать: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="rounded-lg border border-primary/40 bg-background p-1 shadow-sm ring-1 ring-primary/10">
-      <textarea
-        ref={ref}
-        rows={1}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            void submit();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            onClose();
-          }
-        }}
-        onBlur={() => {
-          if (!value.trim() && !busy) onClose();
-        }}
-        placeholder="Название задачи · Enter"
-        aria-label="Название новой задачи"
-        className="max-h-32 w-full resize-none bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-muted-foreground/55"
-      />
     </div>
   );
 }
