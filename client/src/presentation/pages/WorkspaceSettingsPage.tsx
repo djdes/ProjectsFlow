@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -257,8 +257,11 @@ function AssigneeDigestCard({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [applyingCommitSync, setApplyingCommitSync] = useState(false);
   const [resolving, setResolving] = useState(false);
+  // Snapshot of the commit-sync schedule as last persisted. Save compares against it to detect a
+  // change and, if so, propagates the schedule to every project — the per-project scheduler reads
+  // project times, not the workspace one, so a bare "Save" used to change nothing here.
+  const savedCommitSyncRef = useRef<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +273,13 @@ function AssigneeDigestCard({
     ])
       .then(([result, history, workspaceProjects]) => {
         if (cancelled) return;
+        savedCommitSyncRef.current = JSON.stringify([
+          result.settings.commitSyncEnabled,
+          result.settings.commitSyncHour,
+          result.settings.commitSyncMinute,
+          result.settings.commitSyncAction,
+          [...result.settings.daysOfWeek].sort((a, b) => a - b),
+        ]);
         setDraft({
           enabled: result.settings.enabled,
           hour: result.settings.hour,
@@ -308,6 +318,17 @@ function AssigneeDigestCard({
   const update = (patch: Partial<AssigneeDigestDraft>): void => {
     setDraft((current) => (current ? { ...current, ...patch } : current));
   };
+
+  // Stable fingerprint of the commit-sync schedule (enabled + time + mode + shared days), used to
+  // decide on Save whether it changed and must be pushed to all projects.
+  const commitSyncKey = (d: AssigneeDigestDraft): string =>
+    JSON.stringify([
+      d.commitSyncEnabled,
+      d.commitSyncHour,
+      d.commitSyncMinute,
+      d.commitSyncAction,
+      [...d.daysOfWeek].sort((a, b) => a - b),
+    ]);
 
   const selectedEligible = draft
     ? draft.recipientUserIds.filter((id) =>
@@ -387,7 +408,33 @@ function AssigneeDigestCard({
         eodReminderHour: settings.eodReminderHour,
         eodReminderMinute: settings.eodReminderMinute,
       });
-      toast.success('Рассылка по ответственным сохранена');
+      // The per-project scheduler reads each project's own time, so saving the workspace record
+      // alone would never change when syncs fire. When the commit-sync schedule changed, push it
+      // to every project — this is what makes a plain "Save" actually take effect.
+      const nextKey = commitSyncKey(draft);
+      let appliedToProjects = false;
+      if (nextKey !== savedCommitSyncRef.current) {
+        try {
+          await workspaceRepository.applyCommitSyncToAll(workspaceId, {
+            enabled: draft.commitSyncEnabled,
+            hour: draft.commitSyncHour,
+            minute: draft.commitSyncMinute,
+            daysOfWeek: draft.daysOfWeek,
+            action: draft.commitSyncAction,
+          });
+          appliedToProjects = true;
+        } catch (error) {
+          toast.error(
+            `Настройки сохранены, но не удалось применить сверку ко всем проектам: ${(error as Error).message}`,
+          );
+        }
+      }
+      savedCommitSyncRef.current = nextKey;
+      toast.success(
+        appliedToProjects
+          ? 'Сохранено · расписание сверки применено ко всем проектам'
+          : 'Рассылка по ответственным сохранена',
+      );
       return true;
     } catch (error) {
       toast.error((error as Error).message || 'Не удалось сохранить рассылку');
@@ -428,32 +475,6 @@ function AssigneeDigestCard({
       toast.error((error as Error).message || 'Не удалось отправить тест');
     } finally {
       setSending(false);
-    }
-  };
-
-  // Мастер-действие: применить сверку коммитов (вкл/выкл + время + дни + режим) КО ВСЕМ проектам
-  // пространства разом. Пишет per-project конфиг напрямую, поэтому в каждом окне автоматизации
-  // отразится именно это. Дни берём из общего набора «Дни отправки» (draft.daysOfWeek).
-  const applyCommitSyncToAll = async (): Promise<void> => {
-    if (applyingCommitSync || !draft) return;
-    setApplyingCommitSync(true);
-    try {
-      const { affected } = await workspaceRepository.applyCommitSyncToAll(workspaceId, {
-        enabled: draft.commitSyncEnabled,
-        hour: draft.commitSyncHour,
-        minute: draft.commitSyncMinute,
-        daysOfWeek: draft.daysOfWeek,
-        action: draft.commitSyncAction,
-      });
-      toast.success(
-        draft.commitSyncEnabled
-          ? `Сверка коммитов включена во всех проектах (${affected})`
-          : `Сверка коммитов выключена во всех проектах (${affected})`,
-      );
-    } catch (error) {
-      toast.error((error as Error).message || 'Не удалось применить ко всем проектам');
-    } finally {
-      setApplyingCommitSync(false);
     }
   };
 
@@ -674,7 +695,7 @@ function AssigneeDigestCard({
                   }
                 />
                 <span className="text-xs text-muted-foreground">
-                  расписание сверки по умолчанию для всех проектов
+                  время сверки для всех проектов пространства
                 </span>
                 <div className="flex w-full flex-col gap-1.5">
                   <span className="text-xs font-medium text-muted-foreground">
@@ -721,20 +742,10 @@ function AssigneeDigestCard({
                     ))}
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!canManage || applyingCommitSync}
-                  onClick={() => void applyCommitSyncToAll()}
-                >
-                  {applyingCommitSync && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-                  Применить ко всем проектам
-                </Button>
                 <span className="w-full text-xs text-muted-foreground">
-                  Запишет тумблер, время, дни (из «Дней отправки» ниже) и режим сверки во все
-                  проекты пространства — в каждом окне автоматизации отразится это. Дальше каждый
-                  проект можно донастроить отдельно.
+                  При сохранении время, дни (из «Дней отправки» ниже) и режим сверки применятся
+                  ко всем проектам пространства. Отдельный проект можно донастроить в его окне
+                  автоматизации.
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
