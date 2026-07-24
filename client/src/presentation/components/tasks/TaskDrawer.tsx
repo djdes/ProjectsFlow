@@ -64,6 +64,7 @@ import {
   formatBytes,
   isImageFile,
 } from '@/presentation/components/attachments/files';
+import { paceAppend, runFilesLimited } from '@/presentation/components/attachments/pace';
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
@@ -1283,13 +1284,17 @@ export function TaskDrawer({
   const addPendingFiles = (raw: FileList | File[]): void => {
     const valid = Array.from(raw);
     if (valid.length === 0) return;
-    const additions: PendingFile[] = valid.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      // Blob URL только для картинок (для thumbnail); иначе превью не нужно.
-      previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
-    }));
-    setPendingFiles((prev) => [...prev, ...additions]);
+    // Мало файлов — добавляем разом (как раньше); от порога — порциями, чтобы декод пачки
+    // превью не фризил UI (см. pace.ts).
+    paceAppend(valid, (chunk) => {
+      const additions: PendingFile[] = chunk.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        // Blob URL только для картинок (для thumbnail); иначе превью не нужно.
+        previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
+      }));
+      setPendingFiles((prev) => [...prev, ...additions]);
+    });
   };
 
   // Direct upload for edit-mode (paste, drag&drop, «+ Файл»). Каждый файл получает
@@ -1303,29 +1308,29 @@ export function TaskDrawer({
       ...prev,
       ...items.map((it) => ({ id: it.uploadId, name: it.file.name, progress: 0, startedAt, etaSec: null })),
     ]);
-    await Promise.all(
-      items.map(async ({ uploadId, file }) => {
-        try {
-          await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
-            setUploads((prev) =>
-              prev.map((u) =>
-                u.id === uploadId
-                  ? {
-                      ...u,
-                      progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
-                      etaSec: computeEtaSec(u.startedAt, loaded, total),
-                    }
-                  : u,
-              ),
-            );
-          });
-        } catch (err) {
-          toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
-        } finally {
-          setUploads((prev) => prev.filter((u) => u.id !== uploadId));
-        }
-      }),
-    );
+    // Заливаем с ограничением параллелизма: мало файлов — все разом (как раньше), от порога —
+    // не больше UPLOAD_CONCURRENCY одновременно, чтобы пачка не забивала аплинк (см. pace.ts).
+    await runFilesLimited(items, async ({ uploadId, file }) => {
+      try {
+        await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
+          setUploads((prev) =>
+            prev.map((u) =>
+              u.id === uploadId
+                ? {
+                    ...u,
+                    progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                    etaSec: computeEtaSec(u.startedAt, loaded, total),
+                  }
+                : u,
+            ),
+          );
+        });
+      } catch (err) {
+        toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
+      } finally {
+        setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+      }
+    });
     notifyChanged();
     refetchHeaderAttachments();
   };
@@ -2838,14 +2843,17 @@ function CommentComposer({
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
     if (list.length === 0) return;
-    setPending((prev) => [
-      ...prev,
-      ...list.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
-      })),
-    ]);
+    // Мало файлов — разом; от порога — порциями, чтобы декод превью не фризил UI (pace.ts).
+    paceAppend(list, (chunk) => {
+      setPending((prev) => [
+        ...prev,
+        ...chunk.map((file) => ({
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
+        })),
+      ]);
+    });
   };
   const removeFile = (id: string): void => {
     setPending((prev) => {
@@ -2953,7 +2961,7 @@ function CommentComposer({
               className="inline-flex items-center gap-1 rounded border bg-muted/60 py-0.5 pl-1.5 pr-1 text-[11px]"
             >
               {pf.previewUrl ? (
-                <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
               ) : (
                 <FileText className="size-3.5 text-muted-foreground" />
               )}

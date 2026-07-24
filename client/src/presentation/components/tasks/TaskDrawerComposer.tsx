@@ -10,6 +10,7 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import { isImageMime } from '@/presentation/components/attachments/files';
+import { paceAppend } from '@/presentation/components/attachments/pace';
 import type {
   MentionMember,
   RichTextEditorHandle,
@@ -137,14 +138,18 @@ export function TaskDrawerComposer({
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
     if (list.length === 0) return;
-    setPending((prev) => [
-      ...prev,
-      ...list.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
-      })),
-    ]);
+    // Мало файлов — разом (как раньше); от порога — порциями, чтобы декод пачки превью
+    // не фризил UI (см. pace.ts).
+    paceAppend(list, (chunk) => {
+      setPending((prev) => [
+        ...prev,
+        ...chunk.map((file) => ({
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
+        })),
+      ]);
+    });
   };
 
   const removeFile = (id: string): void => {
@@ -262,7 +267,7 @@ export function TaskDrawerComposer({
                 title={pf.file.name}
               >
                 {pf.previewUrl ? (
-                  <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                  <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
                 ) : (
                   <FileText className="size-3.5 text-muted-foreground" />
                 )}

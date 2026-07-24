@@ -147,7 +147,7 @@ export function TaskDrawerAttachmentRow({
             title={pf.name}
           >
             {pf.previewUrl ? (
-              <img src={pf.previewUrl} alt="" className="size-5 shrink-0 rounded object-cover" />
+              <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-5 shrink-0 rounded object-cover" />
             ) : (
               <FileText className="size-4 shrink-0 text-muted-foreground" />
             )}
