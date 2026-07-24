@@ -76,6 +76,38 @@ export class SendWorkspaceCommitReview {
       .catch((error) => console.warn('[commit-sync-digest] remember actions failed', error));
     return true;
   }
+
+  // Short conclusion for a batch that produced no task rows. A multi-project batch already showed a
+  // live progress message that was just deleted, so staying silent makes the vanished message look
+  // broken (the user's report: "message deleted, no result"). We always close the loop and report
+  // honestly how many projects were checked vs left unprocessed (dispatcher_timeout — usually a
+  // stopped/overloaded runner), which doubles as a diagnostic.
+  async sendConclusion(input: {
+    chatId: number;
+    checked: number;
+    failed: number;
+    now?: Date;
+  }): Promise<boolean> {
+    const now = input.now ?? new Date();
+    const lines = [`<b>${escapeHtml(digestTitle(now))}</b>`, ''];
+    lines.push(
+      input.checked > 0
+        ? `Проверено проектов: ${input.checked} · закрывать нечего.`
+        : 'Закрывать нечего.',
+    );
+    if (input.failed > 0) {
+      lines.push(
+        `⚠️ Не обработано: ${input.failed} — диспетчер не ответил вовремя. Проверьте, запущен ли раннер.`,
+      );
+    }
+    const result = await this.deps.telegram.sendMessage({
+      chatId: input.chatId,
+      text: lines.join('\n'),
+      parseMode: 'HTML',
+      disableWebPagePreview: true,
+    });
+    return result.kind === 'ok';
+  }
 }
 
 function modeLabel(mode: 'auto' | 'propose'): string {

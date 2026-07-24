@@ -75,13 +75,15 @@ class FakeRepo {
 
 function harness(repo: FakeRepo) {
   const rich: Array<{ chatId: number; html: string }> = [];
+  const plain: Array<{ chatId: number; text: string }> = [];
   const sendReview = new SendWorkspaceCommitReview({
     telegram: {
       async sendRichMessage(input: { chatId: number; html: string }) {
         rich.push(input);
         return { kind: 'ok' as const, messageId: 1 };
       },
-      async sendMessage() {
+      async sendMessage(input: { chatId: number; text: string }) {
+        plain.push(input);
         return { kind: 'ok' as const, messageId: 2 };
       },
     } as never,
@@ -92,7 +94,7 @@ function harness(repo: FakeRepo) {
     sendReview,
     now: () => NOW,
   });
-  return { flush, rich };
+  return { flush, rich, plain };
 }
 
 function result(name: string, mode: 'auto' | 'propose'): string {
@@ -156,15 +158,31 @@ test('(д) manual run (no batch_key) is sent immediately, without waiting for a 
   assert.equal(rich[0]!.html.match(/<details>/g)?.length, 1);
 });
 
-test('(г) a fully clean batch stays silent', async () => {
+test('(г) многопроектный батч без результатов шлёт завершение, а не молчит', async () => {
   const repo = new FakeRepo();
-  repo.add({ id: 'a', batchKey: 'B', status: 'succeeded', reviewJson: null, batchFlushedAt: null });
-  repo.add({ id: 'b', batchKey: 'B', status: 'failed', reviewJson: null, batchFlushedAt: null });
-  const { flush, rich } = harness(repo);
+  const key = '-100:2026-07-24:19:28';
+  repo.add({ id: 'a', batchKey: key, status: 'succeeded', reviewJson: null, batchFlushedAt: null });
+  repo.add({ id: 'b', batchKey: key, status: 'cancelled', reviewJson: null, batchFlushedAt: null });
+  const { flush, rich, plain } = harness(repo);
 
   await flush.flushForJob((await repo.findById('b'))!);
-  // Батч помечен отправленным (election сработал), но сообщения нет — показывать нечего.
+  // Дайджеста нет (закрывать нечего), но прогресс показывали → закрываем петлю коротким итогом
+  // с честным счётчиком «проверено / не обработано».
   assert.equal(rich.length, 0);
+  assert.equal(plain.length, 1);
+  assert.equal(plain[0]!.chatId, -100);
+  assert.match(plain[0]!.text, /Проверено проектов: 1/);
+  assert.match(plain[0]!.text, /Не обработано: 1/);
+});
+
+test('одиночный (ручной) чистый прогон молчит — прогресса не было', async () => {
+  const repo = new FakeRepo();
+  repo.add({ id: 'a', batchKey: null, status: 'succeeded', reviewJson: null, batchFlushedAt: null });
+  const { flush, rich, plain } = harness(repo);
+
+  await flush.flushForJob((await repo.findById('a'))!);
+  assert.equal(rich.length, 0);
+  assert.equal(plain.length, 0);
 });
 
 test('clean project is dropped, non-clean sibling still ships', async () => {

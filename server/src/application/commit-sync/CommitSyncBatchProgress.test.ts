@@ -224,13 +224,23 @@ test('failed-проект в прогрессе показывается как 
 function flushHarness() {
   const h = progressHarness();
   const sent: unknown[] = [];
+  const conclusions: Array<{ chatId: number; checked: number; failed: number }> = [];
   const flush = new FlushCommitSyncBatch({
     commitSyncJobs: h.jobs as never,
-    sendReview: { async execute(input: unknown) { sent.push(input); } } as never,
+    sendReview: {
+      async execute(input: unknown) {
+        sent.push(input);
+        return true;
+      },
+      async sendConclusion(input: { chatId: number; checked: number; failed: number }) {
+        conclusions.push(input);
+        return true;
+      },
+    } as never,
     progress: h.progress,
     now: () => new Date('2026-07-24T13:00:00Z'),
   });
-  return { ...h, flush, sent };
+  return { ...h, flush, sent, conclusions };
 }
 
 test('(в) все проекты готовы → прогресс удалён + итог отправлен', async () => {
@@ -249,18 +259,22 @@ test('(в) все проекты готовы → прогресс удалён 
   assert.equal(h.sent.length, 1);
 });
 
-test('(г) пустой итог → прогресс удалён, итог НЕ отправлен', async () => {
+test('(г) пустой итог → прогресс удалён, но приходит короткое завершение', async () => {
   const h = flushHarness();
-  // Оба проекта чистые (reviewJson=null) → показывать в итоге нечего.
+  // Оба проекта без результата (reviewJson=null): один проверен-чист, второй не обработан.
   h.jobs.add({ id: 'a', projectId: 'p1', projectName: 'OrdersFlow', batchKey: BATCH, status: 'succeeded', reviewJson: null, batchFlushedAt: null });
-  h.jobs.add({ id: 'b', projectId: 'p2', projectName: 'DocsFlow', batchKey: BATCH, status: 'failed', reviewJson: null, batchFlushedAt: null });
+  h.jobs.add({ id: 'b', projectId: 'p2', projectName: 'DocsFlow', batchKey: BATCH, status: 'cancelled', reviewJson: null, batchFlushedAt: null });
   await h.progress.start(BATCH);
 
   await h.flush.flushBatch(BATCH);
 
-  assert.equal(h.telegram.deleted.length, 1); // прогресс всё равно удалён
+  assert.equal(h.telegram.deleted.length, 1); // прогресс удалён
   assert.equal(h.progressRepo.rows.has(BATCH), false);
-  assert.equal(h.sent.length, 0); // итога нет
+  assert.equal(h.sent.length, 0); // дайджеста нет — закрывать нечего
+  // Но раз прогресс показывали — закрываем петлю коротким итогом с честным счётчиком.
+  assert.equal(h.conclusions.length, 1);
+  assert.equal(h.conclusions[0]!.checked, 1);
+  assert.equal(h.conclusions[0]!.failed, 1);
 });
 
 test('(е) sweep осиротевшего батча удаляет прогресс и шлёт итог', async () => {

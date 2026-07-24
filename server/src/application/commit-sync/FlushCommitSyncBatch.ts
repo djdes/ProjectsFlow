@@ -2,7 +2,7 @@ import type { CommitSyncJob } from '../../domain/commit-sync/CommitSyncJob.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import { parseCommitReviewResult, type CommitReviewResult } from './CommitReviewResult.js';
 import type { SendWorkspaceCommitReview } from './SendWorkspaceCommitReview.js';
-import type { CommitSyncBatchProgress } from './CommitSyncBatchProgress.js';
+import { type CommitSyncBatchProgress, parseBatchKeyChatId } from './CommitSyncBatchProgress.js';
 
 type Deps = {
   readonly commitSyncJobs: CommitSyncJobRepository;
@@ -47,7 +47,20 @@ export class FlushCommitSyncBatch {
         .catch((error) => console.warn('[commit-sync] progress clear failed', batchKey, error));
     }
     const jobs = await this.deps.commitSyncJobs.listByBatchKey(batchKey);
-    await this.send(jobs);
+    const sent = await this.send(jobs);
+    // A multi-project batch showed a live progress message that clear() just deleted. If there were
+    // no task rows to report, still close the loop with a short conclusion — otherwise the vanished
+    // message reads as a failure. Single/manual batches (no progress shown) keep silent on clean.
+    if (!sent && jobs.length >= 2) {
+      const chatId = parseBatchKeyChatId(batchKey);
+      if (chatId !== null) {
+        const checked = jobs.filter((j) => j.status === 'succeeded').length;
+        const failed = jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled').length;
+        await this.deps.sendReview
+          .sendConclusion({ chatId, checked, failed, now: this.deps.now?.() ?? new Date() })
+          .catch((error) => console.warn('[commit-sync-digest] conclusion send failed', batchKey, error));
+      }
+    }
   }
 
   async flushSingle(jobId: string): Promise<void> {
@@ -71,19 +84,20 @@ export class FlushCommitSyncBatch {
 
   // Агрегируем per-job payload'ы в один дайджест. Чистые проекты (review_json = null) отсеиваются;
   // если чист весь батч — не шлём ничего. Проекты сортируем по названию для стабильного порядка.
-  private async send(jobs: readonly CommitSyncJob[]): Promise<void> {
+  // Returns whether a digest was actually sent (false = nothing to report → caller may conclude).
+  private async send(jobs: readonly CommitSyncJob[]): Promise<boolean> {
     const results: CommitReviewResult[] = [];
     for (const job of jobs) {
       const parsed = parseCommitReviewResult(job.reviewJson);
       if (parsed) results.push(parsed);
     }
-    if (results.length === 0) return;
+    if (results.length === 0) return false;
     results.sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru'));
     // Все проекты батча идут в одну группу (chatId зашит в batch_key). Защитно берём чат первого
     // проекта и включаем только совпадающие по чату — на случай, если две подписки делят группу.
     const chatId = results[0]!.chatId;
     const sameChat = results.filter((result) => result.chatId === chatId);
-    await this.deps.sendReview.execute({
+    return this.deps.sendReview.execute({
       chatId,
       results: sameChat,
       now: this.deps.now?.() ?? new Date(),
