@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarClock,
+  ChevronDown,
   Copy,
   History,
   Loader2,
@@ -261,6 +262,8 @@ function AssigneeDigestCard({
     Array<{ id: string; name: string; icon: string | null; commitSyncEnabled: boolean }>
   >([]);
   const [commitSelected, setCommitSelected] = useState<string[]>([]);
+  // Список проектов длинный (десятки), поэтому по умолчанию свёрнут — раскрывается кнопкой.
+  const [commitListOpen, setCommitListOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -789,54 +792,69 @@ function AssigneeDigestCard({
                 </div>
                 {/* Пер-проектный чеклист: какие проекты пространства включены в сверку. Заменяет
                     прежний единый тумблер — проекты можно выбрать, не заходя в каждый. */}
+                {/* Свёрнутый по умолчанию список проектов: заголовок-кнопка со счётчиком
+                    выбранного, разворачивает грид чекбоксов. */}
                 <div className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Какие проекты включены в&nbsp;сверку
+                  <button
+                    type="button"
+                    onClick={() => setCommitListOpen((v) => !v)}
+                    className="flex w-full items-center gap-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={commitListOpen}
+                  >
+                    <ChevronDown
+                      className={cn('size-3.5 shrink-0 transition-transform', !commitListOpen && '-rotate-90')}
+                    />
+                    <span>Какие проекты включены в&nbsp;сверку</span>
+                    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 tabular-nums">
+                      {commitSelected.length} из {commitProjects.length}
                     </span>
-                    {canManage && commitProjects.length > 0 && (
-                      <div className="flex gap-3 text-xs">
-                        <button
-                          type="button"
-                          className="text-primary hover:underline"
-                          onClick={selectAllCommitProjects}
-                        >
-                          Выбрать все
-                        </button>
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:underline"
-                          onClick={clearAllCommitProjects}
-                        >
-                          Снять все
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {commitProjects.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      В&nbsp;пространстве пока нет проектов.
-                    </p>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {commitProjects.map((project) => (
-                        <label
-                          key={project.id}
-                          className={cn(
-                            'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
-                            canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
-                          )}
-                        >
-                          <Checkbox
-                            checked={commitSelected.includes(project.id)}
-                            disabled={!canManage}
-                            onCheckedChange={() => toggleCommitProject(project.id)}
-                          />
-                          <span>{project.icon ?? '📁'}</span>
-                          <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                        </label>
-                      ))}
-                    </div>
+                  </button>
+                  {commitListOpen && (
+                    <>
+                      {canManage && commitProjects.length > 0 && (
+                        <div className="flex gap-3 text-xs">
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={selectAllCommitProjects}
+                          >
+                            Выбрать все
+                          </button>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:underline"
+                            onClick={clearAllCommitProjects}
+                          >
+                            Снять все
+                          </button>
+                        </div>
+                      )}
+                      {commitProjects.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          В&nbsp;пространстве пока нет проектов.
+                        </p>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {commitProjects.map((project) => (
+                            <label
+                              key={project.id}
+                              className={cn(
+                                'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                                canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
+                              )}
+                            >
+                              <Checkbox
+                                checked={commitSelected.includes(project.id)}
+                                disabled={!canManage}
+                                onCheckedChange={() => toggleCommitProject(project.id)}
+                              />
+                              <span>{project.icon ?? '📁'}</span>
+                              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 <span className="block text-xs text-muted-foreground">
