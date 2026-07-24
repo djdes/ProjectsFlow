@@ -59,6 +59,21 @@ export class DrizzleAutomationRepository implements AutomationRepository {
   }
 
   async saveConfig(projectId: string, input: SaveAutomationInput): Promise<void> {
+    // Changing the commit-sync schedule re-arms today's run. The scheduler skips a project whose
+    // last_run_on is today, so without this a same-day time change would never fire — the user must
+    // be able to retrigger the digest by moving the time. We clear last_run_on ONLY when the time
+    // or the enabled flag actually changed (compared against the STORED row before the upsert
+    // overwrites it): an unrelated save (dispatcher, deploy) must not silently re-fire commit sync.
+    await this.db
+      .update(projectAutomation)
+      .set({ commitSyncLastRunOn: null })
+      .where(
+        and(
+          eq(projectAutomation.projectId, projectId),
+          sql`(commit_sync_hour <> ${input.commitSyncHour} OR commit_sync_minute <> ${input.commitSyncMinute} OR commit_sync_enabled <> ${input.commitSyncEnabled})`,
+        ),
+      );
+
     // Только конфиг-колонки; run-state (tasks_created/run_started_at/run_status/...) не трогаем —
     // им управляют resetRun / setRunStatus / recordTaskCreated.
     await this.db
@@ -241,6 +256,10 @@ export class DrizzleAutomationRepository implements AutomationRepository {
             commitSyncMinute: input.minute,
             commitSyncDays: days,
             commitSyncAction: input.action,
+            // «Применить ко всем» — осознанное «запустить по этому расписанию», поэтому
+            // снимаем отметку «запущено сегодня» у всех проектов: смена времени должна
+            // приводить к запуску (в т.ч. повторно в тот же день).
+            commitSyncLastRunOn: null,
           },
         });
     }
