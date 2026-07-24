@@ -1391,10 +1391,16 @@ export const commitSyncJobs = mysqlTable(
     // Снимок действия из настроек на момент enqueue (db/101): 'propose' — создать предложение
     // закрыть; 'auto' — прежнее авто-перемещение по порогу возраста.
     action: mysqlEnum('action', ['propose', 'auto']).notNull().default('propose'),
+    // Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>' (db/143): job'ы одного тика для одной
+    // группы+времени объединяются в одно сообщение. NULL — одиночная доставка («Сверить сейчас»).
+    batchKey: varchar('batch_key', { length: 120 }),
     thresholdHours: int('threshold_hours').notNull(),
     context: mediumtext('context'),
     commitsJson: mediumtext('commits_json'),
     matchesJson: mediumtext('matches_json'),
+    // Per-job payload сводки (db/143): chatId + проект + режим + строки задач. NULL — чистый
+    // проект (в дайджест не попадает). Из этих payload'ов сборщик собирает одно сообщение.
+    reviewJson: mediumtext('review_json'),
     resultSummary: mediumtext('result_summary'),
     error: varchar('error', { length: 500 }),
     costUsd: decimal('cost_usd', { precision: 10, scale: 4 }),
@@ -1402,6 +1408,8 @@ export const commitSyncJobs = mysqlTable(
     tokensOut: bigint('tokens_out', { mode: 'number' }),
     claimedAt: timestamp('claimed_at'),
     finishedAt: timestamp('finished_at'),
+    // Момент отправки единственного сообщения батча (db/143) — атомарный выбор сборщика.
+    batchFlushedAt: timestamp('batch_flushed_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -1409,6 +1417,7 @@ export const commitSyncJobs = mysqlTable(
     index('idx_csj_dispatcher_status').on(t.dispatcherUserId, t.status, t.createdAt),
     index('idx_csj_project_created').on(t.projectId, t.createdAt),
     index('idx_csj_status_created').on(t.status, t.createdAt),
+    index('idx_csj_batch_key').on(t.batchKey),
   ],
 );
 

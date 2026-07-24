@@ -1,5 +1,7 @@
 import type { AutomationRepository } from '../../application/automation/AutomationRepository.js';
 import type { EnqueueCommitSyncJob } from '../../application/commit-sync/EnqueueCommitSyncJob.js';
+import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
+import type { WorkspaceAssigneeDigestRepository } from '../../application/digest/WorkspaceAssigneeDigestRepository.js';
 
 // «Сейчас» в Europe/Moscow → { hour 0..23, minute 0..59, date 'YYYY-MM-DD', dayOfWeek 0..6 }.
 // Зеркало WorkspaceAssigneeDigestScheduler.mskNow (dayOfWeek: 0=вс, как getUTCDay).
@@ -34,7 +36,13 @@ export class CommitSyncScheduler {
   private running = false;
 
   constructor(
-    private readonly deps: { automation: AutomationRepository; enqueue: EnqueueCommitSyncJob },
+    private readonly deps: {
+      automation: AutomationRepository;
+      enqueue: EnqueueCommitSyncJob;
+      // Резолв Telegram-группы проекта для ключа батча (проект → пространство → настройки сводки).
+      projects: Pick<ProjectRepository, 'getWorkspaceId'>;
+      settings: Pick<WorkspaceAssigneeDigestRepository, 'get'>;
+    },
   ) {}
 
   start(): void {
@@ -72,7 +80,10 @@ export class CommitSyncScheduler {
       const schedMin = s.hour * 60 + s.minute;
       if (nowMin < schedMin || s.lastRunOn === now.date) continue;
       try {
-        await this.deps.enqueue.execute(s.projectId);
+        // Ключ батча по РАСПИСАННОМУ времени проекта (s.hour/s.minute), а не now — чтобы catch-up
+        // после простоя всё равно группировал проекты, назначенные на один час:минуту.
+        const batchKey = await this.batchKeyFor(s.projectId, now.date, s.hour, s.minute);
+        await this.deps.enqueue.execute(s.projectId, new Date(), { batchKey });
       } catch (e) {
         console.warn('[commit-sync] enqueue failed', s.projectId, e);
       } finally {
@@ -81,4 +92,34 @@ export class CommitSyncScheduler {
       }
     }
   }
+
+  // Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>'. Проекты с одинаковыми группой, датой и
+  // точным временем сверки схлопнутся в одно сообщение. Нет пространства/группы → null (одиночная
+  // доставка; сводка всё равно молчит без группы).
+  private async batchKeyFor(
+    projectId: string,
+    date: string,
+    hour: number,
+    minute: number,
+  ): Promise<string | null> {
+    const workspaceId = await this.deps.projects.getWorkspaceId(projectId).catch(() => null);
+    if (!workspaceId) return null;
+    const settings = await this.deps.settings.get(workspaceId).catch(() => null);
+    const chatId = settings?.telegramGroupChatId ?? null;
+    if (chatId === null) return null;
+    return commitSyncBatchKey(chatId, date, hour, minute);
+  }
+}
+
+// Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>'. Два проекта попадают в один батч (одно
+// сообщение) ⇔ совпали группа, дата, час И минута сверки. projectsflow@17:00 и docsflow@17:01 →
+// разные ключи → разные сообщения; оба @17:00 → один ключ → одно сообщение.
+export function commitSyncBatchKey(
+  chatId: number,
+  date: string,
+  hour: number,
+  minute: number,
+): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${chatId}:${date}:${pad(hour)}:${pad(minute)}`;
 }

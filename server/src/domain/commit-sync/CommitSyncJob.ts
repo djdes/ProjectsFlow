@@ -44,6 +44,9 @@ export type CommitSyncJob = {
   readonly status: CommitSyncStatus;
   // Снимок действия из настроек на момент enqueue (propose|auto).
   readonly action: CommitSyncAction;
+  // Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>' (db/143). Проставляет планировщик всем
+  // job'ам одного тика для одной группы+времени. null — одиночная доставка («Сверить сейчас»).
+  readonly batchKey: string | null;
   // Снапшот порога (часы) на момент enqueue — авторитетен при применении.
   readonly thresholdHours: number;
   readonly context: string | null;
@@ -51,6 +54,8 @@ export type CommitSyncJob = {
   readonly commitsJson: string | null;
   // Совпадения от воркера (JSON-строка массива CommitSyncMatch).
   readonly matchesJson: string | null;
+  // Per-job payload сводки (db/143, JSON CommitReviewResult). null — чистый проект / не для группы.
+  readonly reviewJson: string | null;
   readonly resultSummary: string | null;
   readonly error: string | null;
   readonly costUsd: number | null;
@@ -58,6 +63,8 @@ export type CommitSyncJob = {
   readonly tokensOut: number | null;
   readonly claimedAt: Date | null;
   readonly finishedAt: Date | null;
+  // Момент отправки единственного сообщения батча (db/143) — атомарный выбор сборщика.
+  readonly batchFlushedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

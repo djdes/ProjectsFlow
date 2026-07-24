@@ -1,145 +1,109 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { SendWorkspaceCommitReview } from './SendWorkspaceCommitReview.js';
+import type { CommitReviewResult } from './CommitReviewResult.js';
 
-function groupSettings() {
+const NOW = new Date('2026-07-24T13:00:00Z'); // 16:00 MSK — дата 24.07.2026
+
+function harness(telegramOverrides: Record<string, unknown> = {}) {
+  const rich: Array<{ chatId: number; html: string }> = [];
+  const plain: Array<{ chatId: number; text: string }> = [];
+  const attached: Array<{ tokens: string[]; messageKind: string; chatId: number }> = [];
+  const service = new SendWorkspaceCommitReview({
+    telegram: {
+      async sendRichMessage(input: { chatId: number; html: string }) {
+        rich.push(input);
+        return { kind: 'ok' as const, messageId: 42 };
+      },
+      async sendMessage(input: { chatId: number; text: string }) {
+        plain.push(input);
+        return { kind: 'ok' as const, messageId: 43 };
+      },
+      ...telegramOverrides,
+    } as never,
+    telegramDigestActions: {
+      async attach(input: { tokens: string[]; messageKind: string; chatId: number }) {
+        attached.push(input);
+      },
+    } as never,
+  });
+  return { service, rich, plain, attached };
+}
+
+function autoResult(name: string, title: string): CommitReviewResult {
   return {
-    ...defaultWorkspaceAssigneeDigestSettings('w1'),
-    commitSyncEnabled: true,
-    telegramGroupChatId: -100,
-    projectMode: 'all' as const,
+    chatId: -100,
+    projectName: name,
+    mode: 'auto',
+    rows: [{ title, openUrl: 'https://app/open', completeUrl: null }],
   };
 }
 
-test('auto summary lists closed drafts without a confirm button', async () => {
-  const rich: Array<{ html: string }> = [];
-  const attached: string[][] = [];
-  const service = new SendWorkspaceCommitReview({
-    settings: { async get() { return groupSettings(); } } as never,
-    projects: {
-      async getById() { return { id: 'p1', name: 'OrdersFlow' }; },
-      async getWorkspaceId() { return 'w1'; },
-    } as never,
-    tasks: {
-      // В auto-режиме задача уже закрыта (status='done') — кнопка ✓ не нужна.
-      async getById() {
-        return { id: 't1', projectId: 'p1', status: 'done', description: 'Экспорт заказов' };
+function proposeResult(name: string, title: string, token: string): CommitReviewResult {
+  return {
+    chatId: -100,
+    projectName: name,
+    mode: 'propose',
+    rows: [
+      {
+        title,
+        openUrl: 'https://app/open',
+        completeUrl: `https://app/api/telegram-digest-actions/${token}`,
       },
-    } as never,
-    createEmailActionToken: {
-      async execute() { throw new Error('auto режим не должен создавать complete-токен'); },
-    } as never,
-    telegramDigestActions: {
-      async attach(input: { tokens: string[] }) { attached.push(input.tokens); },
-    } as never,
-    telegram: {
-      async sendRichMessage(input: { html: string }) {
-        rich.push(input);
-        return { kind: 'ok' as const, messageId: 9 };
-      },
-      async sendMessage() { throw new Error('fallback must not be used'); },
-    } as never,
-    appUrl: 'https://projectsflow.ru',
-  });
+    ],
+  };
+}
 
-  assert.equal(
-    await service.execute({
-      projectId: 'p1',
-      dispatcherUserId: 'u1',
-      mode: 'auto',
-      matches: [{ taskId: 't1', commitSha: 'a'.repeat(40), reason: 'реализует' }],
-    }),
-    true,
-  );
-
-  assert.equal(rich.length, 1);
-  assert.match(rich[0]!.html, /Закрыто по коммитам/);
-  assert.match(rich[0]!.html, /Экспорт заказов/);
-  assert.doesNotMatch(rich[0]!.html, /✓ закрыть/);
-  assert.doesNotMatch(rich[0]!.html, /Значимые коммиты|verdict|⚠️/);
-  assert.deepEqual(attached, [[]]);
+test('empty results → nothing sent', async () => {
+  const h = harness();
+  assert.equal(await h.service.execute({ chatId: -100, results: [], now: NOW }), false);
+  assert.equal(h.rich.length, 0);
+  assert.equal(h.plain.length, 0);
 });
 
-test('propose summary lists proposed drafts with a confirm link', async () => {
-  const rich: Array<{ html: string }> = [];
-  const attached: string[][] = [];
+test('two projects (auto + propose) collapse into ONE message with two <details>', async () => {
+  const h = harness();
   const token = 'd'.repeat(32);
-  const service = new SendWorkspaceCommitReview({
-    settings: { async get() { return groupSettings(); } } as never,
-    projects: {
-      async getById() { return { id: 'p1', name: 'OrdersFlow' }; },
-      async getWorkspaceId() { return 'w1'; },
-    } as never,
-    tasks: {
-      async getById() {
-        return { id: 't1', projectId: 'p1', status: 'backlog', description: 'Проверить обработку заказа' };
-      },
-    } as never,
-    createEmailActionToken: { async execute() { return token; } } as never,
-    telegramDigestActions: {
-      async attach(input: { tokens: string[] }) { attached.push(input.tokens); },
-    } as never,
-    telegram: {
-      async sendRichMessage(input: { html: string }) {
-        rich.push(input);
-        return { kind: 'ok' as const, messageId: 9 };
-      },
-      async sendMessage() { throw new Error('fallback must not be used'); },
-    } as never,
-    appUrl: 'https://projectsflow.ru',
+  const ok = await h.service.execute({
+    chatId: -100,
+    results: [autoResult('OrdersFlow', 'Экспорт заказов'), proposeResult('DocsFlow', 'Проверить обработку', token)],
+    now: NOW,
   });
 
-  assert.equal(
-    await service.execute({
-      projectId: 'p1',
-      dispatcherUserId: 'u1',
-      mode: 'propose',
-      matches: [{ taskId: 't1', commitSha: 'a'.repeat(40), reason: 'реализует' }],
-    }),
-    true,
-  );
-
-  assert.equal(rich.length, 1);
-  assert.match(rich[0]!.html, /Предложено закрыть/);
-  assert.match(rich[0]!.html, /Проверить обработку заказа/);
-  assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${token}`));
-  assert.match(rich[0]!.html, /✓ закрыть/);
-  assert.deepEqual(attached, [[token]]);
+  assert.equal(ok, true);
+  assert.equal(h.rich.length, 1);
+  const html = h.rich[0]!.html;
+  // Один заголовок дайджеста с датой.
+  assert.match(html, /Сверка коммитов · 24\.07\.2026/);
+  // Ровно два сворачиваемых блока.
+  assert.equal(html.match(/<details>/g)?.length, 2);
+  // Режимы подписаны раздельно.
+  assert.match(html, /OrdersFlow · 1 задача · закрыто/);
+  assert.match(html, /DocsFlow · 1 задача · предложено закрыть/);
+  // Задачи и действия сохранены.
+  assert.match(html, /Экспорт заказов/);
+  assert.match(html, /Проверить обработку/);
+  assert.match(html, new RegExp(`/api/telegram-digest-actions/${token}`));
+  // Токен propose-проекта запомнен, auto-проект токенов не даёт.
+  assert.equal(h.attached.length, 1);
+  assert.deepEqual(h.attached[0]!.tokens, [token]);
+  assert.equal(h.attached[0]!.messageKind, 'rich');
 });
 
-test('summary stays silent when there is nothing to report', async () => {
-  let sent = 0;
-  const service = new SendWorkspaceCommitReview({
-    settings: { async get() { return groupSettings(); } } as never,
-    projects: {
-      async getById() { return { id: 'p1', name: 'OrdersFlow' }; },
-      async getWorkspaceId() { return 'w1'; },
-    } as never,
-    tasks: { async getById() { return null; } } as never,
-    createEmailActionToken: { async execute() { return 'unused'; } } as never,
-    telegramDigestActions: { async attach() {} } as never,
-    telegram: {
-      async sendRichMessage() { sent += 1; return { kind: 'ok' as const, messageId: sent }; },
-      async sendMessage() { sent += 1; return { kind: 'ok' as const, messageId: sent }; },
-    } as never,
-    appUrl: 'https://projectsflow.ru',
+test('fallback builds one HTML message with a blockquote per project', async () => {
+  const h = harness({ sendRichMessage: undefined });
+  const ok = await h.service.execute({
+    chatId: -100,
+    results: [autoResult('OrdersFlow', 'Экспорт'), autoResult('DocsFlow', 'Импорт')],
+    now: NOW,
   });
-
-  // Пустой список совпадений — молчок.
-  assert.equal(
-    await service.execute({ projectId: 'p1', dispatcherUserId: 'u1', mode: 'auto', matches: [] }),
-    false,
-  );
-  // Задача не нашлась (getById → null) — тоже молчок.
-  assert.equal(
-    await service.execute({
-      projectId: 'p1',
-      dispatcherUserId: 'u1',
-      mode: 'auto',
-      matches: [{ taskId: 'gone', commitSha: 'x', reason: 'r' }],
-    }),
-    false,
-  );
-  assert.equal(sent, 0);
+  assert.equal(ok, true);
+  assert.equal(h.rich.length, 0);
+  assert.equal(h.plain.length, 1);
+  const text = h.plain[0]!.text;
+  assert.match(text, /Сверка коммитов · 24\.07\.2026/);
+  assert.equal(text.match(/<blockquote expandable>/g)?.length, 2);
+  assert.match(text, /OrdersFlow · закрыто/);
+  assert.match(text, /DocsFlow · закрыто/);
+  assert.equal(h.attached[0]!.messageKind, 'html');
 });

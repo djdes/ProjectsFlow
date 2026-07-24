@@ -219,6 +219,8 @@ import { ListPendingCommitSyncJobs } from './application/commit-sync/ListPending
 import { ClaimCommitSyncJob } from './application/commit-sync/ClaimCommitSyncJob.js';
 import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitSyncJob.js';
 import { SendWorkspaceCommitReview } from './application/commit-sync/SendWorkspaceCommitReview.js';
+import { PrepareCommitReviewResult } from './application/commit-sync/PrepareCommitReviewResult.js';
+import { FlushCommitSyncBatch } from './application/commit-sync/FlushCommitSyncBatch.js';
 import { DrizzleCloseProposalRepository } from './infrastructure/repositories/DrizzleCloseProposalRepository.js';
 import { CreateCloseProposals } from './application/close-proposal/CreateCloseProposals.js';
 import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseProposal.js';
@@ -1480,14 +1482,22 @@ const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
   commitSyncJobs: commitSyncJobRepo,
 });
 const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo, checkBudget });
+// Объединённый дайджест сверки коммитов: собирает результаты нескольких проектов батча в одно
+// сообщение (db/143). Готовит per-project payload'ы — PrepareCommitReviewResult.
 const sendWorkspaceCommitReview = new SendWorkspaceCommitReview({
+  telegram: telegramClient,
+  telegramDigestActions: telegramDigestActionDeliveryRepo,
+});
+const prepareCommitReviewResult = new PrepareCommitReviewResult({
   settings: workspaceAssigneeDigestRepo,
   projects: projectRepo,
   tasks: taskRepo,
-  telegram: telegramClient,
   createEmailActionToken,
-  telegramDigestActions: telegramDigestActionDeliveryRepo,
   appUrl: appBaseUrl,
+});
+const flushCommitSyncBatch = new FlushCommitSyncBatch({
+  commitSyncJobs: commitSyncJobRepo,
+  sendReview: sendWorkspaceCommitReview,
 });
 const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
@@ -1495,7 +1505,8 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
   recordUsage,
   // Ветка action='propose' (db/101): создаём предложения закрыть вместо авто-перемещения.
   createProposals: createCloseProposals,
-  sendReview: sendWorkspaceCommitReview,
+  prepareReview: prepareCommitReviewResult,
+  flush: flushCommitSyncBatch,
   // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
   linkCommit: new LinkCommit({
     projects: projectRepo,
@@ -1509,13 +1520,19 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
     versions: taskVersionRecorder,
   }),
 });
-const commitSyncJobCleanup = new CommitSyncJobCleanup({ commitSyncJobs: commitSyncJobRepo });
+const commitSyncJobCleanup = new CommitSyncJobCleanup({
+  commitSyncJobs: commitSyncJobRepo,
+  // Safety flush: досылаем батчи, осиротевшие после добивания зависших job'ов (db/143).
+  flush: flushCommitSyncBatch,
+});
 setInterval(() => {
   void commitSyncJobCleanup
     .runOnce(new Date())
     .then((r) => {
-      if (r.cancelled > 0 || r.deleted > 0) {
-        console.log(`[commit-sync-cleanup] cancelled=${r.cancelled} deleted=${r.deleted}`);
+      if (r.cancelled > 0 || r.deleted > 0 || r.flushed > 0) {
+        console.log(
+          `[commit-sync-cleanup] cancelled=${r.cancelled} deleted=${r.deleted} flushed=${r.flushed}`,
+        );
       }
     })
     .catch((err) => console.warn('[commit-sync-cleanup] failed:', err));
@@ -2887,6 +2904,9 @@ workspaceAssigneeDigestScheduler.start();
 const commitSyncScheduler = new CommitSyncScheduler({
   automation: automationRepo,
   enqueue: enqueueCommitSyncJob,
+  // Резолв Telegram-группы проекта для ключа батча (db/143).
+  projects: projectRepo,
+  settings: workspaceAssigneeDigestRepo,
 });
 commitSyncScheduler.start();
 

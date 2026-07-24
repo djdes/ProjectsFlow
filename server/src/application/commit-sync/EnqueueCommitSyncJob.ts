@@ -36,7 +36,9 @@ export class EnqueueCommitSyncJob {
   async execute(
     projectId: string,
     now: Date = new Date(),
-    opts: { forceEnabled?: boolean } = {},
+    // batchKey (db/143): планировщик задаёт общий ключ батча для одного тика группы+времени.
+    // По умолчанию null — одиночная доставка (ручная «Сверить сейчас» шлётся сразу).
+    opts: { forceEnabled?: boolean; batchKey?: string | null } = {},
   ): Promise<CommitSyncJob | null> {
     const project = await this.deps.projects.getById(projectId);
     if (!project?.dispatcherUserId) return null;
@@ -90,6 +92,7 @@ export class EnqueueCommitSyncJob {
       createdBy: project.ownerId,
       dispatcherUserId,
       action: config.commitSyncAction,
+      batchKey: opts.batchKey ?? null,
       thresholdHours: config.commitSyncThresholdHours,
       context,
       commitsJson: JSON.stringify(commitSnapshot),

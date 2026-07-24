@@ -11,6 +11,8 @@ export type NewCommitSyncJobInput = {
   readonly dispatcherUserId: string;
   // Снимок действия из настроек (propose|auto).
   readonly action: CommitSyncAction;
+  // Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>' (db/143). null — одиночная доставка.
+  readonly batchKey: string | null;
   readonly thresholdHours: number;
   readonly context: string | null;
   readonly commitsJson: string | null;
@@ -36,6 +38,8 @@ export type CommitSyncJobRepository = {
     readonly id: string;
     readonly status: Extract<CommitSyncStatus, 'succeeded' | 'failed' | 'cancelled'>;
     readonly matchesJson: string | null;
+    // Per-job payload сводки (db/143). null — чистый проект / доставка не для группы.
+    readonly reviewJson: string | null;
     readonly resultSummary: string | null;
     readonly error: string | null;
     readonly costUsd: number | null;
@@ -47,4 +51,17 @@ export type CommitSyncJobRepository = {
     readonly statuses: ReadonlyArray<Extract<CommitSyncStatus, 'queued' | 'running'>>;
   }): Promise<number>;
   deleteTerminal(input: { readonly olderThan: Date }): Promise<number>;
+
+  // --- Батчинг сводок (db/143) ---
+  /** Все job'ы батча (для агрегации сборщиком). */
+  listByBatchKey(batchKey: string): Promise<CommitSyncJob[]>;
+  /**
+   * Атомарно пометить весь батч отправленным (SET batch_flushed_at на все строки), НО только если
+   * не осталось незавершённых job'ов и флаг ещё не стоял. true — этот вызов выбран сборщиком.
+   */
+  tryMarkBatchFlushed(batchKey: string): Promise<boolean>;
+  /** То же для одиночного job'а без batch_key (ручная «Сверить сейчас»). */
+  tryMarkJobFlushed(jobId: string): Promise<boolean>;
+  /** batch_key'и, где все job'ы терминальны, но сообщение ещё не слали (safety sweep). */
+  findFlushableBatchKeys(): Promise<string[]>;
 };
