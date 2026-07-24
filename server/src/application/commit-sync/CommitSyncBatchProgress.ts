@@ -99,7 +99,15 @@ function renderProgress(statuses: readonly CommitSyncBatchStatus[]): string {
   const lines = statuses.map(
     (s) => `${STATUS_EMOJI[s.status]} ${escapeHtml(s.projectName ?? 'Проект')}`,
   );
-  return [`<b>🔍 Сверяю коммиты…</b>`, '', ...lines].join('\n');
+  // Terminal = finished (succeeded/failed/cancelled). Shown in the header so the collapsed
+  // message still conveys progress without expanding.
+  const done = statuses.filter((s) => s.status !== 'queued' && s.status !== 'running').length;
+  // Project list hidden in a native collapsible block (<blockquote expandable>) — same "expand"
+  // affordance as the other digests; the header with the counter stays visible when collapsed.
+  return [
+    `<b>🔍 Сверяю коммиты…</b> ${done}/${statuses.length}`,
+    `<blockquote expandable>${lines.join('\n')}</blockquote>`,
+  ].join('\n');
 }
 
 // chatId зашит первым сегментом ключа '<chatId>:<YYYY-MM-DD>:<HH>:<MM>'. Группы — отрицательные id,
