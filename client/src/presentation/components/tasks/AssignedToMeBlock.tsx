@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -35,6 +36,7 @@ import {
   Inbox as InboxIcon,
   ListFilter,
   MessageSquare,
+  Plus,
   Trash2,
   Users,
   X,
@@ -246,6 +248,7 @@ export function AssignedToMeBlock({
 }: Props): React.ReactElement | null {
   const { taskAssigneeRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
+  const navigate = useNavigate();
   const { user } = useCurrentUser();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
@@ -363,6 +366,25 @@ export function AssignedToMeBlock({
     void refresh();
     onChanged?.();
   };
+
+  // #2 (задача af1ebf44): инлайн-создание в колонке-проекте верхнего блока. Только вкладка
+  // «Для меня» + группировка по проекту (колонка = реальный проект). Открытый композер держим
+  // по projectId колонки; создаём задачу в backlog проекта, назначенную на текущего юзера, —
+  // тогда карточка сразу попадает в эту же колонку. Без модального окна (как «+» на доске).
+  const [composingProject, setComposingProject] = useState<string | null>(null);
+  const createInProjectColumn = useCallback(
+    async (projectId: string, title: string): Promise<void> => {
+      if (!user) return;
+      await taskRepository.create(projectId, {
+        description: title,
+        status: 'backlog',
+        assigneeUserId: user.id,
+      });
+      await refresh();
+      onChanged?.();
+    },
+    [user, taskRepository, refresh, onChanged],
+  );
 
   // Удаление карточки блока — через тот же стильный диалог, что и на досках проектов
   // (не нативный confirm). handleDelete лишь открывает окно, удаляет confirmDelete.
@@ -872,37 +894,50 @@ export function AssignedToMeBlock({
   // колонках канбана и hairline-линейка, замыкающая зону перед основной доской.
   const body = (
     <section id="assigned-to-me" className="space-y-3">
-      <div className="flex items-start justify-between gap-3 px-0.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {/* Своя ава (владелец зоны) — И drop-цель «забрать себе»: перетащи задачу сюда, чтобы
-              вернуть/назначить её себе (остальные участники — справа).
-              size-8 крупнее аватаров в строках/карточках — иерархия масштабом. */}
-          {user ? (
-            <SelfDropAvatar user={user} dragging={dragActive} />
-          ) : (
-            <UserAvatar displayName="" className="size-8 text-[11px]" />
-          )}
-          <div className="min-w-0">
-            {/* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
-                там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
-            <AssigneeTabs
-              tab={tab}
-              onChange={handleTabChange}
-              toMeCount={toMeVisible.length}
-              // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
-              // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
-              // расходилось с количеством видимых карточек («неверное количество»).
-              byMeCount={byMeVisible.length}
-            />
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
+      <div className="space-y-2.5">
+        <div className="flex items-start justify-between gap-3 px-0.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {/* Своя ава (владелец зоны) — И drop-цель «забрать себе»: перетащи задачу сюда, чтобы
+                вернуть/назначить её себе. size-8 крупнее аватаров в строках/карточках. */}
+            {user ? (
+              <SelfDropAvatar user={user} dragging={dragActive} />
+            ) : (
+              <UserAvatar displayName="" className="size-8 text-[11px]" />
+            )}
+            <div className="min-w-0">
+              {/* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
+                  там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
+              <AssigneeTabs
+                tab={tab}
+                onChange={handleTabChange}
+                toMeCount={toMeVisible.length}
+                // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
+                // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
+                // расходилось с количеством видимых карточек («неверное количество»).
+                byMeCount={byMeVisible.length}
+              />
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
+            </div>
           </div>
+          {/* Единая кнопка «Фильтры» порталится в шапку страницы (toolbarSlot). Фолбэк (нет
+              слота) — рендерим на месте, в шапке блока. Сам портал отдаётся из return ниже. */}
+          {!toolbarSlot && (
+            <div className="flex flex-wrap items-center justify-end gap-1 self-center">{filtersPopover}</div>
+          )}
         </div>
-        {/* Кубики людей пространства — в ПРАВОМ крае строки с вкладками (цель drag-назначения).
-            Компактные аватары; при наведении перетаскиваемой задачи кубик раскрывается в
-            «Назначить: <имя>». Ряд горизонтально скроллится на узких экранах. self-center —
-            вертикально по центру относительно более высокой левой группы (вкладки + подзаголовок). */}
+
+        {/* Кубики участников для делегации (задача 3a36e7e8) — СЛЕВА, крупными блоками,
+            переносятся на несколько строк (все видны сразу). Тащить карточку на них удобнее,
+            чем в мелкий ряд у правого края. Каждый блок — drop-цель смены ответственного;
+            под курсором раскрывается в «Назначить: <имя>». На «Другим» блок ещё и клик-фильтр
+            «кому». Во время drag добавляется тихая подпись-подсказка слева. */}
         {members.length > 0 && (
-          <div className="flex min-w-0 items-center gap-1.5 self-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+            {dragActive && (
+              <span className="mr-0.5 shrink-0 text-[11px] font-medium text-primary/70">
+                Перетащите на участника →
+              </span>
+            )}
             {members.map((m) => (
               <UserCube
                 key={m.id}
@@ -920,11 +955,6 @@ export function AssignedToMeBlock({
               />
             ))}
           </div>
-        )}
-        {/* Единая кнопка «Фильтры» порталится в шапку страницы (toolbarSlot). Фолбэк (нет
-            слота) — рендерим на месте, в шапке блока. Сам портал отдаётся из return ниже. */}
-        {!toolbarSlot && (
-          <div className="flex flex-wrap items-center justify-end gap-1 self-center">{filtersPopover}</div>
         )}
       </div>
 
@@ -1038,17 +1068,35 @@ export function AssignedToMeBlock({
                   ? { type: 'group', grouping: 'priority', priority: group.key }
                   : null;
             const columnSelection = columnSelectionAt(index);
+            // #2 (af1ebf44): колонка = реальный проект (группировка по проекту, не «Личные»).
+            // Тогда её название кликабельно (→ страница проекта), а по ховеру доступна «+».
+            const isProjectColumn = grouping === 'project' && !group.isInbox;
+            // «+» создаёт задачу в этом проекте на текущего юзера — осмысленно только на
+            // вкладке «Для меня» и там, где у юзера есть право менять (есть свои задачи).
+            const canQuickAdd =
+              isProjectColumn && tab === 'toMe' && group.items.some((i) => i.canModify);
             return (
             <GroupDropColumn
               key={group.key}
               id={`group-${grouping}-${group.key}`}
               data={dropData}
               highlight={boardDragActive}
-              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
+              className="group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
             >
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
-                <span className="truncate">{group.label}</span>
+                {isProjectColumn ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/projects/${group.key}`)}
+                    title="Открыть проект"
+                    className="min-w-0 truncate text-left underline-offset-2 transition-colors hover:text-primary hover:underline"
+                  >
+                    {group.label}
+                  </button>
+                ) : (
+                  <span className="truncate">{group.label}</span>
+                )}
                 {columnSelection ? (
                   <ColumnSelectionControls
                     selection={columnSelection}
@@ -1060,11 +1108,32 @@ export function AssignedToMeBlock({
                     {group.items.length}
                   </span>
                 )}
+                {canQuickAdd && !columnSelection && (
+                  <button
+                    type="button"
+                    aria-label="Создать задачу в проекте"
+                    title="Создать задачу"
+                    onClick={() =>
+                      setComposingProject((p) => (p === group.key ? null : group.key))
+                    }
+                    // На тач-экранах кнопка видна всегда (ховера нет); на десктопе — по наведению.
+                    className="shrink-0 rounded-md p-0.5 text-muted-foreground opacity-100 transition-colors hover:bg-background hover:text-foreground sm:opacity-0 sm:group-hover/col:opacity-100"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                )}
               </div>
               <div
                 onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
                 className="flex flex-col gap-1.5 p-1.5"
               >
+                {/* #2: инлайн-создание сверху колонки-проекта (как «+» на доске), без окна. */}
+                {composingProject === group.key && (
+                  <InlineQuickAdd
+                    onCreate={(title) => createInProjectColumn(group.key, title)}
+                    onClose={() => setComposingProject(null)}
+                  />
+                )}
                 {/* Каппинг «первые 4 + Показать ещё» (на тач включён по умолчанию) — иначе
                     колонка рендерит все свои карточки и вешает скролл на мобиле. */}
                 <ColumnPreviewList
@@ -1473,6 +1542,63 @@ function DraggableTask({
   );
 }
 
+// #2 (af1ebf44): лёгкий inline-композер сверху колонки-проекта верхнего блока «Входящих».
+// Полный аналог «+» на доске проекта: авто-фокус, Enter — создать и остаться в поле (цепочка),
+// Escape/пустой blur — закрыть. Без модального окна.
+function InlineQuickAdd({
+  onCreate,
+  onClose,
+}: {
+  onCreate: (title: string) => Promise<void>;
+  onClose: () => void;
+}): React.ReactElement {
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  const submit = async (): Promise<void> => {
+    const title = value.trim();
+    if (!title || busy) return;
+    setBusy(true);
+    try {
+      await onCreate(title);
+      setValue('');
+      ref.current?.focus();
+    } catch (e) {
+      toast.error(`Не удалось создать: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-lg border border-primary/40 bg-background p-1 shadow-sm ring-1 ring-primary/10">
+      <textarea
+        ref={ref}
+        rows={1}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            void submit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+        onBlur={() => {
+          if (!value.trim() && !busy) onClose();
+        }}
+        placeholder="Название задачи · Enter"
+        aria-label="Название новой задачи"
+        className="max-h-32 w-full resize-none bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-muted-foreground/55"
+      />
+    </div>
+  );
+}
+
 // Кубик участника пространства = drop-цель смены ответственного. В покое — компактная ава + имя
 // (ховер раскрывает карточку UserAvatarHover). Во время drag'а кубик получает тихий
 // primary-ринг (сигнал «сюда можно»), а тот, что под курсором, плавно всплывает: лёгкий
@@ -1500,15 +1626,16 @@ function UserCube({
       ref={setNodeRef}
       onClick={clickable ? onToggleFilter : undefined}
       className={cn(
-        'relative flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] transition-all duration-200 ease-out',
+        // Крупный блок-плитка (задача 3a36e7e8): больше площадь → легче попасть при drag.
+        'relative flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out',
         clickable && 'cursor-pointer',
         dragging
           ? isOver
-            ? 'scale-[1.06] bg-primary/10 text-primary shadow-sm ring-2 ring-inset ring-primary'
-            : 'bg-primary/[0.05] text-foreground ring-1 ring-inset ring-primary/20'
+            ? 'scale-105 border-primary bg-primary/10 text-primary shadow-md ring-2 ring-inset ring-primary'
+            : 'border-primary/30 bg-primary/[0.06] text-foreground ring-1 ring-inset ring-primary/20'
           : filterActive
-            ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/30'
-            : 'text-muted-foreground hover:bg-muted',
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
       )}
     >
       {dragging ? (
@@ -1516,17 +1643,17 @@ function UserCube({
         <UserAvatar
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
-          className="size-6 shrink-0 text-[10px]"
+          className="size-7 shrink-0 text-[11px]"
         />
       ) : (
         <UserAvatarHover
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
           subtitle="участник пространства · перетащите сюда задачу, чтобы назначить"
-          triggerClassName="size-6 text-[10px]"
+          triggerClassName="size-7 text-[11px]"
         />
       )}
-      <span className="max-w-[7rem] truncate font-medium">
+      <span className="max-w-[8rem] truncate font-medium">
         {dragging && isOver ? 'Назначить' : member.displayName}
       </span>
       {/* Активный фильтр — инлайновый × ВНУТРИ пилюли (не absolute: ряд аватаров в
