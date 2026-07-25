@@ -49,9 +49,11 @@ export class DrizzleTaskSearchRepository implements TaskSearchRepository {
     // юзера, как и раньше (TaskSearchQuery не несёт workspaceId).
     let scopeCond: SQL | undefined;
     if (!q.includeAllProjects) {
-      const accessibleIds = (await this.projectMembers.listProjectsForUser(q.userId)).map(
-        (p) => p.id,
-      );
+      const accessibleIds = (
+        q.workspaceId
+          ? await this.projectMembers.listProjectsForUserInWorkspace(q.userId, q.workspaceId)
+          : await this.projectMembers.listProjectsForUser(q.userId)
+      ).map((p) => p.id);
       if (accessibleIds.length === 0) return [];
       scopeCond = inArray(tasks.projectId, accessibleIds);
     }

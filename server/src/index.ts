@@ -1990,7 +1990,7 @@ const { app, devProxyUpgrade } = createApp({
     projectNotifier,
   },
   recentTaskViews: {
-    list: new ListRecentTaskViews({ repo: recentTaskViewRepo }),
+    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace }),
     record: new RecordTaskView({ repo: recentTaskViewRepo }),
   },
   projectAnalytics: {
@@ -2129,7 +2129,9 @@ const { app, devProxyUpgrade } = createApp({
     service: siteEditorService,
   },
   search: {
-    searchTasks: new SearchTasks({ search: taskSearchRepo }),
+    // UI-поиск изолирован по активному пространству (agent-инстанс ниже — без резолвера,
+    // глобален by-design).
+    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace }),
   },
   telegram: {
     connect: connectTelegramAccount,

@@ -17,6 +17,9 @@ export type TaskSearchQuery = {
   readonly query: string;
   // true ⇒ искать по всем проектам (admin); false ⇒ только там, где userId — member.
   readonly includeAllProjects: boolean;
+  // Изоляция по активному team-пространству: задан ⇒ ищем только в проектах этого
+  // пространства. undefined ⇒ по всем пространствам юзера (дефолт-хаб / agent / admin).
+  readonly workspaceId?: string;
   readonly limit: number;
 };
 

@@ -49,13 +49,19 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
       .onDuplicateKeyUpdate({ set: { viewedAt: sql`CURRENT_TIMESTAMP` } });
   }
 
-  async listRecent(userId: string, limit: number): Promise<RecentTaskView[]> {
+  async listRecent(
+    userId: string,
+    limit: number,
+    workspaceId?: string,
+  ): Promise<RecentTaskView[]> {
     // Гейт доступа — через единое пространство (workspace_members, is_inbox→owner), НЕ
     // project_members (#блокер5: «Недавно просмотренные» были мертвы для ws-участника без
-    // ленивой строки). Без фильтра по workspace (кросс-воркспейсно, как и раньше).
-    const accessibleIds = (await this.projectMembers.listProjectsForUser(userId)).map(
-      (p) => p.id,
-    );
+    // ленивой строки). workspaceId задан ⇒ срез по активному team-пространству.
+    const accessibleIds = (
+      workspaceId
+        ? await this.projectMembers.listProjectsForUserInWorkspace(userId, workspaceId)
+        : await this.projectMembers.listProjectsForUser(userId)
+    ).map((p) => p.id);
     if (accessibleIds.length === 0) return [];
 
     const rows = await this.db
