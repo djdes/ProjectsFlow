@@ -32,6 +32,8 @@ import type { GetCurrentUser } from '../application/auth/GetCurrentUser.js';
 import type { Register } from '../application/auth/Register.js';
 import type { Login } from '../application/auth/Login.js';
 import type { Logout } from '../application/auth/Logout.js';
+import type { RequestPasswordReset } from '../application/auth/RequestPasswordReset.js';
+import type { ResetPassword } from '../application/auth/ResetPassword.js';
 import type { UpdateProfile } from '../application/user/UpdateProfile.js';
 import type { UploadUserAvatar } from '../application/user/UploadUserAvatar.js';
 import type { GetUserUsage } from '../application/usage/GetUserUsage.js';
@@ -312,6 +314,8 @@ type AppDeps = {
     readonly login: Login;
     readonly logout: Logout;
     readonly getCurrentUser: GetCurrentUser;
+    readonly requestPasswordReset: RequestPasswordReset;
+    readonly resetPassword: ResetPassword;
   };
   readonly user: {
     readonly updateProfile: UpdateProfile;
@@ -840,6 +844,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       register: deps.auth.register,
       login: deps.auth.login,
       logout: deps.auth.logout,
+      requestPasswordReset: deps.auth.requestPasswordReset,
+      resetPassword: deps.auth.resetPassword,
       updateProfile: deps.user.updateProfile,
       uploadAvatar: deps.user.uploadAvatar,
       getUserUsage: deps.user.getUserUsage,

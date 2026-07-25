@@ -40,6 +40,8 @@ export interface UserRepository {
   listAdmins(): Promise<User[]>;
   create(input: CreateUserInput): Promise<User>;
   updateProfile(id: string, input: UpdateProfileInput): Promise<User>;
+  // Установить новый password_hash (сброс пароля, db/099). Хэш уже посчитан вызывающим.
+  updatePasswordHash(id: string, passwordHash: string): Promise<void>;
   // Установка/сброс аватара (URL на served-файл). null — удалить аватар.
   setAvatarUrl(id: string, avatarUrl: string | null): Promise<User>;
 

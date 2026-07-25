@@ -58,6 +58,9 @@ import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
 import { Register } from './application/auth/Register.js';
 import { Login } from './application/auth/Login.js';
 import { Logout } from './application/auth/Logout.js';
+import { RequestPasswordReset } from './application/auth/RequestPasswordReset.js';
+import { ResetPassword } from './application/auth/ResetPassword.js';
+import { DrizzlePasswordResetTokenRepository } from './infrastructure/repositories/DrizzlePasswordResetTokenRepository.js';
 import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
 import { UploadUserAvatar } from './application/user/UploadUserAvatar.js';
@@ -371,6 +374,7 @@ const now = (): Date => new Date();
 
 const userRepo = new DrizzleUserRepository(db);
 const sessionRepo = new DrizzleSessionRepository(db);
+const passwordResetTokenRepo = new DrizzlePasswordResetTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
@@ -1774,6 +1778,22 @@ const { app, devProxyUpgrade } = createApp({
     login: new Login(authDeps),
     logout: new Logout(sessionRepo),
     getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now }),
+    requestPasswordReset: new RequestPasswordReset({
+      users: userRepo,
+      tokens: passwordResetTokenRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      now,
+      ttlMs: 60 * 60 * 1000, // 1 час
+      appUrl: appBaseUrl,
+    }),
+    resetPassword: new ResetPassword({
+      users: userRepo,
+      tokens: passwordResetTokenRepo,
+      sessions: sessionRepo,
+      passwordHasher,
+      now,
+    }),
   },
   user: {
     updateProfile: new UpdateProfile(userRepo),

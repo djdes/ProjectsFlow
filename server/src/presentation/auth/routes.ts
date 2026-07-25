@@ -3,6 +3,8 @@ import multer from 'multer';
 import type { Register } from '../../application/auth/Register.js';
 import type { Login } from '../../application/auth/Login.js';
 import type { Logout } from '../../application/auth/Logout.js';
+import type { RequestPasswordReset } from '../../application/auth/RequestPasswordReset.js';
+import type { ResetPassword } from '../../application/auth/ResetPassword.js';
 import type { UpdateProfile } from '../../application/user/UpdateProfile.js';
 import type { UploadUserAvatar } from '../../application/user/UploadUserAvatar.js';
 import type { User } from '../../domain/user/User.js';
@@ -11,7 +13,13 @@ import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemor
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { config, isProd, sessionTtlMs } from '../config.js';
-import { loginSchema, registerSchema, updateProfileSchema } from './schemas.js';
+import {
+  loginSchema,
+  registerSchema,
+  updateProfileSchema,
+  passwordResetRequestSchema,
+  passwordResetConfirmSchema,
+} from './schemas.js';
 import type { GetUserUsage } from '../../application/usage/GetUserUsage.js';
 import type { BuyPlan } from '../../application/usage/BuyPlan.js';
 import type { UsageSummary } from '../../domain/usage/UsageSummary.js';
@@ -25,6 +33,9 @@ type Deps = {
   readonly register: Register;
   readonly login: Login;
   readonly logout: Logout;
+  // Сброс пароля (U2). Опциональны — если не переданы, эндпоинты отдадут 404 (для тестов).
+  readonly requestPasswordReset?: RequestPasswordReset;
+  readonly resetPassword?: ResetPassword;
   readonly updateProfile: UpdateProfile;
   readonly uploadAvatar: UploadUserAvatar;
   // Usage/тарифы (db/082+084): чтение лимитов и self-serve смена плана.
@@ -159,6 +170,51 @@ export function authRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Запрос сброса пароля. Всегда 202 (не раскрываем, существует ли аккаунт). Rate-limit
+  // по IP — anti-spam/anti-enumeration. Anonymous endpoint.
+  router.post(
+    '/password-reset/request',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!deps.requestPasswordReset) {
+          res.status(404).json({ error: 'not_available' });
+          return;
+        }
+        if (deps.rateLimiter) {
+          const key = `pwreset:${clientIp(req)}`;
+          if (!deps.rateLimiter.hit(key, 5, 15 * 60 * 1000)) {
+            res.status(429).json({ error: 'too_many_requests' });
+            return;
+          }
+        }
+        const body = passwordResetRequestSchema.parse(req.body);
+        await deps.requestPasswordReset.execute(body.email);
+        // 202 без тела — единый ответ и для существующего, и для несуществующего email.
+        res.status(202).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Установка нового пароля по токену из письма. Токен одноразовый + TTL. Anonymous endpoint.
+  router.post(
+    '/password-reset/confirm',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!deps.resetPassword) {
+          res.status(404).json({ error: 'not_available' });
+          return;
+        }
+        const body = passwordResetConfirmSchema.parse(req.body);
+        await deps.resetPassword.execute(body.token, body.password);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   router.get('/me', requireAuth, (req: Request, res: Response) => {
     res.json({ user: publicUser(req.user!) });

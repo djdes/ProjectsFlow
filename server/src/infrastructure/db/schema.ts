@@ -2280,6 +2280,26 @@ export const emailActionTokens = mysqlTable(
 );
 
 export type EmailActionTokenRow = typeof emailActionTokens.$inferSelect;
+
+// Токены сброса пароля (db/099). token_hash = SHA-256 plaintext-токена из письма.
+export const passwordResetTokens = mysqlTable(
+  'password_reset_tokens',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    usedAt: timestamp('used_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_password_reset_token_hash').on(t.tokenHash),
+    index('idx_password_reset_user').on(t.userId),
+    index('idx_password_reset_expires').on(t.expiresAt),
+  ],
+);
+
+export type PasswordResetTokenRow = typeof passwordResetTokens.$inferSelect;
 export type NewEmailActionTokenRow = typeof emailActionTokens.$inferInsert;
 
 // ============================================================================

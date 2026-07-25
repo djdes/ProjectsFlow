@@ -80,6 +80,10 @@ export class DrizzleUserRepository implements UserRepository {
     return updated;
   }
 
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.db.update(users).set({ passwordHash }).where(eq(users.id, id));
+  }
+
   async setAvatarUrl(id: string, avatarUrl: string | null): Promise<User> {
     await this.db.update(users).set({ avatarUrl }).where(eq(users.id, id));
     const updated = await this.getById(id);
