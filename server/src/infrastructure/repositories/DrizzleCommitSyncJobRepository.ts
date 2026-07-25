@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import type { CommitSyncJob, CommitSyncStatus } from '../../domain/commit-sync/CommitSyncJob.js';
 import type {
+  CommitSyncBatchStatus,
   CommitSyncJobRepository,
   NewCommitSyncJobInput,
   PendingCommitSyncJob,
@@ -21,6 +22,7 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
       dispatcherUserId: input.dispatcherUserId,
       status: 'queued',
       action: input.action,
+      batchKey: input.batchKey,
       thresholdHours: input.thresholdHours,
       context: input.context,
       commitsJson: input.commitsJson,
@@ -87,6 +89,7 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
     id: string;
     status: Extract<CommitSyncStatus, 'succeeded' | 'failed' | 'cancelled'>;
     matchesJson: string | null;
+    reviewJson: string | null;
     resultSummary: string | null;
     error: string | null;
     costUsd: number | null;
@@ -98,6 +101,7 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
       .set({
         status: input.status,
         matchesJson: input.matchesJson,
+        reviewJson: input.reviewJson,
         resultSummary: input.resultSummary,
         error: input.error,
         costUsd: input.costUsd === null ? null : String(input.costUsd),
@@ -108,20 +112,119 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
       .where(eq(commitSyncJobs.id, input.id));
   }
 
+  async listByBatchKey(batchKey: string): Promise<CommitSyncJob[]> {
+    const rows = await this.db
+      .select()
+      .from(commitSyncJobs)
+      .where(eq(commitSyncJobs.batchKey, batchKey));
+    return rows.map(rowToJob);
+  }
+
+  async listBatchStatuses(batchKey: string): Promise<CommitSyncBatchStatus[]> {
+    const rows = await this.db
+      .select({
+        projectId: commitSyncJobs.projectId,
+        projectName: projects.name,
+        status: commitSyncJobs.status,
+        createdAt: commitSyncJobs.createdAt,
+      })
+      .from(commitSyncJobs)
+      .leftJoin(projects, eq(projects.id, commitSyncJobs.projectId))
+      .where(eq(commitSyncJobs.batchKey, batchKey))
+      .orderBy(asc(commitSyncJobs.createdAt));
+    return rows.map((r) => ({
+      projectId: r.projectId,
+      projectName: r.projectName ?? null,
+      status: r.status,
+    }));
+  }
+
+  async tryMarkBatchFlushed(batchKey: string): Promise<boolean> {
+    // Один атомарный UPDATE гасит все строки батча, но только если не осталось незавершённых
+    // job'ов и флаг ещё NULL. Параллельные завершения: второй увидит batch_flushed_at NOT NULL
+    // (InnoDB перечитывает строку под блокировкой) → 0 строк. Derived-table обёртка обходит
+    // запрет MySQL на подзапрос к обновляемой таблице.
+    const result = await this.db.execute(sql`
+      UPDATE commit_sync_jobs
+      SET batch_flushed_at = CURRENT_TIMESTAMP
+      WHERE batch_key = ${batchKey}
+        AND batch_flushed_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM (SELECT status FROM commit_sync_jobs WHERE batch_key = ${batchKey}) s
+          WHERE s.status IN ('queued', 'running')
+        )
+    `);
+    return affectedRows(result) > 0;
+  }
+
+  async tryMarkJobFlushed(jobId: string): Promise<boolean> {
+    const result = await this.db.execute(sql`
+      UPDATE commit_sync_jobs
+      SET batch_flushed_at = CURRENT_TIMESTAMP
+      WHERE id = ${jobId}
+        AND batch_flushed_at IS NULL
+        AND status NOT IN ('queued', 'running')
+    `);
+    return affectedRows(result) > 0;
+  }
+
+  async findFlushableBatchKeys(): Promise<string[]> {
+    const result = await this.db.execute(sql`
+      SELECT batch_key AS batchKey FROM commit_sync_jobs
+      WHERE batch_key IS NOT NULL
+      GROUP BY batch_key
+      HAVING SUM(status IN ('queued', 'running')) = 0
+         AND SUM(batch_flushed_at IS NOT NULL) = 0
+    `);
+    const rows = (result as unknown as [Array<{ batchKey: string }>])[0] ?? [];
+    return rows.map((r) => r.batchKey).filter((key): key is string => typeof key === 'string');
+  }
+
   async cancelStale(input: {
     olderThan: Date;
     statuses: ReadonlyArray<Extract<CommitSyncStatus, 'queued' | 'running'>>;
+    onlyUnbatched?: boolean;
   }): Promise<number> {
+    const conditions = [
+      inArray(commitSyncJobs.status, [...input.statuses] as CommitSyncStatus[]),
+      lt(commitSyncJobs.createdAt, input.olderThan),
+    ];
+    // Manual «Сверить сейчас» has no batch/progress → age-cancel only unbatched rows, so a big
+    // batch that a slow runner is still clearing is never swept out from under it here.
+    if (input.onlyUnbatched) conditions.push(isNull(commitSyncJobs.batchKey));
     const result = await this.db
       .update(commitSyncJobs)
       .set({ status: 'cancelled', error: 'dispatcher_timeout', finishedAt: sql`CURRENT_TIMESTAMP` })
-      .where(
-        and(
-          inArray(commitSyncJobs.status, [...input.statuses] as CommitSyncStatus[]),
-          lt(commitSyncJobs.createdAt, input.olderThan),
-        ),
-      );
+      .where(and(...conditions));
     return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+  }
+
+  async cancelStalledBatches(input: { stalledBefore: Date }): Promise<number> {
+    // Cancel unfinished jobs of batches whose latest activity is older than `stalledBefore`.
+    // Last activity = GREATEST(latest finished_at, latest claimed_at); if a job was never
+    // claimed/finished its MAX is NULL, so fall back to the batch's earliest created_at (a batch
+    // is enqueued in one tick, so MIN(created_at) is effectively the batch creation time). The
+    // derived-table wrapper is required because MySQL forbids selecting from the table being
+    // updated directly.
+    const result = await this.db.execute(sql`
+      UPDATE commit_sync_jobs
+      SET status = 'cancelled', error = 'dispatcher_timeout', finished_at = CURRENT_TIMESTAMP
+      WHERE status IN ('queued', 'running')
+        AND batch_key IN (
+          SELECT batch_key FROM (
+            SELECT batch_key
+            FROM commit_sync_jobs
+            WHERE batch_key IS NOT NULL
+            GROUP BY batch_key
+            HAVING SUM(status IN ('queued', 'running')) > 0
+               AND GREATEST(
+                     IFNULL(MAX(finished_at), MIN(created_at)),
+                     IFNULL(MAX(claimed_at), MIN(created_at))
+                   ) < ${input.stalledBefore}
+          ) stalled
+        )
+    `);
+    return affectedRows(result);
   }
 
   async deleteTerminal(input: { olderThan: Date }): Promise<number> {
@@ -146,6 +249,11 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
   }
 }
 
+// mysql2 возвращает [ResultSetHeader, FieldPacket[]] для UPDATE — читаем affectedRows.
+function affectedRows(result: unknown): number {
+  return (result as [{ affectedRows?: number }])[0]?.affectedRows ?? 0;
+}
+
 function rowToJob(row: CommitSyncJobRow): CommitSyncJob {
   return {
     id: row.id,
@@ -154,10 +262,12 @@ function rowToJob(row: CommitSyncJobRow): CommitSyncJob {
     dispatcherUserId: row.dispatcherUserId,
     status: row.status,
     action: row.action,
+    batchKey: row.batchKey ?? null,
     thresholdHours: row.thresholdHours,
     context: row.context ?? null,
     commitsJson: row.commitsJson ?? null,
     matchesJson: row.matchesJson ?? null,
+    reviewJson: row.reviewJson ?? null,
     resultSummary: row.resultSummary ?? null,
     error: row.error ?? null,
     // DECIMAL приходит строкой из mysql2 → Number(); BIGINT(mode:number) уже число.
@@ -166,6 +276,7 @@ function rowToJob(row: CommitSyncJobRow): CommitSyncJob {
     tokensOut: row.tokensOut ?? null,
     claimedAt: row.claimedAt ?? null,
     finishedAt: row.finishedAt ?? null,
+    batchFlushedAt: row.batchFlushedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

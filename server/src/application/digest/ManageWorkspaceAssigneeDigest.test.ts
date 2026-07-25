@@ -108,11 +108,13 @@ test('workspace assignee digest shared settings are editable by any member', asy
     commitSyncEnabled: true,
     commitSyncHour: 17,
     commitSyncMinute: 0,
+    commitSyncAction: 'auto',
     eodReminderEnabled: true,
     eodReminderHour: 17,
     eodReminderMinute: 20,
   });
   assert.equal(saved.enabled, true);
+  assert.equal(saved.commitSyncAction, 'auto');
   assert.deepEqual(getSavedRecipientUserIds(), [MEMBER_ID]);
 
   await manager.sendNow(WORKSPACE_ID, MEMBER_ID);
@@ -140,6 +142,7 @@ test('workspace assignee digest shared settings remain closed to outsiders', asy
         commitSyncEnabled: false,
         commitSyncHour: 17,
         commitSyncMinute: 0,
+        commitSyncAction: 'propose',
         eodReminderEnabled: false,
         eodReminderHour: 17,
         eodReminderMinute: 20,

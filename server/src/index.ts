@@ -58,6 +58,9 @@ import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
 import { Register } from './application/auth/Register.js';
 import { Login } from './application/auth/Login.js';
 import { Logout } from './application/auth/Logout.js';
+import { RequestPasswordReset } from './application/auth/RequestPasswordReset.js';
+import { ResetPassword } from './application/auth/ResetPassword.js';
+import { DrizzlePasswordResetTokenRepository } from './infrastructure/repositories/DrizzlePasswordResetTokenRepository.js';
 import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
 import { UploadUserAvatar } from './application/user/UploadUserAvatar.js';
@@ -219,6 +222,10 @@ import { ListPendingCommitSyncJobs } from './application/commit-sync/ListPending
 import { ClaimCommitSyncJob } from './application/commit-sync/ClaimCommitSyncJob.js';
 import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitSyncJob.js';
 import { SendWorkspaceCommitReview } from './application/commit-sync/SendWorkspaceCommitReview.js';
+import { PrepareCommitReviewResult } from './application/commit-sync/PrepareCommitReviewResult.js';
+import { FlushCommitSyncBatch } from './application/commit-sync/FlushCommitSyncBatch.js';
+import { CommitSyncBatchProgress } from './application/commit-sync/CommitSyncBatchProgress.js';
+import { DrizzleCommitSyncBatchProgressRepository } from './infrastructure/repositories/DrizzleCommitSyncBatchProgressRepository.js';
 import { DrizzleCloseProposalRepository } from './infrastructure/repositories/DrizzleCloseProposalRepository.js';
 import { CreateCloseProposals } from './application/close-proposal/CreateCloseProposals.js';
 import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseProposal.js';
@@ -260,6 +267,8 @@ import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceA
 import { TelegramDigestActionService } from './application/digest/TelegramDigestActionService.js';
 import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
 import { BulkSetWorkspaceCommitSync } from './application/commit-sync/BulkSetWorkspaceCommitSync.js';
+import { ListWorkspaceCommitSyncProjects } from './application/commit-sync/ListWorkspaceCommitSyncProjects.js';
+import { SetWorkspaceCommitSyncProjects } from './application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
@@ -365,6 +374,7 @@ const now = (): Date => new Date();
 
 const userRepo = new DrizzleUserRepository(db);
 const sessionRepo = new DrizzleSessionRepository(db);
+const passwordResetTokenRepo = new DrizzlePasswordResetTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
@@ -1480,14 +1490,32 @@ const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
   commitSyncJobs: commitSyncJobRepo,
 });
 const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo, checkBudget });
+// Объединённый дайджест сверки коммитов: собирает результаты нескольких проектов батча в одно
+// сообщение (db/143). Готовит per-project payload'ы — PrepareCommitReviewResult.
 const sendWorkspaceCommitReview = new SendWorkspaceCommitReview({
+  telegram: telegramClient,
+  telegramDigestActions: telegramDigestActionDeliveryRepo,
+});
+const prepareCommitReviewResult = new PrepareCommitReviewResult({
   settings: workspaceAssigneeDigestRepo,
   projects: projectRepo,
   tasks: taskRepo,
-  telegram: telegramClient,
   createEmailActionToken,
-  telegramDigestActions: telegramDigestActionDeliveryRepo,
   appUrl: appBaseUrl,
+});
+// Живой прогресс сверки коммитов в Telegram (db/145): одно редактируемое сообщение на многопроектный
+// плановый батч (⏳→✅/⚠️), удаляется в финале и заменяется свёрнутым итогом.
+const commitSyncBatchProgressRepo = new DrizzleCommitSyncBatchProgressRepository(db);
+const commitSyncBatchProgress = new CommitSyncBatchProgress({
+  telegram: telegramClient,
+  commitSyncJobs: commitSyncJobRepo,
+  progress: commitSyncBatchProgressRepo,
+});
+const flushCommitSyncBatch = new FlushCommitSyncBatch({
+  commitSyncJobs: commitSyncJobRepo,
+  sendReview: sendWorkspaceCommitReview,
+  // Финал батча: удалить прогресс-сообщение перед отправкой итога (db/145).
+  progress: commitSyncBatchProgress,
 });
 const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
@@ -1495,7 +1523,10 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
   recordUsage,
   // Ветка action='propose' (db/101): создаём предложения закрыть вместо авто-перемещения.
   createProposals: createCloseProposals,
-  sendReview: sendWorkspaceCommitReview,
+  prepareReview: prepareCommitReviewResult,
+  flush: flushCommitSyncBatch,
+  // Перерисовка прогресс-сообщения при завершении каждого job'а батча (db/145).
+  progress: commitSyncBatchProgress,
   // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
   linkCommit: new LinkCommit({
     projects: projectRepo,
@@ -1509,13 +1540,19 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
     versions: taskVersionRecorder,
   }),
 });
-const commitSyncJobCleanup = new CommitSyncJobCleanup({ commitSyncJobs: commitSyncJobRepo });
+const commitSyncJobCleanup = new CommitSyncJobCleanup({
+  commitSyncJobs: commitSyncJobRepo,
+  // Safety flush: досылаем батчи, осиротевшие после добивания зависших job'ов (db/143).
+  flush: flushCommitSyncBatch,
+});
 setInterval(() => {
   void commitSyncJobCleanup
     .runOnce(new Date())
     .then((r) => {
-      if (r.cancelled > 0 || r.deleted > 0) {
-        console.log(`[commit-sync-cleanup] cancelled=${r.cancelled} deleted=${r.deleted}`);
+      if (r.cancelled > 0 || r.deleted > 0 || r.flushed > 0) {
+        console.log(
+          `[commit-sync-cleanup] cancelled=${r.cancelled} deleted=${r.deleted} flushed=${r.flushed}`,
+        );
       }
     })
     .catch((err) => console.warn('[commit-sync-cleanup] failed:', err));
@@ -1672,8 +1709,17 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   send: sendWorkspaceAssigneeDigest,
   projects: projectRepo,
 });
-// Мастер-действие «включить сверку коммитов по всем проектам пространства» (db/141).
+// Применить общее расписание сверки коммитов ко всем проектам пространства (db/141).
 const bulkSetWorkspaceCommitSync = new BulkSetWorkspaceCommitSync({
+  workspaces: workspaceRepo,
+  automation: automationRepo,
+});
+// Чеклист «какие проекты пространства включены в сверку» (пер-проектный commit_sync_enabled).
+const listWorkspaceCommitSyncProjects = new ListWorkspaceCommitSyncProjects({
+  workspaces: workspaceRepo,
+  automation: automationRepo,
+});
+const setWorkspaceCommitSyncProjects = new SetWorkspaceCommitSyncProjects({
   workspaces: workspaceRepo,
   automation: automationRepo,
 });
@@ -1732,6 +1778,22 @@ const { app, devProxyUpgrade } = createApp({
     login: new Login(authDeps),
     logout: new Logout(sessionRepo),
     getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now }),
+    requestPasswordReset: new RequestPasswordReset({
+      users: userRepo,
+      tokens: passwordResetTokenRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      now,
+      ttlMs: 60 * 60 * 1000, // 1 час
+      appUrl: appBaseUrl,
+    }),
+    resetPassword: new ResetPassword({
+      users: userRepo,
+      tokens: passwordResetTokenRepo,
+      sessions: sessionRepo,
+      passwordHasher,
+      now,
+    }),
   },
   user: {
     updateProfile: new UpdateProfile(userRepo),
@@ -1947,6 +2009,8 @@ const { app, devProxyUpgrade } = createApp({
     service: workspaceService,
     assigneeDigest: manageWorkspaceAssigneeDigest,
     bulkCommitSync: bulkSetWorkspaceCommitSync,
+    listCommitSyncProjects: listWorkspaceCommitSyncProjects,
+    setCommitSyncProjects: setWorkspaceCommitSyncProjects,
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo,
@@ -2895,6 +2959,11 @@ workspaceAssigneeDigestScheduler.start();
 const commitSyncScheduler = new CommitSyncScheduler({
   automation: automationRepo,
   enqueue: enqueueCommitSyncJob,
+  // Резолв Telegram-группы проекта для ключа батча (db/143).
+  projects: projectRepo,
+  settings: workspaceAssigneeDigestRepo,
+  // Живой прогресс (db/145): после постановки всех job'ов батча шлём одно прогресс-сообщение.
+  progress: commitSyncBatchProgress,
 });
 commitSyncScheduler.start();
 

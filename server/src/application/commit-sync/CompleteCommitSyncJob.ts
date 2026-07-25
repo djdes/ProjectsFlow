@@ -14,7 +14,10 @@ import type { LinkCommit } from '../task/LinkCommit.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import type { RecordUsage } from '../usage/RecordUsage.js';
 import type { CreateCloseProposals } from '../close-proposal/CreateCloseProposals.js';
-import type { SendWorkspaceCommitReview } from './SendWorkspaceCommitReview.js';
+import type { PrepareCommitReviewResult } from './PrepareCommitReviewResult.js';
+import { serializeCommitReviewResult } from './CommitReviewResult.js';
+import type { FlushCommitSyncBatch } from './FlushCommitSyncBatch.js';
+import type { CommitSyncBatchProgress } from './CommitSyncBatchProgress.js';
 import type {
   CommitSyncSnapshot,
   CommitSyncSnapshotEntry,
@@ -33,8 +36,12 @@ type Deps = {
   // Ветка action='propose' (db/101): вместо авто-перемещения создаём предложения закрыть.
   // Если не задан — propose-прогон завершается без предложений (только сводка).
   readonly createProposals?: CreateCloseProposals;
-  // Consolidated 17:00 Telegram message: meaningful commit review + task action icons.
-  readonly sendReview?: SendWorkspaceCommitReview;
+  // Готовит per-job payload сводки (проект + строки задач + токены). Пишется в review_json.
+  readonly prepareReview?: PrepareCommitReviewResult;
+  // Батчинг сводок (db/143): после завершения job'а пытаемся собрать/отправить сообщение батча.
+  readonly flush?: FlushCommitSyncBatch;
+  // Живой прогресс (db/145): при завершении каждого job'а батча перерисовываем прогресс-сообщение.
+  readonly progress?: Pick<CommitSyncBatchProgress, 'refresh'>;
 };
 
 export type CompleteCommitSyncJobInput = {
@@ -79,6 +86,7 @@ export class CompleteCommitSyncJob {
         id: input.jobId,
         status: 'failed',
         matchesJson: null,
+        reviewJson: null,
         resultSummary: null,
         error: err.slice(0, MAX_ERROR),
         costUsd: input.costUsd ?? null,
@@ -86,6 +94,8 @@ export class CompleteCommitSyncJob {
         tokensOut: input.tokensOut ?? null,
       });
       this.meterUsage(job, input);
+      // Failed-job тоже терминален — даём батчу шанс схлопнуться (может быть последним).
+      await this.triggerFlush(job);
       return;
     }
 
@@ -146,10 +156,13 @@ export class CompleteCommitSyncJob {
     const resultSummary =
       `Совпадений: ${matches.length}. Перемещено в готово — ${moved.length}. Пропущено — ${skipped}.`;
 
+    // Сводка (auto): показываем именно реально закрытые задачи (moved), не все совпадения.
+    const reviewJson = await this.buildReviewJson(job, 'auto', moved);
     await this.deps.commitSyncJobs.complete({
       id: input.jobId,
       status: 'succeeded',
       matchesJson: JSON.stringify(matches),
+      reviewJson,
       resultSummary,
       error: null,
       costUsd: input.costUsd ?? null,
@@ -157,7 +170,7 @@ export class CompleteCommitSyncJob {
       tokensOut: input.tokensOut ?? null,
     });
     this.meterUsage(job, input);
-    await this.sendSummary(job, 'auto', moved);
+    await this.triggerFlush(job);
   }
 
   // Ветка propose (db/101): создаём предложения закрыть по совпадениям (через
@@ -187,10 +200,13 @@ export class CompleteCommitSyncJob {
         console.warn('[commit-sync] propose branch failed', job.id, e);
       }
     }
+    // Сводка (propose): показываем задачи, которые предложено закрыть (все совпадения).
+    const reviewJson = await this.buildReviewJson(job, 'propose', matches);
     await this.deps.commitSyncJobs.complete({
       id: input.jobId,
       status: 'succeeded',
       matchesJson: JSON.stringify(matches),
+      reviewJson,
       resultSummary: `Совпадений: ${matches.length}. Предложено закрыть: ${created}.`,
       error: null,
       costUsd: input.costUsd ?? null,
@@ -198,25 +214,43 @@ export class CompleteCommitSyncJob {
       tokensOut: input.tokensOut ?? null,
     });
     this.meterUsage(job, input);
-    await this.sendSummary(job, 'propose', matches);
+    await this.triggerFlush(job);
   }
 
-  // Короткая сводка в Telegram-группу: что закрыто (auto) / что предложено закрыть (propose).
-  // Молчит, если двигать/предлагать нечего. Разбор коммитов на значимость убран.
-  private async sendSummary(
+  // Готовит per-job payload сводки (проект + строки задач + токены «закрыть») и сериализует его
+  // в review_json. Применяет доставочный гейт пространства: чистый/не-для-группы проект → null,
+  // тогда в объединённый дайджест он не попадёт. Best-effort — сбой не валит complete.
+  private async buildReviewJson(
     job: CommitSyncJob,
     mode: 'auto' | 'propose',
     matches: readonly CommitSyncMatch[],
-  ): Promise<void> {
-    if (!this.deps.sendReview || matches.length === 0) return;
-    await this.deps.sendReview
-      .execute({
-        projectId: job.projectId,
-        dispatcherUserId: job.dispatcherUserId,
-        mode,
-        matches,
-      })
-      .catch((error) => console.warn('[commit-sync] Telegram summary failed', job.id, error));
+  ): Promise<string | null> {
+    if (!this.deps.prepareReview || matches.length === 0) return null;
+    const result = await this.deps.prepareReview
+      .execute({ projectId: job.projectId, dispatcherUserId: job.dispatcherUserId, mode, matches })
+      .catch((error) => {
+        console.warn('[commit-sync] prepare review failed', job.id, error);
+        return null;
+      });
+    return result ? serializeCommitReviewResult(result) : null;
+  }
+
+  // Паттерн «последний гасит свет»: после завершения любого job'а даём батчу схлопнуться в одно
+  // сообщение (или, для ручного прогона без batch_key, отправиться сразу). Best-effort.
+  //
+  // Перед этим — перерисовываем «прогресс-сообщение» батча (db/145) из АКТУАЛЬНОГО состояния всех
+  // job'ов (у завершённого проекта ✅/⚠️, у остальных ⏳). Финальное удаление прогресса и отправку
+  // итога делает сам сборщик внутри flush (flushBatch), поэтому здесь только edit.
+  private async triggerFlush(job: CommitSyncJob): Promise<void> {
+    if (job.batchKey && this.deps.progress) {
+      await this.deps.progress
+        .refresh(job.batchKey)
+        .catch((error) => console.warn('[commit-sync] progress refresh failed', job.id, error));
+    }
+    if (!this.deps.flush) return;
+    await this.deps.flush
+      .flushForJob(job)
+      .catch((error) => console.warn('[commit-sync] batch flush failed', job.id, error));
   }
 
   // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).

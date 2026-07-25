@@ -1391,10 +1391,16 @@ export const commitSyncJobs = mysqlTable(
     // Снимок действия из настроек на момент enqueue (db/101): 'propose' — создать предложение
     // закрыть; 'auto' — прежнее авто-перемещение по порогу возраста.
     action: mysqlEnum('action', ['propose', 'auto']).notNull().default('propose'),
+    // Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>' (db/143): job'ы одного тика для одной
+    // группы+времени объединяются в одно сообщение. NULL — одиночная доставка («Сверить сейчас»).
+    batchKey: varchar('batch_key', { length: 120 }),
     thresholdHours: int('threshold_hours').notNull(),
     context: mediumtext('context'),
     commitsJson: mediumtext('commits_json'),
     matchesJson: mediumtext('matches_json'),
+    // Per-job payload сводки (db/143): chatId + проект + режим + строки задач. NULL — чистый
+    // проект (в дайджест не попадает). Из этих payload'ов сборщик собирает одно сообщение.
+    reviewJson: mediumtext('review_json'),
     resultSummary: mediumtext('result_summary'),
     error: varchar('error', { length: 500 }),
     costUsd: decimal('cost_usd', { precision: 10, scale: 4 }),
@@ -1402,6 +1408,8 @@ export const commitSyncJobs = mysqlTable(
     tokensOut: bigint('tokens_out', { mode: 'number' }),
     claimedAt: timestamp('claimed_at'),
     finishedAt: timestamp('finished_at'),
+    // Момент отправки единственного сообщения батча (db/143) — атомарный выбор сборщика.
+    batchFlushedAt: timestamp('batch_flushed_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -1409,11 +1417,27 @@ export const commitSyncJobs = mysqlTable(
     index('idx_csj_dispatcher_status').on(t.dispatcherUserId, t.status, t.createdAt),
     index('idx_csj_project_created').on(t.projectId, t.createdAt),
     index('idx_csj_status_created').on(t.status, t.createdAt),
+    index('idx_csj_batch_key').on(t.batchKey),
   ],
 );
 
 export type CommitSyncJobRow = typeof commitSyncJobs.$inferSelect;
 export type NewCommitSyncJobRow = typeof commitSyncJobs.$inferInsert;
+
+// commit_sync_batch_progress — миграция db/145. Одна строка на многопроектный плановый батч сверки:
+// живое «прогресс-сообщение» в Telegram-группе (заголовок + список проектов с ⏳/✅/⚠️). batch_key —
+// PK, чтобы гарантировать «ровно один прогресс на батч» (атомарный INSERT-claim). message_id — id
+// отправленного сообщения (NULL между claim и первой успешной отправкой). Когда весь батч терминален
+// — сообщение удаляется, строка чистится, вместо него шлётся свёрнутый итог.
+export const commitSyncBatchProgress = mysqlTable('commit_sync_batch_progress', {
+  batchKey: varchar('batch_key', { length: 120 }).primaryKey(),
+  chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+  messageId: bigint('message_id', { mode: 'number' }),
+  createdAt: createdAtCol(),
+});
+
+export type CommitSyncBatchProgressRow = typeof commitSyncBatchProgress.$inferSelect;
+export type NewCommitSyncBatchProgressRow = typeof commitSyncBatchProgress.$inferInsert;
 
 // ============================================================================
 // task_close_proposals — миграция db/101. Предложения закрыть задачу (commit-sync в
@@ -1711,6 +1735,8 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
     commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(false),
     commitSyncHour: tinyint('commit_sync_hour').notNull().default(17),
     commitSyncMinute: tinyint('commit_sync_minute').notNull().default(0),
+    // Режим сверки коммитов пространства: 'auto' — переносить задачи, 'propose' — только оповещать.
+    commitSyncAction: mysqlEnum('commit_sync_action', ['propose', 'auto']).notNull().default('propose'),
     commitSyncLastSentOn: date('commit_sync_last_sent_on', { mode: 'string' }),
     eodReminderEnabled: boolean('eod_reminder_enabled').notNull().default(false),
     eodReminderHour: tinyint('eod_reminder_hour').notNull().default(17),
@@ -2254,6 +2280,26 @@ export const emailActionTokens = mysqlTable(
 );
 
 export type EmailActionTokenRow = typeof emailActionTokens.$inferSelect;
+
+// Токены сброса пароля (db/099). token_hash = SHA-256 plaintext-токена из письма.
+export const passwordResetTokens = mysqlTable(
+  'password_reset_tokens',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    usedAt: timestamp('used_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_password_reset_token_hash').on(t.tokenHash),
+    index('idx_password_reset_user').on(t.userId),
+    index('idx_password_reset_expires').on(t.expiresAt),
+  ],
+);
+
+export type PasswordResetTokenRow = typeof passwordResetTokens.$inferSelect;
 export type NewEmailActionTokenRow = typeof emailActionTokens.$inferInsert;
 
 // ============================================================================

@@ -18,6 +18,16 @@ export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(1).max(80),
 });
 
+// Сброс пароля (U2, db/099).
+export const passwordResetRequestSchema = z.object({
+  email: emailSchema,
+});
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string().min(1).max(128),
+  password: z.string().min(8, 'Пароль минимум 8 символов').max(200),
+});
+
 export type RegisterBody = z.infer<typeof registerSchema>;
 export type LoginBody = z.infer<typeof loginSchema>;
 export type UpdateProfileBody = z.infer<typeof updateProfileSchema>;

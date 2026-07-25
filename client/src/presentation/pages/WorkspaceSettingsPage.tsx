@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarClock,
+  ChevronDown,
   Copy,
   History,
   Loader2,
@@ -48,6 +49,7 @@ import type {
   WorkspaceAssigneeDigestGroup,
   WorkspaceAssigneeDigestMember,
   WorkspaceAssigneeDigestRecipientMode,
+  WorkspaceCommitSyncAction,
   WorkspaceDigestProjectMode,
 } from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { useContainer } from '@/infrastructure/di/container';
@@ -235,6 +237,7 @@ type AssigneeDigestDraft = {
   commitSyncEnabled: boolean;
   commitSyncHour: number;
   commitSyncMinute: number;
+  commitSyncAction: WorkspaceCommitSyncAction;
   eodReminderEnabled: boolean;
   eodReminderHour: number;
   eodReminderMinute: number;
@@ -252,11 +255,26 @@ function AssigneeDigestCard({
   const [members, setMembers] = useState<WorkspaceAssigneeDigestMember[]>([]);
   const [groups, setGroups] = useState<WorkspaceAssigneeDigestGroup[]>([]);
   const [projects, setProjects] = useState<Array<{ id: string; name: string; icon: string | null }>>([]);
+  // Per-project commit-sync checklist: which projects of the workspace are actually synced.
+  // Enabled-ness is per-project (project_automation.commit_sync_enabled); the schedule below is
+  // shared. The single master toggle used to force enabled on every project — replaced by this list.
+  const [commitProjects, setCommitProjects] = useState<
+    Array<{ id: string; name: string; icon: string | null; commitSyncEnabled: boolean }>
+  >([]);
+  const [commitSelected, setCommitSelected] = useState<string[]>([]);
+  // Список проектов длинный (десятки), поэтому по умолчанию свёрнут — раскрывается кнопкой.
+  const [commitListOpen, setCommitListOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [applyingCommitSync, setApplyingCommitSync] = useState(false);
   const [resolving, setResolving] = useState(false);
+  // Snapshot of the shared commit-sync schedule (time/days/mode) as last persisted. Save compares
+  // against it to detect a change and, if so, propagates the schedule to every project — the
+  // per-project scheduler reads project times, not the workspace one.
+  const savedCommitSyncRef = useRef<string>('');
+  // Snapshot of the checklist selection (sorted enabled project ids) as last persisted. Save writes
+  // the per-project enabled flags only when this changed.
+  const savedCommitSelectedRef = useRef<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -265,9 +283,22 @@ function AssigneeDigestCard({
       workspaceRepository.getAssigneeDigest(workspaceId),
       workspaceRepository.listAssigneeDigestGroups(workspaceId).catch(() => []),
       workspaceRepository.listProjects(workspaceId),
+      workspaceRepository.listCommitSyncProjects(workspaceId).catch(() => []),
     ])
-      .then(([result, history, workspaceProjects]) => {
+      .then(([result, history, workspaceProjects, commitSyncProjects]) => {
         if (cancelled) return;
+        savedCommitSyncRef.current = JSON.stringify([
+          result.settings.commitSyncHour,
+          result.settings.commitSyncMinute,
+          result.settings.commitSyncAction,
+          [...result.settings.daysOfWeek].sort((a, b) => a - b),
+        ]);
+        const enabledIds = commitSyncProjects
+          .filter((p) => p.commitSyncEnabled)
+          .map((p) => p.id);
+        setCommitProjects(commitSyncProjects);
+        setCommitSelected(enabledIds);
+        savedCommitSelectedRef.current = JSON.stringify([...enabledIds].sort());
         setDraft({
           enabled: result.settings.enabled,
           hour: result.settings.hour,
@@ -285,6 +316,7 @@ function AssigneeDigestCard({
           commitSyncEnabled: result.settings.commitSyncEnabled,
           commitSyncHour: result.settings.commitSyncHour,
           commitSyncMinute: result.settings.commitSyncMinute,
+          commitSyncAction: result.settings.commitSyncAction,
           eodReminderEnabled: result.settings.eodReminderEnabled,
           eodReminderHour: result.settings.eodReminderHour,
           eodReminderMinute: result.settings.eodReminderMinute,
@@ -306,6 +338,30 @@ function AssigneeDigestCard({
     setDraft((current) => (current ? { ...current, ...patch } : current));
   };
 
+  // Stable fingerprint of the SHARED commit-sync schedule (time + mode + shared days), used to
+  // decide on Save whether it changed and must be pushed to all projects. Enabled is not part of
+  // the schedule anymore — it is per-project (see the checklist / commitSelected).
+  const commitSyncKey = (d: AssigneeDigestDraft): string =>
+    JSON.stringify([
+      d.commitSyncHour,
+      d.commitSyncMinute,
+      d.commitSyncAction,
+      [...d.daysOfWeek].sort((a, b) => a - b),
+    ]);
+
+  // Fingerprint of the checklist selection (sorted enabled project ids).
+  const commitSelectedKey = (ids: readonly string[]): string =>
+    JSON.stringify([...ids].sort());
+
+  const toggleCommitProject = (projectId: string): void => {
+    setCommitSelected((prev) =>
+      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId],
+    );
+  };
+  const selectAllCommitProjects = (): void =>
+    setCommitSelected(commitProjects.map((p) => p.id));
+  const clearAllCommitProjects = (): void => setCommitSelected([]);
+
   const selectedEligible = draft
     ? draft.recipientUserIds.filter((id) =>
         members.some((member) => member.userId === id && member.hasTelegram),
@@ -314,7 +370,7 @@ function AssigneeDigestCard({
 
   const validate = (
     requireGroup = Boolean(
-      draft?.enabled || draft?.commitSyncEnabled || draft?.eodReminderEnabled,
+      draft?.enabled || commitSelected.length > 0 || draft?.eodReminderEnabled,
     ),
   ): boolean => {
     if (!draft) return false;
@@ -363,6 +419,7 @@ function AssigneeDigestCard({
         commitSyncEnabled: draft.commitSyncEnabled,
         commitSyncHour: draft.commitSyncHour,
         commitSyncMinute: draft.commitSyncMinute,
+        commitSyncAction: draft.commitSyncAction,
         eodReminderEnabled: draft.eodReminderEnabled,
         eodReminderHour: draft.eodReminderHour,
         eodReminderMinute: draft.eodReminderMinute,
@@ -378,11 +435,57 @@ function AssigneeDigestCard({
         commitSyncEnabled: settings.commitSyncEnabled,
         commitSyncHour: settings.commitSyncHour,
         commitSyncMinute: settings.commitSyncMinute,
+        commitSyncAction: settings.commitSyncAction,
         eodReminderEnabled: settings.eodReminderEnabled,
         eodReminderHour: settings.eodReminderHour,
         eodReminderMinute: settings.eodReminderMinute,
       });
-      toast.success('Рассылка по ответственным сохранена');
+      // Per-project enabled from the checklist comes FIRST: it creates/updates each project's
+      // automation row, so the schedule push below then lands on rows that already exist. This is
+      // the source of truth for WHICH projects sync — no longer the old master toggle.
+      const nextSel = commitSelectedKey(commitSelected);
+      let enabledChanged = false;
+      if (nextSel !== savedCommitSelectedRef.current) {
+        try {
+          await workspaceRepository.setCommitSyncProjects(workspaceId, commitSelected);
+          enabledChanged = true;
+          setCommitProjects((prev) =>
+            prev.map((p) => ({ ...p, commitSyncEnabled: commitSelected.includes(p.id) })),
+          );
+        } catch (error) {
+          toast.error(
+            `Настройки сохранены, но не удалось обновить список проектов сверки: ${(error as Error).message}`,
+          );
+        }
+      }
+      savedCommitSelectedRef.current = nextSel;
+
+      // The per-project scheduler reads each project's own time, so saving the workspace record
+      // alone would never change when syncs fire. When the SHARED schedule changed, push it to
+      // every project — enabled is left untouched here (it comes from the checklist above).
+      const nextKey = commitSyncKey(draft);
+      let scheduleApplied = false;
+      if (nextKey !== savedCommitSyncRef.current) {
+        try {
+          await workspaceRepository.applyCommitSyncToAll(workspaceId, {
+            hour: draft.commitSyncHour,
+            minute: draft.commitSyncMinute,
+            daysOfWeek: draft.daysOfWeek,
+            action: draft.commitSyncAction,
+          });
+          scheduleApplied = true;
+        } catch (error) {
+          toast.error(
+            `Настройки сохранены, но не удалось применить расписание сверки ко всем проектам: ${(error as Error).message}`,
+          );
+        }
+      }
+      savedCommitSyncRef.current = nextKey;
+      toast.success(
+        enabledChanged || scheduleApplied
+          ? 'Сохранено · настройки сверки применены к проектам'
+          : 'Рассылка по ответственным сохранена',
+      );
       return true;
     } catch (error) {
       toast.error((error as Error).message || 'Не удалось сохранить рассылку');
@@ -423,31 +526,6 @@ function AssigneeDigestCard({
       toast.error((error as Error).message || 'Не удалось отправить тест');
     } finally {
       setSending(false);
-    }
-  };
-
-  // Мастер-действие: применить сверку коммитов (вкл/выкл + время + дни) КО ВСЕМ проектам
-  // пространства разом. Пишет per-project конфиг напрямую, поэтому в каждом окне автоматизации
-  // отразится именно это. Дни берём из общего набора «Дни отправки» (draft.daysOfWeek).
-  const applyCommitSyncToAll = async (): Promise<void> => {
-    if (applyingCommitSync || !draft) return;
-    setApplyingCommitSync(true);
-    try {
-      const { affected } = await workspaceRepository.applyCommitSyncToAll(workspaceId, {
-        enabled: draft.commitSyncEnabled,
-        hour: draft.commitSyncHour,
-        minute: draft.commitSyncMinute,
-        daysOfWeek: draft.daysOfWeek,
-      });
-      toast.success(
-        draft.commitSyncEnabled
-          ? `Сверка коммитов включена во всех проектах (${affected})`
-          : `Сверка коммитов выключена во всех проектах (${affected})`,
-      );
-    } catch (error) {
-      toast.error((error as Error).message || 'Не удалось применить ко всем проектам');
-    } finally {
-      setApplyingCommitSync(false);
     }
   };
 
@@ -627,63 +705,162 @@ function AssigneeDigestCard({
                   }
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
-                <Switch
-                  checked={draft.commitSyncEnabled}
-                  disabled={!canManage}
-                  onCheckedChange={(commitSyncEnabled) => update({ commitSyncEnabled })}
-                />
-                <Label className="min-w-32">Сверка коммитов</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={draft.commitSyncHour}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      commitSyncHour: Math.min(
-                        23,
-                        Math.max(0, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
-                />
-                <span>:</span>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={draft.commitSyncMinute}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      commitSyncMinute: Math.min(
-                        59,
-                        Math.max(0, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
-                />
-                <span className="text-xs text-muted-foreground">
-                  расписание сверки по умолчанию для всех проектов
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!canManage || applyingCommitSync}
-                  onClick={() => void applyCommitSyncToAll()}
-                >
-                  {applyingCommitSync && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-                  Применить ко всем проектам
-                </Button>
-                <span className="w-full text-xs text-muted-foreground">
-                  Запишет тумблер, время и дни (из «Дней отправки» ниже) во все проекты
-                  пространства — в каждом окне автоматизации отразится это. Дальше каждый проект
-                  можно донастроить отдельно.
+              <div className="space-y-3 rounded-md border px-3 py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Label className="min-w-32">Сверка коммитов</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.commitSyncHour}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        commitSyncHour: Math.min(
+                          23,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      })
+                    }
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={draft.commitSyncMinute}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        commitSyncMinute: Math.min(
+                          59,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      })
+                    }
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    время сверки для всех проектов пространства
+                  </span>
+                </div>
+                <div className="flex w-full flex-col gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Что делать при совпадении коммитов
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        {
+                          value: 'auto',
+                          title: 'Переносить автоматически',
+                          hint: 'Задачи с совпавшими коммитами закрываются сами.',
+                        },
+                        {
+                          value: 'propose',
+                          title: 'Просто оповестить',
+                          hint: 'Бот предложит закрыть — переносите вручную.',
+                        },
+                      ] as const
+                    ).map((option) => (
+                      <label
+                        key={option.value}
+                        className={cn(
+                          'flex min-w-[13rem] flex-1 items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
+                          draft.commitSyncAction === option.value
+                            ? 'border-primary bg-primary/5'
+                            : 'border-input hover:bg-accent',
+                          canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name={`commit-sync-action-${workspaceId}`}
+                          className="mt-0.5"
+                          checked={draft.commitSyncAction === option.value}
+                          disabled={!canManage}
+                          onChange={() => update({ commitSyncAction: option.value })}
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-medium text-foreground">{option.title}</span>
+                          <span className="block text-xs text-muted-foreground">{option.hint}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {/* Пер-проектный чеклист: какие проекты пространства включены в сверку. Заменяет
+                    прежний единый тумблер — проекты можно выбрать, не заходя в каждый. */}
+                {/* Свёрнутый по умолчанию список проектов: заголовок-кнопка со счётчиком
+                    выбранного, разворачивает грид чекбоксов. */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setCommitListOpen((v) => !v)}
+                    className="flex w-full items-center gap-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={commitListOpen}
+                  >
+                    <ChevronDown
+                      className={cn('size-3.5 shrink-0 transition-transform', !commitListOpen && '-rotate-90')}
+                    />
+                    <span>Какие проекты включены в&nbsp;сверку</span>
+                    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 tabular-nums">
+                      {commitSelected.length} из {commitProjects.length}
+                    </span>
+                  </button>
+                  {commitListOpen && (
+                    <>
+                      {canManage && commitProjects.length > 0 && (
+                        <div className="flex gap-3 text-xs">
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={selectAllCommitProjects}
+                          >
+                            Выбрать все
+                          </button>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:underline"
+                            onClick={clearAllCommitProjects}
+                          >
+                            Снять все
+                          </button>
+                        </div>
+                      )}
+                      {commitProjects.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          В&nbsp;пространстве пока нет проектов.
+                        </p>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {commitProjects.map((project) => (
+                            <label
+                              key={project.id}
+                              className={cn(
+                                'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                                canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
+                              )}
+                            >
+                              <Checkbox
+                                checked={commitSelected.includes(project.id)}
+                                disabled={!canManage}
+                                onCheckedChange={() => toggleCommitProject(project.id)}
+                              />
+                              <span>{project.icon ?? '📁'}</span>
+                              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <span className="block text-xs text-muted-foreground">
+                  Время, дни (из «Дней отправки» ниже) и режим применяются ко&nbsp;всем проектам
+                  пространства. Галочками отметьте, какие проекты сверяются, — заходить в&nbsp;каждый
+                  проект не&nbsp;нужно.
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">

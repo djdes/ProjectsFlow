@@ -59,6 +59,21 @@ export class DrizzleAutomationRepository implements AutomationRepository {
   }
 
   async saveConfig(projectId: string, input: SaveAutomationInput): Promise<void> {
+    // Changing the commit-sync schedule re-arms today's run. The scheduler skips a project whose
+    // last_run_on is today, so without this a same-day time change would never fire — the user must
+    // be able to retrigger the digest by moving the time. We clear last_run_on ONLY when the time
+    // or the enabled flag actually changed (compared against the STORED row before the upsert
+    // overwrites it): an unrelated save (dispatcher, deploy) must not silently re-fire commit sync.
+    await this.db
+      .update(projectAutomation)
+      .set({ commitSyncLastRunOn: null })
+      .where(
+        and(
+          eq(projectAutomation.projectId, projectId),
+          sql`(commit_sync_hour <> ${input.commitSyncHour} OR commit_sync_minute <> ${input.commitSyncMinute} OR commit_sync_enabled <> ${input.commitSyncEnabled})`,
+        ),
+      );
+
     // Только конфиг-колонки; run-state (tasks_created/run_started_at/run_status/...) не трогаем —
     // им управляют resetRun / setRunStatus / recordTaskCreated.
     await this.db
@@ -205,34 +220,112 @@ export class DrizzleAutomationRepository implements AutomationRepository {
     }));
   }
 
-  // Массовое включение сверки по всему пространству (мастер-действие). Создаёт строку
-  // project_automation, если её не было (insert-if-not-exists), и проставляет enabled/время/дни.
-  // Остальные поля новой строки берут дефолты БД. Затрагивает только проекты этого пространства.
-  async bulkSetCommitSync(
+  // Общее расписание сверки (время/дни/режим) на ВСЕ проекты пространства. Enabled НЕ трогаем:
+  // включённость пер-проектная (setCommitSyncEnabledProjects). На UPDATE меняем только расписание,
+  // на INSERT (у проекта не было строки) ставим enabled=false, чтобы расписание не включало сверку
+  // молча. Сбрасываем commit_sync_last_run_on — смена времени должна приводить к пере-запуску.
+  async bulkSetCommitSyncSchedule(
     workspaceId: string,
-    input: { enabled: boolean; hour: number; minute: number; daysOfWeek: readonly number[] },
+    input: {
+      hour: number;
+      minute: number;
+      daysOfWeek: readonly number[];
+      action: 'propose' | 'auto';
+    },
   ): Promise<number> {
     const rows = await this.db
       .select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.workspaceId, workspaceId));
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)));
     const days = JSON.stringify([...input.daysOfWeek]);
     for (const { id } of rows) {
       await this.db
         .insert(projectAutomation)
         .values({
           projectId: id,
-          commitSyncEnabled: input.enabled,
+          // Новая строка от применения расписания не должна включать сверку сама по себе.
+          commitSyncEnabled: false,
           commitSyncHour: input.hour,
           commitSyncMinute: input.minute,
           commitSyncDays: days,
+          commitSyncAction: input.action,
         })
         .onDuplicateKeyUpdate({
           set: {
-            commitSyncEnabled: input.enabled,
+            // commitSyncEnabled намеренно НЕ обновляем — им владеет чеклист.
             commitSyncHour: input.hour,
             commitSyncMinute: input.minute,
             commitSyncDays: days,
+            commitSyncAction: input.action,
+            commitSyncLastRunOn: null,
+          },
+        });
+    }
+    return rows.length;
+  }
+
+  // Проекты пространства (без «Входящих») + их пер-проектный commit_sync_enabled.
+  // Left join: проект без строки project_automation считается выключенным (false).
+  async listWorkspaceProjectsCommitSync(workspaceId: string): Promise<
+    ReadonlyArray<{
+      id: string;
+      name: string;
+      icon: string | null;
+      commitSyncEnabled: boolean;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        icon: projects.icon,
+        enabled: projectAutomation.commitSyncEnabled,
+      })
+      .from(projects)
+      .leftJoin(projectAutomation, eq(projectAutomation.projectId, projects.id))
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)))
+      .orderBy(projects.createdAt);
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      icon: r.icon ?? null,
+      commitSyncEnabled: r.enabled === true,
+    }));
+  }
+
+  // Пер-проектная включённость сверки из чеклиста. Для каждого не-inbox проекта пространства
+  // ставим commit_sync_enabled = (id в списке). Строка создаётся при отсутствии (upsert).
+  // При переходе OFF→ON сбрасываем commit_sync_last_run_on, чтобы новосверяемый проект запустился.
+  async setCommitSyncEnabledProjects(
+    workspaceId: string,
+    enabledProjectIds: readonly string[],
+  ): Promise<number> {
+    const enabledSet = new Set(enabledProjectIds);
+    const rows = await this.db
+      .select({
+        id: projects.id,
+        enabled: projectAutomation.commitSyncEnabled,
+      })
+      .from(projects)
+      .leftJoin(projectAutomation, eq(projectAutomation.projectId, projects.id))
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)));
+    for (const { id, enabled } of rows) {
+      const nextEnabled = enabledSet.has(id);
+      // OFF→ON (или строки ещё не было): снимаем отметку «запущено сегодня», иначе планировщик
+      // пропустил бы только что включённый проект до завтра.
+      const turningOn = nextEnabled && enabled !== true;
+      const lastRunReset = turningOn ? { commitSyncLastRunOn: null } : {};
+      await this.db
+        .insert(projectAutomation)
+        .values({
+          projectId: id,
+          commitSyncEnabled: nextEnabled,
+          ...lastRunReset,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            commitSyncEnabled: nextEnabled,
+            ...lastRunReset,
           },
         });
     }

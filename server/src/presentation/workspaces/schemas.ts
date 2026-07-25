@@ -59,6 +59,7 @@ export const saveWorkspaceAssigneeDigestSchema = z
     commitSyncEnabled: z.boolean().default(false),
     commitSyncHour: z.number().int().min(0).max(23).default(17),
     commitSyncMinute: z.number().int().min(0).max(59).default(0),
+    commitSyncAction: z.enum(['propose', 'auto']).default('propose'),
     eodReminderEnabled: z.boolean().default(false),
     eodReminderHour: z.number().int().min(0).max(23).default(17),
     eodReminderMinute: z.number().int().min(0).max(59).default(20),

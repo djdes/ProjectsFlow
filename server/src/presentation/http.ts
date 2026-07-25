@@ -32,6 +32,8 @@ import type { GetCurrentUser } from '../application/auth/GetCurrentUser.js';
 import type { Register } from '../application/auth/Register.js';
 import type { Login } from '../application/auth/Login.js';
 import type { Logout } from '../application/auth/Logout.js';
+import type { RequestPasswordReset } from '../application/auth/RequestPasswordReset.js';
+import type { ResetPassword } from '../application/auth/ResetPassword.js';
 import type { UpdateProfile } from '../application/user/UpdateProfile.js';
 import type { UploadUserAvatar } from '../application/user/UploadUserAvatar.js';
 import type { GetUserUsage } from '../application/usage/GetUserUsage.js';
@@ -211,6 +213,8 @@ import { workspacesRouter } from './workspaces/routes.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
 import type { BulkSetWorkspaceCommitSync } from '../application/commit-sync/BulkSetWorkspaceCommitSync.js';
+import type { ListWorkspaceCommitSyncProjects } from '../application/commit-sync/ListWorkspaceCommitSyncProjects.js';
+import type { SetWorkspaceCommitSyncProjects } from '../application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import type { WorkspaceRepository } from '../application/workspace/WorkspaceRepository.js';
 import { activityFeedRouter } from './activity/routes.js';
 import type { GetActivityFeed } from '../application/activity/GetActivityFeed.js';
@@ -310,6 +314,8 @@ type AppDeps = {
     readonly login: Login;
     readonly logout: Logout;
     readonly getCurrentUser: GetCurrentUser;
+    readonly requestPasswordReset: RequestPasswordReset;
+    readonly resetPassword: ResetPassword;
   };
   readonly user: {
     readonly updateProfile: UpdateProfile;
@@ -433,6 +439,8 @@ type AppDeps = {
     readonly service: WorkspaceService;
     readonly assigneeDigest: ManageWorkspaceAssigneeDigest;
     readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
+    readonly listCommitSyncProjects: ListWorkspaceCommitSyncProjects;
+    readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
     readonly invites: {
       readonly create: CreateWorkspaceInvite;
       readonly list: ListWorkspaceInvites;
@@ -836,6 +844,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       register: deps.auth.register,
       login: deps.auth.login,
       logout: deps.auth.logout,
+      requestPasswordReset: deps.auth.requestPasswordReset,
+      resetPassword: deps.auth.resetPassword,
       updateProfile: deps.user.updateProfile,
       uploadAvatar: deps.user.uploadAvatar,
       getUserUsage: deps.user.getUserUsage,

@@ -50,6 +50,14 @@ const FinancePage = page(() => import('@/presentation/pages/FinancePage'), 'Fina
 const AdminPage = page(() => import('@/presentation/pages/AdminPage'), 'AdminPage');
 const LoginPage = page(() => import('@/presentation/pages/LoginPage'), 'LoginPage');
 const RegisterPage = page(() => import('@/presentation/pages/RegisterPage'), 'RegisterPage');
+const ForgotPasswordPage = page(
+  () => import('@/presentation/pages/ForgotPasswordPage'),
+  'ForgotPasswordPage',
+);
+const ResetPasswordPage = page(
+  () => import('@/presentation/pages/ResetPasswordPage'),
+  'ResetPasswordPage',
+);
 const DevicePage = page(() => import('@/presentation/pages/DevicePage'), 'DevicePage');
 const InvitePage = page(() => import('@/presentation/pages/InvitePage'), 'InvitePage');
 const PublicBoardPage = page(() => import('@/presentation/pages/PublicBoardPage'), 'PublicBoardPage');
@@ -88,6 +96,9 @@ export const router = createBrowserRouter(
     : [
   { path: '/login', element: el(<LoginPage />) },
   { path: '/register', element: el(<RegisterPage />) },
+  // Сброс пароля (U2): запрос ссылки и установка нового пароля по токену. Anon-доступ.
+  { path: '/forgot-password', element: el(<ForgotPasswordPage />) },
+  { path: '/reset-password', element: el(<ResetPasswordPage />) },
   // /duplicate?slug=… — «Дублировать» с публичной доски: после логина клонирует доску в аккаунт.
   { path: '/duplicate', element: el(<DuplicatePage />) },
   // /invite/:token — anon-доступная страница. Внутри сам решает, что показать

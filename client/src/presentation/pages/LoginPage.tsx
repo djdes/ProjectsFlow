@@ -94,10 +94,10 @@ export function LoginPage(): React.ReactElement {
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? 'Входим…' : 'Войти'}
         </Button>
-        {/* Самообслуживаемого сброса пароля пока нет — честная подсказка вместо
-            битой ссылки. Восстановление доступа — через администратора/поддержку. */}
         <p className="text-center text-xs text-muted-foreground">
-          Забыли пароль? Напишите в поддержку для восстановления доступа.
+          <Link to="/forgot-password" className="font-medium text-primary hover:underline">
+            Забыли пароль?
+          </Link>
         </p>
       </form>
     </AuthFormCard>

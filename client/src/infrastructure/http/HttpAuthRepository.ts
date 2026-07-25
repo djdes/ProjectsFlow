@@ -58,6 +58,15 @@ export class HttpAuthRepository implements AuthRepository {
     await httpClient.post<void>('/auth/logout');
   }
 
+  async requestPasswordReset(email: string): Promise<void> {
+    // Сервер отвечает 202 без тела и для существующего, и для отсутствующего email.
+    await httpClient.post<void>('/auth/password-reset/request', { email });
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    await httpClient.post<void>('/auth/password-reset/confirm', { token, password });
+  }
+
   async getCurrentOrNull(): Promise<User | null> {
     try {
       const { user } = await httpClient.get<{ user: UserDto }>('/auth/me');

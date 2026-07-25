@@ -16,4 +16,8 @@ export interface AuthRepository {
   login(input: LoginInput): Promise<User>;
   logout(): Promise<void>;
   getCurrentOrNull(): Promise<User | null>;
+  // Сброс пароля (U2). requestPasswordReset всегда резолвится (сервер не раскрывает,
+  // существует ли аккаунт). resetPassword кидает HttpError при невалидном/протухшем токене.
+  requestPasswordReset(email: string): Promise<void>;
+  resetPassword(token: string, password: string): Promise<void>;
 }

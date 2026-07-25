@@ -6,6 +6,10 @@ import {
   UserNotFoundError,
 } from '../../domain/user/errors.js';
 import {
+  PasswordResetTokenInvalidError,
+  PasswordResetTokenExpiredError,
+} from '../../domain/auth/passwordResetErrors.js';
+import {
   CannotDeleteInboxError,
   CannotFavoriteInboxError,
   CannotInviteToInboxError,
@@ -190,6 +194,21 @@ export function errorHandler(
 
   if (err instanceof InvalidCredentialsError) {
     res.status(401).json({ error: 'invalid_credentials', message: 'Неверный email или пароль' });
+    return;
+  }
+
+  if (err instanceof PasswordResetTokenInvalidError) {
+    res.status(400).json({
+      error: 'password_reset_token_invalid',
+      message: 'Ссылка сброса недействительна',
+    });
+    return;
+  }
+  if (err instanceof PasswordResetTokenExpiredError) {
+    res.status(410).json({
+      error: 'password_reset_token_expired',
+      message: 'Ссылка сброса недействительна или истекла — запросите новую',
+    });
     return;
   }
 

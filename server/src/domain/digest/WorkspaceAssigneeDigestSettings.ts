@@ -2,6 +2,8 @@ import { ALL_SCHEDULE_DAYS, type ScheduleDay } from './ScheduleDays.js';
 
 export type WorkspaceAssigneeDigestRecipientMode = 'all' | 'selected';
 export type WorkspaceDigestProjectMode = 'all' | 'selected';
+// Режим сверки коммитов: 'auto' — переносить задачи автоматически, 'propose' — только оповещать.
+export type WorkspaceCommitSyncAction = 'propose' | 'auto';
 
 export type WorkspaceAssigneeDigestSettings = {
   readonly workspaceId: string;
@@ -18,6 +20,7 @@ export type WorkspaceAssigneeDigestSettings = {
   readonly commitSyncEnabled: boolean;
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
+  readonly commitSyncAction: WorkspaceCommitSyncAction;
   readonly commitSyncLastSentOn: string | null;
   readonly eodReminderEnabled: boolean;
   readonly eodReminderHour: number;
@@ -44,6 +47,7 @@ export function defaultWorkspaceAssigneeDigestSettings(
     commitSyncEnabled: false,
     commitSyncHour: 17,
     commitSyncMinute: 0,
+    commitSyncAction: 'propose',
     commitSyncLastSentOn: null,
     eodReminderEnabled: false,
     eodReminderHour: 17,

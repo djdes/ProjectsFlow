@@ -11,6 +11,8 @@ export type NewCommitSyncJobInput = {
   readonly dispatcherUserId: string;
   // Снимок действия из настроек (propose|auto).
   readonly action: CommitSyncAction;
+  // Ключ батча '<groupChatId>:<YYYY-MM-DD>:<HH>:<MM>' (db/143). null — одиночная доставка.
+  readonly batchKey: string | null;
   readonly thresholdHours: number;
   readonly context: string | null;
   readonly commitsJson: string | null;
@@ -21,6 +23,14 @@ export type PendingCommitSyncJob = {
   readonly projectId: string;
   readonly projectName: string | null;
   readonly createdAt: Date;
+};
+
+// Строка для «прогресс-сообщения» батча (db/145): проект + его текущий статус. Порядок стабильный
+// (по createdAt), чтобы список проектов не «прыгал» между правками сообщения.
+export type CommitSyncBatchStatus = {
+  readonly projectId: string;
+  readonly projectName: string | null;
+  readonly status: CommitSyncStatus;
 };
 
 export type CommitSyncJobRepository = {
@@ -36,6 +46,8 @@ export type CommitSyncJobRepository = {
     readonly id: string;
     readonly status: Extract<CommitSyncStatus, 'succeeded' | 'failed' | 'cancelled'>;
     readonly matchesJson: string | null;
+    // Per-job payload сводки (db/143). null — чистый проект / доставка не для группы.
+    readonly reviewJson: string | null;
     readonly resultSummary: string | null;
     readonly error: string | null;
     readonly costUsd: number | null;
@@ -45,6 +57,35 @@ export type CommitSyncJobRepository = {
   cancelStale(input: {
     readonly olderThan: Date;
     readonly statuses: ReadonlyArray<Extract<CommitSyncStatus, 'queued' | 'running'>>;
+    // When true, touch only unbatched jobs (batch_key IS NULL) — the manual «Сверить сейчас»
+    // path that has no batch/progress message. Default false = every job (absolute backstop).
+    readonly onlyUnbatched?: boolean;
   }): Promise<number>;
+  /**
+   * Отменить незавершённые (queued/running) задания ЗАСТОЙНЫХ батчей. Батч застоен, если его
+   * «последняя активность» — самый свежий finished_at/claimed_at среди его заданий, а если ни
+   * одного не было — created_at батча — старше `stalledBefore`. Работающий раннер регулярно
+   * берёт/завершает задания и сбрасывает этот таймер, поэтому НИКОГДА не обрубается на полпути;
+   * а раннер, который стоит, даёт батчу перейти порог и закрыться. Возвращает число отменённых.
+   */
+  cancelStalledBatches(input: { readonly stalledBefore: Date }): Promise<number>;
   deleteTerminal(input: { readonly olderThan: Date }): Promise<number>;
+
+  // --- Батчинг сводок (db/143) ---
+  /** Все job'ы батча (для агрегации сборщиком). */
+  listByBatchKey(batchKey: string): Promise<CommitSyncJob[]>;
+  /**
+   * Проекты батча + их текущий статус для «прогресс-сообщения» (db/145). Порядок стабильный
+   * (по createdAt) — список проектов не «прыгает» между правками сообщения.
+   */
+  listBatchStatuses(batchKey: string): Promise<CommitSyncBatchStatus[]>;
+  /**
+   * Атомарно пометить весь батч отправленным (SET batch_flushed_at на все строки), НО только если
+   * не осталось незавершённых job'ов и флаг ещё не стоял. true — этот вызов выбран сборщиком.
+   */
+  tryMarkBatchFlushed(batchKey: string): Promise<boolean>;
+  /** То же для одиночного job'а без batch_key (ручная «Сверить сейчас»). */
+  tryMarkJobFlushed(jobId: string): Promise<boolean>;
+  /** batch_key'и, где все job'ы терминальны, но сообщение ещё не слали (safety sweep). */
+  findFlushableBatchKeys(): Promise<string[]>;
 };
