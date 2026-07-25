@@ -1911,7 +1911,10 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
-    listSharedMembers: new ListSharedMembers(projectMemberRepo),
+    listSharedMembers: new ListSharedMembers({
+      members: projectMemberRepo,
+      resolveActiveWorkspace,
+    }),
     checkGitCollision: new CheckGitCollision({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -2481,6 +2484,7 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
+      resolveActiveWorkspace,
     }),
     listAssignedToOthers: new ListTasksAssignedToOthers({
       members: projectMemberRepo,
@@ -2488,6 +2492,7 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
+      resolveActiveWorkspace,
     }),
     listPersonalOfColleagues: new ListPersonalTasksOfColleagues({
       projects: projectRepo,
@@ -2496,6 +2501,7 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
+      resolveActiveWorkspace,
     }),
     assignToProject: new MoveTaskToProject({
       tasks: taskRepo,

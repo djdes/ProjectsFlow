@@ -3,6 +3,7 @@ import type { Database } from '../db/index.js';
 import {
   taskDelegations,
   tasks,
+  projects,
   users,
   taskComments,
   taskAttachments,
@@ -170,6 +171,23 @@ export class DrizzleTaskRepository implements TaskRepository {
   async listAssignedTo(userId: string): Promise<Task[]> {
     const rows = await this.baseSelect()
       .where(activeTasks(eq(tasks.assigneeUserId, userId)))
+      .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
+    return rows.map((r) => toTask(r as TaskRowJoined));
+  }
+
+  async listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]> {
+    // Скоуп по пространству — через принадлежность проекта задачи (projects.workspace_id).
+    // Подзапрос вместо join, чтобы не трогать leftJoin-набор baseSelect.
+    const workspaceProjects = this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.workspaceId, workspaceId));
+    const rows = await this.baseSelect()
+      .where(
+        activeTasks(
+          and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, workspaceProjects)),
+        ),
+      )
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }

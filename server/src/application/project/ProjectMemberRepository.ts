@@ -73,6 +73,11 @@ export interface ProjectMemberRepository {
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах.
   // Без caller'а самого. Используется для выбора ответственного во входящих.
   listSharedUsers(userId: string): Promise<SharedUser[]>;
+
+  // Как listSharedUsers, но круг ограничен со-участниками одного конкретного пространства.
+  // Нужен для изоляции «Входящих» по активному team-пространству (см. ListSharedMembers /
+  // ListPersonalTasksOfColleagues).
+  listSharedUsersInWorkspace(userId: string, workspaceId: string): Promise<SharedUser[]>;
 }
 
 export type SharedUser = {

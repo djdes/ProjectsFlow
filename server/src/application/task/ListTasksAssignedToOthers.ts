@@ -1,5 +1,6 @@
 import { can } from '../../domain/project/permissions.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
@@ -12,15 +13,22 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
+  readonly resolveActiveWorkspace: ResolveActiveWorkspace;
 };
 
 // Все видимые caller'у задачи, где ответственный — другой человек. Источник назначения
-// и автор задачи не имеют значения.
+// и автор задачи не имеют значения. Охват — как в ListProjects: дефолт-хаб → все
+// пространства юзера; team → срез по активному пространству; нет пространства → пусто.
 export class ListTasksAssignedToOthers {
   constructor(private readonly deps: Deps) {}
 
   async execute(userId: string): Promise<AssignedTaskView[]> {
-    const projects = await this.deps.members.listProjectsForUser(userId);
+    const ws = await this.deps.resolveActiveWorkspace(userId);
+    if (!ws) return [];
+    const projects =
+      ws.kind === 'default'
+        ? await this.deps.members.listProjectsForUser(userId)
+        : await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id);
     const rows = await Promise.all(
       projects.map(async (project) => ({
         project,

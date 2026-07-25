@@ -347,6 +347,32 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return rows;
   }
 
+  async listSharedUsersInWorkspace(
+    userId: string,
+    workspaceId: string,
+  ): Promise<SharedUser[]> {
+    // То же, что listSharedUsers, но круг ограничен со-участниками ОДНОГО пространства:
+    // wm1 — членство caller-а именно в workspaceId, wm2 — остальные участники того же
+    // пространства (workspaceId наследуется через join wm2.workspace_id = wm1.workspace_id).
+    const wm1 = aliasedTable(workspaceMembers, 'wm1');
+    const wm2 = aliasedTable(workspaceMembers, 'wm2');
+    const rows = await this.db
+      .selectDistinct({
+        id: users.id,
+        displayName: users.displayName,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(wm1)
+      .innerJoin(wm2, eq(wm2.workspaceId, wm1.workspaceId))
+      .innerJoin(users, eq(users.id, wm2.userId))
+      .where(
+        and(eq(wm1.userId, userId), eq(wm1.workspaceId, workspaceId), ne(wm2.userId, userId)),
+      )
+      .orderBy(asc(users.displayName));
+    return rows;
+  }
+
   async reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void> {
     if (orderedIds.length === 0) return;
     // Скоупим по реально доступным проектам (мусорный id от клиента не должен

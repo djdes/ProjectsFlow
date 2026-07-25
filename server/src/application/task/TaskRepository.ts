@@ -71,6 +71,9 @@ export interface TaskRepository {
   listByProjects(projectIds: readonly string[]): Promise<Task[]>;
   // Все задачи, где userId — текущий ответственный (в любых проектах).
   listAssignedTo(userId: string): Promise<Task[]>;
+  // Как listAssignedTo, но только задачи проектов заданного пространства (изоляция
+  // «Входящих» по активному team-пространству — см. ListTasksAssignedToMe).
+  listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]>;
   // Все выборки выше и getById отдают ТОЛЬКО живые задачи: удалённая задача (db/134)
   // не должна «воскресать» ни в одном виде.
   getById(taskId: string): Promise<Task | null>;

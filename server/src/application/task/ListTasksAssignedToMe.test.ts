@@ -32,9 +32,18 @@ function makeList(input: {
   tasks: Task[];
   projects: Record<string, { id: string; name: string; isInbox: boolean }>;
   memberships?: Record<string, boolean>;
+  // По умолчанию — дефолт-хаб (агрегирует всё): существующие кейсы поведения не меняют.
+  activeWorkspace?: { id: string; kind: 'default' | 'team' } | null;
+  // Что вернёт listAssignedToInWorkspace для team-пространства.
+  workspaceTasks?: Task[];
 }): ListTasksAssignedToMe {
+  const activeWorkspace =
+    input.activeWorkspace === undefined ? { id: 'ws', kind: 'default' as const } : input.activeWorkspace;
   return new ListTasksAssignedToMe({
-    tasks: { listAssignedTo: async () => input.tasks } as never,
+    tasks: {
+      listAssignedTo: async () => input.tasks,
+      listAssignedToInWorkspace: async () => input.workspaceTasks ?? [],
+    } as never,
     projects: {
       getById: async (id: string) => input.projects[id] ?? null,
     } as never,
@@ -47,6 +56,7 @@ function makeList(input: {
     taskCommits: { countsByTasks: async () => new Map([['t1', 2]]) } as never,
     attachments: { countsByTasks: async () => new Map([['t1', 3]]) } as never,
     comments: { countsByTasks: async () => new Map([['t1', 4]]) } as never,
+    resolveActiveWorkspace: async () => activeWorkspace,
   });
 }
 
@@ -85,4 +95,30 @@ test('current assignee sees an Inbox task without project membership', async () 
   assert.equal(items.length, 1);
   assert.equal(items[0]!.isInbox, true);
   assert.equal(items[0]!.canModify, true);
+});
+
+test('team workspace scopes to that workspace tasks only (not the hub aggregate)', async () => {
+  const list = makeList({
+    // Хаб-агрегат содержит t1, но активно team-пространство: должен вернуться только t2.
+    tasks: [task('t1', 'p-other')],
+    workspaceTasks: [task('t2', 'p-team')],
+    projects: {
+      'p-other': { id: 'p-other', name: 'Чужой', isInbox: false },
+      'p-team': { id: 'p-team', name: 'Командный', isInbox: false },
+    },
+    activeWorkspace: { id: 'ws-team', kind: 'team' },
+  });
+
+  const items = await list.execute('me');
+  assert.deepEqual(items.map((i) => i.task.id), ['t2']);
+});
+
+test('no active workspace yields an empty list', async () => {
+  const list = makeList({
+    tasks: [task('t1', 'p1')],
+    projects: { p1: { id: 'p1', name: 'Проект', isInbox: false } },
+    activeWorkspace: null,
+  });
+
+  assert.deepEqual(await list.execute('me'), []);
 });

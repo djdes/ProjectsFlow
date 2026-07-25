@@ -1,6 +1,7 @@
 import type { Task } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
@@ -13,6 +14,7 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
+  readonly resolveActiveWorkspace: ResolveActiveWorkspace;
 };
 
 // Строка верхнего канбана: задача с обязательным assignee + контекст проекта.
@@ -32,7 +34,14 @@ export class ListTasksAssignedToMe {
   constructor(private readonly deps: Deps) {}
 
   async execute(userId: string): Promise<AssignedTaskView[]> {
-    const taskList = await this.deps.tasks.listAssignedTo(userId);
+    const ws = await this.deps.resolveActiveWorkspace(userId);
+    if (!ws) return [];
+    // Дефолт-хаб → все мои задачи; team → только задачи проектов активного пространства
+    // (личный inbox живёт в хабе, поэтому в team-срез не попадает — как и в сайдбаре).
+    const taskList =
+      ws.kind === 'default'
+        ? await this.deps.tasks.listAssignedTo(userId)
+        : await this.deps.tasks.listAssignedToInWorkspace(userId, ws.id);
     const projectIds = [...new Set(taskList.map((t) => t.projectId))];
     const contexts = await Promise.all(
       projectIds.map(async (projectId) => {

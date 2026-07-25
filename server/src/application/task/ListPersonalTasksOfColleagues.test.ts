@@ -38,17 +38,21 @@ function makeList(input: {
   colleagues: string[];
   inboxes: Inbox[];
   tasks: Task[];
+  // По умолчанию — дефолт-хаб: существующие кейсы поведения не меняют.
+  activeWorkspace?: { id: string; kind: 'default' | 'team' } | null;
+  // Круг коллег, который отдаёт listSharedUsersInWorkspace для team-пространства.
+  workspaceColleagues?: string[];
 }): { list: ListPersonalTasksOfColleagues; askedOwners: string[][] } {
   const askedOwners: string[][] = [];
+  const activeWorkspace =
+    input.activeWorkspace === undefined ? { id: 'ws', kind: 'default' as const } : input.activeWorkspace;
+  const toShared = (ids: string[]): SharedUser[] =>
+    ids.map((id) => ({ id, displayName: id, email: `${id}@example.com`, avatarUrl: null }));
   const list = new ListPersonalTasksOfColleagues({
     members: {
-      listSharedUsers: async (): Promise<SharedUser[]> =>
-        input.colleagues.map((id) => ({
-          id,
-          displayName: id,
-          email: `${id}@example.com`,
-          avatarUrl: null,
-        })),
+      listSharedUsers: async (): Promise<SharedUser[]> => toShared(input.colleagues),
+      listSharedUsersInWorkspace: async (): Promise<SharedUser[]> =>
+        toShared(input.workspaceColleagues ?? []),
     } as never,
     projects: {
       listInboxesByOwners: async (ownerIds: readonly string[]) => {
@@ -65,6 +69,7 @@ function makeList(input: {
     taskCommits: { countsByTasks: async () => new Map([['t1', 2]]) } as never,
     attachments: { countsByTasks: async () => new Map([['t1', 3]]) } as never,
     comments: { countsByTasks: async () => new Map([['t1', 4]]) } as never,
+    resolveActiveWorkspace: async () => activeWorkspace,
   });
   return { list, askedOwners };
 }
@@ -128,6 +133,37 @@ test('tasks assigned back to the caller are skipped (they live in the "mine" tab
 
   const items = await list.execute('me');
   assert.deepEqual(items.map((i) => i.task.id), ['t1']);
+});
+
+test('team workspace limits the colleague circle to co-members of that workspace', async () => {
+  // Хаб знает и bob, и carol; но активно team-пространство, где со-участник только bob.
+  const { list, askedOwners } = makeList({
+    colleagues: ['bob', 'carol'],
+    workspaceColleagues: ['bob'],
+    activeWorkspace: { id: 'ws-team', kind: 'team' },
+    inboxes: [
+      { id: 'bob-inbox', ownerId: 'bob', name: 'Входящие' },
+      { id: 'carol-inbox', ownerId: 'carol', name: 'Входящие' },
+    ],
+    tasks: [task('t1', 'bob-inbox', 'bob'), task('t2', 'carol-inbox', 'carol')],
+  });
+
+  const items = await list.execute('me');
+  assert.deepEqual(items.map((i) => i.task.id), ['t1']);
+  // Сервер не спрашивает inbox коллеги вне активного пространства.
+  assert.deepEqual(askedOwners, [['bob']]);
+});
+
+test('no active workspace yields an empty personal feed', async () => {
+  const { list, askedOwners } = makeList({
+    colleagues: ['bob'],
+    activeWorkspace: null,
+    inboxes: [{ id: 'bob-inbox', ownerId: 'bob', name: 'Входящие' }],
+    tasks: [task('t1', 'bob-inbox', 'bob')],
+  });
+
+  assert.deepEqual(await list.execute('me'), []);
+  assert.deepEqual(askedOwners, []);
 });
 
 test("caller's own inbox is filtered out even if it leaks into the colleague circle", async () => {

@@ -1,5 +1,6 @@
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
@@ -13,6 +14,7 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
+  readonly resolveActiveWorkspace: ResolveActiveWorkspace;
 };
 
 /**
@@ -34,7 +36,14 @@ export class ListPersonalTasksOfColleagues {
   constructor(private readonly deps: Deps) {}
 
   async execute(userId: string): Promise<AssignedTaskView[]> {
-    const colleagues = await this.deps.members.listSharedUsers(userId);
+    const ws = await this.deps.resolveActiveWorkspace(userId);
+    if (!ws) return [];
+    // Круг коллег изолируем по активному пространству: дефолт-хаб → все общие пространства;
+    // team → только со-участники этого пространства (их личные доски и покажем).
+    const colleagues =
+      ws.kind === 'default'
+        ? await this.deps.members.listSharedUsers(userId)
+        : await this.deps.members.listSharedUsersInWorkspace(userId, ws.id);
     const colleagueIds = colleagues.map((c) => c.id).filter((id) => id !== userId);
     if (colleagueIds.length === 0) return [];
 
