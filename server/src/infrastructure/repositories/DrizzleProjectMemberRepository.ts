@@ -232,8 +232,10 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${projects.workspaceId})`,
         // deleted_at IS NULL (db/134): задачи из корзины не должны раздувать счётчик.
         taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
-        isFavorite: projectMembers.isFavorite,
-        favoriteSortOrder: projectMembers.favoriteSortOrder,
+        // Избранное теперь ВЫЧИСЛЯЕМОЕ: проект в избранном, если у пользователя есть незавершённая
+        // назначенная задача в нём. Ручное избранное (колонки db/040 is_favorite/favorite_sort_order)
+        // больше не читаем — они остаются в схеме, но игнорируются.
+        isFavorite: sql<number>`EXISTS (SELECT 1 FROM tasks tf WHERE tf.project_id = ${projects.id} AND tf.assignee_user_id = ${userId} AND tf.status <> 'done' AND tf.deleted_at IS NULL)`,
       })
       .from(projects)
       .leftJoin(
@@ -262,8 +264,10 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
           role: vis.role,
           memberCount: r.project.isInbox ? 1 : Number(r.memberCount),
           taskCount: Number(r.taskCount),
-          isFavorite: r.isFavorite ?? false,
-          favoriteSortOrder: Number(r.favoriteSortOrder ?? 0),
+          // Inbox никогда не попадает в избранное (как и раньше — его нельзя было отметить).
+          isFavorite: !r.project.isInbox && Boolean(r.isFavorite),
+          // Ручной порядок избранного убран — поле оставлено в типе как 0 (клиент больше не сортирует по нему).
+          favoriteSortOrder: 0,
         },
       ];
     });

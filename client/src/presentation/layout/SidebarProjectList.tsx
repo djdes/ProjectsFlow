@@ -25,8 +25,6 @@ import {
   ChevronDown,
   Copy,
   FolderSearch,
-  Heart,
-  HeartOff,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -37,8 +35,6 @@ import { useProjects } from '@/presentation/hooks/useProjects';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { Collapse } from '@/presentation/components/motion/Collapse';
 import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
-import { useReorderFavoriteProjects } from '@/presentation/hooks/useReorderFavoriteProjects';
-import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
 import { useDuplicateProject } from '@/presentation/hooks/useDuplicateProject';
 import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
@@ -94,7 +90,6 @@ function SidebarProjectRow({
   const navigate = useNavigate();
   const location = useLocation();
   const { refresh: refreshProjects } = useProjectsContext();
-  const { toggle: toggleFavorite } = useToggleProjectFavorite();
   const { submit: updateProject } = useUpdateProject();
   const { submit: duplicateProject } = useDuplicateProject();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -274,14 +269,6 @@ function SidebarProjectRow({
             <Pencil />
             Изменить имя
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              void toggleFavorite(project.id, !project.isFavorite);
-            }}
-          >
-            {project.isFavorite ? <HeartOff /> : <Heart />}
-            {project.isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
-          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate(`/projects/${project.id}/kb`)}>
             <BookOpen />
             База знаний
@@ -446,7 +433,6 @@ const PROJECT_LIMIT = Infinity;
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
   const { reorder } = useReorderProjects();
-  const { reorder: reorderFavorites } = useReorderFavoriteProjects();
   const { open: openNewProject } = useNewProjectDialog();
   const { collapsed: favCollapsed, toggle: toggleFavCollapsed } =
     useSidebarSectionCollapse('favorites');
@@ -528,13 +514,12 @@ export function SidebarProjectList(): React.ReactElement {
   const searching = q.length > 0;
   const matches = (p: Project): boolean => matchesKeyboardLayoutQuery(p.name, q);
 
-  // Секция «Избранное» — подмножество, сортированное локально по favorite_sort_order
-  // (сервер отдаёт основной список в порядке sort_order). Дубликат project.id ожидаем —
-  // см. spec: проект виден И в «Избранное», И в «Мои проекты».
-  const favoritesAll = visible
-    .filter((p) => p.isFavorite)
-    .slice()
-    .sort((a, b) => a.favoriteSortOrder - b.favoriteSortOrder);
+  // Секция «Избранное» — теперь ВЫЧИСЛЯЕМАЯ: проекты, где у пользователя есть незавершённая
+  // назначенная задача (isFavorite приходит с сервера уже вычисленным; обновляется на
+  // TASK_CHANGED — ProjectsProvider перечитывает список). Порядок — как в основном списке
+  // (sort_order), ручной reorder убран. Дубликат project.id ожидаем — проект виден И в
+  // «Избранное», И в «Мои проекты».
+  const favoritesAll = visible.filter((p) => p.isFavorite);
 
   const favorites = searching ? favoritesAll.filter(matches) : favoritesAll;
   const regular = searching ? visible.filter(matches) : visible;
@@ -545,17 +530,6 @@ export function SidebarProjectList(): React.ReactElement {
   // В режиме поиска DnD выключен (как и в исходной логике).
   const reorderable = !searching;
 
-  const handleFavoritesDragEnd = (event: DragEndEvent): void => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const ids = favorites.map((p) => p.id);
-    const oldIndex = ids.indexOf(stripBucket(String(active.id)));
-    const newIndex = ids.indexOf(stripBucket(String(over.id)));
-    if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(ids, oldIndex, newIndex);
-    void reorderFavorites(ids, next);
-  };
-
   const handleRegularDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -565,15 +539,6 @@ export function SidebarProjectList(): React.ReactElement {
     if (oldIndex < 0 || newIndex < 0) return;
     const next = arrayMove(ids, oldIndex, newIndex);
     void reorder(ids, next);
-  };
-
-  const moveInFavorites = (projectId: string, dir: MoveDir): void => {
-    const ids = favorites.map((p) => p.id);
-    const i = ids.indexOf(projectId);
-    const j = dir === 'up' ? i - 1 : i + 1;
-    if (i < 0 || j < 0 || j >= ids.length) return;
-    const next = arrayMove(ids, i, j);
-    void reorderFavorites(ids, next);
   };
 
   const moveInRegular = (projectId: string, dir: MoveDir): void => {
@@ -647,12 +612,13 @@ export function SidebarProjectList(): React.ReactElement {
             <span>Избранное</span>
           </button>
           <Collapse open={!favCollapsed}>
+            {/* Избранное авто-вычисляемое → ручной reorder убран (reorderable=false). */}
             <ProjectGroup
               projects={favorites}
               bucket="favorites"
-              reorderable={reorderable}
-              onReorderEnd={handleFavoritesDragEnd}
-              onMove={moveInFavorites}
+              reorderable={false}
+              onReorderEnd={() => {}}
+              onMove={() => {}}
             />
           </Collapse>
         </div>

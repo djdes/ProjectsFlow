@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Image as ImageIcon, Loader2, Star, Text } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Text } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -24,7 +24,6 @@ import { useProjectBannersHidden } from '@/presentation/components/project/proje
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
 import { randomCover } from '@/presentation/components/project/coverGallery';
-import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 
 // Ключ и чтение переключателя «Скрыть описание» — пер-проектные, живут вне компонента,
@@ -113,9 +112,7 @@ export function TasksPage(): React.ReactElement {
     }
   };
   const [coverBusy, setCoverBusy] = useState(false);
-  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const { submit: submitProject } = useUpdateProject();
-  const { toggle: toggleFavorite } = useToggleProjectFavorite();
 
   // Заголовок вкладки браузера = имя проекта (помогает ориентироваться в табах).
   useEffect(() => {
@@ -208,16 +205,6 @@ export function TasksPage(): React.ReactElement {
     }
   };
 
-  const handleFavorite = async (): Promise<void> => {
-    if (favoriteBusy) return;
-    setFavoriteBusy(true);
-    try {
-      await toggleFavorite(data.id, !data.isFavorite);
-    } finally {
-      setFavoriteBusy(false);
-    }
-  };
-
   // Действия проекта (участники · Поделиться · ⋯) — один набор, рендерится и в шапке страницы,
   // и в правом верхнем углу окна активности (Notion-style).
   const projectActions = (compact = false) => (
@@ -236,26 +223,6 @@ export function TasksPage(): React.ReactElement {
         isOwner={data.role === 'owner'}
         compact={compact}
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className={cn(
-          // Иконочные кнопки шапки в Notion — 28×28. Compact-ветка (мобильная, под палец)
-          // остаётся крупной: ужимать touch-target нельзя.
-          compact ? 'size-10 sm:size-9' : 'size-7',
-          data.isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground',
-        )}
-        disabled={favoriteBusy}
-        onClick={() => void handleFavorite()}
-        aria-label={data.isFavorite ? 'Убрать проект из избранного' : 'Добавить проект в избранное'}
-      >
-        {favoriteBusy ? (
-          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
-        ) : (
-          <Star className={cn('size-4', data.isFavorite && 'fill-current')} />
-        )}
-      </Button>
       <ProjectActionsMenu
         project={data}
         mode="tasks"
