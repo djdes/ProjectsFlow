@@ -365,7 +365,9 @@ const TOOLS = [
       'position, commitCount, commentCount ' +
       '(>0 means the task already has a discussion thread — read it via pf_get_task) and ' +
       'attachmentCount (>0 means the user attached files — screenshots, voice messages, PDFs; ' +
-      'pf_get_task downloads them to local files you can open). \'backlog\' ' +
+      'pf_get_task downloads them to local files you can open). Note attachmentCount counts ' +
+      'only files attached to the task itself — files posted inside the comment thread are ' +
+      'not in it, but pf_get_task returns them too. \'backlog\' ' +
       'is the unnamed left-most column for raw triage items — users manually promote them ' +
       "to TODO. 'manual' is a parking column for tasks the user does by hand — no auto-transitions, " +
       "agent never picks them up. Use this BEFORE making a commit: read open tasks (todo + in_progress), " +
