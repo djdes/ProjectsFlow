@@ -24,6 +24,7 @@ import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
 import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
+import { parseDonePrefix } from './parseDonePrefix.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
 import { endOfWeekDeadline } from './defaultDeadline.js';
@@ -532,6 +533,17 @@ export class TelegramComposerService {
     }
 
     const parsed = parseComposerMessage(rawText);
+    // «Готово …» / «Сделано …» → фиксируем УЖЕ ВЫПОЛНЕННУЮ задачу сразу в колонке «Готово»,
+    // без карточки-подтверждения и AI. Цель — не терять завершённую работу в переписке.
+    const donePrefix = parseDonePrefix(parsed.taskText);
+    if (donePrefix.isDone) {
+      return this.createDoneTask(
+        userId,
+        chatId,
+        { ...parsed, taskText: donePrefix.rest },
+        options.sourceKey ?? null,
+      );
+    }
     // Нет текста задачи (например, один '+Проект') → ручной флоу покажет подсказку (без AI).
     if (parsed.taskText.trim().length === 0) {
       await this.manualFlow(
@@ -763,6 +775,109 @@ export class TelegramComposerService {
       await this.send(chatId, '❌ Не удалось создать задачу. Попробуйте позже.');
       // Retry transient persistence failures. sourceKey + atomic claim keep retries safe; a
       // swallowed exception would acknowledge Telegram and permanently lose the task.
+      throw err;
+    }
+  }
+
+  // «Готово/Сделано …» — зафиксировать УЖЕ ВЫПОЛНЕННУЮ задачу сразу в колонке «Готово».
+  // Создаётся немедленно (без карточки-подтверждения и AI): цель — не потерять завершённую
+  // работу в переписке. Делегат = @упомянутый (иначе автор). Идемпотентность Telegram-ретраев —
+  // через черновик по sourceKey (+ атомарный claim от гонок параллельных доставок).
+  private async createDoneTask(
+    userId: string,
+    chatId: number,
+    parsed: ReturnType<typeof parseComposerMessage>,
+    sourceKey: string | null,
+  ): Promise<void> {
+    let hint: { projectId: string | null; taskText: string };
+    try {
+      hint = await this.resolveProjectHint(userId, parsed);
+    } catch (err) {
+      console.warn('[tg-composer] done project hint failed:', err);
+      hint = { projectId: null, taskText: parsed.taskText.trim() };
+    }
+    const text = hint.taskText.trim();
+    if (text.length === 0) {
+      await this.send(
+        chatId,
+        '📝 После «Готово» напиши, что именно сделано. Например: <code>Готово Обновил билд @Коллега</code>',
+      );
+      return;
+    }
+    let assigneeUserId: string | null = null;
+    try {
+      assigneeUserId = await this.resolveUniqueAssignee(userId, hint.projectId, parsed.assigneeQuery);
+    } catch (err) {
+      console.warn('[tg-composer] done assignee hint failed:', err);
+    }
+
+    let receipt: TelegramTaskDraft | null = null;
+    try {
+      if (sourceKey) {
+        receipt = await this.deps.drafts.findBySourceKey(sourceKey);
+        if (
+          receipt &&
+          (receipt.status === 'confirmed' ||
+            receipt.status === 'cancelled' ||
+            receipt.status === 'expired')
+        ) {
+          return; // ретрай уже обработанной доставки — не дублируем задачу
+        }
+        if (!receipt) {
+          receipt = await this.deps.drafts.create({
+            id: this.deps.shortIdGen(),
+            sourceKey,
+            creatorUserId: userId,
+            tgChatId: chatId,
+            taskText: text,
+            projectId: hint.projectId,
+            assigneeUserId,
+            targetStatus: 'done',
+            attachments: [],
+            ttlSeconds: DRAFT_TTL_SECONDS,
+            autoCreateSeconds: null,
+          });
+        }
+        receipt = await this.deps.drafts.claimForConfirmation(receipt.id, false);
+        if (!receipt) return; // другой процесс уже создаёт эту задачу
+      }
+
+      // Делегирование во «Входящие» коллеги: нет проекта И получатель ≠ автор.
+      const delegateUserId = assigneeUserId && assigneeUserId !== userId ? assigneeUserId : null;
+      const inboxOwnerId = delegateUserId ?? userId;
+      const delegatedInbox = !hint.projectId && inboxOwnerId !== userId;
+      const targetId = hint.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId)).id;
+      const task = await this.deps.createTask.execute({
+        projectId: targetId,
+        ownerUserId: userId,
+        description: text,
+        status: 'done',
+        assigneeUserId: assigneeUserId ?? userId,
+        allowInboxDelegation: delegatedInbox,
+      });
+      // Закрываем claim сразу после создания — всё ниже best-effort, его сбой не должен
+      // вернуть уже созданную задачу в очередь и породить дубль.
+      if (receipt) await this.deps.drafts.patch(receipt.id, { status: 'confirmed' });
+
+      if (assigneeUserId && assigneeUserId !== userId) {
+        await this.notifyAssignee(assigneeUserId, hint.projectId, task.id, targetId, userId, text, true);
+      }
+
+      const projName = await this.projNameOf(hint.projectId);
+      const assigneeSuffix =
+        assigneeUserId && assigneeUserId !== userId
+          ? ` Ответственный — <b>${escapeHtml((await this.deps.users.getById(assigneeUserId))?.displayName ?? 'участник')}</b>.`
+          : '';
+      await this.send(
+        chatId,
+        `✅ Зафиксировано как <b>выполненное</b> в <b>${escapeHtml(projName)}</b>.${assigneeSuffix}\n📝 ${markdownToTelegramHtml(excerpt(text))}`,
+      );
+    } catch (err) {
+      console.warn('[tg-composer] done-shortcut failed:', err);
+      if (receipt?.status === 'confirming') {
+        await this.deps.drafts.releaseConfirmation(receipt.id, AUTO_RETRY_SECONDS).catch(() => {});
+      }
+      await this.send(chatId, '❌ Не удалось зафиксировать задачу. Попробуйте позже.');
       throw err;
     }
   }
@@ -1197,7 +1312,7 @@ export class TelegramComposerService {
         });
       }
       if (draft.assigneeUserId && draft.assigneeUserId !== userId) {
-        await this.notifyAssignee(draft, task.id, targetId, userId, text);
+        await this.notifyAssignee(draft.assigneeUserId, draft.projectId, task.id, targetId, userId, text);
       }
 
       const projName = await this.projNameOf(draft.projectId);
@@ -1233,31 +1348,34 @@ export class TelegramComposerService {
   // TG-карточка новому ответственному: кнопки действий по задаче. Reply на карточку =
   // комментарий (существующий механизм telegram_task_messages).
   private async notifyAssignee(
-    draft: TelegramTaskDraft,
+    assigneeUserId: string,
+    // draft.projectId (null = «Входящие») — только для строки-контекста «Проект: …».
+    sourceProjectId: string | null,
     taskId: string,
     projectId: string,
     creatorUserId: string,
     text: string,
+    // Для зафиксированной «готовой» задачи — иной глагол («отметил выполненной») + без
+    // action-кнопки «Завершить» (задача уже done).
+    done = false,
   ): Promise<void> {
-    if (!draft.assigneeUserId) return;
     const creator = await this.deps.users.getById(creatorUserId);
     const creatorName = creator?.displayName ?? 'Коллега';
-    const projName = draft.projectId
-      ? ((await this.deps.projects.getById(draft.projectId))?.name ?? null)
+    const projName = sourceProjectId
+      ? ((await this.deps.projects.getById(sourceProjectId))?.name ?? null)
       : null;
     const ctx = projName ? ` Проект: <b>${escapeHtml(projName)}</b>.` : ' (во «Входящие»).';
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> назначил(а) тебя ответственным:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
+    const verb = done ? 'отметил(а) выполненной и назначил(а) на тебя' : 'назначил(а) тебя ответственным';
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> ${verb}:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
+    const openBtn = [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }];
     const res = await this.deps.sendNotification.execute({
-      userId: draft.assigneeUserId,
+      userId: assigneeUserId,
       text: msg,
       parseMode: 'HTML',
       kind: 'task_assignee_changed',
       taskId,
       replyMarkup: {
-        inline_keyboard: [
-          ...taskActionKeyboard(taskId).inline_keyboard,
-          [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }],
-        ],
+        inline_keyboard: done ? [openBtn] : [...taskActionKeyboard(taskId).inline_keyboard, openBtn],
       },
       skipPrefsCheck: true, // важное — должно дойти независимо от prefs
       skipDedupCheck: true,
@@ -1266,7 +1384,7 @@ export class TelegramComposerService {
       await this.deps.taskMessages.upsert({
         tgChatId: res.chatId,
         tgMessageId: res.messageId,
-        recipientUserId: draft.assigneeUserId,
+        recipientUserId: assigneeUserId,
         taskId,
         projectId,
       });

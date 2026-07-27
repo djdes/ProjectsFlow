@@ -399,6 +399,53 @@ test('группа: коллега с +своим проектом → флоу 
   assert.equal(d.projectId, 'p1'); // в свой проект Альфа
 });
 
+test('«Готово …» → мгновенно создаёт задачу в колонке «Готово», без карточки', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(111, 500, 'готово починить сборку', undefined, [], {
+    sourceKey: 'm:500:1',
+  });
+  assert.equal(h.createTaskCalls.length, 1);
+  const c = h.createTaskCalls[0]!;
+  assert.equal(c.status, 'done'); // сразу в «Готово»
+  assert.equal(c.description, 'починить сборку'); // ключевое слово срезано
+  assert.equal(c.ownerUserId, 'u1');
+  // Подтверждение «зафиксировано как выполненное»
+  assert.ok(h.sent.some((m) => /выполненное/i.test(m.text)));
+});
+
+test('«Готово … @Вася» → задача в «Готово», делегирована во «Входящие» коллеги', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(111, 500, 'готово обновил прод @Вася', undefined, [], {
+    sourceKey: 'm:500:2',
+  });
+  assert.equal(h.createTaskCalls.length, 1);
+  const c = h.createTaskCalls[0]!;
+  assert.equal(c.status, 'done');
+  assert.equal(c.assigneeUserId, 'u2'); // делегировано Васе
+  assert.equal(c.projectId, 'inbox-u2'); // во «Входящие» делегата
+  assert.equal(c.allowInboxDelegation, true);
+  assert.equal(c.description, 'обновил прод');
+  // Делегату ушла карточка «отметил выполненной и назначил на тебя»
+  assert.ok(h.assigneeMessages.some((m) => m.userId === 'u2'));
+});
+
+test('повтор «Готово …» с тем же sourceKey не дублирует задачу', async () => {
+  const h = makeHarness();
+  const opts = { sourceKey: 'm:500:3' } as const;
+  await h.service.startFromMessage(111, 500, 'готово выкатил релиз', undefined, [], opts);
+  await h.service.startFromMessage(111, 500, 'готово выкатил релиз', undefined, [], opts);
+  assert.equal(h.createTaskCalls.length, 1); // ровно одна задача
+});
+
+test('«готовность …» НЕ считается фиксацией (обычный флоу)', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(111, 500, 'готовность к релизу проверить', undefined, [], {
+    sourceKey: 'm:500:4',
+  });
+  // Обычный флоу: мгновенного createTask со status=done нет (уходит в manual/AI карточку).
+  assert.equal(h.createTaskCalls.length, 0);
+});
+
 test('группа: непривязанный отправитель при владельце → в «Входящие» владельца + кнопка «Привязать»', async () => {
   const h = makeHarness();
   await h.service.startFromMessage(999, 500, 'подготовить отчёт', gctx('u1', 'Гость'));
