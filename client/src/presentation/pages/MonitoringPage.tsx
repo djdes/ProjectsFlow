@@ -14,6 +14,7 @@ import { AlertList } from '@/presentation/components/monitoring/AlertList';
 import { AddServerDialog } from '@/presentation/components/monitoring/AddServerDialog';
 import { AlertRulesDialog } from '@/presentation/components/monitoring/AlertRulesDialog';
 import { IncidentHistory } from '@/presentation/components/monitoring/IncidentHistory';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 const DENSITY_KEY = 'pf:monitoring:density';
 
@@ -23,7 +24,7 @@ export function MonitoringPage(): React.ReactElement {
   const { data } = useProject(pid);
   const { user } = useCurrentUser();
   // Смотреть может любой участник; управлять (добавить/удалить/собрать) — editor+ или admin.
-  const canManage = data?.role === 'editor' || data?.role === 'owner' || user?.isAdmin === true;
+  const canManage = data?.role === 'editor' || hasOwnerRights(data?.role) || user?.isAdmin === true;
   const { servers, alerts, loading, error, forbidden, lastUpdated, reload } = useMonitoring(pid);
   const [addOpen, setAddOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);

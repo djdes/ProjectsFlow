@@ -1,5 +1,6 @@
 import { RequestTargetStaleError } from '../../domain/agent/errors.js';
 import type { Project } from '../../domain/project/Project.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
 import type { ProjectJoinRequest } from '../../domain/project/ProjectJoinRequest.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -98,7 +99,7 @@ export class RequestRepoAccess {
   ): Promise<void> {
     const projectUrl = `${this.deps.appUrl.replace(/\/$/, '')}/projects/${project.id}`;
     const owners = (await this.deps.members.listByProject(project.id)).filter(
-      (m) => m.role === 'owner',
+      (m) => hasOwnerRights(m.role),
     );
     await Promise.all(
       owners.map(async (owner) => {

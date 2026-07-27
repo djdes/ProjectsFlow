@@ -14,6 +14,8 @@ const VISIBLE = 6;
 // (projects.owner_id) помечаем нейтральным «Создал» (см. MemberRow).
 const ROLE_LABEL: Record<ProjectRole, string> = {
   owner: 'Редактор',
+  // Руководителя подписываем явно: у него владельческие права на все проекты пространства.
+  lead: 'Руководитель',
   editor: 'Редактор',
   viewer: 'Наблюдатель',
 };

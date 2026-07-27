@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
 import type { ListProjects, ProjectWithRole } from '../../application/project/ListProjects.js';
 import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
@@ -150,7 +151,7 @@ type Deps = {
 // возвращать реальную role через membership.
 type ProjectDto = Omit<Project, 'createdAt'> & {
   createdAt: string;
-  role: 'owner' | 'editor' | 'viewer';
+  role: ProjectRole;
   // Только на list-эндпоинте (приходят из ProjectWithRole); на get/create/update — undefined.
   memberCount?: number;
   taskCount?: number;
@@ -160,7 +161,7 @@ type ProjectDto = Omit<Project, 'createdAt'> & {
   favoriteSortOrder?: number;
 };
 
-function toDto(project: ProjectWithRole | Project, fallbackRole: 'owner' | 'editor' | 'viewer' = 'owner'): ProjectDto {
+function toDto(project: ProjectWithRole | Project, fallbackRole: ProjectRole = 'owner'): ProjectDto {
   const role = 'role' in project ? project.role : fallbackRole;
   return { ...project, role, createdAt: project.createdAt.toISOString() };
 }
@@ -168,7 +169,7 @@ function toDto(project: ProjectWithRole | Project, fallbackRole: 'owner' | 'edit
 type MemberDto = {
   projectId: string;
   userId: string;
-  role: 'owner' | 'editor' | 'viewer';
+  role: ProjectRole;
   joinedAt: string;
   user: {
     id: string;

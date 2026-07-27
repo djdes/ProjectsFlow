@@ -1,3 +1,4 @@
+import type { ProjectRole } from './ProjectMembership.js';
 export class ProjectNameAlreadyExistsError extends Error {
   constructor(public readonly attemptedName: string) {
     super(`Project with name "${attemptedName}" already exists for this owner`);
@@ -25,7 +26,7 @@ export class ProjectNotFoundError extends Error {
 // для wrong-role — 403.
 export class InsufficientProjectRoleError extends Error {
   constructor(
-    public readonly haveRole: 'owner' | 'editor' | 'viewer',
+    public readonly haveRole: ProjectRole,
     public readonly requiredAction: string,
   ) {
     super(`Role "${haveRole}" cannot perform "${requiredAction}"`);

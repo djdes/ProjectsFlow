@@ -1,4 +1,5 @@
 import { TaskNotFoundError } from '../../domain/task/errors.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { SendAgentTelegramNotification } from './SendAgentTelegramNotification.js';
 
@@ -50,7 +51,25 @@ export type BroadcastByTaskResult = {
 type Deps = {
   readonly tasks: Pick<TaskRepository, 'getById'>;
   readonly send: Pick<SendAgentTelegramNotification, 'execute'>;
+  // Руководители пространства — вторая (и единственная кроме ответственного) аудитория.
+  readonly members: Pick<ProjectMemberRepository, 'listLeadUserIdsForProject'>;
 };
+
+// Какие события пересылаются руководителю. Всё остальное (новая задача, комментарии,
+// упоминания) в командный поток НЕ идёт: руководителю нужен статус работы, а не лента.
+const TEAM_FORWARD_KINDS: ReadonlySet<string> = new Set([
+  'status_change',
+  'task_done',
+  'task_blocked',
+  'ralph_question',
+]);
+
+// Kind командной копии = исходный с префиксом. Даёт своё окно дедупа и свой pref-ключ
+// (teamStatusChange), поэтому руководитель может выключить командный поток, не теряя
+// уведомлений по собственным задачам.
+export function teamKind(kind: string): string {
+  return `team_${kind}`;
+}
 
 // АДРЕСНАЯ TG-нотификация по taskId: грузим задачу → шлём ЕДИНСТВЕННОМУ ответственному
 // (task.assignee, db/113) через SendAgentTelegramNotification (там уже все gates — link/
@@ -72,13 +91,17 @@ export class BroadcastTelegramNotificationByTask {
 
     const userId = task.assignee.userId;
 
-    // Ответственный сам и сделал действие — уведомлять его о собственном шаге не нужно.
-    if (cmd.skipUserId && userId === cmd.skipUserId) {
-      return { sent: 0, skipped: [{ userId, reason: 'self' }], delivered: [] };
-    }
-
     const delivered: { userId: string; messageId: number }[] = [];
     const skipped: { userId: string; reason: string; detail?: string }[] = [];
+
+    // Ответственный сам и сделал действие — уведомлять его о собственном шаге не нужно.
+    // Руководителям копия уходит в любом случае: ровно этот случай («Олег перевёл свою
+    // задачу в готово») им и нужен.
+    if (cmd.skipUserId && userId === cmd.skipUserId) {
+      skipped.push({ userId, reason: 'self' });
+      await this.notifyLeads(cmd, task, delivered, skipped);
+      return { sent: delivered.length, skipped, delivered };
+    }
 
     const r = await this.deps.send.execute({
       userId,
@@ -120,6 +143,51 @@ export class BroadcastTelegramNotificationByTask {
         skipped.push({ userId, reason: 'error', detail: r.description });
         break;
     }
+
+    await this.notifyLeads(cmd, task, delivered, skipped);
     return { sent: delivered.length, skipped, delivered };
   }
+
+  // Командная копия события руководителям пространства — в ЛИЧНЫЙ чат каждого (send
+  // работает только с личной привязкой юзера), поэтому в групповые чаты ничего не утекает.
+  // Ошибки доставки одному руководителю не мешают остальным и не влияют на ответ.
+  private async notifyLeads(
+    cmd: BroadcastByTaskCommand,
+    task: { projectId: string; assignee: { userId: string; displayName: string } },
+    delivered: { userId: string; messageId: number }[],
+    skipped: { userId: string; reason: string; detail?: string }[],
+  ): Promise<void> {
+    if (!TEAM_FORWARD_KINDS.has(cmd.kind)) return;
+    const leadIds = await this.deps.members.listLeadUserIdsForProject(task.projectId);
+    const recipients = [...new Set(leadIds)].filter(
+      (id) => id !== task.assignee.userId && id !== cmd.skipUserId,
+    );
+    if (recipients.length === 0) return;
+
+    // Префикс с именем ответственного: без него командный поток неотличим от
+    // уведомлений по собственным задачам руководителя.
+    const text = `👤 <b>${escapeHtml(task.assignee.displayName)}</b>\n${cmd.text}`;
+    for (const leadId of recipients) {
+      const res = await this.deps.send.execute({
+        userId: leadId,
+        text,
+        parseMode: cmd.parseMode ?? 'HTML',
+        kind: teamKind(cmd.kind),
+        taskId: cmd.taskId,
+        projectId: task.projectId,
+        // Клавиатуру ответственного не пересылаем: кнопки вида «Ответить агенту»
+        // адресованы исполнителю, не наблюдателю.
+        skipDedupCheck: cmd.skipDedupCheck,
+        // Prefs руководителя (teamStatusChange) уважаем всегда, даже если для
+        // ответственного caller просил override.
+        skipPrefsCheck: false,
+      });
+      if (res.status === 'ok') delivered.push({ userId: leadId, messageId: res.messageId });
+      else skipped.push({ userId: leadId, reason: res.status });
+    }
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
 }

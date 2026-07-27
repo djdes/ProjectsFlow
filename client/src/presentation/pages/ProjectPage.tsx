@@ -14,6 +14,7 @@ import { DispatcherSection } from '@/presentation/components/project/DispatcherS
 import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import { ProjectStatusSelect } from '@/presentation/components/project/ProjectStatusSelect';
 import { NotificationPrefsCard } from '@/presentation/components/project/NotificationPrefsCard';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 export function ProjectPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -101,7 +102,7 @@ export function ProjectPage(): React.ReactElement {
           )}
 
           {/* Опасная зона — только владелец, не для inbox. Тихая строка вместо красной карточки. */}
-          {data.role === 'owner' && !data.isInbox && (
+          {hasOwnerRights(data.role) && !data.isInbox && (
             <>
               <section className="border-t pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">

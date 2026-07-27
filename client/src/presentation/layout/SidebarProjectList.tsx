@@ -59,6 +59,7 @@ import { RenameProjectDialog } from '@/presentation/components/project/RenamePro
 import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { Project } from '@/domain/project/Project';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 type MoveDir = 'up' | 'down';
 type Bucket = 'favorites' | 'main';
@@ -98,7 +99,7 @@ function SidebarProjectRow({
   const isArchived = project.status === 'archived';
   // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
   // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
-  const canDelete = project.role === 'owner' && !project.isInbox;
+  const canDelete = hasOwnerRights(project.role) && !project.isInbox;
   // Архивировать/дублировать — editor+ (viewer не может менять проект). Inbox исключаем.
   const canManage = project.role !== 'viewer' && !project.isInbox;
 

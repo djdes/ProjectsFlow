@@ -1,5 +1,6 @@
 import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
 import { requireWorkspaceMember } from '../workspace/workspaceAccess.js';
 import type { ChatRepository, ListMessagesQuery } from './ChatRepository.js';
 import type { ChatMessageRecord } from '../../domain/chat/ChatMessage.js';
@@ -236,7 +237,7 @@ export class ChatService {
     const msg = await this.loadInWorkspace(workspaceId, messageId);
     if (msg.deletedAt) return; // идемпотентно
     const isAuthor = msg.authorUserId === userId;
-    const isOwner = member.role === 'owner';
+    const isOwner = hasOwnerRights(member.role);
     if (!isAuthor && !isOwner) throw new CannotDeleteMessageError();
 
     await this.deps.repo.softDelete(messageId, new Date());

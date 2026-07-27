@@ -51,6 +51,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { ProjectVersionsDialog } from './ProjectVersionsDialog';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 import { trackProjectAction } from '@/lib/productAnalytics';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 type Props = {
   project: Project;
@@ -95,7 +96,7 @@ export function ProjectActionsMenu({
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<'archive' | 'delete' | 'export' | null>(null);
   const projectId = project.id;
-  const isOwner = project.role === 'owner';
+  const isOwner = hasOwnerRights(project.role);
   const canEdit = isOwner || project.role === 'editor';
   // Зеркало условия рендера в TasksPage: онбординг GitHub появляется только у
   // не-inbox проектов и только при праве редактирования.

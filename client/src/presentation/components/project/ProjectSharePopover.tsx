@@ -27,6 +27,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ROLE_LABEL: Record<ProjectRole, string> = {
   owner: 'Полный доступ',
+  lead: 'Руководитель',
   editor: 'Редактор',
   viewer: 'Наблюдатель',
 };

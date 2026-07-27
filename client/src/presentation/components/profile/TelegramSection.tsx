@@ -16,6 +16,7 @@ import type {
   TelegramPrefs,
   TelegramStatus,
 } from '@/application/telegram/TelegramRepository';
+import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 
 // Подписи pref-тогглов. Порядок = порядок отображения.
 const PREF_LABELS: ReadonlyArray<{ key: keyof TelegramPrefs; label: string; hint?: string }> = [
@@ -30,6 +31,14 @@ const PREF_LABELS: ReadonlyArray<{ key: keyof TelegramPrefs; label: string; hint
   },
   { key: 'taskDone', label: 'Моя задача успешно завершена' },
 ];
+
+// Тоггл руководителя: командный поток по всему пространству. Показываем только тем, у кого
+// роль есть хотя бы в одном пространстве — остальным настройка ничего не даёт.
+const LEAD_PREF: { key: keyof TelegramPrefs; label: string; hint: string } = {
+  key: 'teamStatusChange',
+  label: 'Состояния задач всей команды',
+  hint: 'Роль «Руководитель»: события по задачам всех участников — только вам в личный чат',
+};
 
 declare global {
   interface Window {
@@ -60,6 +69,10 @@ function TelegramGlyph({ className }: { className?: string }): React.ReactElemen
 
 export function TelegramSection(): React.ReactElement {
   const { telegramRepository } = useContainer();
+  // Тоггл командного потока показываем только руководителю (роль хотя бы в одном пространстве).
+  const { data: workspaces } = useWorkspaces();
+  const isLead = (workspaces ?? []).some((w) => w.role === 'lead');
+  const prefRows = isLead ? [...PREF_LABELS, LEAD_PREF] : PREF_LABELS;
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -212,7 +225,7 @@ export function TelegramSection(): React.ReactElement {
                 Что присылать
               </p>
               <div className="rounded-md border">
-                {PREF_LABELS.map(({ key, label, hint }) => (
+                {prefRows.map(({ key, label, hint }) => (
                   <label
                     key={key}
                     className="flex items-center justify-between gap-3 border-b px-3 py-2 last:border-b-0"

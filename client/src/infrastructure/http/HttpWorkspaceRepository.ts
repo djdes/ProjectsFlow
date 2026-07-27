@@ -46,7 +46,7 @@ type ProjectDto = { id: string; name: string; icon: string | null };
 
 // Старый бэк отдавал 'member' — маппим в 'editor' (миграция БД переводит роли так же).
 function normalizeRole(role: string | undefined): WorkspaceRole {
-  if (role === 'owner' || role === 'editor' || role === 'viewer') return role;
+  if (role === 'owner' || role === 'lead' || role === 'editor' || role === 'viewer') return role;
   return 'editor';
 }
 

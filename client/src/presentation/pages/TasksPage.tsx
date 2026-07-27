@@ -25,6 +25,7 @@ import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
 import { randomCover } from '@/presentation/components/project/coverGallery';
 import { actionErrorMessage } from '@/lib/actionFeedback';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 // Ключ и чтение переключателя «Скрыть описание» — пер-проектные, живут вне компонента,
 // чтобы их можно было звать из инициализатора состояния и при смене проекта в рендере.
@@ -185,7 +186,7 @@ export function TasksPage(): React.ReactElement {
     );
   }
 
-  const canEdit = data.role === 'owner' || data.role === 'editor';
+  const canEdit = hasOwnerRights(data.role) || data.role === 'editor';
   // Блок описания рендерим, только когда он реально что-то показывает. У редактора это всегда
   // так: пустое поле — это плейсхолдер «Добавьте описание проекта…», т.е. сам способ описание
   // завести. А наблюдателю ProjectDescription при пустом описании возвращает null, и обёртка
@@ -212,15 +213,15 @@ export function TasksPage(): React.ReactElement {
       {!compact && members.length > 1 && (
         <MemberAvatarStack
           members={members}
-          canInvite={data.role === 'owner' || data.role === 'editor'}
+          canInvite={hasOwnerRights(data.role) || data.role === 'editor'}
           ownerId={data.ownerId}
         />
       )}
       <ProjectSharePopover
         project={data}
         members={members}
-        canInvite={data.role === 'owner' || data.role === 'editor'}
-        isOwner={data.role === 'owner'}
+        canInvite={hasOwnerRights(data.role) || data.role === 'editor'}
+        isOwner={hasOwnerRights(data.role)}
         compact={compact}
       />
       <ProjectActionsMenu

@@ -111,10 +111,21 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   manage_monitoring: 'editor',
 };
 
-const ROLE_LEVEL: Record<ProjectRole, number> = { viewer: 0, editor: 1, owner: 2 };
+// 'lead' (руководитель) стоит на одном уровне с владельцем: по решению заказчика у него
+// РОВНО права владельца. Разделение проходит не здесь, а в requireWorkspaceOwner —
+// состав команды и роли участников меняет только владелец пространства.
+const ROLE_LEVEL: Record<ProjectRole, number> = { viewer: 0, editor: 1, lead: 2, owner: 2 };
 
 export function can(actorRole: ProjectRole, action: ProjectAction): boolean {
   return ROLE_LEVEL[actorRole] >= ROLE_LEVEL[REQUIRED_ROLE[action]];
+}
+
+// «Владельческие права» для мест, которые исторически сравнивали роль литералом
+// (`role === 'owner'`). Руководитель обязан проходить эти проверки — иначе роль выдаёт
+// owner-действия через can(), но спотыкается о случайные литералы (финансы, чат,
+// join-requests). Там, где нужен ИМЕННО владелец пространства, литерал остаётся.
+export function hasOwnerRights(role: ProjectRole): boolean {
+  return role === 'owner' || role === 'lead';
 }
 
 export function requiredRoleFor(action: ProjectAction): ProjectRole {

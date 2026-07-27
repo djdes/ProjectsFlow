@@ -270,6 +270,9 @@ import { BulkSetWorkspaceCommitSync } from './application/commit-sync/BulkSetWor
 import { ListWorkspaceCommitSyncProjects } from './application/commit-sync/ListWorkspaceCommitSyncProjects.js';
 import { SetWorkspaceCommitSyncProjects } from './application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
+import { LeadDigestScheduler } from './infrastructure/scheduler/LeadDigestScheduler.js';
+import { SendLeadDigest } from './application/lead/SendLeadDigest.js';
+import { DrizzleLeadDigestStateRepository } from './infrastructure/repositories/DrizzleLeadDigestStateRepository.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
@@ -828,6 +831,13 @@ const TG_KIND_TO_PREF = {
   ralph_answer: 'ralphAnswer',
   ralph_answer_accepted: 'ralphAnswer',
   server_alert: 'serverAlert',
+  // Командная копия события руководителю (team_* — см. teamKind в
+  // BroadcastTelegramNotificationByTask). Один pref-ключ на все командные kinds:
+  // руководитель либо следит за работой команды, либо нет.
+  team_status_change: 'teamStatusChange',
+  team_task_done: 'teamStatusChange',
+  team_task_blocked: 'teamStatusChange',
+  team_ralph_question: 'teamStatusChange',
 } as const;
 // Маппинг task-сообщений бота → задача (db/049). Общий экземпляр: сендеру нужен для
 // reply→комментарий на задачных уведомлениях, конструктору/вебхуку — для тех же reply'ев.
@@ -962,6 +972,7 @@ setInterval(runTelegramDraftAutoCreate, 15_000).unref();
 const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
   tasks: taskRepo,
   send: sendAgentTelegramNotification,
+  members: projectMemberRepo,
 });
 // Подключаем боевые эффекты действий workflow (см. холдер выше, у RunWorkflow). Telegram —
 // адресно ответственному по задаче события; исходящий вебхук — фан-аут события среза 6.
@@ -2952,6 +2963,25 @@ const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   sendEodReminder: sendWorkspaceEodReminder,
 });
 workspaceAssigneeDigestScheduler.start();
+
+// Ежедневная личная сводка руководителям (role='lead'): в личный чат бота и на почту.
+// Групповые чаты не задействованы — командная картина не должна утекать всей команде
+// (docs/superpowers/specs/2026-07-27-lead-role-design.md §3).
+const sendLeadDigest = new SendLeadDigest({
+  members: projectMemberRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  users: userRepo,
+  workspaces: workspaceRepo,
+  telegram: sendAgentTelegramNotification,
+  email: emailSender,
+  appUrl: appBaseUrl,
+});
+const leadDigestScheduler = new LeadDigestScheduler({
+  state: new DrizzleLeadDigestStateRepository(db),
+  send: sendLeadDigest,
+});
+leadDigestScheduler.start();
 
 // Сверка коммитов теперь per-project (db/141): у каждого проекта своё время и дни, а тумблер
 // «Сверка коммитов» реально включает/выключает. Раньше её гонял воркспейс-планировщик выше

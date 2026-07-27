@@ -9,6 +9,7 @@ import {
 import { toast } from '@/components/ui/sonner';
 import type { Project, ProjectStatus } from '@/domain/project/Project';
 import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
   active: 'Активен',
@@ -26,7 +27,7 @@ const STATUS_DOT: Record<ProjectStatus, string> = {
 // Viewer видит статичный бейдж без dropdown.
 export function ProjectStatusSelect({ project }: { project: Project }): React.ReactElement {
   const { submit, saving } = useUpdateProject();
-  const canEdit = project.role === 'owner' || project.role === 'editor';
+  const canEdit = hasOwnerRights(project.role) || project.role === 'editor';
 
   const handleChange = async (value: string): Promise<void> => {
     try {

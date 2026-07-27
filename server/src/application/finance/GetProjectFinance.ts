@@ -1,4 +1,5 @@
 import { InsufficientProjectRoleError } from '../../domain/project/errors.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
@@ -31,7 +32,7 @@ export class GetProjectFinance {
       'read_project',
     );
     // Видимость финансов: не-владелец видит только если включён режим 'members'.
-    if (membership.role !== 'owner' && project.financeVisibility !== 'members') {
+    if (!hasOwnerRights(membership.role) && project.financeVisibility !== 'members') {
       throw new InsufficientProjectRoleError(membership.role, 'manage_finance');
     }
 

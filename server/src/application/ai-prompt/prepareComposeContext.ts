@@ -1,3 +1,4 @@
+import { hasOwnerRights } from '../../domain/project/permissions.js';
 import type { ListProjects } from '../project/ListProjects.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
@@ -62,7 +63,7 @@ export async function prepareComposeContext(
   }
 
   const creatable = projects
-    .filter((p) => (p.role === 'editor' || p.role === 'owner') && !p.isInbox)
+    .filter((p) => (p.role === 'editor' || hasOwnerRights(p.role)) && !p.isInbox)
     .slice(0, MAX_PROJECTS);
   if (creatable.length === 0) return null;
 

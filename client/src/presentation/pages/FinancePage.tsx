@@ -21,6 +21,7 @@ import { HttpError } from '@/lib/HttpError';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
 const fmtDate = (d: Date): string => dateFmt.format(d);
@@ -33,7 +34,7 @@ export function FinancePage(): React.ReactElement {
   const { user } = useCurrentUser();
   const { projectFinanceRepository, employeeRepository } = useContainer();
 
-  const canManage = project?.role === 'owner' || user?.isAdmin === true;
+  const canManage = hasOwnerRights(project?.role) || user?.isAdmin === true;
 
   const [finance, setFinance] = useState<ProjectFinance | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);

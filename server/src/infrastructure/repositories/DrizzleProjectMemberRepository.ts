@@ -377,6 +377,26 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return rows;
   }
 
+  // Руководители пространства проекта. Инбокс здесь не исключение: он тоже принадлежит
+  // пространству, и его задачи входят в зону ответственности руководителя (спека §2).
+  async listLeadUserIdsForProject(projectId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ userId: workspaceMembers.userId })
+      .from(projects)
+      .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, projects.workspaceId))
+      .where(and(eq(projects.id, projectId), eq(workspaceMembers.role, 'lead')));
+    return rows.map((r) => r.userId);
+  }
+
+  async listLeadUserIds(workspaceId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.role, 'lead')))
+      .orderBy(asc(workspaceMembers.createdAt));
+    return rows.map((r) => r.userId);
+  }
+
   async reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void> {
     if (orderedIds.length === 0) return;
     // Скоупим по реально доступным проектам (мусорный id от клиента не должен

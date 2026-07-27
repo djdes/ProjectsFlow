@@ -387,7 +387,7 @@ export const workspaceMembers = mysqlTable(
   {
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     userId: char('user_id', { length: 36 }).notNull(),
-    role: mysqlEnum('role', ['owner', 'editor', 'viewer']).notNull().default('editor'),
+    role: mysqlEnum('role', ['owner', 'lead', 'editor', 'viewer']).notNull().default('editor'),
     createdAt: createdAtCol(),
   },
   (t) => [
@@ -532,7 +532,7 @@ export const projectMembers = mysqlTable(
   {
     projectId: char('project_id', { length: 36 }).notNull(),
     userId: char('user_id', { length: 36 }).notNull(),
-    role: mysqlEnum('role', ['owner', 'editor', 'viewer']).notNull(),
+    role: mysqlEnum('role', ['owner', 'lead', 'editor', 'viewer']).notNull(),
     joinedAt: timestamp('joined_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     // Персональный порядок проекта в сайдбаре этого юзера. См. db/023.
     sortOrder: int('sort_order').notNull().default(0),
@@ -2424,3 +2424,12 @@ export const projectWorkflows = mysqlTable(
 
 export type ProjectWorkflowRow = typeof projectWorkflows.$inferSelect;
 export type NewProjectWorkflowRow = typeof projectWorkflows.$inferInsert;
+
+// Состояние ежедневной личной сводки руководителям пространства (db/147): дата последней
+// отправки, чтобы минутный тик планировщика слал её ровно раз в день.
+export const leadDigestState = mysqlTable('lead_digest_state', {
+  workspaceId: char('workspace_id', { length: 36 }).notNull().primaryKey(),
+  lastSentOn: date('last_sent_on', { mode: 'string' }),
+});
+
+export type LeadDigestStateRow = typeof leadDigestState.$inferSelect;

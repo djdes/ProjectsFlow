@@ -1,6 +1,15 @@
 // Роли пространства (после унификации доступа): owner управляет командой, editor
 // редактирует все проекты, viewer только смотрит. Legacy 'member' мигрирован в 'editor'.
-export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
+export type WorkspaceRole = 'owner' | 'lead' | 'editor' | 'viewer';
+
+// Подписи ролей в UI. 'lead' — руководитель: права владельца + сводки и события по всей
+// команде в личный чат бота и на почту.
+export const WORKSPACE_ROLE_LABEL: Record<WorkspaceRole, string> = {
+  owner: 'Владелец',
+  lead: 'Руководитель',
+  editor: 'Редактор',
+  viewer: 'Наблюдатель',
+};
 
 // 'default' — личный хаб (все мои проекты + общий чат, неудаляем, один на юзера);
 // 'team' — созданное вручную командное пространство.

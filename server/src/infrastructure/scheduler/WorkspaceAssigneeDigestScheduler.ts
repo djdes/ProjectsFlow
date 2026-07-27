@@ -2,28 +2,7 @@ import type { WorkspaceAssigneeDigestRepository } from '../../application/digest
 import type { SendWorkspaceAssigneeDigest } from '../../application/digest/SendWorkspaceAssigneeDigest.js';
 import type { SendWorkspaceEodReminder } from '../../application/eod/SendWorkspaceEodReminder.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
-
-function mskNow(at: Date): { hour: number; minute: number; date: string; dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6 } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(at);
-  const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
-  const date = `${get('year')}-${get('month')}-${get('day')}`;
-  const [year, month, day] = date.split('-').map(Number);
-  const weekDay = new Date(Date.UTC(year!, (month ?? 1) - 1, day!)).getUTCDay();
-  return {
-    hour: Number(get('hour')) % 24,
-    minute: Number(get('minute')),
-    date,
-    dayOfWeek: weekDay as 0 | 1 | 2 | 3 | 4 | 5 | 6,
-  };
-}
+import { mskNow } from './mskClock.js';
 
 export class WorkspaceAssigneeDigestScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;

@@ -78,6 +78,14 @@ export interface ProjectMemberRepository {
   // Нужен для изоляции «Входящих» по активному team-пространству (см. ListSharedMembers /
   // ListPersonalTasksOfColleagues).
   listSharedUsersInWorkspace(userId: string, workspaceId: string): Promise<SharedUser[]>;
+
+  // Руководители (role='lead') пространства, которому принадлежит проект. Аудитория
+  // командных уведомлений: они приходят руководителю в ЛИЧНЫЙ чат с ботом, поэтому
+  // достаточно user-id. Пустой массив, если проекта нет или руководителей не назначили.
+  listLeadUserIdsForProject(projectId: string): Promise<string[]>;
+
+  // Руководители пространства — для ежедневной личной сводки (адресаты рассылки).
+  listLeadUserIds(workspaceId: string): Promise<string[]>;
 }
 
 export type SharedUser = {

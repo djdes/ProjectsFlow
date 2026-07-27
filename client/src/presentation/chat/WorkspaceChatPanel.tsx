@@ -8,6 +8,7 @@ import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatComposer } from './ChatComposer';
 import { ParticipantsPopover } from './ParticipantsPopover';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 // Один общий чат активного пространства — НЕ список комнат/пространств. Участники = все люди
 // по всем проектам этого пространства (для дефолт-хаба это все мои коллабораторы, для
@@ -33,7 +34,7 @@ export function WorkspaceChatPanel(): React.ReactElement {
   // Множественное выделение (drag по области рядом с сообщениями) для массового удаления.
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
 
-  const canModerate = selectedRoom?.role === 'owner';
+  const canModerate = hasOwnerRights(selectedRoom?.role);
   const currentUserId = user?.id ?? '';
 
   const clearSelection = (): void => setSelectedIds(new Set());

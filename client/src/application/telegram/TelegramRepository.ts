@@ -17,6 +17,8 @@ export type TelegramPrefs = {
   readonly commentOnMyTask: boolean;
   readonly mention: boolean;
   readonly statusChange: boolean;
+  // Только для руководителей: состояния задач всей команды в личный чат бота.
+  readonly teamStatusChange: boolean;
   readonly ralphQuestion: boolean;
   readonly ralphAnswer: boolean;
   readonly taskDone: boolean;

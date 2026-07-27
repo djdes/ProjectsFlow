@@ -17,6 +17,8 @@ const NOTIF_KINDS = [
   'ralphQuestion',
   'ralphAnswer',
   'taskDone',
+  // Командный поток руководителя: состояния чужих задач по всему пространству.
+  'teamStatusChange',
 ] as const;
 
 // Payload от Telegram Login Widget — все поля идут как строки в data-onauth callback,

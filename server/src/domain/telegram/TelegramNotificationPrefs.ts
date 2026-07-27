@@ -8,7 +8,11 @@ export type TelegramNotifKind =
   | 'ralphQuestion'     // вопрос от Ralph-агента (ralph-question marker)
   | 'ralphAnswer'       // ответ на мой вопрос (обычно уже знаю — дефолт off)
   | 'taskDone'          // моя задача успешно завершена агентом
-  | 'serverAlert';      // алерт мониторинга сервера (диск/процесс/рестарты)
+  | 'serverAlert'       // алерт мониторинга сервера (диск/процесс/рестарты)
+  // Командный поток руководителя (role='lead'): состояния ЧУЖИХ задач по всему
+  // пространству. Отдельный ключ от statusChange, чтобы приглушить командный шум,
+  // не теряя уведомлений по своим задачам. У не-руководителя эффекта не имеет.
+  | 'teamStatusChange';
 
 export type TelegramNotificationPrefs = Partial<Record<TelegramNotifKind, boolean>>;
 
@@ -22,6 +26,7 @@ const DEFAULTS: Required<TelegramNotificationPrefs> = {
   ralphAnswer: false,
   taskDone: true,
   serverAlert: true,
+  teamStatusChange: true,
 };
 
 export function resolveTgPref(
@@ -43,5 +48,6 @@ export function getAllTgPrefsResolved(
     ralphAnswer: resolveTgPref(prefs, 'ralphAnswer'),
     taskDone: resolveTgPref(prefs, 'taskDone'),
     serverAlert: resolveTgPref(prefs, 'serverAlert'),
+    teamStatusChange: resolveTgPref(prefs, 'teamStatusChange'),
   };
 }

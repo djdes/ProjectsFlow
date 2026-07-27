@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import type { WorkspaceRole } from '@/domain/workspace/Workspace';
+import { WORKSPACE_ROLE_LABEL, type WorkspaceRole } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import type {
   WorkspaceAssigneeDigestGroup,
@@ -69,11 +69,7 @@ import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPi
 const ROLE_SELECT_CLASS =
   'h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
-const WS_ROLE_LABEL: Record<WorkspaceRole, string> = {
-  owner: 'Владелец',
-  editor: 'Редактор',
-  viewer: 'Наблюдатель',
-};
+
 
 export function WorkspaceSettingsPage(): React.ReactElement {
   const { workspaceId = '' } = useParams<{ workspaceId: string }>();
@@ -1128,7 +1124,14 @@ function MembersCard({
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{m.displayName ?? '—'}</div>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-sm font-medium">{m.displayName ?? '—'}</span>
+                    {m.role === 'lead' && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        Руководитель
+                      </span>
+                    )}
+                  </div>
                   <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                 </div>
                 {canManage ? (
@@ -1140,6 +1143,7 @@ function MembersCard({
                       aria-label="Роль участника"
                     >
                       <option value="owner">Владелец</option>
+                      <option value="lead">Руководитель</option>
                       <option value="editor">Редактор</option>
                       <option value="viewer">Наблюдатель</option>
                     </select>
@@ -1160,7 +1164,7 @@ function MembersCard({
                   </>
                 ) : (
                   <>
-                    <span className="text-xs text-muted-foreground">{WS_ROLE_LABEL[m.role]}</span>
+                    <span className="text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[m.role]}</span>
                     {currentUser?.id === m.userId && m.role !== 'owner' && (
                       <Button
                         variant="ghost"

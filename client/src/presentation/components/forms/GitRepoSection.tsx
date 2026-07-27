@@ -10,6 +10,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { RepoPickerDialog } from '@/presentation/components/github/RepoPickerDialog';
 import { CreateRepoDialog } from '@/presentation/components/github/CreateRepoDialog';
 import { OverviewSection } from '@/presentation/components/project/OverviewSection';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 type Props = {
   project: Project;
@@ -21,7 +22,7 @@ export function GitRepoSection({ project }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const canEdit = project.role === 'owner' || project.role === 'editor';
+  const canEdit = hasOwnerRights(project.role) || project.role === 'editor';
   const [collision, setCollision] = useState<{ projectId: string; projectName: string } | null>(
     null,
   );

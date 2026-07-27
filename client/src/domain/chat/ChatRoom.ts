@@ -1,3 +1,4 @@
+import type { WorkspaceRole } from '../workspace/Workspace';
 import type { WorkspaceKind } from '@/domain/workspace/Workspace';
 
 // Чат-комната в списке пользователя: пространство, где он участник (его дефолт-хаб, хаб
@@ -10,7 +11,7 @@ export type ChatRoom = {
   readonly kind: WorkspaceKind;
   readonly ownerUserId: string;
   // Роль текущего юзера в комнате — owner может модерировать (удалять) чужие сообщения.
-  readonly role: 'owner' | 'editor' | 'viewer';
+  readonly role: WorkspaceRole;
   readonly memberCount: number;
   readonly unreadCount: number;
   readonly lastMessageSeq: number;

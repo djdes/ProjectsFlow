@@ -14,17 +14,20 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 import { InviteDialog } from './InviteDialog';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 const ROLE_LABEL: Record<WorkspaceRole, string> = {
   // «Владелец» — концепт пространства (показывается на настройках пространства), а не проекта:
   // на уровне проекта роли — «редактор»/«наблюдатель», а создателя помечаем «создал» ниже.
   owner: 'редактор',
+  lead: 'руководитель',
   editor: 'редактор',
   viewer: 'наблюдатель',
 };
 
 const ROLE_BADGE_CLASS: Record<WorkspaceRole, string> = {
   owner: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  lead: 'bg-primary/15 text-primary',
   editor: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   viewer: 'bg-muted text-muted-foreground',
 };
@@ -44,7 +47,7 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
   const [loading, setLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
-  const canInvite = workspace?.role === 'owner' || workspace?.role === 'editor';
+  const canInvite = hasOwnerRights(workspace?.role) || workspace?.role === 'editor';
 
   // В inbox команды не бывает — секцию не показываем.
   const skip = project.isInbox;

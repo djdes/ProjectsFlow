@@ -1,4 +1,5 @@
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import type { ProjectJoinRequestRepository } from './ProjectJoinRequestRepository.js';
@@ -45,7 +46,7 @@ export class RequestProjectJoin {
     const projectUrl = `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}`;
 
     const owners = (await this.deps.members.listByProject(projectId)).filter(
-      (m) => m.role === 'owner',
+      (m) => hasOwnerRights(m.role),
     );
 
     // Доставка владельцам — best-effort, не роняем заявку.

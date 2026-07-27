@@ -27,6 +27,7 @@ import {
 } from '@/presentation/components/project/workspace/dashboard/dashboardConfig';
 import { normalizePreviewPath } from '@/presentation/components/project/workspace/preview/path';
 import type { PreviewEditRequest, PreviewSelectionRequest } from '@/presentation/components/project/workspace/ProjectPreview';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 type StudioData = {
   project: Project;
@@ -251,7 +252,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
         project={data.project}
         members={data.members}
         canInvite={canEdit}
-        isOwner={data.project.role === 'owner'}
+        isOwner={hasOwnerRights(data.project.role)}
       />
       <ProjectActionsMenu
         project={data.project}

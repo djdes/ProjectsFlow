@@ -7,6 +7,7 @@ import type { DispatcherCandidate } from '@/application/project/ProjectRepositor
 import type { Project } from '@/domain/project/Project';
 import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 import { GitTokenDelegationBlock } from './GitTokenDelegationBlock';
+import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 type Props = {
   project: Project;
@@ -216,7 +217,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
             заранее — до того как назначит диспетчера. */}
         <GitTokenDelegationBlock
           project={project}
-          isOwner={project.role === 'owner'}
+          isOwner={hasOwnerRights(project.role)}
           currentDispatcherDisplayName={currentDispatcher?.displayName ?? null}
         />
       </div>
