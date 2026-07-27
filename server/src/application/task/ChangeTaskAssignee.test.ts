@@ -259,7 +259,23 @@ test('inbox: the current assignee can return the task to the owner', async () =>
   assert.equal(h.calls.updates.length, 1);
 });
 
-test('inbox: a user who is neither owner nor current assignee cannot reassign', async () => {
+// Коллега по общему пространству ВИДИТ личные задачи владельца инбокса (см.
+// ListPersonalTasksOfColleagues → canModify: true) и может двигать/удалять их
+// (taskAuthorization.isInboxColleague). Смена ответственного обязана идти по той же
+// границе: иначе массовое «назначить ответственного» по выбранным карточкам падало
+// на личных задачах коллеги 404-й, а остальные задачи выборки проходили.
+test('inbox: a colleague from a shared workspace can reassign a personal task', async () => {
+  const h = makeHarness({ isInbox: true, sharedUserIds: [OWNER_ID, TARGET_ID] });
+
+  const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
+
+  assert.equal(result.assignee.userId, TARGET_ID);
+  assert.deepEqual(h.calls.updates, [
+    { taskId: TASK_ID, patch: { assigneeUserId: TARGET_ID } },
+  ]);
+});
+
+test('inbox: a user with no shared workspace with the owner cannot reassign', async () => {
   const h = makeHarness({ isInbox: true });
 
   await assert.rejects(
@@ -267,7 +283,9 @@ test('inbox: a user who is neither owner nor current assignee cannot reassign', 
     ProjectNotFoundError,
   );
 
-  assert.deepEqual(h.calls.sharedLookups, []);
+  // Единственный lookup — проверка «коллега ли актор владельцу инбокса»; она не прошла,
+  // до валидации нового ответственного дело не дошло.
+  assert.deepEqual(h.calls.sharedLookups, [OUTSIDER_ID]);
   assert.deepEqual(h.calls.updates, []);
 });
 

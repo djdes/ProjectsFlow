@@ -1,4 +1,3 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import {
   AssigneeNotProjectMemberError,
   AssigneeNotSharedMemberError,
@@ -10,9 +9,9 @@ import type { EmailSender } from '../notifications/EmailSender.js';
 import { renderTaskAssigneeEmail } from '../notifications/emails/taskAssigneeEmail.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 
 type Deps = {
@@ -38,14 +37,26 @@ export class ChangeTaskAssignee {
   ): Promise<Task> {
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
-    const project = await this.deps.projects.getById(projectId);
-    if (!project) throw new TaskNotFoundError(taskId);
+
+    // Кто вправе тронуть задачу — единый гейт с остальными task-операциями
+    // (правка/перенос/удаление). Для inbox это владелец, текущий ответственный ИЛИ коллега
+    // по общему пространству: он эту личную задачу видит во «Входящих», значит и смена
+    // ответственного ему доступна. Раньше здесь стояла своя, более узкая проверка
+    // (только владелец либо текущий ответственный) — из-за неё массовое «назначить
+    // ответственного» падало 404-й ровно на личных задачах коллег.
+    // Для именованного проекта — обычные права: assign_task (viewer+) или task-scope
+    // текущего ответственного.
+    const { project } = await requireTaskModifyAccess(
+      this.deps,
+      projectId,
+      taskId,
+      actorUserId,
+      'assign_task',
+    );
 
     if (project.isInbox) {
-      // Личную задачу видят и переназначают владелец inbox либо её текущий ответственный.
-      if (project.ownerId !== actorUserId && task.assignee.userId !== actorUserId) {
-        throw new ProjectNotFoundError();
-      }
+      // Ответственным личной задачи может стать владелец инбокса либо его коллега по
+      // общему пространству (тот же круг, что видит эту доску).
       if (assigneeUserId !== project.ownerId) {
         const shared = await this.deps.members.listSharedUsers(project.ownerId);
         if (!shared.some((u) => u.id === assigneeUserId)) {
@@ -53,8 +64,7 @@ export class ChangeTaskAssignee {
         }
       }
     } else {
-      // Менять ответственного может любой участник проекта, включая viewer.
-      await requireProjectAccess(this.deps, projectId, actorUserId, 'assign_task');
+      // Ответственным может стать любой участник проекта, включая viewer.
       const targetMembership = await this.deps.members.findForProject(projectId, assigneeUserId);
       if (!targetMembership) throw new AssigneeNotProjectMemberError();
     }
