@@ -533,54 +533,63 @@ export class TelegramComposerService {
     }
 
     const parsed = parseComposerMessage(rawText);
-    // «Готово …» / «Сделано …» → фиксируем УЖЕ ВЫПОЛНЕННУЮ задачу сразу в колонке «Готово»,
-    // без карточки-подтверждения и AI. Цель — не терять завершённую работу в переписке.
+    // «Готово …» / «Сделано …» → ТА ЖЕ обработка, что и обычное создание (AI-перефраз +
+    // разбиение на задачи по проектам/ответственным), только все задачи попадают сразу в
+    // колонку «Готово»: фиксируем УЖЕ ВЫПОЛНЕННУЮ работу в трекере, а не оставляем в переписке.
+    // Ключевое слово вырезаем из текста (пересобираем сообщение без него) и гоним обычный
+    // конвейер, помечая колонку forceStatus='done' у черновика и у каждого AI-сегмента.
     const donePrefix = parseDonePrefix(parsed.taskText);
-    if (donePrefix.isDone) {
-      return this.createDoneTask(
-        userId,
-        chatId,
-        { ...parsed, taskText: donePrefix.rest },
-        options.sourceKey ?? null,
-      );
-    }
-    // Нет текста задачи (например, один '+Проект') → ручной флоу покажет подсказку (без AI).
-    if (parsed.taskText.trim().length === 0) {
+    const forceStatus: VisibleKanbanStatus | null = donePrefix.isDone ? 'done' : null;
+    const effectiveRaw = donePrefix.isDone
+      ? [
+          parsed.projectQuery !== null ? `+${parsed.projectQuery}` : null,
+          donePrefix.rest,
+          parsed.assigneeQuery !== null ? `@${parsed.assigneeQuery}` : null,
+        ]
+          .filter((s): s is string => !!s && s.trim().length > 0)
+          .join(' ')
+      : rawText;
+    const parsedEff = donePrefix.isDone ? parseComposerMessage(effectiveRaw) : parsed;
+
+    // Нет текста задачи (например, один '+Проект' или голое «готово») → ручной флоу с подсказкой.
+    if (parsedEff.taskText.trim().length === 0) {
       await this.manualFlow(
         userId,
         chatId,
-        rawText,
+        effectiveRaw,
         undefined,
         attachments,
         undefined,
         options.sourceKey ?? null,
+        forceStatus,
       );
       return;
     }
 
     let hint: { projectId: string | null; taskText: string };
     try {
-      hint = await this.resolveProjectHint(userId, parsed);
+      hint = await this.resolveProjectHint(userId, parsedEff);
     } catch (err) {
       console.warn('[tg-composer] project hint failed → manual flow:', err);
       await this.manualFlow(
         userId,
         chatId,
-        rawText,
+        effectiveRaw,
         undefined,
         attachments,
         undefined,
         options.sourceKey ?? null,
+        forceStatus,
       );
       return;
     }
-    const aiText = this.buildAiText(hint.taskText, parsed.assigneeQuery);
+    const aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
     let fallbackAssigneeUserId: string | null = null;
     try {
       fallbackAssigneeUserId = await this.resolveUniqueAssignee(
         userId,
         hint.projectId,
-        parsed.assigneeQuery,
+        parsedEff.assigneeQuery,
       );
     } catch (err) {
       // The durable raw fallback still works with the creator as assignee. AI/manual enrichment
@@ -599,6 +608,8 @@ export class TelegramComposerService {
       taskText: hint.taskText,
       projectId: hint.projectId,
       assigneeUserId: fallbackAssigneeUserId,
+      // «Готово»-режим фиксирует колонку сразу; обычные задачи — null (ЧЕРНОВИКИ по умолчанию).
+      targetStatus: forceStatus,
       attachments: withDefaultAttachmentTargets(attachments),
       ttlSeconds: DRAFT_TTL_SECONDS,
       autoCreateSeconds: AUTO_CREATE_SECONDS,
@@ -607,7 +618,7 @@ export class TelegramComposerService {
     // creator of that row starts AI/card work; the retry is now safely acknowledged as duplicate.
     if (draft.id !== draftId) return;
 
-    const enrichment = this.enrichDraft(draft, userId, chatId, rawText, parsed, hint, aiText);
+    const enrichment = this.enrichDraft(draft, userId, chatId, effectiveRaw, parsedEff, hint, aiText, forceStatus);
     if (options.background) {
       void enrichment.catch((err) => console.warn('[tg-composer] background enrichment failed:', err));
       return;
@@ -623,6 +634,8 @@ export class TelegramComposerService {
     parsed: ReturnType<typeof parseComposerMessage>,
     hint: { projectId: string | null; taskText: string },
     aiText: string,
+    // «Готово»-режим: все AI-сегменты создаём сразу в этой колонке (см. startFromMessage).
+    forceStatus: VisibleKanbanStatus | null = null,
   ): Promise<void> {
     let waitMsgId: number | null = null;
     let stopSpinner: (() => Promise<void>) | null = null;
@@ -649,7 +662,7 @@ export class TelegramComposerService {
         }
         stopSpinner = null;
       }
-      const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId);
+      const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus);
       const updated = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
@@ -670,6 +683,8 @@ export class TelegramComposerService {
         waitMsgId ?? undefined,
         current.attachments,
         current,
+        null,
+        forceStatus,
       );
     } finally {
       if (stopSpinner) await stopSpinner();
@@ -779,109 +794,6 @@ export class TelegramComposerService {
     }
   }
 
-  // «Готово/Сделано …» — зафиксировать УЖЕ ВЫПОЛНЕННУЮ задачу сразу в колонке «Готово».
-  // Создаётся немедленно (без карточки-подтверждения и AI): цель — не потерять завершённую
-  // работу в переписке. Делегат = @упомянутый (иначе автор). Идемпотентность Telegram-ретраев —
-  // через черновик по sourceKey (+ атомарный claim от гонок параллельных доставок).
-  private async createDoneTask(
-    userId: string,
-    chatId: number,
-    parsed: ReturnType<typeof parseComposerMessage>,
-    sourceKey: string | null,
-  ): Promise<void> {
-    let hint: { projectId: string | null; taskText: string };
-    try {
-      hint = await this.resolveProjectHint(userId, parsed);
-    } catch (err) {
-      console.warn('[tg-composer] done project hint failed:', err);
-      hint = { projectId: null, taskText: parsed.taskText.trim() };
-    }
-    const text = hint.taskText.trim();
-    if (text.length === 0) {
-      await this.send(
-        chatId,
-        '📝 После «Готово» напиши, что именно сделано. Например: <code>Готово Обновил билд @Коллега</code>',
-      );
-      return;
-    }
-    let assigneeUserId: string | null = null;
-    try {
-      assigneeUserId = await this.resolveUniqueAssignee(userId, hint.projectId, parsed.assigneeQuery);
-    } catch (err) {
-      console.warn('[tg-composer] done assignee hint failed:', err);
-    }
-
-    let receipt: TelegramTaskDraft | null = null;
-    try {
-      if (sourceKey) {
-        receipt = await this.deps.drafts.findBySourceKey(sourceKey);
-        if (
-          receipt &&
-          (receipt.status === 'confirmed' ||
-            receipt.status === 'cancelled' ||
-            receipt.status === 'expired')
-        ) {
-          return; // ретрай уже обработанной доставки — не дублируем задачу
-        }
-        if (!receipt) {
-          receipt = await this.deps.drafts.create({
-            id: this.deps.shortIdGen(),
-            sourceKey,
-            creatorUserId: userId,
-            tgChatId: chatId,
-            taskText: text,
-            projectId: hint.projectId,
-            assigneeUserId,
-            targetStatus: 'done',
-            attachments: [],
-            ttlSeconds: DRAFT_TTL_SECONDS,
-            autoCreateSeconds: null,
-          });
-        }
-        receipt = await this.deps.drafts.claimForConfirmation(receipt.id, false);
-        if (!receipt) return; // другой процесс уже создаёт эту задачу
-      }
-
-      // Делегирование во «Входящие» коллеги: нет проекта И получатель ≠ автор.
-      const delegateUserId = assigneeUserId && assigneeUserId !== userId ? assigneeUserId : null;
-      const inboxOwnerId = delegateUserId ?? userId;
-      const delegatedInbox = !hint.projectId && inboxOwnerId !== userId;
-      const targetId = hint.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId)).id;
-      const task = await this.deps.createTask.execute({
-        projectId: targetId,
-        ownerUserId: userId,
-        description: text,
-        status: 'done',
-        assigneeUserId: assigneeUserId ?? userId,
-        allowInboxDelegation: delegatedInbox,
-      });
-      // Закрываем claim сразу после создания — всё ниже best-effort, его сбой не должен
-      // вернуть уже созданную задачу в очередь и породить дубль.
-      if (receipt) await this.deps.drafts.patch(receipt.id, { status: 'confirmed' });
-
-      if (assigneeUserId && assigneeUserId !== userId) {
-        await this.notifyAssignee(assigneeUserId, hint.projectId, task.id, targetId, userId, text, true);
-      }
-
-      const projName = await this.projNameOf(hint.projectId);
-      const assigneeSuffix =
-        assigneeUserId && assigneeUserId !== userId
-          ? ` Ответственный — <b>${escapeHtml((await this.deps.users.getById(assigneeUserId))?.displayName ?? 'участник')}</b>.`
-          : '';
-      await this.send(
-        chatId,
-        `✅ Зафиксировано как <b>выполненное</b> в <b>${escapeHtml(projName)}</b>.${assigneeSuffix}\n📝 ${markdownToTelegramHtml(excerpt(text))}`,
-      );
-    } catch (err) {
-      console.warn('[tg-composer] done-shortcut failed:', err);
-      if (receipt?.status === 'confirming') {
-        await this.deps.drafts.releaseConfirmation(receipt.id, AUTO_RETRY_SECONDS).catch(() => {});
-      }
-      await this.send(chatId, '❌ Не удалось зафиксировать задачу. Попробуйте позже.');
-      throw err;
-    }
-  }
-
   // Текст задачи-фолбэка + футер-атрибуция (кто и из какой группы поставил).
   private buildOwnerInboxDescription(body: string, groupCtx: TelegramGroupContext): string {
     const grp = groupCtx.groupTitle ? ` · «${groupCtx.groupTitle}»` : '';
@@ -903,6 +815,8 @@ export class TelegramComposerService {
     attachments: readonly TelegramDraftAttachment[] = [],
     existingDraft?: TelegramTaskDraft,
     sourceKey: string | null = null,
+    // «Готово»-режим: одиночная задача создаётся сразу в этой колонке (см. startFromMessage).
+    forceStatus: VisibleKanbanStatus | null = null,
   ): Promise<void> {
     const parsed = parseComposerMessage(rawText);
 
@@ -967,6 +881,7 @@ export class TelegramComposerService {
           // AI may have persisted segments before a later render/transport error. This fallback
           // renders a manual tc:-card, so its stored finalize path must be manual as well.
           segments: null,
+          targetStatus: forceStatus,
           attachments: withDefaultAttachmentTargets(attachments),
         })) ?? existingDraft)
       : await this.deps.drafts.create({
@@ -978,6 +893,7 @@ export class TelegramComposerService {
           projectId,
           assigneeUserId,
           offered,
+          targetStatus: forceStatus,
           attachments: withDefaultAttachmentTargets(attachments),
           ttlSeconds: DRAFT_TTL_SECONDS,
           autoCreateSeconds: AUTO_CREATE_SECONDS,
@@ -1355,9 +1271,6 @@ export class TelegramComposerService {
     projectId: string,
     creatorUserId: string,
     text: string,
-    // Для зафиксированной «готовой» задачи — иной глагол («отметил выполненной») + без
-    // action-кнопки «Завершить» (задача уже done).
-    done = false,
   ): Promise<void> {
     const creator = await this.deps.users.getById(creatorUserId);
     const creatorName = creator?.displayName ?? 'Коллега';
@@ -1365,8 +1278,7 @@ export class TelegramComposerService {
       ? ((await this.deps.projects.getById(sourceProjectId))?.name ?? null)
       : null;
     const ctx = projName ? ` Проект: <b>${escapeHtml(projName)}</b>.` : ' (во «Входящие»).';
-    const verb = done ? 'отметил(а) выполненной и назначил(а) на тебя' : 'назначил(а) тебя ответственным';
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> ${verb}:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> назначил(а) тебя ответственным:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
     const openBtn = [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }];
     const res = await this.deps.sendNotification.execute({
       userId: assigneeUserId,
@@ -1375,7 +1287,7 @@ export class TelegramComposerService {
       kind: 'task_assignee_changed',
       taskId,
       replyMarkup: {
-        inline_keyboard: done ? [openBtn] : [...taskActionKeyboard(taskId).inline_keyboard, openBtn],
+        inline_keyboard: [...taskActionKeyboard(taskId).inline_keyboard, openBtn],
       },
       skipPrefsCheck: true, // важное — должно дойти независимо от prefs
       skipDedupCheck: true,
@@ -1613,6 +1525,8 @@ export class TelegramComposerService {
     parsed: ParsedComposeSegment[],
     hintProjectId: string | null,
     creatorUserId: string,
+    // «Готово»-режим: колонка каждого сегмента фиксируется в 'done' (см. startFromMessage).
+    forceStatus: VisibleKanbanStatus | null = null,
   ): Promise<TelegramDraftSegment[]> {
     const out: TelegramDraftSegment[] = [];
     for (const s of parsed) {
@@ -1629,7 +1543,9 @@ export class TelegramComposerService {
         // нельзя — CreateTask тогда проставит «сегодня», и задача из чата сразу просрочена.
         deadline: s.deadline ?? endOfWeekDeadline(this.now()),
         included: true,
-        targetStatus: null, // дефолт 'backlog' (ЧЕРНОВИКИ) пока пользователь не выбрал колонку
+        // null = дефолт 'backlog' (ЧЕРНОВИКИ) пока юзер не выбрал колонку; forceStatus='done'
+        // приходит из «Готово»-режима и ставит все сегменты сразу в «Готово».
+        targetStatus: forceStatus,
       });
     }
     return out;

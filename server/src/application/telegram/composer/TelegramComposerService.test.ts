@@ -399,51 +399,75 @@ test('группа: коллега с +своим проектом → флоу 
   assert.equal(d.projectId, 'p1'); // в свой проект Альфа
 });
 
-test('«Готово …» → мгновенно создаёт задачу в колонке «Готово», без карточки', async () => {
-  const h = makeHarness();
+test('«Готово …» (ручной флоу) → черновик в колонке «Готово»; подтверждение создаёт done', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' }); // AI деградирует → ручной флоу
   await h.service.startFromMessage(111, 500, 'готово починить сборку', undefined, [], {
     sourceKey: 'm:500:1',
   });
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  assert.equal(draft.targetStatus, 'done'); // колонка зафиксирована сразу
+  assert.equal(draft.taskText, 'починить сборку'); // ключевое слово срезано
+  // Подтверждаем карточку → задача создаётся в «Готово».
+  await h.service.handleCallback(cq(`tc:${draftId}`));
   assert.equal(h.createTaskCalls.length, 1);
-  const c = h.createTaskCalls[0]!;
-  assert.equal(c.status, 'done'); // сразу в «Готово»
-  assert.equal(c.description, 'починить сборку'); // ключевое слово срезано
-  assert.equal(c.ownerUserId, 'u1');
-  // Подтверждение «зафиксировано как выполненное»
-  assert.ok(h.sent.some((m) => /выполненное/i.test(m.text)));
+  assert.equal(h.createTaskCalls[0]!.status, 'done');
+  assert.equal(h.createTaskCalls[0]!.description, 'починить сборку');
 });
 
-test('«Готово … @Вася» → задача в «Готово», делегирована во «Входящие» коллеги', async () => {
-  const h = makeHarness();
+test('«Готово … @Вася» → колонка «Готово» + делегирование во «Входящие» коллеги', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' });
   await h.service.startFromMessage(111, 500, 'готово обновил прод @Вася', undefined, [], {
     sourceKey: 'm:500:2',
   });
-  assert.equal(h.createTaskCalls.length, 1);
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  assert.equal(draft.targetStatus, 'done');
+  assert.equal(draft.assigneeUserId, 'u2'); // делегировано Васе
+  await h.service.handleCallback(cq(`tc:${draftId}`));
   const c = h.createTaskCalls[0]!;
   assert.equal(c.status, 'done');
-  assert.equal(c.assigneeUserId, 'u2'); // делегировано Васе
+  assert.equal(c.assigneeUserId, 'u2');
   assert.equal(c.projectId, 'inbox-u2'); // во «Входящие» делегата
   assert.equal(c.allowInboxDelegation, true);
   assert.equal(c.description, 'обновил прод');
-  // Делегату ушла карточка «отметил выполненной и назначил на тебя»
-  assert.ok(h.assigneeMessages.some((m) => m.userId === 'u2'));
 });
 
-test('повтор «Готово …» с тем же sourceKey не дублирует задачу', async () => {
-  const h = makeHarness();
+test('«Готово …» с AI-разбиением → каждый сегмент в колонке «Готово»', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }, { id: 'p2', name: 'Бета' }],
+    aiSegments: [
+      seg1({ id: 's1', projectId: 'p1', projectName: 'Альфа' }),
+      seg1({ id: 's2', projectId: 'p2', projectName: 'Бета' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сделано раз и два');
+  const draftId = [...h.drafts.keys()][0]!;
+  const segs = h.drafts.get(draftId)!.segments!;
+  assert.equal(segs.length, 2);
+  assert.ok(segs.every((s) => s.targetStatus === 'done')); // все задачи сразу в «Готово»
+  // Создаём все сегменты → задачи в done.
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.ok(h.createTaskCalls.length >= 1);
+  assert.ok(h.createTaskCalls.every((c) => c.status === 'done'));
+});
+
+test('повтор «Готово …» с тем же sourceKey не создаёт второй черновик', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' });
   const opts = { sourceKey: 'm:500:3' } as const;
   await h.service.startFromMessage(111, 500, 'готово выкатил релиз', undefined, [], opts);
   await h.service.startFromMessage(111, 500, 'готово выкатил релиз', undefined, [], opts);
-  assert.equal(h.createTaskCalls.length, 1); // ровно одна задача
+  assert.equal(h.drafts.size, 1); // ровно один черновик (идемпотентность по sourceKey)
 });
 
-test('«готовность …» НЕ считается фиксацией (обычный флоу)', async () => {
-  const h = makeHarness();
+test('«готовность …» НЕ считается фиксацией (обычный флоу, колонка не done)', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' });
   await h.service.startFromMessage(111, 500, 'готовность к релизу проверить', undefined, [], {
     sourceKey: 'm:500:4',
   });
-  // Обычный флоу: мгновенного createTask со status=done нет (уходит в manual/AI карточку).
-  assert.equal(h.createTaskCalls.length, 0);
+  const draft = h.drafts.get([...h.drafts.keys()][0]!)!;
+  assert.notEqual(draft.targetStatus, 'done'); // обычный флоу — колонка НЕ «Готово»
+  assert.match(draft.taskText ?? '', /готовность/); // слово осталось в тексте
 });
 
 test('группа: непривязанный отправитель при владельце → в «Входящие» владельца + кнопка «Привязать»', async () => {
