@@ -16,10 +16,31 @@ type Deps = {
 export class ListTaskAttachments {
   constructor(private readonly deps: Deps) {}
 
+  // Вложения самой задачи (веб рисует их отдельным блоком; файлы комментариев приходят
+  // вместе с лентой комментариев).
   async execute(projectId: string, ownerUserId: string, taskId: string): Promise<TaskAttachment[]> {
+    await this.assertTaskInProject(projectId, ownerUserId, taskId);
+    return this.deps.attachments.listByTask(taskId);
+  }
+
+  // ВСЕ вложения задачи, включая файлы из комментариев — для агентов, которым задача
+  // отдаётся одним куском.
+  async executeAll(
+    projectId: string,
+    ownerUserId: string,
+    taskId: string,
+  ): Promise<TaskAttachment[]> {
+    await this.assertTaskInProject(projectId, ownerUserId, taskId);
+    return this.deps.attachments.listAllByTask(taskId);
+  }
+
+  private async assertTaskInProject(
+    projectId: string,
+    ownerUserId: string,
+    taskId: string,
+  ): Promise<void> {
     await requireTaskReadAccess(this.deps, projectId, taskId, ownerUserId);
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
-    return this.deps.attachments.listByTask(taskId);
   }
 }

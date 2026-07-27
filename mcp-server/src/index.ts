@@ -20,7 +20,9 @@
 //   - pf_write_kb_document     — создать/обновить KB-док
 //   - pf_delete_kb_document    — удалить KB-док (необратимо)
 //   - pf_list_tasks            — список kanban-задач в проекте
-//   - pf_get_task              — задача с вложениями и тредом комментариев
+//   - pf_get_task              — задача с вложениями (файлами на диск) и тредом комментариев
+//   - pf_list_task_attachments — метаданные вложений задачи без байтов
+//   - pf_read_task_attachment  — скачать одно вложение в файл
 //   - pf_create_task           — создать задачу
 //   - pf_update_task           — изменить описание задачи
 //   - pf_delete_task           — удалить задачу (необратимо)
@@ -66,6 +68,15 @@ import { dirname, join } from 'node:path';
 import { loadConfig } from './config.js';
 import { ApiClient, ApiError } from './api.js';
 import { collectSiteFiles, formatBytes, resolveBuildDir } from './siteFiles.js';
+import {
+  attachmentsRoot,
+  decodeTextPreview,
+  formatBytesShort,
+  isTextLike,
+  pruneAttachmentCache,
+  saveAttachment,
+  saveAttachmentTo,
+} from './attachments.js';
 
 // Версия сервера читается из package.json в рантайме (а не хардкодом / import) —
 // rootDir=./src запрещает `import pkg from '../package.json'` (TS6059). Резолвим
@@ -209,13 +220,16 @@ const TOOLS = [
   {
     name: 'pf_get_task',
     description:
-      'Fetch a single task with ALL its attachments inlined AND the full thread of comments. ' +
-      'Returns the task metadata + comments as text, then each attachment as a separate ' +
-      'content block: images (image/*) as inline `image` blocks (viewable directly), other ' +
-      'files as embedded `resource` blocks. Comments are ordered oldest-first (like a chat). ' +
-      "Use this whenever you're about to work on a task — even if attachmentCount is 0, " +
-      'the comments thread often carries clarifications, prior agent attempts, or user ' +
-      'follow-ups that change the scope.',
+      'Fetch a single task with ALL its attachments AND the full thread of comments. ' +
+      'EVERY attachment is downloaded and written to a real file on this machine — its ' +
+      'absolute path is in the `localPath` field of the JSON block. To look at an attached ' +
+      'screenshot, PDF, voice message or archive, OPEN THAT PATH with your own file tool ' +
+      '(Read / cat / ffmpeg / whatever you have). Do not assume you cannot see attachments: ' +
+      'they are on disk. On top of that, text-like files (txt/md/csv/json/code) are inlined ' +
+      'as text blocks, and images are also sent as `image` blocks for clients that render ' +
+      'them. Comments are ordered oldest-first (like a chat). Use this whenever you are about ' +
+      'to work on a task — even if attachmentCount is 0, the comments thread often carries ' +
+      'clarifications, prior agent attempts, or user follow-ups that change the scope.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -223,6 +237,52 @@ const TOOLS = [
         taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
       },
       required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_list_task_attachments',
+    description:
+      'List metadata of every file attached to a task (id, filename, mimeType, sizeBytes, ' +
+      'commentId, uploadedAt) WITHOUT downloading the bytes. Cheap way to see what is ' +
+      'attached before pulling a large voice message / video / PDF. Download a specific one ' +
+      'with pf_read_task_attachment.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+      },
+      required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_read_task_attachment',
+    description:
+      'Download ONE attachment of a task and save it to a local file; returns the absolute ' +
+      'path. Use it to actually see/open a file the user attached: open the returned path ' +
+      'with your file tool (images and PDFs are readable directly, audio can be transcribed, ' +
+      'archives unpacked). Text-like files are additionally returned inline as text, images ' +
+      'as an `image` block. Works for files of any size (unlike the inline blocks of ' +
+      'pf_get_task). Attachment ids come from pf_get_task or pf_list_task_attachments.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        attachmentId: {
+          type: 'string',
+          description: 'Attachment id (from pf_get_task / pf_list_task_attachments)',
+        },
+        saveTo: {
+          type: 'string',
+          description:
+            'Optional path to save the file to (absolute, or relative to the current working ' +
+            'directory). Defaults to a temp cache dir.',
+        },
+      },
+      required: ['projectId', 'taskId', 'attachmentId'],
       additionalProperties: false,
     },
   },
@@ -302,8 +362,10 @@ const TOOLS = [
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
       "('backlog' | 'todo' | 'in_progress' | 'awaiting_clarification' | 'done' | 'manual'), " +
-      'position, commitCount, and commentCount ' +
-      '(>0 means the task already has a discussion thread — read it via pf_get_task). \'backlog\' ' +
+      'position, commitCount, commentCount ' +
+      '(>0 means the task already has a discussion thread — read it via pf_get_task) and ' +
+      'attachmentCount (>0 means the user attached files — screenshots, voice messages, PDFs; ' +
+      'pf_get_task downloads them to local files you can open). \'backlog\' ' +
       'is the unnamed left-most column for raw triage items — users manually promote them ' +
       "to TODO. 'manual' is a parking column for tasks the user does by hand — no auto-transitions, " +
       "agent never picks them up. Use this BEFORE making a commit: read open tasks (todo + in_progress), " +
@@ -1838,6 +1900,12 @@ const RecordAutomationTaskInput = z.object({
   projectId: z.string().min(1),
   taskId: z.string().min(1),
 });
+const ReadTaskAttachmentInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  attachmentId: z.string().min(1),
+  saveTo: z.string().trim().min(1).optional(),
+});
 const AddExpenseInputZ = z.object({
   projectId: z.string().min(1),
   amountRubles: z.number().nonnegative(),
@@ -1909,46 +1977,131 @@ async function main(): Promise<void> {
             input.projectId,
             input.taskId,
           );
-          // Текстовый блок — task + attachment metadata + comments thread (без base64-дублей).
+          pruneAttachmentCache();
+          // Каждое вложение материализуем на диск. Это единственный способ отдать файл,
+          // который прочитает ЛЮБОЙ клиент: `image`/`resource`-блоки понимает Claude Code,
+          // а Codex/Cursor/Gemini их выкидывают — и задача выглядела как «файл есть в
+          // списке, но посмотреть его нечем».
+          const saved = attachments.map((a) => {
+            // Байтов нет — сервер не уложил файл в бюджет ответа (огромное видео или
+            // длинный тред). Не ошибка: путь получится через pf_read_task_attachment.
+            const data = a.dataBase64 ? Buffer.from(a.dataBase64, 'base64') : null;
+            let localPath: string | null = null;
+            let saveError: string | null = null;
+            if (data) {
+              try {
+                localPath = saveAttachment(input.taskId, a.id, a.filename, data);
+              } catch (e) {
+                saveError = (e as Error).message;
+              }
+            }
+            return { a, data, localPath, saveError };
+          });
+          // Текстовый блок — task + метаданные вложений (с путями) + тред комментариев.
           const meta = {
             task,
-            attachments: attachments.map((a) => ({
+            attachments: saved.map(({ a, localPath, saveError }) => ({
               id: a.id,
+              commentId: a.commentId ?? null,
               filename: a.filename,
               mimeType: a.mimeType,
               sizeBytes: a.sizeBytes,
               uploadedAt: a.uploadedAt,
+              localPath,
+              ...(saveError ? { saveError } : {}),
+              ...(localPath === null && !saveError
+                ? { note: 'файл не приложен к этому ответу — скачай его pf_read_task_attachment' }
+                : {}),
             })),
             comments,
           };
           const content: ToolContent[] = [
             { type: 'text', text: JSON.stringify(meta, null, 2) },
           ];
-          // Бинари — image/* как `image`-блок (LLM видит картинку), остальное как
-          // `resource` с blob (Claude Code умеет читать embedded resources).
-          // ВАЖНО: cap'аем размер inline-бинарей — большие файлы могут заглушить stdio-канал
-          // MCP и memory-spike процесс (base64 раздувает в ~1.33×, плюс concat).
+          if (saved.length > 0) {
+            content.push({ type: 'text', text: attachmentsHint(saved.length) });
+          }
+          // Текст инлайним (виден всем клиентам), картинки дублируем `image`-блоком —
+          // ВАЖНО: с cap'ом, иначе большой файл забьёт stdio-канал MCP и раздует память
+          // (base64 это ~1.33× от размера). Полный файл в любом случае лежит на диске.
           const MAX_INLINE_BYTES = 2 * 1024 * 1024; // 2 MB raw
-          for (const a of attachments) {
-            if (a.sizeBytes > MAX_INLINE_BYTES) {
+          for (const { a, data, localPath } of saved) {
+            if (!data) continue;
+            if (isTextLike(a.mimeType, a.filename)) {
+              const { text, truncated } = decodeTextPreview(data);
               content.push({
                 type: 'text',
-                text: `[attachment ${a.filename} (${a.mimeType}, ${Math.round(a.sizeBytes / 1024)} KB) — слишком большой для inline, открой в UI: projectsflow://attachment/${a.id}]`,
+                text:
+                  `--- ${a.filename} (${a.mimeType}, ${formatBytesShort(a.sizeBytes)})` +
+                  `${truncated ? ' — первые 64 KB, полный файл: ' + (localPath ?? '—') : ''} ---\n` +
+                  text,
               });
               continue;
             }
-            if (a.mimeType.startsWith('image/')) {
-              content.push({ type: 'image', data: a.dataBase64, mimeType: a.mimeType });
-            } else {
-              content.push({
-                type: 'resource',
-                resource: {
-                  uri: `projectsflow://attachment/${a.id}`,
-                  mimeType: a.mimeType,
-                  blob: a.dataBase64,
-                },
-              });
+            if (a.mimeType.startsWith('image/') && a.sizeBytes <= MAX_INLINE_BYTES) {
+              content.push({ type: 'image', data: data.toString('base64'), mimeType: a.mimeType });
             }
+          }
+          return { content };
+        }
+        case 'pf_list_task_attachments': {
+          const input = GetTaskInput.parse(req.params.arguments ?? {});
+          const attachments = await api.listTaskAttachments(input.projectId, input.taskId);
+          return jsonResult(attachments);
+        }
+        case 'pf_read_task_attachment': {
+          const input = ReadTaskAttachmentInputZ.parse(req.params.arguments ?? {});
+          const list = await api.listTaskAttachments(input.projectId, input.taskId);
+          const meta = list.find((a) => a.id === input.attachmentId);
+          if (!meta) {
+            return errorResult(
+              `Вложение ${input.attachmentId} не найдено в задаче ${input.taskId}. ` +
+                `Есть: ${list.map((a) => `${a.id} (${a.filename})`).join(', ') || '—'}`,
+            );
+          }
+          const data = await api.downloadTaskAttachment(
+            input.projectId,
+            input.taskId,
+            input.attachmentId,
+          );
+          pruneAttachmentCache();
+          const localPath = input.saveTo
+            ? saveAttachmentTo(input.saveTo, data)
+            : saveAttachment(input.taskId, meta.id, meta.filename, data);
+          const content: ToolContent[] = [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  id: meta.id,
+                  filename: meta.filename,
+                  mimeType: meta.mimeType,
+                  sizeBytes: meta.sizeBytes,
+                  commentId: meta.commentId ?? null,
+                  localPath,
+                },
+                null,
+                2,
+              ),
+            },
+            {
+              type: 'text',
+              text: `Файл сохранён: ${localPath} — открой его своим файловым инструментом (Read/cat/ffmpeg).`,
+            },
+          ];
+          if (isTextLike(meta.mimeType, meta.filename)) {
+            const { text, truncated } = decodeTextPreview(data);
+            content.push({
+              type: 'text',
+              text:
+                `--- ${meta.filename}${truncated ? ' (первые 64 KB)' : ''} ---\n` + text,
+            });
+          } else if (meta.mimeType.startsWith('image/') && data.byteLength <= 2 * 1024 * 1024) {
+            content.push({
+              type: 'image',
+              data: data.toString('base64'),
+              mimeType: meta.mimeType,
+            });
           }
           return { content };
         }
@@ -2419,6 +2572,19 @@ async function probePublishedSite(
   const nested = paths.find((p) => p.includes('/'));
   const nestedAsset = nested ? await probeSiteUrl(`${base}/${nested}`) : null;
   return { root, nestedAsset };
+}
+
+// Подсказка агенту: файлы уже на диске, смотреть их надо своим файловым инструментом.
+// Без неё модели регулярно отвечают «я не могу посмотреть вложение» при том, что путь
+// лежит прямо в ответе.
+function attachmentsHint(count: number): string {
+  return (
+    `К задаче приложено файлов: ${count}. Все они скачаны на этот компьютер — ` +
+    `абсолютные пути в поле localPath выше (кэш: ${attachmentsRoot()}). ` +
+    `Чтобы посмотреть вложение, открой его путь своим файловым инструментом ` +
+    `(Read/cat — картинки и PDF читаются напрямую, аудио можно расшифровать, архив распаковать). ` +
+    `Заново скачать конкретный файл (в т.ч. в свою папку) — pf_read_task_attachment.`
+  );
 }
 
 function jsonResult(data: unknown): { content: ToolContent[] } {

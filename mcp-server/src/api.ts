@@ -122,6 +122,9 @@ export type Task = {
   updatedAt: string;
   commitCount?: number;
   commentCount?: number;
+  // >0 — к задаче приложены файлы (скрины, голосовые, PDF). Читаются pf_get_task /
+  // pf_list_task_attachments / pf_read_task_attachment.
+  attachmentCount?: number;
 };
 
 export type TaskCommit = {
@@ -135,13 +138,21 @@ export type TaskCommit = {
   linkedAt: string;
 };
 
-export type TaskAttachmentWithData = {
+export type TaskAttachmentMeta = {
   id: string;
+  // null — вложение самой задачи; иначе id комментария, к которому его приложили.
+  // Старый backend поля не присылает — поэтому optional.
+  commentId?: string | null;
   filename: string;
   mimeType: string;
   sizeBytes: number;
   uploadedAt: string;
-  dataBase64: string;
+};
+
+export type TaskAttachmentWithData = TaskAttachmentMeta & {
+  // Отсутствует, когда файл не влез в бюджет ответа (длинный тред / стомегабайтное видео).
+  // Такие качаются поштучно через downloadTaskAttachment.
+  dataBase64?: string;
 };
 
 export type TaskComment = {
@@ -711,6 +722,44 @@ export class ApiClient {
     return this.request<TaskWithAttachments>(
       `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
     );
+  }
+
+  // Метаданные вложений без байтов — чтобы решить, что качать, не таща base64 задачи.
+  async listTaskAttachments(projectId: string, taskId: string): Promise<TaskAttachmentMeta[]> {
+    const { attachments } = await this.request<{ attachments: TaskAttachmentMeta[] }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/attachments`,
+    );
+    return attachments;
+  }
+
+  // Скачивание одного вложения сырыми байтами (без base64-раздувания в JSON).
+  // Таймаут больше, чем у request(): голосовые/видео бывают на десятки мегабайт.
+  async downloadTaskAttachment(
+    projectId: string,
+    taskId: string,
+    attachmentId: string,
+    timeoutMs = 120_000,
+  ): Promise<Buffer> {
+    const path =
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}` +
+      `/attachments/${encodeURIComponent(attachmentId)}`;
+    let res: Response;
+    try {
+      res = await fetch(`${this.config.apiUrl}${path}`, {
+        headers: { Authorization: `Bearer ${this.config.token}`, Accept: '*/*' },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (e) {
+      if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') {
+        throw new ApiError(599, `timeout after ${Math.round(timeoutMs / 1000)}s on ${path}`, null);
+      }
+      throw e;
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => null);
+      throw new ApiError(res.status, `HTTP ${res.status} from ${path}`, detail);
+    }
+    return Buffer.from(await res.arrayBuffer());
   }
 
   async moveTask(

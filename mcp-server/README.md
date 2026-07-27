@@ -44,6 +44,18 @@ claude mcp add --scope user projectsflow \
 
 Этот вариант не пишет `~/.config/projectsflow/agent.json` — токен живёт прямо в Claude Code конфиге.
 
+## Вложения задач
+
+`pf_get_task` и `pf_read_task_attachment` **скачивают приложенные к задаче файлы на диск** и
+возвращают абсолютный путь в поле `localPath` — агент открывает файл своим обычным
+файловым инструментом (Read/cat/ffmpeg). Так работает любой MCP-клиент: блоки `image` и
+embedded `resource` понимает Claude Code, а Codex / Cursor / Gemini CLI их выкидывают, и без
+файла на диске вложение для них было невидимым.
+
+Кэш по умолчанию — `<tmp>/projectsflow-mcp/attachments/<taskId>/`, всё старше 7 дней
+подметается автоматически. Каталог можно переопределить переменной
+`PROJECTSFLOW_ATTACHMENT_DIR`.
+
 ## Инструменты
 
 ### Проекты
@@ -70,8 +82,10 @@ claude mcp add --scope user projectsflow \
 
 | Tool | Описание |
 |---|---|
-| `pf_list_tasks` | Список задач в проекте (id, title, description, status, position, commitCount, commentCount) |
-| `pf_get_task` | Полный task + все вложения inline + thread комментариев. Картинки — как `image`-блоки (агент их видит), остальное — как embedded resources. Comments в текстовом мета-блоке, oldest-first. Вызывай всегда когда берёшь задачу в работу — комменты часто содержат уточнения. |
+| `pf_list_tasks` | Список задач в проекте (id, title, description, status, position, commitCount, commentCount, attachmentCount) |
+| `pf_get_task` | Полный task + все вложения + thread комментариев. **Каждое вложение скачивается в файл на диск, абсолютный путь — в поле `localPath`**; агент открывает его своим файловым инструментом. Текстовые файлы дополнительно инлайнятся текстом, картинки — ещё и `image`-блоком (для клиентов, которые их рисуют). Comments в текстовом мета-блоке, oldest-first. Вызывай всегда когда берёшь задачу в работу — комменты часто содержат уточнения. |
+| `pf_list_task_attachments` | Метаданные вложений задачи (id, filename, mimeType, sizeBytes, commentId, uploadedAt) БЕЗ байтов — разведка перед скачиванием тяжёлых голосовых/видео. |
+| `pf_read_task_attachment` | Скачать одно вложение в файл (любого размера) и получить абсолютный путь. Опциональный `saveTo` — сохранить в свою папку. Текст инлайнится, картинка отдаётся ещё и `image`-блоком. |
 | `pf_search_tasks` | Глобальный поиск по задачам (≥2 симв.). Scope — проекты юзера; admin — все. Возвращает taskId, projectId, projectName, status, excerpt. |
 | `pf_create_task` | Создать новую задачу (по умолчанию падает в TODO в конец колонки) |
 | `pf_update_task` | Изменить описание задачи (editor+). |

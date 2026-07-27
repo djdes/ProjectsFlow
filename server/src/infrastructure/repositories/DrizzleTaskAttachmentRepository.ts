@@ -56,6 +56,15 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
     return rows.map(toAttachment);
   }
 
+  async listAllByTask(taskId: string): Promise<TaskAttachment[]> {
+    const rows = await this.db
+      .select()
+      .from(taskAttachments)
+      .where(eq(taskAttachments.taskId, taskId))
+      .orderBy(asc(taskAttachments.uploadedAt));
+    return rows.map(toAttachment);
+  }
+
   async listByComment(commentId: string): Promise<TaskAttachment[]> {
     const rows = await this.db
       .select()

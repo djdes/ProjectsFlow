@@ -15,6 +15,10 @@ export interface TaskAttachmentRepository {
   getById(attachmentId: string): Promise<TaskAttachment | null>;
   // Вложения самой задачи (comment_id IS NULL).
   listByTask(taskId: string): Promise<TaskAttachment[]>;
+  // ВСЕ вложения задачи, включая приложенные к комментариям треда. Нужно агентам:
+  // им отдаётся задача целиком, и файл из обсуждения для них такой же контекст,
+  // как файл из описания.
+  listAllByTask(taskId: string): Promise<TaskAttachment[]>;
   // Вложения одного комментария.
   listByComment(commentId: string): Promise<TaskAttachment[]>;
   // Батч: map commentId → вложения (для ленты комментариев без N+1).

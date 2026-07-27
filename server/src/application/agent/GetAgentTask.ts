@@ -19,9 +19,16 @@ type Deps = {
   readonly storage: AttachmentStorage;
 };
 
+// data === null — файл существует, но в этот ответ не влез (см. INLINE_BUDGET_BYTES).
+// Клиент скачивает такие поштучно: GET .../attachments/:attachmentId.
 export type AgentTaskAttachmentWithData = TaskAttachment & {
-  readonly data: Buffer;
+  readonly data: Buffer | null;
 };
+
+// Потолок суммарных байтов, которые кладём в один ответ. Отдельный файл может весить
+// до 100 MB (MAX_ATTACHMENT_BYTES), а в base64 это ×1.33 — без бюджета длинный тред со
+// скринами и голосовыми раздувал бы ответ до сотен мегабайт и вешал MCP-процесс.
+const INLINE_BUDGET_BYTES = 24 * 1024 * 1024;
 
 export type AgentTaskResult = {
   readonly task: Task;
@@ -29,12 +36,13 @@ export type AgentTaskResult = {
   readonly comments: TaskComment[];
 };
 
-// Агрегатор для pf_get_task: task + binary'и всех аттачей + список комментариев.
-// Юзер сказал «передавать все вложения», cap не ставим — sanity-чек уже стоит в
-// UploadTaskAttachment (MAX_ATTACHMENT_BYTES + ALLOWED_ATTACHMENT_MIME), так что
-// неконтролируемого роста быть не должно. Битые storageKey'и (read возвращает null)
-// пропускаем, не валим ответ — лучше отдать что есть, чем 500'ить всю задачу.
-// Comments возвращаем по порядку (старые сверху, как в TaskCommentRepository).
+// Агрегатор для pf_get_task: task + binary'и аттачей + список комментариев.
+// Аттачи берём ВСЕ — и приложенные к самой задаче, и приложенные к комментариям треда:
+// для агента файл из обсуждения ровно такой же контекст, а раньше он их вообще не видел.
+// Байты отдаём в пределах INLINE_BUDGET_BYTES (по порядку загрузки), остальным ставим
+// data=null — клиент дотянет их поштучным download-эндпоинтом. Битые storageKey'и (read
+// возвращает null) пропускаем, не валим ответ — лучше отдать что есть, чем 500'ить всю
+// задачу. Comments возвращаем по порядку (старые сверху, как в TaskCommentRepository).
 export class GetAgentTask {
   constructor(private readonly deps: Deps) {}
 
@@ -48,14 +56,20 @@ export class GetAgentTask {
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
 
     const [attachmentsMeta, comments] = await Promise.all([
-      this.deps.attachments.listByTask(taskId),
+      this.deps.attachments.listAllByTask(taskId),
       this.deps.comments.listByTask(taskId),
     ]);
 
     const attachments: AgentTaskAttachmentWithData[] = [];
+    let spentBytes = 0;
     for (const att of attachmentsMeta) {
+      if (spentBytes + att.sizeBytes > INLINE_BUDGET_BYTES) {
+        attachments.push({ ...att, data: null });
+        continue;
+      }
       const read = await this.deps.storage.read(att.storageKey);
       if (!read) continue;
+      spentBytes += read.data.byteLength;
       attachments.push({ ...att, data: read.data });
     }
     return { task, attachments, comments };

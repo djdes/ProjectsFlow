@@ -1074,6 +1074,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       completeCommitSyncJob: deps.agent.completeCommitSyncJob,
       dispatchAllowed: deps.agent.dispatchAllowed,
       uploadTaskAttachment: deps.tasks.uploadAttachment,
+      listTaskAttachments: deps.tasks.listAttachments,
+      getTaskAttachment: deps.tasks.getAttachment,
       maxAttachmentBytes: deps.tasks.maxAttachmentBytes,
       ackRalphCancel: deps.agent.ackRalphCancel,
       checkRepoUsage: deps.agent.checkRepoUsage,

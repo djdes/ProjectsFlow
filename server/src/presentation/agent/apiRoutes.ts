@@ -1,4 +1,5 @@
 import { Router, raw, type NextFunction, type Request, type Response } from 'express';
+import { contentDisposition } from '../contentDisposition.js';
 import { z } from 'zod';
 import type { ListProjects } from '../../application/project/ListProjects.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
@@ -55,6 +56,8 @@ import {
   AiPromptProjectHasNoDispatcherError,
 } from '../../domain/ai-prompt/errors.js';
 import type { UploadTaskAttachment } from '../../application/task/UploadTaskAttachment.js';
+import type { ListTaskAttachments } from '../../application/task/ListTaskAttachments.js';
+import type { GetTaskAttachment } from '../../application/task/GetTaskAttachment.js';
 import type { AiPromptJob } from '../../domain/ai-prompt/AiPromptJob.js';
 import type { PendingAiPromptJob } from '../../application/ai-prompt/AiPromptJobRepository.js';
 import type { AckRalphCancel } from '../../application/task/AckRalphCancel.js';
@@ -164,6 +167,10 @@ type Deps = {
   // Гейт воркера: можно ли запускать claude -p по задаче (тариф/бюджет инициатора).
   readonly dispatchAllowed: CheckDispatchAllowed;
   readonly uploadTaskAttachment: UploadTaskAttachment;
+  // Чтение вложений задачи агентом: метаданные списком + сырые байты по одному.
+  // Нужны, чтобы MCP-клиент мог скачать конкретный файл, не таща base64 всей задачи.
+  readonly listTaskAttachments: ListTaskAttachments;
+  readonly getTaskAttachment: GetTaskAttachment;
   readonly maxAttachmentBytes: number;
   readonly ackRalphCancel: AckRalphCancel;
   readonly checkRepoUsage: CheckRepoUsage;
@@ -323,6 +330,28 @@ function taskToDto(t: Task & { commitCount?: number; commentCount?: number }): T
     ...t,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
+  };
+}
+
+type AttachmentDto = {
+  id: string;
+  // NULL — вложение самой задачи, иначе id комментария, к которому оно приложено.
+  // Агенту это важно: без commentId непонятно, к какой реплике треда относится файл.
+  commentId: string | null;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+};
+
+function attachmentToDto(a: TaskAttachment): AttachmentDto {
+  return {
+    id: a.id,
+    commentId: a.commentId,
+    filename: a.filename,
+    mimeType: a.mimeType,
+    sizeBytes: a.sizeBytes,
+    uploadedAt: a.uploadedAt.toISOString(),
   };
 }
 
@@ -985,18 +1014,65 @@ export function agentApiRouter(deps: Deps): Router {
         );
         res.json({
           task: taskToDto(task),
+          // dataBase64 нет — файл не влез в бюджет ответа; клиент качает его отдельным
+          // GET .../attachments/:attachmentId.
           attachments: attachments.map(
-            (a: TaskAttachment & { data: Buffer }) => ({
-              id: a.id,
-              filename: a.filename,
-              mimeType: a.mimeType,
-              sizeBytes: a.sizeBytes,
-              uploadedAt: a.uploadedAt.toISOString(),
-              dataBase64: a.data.toString('base64'),
+            (a: TaskAttachment & { data: Buffer | null }) => ({
+              ...attachmentToDto(a),
+              ...(a.data ? { dataBase64: a.data.toString('base64') } : {}),
             }),
           ),
           comments: comments.map(commentToDto),
         });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Метаданные вложений задачи БЕЗ байтов — дешёвая разведка «что вообще приложено»
+  // (голосовые, видео, PDF бывают по десятку мегабайт, и тащить их base64 в каждом
+  // pf_get_task незачем). Скачивать поштучно — роутом ниже.
+  router.get(
+    '/projects/:projectId/tasks/:taskId/attachments',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const list = await deps.listTaskAttachments.executeAll(projectId, req.user!.id, taskId);
+        res.json({ attachments: list.map(attachmentToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Сырые байты ОДНОГО вложения. Путь намеренно project/task-scoped: воркерские
+  // capability-токены гейтятся по /projects/:id/... + /tasks/:id/...
+  // (requireAgentCapabilityScope), поэтому короткий /agent/attachments/:id был бы им
+  // недоступен. Принадлежность аттача задаче/проекту проверяем через ListTaskAttachments
+  // (он же гейтит доступ), байты читаем GetTaskAttachment'ом.
+  router.get(
+    '/projects/:projectId/tasks/:taskId/attachments/:attachmentId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const attachmentId = req.params['attachmentId'] as string;
+        const list = await deps.listTaskAttachments.executeAll(projectId, req.user!.id, taskId);
+        const meta = list.find((a) => a.id === attachmentId);
+        if (!meta) {
+          res.status(404).json({ error: 'attachment_not_found' });
+          return;
+        }
+        const { data } = await deps.getTaskAttachment.execute(req.user!.id, attachmentId);
+        // Агент сохраняет файл на диск, поэтому всё отдаём как download + nosniff:
+        // никакого inline-рендера в браузере тут не требуется.
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', contentDisposition(meta.filename, false));
+        res.setHeader('Content-Length', data.data.byteLength.toString());
+        res.send(data.data);
       } catch (e) {
         next(e);
       }
