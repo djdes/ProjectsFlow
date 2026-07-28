@@ -465,9 +465,10 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         }
         return false;
       },
-      handlePaste: (_view, event) => {
-        return routeClipboardPaste(event);
-      },
+      // NB: no `handlePaste` here on purpose — see the native capture listener below. Both
+      // hooks sit on the same `view.dom` node, and at the target phase the DOM invokes every
+      // listener in registration order regardless of the capture flag: ProseMirror's ran first,
+      // then ours, so a single Ctrl+V routed the clipboard twice and attached the file twice.
     },
     onUpdate: ({ editor: e }) => {
       if (e.isDestroyed) return;
@@ -509,8 +510,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
 
   // Capture Ctrl+V on the editable DOM itself before ProseMirror/default HTML paste. Some browser
   // and Windows clipboard combinations do not pass their binary item through Tiptap's handlePaste,
-  // even though it is present on the native event. stopImmediatePropagation prevents a duplicate
-  // second pass through ProseMirror and the form-level attachment handler.
+  // even though it is present on the native event — so this listener, not `handlePaste`, is the
+  // single clipboard entry point. stopImmediatePropagation keeps ProseMirror's own paste handler
+  // (registered on this very node) and the form-level attachment handler from running a second pass.
   React.useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const dom = editor.view.dom;

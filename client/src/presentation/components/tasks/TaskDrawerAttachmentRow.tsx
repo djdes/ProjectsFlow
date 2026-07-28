@@ -4,7 +4,11 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
-import { formatBytes, isImageFile } from '@/presentation/components/attachments/files';
+import {
+  formatBytes,
+  isImageFile,
+  localPreviewAttachment,
+} from '@/presentation/components/attachments/files';
 
 // Локальный файл, ещё не загруженный на сервер (create-mode): тот же чип, что и у
 // загруженного вложения, но без url/размера и с «убрать» вместо «удалить».
@@ -151,12 +155,27 @@ export function TaskDrawerAttachmentRow({
             className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1 pr-1 text-[11px]"
             title={pf.name}
           >
+            {/* Ещё не загруженную картинку тоже можно рассмотреть — лайтбокс на blob-превью. */}
             {pf.previewUrl ? (
-              <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-5 shrink-0 rounded object-cover" />
+              <button
+                type="button"
+                onClick={() =>
+                  setPreview(
+                    localPreviewAttachment({ id: pf.id, filename: pf.name, url: pf.previewUrl }),
+                  )
+                }
+                className="flex min-w-0 items-center gap-1.5"
+                aria-label={`Открыть ${pf.name}`}
+              >
+                <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-5 shrink-0 rounded object-cover" />
+                <span className="max-w-[160px] truncate">{pf.name}</span>
+              </button>
             ) : (
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
+              <>
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <span className="max-w-[160px] truncate">{pf.name}</span>
+              </>
             )}
-            <span className="max-w-[160px] truncate">{pf.name}</span>
             {onRemovePending && (
               <button
                 type="button"

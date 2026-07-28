@@ -1,6 +1,29 @@
 // Общие хелперы для вложений (доска, Входящие, комментарии). Любой тип файла разрешён —
 // фильтрация по MIME убрана; ограничение размера валидирует сервер.
 
+import type { TaskAttachment } from '@/domain/task/TaskAttachment';
+
+// Псевдо-вложение для AttachmentLightbox из ЛОКАЛЬНОГО файла, который ещё не улетел на
+// сервер: `url` — это blob-превью (URL.createObjectURL). Позволяет открыть прикреплённую
+// картинку прямо в композере, до отправки комментария.
+export function localPreviewAttachment(input: {
+  readonly id: string;
+  readonly filename: string;
+  readonly mimeType?: string;
+  readonly sizeBytes?: number;
+  readonly url: string;
+}): TaskAttachment {
+  return {
+    id: input.id,
+    taskId: '',
+    filename: input.filename,
+    mimeType: input.mimeType ?? '',
+    sizeBytes: input.sizeBytes ?? 0,
+    url: input.url,
+    uploadedAt: new Date(),
+  };
+}
+
 export function isImageMime(mime: string): boolean {
   // SVG отдаётся сервером как download (анти-XSS), поэтому inline-превью не делаем.
   return mime.startsWith('image/') && mime !== 'image/svg+xml';
@@ -97,7 +120,11 @@ export function extractClipboardFiles(clipboardData: DataTransfer | null): File[
   const out: File[] = [];
   const seen = new Set<string>();
   const add = (file: File): void => {
-    const key = `${file.name}\u0000${file.type}\u0000${file.size}\u0000${file.lastModified}`;
+    // Identity is name+type+size ONLY. `lastModified` is deliberately left out: a clipboard image
+    // has no file on disk, so the browser stamps every File it materialises with the current
+    // time — the copy from `items` and the copy from `files` can differ by a millisecond, and
+    // the screenshot was attached twice. Two different files in one paste never collide here.
+    const key = JSON.stringify([file.name, file.type, file.size]);
     if (seen.has(key)) return;
     seen.add(key);
     out.push(file);

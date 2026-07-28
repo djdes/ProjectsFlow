@@ -27,6 +27,14 @@ test('extractClipboardFiles объединяет items и files без дубл�
   );
 });
 
+test('extractClipboardFiles дедуплицирует скрин с разным lastModified', () => {
+  // Chrome материализует File для картинки из буфера в момент вызова и штампует её
+  // текущим временем: копия из items и копия из files отличаются на миллисекунду.
+  const fromItems = new File(['png'], 'image.png', { type: 'image/png', lastModified: 1000 });
+  const fromFiles = new File(['png'], 'image.png', { type: 'image/png', lastModified: 1001 });
+  assert.deepEqual(extractClipboardFiles(clipboard([fromItems], [fromFiles])), [fromItems]);
+});
+
 test('extractClipboardFiles converts an HTML data URL screenshot to a File', () => {
   const data = {
     items: [],

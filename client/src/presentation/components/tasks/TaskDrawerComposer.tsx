@@ -9,8 +9,10 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
-import { isImageMime } from '@/presentation/components/attachments/files';
+import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
+import { isImageFile, localPreviewAttachment } from '@/presentation/components/attachments/files';
 import { paceAppend } from '@/presentation/components/attachments/pace';
+import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type {
   MentionMember,
   RichTextEditorHandle,
@@ -37,6 +39,16 @@ const DRAWER_TARGETS = [
 ] as const;
 
 type ReplyDraft = { commentId: string; authorName: string; quotedText: string | null };
+
+// Дефолтная адресация уведомления: только ответственный за задачу. Комментарий — это почти
+// всегда обращение к тому, кто задачу делает, а не рассылка всему воркспейсу. Если
+// ответственный — сам автор комментария, уведомлять его бессмысленно: откатываемся на 'all'
+// (сервер сузит до реально причастных — автора родительского коммента и упомянутых).
+function defaultNotify(task: Task, currentUserId: string | null): NotifyAudience {
+  const assigneeId = task.assignee?.userId ?? null;
+  if (!assigneeId || assigneeId === currentUserId) return { mode: 'all' };
+  return { mode: 'selected', userIds: [assigneeId] };
+}
 
 type Props = {
   task: Task;
@@ -87,8 +99,12 @@ export function TaskDrawerComposer({
   const { user: currentUser } = useCurrentUser();
   const [body, setBody] = useState('');
   const [pending, setPending] = useState<PendingFile[]>([]);
-  // Адресация уведомления (по умолчанию — все участники).
-  const [notify, setNotify] = useState<NotifyAudience>({ mode: 'all' });
+  // Открытая на просмотр прикреплённая картинка (ещё не загруженная — url это blob-превью).
+  const [preview, setPreview] = useState<TaskAttachment | null>(null);
+  // Адресация уведомления (по умолчанию — только ответственный за задачу).
+  const [notify, setNotify] = useState<NotifyAudience>(() =>
+    defaultNotify(task, currentUser?.id ?? null),
+  );
   // На awaiting_clarification дефолт = «Воркеру»: юзер отвечает на ralph-question и
   // ожидаемое действие — продолжить работу. На остальных статусах берём из localStorage'а.
   const [target, setTarget] = useState<ComposerTarget>(() =>
@@ -114,6 +130,17 @@ export function TaskDrawerComposer({
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(targetStorageKey(task.projectId), target);
   }, [task.projectId, target]);
+
+  // Сменилась задача (drawer переиспользуется без ремаунта), сменился ответственный или
+  // догрузился текущий юзер — пересобираем дефолтную аудиторию.
+  const assigneeId = task.assignee?.userId ?? null;
+  const currentUserId = currentUser?.id ?? null;
+  useEffect(() => {
+    setNotify(defaultNotify(task, currentUserId));
+    // Пересчитываем именно по этим трём входам: реакция на весь `task` сбрасывала бы
+    // ручной выбор автора на любом фоновом обновлении задачи.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id, assigneeId, currentUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,13 +173,17 @@ export function TaskDrawerComposer({
         ...chunk.map((file) => ({
           id: crypto.randomUUID(),
           file,
-          previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
+          // По MIME И по расширению: из мессенджеров/буфера файл нередко приходит с пустым
+          // type, а превью (и просмотр по клику) всё равно должны работать.
+          previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
         })),
       ]);
     });
   };
 
   const removeFile = (id: string): void => {
+    // Лайтбокс держит тот же blob-URL — закрываем, иначе он покажет отозванную ссылку.
+    setPreview((cur) => (cur?.id === id ? null : cur));
     setPending((prev) => {
       const t = prev.find((p) => p.id === id);
       if (t?.previewUrl) URL.revokeObjectURL(t.previewUrl);
@@ -206,6 +237,7 @@ export function TaskDrawerComposer({
         onTaskChanged();
       }
 
+      setPreview(null);
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setPending([]);
       setBody('');
@@ -266,12 +298,30 @@ export function TaskDrawerComposer({
                 className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
                 title={pf.file.name}
               >
+                {/* Картинку можно рассмотреть ДО отправки — клик открывает лайтбокс на
+                    blob-превью. Не-картинки остаются просто чипом (открывать нечего). */}
                 {pf.previewUrl ? (
-                  <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setPreview(localPreviewAttachment({
+                      id: pf.id,
+                      filename: pf.file.name,
+                      mimeType: pf.file.type,
+                      sizeBytes: pf.file.size,
+                      url: pf.previewUrl,
+                    }))}
+                    className="flex min-w-0 items-center gap-1.5"
+                    aria-label={`Открыть ${pf.file.name}`}
+                  >
+                    <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
+                    <span className="max-w-[140px] truncate">{pf.file.name}</span>
+                  </button>
                 ) : (
-                  <FileText className="size-3.5 text-muted-foreground" />
+                  <>
+                    <FileText className="size-3.5 text-muted-foreground" />
+                    <span className="max-w-[140px] truncate">{pf.file.name}</span>
+                  </>
                 )}
-                <span className="max-w-[140px] truncate">{pf.file.name}</span>
                 <button
                   type="button"
                   onClick={() => removeFile(pf.id)}
@@ -350,6 +400,8 @@ export function TaskDrawerComposer({
           />
         </div>
       </div>
+
+      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }

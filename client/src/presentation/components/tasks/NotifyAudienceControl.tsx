@@ -64,8 +64,14 @@ export function NotifyAudienceControl({
   const selectedIds =
     value.mode === 'selected' ? new Set(value.userIds ?? []) : new Set<string>();
 
+  // Один получатель — показываем имя: дефолт «только ответственный» должен читаться как
+  // «уведомлю Ярослава», а не как безликое «Выбрано: 1».
+  const soleSelected =
+    selectedIds.size === 1 ? members.find((m) => selectedIds.has(m.userId)) : undefined;
   const triggerLabel =
-    value.mode === 'selected' ? `Выбрано: ${selectedIds.size}` : `Все (${members.length})`;
+    value.mode !== 'selected'
+      ? `Все (${members.length})`
+      : (soleSelected?.user.displayName ?? `Выбрано: ${selectedIds.size}`);
 
   const toggleMember = (userId: string): void => {
     const next = new Set(selectedIds);
@@ -87,7 +93,9 @@ export function NotifyAudienceControl({
         <button
           type="button"
           aria-pressed={notifyOn}
-          onClick={() => onChange({ mode: 'all' })}
+          // Уже уведомляем — клик ничего не меняет. Иначе повторный клик по активной кнопке
+          // втихую расширял бы адресата с «только ответственный» до всех участников.
+          onClick={() => !notifyOn && onChange({ mode: 'all' })}
           className={cn(
             'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors',
             notifyOn
