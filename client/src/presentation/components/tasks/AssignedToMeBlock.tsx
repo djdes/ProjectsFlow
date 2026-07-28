@@ -94,11 +94,9 @@ import { DeadlineBadge } from './DeadlineBadge';
 import { RalphModeBadge } from './RalphMode';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
-import type { UnifiedDndRef } from './unifiedDndTypes';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
-  isPersonalInboxBlockTask,
   type AssignedInboxBlockTask,
   type InboxBlockTask,
 } from './inboxBlockTasks';
@@ -124,9 +122,6 @@ type Props = {
   // страницы, чтобы отступы от краёв были такими же, как в проектах.
   bleedNegClass?: string;
   bleedPadClass?: string;
-  // Единый DnD «Входящих» (#5): если задан — блок НЕ рендерит свой DndContext/DragOverlay
-  // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры в этом реестре.
-  externalDnd?: UnifiedDndRef | null;
   // Режим мультивыделения СРАЗУ ВО ВСЕХ колонках блока: кнопка «Выделить» живёт в шапке
   // страницы «Входящие», поэтому состояние приходит снаружи. Выключение (Esc, крестик на
   // панели действий, полностью успешное массовое действие) блок сообщает обратно.
@@ -147,7 +142,6 @@ const PRIORITY_BUCKET_KEYS = ['1', '2', '3', '4', 'none'] as const;
 // Коллизии по КУРСОРУ (pointerWithin) — целиться в мелкие кубики людей и колонки проще, чем
 // «прямоугольником» всей карточки (дефолтный rectIntersection часто мазал мимо → «тяжело
 // попасть»). Фолбэк на rectIntersection, когда курсор в зазоре между целями.
-// Экспорт (и snapToCursor ниже) — для InboxUnifiedDnd (общий контекст «Входящих»).
 export const dndCollision: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
   return hits.length > 0 ? hits : rectIntersection(args);
@@ -247,7 +241,6 @@ export function AssignedToMeBlock({
   onHideDoneChange,
   bleedNegClass = '',
   bleedPadClass = '',
-  externalDnd = null,
   selectionActive = false,
   onSelectionActiveChange,
 }: Props): React.ReactElement | null {
@@ -420,10 +413,6 @@ export function AssignedToMeBlock({
       // а не только из инбокса.
       await taskRepository.delete(deleteTarget.projectId, deleteTarget.id);
       toast.success('Задача удалена');
-      // Личные задачи блока — зеркала карточек нижней доски, её тоже надо перечитать.
-      if (isPersonalInboxBlockTask(deleteTarget)) {
-        await externalDnd?.current.board?.refetch();
-      }
       setDeleteTarget(null);
       handleToggled();
     } catch (err) {
@@ -446,9 +435,6 @@ export function AssignedToMeBlock({
       deadline: input.deadline,
       priority: input.priority,
     });
-    if (isPersonalInboxBlockTask(drawerTask)) {
-      await externalDnd?.current.board?.refetch();
-    }
     return updated;
   };
 
@@ -670,7 +656,6 @@ export function AssignedToMeBlock({
   // confirmDelete. Мемоизацию берёт на себя React Compiler.
   const refreshAfterBulk = async (): Promise<void> => {
     await refresh();
-    await externalDnd?.current.board?.refetch();
     onChanged?.();
   };
   const crossProjectBulk = useCrossProjectBulkActions({
@@ -718,16 +703,6 @@ export function AssignedToMeBlock({
     async (item: InboxBlockTask, deadline: string | null): Promise<void> => {
       const prev = item.deadline ?? null;
       if (prev === deadline) return;
-      if (isPersonalInboxBlockTask(item)) {
-        try {
-          const board = externalDnd?.current.board;
-          if (board) await board.updateTask(item.id, { deadline });
-          else await taskRepository.update(item.projectId, item.id, { deadline });
-        } catch (e) {
-          toast.error(`Не удалось изменить срок: ${(e as Error).message}`);
-        }
-        return;
-      }
       patchDeadlineLocal(item.id, deadline); // оптимистично — карточка сразу переезжает
       try {
         await taskRepository.update(item.projectId, item.id, { deadline });
@@ -736,7 +711,7 @@ export function AssignedToMeBlock({
         toast.error(`Не удалось изменить срок: ${(e as Error).message}`);
       }
     },
-    [externalDnd, patchDeadlineLocal, taskRepository],
+    [patchDeadlineLocal, taskRepository],
   );
 
   // Кубики людей: все участники проектов пространства (shared-members) — цель для
@@ -784,13 +759,12 @@ export function AssignedToMeBlock({
         await taskRepository.assign(item.projectId, item.id, member.id);
         toast.success(`Ответственный — ${member.displayName}`);
         await refresh();
-        await externalDnd?.current.board?.refetch();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось переназначить: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, externalDnd, onChanged],
+    [taskRepository, refresh, onChanged],
   );
 
   // Забрать задачу себе — та же смена ответственного. В именованном проекте это
@@ -806,13 +780,12 @@ export function AssignedToMeBlock({
         await taskRepository.assign(item.projectId, item.id, user.id);
         toast.success('Теперь вы ответственный');
         await refresh();
-        await externalDnd?.current.board?.refetch();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
     },
-    [user, taskRepository, refresh, externalDnd, onChanged],
+    [user, taskRepository, refresh, onChanged],
   );
 
   // Взять в работу / убрать из работы. Статус общий с доской проекта: in_progress —
@@ -827,7 +800,6 @@ export function AssignedToMeBlock({
           beforeTaskId: null,
           afterTaskId: null,
         });
-        toast.success(next === 'in_progress' ? 'Взято в работу' : 'Убрано из работы');
         await refresh();
         onChanged?.();
       } catch (e) {
@@ -881,26 +853,6 @@ export function AssignedToMeBlock({
     setActiveDrag(null);
     setDragActive(false);
   };
-
-  // === Единый DnD «Входящих» (#5): регистрация в реестре общего контекста. ===
-  // Без deps — пере-запись каждый рендер, чтобы замыкания хендлеров видели свежий стейт.
-  useEffect(() => {
-    if (!externalDnd) return;
-    externalDnd.current.block = {
-      onDragStart: handleDragStart,
-      onDragEnd: handleDragEnd,
-      onDragCancel: handleDragCancel,
-      refresh,
-    };
-  });
-  // Снятие регистрации — только на unmount (реестр в ref у InboxPage переживает ремаунты).
-  useEffect(() => {
-    if (!externalDnd) return;
-    const registry = externalDnd.current;
-    return () => {
-      registry.block = null;
-    };
-  }, [externalDnd]);
 
   if (loading || boardTasks === null) return null;
 
@@ -1282,10 +1234,8 @@ export function AssignedToMeBlock({
         // открывший чужую пару из «Другим», получает read-only вместо 403 на каждом save.
         canEdit={drawerTask?.canModify ?? true}
         onClose={() => {
-          const refreshBoard = drawerTask && isPersonalInboxBlockTask(drawerTask);
           setDrawerTask(null);
           void refresh();
-          if (refreshBoard) void externalDnd?.current.board?.refetch();
         }}
         onSubmit={handleDrawerSubmit}
         onCommitsChange={() => void refresh()}
@@ -1333,8 +1283,7 @@ export function AssignedToMeBlock({
         }}
       />
 
-      {/* Дроп на кубик другого участника → подтверждение смены ответственного. Тот же
-          диалог используется карточками нижней доски через InboxUnifiedDnd. */}
+      {/* Дроп на кубик другого участника → подтверждение смены ответственного. */}
       <AssigneeConfirmDialog
         open={pendingReassign !== null}
         taskTitle={pendingReassign ? plainTaskTitle(pendingReassign.item.description ?? '') : ''}
@@ -1361,16 +1310,6 @@ export function AssignedToMeBlock({
     </section>
   );
 
-  // External-режим (инбокс): DndContext и DragOverlay рендерит InboxUnifiedDnd на странице
-  // (хендлеры зарегистрированы эффектом выше), блок отдаёт тело + портал кнопки «Фильтры».
-  if (externalDnd)
-    return (
-      <>
-        {filtersToolbar}
-        {body}
-      </>
-    );
-
   return (
     // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
     // (drag → смена ответственного) — общие drop-цели одного перетаскивания карточки.
@@ -1396,7 +1335,7 @@ export function AssignedToMeBlock({
 // карточки: стартует крупнее → пружиной сжимается в маленькую пилюлю с названием.
 // ПОЛУПРОЗРАЧНЫЙ (~55%) — сквозь него видно кубик участника/колонку, на которую целишься
 // (сразу видно, кого назначаем). Мелкий оверлей = легче целиться (+ коллизии по курсору,
-// см. dndCollision). Экспорт — его же рендерит InboxUnifiedDnd в общем контексте.
+// см. dndCollision).
 export function AssignedDragPill({ item }: { item: InboxBlockTask }): React.ReactElement {
   return <TaskDragPill title={plainTaskTitle(item.description ?? '') || 'Задача'} />;
 }
@@ -1566,7 +1505,7 @@ function GroupDropColumn({
 
 // Фантомная drop-колонка: появляется ПЕРВОЙ в ряду, пока тащат карточку с доски.
 // «Другой проект…» / «Другой приоритет…» — дроп открывает соответствующий пикер
-// (диспетчер InboxUnifiedDnd, data {type:'phantom', kind}).
+// (data {type:'phantom', kind}).
 function PhantomDropColumn({
   id,
   kind,
@@ -1832,7 +1771,7 @@ function SelfDropAvatar({
 
 // Всплывашка выбора срока при дропе в «Будущее»: неделя / до конца месяца / конкретный день.
 // Отмена (закрытие) — ничего не меняем, карточка остаётся где была. От задачи ей ничего не
-// нужно (только open/onPick) — переиспользуется InboxUnifiedDnd'ом и для задач доски.
+// нужно (только open/onPick).
 export function FutureDeadlineDialog({
   open,
   onClose,
@@ -1940,9 +1879,7 @@ function AssigneePerson({
 }
 
 // Подтверждение смены ответственного дропом на кубик участника. Единый диалог
-// для обоих происхождений драга: карточки блока «Входящих» (AssignedToMeBlock) и карточки
-// нижней доски (InboxUnifiedDnd → dropBoardTaskOnUser) — чтобы дроп на один и тот же кубик
-// вёл себя одинаково. Название задачи + переход «текущий → новый ответственный» с аватарами
+// Название задачи + переход «текущий → новый ответственный» с аватарами
 // (from=null — новое назначение, показываем только ответственного). Кнопки блокируются на время запроса.
 export function AssigneeConfirmDialog({
   open,

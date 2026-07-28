@@ -82,7 +82,6 @@ import {
   resolveColumnLabel,
   type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
-import type { UnifiedDndRef } from './unifiedDndTypes';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { plainTaskTitle } from '@/lib/taskTitleBody';
 import type { ViewCreateRequest } from './views/ProjectBoardViews';
@@ -113,13 +112,6 @@ type Props = {
   // Значения зависят от паддинга страницы, поэтому передаются снаружи. По умолчанию — без bleed.
   bleedNegClass?: string;
   bleedPadClass?: string;
-  // Единый DnD «Входящих» (#5): если задан — доска НЕ рендерит свой DndContext/DragOverlay
-  // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры и операции в этом
-  // реестре. null/undefined (доски проектов) — прежнее поведение без изменений.
-  externalDnd?: UnifiedDndRef | null;
-  // Снимок карточек, реально показанных на нижней inbox-доске. InboxPage использует его,
-  // чтобы отрисовать те же Task в верхней личной колонке без второго запроса.
-  onBoardTasksChange?: (tasks: readonly Task[]) => void;
   // Верхний офсет для sticky-шапок колонок (Notion: при скролле липнут заголовки
   // колонок, а не строка вкладок). undefined — не закрепляем (инбокс).
   stickyHeaderTop?: number;
@@ -216,8 +208,6 @@ function toVisibleStatus(status: TaskStatus): TaskStatus {
 
 // Длительность drop-анимации в ms. Используется и dnd-kit'ом для position-lerp'а оверлея,
 // и motion'ом для exit-анимации rotate/scale у обёртки preview — они должны быть равны.
-// Экспорт (и ниже DROP_ANIMATION/MEASURING_CONFIG) — для InboxUnifiedDnd: в общем DnD-режиме
-// инбокса оверлей доски-карточки рендерит родитель теми же константами.
 export const DROP_DURATION_MS = 320;
 export const DROP_EASING_BEZIER = [0.32, 0.72, 0, 1] as const; // Apple smooth-spring, без длинного хвоста
 
@@ -276,8 +266,6 @@ export function KanbanBoard({
   onOpenAutomation,
   bleedNegClass = '',
   bleedPadClass = '',
-  externalDnd = null,
-  onBoardTasksChange,
   stickyHeaderTop,
   createRequest,
   viewFilters,
@@ -604,9 +592,6 @@ export function KanbanBoard({
       ),
     [tasks, viewFilters, viewSort],
   );
-  useEffect(() => {
-    if (!loading) onBoardTasksChange?.(boardTasks);
-  }, [boardTasks, loading, onBoardTasksChange]);
   const grouped = useMemo(() => groupByStatus(boardTasks, doneOrder), [boardTasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
   // Открытая в drawer'е задача — её карточку подсвечиваем синим бордером (E4).
@@ -974,7 +959,6 @@ export function KanbanBoard({
     if (!next) return;
     try {
       await move(task.id, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
-      toast.success(`Передано: ${STATUS_LABEL[next]}`);
     } catch (err) {
       toast.error(`Не удалось перенести: ${(err as Error).message}`);
     }
@@ -986,33 +970,6 @@ export function KanbanBoard({
     setDropTarget(null);
     setActiveId(null);
   };
-
-  // === Единый DnD «Входящих» (#5): регистрация в реестре общего контекста. ===
-  // Без deps — пере-запись каждый рендер, чтобы замыкания хендлеров видели свежие tasks/grouped.
-  useEffect(() => {
-    if (!externalDnd) return;
-    externalDnd.current.board = {
-      onDragStart: handleDragStart,
-      onDragOver: handleDragOver,
-      onDragEnd: handleDragEnd,
-      onDragCancel: handleDragCancel,
-      updateTask: update,
-      // Дроп пилюли блока на колонку: в НАЧАЛО видимой порции (как «Перенести» из TaskDrawer),
-      // иначе карточка утонула бы в скрытом хвосте «Показать ещё».
-      moveTask: async (taskId, targetStatus) => {
-        await move(taskId, { targetStatus, beforeTaskId: null, afterTaskId: topAnchorFor(targetStatus) });
-      },
-      refetch,
-    };
-  });
-  // Снятие регистрации — только на unmount (реестр в ref у InboxPage переживает ремаунты доски).
-  useEffect(() => {
-    if (!externalDnd) return;
-    const registry = externalDnd.current;
-    return () => {
-      registry.board = null;
-    };
-  }, [externalDnd]);
 
   // Удаление через стильный диалог (не нативный confirm): handleDelete лишь открывает
   // окно, реальное удаление — в confirmDelete по кнопке «Удалить».
@@ -1187,9 +1144,6 @@ export function KanbanBoard({
         </div>
       )}
 
-      {/* External-режим (инбокс): DndContext и DragOverlay рендерит InboxUnifiedDnd на
-          странице, доска отдаёт только тело (хендлеры зарегистрированы эффектом выше).
-          Own-режим (доски проектов) — собственный контекст, поведение прежнее. */}
       {(() => {
         const boardBody = (
           <>
@@ -1323,7 +1277,6 @@ export function KanbanBoard({
         <SyncedStickyScrollbar targetRef={boardScrollRef} className={bleedNegClass} />
           </>
         );
-        if (externalDnd) return boardBody;
         return (
           <DndContext
             sensors={canEdit ? sensors : []}
