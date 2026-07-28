@@ -985,6 +985,9 @@ export function AssignedToMeBlock({
             // Как у основной доски: каждая колонка заканчивается под своей последней
             // задачей, а не растягивается до высоты самой длинной соседней колонки.
             'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pb-2',
+            // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
+            // SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
+            '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             bleedNegClass,
             bleedPadClass,
           )}
@@ -1048,6 +1051,9 @@ export function AssignedToMeBlock({
           onScroll={onHScroll}
           className={cn(
             'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pb-2',
+            // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
+            // SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
+            '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             bleedNegClass,
             bleedPadClass,
           )}
