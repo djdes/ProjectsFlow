@@ -2248,6 +2248,10 @@ function AcceptedCard({
   // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
   // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание).
   const [completePhase, setCompletePhase] = useState<'idle' | 'flash' | 'exit'>('idle');
+  // Держать ли серую вуаль во время анимации. true только для Ctrl-пути, где она уже видна
+  // под курсором: снять её на клике — из-под неё на миг проступит текст. Для ПКМ остаётся
+  // false, иначе вуаль резко «выпрыгнет» на пустом месте.
+  const [completeVeiled, setCompleteVeiled] = useState(false);
   const onChangedRef = useRef(onChanged);
   useEffect(() => {
     onChangedRef.current = onChanged;
@@ -2269,6 +2273,7 @@ function AcceptedCard({
             onChangedRef.current();
           } catch (err) {
             setCompletePhase('idle');
+            setCompleteVeiled(false);
             toast.error(`Не удалось выполнить: ${(err as Error).message}`);
           }
         })();
@@ -2278,18 +2283,25 @@ function AcceptedCard({
     return undefined;
   }, [completePhase, item.id, item.projectId, taskRepository]);
 
+  // Единая точка запуска для обоих жестов: withVeil — оставлять ли серую вуаль на анимацию.
+  const startComplete = (withVeil: boolean): void => {
+    setCompleteVeiled(withVeil);
+    setCompletePhase('flash');
+  };
+
   const completeByContextMenu = (e: React.MouseEvent): void => {
     // Только для своих задач, не в режиме выделения и не по уже выполненной — иначе
     // отдаём браузерное контекстное меню (preventDefault не зовём).
     if (selecting || !item.canModify || isDone || completePhase !== 'idle') return;
     e.preventDefault();
-    setCompletePhase('flash');
+    startComplete(false);
   };
 
   // Второй способ — Ctrl/⌘ + ЛКМ. При зажатом модификаторе на наведённой карточке
   // показываем серый оверлей с галочкой (аффорданс), а клик по ней — выполняет.
   const ctrlHeld = useCtrlOrMetaHeld();
   const completeArmed = ctrlHeld && item.canModify && !isDone && !selecting && completePhase === 'idle';
+  const completing = completePhase !== 'idle';
 
   // Выделять можно ЛЮБУЮ карточку, в том числе без прав на изменение: пользователь хочет
   // собирать пачку свободно. Действие по такой задаче честно попадёт в «не удалось» —
@@ -2423,7 +2435,7 @@ function AcceptedCard({
         // Ctrl/⌘ + ЛКМ = выполнить (вместо открытия дравера).
         if ((e.ctrlKey || e.metaKey) && item.canModify && !isDone && completePhase === 'idle') {
           e.preventDefault();
-          setCompletePhase('flash');
+          startComplete(true);
           return;
         }
         onOpen();
@@ -2442,9 +2454,25 @@ function AcceptedCard({
     >
       {/* Аффорданс «Ctrl+клик = выполнить»: серый оверлей с зелёной галочкой поверх карточки,
           виден только при зажатом Ctrl и наведении. pointer-events-none — клик идёт в карточку. */}
-      {completeArmed && (
-        <div className="pointer-events-none absolute inset-0 z-30 hidden items-center justify-center rounded-lg bg-zinc-500/30 opacity-0 backdrop-blur-[1px] transition-opacity duration-150 group-hover:flex group-hover:opacity-100 dark:bg-zinc-900/45">
-          <span className="flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 ring-white/70 dark:ring-black/30">
+      {(completeArmed || (completing && completeVeiled)) && (
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-0 z-30 items-center justify-center rounded-lg bg-zinc-500/30 backdrop-blur-[1px] transition-opacity duration-150 dark:bg-zinc-900/45',
+            // Во время выполнения вуаль видна безусловно — не завязана на hover: при коллапсе
+            // карточка уезжает из-под курсора, и hover-условие сняло бы её на полпути.
+            completing
+              ? 'flex opacity-100'
+              : 'hidden opacity-0 group-hover:flex group-hover:opacity-100',
+          )}
+        >
+          <span
+            className={cn(
+              'flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 transition-transform duration-200 ring-white/70 dark:ring-black/30',
+              // Галочка на вспышке слегка «подпрыгивает», на уходе — сжимается вместе с карточкой.
+              completePhase === 'flash' && 'scale-110',
+              completePhase === 'exit' && 'scale-90',
+            )}
+          >
             <Check className="size-5" strokeWidth={3} />
           </span>
         </div>
