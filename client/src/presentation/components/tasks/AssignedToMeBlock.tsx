@@ -24,6 +24,7 @@ import {
   CalendarDays,
   CalendarOff,
   CalendarRange,
+  Check,
   Eye,
   EyeOff,
   ArrowRight,
@@ -49,6 +50,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
@@ -2241,6 +2243,54 @@ function AcceptedCard({
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 }): React.ReactElement {
   const isDone = item.status === 'done';
+  const { taskRepository } = useContainer();
+  // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
+  // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
+  // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание).
+  const [completePhase, setCompletePhase] = useState<'idle' | 'flash' | 'exit'>('idle');
+  const onChangedRef = useRef(onChanged);
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  }, [onChanged]);
+  useEffect(() => {
+    if (completePhase === 'flash') {
+      const t = setTimeout(() => setCompletePhase('exit'), 200);
+      return () => clearTimeout(t);
+    }
+    if (completePhase === 'exit') {
+      const t = setTimeout(() => {
+        void (async () => {
+          try {
+            await taskRepository.move(item.projectId, item.id, {
+              targetStatus: 'done',
+              beforeTaskId: null,
+              afterTaskId: null,
+            });
+            onChangedRef.current();
+          } catch (err) {
+            setCompletePhase('idle');
+            toast.error(`Не удалось выполнить: ${(err as Error).message}`);
+          }
+        })();
+      }, 300);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [completePhase, item.id, item.projectId, taskRepository]);
+
+  const completeByContextMenu = (e: React.MouseEvent): void => {
+    // Только для своих задач, не в режиме выделения и не по уже выполненной — иначе
+    // отдаём браузерное контекстное меню (preventDefault не зовём).
+    if (selecting || !item.canModify || isDone || completePhase !== 'idle') return;
+    e.preventDefault();
+    setCompletePhase('flash');
+  };
+
+  // Второй способ — Ctrl/⌘ + ЛКМ. При зажатом модификаторе на наведённой карточке
+  // показываем серый оверлей с галочкой (аффорданс), а клик по ней — выполняет.
+  const ctrlHeld = useCtrlOrMetaHeld();
+  const completeArmed = ctrlHeld && item.canModify && !isDone && !selecting && completePhase === 'idle';
+
   // Выделять можно ЛЮБУЮ карточку, в том числе без прав на изменение: пользователь хочет
   // собирать пачку свободно. Действие по такой задаче честно попадёт в «не удалось» —
   // это лучше, чем карточка, которая молча не откликается на клик.
@@ -2331,6 +2381,16 @@ function AcceptedCard({
   );
 
   return (
+    // Обёртка-аниматор: плавный коллапс высоты (grid 1fr→0fr) + затухание при «выполнено».
+    // overflow скрываем ТОЛЬКО на фазе exit — иначе на вспышке обрезался бы зелёный ring.
+    <div
+      className={cn(
+        'grid transition-all duration-300 ease-out motion-reduce:transition-none',
+        completePhase === 'exit' && 'opacity-0',
+      )}
+      style={{ gridTemplateRows: completePhase === 'exit' ? '0fr' : '1fr' }}
+    >
+    <div className={cn('min-h-0', completePhase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
     <div
       // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
       data-pf-task-id={item.id}
@@ -2340,18 +2400,30 @@ function AcceptedCard({
       role={selecting ? 'button' : undefined}
       tabIndex={selecting ? 0 : undefined}
       aria-pressed={selectable ? selected : undefined}
+      onContextMenu={completeByContextMenu}
       className={cn(
-        'group relative flex cursor-pointer select-none flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-colors duration-150 dark:border-white/[0.08]',
+        'group relative flex cursor-pointer select-none flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-all duration-200 dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
         // Выбор показываем ТОЛЬКО рамкой и кольцом. Кружок-отметку в левом верхнем углу
         // убрали: он повторял вид старого круглого чекбокса «готово» и читался как он.
         selected && 'border-primary ring-2 ring-primary/60',
+        // Вспышка «выполнено»: мягкий зелёный + лёгкий pop.
+        completePhase === 'flash' &&
+          'scale-[1.02] border-emerald-500/60 bg-emerald-500/[0.12] ring-2 ring-emerald-500/50 dark:bg-emerald-500/[0.16]',
+        // Уход: сжимаемся внутрь, обёртка коллапсит высоту и гасит opacity.
+        completePhase === 'exit' && 'scale-[0.96]',
       )}
       onClick={(e) => {
         if (selecting) {
           if (selectable) {
             onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
           }
+          return;
+        }
+        // Ctrl/⌘ + ЛКМ = выполнить (вместо открытия дравера).
+        if ((e.ctrlKey || e.metaKey) && item.canModify && !isDone && completePhase === 'idle') {
+          e.preventDefault();
+          setCompletePhase('flash');
           return;
         }
         onOpen();
@@ -2368,6 +2440,15 @@ function AcceptedCard({
         onOpen();
       }}
     >
+      {/* Аффорданс «Ctrl+клик = выполнить»: серый оверлей с зелёной галочкой поверх карточки,
+          виден только при зажатом Ctrl и наведении. pointer-events-none — клик идёт в карточку. */}
+      {completeArmed && (
+        <div className="pointer-events-none absolute inset-0 z-30 hidden items-center justify-center rounded-lg bg-zinc-500/30 opacity-0 backdrop-blur-[1px] transition-opacity duration-150 group-hover:flex group-hover:opacity-100 dark:bg-zinc-900/45">
+          <span className="flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 ring-white/70 dark:ring-black/30">
+            <Check className="size-5" strokeWidth={3} />
+          </span>
+        </div>
+      )}
       {/* Название проекта — полоса-заголовок. Скрываем при сортировке по проекту (колонка = проект). */}
       {!hideProjectLabel && (
         <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
@@ -2437,6 +2518,8 @@ function AcceptedCard({
           )}
         </div>
       </div>
+    </div>
+    </div>
     </div>
   );
 }
