@@ -38,6 +38,13 @@ export function AssigneeTaskButton({
   const { user } = useCurrentUser();
   const [loadedMembers, setLoadedMembers] = useState<SharedMember[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Оптимистичный ответственный (как value в TaskPriorityChip): notifyChanged() не
+  // пересобирает task.assignee, поэтому без локального состояния кнопка показывала бы
+  // старого ответственного до перезагрузки. Синкаемся, когда проп реально меняется.
+  const [assignee, setAssignee] = useState(task.assignee);
+  useEffect(() => {
+    setAssignee(task.assignee);
+  }, [task.assignee]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,19 +86,25 @@ export function AssigneeTaskButton({
       });
     }
     for (const member of loadedMembers ?? []) byId.set(member.id, member);
-    if (!byId.has(task.assignee.userId)) {
-      byId.set(task.assignee.userId, {
-        id: task.assignee.userId,
-        displayName: task.assignee.displayName,
+    if (!byId.has(assignee.userId)) {
+      byId.set(assignee.userId, {
+        id: assignee.userId,
+        displayName: assignee.displayName,
         email: '',
-        avatarUrl: task.assignee.avatarUrl,
+        avatarUrl: assignee.avatarUrl,
       });
     }
     return [...byId.values()];
-  }, [loadedMembers, projectId, task.assignee, user]);
+  }, [loadedMembers, projectId, assignee, user]);
 
   const select = async (target: SharedMember): Promise<void> => {
-    if (submitting || target.id === task.assignee.userId) return;
+    if (submitting || target.id === assignee.userId) return;
+    const prev = assignee;
+    setAssignee({
+      userId: target.id,
+      displayName: target.displayName,
+      avatarUrl: target.avatarUrl,
+    });
     setSubmitting(true);
     try {
       await taskRepository.assign(task.projectId, task.id, target.id);
@@ -102,6 +115,7 @@ export function AssigneeTaskButton({
       );
       onChanged();
     } catch (error) {
+      setAssignee(prev);
       toast.error(`Не удалось сменить ответственного: ${(error as Error).message}`);
     } finally {
       setSubmitting(false);
@@ -126,9 +140,9 @@ export function AssigneeTaskButton({
           {submitting ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin" />
           ) : (
-            <MiniAvatar name={task.assignee.displayName} avatarUrl={task.assignee.avatarUrl} />
+            <MiniAvatar name={assignee.displayName} avatarUrl={assignee.avatarUrl} />
           )}
-          <span className="min-w-0 truncate">{task.assignee.displayName}</span>
+          <span className="min-w-0 truncate">{assignee.displayName}</span>
           {!disabled && <ChevronDown className="!size-3 shrink-0 opacity-60" />}
         </Button>
       </DropdownMenuTrigger>
@@ -137,7 +151,7 @@ export function AssigneeTaskButton({
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Загрузка…</div>
         ) : (
           members.map((member) => {
-            const active = task.assignee.userId === member.id;
+            const active = assignee.userId === member.id;
             return (
               <DropdownMenuItem
                 key={member.id}
