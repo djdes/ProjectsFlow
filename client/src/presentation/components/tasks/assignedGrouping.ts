@@ -100,11 +100,12 @@ function groupByProject(
   // Порядок колонок НЕ должен зависеть от того, какие задачи сейчас на доске. Раньше группы
   // шли в порядке первого появления задачи: стоило закрыть одну задачу — и колонка проекта
   // прыгала на несколько позиций вправо. Берём канонический порядок проектов (тот же, что в
-  // сайдбаре); проекты вне списка (архивные, чужие) — по алфавиту следом; «Личные» — в конец.
+  // сайдбаре); «Личные» закреплены слева, проекты вне списка (архивные, чужие) — по
+  // алфавиту следом за известными.
   const rank = new Map(projectOrder.map((id, i) => [id, i]));
   const groups = [...map.values()];
   groups.sort((a, b) => {
-    if (a.isInbox !== b.isInbox) return a.isInbox ? 1 : -1;
+    if (a.isInbox !== b.isInbox) return a.isInbox ? -1 : 1;
     if (!a.isInbox) {
       const ra = rank.get(a.key) ?? Number.MAX_SAFE_INTEGER;
       const rb = rank.get(b.key) ?? Number.MAX_SAFE_INTEGER;

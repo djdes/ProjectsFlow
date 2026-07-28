@@ -62,11 +62,11 @@ test('project: группирует по проекту, а Inbox не пока�
   ];
   const groups = groupAssignedTasks(tasks, 'project', NOW);
   assert.equal(groups.length, 2);
-  assert.equal(groups[0]?.key, 'p1');
-  assert.equal(groups[0]?.label, 'Альфа');
-  assert.equal(groups[0]?.items.length, 2);
-  assert.equal(groups[1]?.key, 'inbox');
-  assert.equal(groups[1]?.label, 'Личные');
+  assert.equal(groups[0]?.key, 'inbox');
+  assert.equal(groups[0]?.label, 'Личные');
+  assert.equal(groups[1]?.key, 'p1');
+  assert.equal(groups[1]?.label, 'Альфа');
+  assert.equal(groups[1]?.items.length, 2);
 });
 
 test('created: бакеты Сегодня/Вчера/На этой неделе/Ранее, пустые не показываются', () => {
@@ -127,7 +127,7 @@ test('project, вкладка «Другим»: Inbox-группы дробят�
   const groups = groupAssignedTasks(tasks, 'project', NOW, 'byMe');
   assert.deepEqual(
     groups.map((group) => group.label),
-    ['Альфа', 'Личные · Боб', 'Личные · Вера'],
+    ['Личные · Боб', 'Личные · Вера', 'Альфа'],
   );
   assert.equal(new Set(groups.map((group) => group.key)).size, 3);
 });
@@ -159,15 +159,15 @@ test('project: колонка не переезжает, когда задача
   assert.equal(after.findIndex((g) => g.key === 'p3'), 0);
 });
 
-test('project: проекты вне списка идут после известных, «Личные» — последними', () => {
+test('project: «Личные» первыми, проекты вне списка — после известных', () => {
   const tasks = [
-    mk({ projectId: 'inbox', isInbox: true }),
     mk({ projectId: 'archived', projectName: 'Архивный' }),
     mk({ projectId: 'p1', projectName: 'Яндекс' }),
+    mk({ projectId: 'inbox', isInbox: true }),
   ];
   assert.deepEqual(
     groupAssignedTasks(tasks, 'project', NOW, 'toMe', ['p1']).map((g) => g.label),
-    ['Яндекс', 'Архивный', 'Личные'],
+    ['Личные', 'Яндекс', 'Архивный'],
   );
 });
 
