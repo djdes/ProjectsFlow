@@ -412,7 +412,8 @@ export function TaskComposer({
 
       {previewFile && (
         <Dialog open onOpenChange={() => setPreviewFile(null)}>
-          <DialogContent className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
+          {/* hideClose: крестик уже есть в шапке — иначе два крестика друг на друге. */}
+          <DialogContent hideClose className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
             <div className="flex items-center justify-between border-b px-4 py-2.5">
               <p className="truncate text-sm font-medium">{previewFile.file.name}</p>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => setPreviewFile(null)} aria-label="Закрыть">

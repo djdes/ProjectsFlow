@@ -29,11 +29,15 @@ export function DialogContent({
   className,
   children,
   overlayClassName,
+  hideClose,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   // По умолчанию overlay прозрачный. Отдельные тяжёлые окна (например, история версий)
   // могут включить собственное затемнение, не меняя внешний вид всех остальных Dialog.
   overlayClassName?: string;
+  // Окна со своей шапкой (лайтбоксы превью) рисуют кнопку закрытия сами, в ряду заголовка.
+  // Встроенная абсолютная «×» ложилась поверх неё — пользователь видел двойной крестик.
+  hideClose?: boolean;
 }): React.ReactElement {
   return (
     <DialogPortal>
@@ -48,10 +52,12 @@ export function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {!hideClose && (
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPortal>
   );

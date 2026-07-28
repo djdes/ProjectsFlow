@@ -17,7 +17,8 @@ export function AttachmentLightbox({
   const mp4 = attachment ? isMp4File(attachment.mimeType, attachment.filename) : false;
   return (
     <Dialog open={attachment !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
+      {/* hideClose: крестик уже есть в шапке ниже — без этого их рисуется два поверх друг друга. */}
+      <DialogContent hideClose className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
         <div className="flex items-center justify-between border-b px-4 py-2.5">
           <p className="truncate text-sm font-medium">{attachment?.filename ?? ''}</p>
           <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Закрыть">

@@ -243,7 +243,8 @@ export function ChatBubble({
 
       {/* Лайтбокс картинки — открываем прямо на сайте (модалка), а не отдельной вкладкой. */}
       <Dialog open={preview !== null} onOpenChange={(o) => !o && setPreview(null)}>
-        <DialogContent className="grid max-h-[90dvh] max-w-3xl gap-0 overflow-hidden p-0">
+        {/* hideClose: свой крестик в шапке — встроенный лёг бы поверх кнопки «Скачать». */}
+        <DialogContent hideClose className="grid max-h-[90dvh] max-w-3xl gap-0 overflow-hidden p-0">
           <div className="flex items-center justify-between border-b px-4 py-2.5">
             <p className="truncate text-sm font-medium">{preview?.filename ?? ''}</p>
             <div className="flex items-center gap-1">
