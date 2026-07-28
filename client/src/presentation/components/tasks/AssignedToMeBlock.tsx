@@ -529,14 +529,17 @@ export function AssignedToMeBlock({
   }, [byMeDisplayTasks, filterProject]);
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
   // Направление = активная вкладка: влияет на подпись inbox-групп («Личные · кто/кому»).
-  // Зона «В работе» — отдельная полка над колонками: то, чем занимаются прямо сейчас.
-  // Задачи в ней ИСКЛЮЧЕНЫ из обычных групп, иначе одна карточка висела бы в двух местах.
+  // Зона «В работе» — отдельная полка над колонками: то, чем человек занят сам.
+  // Статус — 'manual' (ветка ВНЕ pipeline'а агента: Ralph такие задачи не берёт), а НЕ
+  // 'in_progress': тот считается открытой работой диспетчера, и воркер выполнил бы задачу,
+  // которую пользователь взял себе. Задачи полки ИСКЛЮЧЕНЫ из обычных групп, иначе одна
+  // карточка висела бы в двух местах.
   const inProgressTasks = useMemo(
-    () => visibleTasks.filter((t) => t.status === 'in_progress'),
+    () => visibleTasks.filter((t) => t.status === 'manual'),
     [visibleTasks],
   );
   const groupedTasks = useMemo(
-    () => visibleTasks.filter((t) => t.status !== 'in_progress'),
+    () => visibleTasks.filter((t) => t.status !== 'manual'),
     [visibleTasks],
   );
   // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
@@ -791,11 +794,11 @@ export function AssignedToMeBlock({
     [user, taskRepository, refresh, onChanged],
   );
 
-  // Взять в работу / убрать из работы. Статус общий с доской проекта: in_progress —
-  // «В работе», backlog — «Черновики» (нейтральное «не занимаюсь этим сейчас»). Возврат
-  // НЕ в todo: в личных входящих это колонка «Воркер», задачу подхватил бы Ralph.
+  // Взять в работу / убрать из работы. 'manual' — «делаю руками», агент такие задачи
+  // никогда не подхватывает; backlog — «Черновики», нейтральное «не занимаюсь сейчас».
+  // Возврат НЕ в todo: в личных входящих это колонка «Воркер», задачу забрал бы Ralph.
   const setWorkStatus = useCallback(
-    async (item: InboxBlockTask, next: 'in_progress' | 'backlog'): Promise<void> => {
+    async (item: InboxBlockTask, next: 'manual' | 'backlog'): Promise<void> => {
       if (item.status === next) return;
       try {
         await taskRepository.move(item.projectId, item.id, {
@@ -822,7 +825,7 @@ export function AssignedToMeBlock({
     setDragActive(false);
     const over = e.over;
     const data = over?.data.current as
-      | { type?: string; bucket?: string; member?: SharedMember; status?: 'in_progress' | 'backlog' }
+      | { type?: string; bucket?: string; member?: SharedMember; status?: 'manual' | 'backlog' }
       | undefined;
     const item = e.active.data.current?.item as InboxBlockTask | undefined;
     if (!over || !item || !data) return;
@@ -975,7 +978,7 @@ export function AssignedToMeBlock({
       </div>
 
       {/* Полка «В работе» — над колонками, всегда видима: это ответ на вопрос «чем я занят
-          прямо сейчас». Принимает дроп карточки (статус → in_progress), карточки внутри
+          прямо сейчас». Принимает дроп карточки (статус → manual), карточки внутри
           можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
           отключён и полка была бы мёртвой. */}
       {!selectionActive && (
@@ -1011,8 +1014,7 @@ export function AssignedToMeBlock({
           )}
         >
           {kanbanGroups.map((group, index) => (
-            // Дроп-зона (drag-срок/ответственный) + пагинация «первые 4 + Показать ещё» +
-            // перетаскиваемые карточки. Все три фичи вместе (мердж main ↔ feat/s2-usage).
+            // Дроп-зона (drag-срок/ответственный) + перетаскиваемые карточки.
             <TimeBucketColumn
               key={group.key}
               bucket={group.key}
@@ -1027,8 +1029,8 @@ export function AssignedToMeBlock({
                 <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
               ) : (
                 <ColumnPreviewList
-                  // key по вкладке+фильтрам: смена датасета ремаунтит список и
-                  // сбрасывает раскрытие «Показать ещё» (не тащим его между вкладками).
+                  // key по вкладке+фильтрам: смена датасета ремаунтит список (не тащим
+                  // позицию скролла колонки между вкладками).
                   key={[tab, filterTo ?? '', filterProject ?? ''].join('|')}
                   items={group.items}
                   renderItem={(item) => (
@@ -1537,7 +1539,7 @@ function PhantomDropColumn({
 }
 
 // Полка «В работе»: мягко-жёлтая зона над колонками, куда перетаскивают задачи, которыми
-// занимаются прямо сейчас (статус in_progress). Подсвечивается при наведении драга. Пустая
+// занимается сам (статус manual — агент такие не берёт). Подсвечивается при наведении драга. Пустая
 // показывает подсказку — иначе непонятно, что сюда можно тащить.
 function InProgressShelf({
   items,
@@ -1556,7 +1558,7 @@ function InProgressShelf({
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
     id: 'work-in-progress',
-    data: { type: 'work', status: 'in_progress' },
+    data: { type: 'work', status: 'manual' },
   });
 
   return (
