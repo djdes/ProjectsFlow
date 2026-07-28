@@ -539,9 +539,12 @@ export function AssignedToMeBlock({
     () => visibleTasks.filter((t) => t.status !== 'in_progress'),
     [visibleTasks],
   );
+  // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
+  // стояли на месте и не переезжали, когда задача уходит с доски.
+  const projectOrder = useMemo(() => (allProjects ?? []).map((p) => p.id), [allProjects]);
   const groups = useMemo(
-    () => groupAssignedTasks(groupedTasks, grouping, new Date(), tab),
-    [groupedTasks, grouping, tab],
+    () => groupAssignedTasks(groupedTasks, grouping, new Date(), tab, projectOrder),
+    [groupedTasks, grouping, tab, projectOrder],
   );
   // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.

@@ -127,9 +127,48 @@ test('project, вкладка «Другим»: Inbox-группы дробят�
   const groups = groupAssignedTasks(tasks, 'project', NOW, 'byMe');
   assert.deepEqual(
     groups.map((group) => group.label),
-    ['Личные · Боб', 'Личные · Вера', 'Альфа'],
+    ['Альфа', 'Личные · Боб', 'Личные · Вера'],
   );
   assert.equal(new Set(groups.map((group) => group.key)).size, 3);
+});
+
+test('project: порядок колонок берётся из списка проектов, а не из порядка задач', () => {
+  const tasks = [
+    mk({ projectId: 'p3', projectName: 'Гамма' }),
+    mk({ projectId: 'p1', projectName: 'Альфа' }),
+    mk({ projectId: 'p2', projectName: 'Бета' }),
+  ];
+  assert.deepEqual(
+    groupAssignedTasks(tasks, 'project', NOW, 'toMe', ['p1', 'p2', 'p3']).map((g) => g.label),
+    ['Альфа', 'Бета', 'Гамма'],
+  );
+});
+
+test('project: колонка не переезжает, когда задача уходит с доски', () => {
+  // Регрессия: группы шли в порядке первого появления задачи, поэтому закрытая задача
+  // «Альфы» уводила колонку «Гамма» на несколько позиций вправо.
+  const order = ['p3', 'p1', 'p2'];
+  const gamma = mk({ projectId: 'p3', projectName: 'Гамма' });
+  const alphaDone = mk({ projectId: 'p1', projectName: 'Альфа' });
+  const beta = mk({ projectId: 'p2', projectName: 'Бета' });
+
+  const before = groupAssignedTasks([alphaDone, gamma, beta], 'project', NOW, 'toMe', order);
+  const after = groupAssignedTasks([gamma, beta], 'project', NOW, 'toMe', order);
+  assert.deepEqual(before.map((g) => g.label), ['Гамма', 'Альфа', 'Бета']);
+  assert.equal(before.findIndex((g) => g.key === 'p3'), 0);
+  assert.equal(after.findIndex((g) => g.key === 'p3'), 0);
+});
+
+test('project: проекты вне списка идут после известных, «Личные» — последними', () => {
+  const tasks = [
+    mk({ projectId: 'inbox', isInbox: true }),
+    mk({ projectId: 'archived', projectName: 'Архивный' }),
+    mk({ projectId: 'p1', projectName: 'Яндекс' }),
+  ];
+  assert.deepEqual(
+    groupAssignedTasks(tasks, 'project', NOW, 'toMe', ['p1']).map((g) => g.label),
+    ['Яндекс', 'Архивный', 'Личные'],
+  );
 });
 
 test('project: локальное зеркало Inbox остаётся в единой группе «Личные»', () => {
