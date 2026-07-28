@@ -26,16 +26,23 @@ export class ListTasks {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<TaskWithCounts[]> {
-    await requireProjectAccess(
+    const { project } = await requireProjectAccess(
       this.deps,
       projectId,
       ownerUserId,
       'read_project',
     );
-    const tasks = await this.deps.tasks.listByProject(projectId);
+    const own = await this.deps.tasks.listByProject(projectId);
 
-    // Проектный endpoint возвращает только физические задачи этой доски. Общая выборка
-    // «назначено мне» живёт отдельно и не подмешивает чужие inbox-задачи вниз.
+    // Правило «я ответственный ⇒ задача в моих личных»: на СВОЮ inbox-доску подмешиваем
+    // задачи, за которые отвечает caller, но которые физически лежат в чужих личных
+    // входящих (запись остаётся у владельца — он её не теряет). Только для inbox-доски
+    // её же владельца: доски именованных проектов возвращают строго свои задачи.
+    const tasks =
+      project.isInbox && project.ownerId === ownerUserId
+        ? [...own, ...(await this.foreignInboxTasksAssignedTo(ownerUserId, projectId))]
+        : own;
+
     const ids = tasks.map((t) => t.id);
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);
     const attachmentCounts = await this.deps.attachments.countsByTasks(ids);
@@ -46,5 +53,25 @@ export class ListTasks {
       attachmentCount: attachmentCounts.get(t.id) ?? 0,
       commentCount: commentCounts.get(t.id) ?? 0,
     }));
+  }
+
+  // Задачи, где userId — ответственный, лежащие в ЧУЖИХ личных входящих. Задачи
+  // именованных проектов сюда не попадают: они живут на доске своего проекта, а не в
+  // личных (перенос в «Входящие» — отдельный явный жест в верхнем блоке).
+  private async foreignInboxTasksAssignedTo(
+    userId: string,
+    ownInboxProjectId: string,
+  ): Promise<Task[]> {
+    const assigned = await this.deps.tasks.listAssignedTo(userId);
+    const candidates = assigned.filter((t) => t.projectId !== ownInboxProjectId);
+    if (candidates.length === 0) return [];
+    const holderIds = [...new Set(candidates.map((t) => t.projectId))];
+    const holders = await Promise.all(
+      holderIds.map(async (id) => [id, await this.deps.projects.getById(id)] as const),
+    );
+    const inboxHolderIds = new Set(
+      holders.filter(([, p]) => p?.isInbox === true).map(([id]) => id),
+    );
+    return candidates.filter((t) => inboxHolderIds.has(t.projectId));
   }
 }

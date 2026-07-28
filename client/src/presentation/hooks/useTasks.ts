@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
@@ -50,6 +50,17 @@ export function useTasks(projectId: string): UseTasks {
   const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
   const [state, setState] = useState<State>({ tasks: [], loading: true, error: null });
+
+  // Своя inbox-доска показывает и задачи, за которые юзер отвечает, но которые физически
+  // лежат в чужих личных входящих (см. ListTasks на сервере). Адресовать их надо ИХ
+  // projectId, а не projectId доски — иначе сервер справедливо ответит 404 (задача не из
+  // этого проекта). Держим последний снимок в ref: колбэки ниже async и видели бы stale state.
+  const tasksRef = useRef<Task[]>([]);
+  useEffect(() => {
+    tasksRef.current = state.tasks;
+  }, [state.tasks]);
+  const projectIdOf = (taskId: string): string =>
+    tasksRef.current.find((t) => t.id === taskId)?.projectId ?? projectId;
 
   // refetch() НЕ сбрасывает loading=true и НЕ обнуляет tasks. Это критично для
   // SSE-обновлений: каждое SSE-событие вызывает refetch, и если бы тут стояло
@@ -113,7 +124,7 @@ export function useTasks(projectId: string): UseTasks {
   };
 
   const update: UseTasks['update'] = async (taskId, input) => {
-    const updated = await taskRepository.update(projectId, taskId, input);
+    const updated = await taskRepository.update(projectIdOf(taskId), taskId, input);
     setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
     notifyChanged();
     return updated;
@@ -147,7 +158,7 @@ export function useTasks(projectId: string): UseTasks {
       };
     });
     try {
-      const updated = await taskRepository.move(projectId, taskId, input);
+      const updated = await taskRepository.move(projectIdOf(taskId), taskId, input);
       setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
       notifyChanged();
     } catch (e) {
@@ -158,7 +169,7 @@ export function useTasks(projectId: string): UseTasks {
   };
 
   const remove: UseTasks['remove'] = async (taskId) => {
-    await taskRepository.delete(projectId, taskId);
+    await taskRepository.delete(projectIdOf(taskId), taskId);
     setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }));
     notifyChanged();
   };

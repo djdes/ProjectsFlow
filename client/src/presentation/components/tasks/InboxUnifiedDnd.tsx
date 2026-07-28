@@ -185,7 +185,15 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     status: TaskStatus,
   ): Promise<void> => {
     if (!user) return;
-    if (isPersonalInboxBlockTask(item) || item.projectId === projectId) {
+    // Своя личная задача, задача этой же доски — и чужая личная, за которую отвечаю я:
+    // все они уже видны на моей доске (правило «я ответственный ⇒ задача в моих личных»,
+    // см. ListTasks), поэтому дроп — это просто смена колонки. Владелец чужих входящих
+    // задачу не теряет: физически запись остаётся у него, меняется только статус.
+    if (
+      isPersonalInboxBlockTask(item) ||
+      item.projectId === projectId ||
+      (item.isInbox && item.assignee.userId === user.id)
+    ) {
       try {
         await registry.current.board?.moveTask(item.id, status);
       } catch (e) {
@@ -209,7 +217,9 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       await afterAssigneeChange();
       return;
     }
-    toast.info('Задачу из чужих личных входящих нельзя перенести на вашу доску');
+    // Сюда попадают только чужие личные задачи, за которые отвечает КТО-ТО ДРУГОЙ: на свою
+    // доску мы подмешиваем лишь назначенные себе, поэтому переносить такую некуда.
+    toast.info('На вашу доску попадают только личные задачи, где вы ответственный');
   };
 
   // Перенос задачи доски в проект. Сервер одной транзакцией сохраняет текущего
