@@ -1,20 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+import { useCallback, useEffect, useState } from 'react';
 import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { fadeInUp } from '@/presentation/components/motion/presets';
 import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import type { Task } from '@/domain/task/Task';
-import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
-import { InboxUnifiedDnd } from '@/presentation/components/tasks/InboxUnifiedDnd';
-import { useBoardStickyTop } from '@/presentation/components/tasks/useBoardStickyTop';
-import type { UnifiedDndRegistry } from '@/presentation/components/tasks/unifiedDndTypes';
 
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 
@@ -33,8 +26,7 @@ function loadHideDone(): boolean {
 // Отображение — только канбан (drag-drop по статусам); сортировку/группировку блока
 // ответственных выбирают в «Сортировке». Режим списка убран.
 export function InboxPage(): React.ReactElement {
-  const { projectRepository } = useContainer();
-  const { animations } = useMotion();
+  const { projectRepository, taskRepository } = useContainer();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,24 +38,23 @@ export function InboxPage(): React.ReactElement {
   // страницы рядом с «Фильтрами». Нижняя доска живёт по-прежнему: там режим включается
   // по колонке из её шапки. Состояние здесь, а не в блоке, — кнопка снаружи блока.
   const [selectionActive, setSelectionActive] = useState(false);
-  // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
-  // TaskListView. Меняется при смене ответственного/toggle в AssignedToMeBlock,
-  // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
-  // SSE, но проще пересоздать board без задержки).
-  const [refetchKey, setRefetchKey] = useState(0);
-  // null отличает «нижняя доска ещё грузится» от честного пустого inbox. После загрузки
-  // этот же snapshot питает виртуальные карточки верхней личной колонки.
+  // Снимок задач своего инбокса. Нижней доски на странице больше нет (канбан ровно один —
+  // блок ответственных), но снимок всё равно нужен: в team-пространстве «назначено мне» не
+  // отдаёт личный inbox (он живёт в хабе), и без этой выборки личные задачи пропали бы.
+  // null = ещё грузится, отличается от честного пустого инбокса.
   const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(null);
-  const handleBoardTasksChange = useCallback((next: readonly Task[]): void => {
-    setBoardTasks(next);
-  }, []);
-  // Реестр единого DnD (#5): доска и блок ответственных регистрируют сюда свои хендлеры,
-  // InboxUnifiedDnd диспетчеризует. Ref (не state) — стабильная ссылка переживает ремаунты
-  // KanbanBoard по refetchKey и не дёргает лишние рендеры.
-  const dndRegistry = useRef<UnifiedDndRegistry>({ board: null, block: null });
-  // Шапки колонок доски закрепляются у верхней кромки <main> — своих sticky-строк
-  // (крошки/плашки) у «Входящих» нет, поэтому офсет = только верх скролл-контейнера.
-  const stickyTop = useBoardStickyTop();
+  const reloadInboxTasks = useCallback(
+    async (projectId: string): Promise<void> => {
+      try {
+        setBoardTasks(await taskRepository.list(projectId));
+      } catch {
+        // Блок не должен «залипнуть» в пустом рендере из-за сетевой ошибки: сам он
+        // грузит задачи отдельно и покажет их, а личное зеркало просто будет пустым.
+        setBoardTasks([]);
+      }
+    },
+    [taskRepository],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +76,11 @@ export function InboxPage(): React.ReactElement {
       cancelled = true;
     };
   }, [projectRepository]);
+
+  useEffect(() => {
+    if (!project) return;
+    void reloadInboxTasks(project.id);
+  }, [project, reloadInboxTasks]);
 
   const handleHideDoneChange = (next: boolean): void => {
     setHideDone(next);
@@ -155,43 +151,21 @@ export function InboxPage(): React.ReactElement {
           </Button>
         </div>
 
-        {/* Единый DnD (#5): один DndContext на блок ответственных И доску — карточку доски
-            можно тащить в колонки срока и на участников (назначить ответственным). */}
-        <InboxUnifiedDnd registry={dndRegistry} projectId={project.id}>
-          <AssignedToMeBlock
-            boardTasks={boardTasks}
-            inboxProjectId={project.id}
-            onChanged={() => setRefetchKey((k) => k + 1)}
-            toolbarSlot={toolbarSlot}
-            hideDone={hideDone}
-            onHideDoneChange={handleHideDoneChange}
-            bleedNegClass={KANBAN_BLEED_NEG}
-            bleedPadClass={KANBAN_BLEED_PAD}
-            externalDnd={dndRegistry}
-            selectionActive={selectionActive}
-            onSelectionActiveChange={setSelectionActive}
-          />
-
-          {/* Мягкое появление доски при входе — fadeInUp, гейтится useMotion(). */}
-          <motion.div
-            className="flex flex-1 flex-col"
-            variants={fadeInUp}
-            initial={animations ? 'hidden' : false}
-            animate="visible"
-          >
-            <KanbanBoard
-              key={refetchKey}
-              projectId={project.id}
-              showCommits={false}
-              hideDone={hideDone}
-              stickyHeaderTop={stickyTop}
-              bleedNegClass={KANBAN_BLEED_NEG}
-              bleedPadClass={KANBAN_BLEED_PAD}
-              externalDnd={dndRegistry}
-              onBoardTasksChange={handleBoardTasksChange}
-            />
-          </motion.div>
-        </InboxUnifiedDnd>
+        {/* Единственный канбан страницы — блок ответственных. Свой DndContext он рендерит
+            сам (externalDnd не задан): отдельная нижняя доска инбокса убрана, объединять
+            больше нечего. */}
+        <AssignedToMeBlock
+          boardTasks={boardTasks}
+          inboxProjectId={project.id}
+          onChanged={() => void reloadInboxTasks(project.id)}
+          toolbarSlot={toolbarSlot}
+          hideDone={hideDone}
+          onHideDoneChange={handleHideDoneChange}
+          bleedNegClass={KANBAN_BLEED_NEG}
+          bleedPadClass={KANBAN_BLEED_PAD}
+          selectionActive={selectionActive}
+          onSelectionActiveChange={setSelectionActive}
+        />
       </div>
     </div>
   );
