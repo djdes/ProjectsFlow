@@ -71,6 +71,9 @@ export class ListPersonalTasksOfColleagues {
       this.deps.comments.countsByTasks(ids),
     ]);
 
+    // Имя владельца входящих у нас уже есть из круга коллег — дополнительных запросов не надо.
+    const colleagueNameById = new Map(colleagues.map((c) => [c.id, c.displayName]));
+
     return visible.map((task) => {
       const project = projectById.get(task.projectId)!;
       return {
@@ -78,6 +81,10 @@ export class ListPersonalTasksOfColleagues {
         projectId: project.id,
         projectName: project.name,
         isInbox: true,
+        inboxOwner: {
+          userId: project.ownerId,
+          displayName: colleagueNameById.get(project.ownerId) ?? '',
+        },
         // Коллега по общему пространству: видит задачу — значит может менять статус и удалять.
         canModify: true,
         commitCount: commitCounts.get(task.id) ?? 0,

@@ -9,6 +9,8 @@ type AssignedItemDto = {
   projectName: string;
   isInbox: boolean;
   canModify: boolean;
+  // Владелец личных входящих, где лежит задача (null у именованных проектов).
+  inboxOwner?: { userId: string; displayName: string } | null;
 };
 
 export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
@@ -32,6 +34,7 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
       projectName: item.projectName,
       isInbox: item.isInbox,
       canModify: item.canModify,
+      inboxOwner: item.inboxOwner ?? null,
     }));
   }
 }

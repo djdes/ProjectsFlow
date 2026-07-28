@@ -6,6 +6,7 @@ import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { AssignedTaskView } from './ListTasksAssignedToMe.js';
+import type { UserRepository } from '../user/UserRepository.js';
 
 type Deps = {
   readonly members: ProjectMemberRepository;
@@ -14,6 +15,7 @@ type Deps = {
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
   readonly resolveActiveWorkspace: ResolveActiveWorkspace;
+  readonly users: UserRepository;
 };
 
 // Все видимые caller'у задачи, где ответственный — другой человек. Источник назначения
@@ -47,11 +49,24 @@ export class ListTasksAssignedToOthers {
       this.deps.comments.countsByTasks(ids),
     ]);
 
+    // Имена владельцев inbox'ов — по одному запросу на юзера, не на задачу.
+    const inboxOwnerIds = [
+      ...new Set(flat.filter(({ project }) => project.isInbox).map(({ project }) => project.ownerId)),
+    ];
+    const inboxOwnerNames = new Map(
+      (await Promise.all(inboxOwnerIds.map((id) => this.deps.users.getById(id))))
+        .filter((u) => u !== null)
+        .map((u) => [u.id, u.displayName]),
+    );
+
     return flat.map(({ task, project }) => ({
       task,
       projectId: project.id,
       projectName: project.name,
       isInbox: project.isInbox,
+      inboxOwner: project.isInbox
+        ? { userId: project.ownerId, displayName: inboxOwnerNames.get(project.ownerId) ?? '' }
+        : null,
       canModify: project.isInbox || can(project.role, 'move_task'),
       commitCount: commitCounts.get(task.id) ?? 0,
       attachmentCount: attachmentCounts.get(task.id) ?? 0,

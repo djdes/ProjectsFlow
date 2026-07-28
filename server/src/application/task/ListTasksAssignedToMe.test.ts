@@ -47,6 +47,9 @@ function makeList(input: {
     projects: {
       getById: async (id: string) => input.projects[id] ?? null,
     } as never,
+    users: {
+      getById: async (id: string) => ({ id, displayName: `Юзер ${id}` }),
+    } as never,
     members: {
       findForProject: async (projectId: string) =>
         input.memberships?.[projectId] === false

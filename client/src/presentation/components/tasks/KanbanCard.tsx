@@ -3,7 +3,15 @@ import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  ImageIcon,
+  Inbox as InboxIcon,
+  ListChecks,
+  MessageSquare,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -411,6 +419,18 @@ function KanbanCardImpl({
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
+          {/* Задача из ЧУЖИХ личных входящих, подмешанная сюда потому, что ответственный — я
+              (см. ListTasks). Подпись всегда видима, а не по hover: без неё карточка выглядела
+              бы своей, хотя запись живёт у другого человека — статус и порядок у вас общие. */}
+          {task.inboxOwner && (
+            <div
+              className="mb-1 flex items-center gap-1 text-[10px] font-medium text-muted-foreground"
+              title={`Задача из личных входящих: ${task.inboxOwner.displayName}. Вы ответственный, поэтому она на вашей доске. Запись общая — статус виден обоим.`}
+            >
+              <InboxIcon className="size-2.5 shrink-0" />
+              <span className="truncate">Личные · {task.inboxOwner.displayName}</span>
+            </div>
+          )}
           {/* Текст карточки НЕ затемняем: мета/действия всплывают как локальные плашки со
               своим фоном (снизу-слева и сверху-справа), маскируя только свою область. */}
           <div>

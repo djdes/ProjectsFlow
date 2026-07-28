@@ -92,6 +92,8 @@ export class SendDailyDigest {
       commitCount: 0,
       attachmentCount: 0,
       commentCount: commentCounts.get(t.id) ?? 0,
+      // Дайджест не различает чужие личные входящие — подпись владельца ему не нужна.
+      inboxOwner: null,
     }));
 
     const digestNow = new Date();

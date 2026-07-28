@@ -45,6 +45,9 @@ function makeList(input: {
     projects: {
       getById: async (id: string) => input.projects[id] ?? null,
     } as never,
+    users: {
+      getById: async (id: string) => ({ id, displayName: id === 'other' ? 'Денис' : 'Я' }),
+    } as never,
     members: {
       findForProject: async (projectId: string, userId: string) => ({
         projectId,
@@ -79,6 +82,12 @@ test('своя inbox-доска показывает задачу из чужи�
     items.map((t) => t.id).sort(),
     ['foreign', 'mine'],
   );
+  // Подмешанная задача честно подписана владельцем чужих входящих, своя — нет.
+  assert.deepEqual(items.find((t) => t.id === 'foreign')?.inboxOwner, {
+    userId: 'other',
+    displayName: 'Денис',
+  });
+  assert.equal(items.find((t) => t.id === 'mine')?.inboxOwner, null);
 });
 
 test('задача именованного проекта на личную доску не подмешивается', async () => {

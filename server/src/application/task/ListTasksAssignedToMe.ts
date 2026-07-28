@@ -6,6 +6,7 @@ import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -15,6 +16,7 @@ type Deps = {
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
   readonly resolveActiveWorkspace: ResolveActiveWorkspace;
+  readonly users: UserRepository;
 };
 
 // Строка верхнего канбана: задача с обязательным assignee + контекст проекта.
@@ -24,6 +26,9 @@ export type AssignedTaskView = {
   readonly projectName: string;
   readonly isInbox: boolean;
   readonly canModify: boolean;
+  // Владелец личных входящих, в которых лежит задача (null у именованных проектов).
+  // Нужен, чтобы UI подписывал «Личные · <имя>» и не выдавал чужую задачу за свою.
+  readonly inboxOwner: { readonly userId: string; readonly displayName: string } | null;
   readonly commitCount: number;
   readonly attachmentCount: number;
   readonly commentCount: number;
@@ -64,6 +69,18 @@ export class ListTasksAssignedToMe {
       this.deps.comments.countsByTasks(ids),
     ]);
 
+    // Имена владельцев чужих inbox'ов — по одному запросу на юзера, не на задачу.
+    const inboxOwnerIds = [
+      ...new Set(
+        [...projectById.values()].filter((p) => p.isInbox).map((p) => p.ownerId),
+      ),
+    ];
+    const inboxOwnerNames = new Map(
+      (await Promise.all(inboxOwnerIds.map((id) => this.deps.users.getById(id))))
+        .filter((u) => u !== null)
+        .map((u) => [u.id, u.displayName]),
+    );
+
     return visible.map((task) => {
       const project = projectById.get(task.projectId)!;
       return {
@@ -71,6 +88,12 @@ export class ListTasksAssignedToMe {
         projectId: task.projectId,
         projectName: project.name,
         isInbox: project.isInbox,
+        inboxOwner: project.isInbox
+          ? {
+              userId: project.ownerId,
+              displayName: inboxOwnerNames.get(project.ownerId) ?? '',
+            }
+          : null,
         // Текущий ответственный получает task-scoped modify даже с viewer-ролью.
         canModify: true,
         commitCount: commitCounts.get(task.id) ?? 0,

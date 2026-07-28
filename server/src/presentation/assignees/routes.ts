@@ -29,6 +29,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
     projectName: v.projectName,
     isInbox: v.isInbox,
     canModify: v.canModify,
+    inboxOwner: v.inboxOwner,
   });
 
   // Все задачи, где caller — текущий ответственный.

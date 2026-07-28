@@ -517,7 +517,12 @@ export function AssignedToMeBlock({
     // у которых есть только личные задачи, не попадали бы в меню фильтров.
     for (const t of byMeDisplayTasks) {
       to.set(t.assignee.userId, t.assignee.displayName);
-      projects.set(t.projectId, t.isInbox ? `Личные · ${t.assignee.displayName}` : t.projectName);
+      // Подписываем ВЛАДЕЛЬЦЕМ входящих, а не ответственным: это разные люди, когда задача
+      // из чужих личных назначена мне (раньше в меню светилось не то имя).
+      projects.set(
+        t.projectId,
+        t.isInbox ? `Личные · ${t.inboxOwner?.displayName ?? '—'}` : t.projectName,
+      );
     }
     const toArr = (m: Map<string, string>): { id: string; name: string }[] =>
       [...m.entries()]
@@ -2244,6 +2249,7 @@ function AcceptedCard({
 }): React.ReactElement {
   const isDone = item.status === 'done';
   const { taskRepository } = useContainer();
+  const { user: currentUser } = useCurrentUser();
   // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
   // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
   // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание).
@@ -2310,8 +2316,18 @@ function AcceptedCard({
   // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
   // line-clamp-4 — видно только название (запросы 3, 4).
   const { title, body } = splitTitleBody(item.description ?? '');
-  // Название проекта — всегда видимая пилюля в правом верхнем углу (инбокс → «Личные»).
-  const projectLabel = item.isInbox ? 'Личные' : item.projectName;
+  // Название проекта — всегда видимая пилюля в правом верхнем углу. Чужие личные входящие
+  // подписываем владельцем («Личные · Денис Волков»): без имени задача выглядела бы своей,
+  // хотя запись живёт у другого человека (статус и порядок у вас общие).
+  const foreignInboxOwner =
+    item.isInbox && item.inboxOwner && item.inboxOwner.userId !== currentUser?.id
+      ? item.inboxOwner.displayName
+      : null;
+  const projectLabel = item.isInbox
+    ? foreignInboxOwner
+      ? `Личные · ${foreignInboxOwner}`
+      : 'Личные'
+    : item.projectName;
 
   // Кнопки действий (чекбокс + удалить). Рендерятся в ДВУХ раскладках: десктоп — плавающий
   // оверлей по hover, мобила — статичный ряд под текстом. big=true → тач-размер (size-9).

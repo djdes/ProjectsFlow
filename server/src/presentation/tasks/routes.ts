@@ -132,6 +132,9 @@ type TaskDto = Omit<
   commitCount?: number;
   attachmentCount?: number;
   commentCount?: number;
+  // Заполнен только у задач, подмешанных на личную доску из ЧУЖИХ входящих (см. ListTasks):
+  // UI подписывает их «Личные · <имя>», чтобы чужая задача не выглядела своей.
+  inboxOwner?: { userId: string; displayName: string } | null;
 };
 
 export function toDto(t: Task | TaskWithCounts): TaskDto {
@@ -149,6 +152,7 @@ export function toDto(t: Task | TaskWithCounts): TaskDto {
   if ('commitCount' in t) base.commitCount = t.commitCount;
   if ('attachmentCount' in t) base.attachmentCount = t.attachmentCount;
   if ('commentCount' in t) base.commentCount = t.commentCount;
+  if ('inboxOwner' in t) base.inboxOwner = t.inboxOwner;
   return base;
 }
 
