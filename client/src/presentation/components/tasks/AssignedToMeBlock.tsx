@@ -36,6 +36,7 @@ import {
   ImageIcon,
   Inbox as InboxIcon,
   ListFilter,
+  Loader2,
   MessageSquare,
   Plus,
   Trash2,
@@ -542,13 +543,26 @@ export function AssignedToMeBlock({
   }, [byMeDisplayTasks, filterProject]);
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
   // Направление = активная вкладка: влияет на подпись inbox-групп («Личные · кто/кому»).
+  // Зона «В работе» — отдельная полка над колонками: то, чем занимаются прямо сейчас.
+  // Задачи в ней ИСКЛЮЧЕНЫ из обычных групп, иначе одна карточка висела бы в двух местах.
+  const inProgressTasks = useMemo(
+    () => visibleTasks.filter((t) => t.status === 'in_progress'),
+    [visibleTasks],
+  );
+  const groupedTasks = useMemo(
+    () => visibleTasks.filter((t) => t.status !== 'in_progress'),
+    [visibleTasks],
+  );
   const groups = useMemo(
-    () => groupAssignedTasks(visibleTasks, grouping, new Date(), tab),
-    [visibleTasks, grouping, tab],
+    () => groupAssignedTasks(groupedTasks, grouping, new Date(), tab),
+    [groupedTasks, grouping, tab],
   );
   // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
-  const kanbanGroups = useMemo(() => groupAssignedByTime(visibleTasks, new Date()), [visibleTasks]);
+  const kanbanGroups = useMemo(
+    () => groupAssignedByTime(groupedTasks, new Date()),
+    [groupedTasks],
+  );
 
   // === Мультивыделение по ВСЕМУ блоку (кнопка «Выделить» в шапке страницы) ===
   // Колонки блока — это либо 3 временных бакета (сортировка «по дедлайну»), либо группы
@@ -801,6 +815,28 @@ export function AssignedToMeBlock({
     [user, taskRepository, refresh, externalDnd, onChanged],
   );
 
+  // Взять в работу / убрать из работы. Статус общий с доской проекта: in_progress —
+  // «В работе», backlog — «Черновики» (нейтральное «не занимаюсь этим сейчас»). Возврат
+  // НЕ в todo: в личных входящих это колонка «Воркер», задачу подхватил бы Ralph.
+  const setWorkStatus = useCallback(
+    async (item: InboxBlockTask, next: 'in_progress' | 'backlog'): Promise<void> => {
+      if (item.status === next) return;
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: next,
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        toast.success(next === 'in_progress' ? 'Взято в работу' : 'Убрано из работы');
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, refresh, onChanged],
+  );
+
   const handleDragStart = (e: DragStartEvent): void => {
     setDragActive(true);
     const it = e.active.data.current?.item as InboxBlockTask | undefined;
@@ -811,10 +847,15 @@ export function AssignedToMeBlock({
     setDragActive(false);
     const over = e.over;
     const data = over?.data.current as
-      | { type?: string; bucket?: string; member?: SharedMember }
+      | { type?: string; bucket?: string; member?: SharedMember; status?: 'in_progress' | 'backlog' }
       | undefined;
     const item = e.active.data.current?.item as InboxBlockTask | undefined;
     if (!over || !item || !data) return;
+    // Дроп в полку «В работе» (и обратно в колонки — тем же типом).
+    if (data.type === 'work' && data.status) {
+      void setWorkStatus(item, data.status);
+      return;
+    }
     // Дроп на кубик человека → сменить ответственного с подтверждением. Дроп на СВОЙ
     // кубик → забрать себе сразу.
     if (data.type === 'user' && data.member) {
@@ -977,6 +1018,21 @@ export function AssignedToMeBlock({
           </div>
         )}
       </div>
+
+      {/* Полка «В работе» — над колонками, всегда видима: это ответ на вопрос «чем я занят
+          прямо сейчас». Принимает дроп карточки (статус → in_progress), карточки внутри
+          можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
+          отключён и полка была бы мёртвой. */}
+      {!selectionActive && (
+        <InProgressShelf
+          items={inProgressTasks}
+          onOpen={(t) => setDrawerTask(t)}
+          onChanged={handleToggled}
+          onDelete={handleDelete}
+          onRemoveFromWork={(t) => void setWorkStatus(t, 'backlog')}
+          className={cn(bleedNegClass, bleedPadClass)}
+        />
+      )}
 
       {visibleTasks.length === 0 ? (
         // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
@@ -1536,6 +1592,86 @@ function PhantomDropColumn({
       <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
       <span className="text-xs font-medium text-foreground/80">{label}</span>
       <span className="text-[10px] leading-tight text-muted-foreground/70">{hint}</span>
+    </div>
+  );
+}
+
+// Полка «В работе»: мягко-жёлтая зона над колонками, куда перетаскивают задачи, которыми
+// занимаются прямо сейчас (статус in_progress). Подсвечивается при наведении драга. Пустая
+// показывает подсказку — иначе непонятно, что сюда можно тащить.
+function InProgressShelf({
+  items,
+  onOpen,
+  onChanged,
+  onDelete,
+  onRemoveFromWork,
+  className,
+}: {
+  items: readonly InboxBlockTask[];
+  onOpen: (item: InboxBlockTask) => void;
+  onChanged: () => void;
+  onDelete: (item: InboxBlockTask) => void;
+  onRemoveFromWork: (item: InboxBlockTask) => void;
+  className?: string;
+}): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'work-in-progress',
+    data: { type: 'work', status: 'in_progress' },
+  });
+
+  return (
+    <div className={className}>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          // Мягкий жёлтый: amber с низкой насыщенностью, чтобы полка читалась как «тёплая
+          // зона», а не как предупреждение. В тёмной теме — тот же оттенок в глубину.
+          'rounded-xl border border-amber-300/50 bg-amber-100/45 px-2.5 py-2 transition-colors duration-150',
+          'dark:border-amber-400/20 dark:bg-amber-400/[0.07]',
+          isOver && 'border-amber-400/80 bg-amber-200/60 dark:border-amber-300/50 dark:bg-amber-400/[0.16]',
+        )}
+      >
+        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
+          <Loader2 className={cn('size-3 shrink-0', items.length > 0 && 'animate-spin')} />
+          <span>В работе</span>
+          {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
+        </div>
+        {items.length === 0 ? (
+          <p className="px-0.5 py-1 text-xs text-amber-800/60 dark:text-amber-200/45">
+            Перетащите сюда задачу, которой занимаетесь сейчас.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {items.map((item) => (
+              <div key={item.id} className="group relative w-[min(100%,17rem)]">
+                <DraggableTask item={item} disabled={!item.canModify}>
+                  <AcceptedCard
+                    item={item}
+                    onOpen={() => onOpen(item)}
+                    onChanged={onChanged}
+                    onDelete={() => onDelete(item)}
+                  />
+                </DraggableTask>
+                {item.canModify && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveFromWork(item);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    title="Убрать из работы (вернуть в «Черновики»)"
+                    className="absolute -right-1.5 -top-1.5 z-20 grid size-5 place-items-center rounded-full border border-amber-300/70 bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 dark:border-amber-400/30"
+                    aria-label="Убрать из работы"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
