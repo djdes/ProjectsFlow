@@ -22,6 +22,7 @@ const CURRENT_ASSIGNEE_ID = 'user-current';
 const VIEWER_ID = 'user-viewer';
 const TARGET_ID = 'user-target';
 const OUTSIDER_ID = 'user-outsider';
+const TARGET_INBOX_ID = 'inbox-of-target';
 
 const DISPLAY_NAMES: Readonly<Record<string, string>> = {
   [OWNER_ID]: 'Olga Owner',
@@ -118,6 +119,9 @@ function makeHarness(options: HarnessOptions = {}) {
 
   const calls = {
     updates: [] as Array<{ taskId: string; patch: UpdateTaskPatch }>,
+    // Переезды записи в inbox нового ответственного (правило «личная задача живёт
+    // во входящих своего ответственного»).
+    projectMoves: [] as Array<{ taskId: string; targetProjectId: string; assigneeUserId: string }>,
     membershipLookups: [] as Array<{ projectId: string; userId: string }>,
     sharedLookups: [] as string[],
     userLookups: [] as string[],
@@ -129,6 +133,11 @@ function makeHarness(options: HarnessOptions = {}) {
   const change = new ChangeTaskAssignee({
     projects: {
       getById: async (id: string) => (id === PROJECT_ID ? project : null),
+      // Инбокс получателя: у TARGET_ID он есть, у остальных — нет (проверяем и этот путь).
+      findInboxByOwner: async (ownerId: string) =>
+        ownerId === TARGET_ID
+          ? { ...makeProject(true), id: TARGET_INBOX_ID, ownerId: TARGET_ID }
+          : null,
     } as never,
     members: {
       findForProject: async (projectId: string, userId: string) => {
@@ -153,6 +162,15 @@ function makeHarness(options: HarnessOptions = {}) {
       update: async (taskId: string, patch: UpdateTaskPatch) => {
         calls.updates.push({ taskId, patch });
         if (patch.assigneeUserId !== undefined) task = makeTask(patch.assigneeUserId);
+        return task;
+      },
+      moveToProject: async (
+        taskId: string,
+        targetProjectId: string,
+        assigneeUserId: string,
+      ) => {
+        calls.projectMoves.push({ taskId, targetProjectId, assigneeUserId });
+        task = { ...task, projectId: targetProjectId };
         return task;
       },
     } as never,
@@ -358,4 +376,50 @@ test('assigning another user emits one notification, email and activity event', 
       },
     },
   ]);
+});
+
+// Правило «я ответственный ⇒ задача в моих личных»: личная задача всегда лежит во
+// входящих своего ответственного. Иначе она осталась бы чужой записью в его колонках —
+// карточка «Личные · <чужое имя>» в собственных «Черновиках» читается как ошибка.
+test('inbox: назначение коллеге переносит запись в его личные входящие', async () => {
+  const h = makeHarness({ isInbox: true, assigneeUserId: OWNER_ID });
+
+  const updated = await h.change.execute(PROJECT_ID, TASK_ID, OWNER_ID, TARGET_ID);
+
+  assert.deepEqual(h.calls.projectMoves, [
+    { taskId: TASK_ID, targetProjectId: TARGET_INBOX_ID, assigneeUserId: TARGET_ID },
+  ]);
+  assert.equal(updated.projectId, TARGET_INBOX_ID);
+});
+
+test('inbox: возврат задачи владельцу входящих никуда её не переносит', async () => {
+  const h = makeHarness({ isInbox: true, assigneeUserId: CURRENT_ASSIGNEE_ID });
+
+  await h.change.execute(PROJECT_ID, TASK_ID, OWNER_ID, OWNER_ID);
+
+  assert.deepEqual(h.calls.projectMoves, []);
+});
+
+test('именованный проект: смена ответственного не трогает проект задачи', async () => {
+  const h = makeHarness({ assigneeUserId: CURRENT_ASSIGNEE_ID });
+
+  const updated = await h.change.execute(PROJECT_ID, TASK_ID, OWNER_ID, TARGET_ID);
+
+  assert.deepEqual(h.calls.projectMoves, []);
+  assert.equal(updated.projectId, PROJECT_ID);
+});
+
+test('inbox: у получателя нет входящих — назначение проходит, запись остаётся на месте', async () => {
+  // VIEWER_ID в фейке findInboxByOwner возвращает null. Терять назначение из-за этого нельзя.
+  const h = makeHarness({
+    isInbox: true,
+    assigneeUserId: OWNER_ID,
+    sharedUserIds: [VIEWER_ID, TARGET_ID],
+  });
+
+  const updated = await h.change.execute(PROJECT_ID, TASK_ID, OWNER_ID, VIEWER_ID);
+
+  assert.deepEqual(h.calls.projectMoves, []);
+  assert.equal(updated.assignee.userId, VIEWER_ID);
+  assert.equal(updated.projectId, PROJECT_ID);
 });

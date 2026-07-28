@@ -51,10 +51,10 @@ export function useTasks(projectId: string): UseTasks {
   const { user } = useCurrentUser();
   const [state, setState] = useState<State>({ tasks: [], loading: true, error: null });
 
-  // Своя inbox-доска показывает и задачи, за которые юзер отвечает, но которые физически
-  // лежат в чужих личных входящих (см. ListTasks на сервере). Адресовать их надо ИХ
-  // projectId, а не projectId доски — иначе сервер справедливо ответит 404 (задача не из
-  // этого проекта). Держим последний снимок в ref: колбэки ниже async и видели бы stale state.
+  // Задачу адресуем ЕЁ projectId, а не projectId доски: они совпадают почти всегда, но в
+  // момент передачи владения (личная задача уезжает в inbox нового ответственного, см.
+  // ChangeTaskAssignee) локальный снимок может ещё держать старую доску — тогда запрос
+  // по projectId доски вернул бы 404. Снимок в ref: колбэки async и видели бы stale state.
   const tasksRef = useRef<Task[]>([]);
   useEffect(() => {
     tasksRef.current = state.tasks;

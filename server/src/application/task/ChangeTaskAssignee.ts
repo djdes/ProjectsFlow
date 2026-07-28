@@ -70,8 +70,29 @@ export class ChangeTaskAssignee {
     }
 
     if (task.assignee.userId === assigneeUserId) return task;
-    const updated = await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);
+    let updated = await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);
     if (!updated) throw new TaskNotFoundError(taskId);
+
+    // Правило «я ответственный ⇒ задача в моих личных»: личная задача всегда лежит во
+    // входящих СВОЕГО ответственного. Назначили коллегу — запись переезжает в его inbox,
+    // иначе она осталась бы чужой записью в его колонках (карточка «Личные · <чужое имя>»
+    // в собственных «Черновиках» читается как ошибка). Прежний владелец не теряет её из
+    // виду: личные доски коллег видны во вкладке «Для всех».
+    // Задачи именованных проектов не трогаем — они живут на доске своего проекта.
+    if (project.isInbox && assigneeUserId !== project.ownerId) {
+      const targetInbox = await this.deps.projects.findInboxByOwner(assigneeUserId);
+      // Нет inbox'а (юзер ещё ни разу его не открывал) — оставляем запись на месте:
+      // назначение важнее, а создавать чужой проект здесь мы не вправе.
+      if (targetInbox && targetInbox.id !== project.id) {
+        const moved = await this.deps.tasks.moveToProject(
+          taskId,
+          targetInbox.id,
+          assigneeUserId,
+          actorUserId,
+        );
+        if (moved) updated = moved;
+      }
+    }
 
     void this.deps.activityRecorder?.record({
       projectId,

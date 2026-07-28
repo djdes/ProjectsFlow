@@ -185,15 +185,10 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     status: TaskStatus,
   ): Promise<void> => {
     if (!user) return;
-    // Своя личная задача, задача этой же доски — и чужая личная, за которую отвечаю я:
-    // все они уже видны на моей доске (правило «я ответственный ⇒ задача в моих личных»,
-    // см. ListTasks), поэтому дроп — это просто смена колонки. Владелец чужих входящих
-    // задачу не теряет: физически запись остаётся у него, меняется только статус.
-    if (
-      isPersonalInboxBlockTask(item) ||
-      item.projectId === projectId ||
-      (item.isInbox && item.assignee.userId === user.id)
-    ) {
+    // Своя личная задача / задача этой же доски — дроп это просто смена колонки. Личная
+    // задача, назначенная мне, уже лежит в МОИХ входящих (владение переезжает за
+    // ответственным, см. ChangeTaskAssignee), поэтому отдельной ветки для «чужих» не нужно.
+    if (isPersonalInboxBlockTask(item) || item.projectId === projectId) {
       try {
         await registry.current.board?.moveTask(item.id, status);
       } catch (e) {

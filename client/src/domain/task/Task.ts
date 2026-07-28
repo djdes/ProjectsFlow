@@ -84,10 +84,6 @@ export type Task = {
   readonly commitCount?: number;
   readonly attachmentCount?: number;
   readonly commentCount?: number;
-  // Владелец ЧУЖИХ личных входящих, в которых физически лежит задача. Приходит только у
-  // задач, подмешанных на личную доску по правилу «я ответственный ⇒ задача в моих личных»
-  // (см. ListTasks на сервере). null/undefined = задача этой доски, подпись не нужна.
-  readonly inboxOwner?: { readonly userId: string; readonly displayName: string } | null;
   // Режим работы Ralph (default 'normal' если backend без 035).
   readonly ralphMode: RalphMode;
   // Pull-based отмена Ralph-работы (db/037). null = нет запроса. См. spec
