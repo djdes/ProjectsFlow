@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
-import { ColumnMoreButton, useColumnPreview } from './ColumnPreview';
+import { COLUMN_SCROLL_CLASS } from './ColumnPreview';
 import { TaskComposer } from './TaskComposer';
 import { IconPicker } from '@/presentation/components/project/IconPicker';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -332,9 +332,7 @@ export function KanbanColumn({
   // (вплоть до фантомной кнопки при Enter-цепочке > 4 карточек). В режиме выделения —
   // всё целиком: диапазоны и «выбрать всё» должны видеть реальные карточки.
   const rest = sessionSet ? tasks.filter((t) => !sessionSet.has(t.id)) : tasks;
-  const preview = useColumnPreview(rest.length);
-  const listTasks = selectionMode ? rest : rest.slice(0, preview.shownCount);
-  const hiddenCount = rest.length - listTasks.length;
+  const listTasks = rest;
 
   useLayoutEffect(() => {
     if (stickyHeaderTop == null) {
@@ -687,6 +685,7 @@ export function KanbanColumn({
           // p-2 + gap-2 = замеры Notion: паддинг 8px (276 − 16 = 260 ширина карточки),
           // вертикальный зазор между карточками 8px.
           'flex min-h-[4rem] flex-col gap-2 p-2 transition-colors',
+          COLUMN_SCROLL_CLASS,
           // Подсветка цели дропа. Серый bg-muted/60 читался заплаткой, а 2% чёрного поверх
           // уже тонированной колонки не читались вовсе — состояние было мёртвым. Берём цвет
           // акцента (тот же синий, что у полоски-индикатора): от тонировки колонки он
@@ -755,10 +754,6 @@ export function KanbanColumn({
             <span className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_rgba(59,130,246,0.5)]" />
             <span className="size-1.5 shrink-0 rounded-full bg-primary" />
           </div>
-        )}
-        {!selectionMode && <ColumnMoreButton preview={preview} />}
-        {hiddenCount > 0 && (
-          <span className="sr-only">{`Скрыто карточек: ${hiddenCount}`}</span>
         )}
         </>
         )}

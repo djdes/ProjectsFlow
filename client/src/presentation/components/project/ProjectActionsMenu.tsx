@@ -29,7 +29,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
 import {
   Tooltip,
   TooltipContent,
@@ -38,7 +37,6 @@ import {
 } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { useTaskHiding, setTaskHiding } from '@/presentation/components/tasks/taskHidingSetting';
 import {
   useProjectBannersHidden,
   setProjectBannersHidden,
@@ -90,7 +88,6 @@ export function ProjectActionsMenu({
   const { projectRepository, taskRepository } = useContainer();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const taskHiding = useTaskHiding();
   const bannersHidden = useProjectBannersHidden();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
@@ -329,15 +326,6 @@ export function ProjectActionsMenu({
               className="h-7 w-full rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
             />
           </div>
-          {/* Глобальный тумблер «Скрывать лишние задачи» (на весь сайт). Выкл (дефолт) —
-              канбаны показывают ВСЕ задачи сразу, без «Показать ещё». */}
-          {!query && (
-            <label className="mb-1 flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-accent/60">
-              <EyeOff className="size-4 text-muted-foreground" />
-              <span className="min-w-0 flex-1">Скрывать лишние задачи</span>
-              <Switch checked={taskHiding} onCheckedChange={setTaskHiding} />
-            </label>
-          )}
           {/* Тумблер «Скрыть плашки» — только на странице задач (только там живёт
               #pf-sticky-banners). При наведении сбоку всплывает предпросмотр того,
               что именно скрывается. */}

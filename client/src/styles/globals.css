@@ -192,6 +192,24 @@
     background: hsl(var(--muted-foreground) / 0.65);
   }
 
+  /* Тонкая полоса для вертикальной прокрутки ВНУТРИ колонки канбана. В отличие от
+     .pf-scroll-visible трек не резервируется: полоса появляется, только когда список
+     реально длиннее колонки, и не крадёт ширину у карточек. */
+  .pf-scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  .pf-scroll-thin::-webkit-scrollbar {
+    width: 8px;
+  }
+  .pf-scroll-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+  }
+  .pf-scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
   /* ТАЧ-устройства (телефон/PWA): принудительно-видимые скроллбары нужны только на ПК.
      На тач они торчат серыми полосами (под рядами чипов, в списках проектов) и не нужны —
      скролл пальцем. Прячем везде, включая .pf-scroll-visible. Идёт ПОСЛЕ правил выше,

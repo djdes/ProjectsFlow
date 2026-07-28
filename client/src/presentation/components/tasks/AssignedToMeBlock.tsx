@@ -73,7 +73,7 @@ import {
   ymd,
   type AssigneeDirection,
 } from './assignedGrouping';
-import { ColumnPreviewList } from './ColumnPreview';
+import { COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard } from './KanbanColumn';
 import { BulkActionBar } from './BulkActionBar';
@@ -1164,7 +1164,7 @@ export function AssignedToMeBlock({
               </div>
               <div
                 onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
-                className="flex flex-col gap-1.5 p-1.5"
+                className={cn('flex flex-col gap-1.5 p-1.5', COLUMN_SCROLL_CLASS)}
               >
                 {/* #2: инлайн-создание сверху колонки-проекта — ТОТ ЖЕ композер, что и в
                     нижних канбанах (InlineNewCard): плавно, Enter создаёт и оставляет поле для
@@ -1176,8 +1176,6 @@ export function AssignedToMeBlock({
                     onOpenFull={() => setComposingProject(null)}
                   />
                 )}
-                {/* Каппинг «первые 4 + Показать ещё» (на тач включён по умолчанию) — иначе
-                    колонка рендерит все свои карточки и вешает скролл на мобиле. */}
                 <ColumnPreviewList
                   key={[grouping, group.key].join('|')}
                   items={group.items}
@@ -1460,7 +1458,7 @@ function TimeBucketColumn({
       <div
         // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
         onPointerDown={selection ? onCardsPointerDown : undefined}
-        className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2"
+        className={cn('flex min-h-[3rem] flex-col gap-2 px-2 pb-2', COLUMN_SCROLL_CLASS)}
       >
         {children}
       </div>
