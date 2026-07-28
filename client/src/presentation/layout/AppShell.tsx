@@ -353,7 +353,7 @@ export function AppShell(): React.ReactElement {
               </>
             )}
             <main
-              className={cn('relative min-h-0', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto')}
+              className={cn('relative min-h-0', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden')}
               data-pf-scrolled={mainScrolled ? 'true' : 'false'}
               onScroll={handleMainScroll}
             >
@@ -380,7 +380,7 @@ export function AppShell(): React.ReactElement {
             </header>
             <InstallAppPrompt variant="banner" />
             <main
-              className={cn('min-h-0 flex-1', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto')}
+              className={cn('min-h-0 flex-1', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden')}
               data-pf-scrolled={mainScrolled ? 'true' : 'false'}
               onScroll={handleMainScroll}
             >
