@@ -22,6 +22,9 @@ export type Workspace = {
   // Эмодзи-иконка; null = дефолт (первая буква названия).
   readonly icon: string | null;
   readonly kind: WorkspaceKind;
+  // Приёмка задач руководителем (db/150): «выполнено» от участника отправляет задачу
+  // на утверждение, закрыть её может только руководитель или владелец пространства.
+  readonly requireTaskApproval: boolean;
   readonly ownerUserId: string;
   // Роль текущего юзера в пространстве.
   readonly role: WorkspaceRole;

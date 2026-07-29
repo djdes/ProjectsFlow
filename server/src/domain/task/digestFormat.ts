@@ -17,6 +17,7 @@ export const STATUS_DIGEST_LABEL: Record<TaskStatus, string> = {
   todo: 'Воркер',
   in_progress: 'В работе',
   awaiting_clarification: 'На уточнении',
+  pending_approval: 'На утверждении',
   done: 'Готово',
 };
 

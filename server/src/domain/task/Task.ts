@@ -9,11 +9,15 @@ import type { TaskCreator } from './TaskCreator.js';
 // 'manual' — отдельная ветка ВНЕ pipeline'а: задачи которые делает человек руками.
 // Не имеет авто-переходов; в array идёт в конец чтобы numeric storage order существующих
 // строк MariaDB ENUM не менялся (см. db/038).
+// 'pending_approval' — работа исполнителем закончена и ждёт приёмки руководителем
+// (db/150). Появляется только в пространствах с включённой приёмкой; в 'done' такую
+// задачу переводит лишь lead/owner. Стоит перед 'done' — это предпоследний шаг pipeline'а.
 export type TaskStatus =
   | 'backlog'
   | 'todo'
   | 'in_progress'
   | 'awaiting_clarification'
+  | 'pending_approval'
   | 'done'
   | 'manual';
 
@@ -22,6 +26,7 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'todo',
   'in_progress',
   'awaiting_clarification',
+  'pending_approval',
   'done',
   'manual',
 ];

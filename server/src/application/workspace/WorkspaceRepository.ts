@@ -13,6 +13,8 @@ export type CreateWorkspaceInput = {
 export type UpdateWorkspaceInput = {
   readonly name?: string;
   readonly icon?: string | null;
+  // Приёмка задач руководителем (db/150).
+  readonly requireTaskApproval?: boolean;
 };
 
 // Пространство в списке для юзера: + его роль и счётчик проектов (read-model).

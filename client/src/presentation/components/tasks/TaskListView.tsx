@@ -31,6 +31,8 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
   in_progress: 1,
   // awaiting_clarification сидит между in_progress и done в пайплайне.
   awaiting_clarification: 1.5,
+  // Ждёт приёмки руководителем — почти готово, но ещё не закрыто.
+  pending_approval: 1.8,
   done: 2,
 };
 

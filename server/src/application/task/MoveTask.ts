@@ -3,13 +3,17 @@ import { TASK_STATUSES, type Task, type TaskStatus } from '../../domain/task/Tas
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
+import type { Project } from '../../domain/project/Project.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
+import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  // Приёмка задач руководителем (db/150): флаг пространства + роль актора в нём.
+  readonly workspaces: WorkspaceRepository;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
   // Снимок версии при смене статуса (для окна версий + restore).
@@ -49,7 +53,7 @@ export class MoveTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: MoveTaskCommand): Promise<Task> {
-    await requireTaskModifyAccess(
+    const { project } = await requireTaskModifyAccess(
       this.deps,
       input.projectId,
       input.taskId,
@@ -75,6 +79,16 @@ export class MoveTask {
     } else if (task.status === 'done' && targetStatus !== 'done') {
       // Явный уход из done (drag в другую колонку): снапшот больше не нужен.
       statusBeforeDonePatch = null;
+    }
+
+    // Приёмка руководителем (db/150). Единственная точка гейта: сюда сходятся все пути
+    // «выполнить» — чекбокс, drag, ПКМ/Ctrl+клик, массовые действия, кнопка в письме,
+    // «Готово» в Telegram. Исполнитель своим действием отправляет задачу НА УТВЕРЖДЕНИЕ;
+    // закрыть её может только руководитель (lead) или владелец пространства.
+    if (targetStatus === 'done' && (await this.needsApproval(project, input.ownerUserId))) {
+      targetStatus = 'pending_approval';
+      // Снапшот прежней колонки оставляем: приёмка ещё не состоялась, и при возврате в
+      // работу задача должна попасть туда, откуда её отправили.
     }
 
     const beforePos = await this.resolvePosition(input.beforeTaskId, input.projectId);
@@ -134,6 +148,21 @@ export class MoveTask {
       });
     }
     return updated;
+  }
+
+  // true — задачу нельзя закрыть напрямую: в пространстве включена приёмка, проект не
+  // личный, а актор не руководитель. Личные входящие исключены осознанно: свою задачу
+  // утверждать не у кого.
+  private async needsApproval(project: Project, actorUserId: string): Promise<boolean> {
+    if (project.isInbox) return false;
+    const workspace = await this.deps.workspaces.getById(project.workspaceId);
+    if (!workspace?.requireTaskApproval) return false;
+    const membership = await this.deps.workspaces.getMembership(project.workspaceId, actorUserId);
+    // Руководитель и владелец закрывают задачи сами — иначе им пришлось бы утверждать
+    // собственную работу. Роли нет вовсе (admin-bypass) — тоже пропускаем: у такого
+    // актора прав больше, чем у участника.
+    if (!membership) return false;
+    return membership.role !== 'lead' && membership.role !== 'owner';
   }
 
   private async resolvePosition(taskId: string | null, projectId: string): Promise<number | null> {

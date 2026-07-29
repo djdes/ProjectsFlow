@@ -1057,6 +1057,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   // Инлайн «Завершить/Отменить» на задачных уведомлениях (nd:/nu: callback).
   moveTask: new MoveTask({
     projects: projectRepo,
+    workspaces: workspaceRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -1670,6 +1671,7 @@ const emailActionService = new EmailActionService({
   tasks: taskRepo,
   moveTask: new MoveTask({
     projects: projectRepo,
+    workspaces: workspaceRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -2346,6 +2348,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
+      workspaces: workspaceRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,
@@ -2700,6 +2703,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
+      workspaces: workspaceRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,

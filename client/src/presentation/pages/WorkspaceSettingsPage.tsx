@@ -55,6 +55,7 @@ import type {
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
+import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { useRenameWorkspace } from '@/presentation/hooks/useRenameWorkspace';
 import { useDeleteWorkspace } from '@/presentation/hooks/useDeleteWorkspace';
 import { useWorkspaceMembers } from '@/presentation/hooks/useWorkspaceMembers';
@@ -137,6 +138,13 @@ export function WorkspaceSettingsPage(): React.ReactElement {
       />
       <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
       <AssigneeDigestCard workspaceId={workspace.id} canManage={canEditSharedSettings} />
+      {!isDefault && (
+        <TaskApprovalCard
+          workspaceId={workspace.id}
+          enabled={workspace.requireTaskApproval}
+          canManage={isOwner || workspace.role === 'lead'}
+        />
+      )}
       {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
@@ -214,6 +222,70 @@ function RenameCard({
             </div>
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Приёмка задач руководителем (db/150). Тумблер управленческий: сервер пускает сюда
+// только lead/owner, поэтому рядовому участнику показываем состояние, но не даём менять.
+function TaskApprovalCard({
+  workspaceId,
+  enabled,
+  canManage,
+}: {
+  workspaceId: string;
+  enabled: boolean;
+  canManage: boolean;
+}): React.ReactElement {
+  const { workspaceRepository } = useContainer();
+  // applyReplace, а не полный рефетч: список пространств живёт в провайдере, и точечная
+  // подмена не дёргает лишние запросы у остальных экранов.
+  const { applyReplace } = useWorkspacesContext();
+  const [saving, setSaving] = useState(false);
+  // Оптимистично: тумблер обязан отзываться мгновенно, иначе кажется, что клик не прошёл.
+  const [value, setValue] = useState(enabled);
+  useEffect(() => {
+    setValue(enabled);
+  }, [enabled]);
+
+  const toggle = async (next: boolean): Promise<void> => {
+    setValue(next);
+    setSaving(true);
+    try {
+      applyReplace(await workspaceRepository.rename(workspaceId, { requireTaskApproval: next }));
+      toast.success(next ? 'Приёмка включена' : 'Приёмка выключена');
+    } catch (e) {
+      setValue(!next);
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Приёмка задач</CardTitle>
+        <CardDescription>
+          Участник не&nbsp;закрывает задачу сам: его «выполнено» отправляет её&nbsp;на&nbsp;утверждение,
+          а&nbsp;в&nbsp;«Готово» переводит руководитель или владелец пространства.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+          <Switch
+            checked={value}
+            disabled={!canManage || saving}
+            onCheckedChange={(next) => void toggle(next)}
+          />
+          <Label className="min-w-0 flex-1">Требовать утверждение перед закрытием</Label>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {canManage
+            ? 'Личные «Входящие» приёмку не проходят — свою задачу утверждать не у кого. Задачи на утверждении видны в колонке «На утверждении» на доске проекта.'
+            : 'Настройку меняет руководитель или владелец пространства.'}
+        </p>
       </CardContent>
     </Card>
   );

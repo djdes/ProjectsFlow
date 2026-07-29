@@ -23,6 +23,9 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
 
 export type Project = {
   readonly id: string;
+  // Пространство, которому принадлежит проект. Нужен, чтобы читать настройки уровня
+  // пространства (например приёмку задач руководителем, db/150).
+  readonly workspaceId: string;
   readonly ownerId: string;
   readonly name: string;
   // Эмодзи-иконка (Notion-style). NULL = дефолтная папка в UI. См. db/071.

@@ -26,6 +26,7 @@ function toWorkspace(row: WorkspaceRow): Workspace {
     name: row.name,
     icon: row.icon ?? null,
     kind: row.kind,
+    requireTaskApproval: Boolean(row.requireTaskApproval),
     ownerUserId: row.ownerUserId,
     createdAt: row.createdAt,
   };

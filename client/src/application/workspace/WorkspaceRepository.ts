@@ -16,6 +16,8 @@ export type CreateWorkspaceInput = {
 export type UpdateWorkspaceInput = {
   readonly name?: string;
   readonly icon?: string | null;
+  // Приёмка задач руководителем. Менять может только lead/owner — гейт на сервере.
+  readonly requireTaskApproval?: boolean;
 };
 
 export type CreateWorkspaceInviteInput = {

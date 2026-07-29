@@ -45,6 +45,8 @@ type WorkspaceDto = {
   name: string;
   icon: string | null;
   kind: WorkspaceKind;
+  // Приёмка задач руководителем (db/150): включена ли она в этом пространстве.
+  requireTaskApproval: boolean;
   ownerUserId: string;
   role?: WorkspaceRole;
   projectCount?: number;
@@ -62,6 +64,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
     name: ws.name,
     icon: ws.icon,
     kind: ws.kind,
+    requireTaskApproval: ws.requireTaskApproval,
     ownerUserId: ws.ownerUserId,
     role: listItem.role,
     projectCount: listItem.projectCount,
@@ -185,7 +188,13 @@ export function workspacesRouter(deps: Deps): Router {
   router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = updateWorkspaceSchema.parse(req.body);
-      const ws = await deps.service.rename(req.params.id as string, req.user!.id, body);
+      const workspaceId = req.params.id as string;
+      // Приёмка — управленческая настройка со своим гейтом (lead/owner), поэтому идёт
+      // отдельным вызовом, а не вместе с названием/иконкой (их правит любой участник).
+      if (body.requireTaskApproval !== undefined) {
+        await deps.service.setTaskApproval(workspaceId, req.user!.id, body.requireTaskApproval);
+      }
+      const ws = await deps.service.rename(workspaceId, req.user!.id, body);
       res.json({ workspace: toDto(ws) });
     } catch (e) {
       next(e);

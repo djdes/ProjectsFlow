@@ -12,6 +12,9 @@ export type TaskStatus =
   | 'todo'
   | 'in_progress'
   | 'awaiting_clarification'
+  // Работа закончена исполнителем и ждёт приёмки руководителем (db/150). Только
+  // lead/owner переводит такую задачу в 'done'.
+  | 'pending_approval'
   | 'done'
   | 'manual';
 
@@ -20,6 +23,7 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'todo',
   'in_progress',
   'awaiting_clarification',
+  'pending_approval',
   'done',
   'manual',
 ];

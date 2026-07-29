@@ -24,6 +24,8 @@ export const createWorkspaceSchema = z.object({
 export const updateWorkspaceSchema = z.object({
   name: z.string().min(1).optional(),
   icon: z.string().max(16).nullable().optional(),
+  // Приёмка задач руководителем (db/150). Отдельный гейт по роли — см. setTaskApproval.
+  requireTaskApproval: z.boolean().optional(),
 });
 
 export const setCurrentSchema = z.object({

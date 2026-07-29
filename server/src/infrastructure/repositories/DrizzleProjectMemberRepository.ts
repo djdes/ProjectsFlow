@@ -55,6 +55,7 @@ function toUser(row: UserRow): User {
 function toProject(row: ProjectRow): Project {
   return {
     id: row.id,
+    workspaceId: row.workspaceId,
     ownerId: row.ownerId,
     name: row.name,
     icon: row.icon ?? null,

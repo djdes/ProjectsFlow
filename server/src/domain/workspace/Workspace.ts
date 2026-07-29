@@ -14,6 +14,10 @@ export type Workspace = {
   // Эмодзи-иконка; null = дефолт (первая буква названия в UI).
   readonly icon: string | null;
   readonly kind: WorkspaceKind;
+  // Приёмка задач руководителем (db/150): «выполнено» от исполнителя переводит задачу в
+  // pending_approval, закрыть её может только lead/owner. Выключено по умолчанию —
+  // включение меняет привычный сценарий всей команде.
+  readonly requireTaskApproval: boolean;
   readonly ownerUserId: string;
   readonly createdAt: Date;
 };

@@ -56,6 +56,7 @@ const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
   todo: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
   in_progress: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
   awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  pending_approval: 'bg-violet-500/15 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
   done: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-400',
 };
 

@@ -239,6 +239,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
     todo: [],
     in_progress: [],
     awaiting_clarification: [],
+    pending_approval: [],
     done: [],
   };
   for (const t of tasks) out[toVisibleStatus(t.status)].push(t);
@@ -1021,7 +1022,13 @@ export function KanbanBoard({
 
   // Скрытые колонки исключаем из рендера (задачи скрытых статусов остаются в `grouped`,
   // поэтому drag-математика в handleDragEnd не ломается). Скрытые перечисляем в меню доски.
-  const shownStatuses = VISIBLE_KANBAN_STATUSES.filter((s) => !isColumnHidden(settings?.[s]));
+  const visibleStatuses = VISIBLE_KANBAN_STATUSES.filter((s) => !isColumnHidden(settings?.[s]));
+  // Приёмка задач руководителем (db/150): колонка «На утверждении» появляется, когда есть
+  // что утверждать. Показываем по данным, а не по флагу пространства — тогда доски команд
+  // без приёмки выглядят ровно как раньше, а плюс колонка не требует настроек/цветов.
+  const shownStatuses: TaskStatus[] = grouped.pending_approval.length
+    ? visibleStatuses.flatMap((s) => (s === 'done' ? ['pending_approval' as TaskStatus, s] : [s]))
+    : visibleStatuses;
   const hiddenColumns = VISIBLE_KANBAN_STATUSES.filter((s) => isColumnHidden(settings?.[s])).map(
     (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]) }),
   );
@@ -1167,8 +1174,17 @@ export function KanbanBoard({
           )}
         >
           {shownStatuses.map((status) => {
-            const perColumn = settings?.[status];
-            const color = resolveColumnColor(perColumn, defaults?.[status], status);
+            // «На утверждении» — служебная колонка: пер-проектных цвета/названия у неё нет
+            // (её нет в VISIBLE_KANBAN_STATUSES и в настройках доски), поэтому фиксированные.
+            const approvalColumn = status === 'pending_approval';
+            const perColumn = approvalColumn ? undefined : settings?.[status as VisibleKanbanStatus];
+            const color = approvalColumn
+              ? ('purple' as const)
+              : resolveColumnColor(
+                  perColumn,
+                  defaults?.[status as VisibleKanbanStatus],
+                  status as VisibleKanbanStatus,
+                );
             const label = resolveColumnLabel(perColumn, STATUS_LABEL[status]);
             return (
               <KanbanColumn
@@ -1193,14 +1209,18 @@ export function KanbanBoard({
                 dropTarget={dropTarget?.status === status ? dropTarget : null}
                 liveTaskIds={liveTaskIds}
                 colorClasses={KANBAN_COLOR_CLASSES[color]}
-                onRename={canEdit && label.length > 0 ? (l) => setLabel(status, l) : undefined}
+                onRename={
+                  canEdit && !approvalColumn && label.length > 0
+                    ? (l) => setLabel(status as VisibleKanbanStatus, l)
+                    : undefined
+                }
                 lockOffer={
                   status === 'todo' && workerLocked ? (
                     <WorkerLockOffer onUpgrade={openUpgrade} />
                   ) : undefined
                 }
                 onInlineCreate={
-                  canEdit
+                  canEdit && !approvalColumn
                     ? (input) => create({ ...input, status: input.status ?? status })
                     : undefined
                 }
@@ -1208,30 +1228,38 @@ export function KanbanBoard({
                 isInbox={isInbox}
                 isShared={isShared}
                 aiProjectId={isInbox ? null : projectId}
-                composerStorageKey={composerKey(status)}
-                composing={composingStatus === status}
-                onComposingChange={(open) => (open ? openComposer(status) : closeComposer())}
+                composerStorageKey={composerKey(status as VisibleKanbanStatus)}
+                composing={!approvalColumn && composingStatus === status}
+                onComposingChange={(open) =>
+                  open ? openComposer(status as VisibleKanbanStatus) : closeComposer()
+                }
                 openInlineSeq={inlineCreateReq?.status === status ? inlineCreateReq.nonce : 0}
                 selectionMode={selectionStatus === status}
                 selectedIds={selectionStatus === status ? selectedIds : undefined}
                 selectedCount={
-                  (columnSelectionIds.get(status) ?? []).filter((id) => selectedIds.has(id)).length
+                  (columnSelectionIds.get(status as VisibleKanbanStatus) ?? []).filter((id) =>
+                    selectedIds.has(id),
+                  ).length
                 }
                 onSelectToggle={handleSelectToggle}
                 onSelectAll={handleSelectAll}
                 onSelectNone={handleSelectNone}
                 onExitSelection={exitSelection}
                 onDragSelectStart={dragSelect.onPointerDown}
-                onEnterSelection={canEdit ? () => enterSelection(status) : undefined}
-                columnMenu={canEdit ? (
+                onEnterSelection={
+                  canEdit && !approvalColumn
+                    ? () => enterSelection(status as VisibleKanbanStatus)
+                    : undefined
+                }
+                columnMenu={canEdit && !approvalColumn ? (
                   <KanbanColumnMenu
-                    status={status}
+                    status={status as VisibleKanbanStatus}
                     currentColor={color}
                     currentLabel={label}
-                    onColor={(c) => setColor(status, c)}
-                    onLabel={(l) => setLabel(status, l)}
-                    onHide={() => setHidden(status, true)}
-                    onSelect={() => enterSelection(status)}
+                    onColor={(c) => setColor(status as VisibleKanbanStatus, c)}
+                    onLabel={(l) => setLabel(status as VisibleKanbanStatus, l)}
+                    onHide={() => setHidden(status as VisibleKanbanStatus, true)}
+                    onSelect={() => enterSelection(status as VisibleKanbanStatus)}
                   />
                 ) : undefined}
                 headerExtra={
@@ -1352,7 +1380,10 @@ export function KanbanBoard({
           currentUserId={user?.id ?? null}
           moveTargets={shownStatuses.map((s) => ({
             status: s,
-            label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]),
+            label: resolveColumnLabel(
+              s === 'pending_approval' ? undefined : settings?.[s as VisibleKanbanStatus],
+              STATUS_LABEL[s],
+            ),
           }))}
           bulk={bulk}
           onExit={exitSelection}

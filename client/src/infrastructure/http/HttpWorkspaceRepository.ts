@@ -25,6 +25,7 @@ type WorkspaceDto = {
   name: string;
   icon: string | null;
   kind?: WorkspaceKind;
+  requireTaskApproval?: boolean;
   ownerUserId: string;
   // Сервер старой версии мог отдавать 'member' — нормализуем через normalizeRole.
   role?: string;
@@ -80,6 +81,8 @@ function fromDto(dto: WorkspaceDto): Workspace {
     icon: dto.icon ?? null,
     // Старый бэк без kind → считаем командным (дефолт явно помечается миграцией db/079).
     kind: dto.kind ?? 'team',
+    // Старый бэк без db/150 → приёмка выключена (прежнее поведение).
+    requireTaskApproval: dto.requireTaskApproval ?? false,
     ownerUserId: dto.ownerUserId,
     role: normalizeRole(dto.role),
     projectCount: dto.projectCount ?? 0,

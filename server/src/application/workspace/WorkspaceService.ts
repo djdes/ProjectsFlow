@@ -7,6 +7,7 @@ import {
   WorkspaceNameEmptyError,
   WorkspaceNotFoundError,
   NotWorkspaceMemberError,
+  NotWorkspaceOwnerError,
   NotProjectOwnerError,
   LastOwnerError,
   WorkspaceNotEmptyError,
@@ -96,6 +97,21 @@ export class WorkspaceService {
       if (name.length === 0) throw new WorkspaceNameEmptyError();
     }
     const updated = await this.deps.repo.update(workspaceId, { name, icon: patch.icon });
+    if (!updated) throw new WorkspaceNotFoundError();
+    return updated;
+  }
+
+  // Приёмка задач руководителем (db/150). Настройка управленческая: включать её может
+  // только руководитель или владелец пространства — не рядовой участник, которого она
+  // как раз и ограничивает.
+  async setTaskApproval(
+    workspaceId: string,
+    actorId: string,
+    enabled: boolean,
+  ): Promise<Workspace> {
+    const member = await requireWorkspaceMember(this.deps.repo, workspaceId, actorId);
+    if (member.role !== 'owner' && member.role !== 'lead') throw new NotWorkspaceOwnerError();
+    const updated = await this.deps.repo.update(workspaceId, { requireTaskApproval: enabled });
     if (!updated) throw new WorkspaceNotFoundError();
     return updated;
   }

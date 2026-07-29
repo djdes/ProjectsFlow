@@ -37,6 +37,7 @@ import {
   Inbox as InboxIcon,
   ListFilter,
   Loader2,
+  ShieldCheck,
   MessageSquare,
   Plus,
   Trash2,
@@ -538,8 +539,15 @@ export function AssignedToMeBlock({
     () => visibleTasks.filter((t) => t.status === 'manual'),
     [visibleTasks],
   );
+  // Приёмка руководителем (db/150): задачи, которые исполнители отправили на утверждение.
+  // Показываем их отдельной полкой — чтобы руководитель видел очередь приёмки сразу, не
+  // заходя в каждый проект. Из обычных групп исключены, как и «В работе».
+  const approvalTasks = useMemo(
+    () => visibleTasks.filter((t) => t.status === 'pending_approval'),
+    [visibleTasks],
+  );
   const groupedTasks = useMemo(
-    () => visibleTasks.filter((t) => t.status !== 'manual'),
+    () => visibleTasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval'),
     [visibleTasks],
   );
   // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
@@ -815,6 +823,27 @@ export function AssignedToMeBlock({
     [taskRepository, refresh, onChanged],
   );
 
+  // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
+  // пустит в done только руководителя/владельца — кнопки видит тот, кому это доступно,
+  // но окончательное слово всё равно за гейтом в MoveTask.
+  const resolveApproval = useCallback(
+    async (item: InboxBlockTask, accept: boolean): Promise<void> => {
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: accept ? 'done' : 'in_progress',
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        toast.success(accept ? 'Задача принята' : 'Возвращена в работу');
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, refresh, onChanged],
+  );
+
   const handleDragStart = (e: DragStartEvent): void => {
     setDragActive(true);
     const it = e.active.data.current?.item as InboxBlockTask | undefined;
@@ -981,6 +1010,16 @@ export function AssignedToMeBlock({
           прямо сейчас». Принимает дроп карточки (статус → manual), карточки внутри
           можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
           отключён и полка была бы мёртвой. */}
+      {!selectionActive && approvalTasks.length > 0 && (
+        <ApprovalShelf
+          items={approvalTasks}
+          onOpen={(t) => setDrawerTask(t)}
+          onAccept={(t) => void resolveApproval(t, true)}
+          onReject={(t) => void resolveApproval(t, false)}
+          className={cn(bleedNegClass, bleedPadClass)}
+        />
+      )}
+
       {!selectionActive && (
         <InProgressShelf
           items={inProgressTasks}
@@ -1534,6 +1573,64 @@ function PhantomDropColumn({
       <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
       <span className="text-xs font-medium text-foreground/80">{label}</span>
       <span className="text-[10px] leading-tight text-muted-foreground/70">{hint}</span>
+    </div>
+  );
+}
+
+// Полка «На утверждении» (db/150): очередь приёмки руководителя. Появляется только когда
+// есть что принимать, поэтому командам без приёмки страница выглядит как раньше. Цвет —
+// фиолетовый, тот же, что у одноимённой колонки на доске проекта.
+function ApprovalShelf({
+  items,
+  onOpen,
+  onAccept,
+  onReject,
+  className,
+}: {
+  items: readonly InboxBlockTask[];
+  onOpen: (item: InboxBlockTask) => void;
+  onAccept: (item: InboxBlockTask) => void;
+  onReject: (item: InboxBlockTask) => void;
+  className?: string;
+}): React.ReactElement {
+  return (
+    <div className={className}>
+      <div className="rounded-xl border border-violet-300/50 bg-violet-100/40 px-2.5 py-2 dark:border-violet-400/20 dark:bg-violet-400/[0.07]">
+        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-violet-800 dark:text-violet-300/90">
+          <ShieldCheck className="size-3 shrink-0" />
+          <span>На утверждении</span>
+          <span className="tabular-nums opacity-70">{items.length}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {items.map((item) => (
+            <div key={item.id} className="w-[min(100%,17rem)] space-y-1">
+              <AcceptedCard
+                item={item}
+                onOpen={() => onOpen(item)}
+                onChanged={() => onAccept(item)}
+                onDelete={() => onReject(item)}
+              />
+              {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. */}
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => onAccept(item)}
+                  className="flex-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
+                >
+                  Принять
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReject(item)}
+                  className="flex-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  Вернуть в работу
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
