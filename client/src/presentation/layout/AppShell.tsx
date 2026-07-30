@@ -34,6 +34,9 @@ import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
+import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
+import { CompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
+import { CompletionCelebration } from '@/presentation/components/stats/CompletionCelebration';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { SidebarResizingContext } from './sidebarResizingContext';
@@ -220,6 +223,9 @@ export function AppShell(): React.ReactElement {
     <SidebarResizingContext.Provider value={sidebarDragging}>
     <WorkspacesProvider>
     <ProjectsProvider>
+    {/* Счётчик «выполнено сегодня» — над роутером, чтобы цифра не сбрасывалась при переходах
+        между страницами. Внутри AppShell (а не в main.tsx): запрос требует авторизации. */}
+    <CompletedTodayProvider>
     <UsageProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
@@ -413,6 +419,11 @@ export function AppShell(): React.ReactElement {
             </Sheet>
           </div>
         )}
+        {/* Мотивационный счётчик закрытых сегодня задач — правый верхний угол, поверх страниц. */}
+        <CompletedTodayPill />
+        {/* Конфетти на закрытие задачи из ЛЮБОЙ точки (чекбокс, ховер-кнопка, drag) — один
+            праздник на приложение, запускается ключом из CompletedTodayProvider. */}
+        <CompletionCelebration />
         {/* Плавающий виджет помощи/поддержки — снизу справа, портал в body, над таб-баром. */}
         <HelpWidget />
         {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
@@ -426,6 +437,7 @@ export function AppShell(): React.ReactElement {
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </UsageProvider>
+    </CompletedTodayProvider>
     </ProjectsProvider>
     </WorkspacesProvider>
     </SidebarResizingContext.Provider>

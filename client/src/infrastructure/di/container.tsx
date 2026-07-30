@@ -7,6 +7,7 @@ import { HttpKbRepository } from "@/infrastructure/http/HttpKbRepository";
 import { HttpSecretsRepository } from "@/infrastructure/http/HttpSecretsRepository";
 import { HttpTaskRepository } from "@/infrastructure/http/HttpTaskRepository";
 import { HttpTaskAssigneeRepository } from "@/infrastructure/http/HttpTaskAssigneeRepository";
+import { HttpStatsRepository } from "@/infrastructure/http/HttpStatsRepository";
 import { HttpDigestSettingsRepository } from "@/infrastructure/http/HttpDigestSettingsRepository";
 import { HttpTaskSearchRepository } from "@/infrastructure/http/HttpTaskSearchRepository";
 import { HttpInviteRepository } from "@/infrastructure/http/HttpInviteRepository";
@@ -64,6 +65,7 @@ import type { KbRepository } from "@/application/kb/KbRepository";
 import type { SecretsRepository } from "@/application/secrets/SecretsRepository";
 import type { TaskRepository } from "@/application/task/TaskRepository";
 import type { TaskAssigneeRepository } from "@/application/task/TaskAssigneeRepository";
+import type { StatsRepository } from "@/application/stats/StatsRepository";
 import type { DigestSettingsRepository } from "@/application/digest/DigestSettingsRepository";
 import type { InviteRepository } from "@/application/project/InviteRepository";
 import type { NotificationRepository } from "@/application/notifications/NotificationRepository";
@@ -120,6 +122,7 @@ type Container = {
   secretsRepository: SecretsRepository;
   taskRepository: TaskRepository;
   taskAssigneeRepository: TaskAssigneeRepository;
+  statsRepository: StatsRepository;
   digestSettingsRepository: DigestSettingsRepository;
   inviteRepository: InviteRepository;
   notificationRepository: NotificationRepository;
@@ -172,6 +175,7 @@ function buildContainer(): Container {
   const secretsRepo = new HttpSecretsRepository();
   const taskRepo = new HttpTaskRepository();
   const taskAssigneeRepo = new HttpTaskAssigneeRepository();
+  const statsRepo = new HttpStatsRepository();
   const digestSettingsRepo = new HttpDigestSettingsRepository();
   const taskSearchRepo = new HttpTaskSearchRepository();
   const inviteRepo = new HttpInviteRepository();
@@ -221,6 +225,7 @@ function buildContainer(): Container {
     secretsRepository: secretsRepo,
     taskRepository: taskRepo,
     taskAssigneeRepository: taskAssigneeRepo,
+    statsRepository: statsRepo,
     digestSettingsRepository: digestSettingsRepo,
     inviteRepository: inviteRepo,
     notificationRepository: notificationRepo,

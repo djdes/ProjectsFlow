@@ -182,6 +182,7 @@ import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/D
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { DrizzleTaskBillingAttributionRepository } from './infrastructure/repositories/DrizzleTaskBillingAttributionRepository.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
+import { CountMyCompletedToday } from './application/stats/CountMyCompletedToday.js';
 import { ListTasksAssignedToOthers } from './application/task/ListTasksAssignedToOthers.js';
 import { ListPersonalTasksOfColleagues } from './application/task/ListPersonalTasksOfColleagues.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
@@ -2611,6 +2612,9 @@ const { app, devProxyUpgrade } = createApp({
   },
   telemetry: {
     repo: productTelemetryRepo,
+  },
+  meStats: {
+    countMyCompletedToday: new CountMyCompletedToday({ activity: activityRepo }),
   },
   assignees: {
     listAssignedToMe: new ListTasksAssignedToMe({

@@ -4,6 +4,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 
 type Props = {
   task: Task;
@@ -39,6 +40,7 @@ export function InboxCheckbox({
   doneTitle,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
+  const { celebrate, uncount } = useCompletedToday();
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -70,6 +72,10 @@ export function InboxCheckbox({
         // Снятие галочки → сервер восстановит прежний статус (status_before_done).
         ...(next ? {} : { restore: true }),
       });
+      // Праздник и +1 к счётчику — только после подтверждения сервером: оптимистично
+      // поднимать цифру нельзя, задачу могло отклонить (нет прав, заморозка приёмкой).
+      if (next) celebrate();
+      else uncount();
       onChanged?.();
     } catch (err) {
       setOptimistic(null);

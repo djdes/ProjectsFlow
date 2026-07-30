@@ -45,7 +45,7 @@ import { toast } from '@/components/ui/sonner';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
-import { ConfettiBurst } from './ConfettiBurst';
+import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { SidebarResizingContext, useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
@@ -658,8 +658,10 @@ export function KanbanBoard({
     setFilterAssignee(null);
   };
 
-  // Конфетти при переносе карточки в «Готово» (key перезапускает анимацию).
-  const [confettiKey, setConfettiKey] = useState(0);
+  // Праздник при переносе карточки в «Готово» живёт в приложении, а не на доске: та же
+  // анимация нужна чекбоксу в списке и в окне задачи, а счётчик «выполнено сегодня» —
+  // один на всё приложение (CompletedTodayProvider).
+  const { celebrate } = useCompletedToday();
 
   // === Мультивыделение (scoped к одной колонке) ===
   // selectionStatus — колонка в режиме выделения (null = режим выключен).
@@ -921,7 +923,7 @@ export function KanbanBoard({
       setRecentlyMovedId(movedId);
       // Микро-праздник: дотащили в «Готово» (не реордер внутри done).
       if (targetStatus === 'done' && activeTask.status !== 'done') {
-        setConfettiKey((k) => k + 1);
+        celebrate();
       }
     } catch (err) {
       toast.error(`Не удалось переместить: ${(err as Error).message}`);
@@ -1050,7 +1052,6 @@ export function KanbanBoard({
         (тогда flex-1-спейсер ниже проталкивает закреплённый скролл к самому низу) И растёт по
         контенту при длинном (страница скроллится, sticky-скролл прилипает к низу вьюпорта). */}
     <div className="flex flex-[1_0_auto] flex-col">
-      {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
       <ViewLoadFeedback error={error} hasData={tasks.length > 0} onRetry={refetch} label="доску" />
 
       {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ ответственный в совместных). */}

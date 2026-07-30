@@ -52,6 +52,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -250,6 +251,7 @@ export function AssignedToMeBlock({
     useContainer();
   const navigate = useNavigate();
   const { user } = useCurrentUser();
+  const { celebrate } = useCompletedToday();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
   // Принимает работу руководитель/владелец активного пространства. Нужно, чтобы показать
@@ -851,6 +853,8 @@ export function AssignedToMeBlock({
           beforeTaskId: null,
           afterTaskId: null,
         });
+        // Принятая работа — тоже закрытая задача для принимающего: счётчик и праздник его.
+        celebrate();
         toast.success('Задача принята');
         await refresh();
         onChanged?.();
@@ -858,7 +862,7 @@ export function AssignedToMeBlock({
         toast.error(`Не удалось: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, refresh, onChanged, celebrate],
   );
 
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
@@ -2531,6 +2535,7 @@ function AcceptedCard({
   const isDone = item.status === 'done';
   const { taskRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
+  const { celebrate } = useCompletedToday();
   // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
   // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
   // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание).
@@ -2557,6 +2562,7 @@ function AcceptedCard({
               beforeTaskId: null,
               afterTaskId: null,
             });
+            celebrate();
             onChangedRef.current();
           } catch (err) {
             setCompletePhase('idle');
@@ -2568,7 +2574,7 @@ function AcceptedCard({
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [completePhase, item.id, item.projectId, taskRepository]);
+  }, [completePhase, item.id, item.projectId, taskRepository, celebrate]);
 
   // Единая точка запуска для обоих жестов: withVeil — оставлять ли серую вуаль на анимацию.
   const startComplete = (withVeil: boolean): void => {

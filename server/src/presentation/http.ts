@@ -155,6 +155,7 @@ import type { BoardViewRepository } from '../application/project/BoardViewReposi
 import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
 import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
 import type { TaskVersionRecorder } from '../application/task/TaskVersionRecorder.js';
+import type { CountMyCompletedToday } from '../application/stats/CountMyCompletedToday.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAssignedToOthers.js';
 import type { ListPersonalTasksOfColleagues } from '../application/task/ListPersonalTasksOfColleagues.js';
@@ -242,6 +243,7 @@ import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { workflowRouter } from './automation/workflowRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { taskAssigneesRouter } from './assignees/routes.js';
+import { meStatsRouter } from './stats/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
 import { projectAnalyticsRouter } from './project/analyticsRoutes.js';
@@ -628,6 +630,10 @@ type AppDeps = {
     readonly save: SaveDigestSettings;
     readonly sendNow: TriggerDailyDigestNow;
   };
+  // Личная статистика caller'а (счётчик «выполнено сегодня» в интерфейсе).
+  readonly meStats: {
+    readonly countMyCompletedToday: CountMyCompletedToday;
+  };
   readonly assignees: {
     readonly listAssignedToMe: ListTasksAssignedToMe;
     readonly listAssignedToOthers: ListTasksAssignedToOthers;
@@ -927,6 +933,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
   app.use('/api/projects', digestRouter(deps.digest));
   app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
+  app.use('/api/me', meStatsRouter(deps.meStats));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));

@@ -25,6 +25,15 @@ export interface ActivityRepository {
     projectId: string,
     opts: { before?: Date; beforeId?: string; limit: number },
   ): Promise<ActivityEvent[]>;
+  /**
+   * Сколько задач актор закрыл начиная с `since` — счётчик «выполнено сегодня».
+   *
+   * Считаем переходы в 'done' И в 'pending_approval': при включённой приёмке «выполнено»
+   * исполнителя уводит задачу на утверждение, и без второго статуса его счётчик всегда
+   * показывал бы ноль. Возврат работы счётчик не уменьшает — это журнал событий, а не
+   * состояние доски.
+   */
+  countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number>;
   /** GC: удалить события старше cutoff. Возвращает число удалённых. */
   deleteOlderThan(cutoff: Date): Promise<number>;
 }

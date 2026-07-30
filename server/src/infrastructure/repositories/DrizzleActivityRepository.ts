@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { activityEvents, type ActivityEventRow } from '../db/schema.js';
 import type { ActivityEvent, ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
@@ -94,6 +94,25 @@ export class DrizzleActivityRepository implements ActivityRepository {
       .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
       .limit(opts.limit);
     return rows.map((r) => toEvent(r));
+  }
+
+  // Счётчик «выполнено сегодня». Читаем ленту действий, а не задачи: у задачи нет отметки
+  // «кто и когда её закрыл» (status_before_done — про откат, updated_at перезаписывается
+  // любой правкой), а событие task_status_changed хранит и актора, и момент, и целевой
+  // статус. JSON_UNQUOTE нужен: JSON_EXTRACT вернул бы строку в кавычках.
+  async countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number> {
+    const rows = await this.db
+      .select({ n: count() })
+      .from(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.actorUserId, actorUserId),
+          eq(activityEvents.kind, 'task_status_changed'),
+          gte(activityEvents.createdAt, since),
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')`,
+        ),
+      );
+    return Number(rows[0]?.n ?? 0);
   }
 
   async deleteOlderThan(cutoff: Date): Promise<number> {
