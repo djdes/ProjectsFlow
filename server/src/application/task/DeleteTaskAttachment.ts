@@ -1,3 +1,4 @@
+import type { ApprovalGuard } from './TaskApprovalService.js';
 import {
   TaskAttachmentNotFoundError,
   TaskNotFoundError,
@@ -11,6 +12,8 @@ import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 
 type Deps = {
+  // Приёмка (db/150): задача на утверждении заморожена для всех, кроме принимающего.
+  readonly approval: ApprovalGuard;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;

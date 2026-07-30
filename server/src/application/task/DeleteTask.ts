@@ -3,7 +3,8 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
-import { requireTaskDeleteAccess } from './taskAuthorization.js';
+import { assertNotFrozenByApproval, requireTaskDeleteAccess } from './taskAuthorization.js';
+import type { ApprovalGuard } from './TaskApprovalService.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
@@ -11,6 +12,8 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
+  // Приёмка (db/150): задача на утверждении заморожена для всех, кроме принимающего.
+  readonly approval: ApprovalGuard;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
 };
@@ -19,10 +22,18 @@ export class DeleteTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string, taskId: string): Promise<void> {
-    await requireTaskDeleteAccess(this.deps, projectId, ownerUserId, 'delete_task');
+    const { project } = await requireTaskDeleteAccess(
+      this.deps,
+      projectId,
+      ownerUserId,
+      'delete_task',
+    );
 
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
+
+    // Задача на утверждении: исполнитель не убирает её из очереди руководителя даже в корзину.
+    await assertNotFrozenByApproval(this.deps.approval, project, task, ownerUserId, 'delete_task');
 
     // Мягкое удаление (db/134): задача уезжает в корзину вместе со всеми child-строками.
     // Физического DELETE больше нет — иначе Undo пришлось бы пересоздавать задачу с НОВЫМ

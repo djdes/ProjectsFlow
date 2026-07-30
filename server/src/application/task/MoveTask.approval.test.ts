@@ -202,3 +202,46 @@ test('руководитель, закрывший задачу сам, увед
 
   assert.deepEqual(h.notified(), []);
 });
+
+// Заморозка на время приёмки (db/150): пока работа висит на утверждении, исполнитель её не
+// правит — иначе руководитель принял бы уже не то, что проверял.
+test('исполнитель не может двигать задачу, которая ждёт утверждения', async () => {
+  const h = makeMove({
+    requireTaskApproval: true,
+    actorRole: 'editor',
+    taskStatus: 'pending_approval',
+  });
+
+  await assert.rejects(
+    () =>
+      h.move.execute({
+        projectId: PROJECT_ID,
+        taskId: TASK_ID,
+        ownerUserId: 'employee',
+        targetStatus: 'in_progress',
+        beforeTaskId: null,
+        afterTaskId: null,
+      }),
+    /утверждени/u,
+  );
+  assert.equal(h.savedStatus(), null);
+});
+
+test('руководитель задачу на утверждении двигать может', async () => {
+  const h = makeMove({
+    requireTaskApproval: true,
+    actorRole: 'lead',
+    taskStatus: 'pending_approval',
+  });
+
+  await h.move.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    ownerUserId: 'boss',
+    targetStatus: 'in_progress',
+    beforeTaskId: null,
+    afterTaskId: null,
+  });
+
+  assert.equal(h.savedStatus(), 'in_progress');
+});

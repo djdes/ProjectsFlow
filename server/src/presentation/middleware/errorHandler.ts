@@ -83,6 +83,7 @@ import {
   TaskCommitNotFoundError,
   TaskDescriptionEmptyError,
   ApprovalCommentRequiredError,
+  TaskAwaitingApprovalError,
   NotTaskApproverError,
   AssigneeNotProjectMemberError,
   AssigneeNotSharedMemberError,
@@ -490,6 +491,11 @@ export function errorHandler(
 
   if (err instanceof TaskNotFoundError) {
     res.status(404).json({ error: 'task_not_found' });
+    return;
+  }
+  if (err instanceof TaskAwaitingApprovalError) {
+    // 409: состояние задачи не позволяет операцию (не про права — про этап).
+    res.status(409).json({ error: 'task_awaiting_approval', message: err.message });
     return;
   }
   if (err instanceof ApprovalCommentRequiredError) {

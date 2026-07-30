@@ -1,3 +1,4 @@
+import type { ApprovalGuard } from './TaskApprovalService.js';
 import { effectivePlan, type Subscription } from '../../domain/usage/Subscription.js';
 import type { PlanId } from '../../domain/usage/Plan.js';
 import type { TaskVersion } from '../../domain/task/TaskVersion.js';
@@ -13,6 +14,8 @@ import { requireTaskModifyAccess } from './taskAuthorization.js';
 export const VERSION_HISTORY_FREE_DAYS = 7;
 
 type Deps = {
+  // Приёмка (db/150): задача на утверждении заморожена для всех, кроме принимающего.
+  readonly approval: ApprovalGuard;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;

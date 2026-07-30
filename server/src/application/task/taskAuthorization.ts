@@ -4,13 +4,58 @@ import type { ProjectAction } from '../../domain/project/permissions.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
+import type { Task } from '../../domain/task/Task.js';
 import type { TaskRepository } from './TaskRepository.js';
+import type { ApprovalGuard } from './TaskApprovalService.js';
+import { TaskAwaitingApprovalError } from '../../domain/task/errors.js';
 
 export type TaskAccessDeps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
 };
+
+// Зависимости МУТИРУЮЩИХ операций: сверх чтения нужна политика приёмки — задача в очереди
+// утверждения заморожена для всех, кроме принимающего (db/150). Обязательна намеренно:
+// опциональная зависимость означала бы «часть use-case'ов тихо не проверяет правило», а
+// такие дыры не видны на ревью. Read-хелперы её не требуют — им нечего запрещать.
+export type TaskModifyAccessDeps = TaskAccessDeps & {
+  readonly approval: ApprovalGuard;
+};
+
+// Действия, запрещённые пока задача ждёт приёмки. Комментарии и чтение НЕ здесь: исполнителю
+// нужно отвечать на замечания руководителя, а версии/тред — читать.
+const FROZEN_WHILE_AWAITING_APPROVAL: readonly ProjectAction[] = [
+  'update_task',
+  'move_task',
+  'assign_task',
+  'manage_attachments',
+  // Удаление — тоже изменение, причём необратимее прочих: пока работа висит на утверждении,
+  // исполнитель не должен убирать её из очереди руководителя (мягкое, но из очереди уходит).
+  'delete_task',
+];
+
+/**
+ * Единый гейт заморозки: задача в очереди утверждения неприкосновенна для всех, кроме того,
+ * кто эту работу принимает (db/150).
+ *
+ * Вынесен из requireTaskModifyAccess, потому что часть путей ходит мимо него со своей
+ * авторизацией — перенос в другой проект и удаление. Правило должно быть ОДНО: раньше эти
+ * два пути гейта не знали, и задача на утверждении спокойно уезжала в другой проект или
+ * в корзину руками исполнителя.
+ */
+export async function assertNotFrozenByApproval(
+  approval: ApprovalGuard,
+  project: Project,
+  task: Pick<Task, 'status'>,
+  userId: string,
+  action: ProjectAction,
+): Promise<void> {
+  if (task.status !== 'pending_approval') return;
+  if (!FROZEN_WHILE_AWAITING_APPROVAL.includes(action)) return;
+  if (await approval.canApprove(project, userId)) return;
+  throw new TaskAwaitingApprovalError();
+}
 
 export type TaskAccessResult = {
   readonly project: Project;
@@ -46,7 +91,7 @@ async function isInboxColleague(
 // 404 (ProjectNotFoundError) когда caller не участник и не текущий ответственный —
 // семантика «не палим существование» (как в requireProjectAccess).
 export async function requireTaskModifyAccess(
-  deps: TaskAccessDeps,
+  deps: TaskModifyAccessDeps,
   projectId: string,
   taskId: string,
   userId: string,
@@ -56,6 +101,11 @@ export async function requireTaskModifyAccess(
   if (!project) throw new ProjectNotFoundError();
   const task = await deps.tasks.getById(taskId);
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
+
+  // Заморозка на время приёмки. Проверяем ДО ролевых веток: правило одинаково и для
+  // именованного проекта, и для inbox, и для назначенного viewer'а — пока работа висит на
+  // утверждении, менять её вправе только тот, кто эту работу принимает.
+  await assertNotFrozenByApproval(deps.approval, project, task, userId, action);
 
   if (project.isInbox) {
     if (project.ownerId === userId) {

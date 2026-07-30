@@ -102,12 +102,22 @@ function KanbanCardImpl({
   // Роль в активном пространстве: ею решаем, показывать ли «выполнено» на задаче,
   // которая уже ждёт приёмки (см. checkboxVisible ниже).
   const { data: workspaces } = useWorkspaces();
+  // Приёмка (db/150): задача уже отправлена на утверждение.
+  const awaitingApproval = task.status === 'pending_approval';
+  const currentWorkspace = (workspaces ?? []).find((w) => w.isCurrent) ?? null;
+  const canApproveWork =
+    currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
+  // Задача заморожена: ждёт приёмки, а актор её не принимает. Драг и удаление отключаем —
+  // сервер такие операции отклоняет (409), и кнопка, которая заведомо упадёт, хуже её
+  // отсутствия. Открыть и читать задачу при этом можно. Объявлено ДО useSortable: хук
+  // читает флаг в своих опциях (иначе TDZ — «used before declaration»).
+  const frozenByApproval = awaitingApproval && !canApproveWork;
   // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
   const selecting = selectionMode && !preview;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
-    disabled: preview || selecting || readOnly,
+    disabled: preview || selecting || readOnly || frozenByApproval,
     transition: DND_TRANSITION,
   });
 
@@ -160,13 +170,10 @@ function KanbanCardImpl({
   // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
   const promoteNext = onQuickPromote ? quickPromoteNext(task.status) : null;
-  // Приёмка (db/150): задача уже отправлена на утверждение. Исполнителю кнопка «выполнено»
-  // здесь бесполезна — сервер вернёт ту же очередь приёмки, и ничего не произойдёт. Прячем
-  // её и оставляем только принимающему: для него это и есть «принять работу».
-  const awaitingApproval = task.status === 'pending_approval';
-  const currentWorkspace = (workspaces ?? []).find((w) => w.isCurrent) ?? null;
-  const canApproveWork =
-    currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
+  // Исполнителю кнопка «выполнено» на задаче в очереди приёмки бесполезна — сервер вернёт
+  // ту же очередь, и ничего не произойдёт. Оставляем её только принимающему: для него это
+  // и есть «принять работу». (awaitingApproval/canApproveWork объявлены выше — их читает
+  // useSortable.)
   const checkboxVisible = showCheckbox && (!awaitingApproval || canApproveWork);
 
   // Есть ли вообще кнопки действий на карточке.
@@ -211,21 +218,23 @@ function KanbanCardImpl({
             />
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
-            big ? 'size-9' : 'size-6',
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(task);
-          }}
-          aria-label="Удалить"
-        >
-          <Trash2 className={big ? 'size-4' : 'size-3'} />
-        </Button>
+        {!frozenByApproval && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
+              big ? 'size-9' : 'size-6',
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(task);
+            }}
+            aria-label="Удалить"
+          >
+            <Trash2 className={big ? 'size-4' : 'size-3'} />
+          </Button>
+        )}
       </>
     ) : null;
 

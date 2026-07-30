@@ -127,3 +127,13 @@ export class NotTaskApproverError extends Error {
     this.name = 'NotTaskApproverError';
   }
 }
+
+// Приёмка задач (db/150): пока задача ждёт утверждения, исполнитель её не правит —
+// иначе руководитель принимал бы уже не то, что видел. Комментарии при этом разрешены:
+// отвечать на замечания нужно.
+export class TaskAwaitingApprovalError extends Error {
+  constructor() {
+    super('Задача на утверждении — изменить её может только руководитель');
+    this.name = 'TaskAwaitingApprovalError';
+  }
+}

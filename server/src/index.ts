@@ -883,6 +883,7 @@ const submitSupportTicket = new SubmitSupportTicket({
 // и в HandleTelegramWebhook (reply→ralph-answer ветка). Один экземпляр на оба чтобы не
 // дублировать конструкцию и не разъезжаться по поведению.
 const createTaskCommentUseCase = new CreateTaskComment({
+  approval: taskApprovalService,
   projects: projectRepo,
   members: projectMemberRepo,
   tasks: taskRepo,
@@ -965,6 +966,7 @@ const telegramComposer = new TelegramComposerService({
   enqueueAiPromptJob,
   waitForAiPromptJob,
   uploadAttachment: new UploadTaskAttachment({
+    approval: taskApprovalService,
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
@@ -975,6 +977,7 @@ const telegramComposer = new TelegramComposerService({
     versions: taskVersionRecorder,
   }),
   updateTask: new UpdateTask({
+    approval: taskApprovalService,
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
@@ -1777,10 +1780,15 @@ const projectImportAnalyzer = new ProjectImportAnalyzer();
 // Журнал батчей действий ассистента (db/135). Откат намеренно ходит через ТЕ ЖЕ
 // use-case'ы, что и обычные HTTP-роуты, — иначе Undo обошёл бы проверки прав.
 const aiActionUndoTaskDeps = { projects: projectRepo, members: projectMemberRepo, tasks: taskRepo };
-const aiActionUndoUpdateTask = new UpdateTask({ ...aiActionUndoTaskDeps, activity: activityRecorder });
+const aiActionUndoUpdateTask = new UpdateTask({
+  ...aiActionUndoTaskDeps,
+  approval: taskApprovalService,
+  activity: activityRecorder,
+});
 const aiActionUndoDeleteTask = new DeleteTask({
   ...aiActionUndoTaskDeps,
   comments: taskCommentRepo,
+  approval: taskApprovalService,
   activityRecorder,
 });
 const aiActionUndoRestoreTask = new RestoreDeletedTask(aiActionUndoTaskDeps);
@@ -2380,6 +2388,7 @@ const { app, devProxyUpgrade } = createApp({
       activityRecorder,
     }),
     updateTask: new UpdateTask({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2398,6 +2407,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      approval: taskApprovalService,
       activityRecorder,
     }),
     listTrashedTasks: new ListTrashedTasks({
@@ -2416,6 +2426,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
     }),
     getTaskVersions: new GetTaskVersions({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2431,6 +2442,7 @@ const { app, devProxyUpgrade } = createApp({
       now: () => new Date(),
     }),
     restoreTaskVersion: new RestoreTaskVersion({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2475,6 +2487,7 @@ const { app, devProxyUpgrade } = createApp({
       versions: taskVersionRecorder,
     }),
     uploadAttachment: new UploadTaskAttachment({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2485,6 +2498,7 @@ const { app, devProxyUpgrade } = createApp({
       versions: taskVersionRecorder,
     }),
     deleteAttachment: new DeleteTaskAttachment({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2516,12 +2530,14 @@ const { app, devProxyUpgrade } = createApp({
     }),
     createComment: createTaskCommentUseCase,
     updateComment: new UpdateTaskComment({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
     }),
     deleteComment: new DeleteTaskComment({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2629,8 +2645,10 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
+      approval: taskApprovalService,
     }),
     changeAssignee: new ChangeTaskAssignee({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2840,6 +2858,7 @@ const { app, devProxyUpgrade } = createApp({
     initLocalKb: new InitLocalKb({ projects: projectRepo, members: projectMemberRepo }),
     // Расширенный набор agent-операций (MCP 0.10) — те же use-case'ы, что у web-API.
     updateTask: new UpdateTask({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2850,6 +2869,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      approval: taskApprovalService,
       activityRecorder,
     }),
     listTaskCommits: new ListTaskCommits({

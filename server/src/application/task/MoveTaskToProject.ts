@@ -9,11 +9,15 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
+import type { ApprovalGuard } from './TaskApprovalService.js';
+import { assertNotFrozenByApproval } from './taskAuthorization.js';
 
 type Deps = {
   readonly tasks: TaskRepository;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
+  // Приёмка (db/150): задача на утверждении заморожена для всех, кроме принимающего.
+  readonly approval: ApprovalGuard;
 };
 
 // Перенос сохраняет ответственного, если он допустим в целевом проекте. Иначе задача
@@ -30,6 +34,11 @@ export class MoveTaskToProject {
       if (sourceProject.ownerId !== userId) throw new InboxOwnerRequiredError();
     } else {
       await requireProjectAccess(this.deps, task.projectId, userId, 'move_task');
+    }
+    // Перенос в другой проект — тоже изменение задачи, и он уводил её из очереди приёмки
+    // руководителя. Гейт тот же, что у остальных мутаций.
+    if (sourceProject) {
+      await assertNotFrozenByApproval(this.deps.approval, sourceProject, task, userId, 'move_task');
     }
     if (task.projectId === targetProjectId) return task;
 

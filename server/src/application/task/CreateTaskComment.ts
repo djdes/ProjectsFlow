@@ -1,3 +1,4 @@
+import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskCommentBodyEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
 import type { CommentNotifyMode } from '../../domain/task/TaskComment.js';
@@ -11,6 +12,8 @@ import { parseMentions } from './parseMentions.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
+  // Приёмка (db/150): задача на утверждении заморожена для всех, кроме принимающего.
+  readonly approval: ApprovalGuard;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;

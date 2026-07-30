@@ -15,6 +15,13 @@ type Deps = {
   readonly appUrl: string;
 };
 
+// Минимальный контракт, который нужен гейту задачных операций (taskAuthorization): только
+// «вправе ли актор принимать работу». Отдельный тип, чтобы не тащить в каждый task-use-case
+// зависимости уведомлений — реализуется TaskApprovalService целиком.
+export type ApprovalGuard = {
+  canApprove(project: Project, actorUserId: string): Promise<boolean>;
+};
+
 // Приёмка задач руководителем (db/150, включена по умолчанию с db/151).
 //
 // Одна политика на все пути закрытия задачи. Раньше гейт жил внутри MoveTask, но задачу

@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -51,6 +51,7 @@ import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useApprovalFreeze } from '@/presentation/hooks/useApprovalFreeze';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -1798,11 +1799,16 @@ export function TaskDrawer({
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
   // композером-футером (плашка «в ответ …») и уходит в createComment. db/080.
   const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
+  // Приёмка (db/150): задача ждёт утверждения, а текущий юзер её не принимает — сервер
+  // отклонит любую правку (409 task_awaiting_approval). Опускаем окно в read-only по той же
+  // причине, что и для viewer'а: иначе исполнитель правит поля, а каждое сохранение
+  // откатывается.
+  const frozenByApproval = useApprovalFreeze(task?.status);
   // Редактируем задачу в ЛЮБОМ статусе, включая done (по требованию: «задача всегда
   // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
   // canEditProp сверху может опустить в read-only (viewer на чужой задаче) — иначе
   // окно выглядело бы редактируемым, а каждый save падал бы 403-ей.
-  const canEdit = !!task && canEditProp;
+  const canEdit = !!task && canEditProp && !frozenByApproval;
 
   // Сохранить медиа-поля (иконка/обложка/положение обложки). Оптимистичный показ живёт в
   // TaskHeaderMedia; здесь только PATCH + оповещение. Ошибка — тост (локальный показ уже стоит).
@@ -1951,8 +1957,9 @@ export function TaskDrawer({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[200px]">
-          {/* Перенос задачи в другой проект — переехал сюда из шапки. */}
-          {onMove && (
+          {/* Перенос задачи в другой проект — переехал сюда из шапки. На утверждении скрыт:
+              сервер отклоняет перенос (409), он уводил бы задачу из очереди руководителя. */}
+          {onMove && !frozenByApproval && (
             <MoveToProjectSubmenu
               task={task}
               onMoved={() => {
@@ -2121,6 +2128,19 @@ export function TaskDrawer({
                 onHoverChange={(enter) => (enter ? enterTopZone() : leaveTopZone())}
               />
 
+              {/* Заморозка приёмкой: объясняем, ПОЧЕМУ поля не правятся. Без плашки окно
+                  выглядит просто сломанным — контролы есть, но ничего не меняется.
+                  Комментарии при этом открыты: отвечать на замечания нужно. */}
+              {frozenByApproval && (
+                <div className="mx-[var(--pf-drawer-px)] mb-2 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
+                  <Lock className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    Задача на утверждении — изменить её может только руководитель. Комментарии
+                    доступны: напишите здесь, если нужно что-то поправить.
+                  </span>
+                </div>
+              )}
+
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
@@ -2137,7 +2157,8 @@ export function TaskDrawer({
                   // содержит фигуру): переживает reload, аттач не «осиротеет» в «Файлы».
                   onImageUploaded={(md) => void commitDescription(md)}
                   onPasteFiles={(files) => void uploadFilesDirectly(files)}
-                  disabled={editSaving}
+                  // Заморожена приёмкой — тело только читаем: PATCH всё равно вернёт 409.
+                  disabled={editSaving || frozenByApproval}
                   placeholder="Название и описание…"
                 />
               </div>
@@ -2222,7 +2243,10 @@ export function TaskDrawer({
                           task={task}
                           onChanged={() => notifyChanged()}
                           projectId={isInbox ? undefined : task.projectId}
-                          disabled={!currentUser || (isInbox && !canEdit)}
+                          // frozenByApproval отдельным слагаемым: в именованном проекте
+                          // переназначение НЕ ходит через canEdit (viewer может «забрать
+                          // себе»), но на утверждении оно запрещено всем, кроме принимающего.
+                          disabled={!currentUser || (isInbox && !canEdit) || frozenByApproval}
                           className={PROPERTY_VALUE_CLASS}
                         />
                       </div>
