@@ -78,55 +78,51 @@ export function CompletedTodayPill(): React.ReactElement | null {
         data-iris={t.iris && animations ? '1' : undefined}
         title={`Сегодня выполнено задач: ${count} · ранг ${rank.name}`}
       >
+        {/* Ряд, а не absolute-навеска: трассы и скобки — обычные элементы потока,
+            поэтому входят в габариты бейджа. Иначе правый край уезжал за окно. */}
         <span className="pf-rb-stack">
-          {t.reactor && animations && <span aria-hidden className="pf-rb-reactor" />}
-          {t.grid && animations && (
-            <>
-              <span aria-hidden className="pf-rb-grid" />
-              <span aria-hidden className="pf-rb-grid pf-rb-grid-b" />
-            </>
-          )}
-          {t.rain && animations && (
-            <span aria-hidden className="pf-rb-rain">
-              {['1', '0', '1', '0'].map((d, i) => (
-                <i key={i} style={{ left: `${10 + i * 26}%`, animationDelay: `${i * 0.6}s` }}>
-                  {d}
-                </i>
-              ))}
-            </span>
-          )}
           {t.trace && (
-            <>
-              <span aria-hidden className="pf-rb-trace pf-rb-trace-l">
-                <Trace />
-              </span>
-              <span aria-hidden className="pf-rb-trace pf-rb-trace-r">
-                <Trace />
-              </span>
-            </>
-          )}
-          {t.hud && (
-            <>
-              <span aria-hidden className="pf-rb-hud pf-rb-hud-l" />
-              <span aria-hidden className="pf-rb-hud pf-rb-hud-r" />
-            </>
-          )}
-
-          <span className="pf-rb-frame pointer-events-auto">
-            <span className="pf-rb-core">
-              <DrawnCheck />
-              {/* key={count}: React перемонтирует узел на новом значении, и цифра
-                  прокручивается снизу вверх без ручного хранения прошлого числа. */}
-              <span key={count} className="pf-rb-count">
-                {count}
-              </span>
-              {t.cursor && <span aria-hidden className={cn('pf-rb-cursor', animations && 'pf-rb-blink')} />}
+            <span aria-hidden className="pf-rb-trace pf-rb-trace-l">
+              <Trace />
             </span>
-          </span>
+          )}
+          {t.hud && <span aria-hidden className="pf-rb-hud pf-rb-hud-l" />}
 
-          {/* Слой церемонии. key=burst перемонтирует его целиком — так CSS-анимации
-              стартуют заново на каждой закрытой задаче. */}
-          {playing && (
+          {/* Якорь: всё, что должно центрироваться по ЯДРУ, а не по всему ряду —
+              фоновые слои и церемония. */}
+          <span className="pf-rb-anchor">
+            {t.reactor && animations && <span aria-hidden className="pf-rb-reactor" />}
+            {t.grid && animations && (
+              <>
+                <span aria-hidden className="pf-rb-grid" />
+                <span aria-hidden className="pf-rb-grid pf-rb-grid-b" />
+              </>
+            )}
+            {t.rain && animations && (
+              <span aria-hidden className="pf-rb-rain">
+                {['1', '0', '1', '0'].map((d, i) => (
+                  <i key={i} style={{ left: `${10 + i * 26}%`, animationDelay: `${i * 0.6}s` }}>
+                    {d}
+                  </i>
+                ))}
+              </span>
+            )}
+
+            <span className="pf-rb-frame pointer-events-auto">
+              <span className="pf-rb-core">
+                <DrawnCheck />
+                {/* key={count}: React перемонтирует узел на новом значении, и цифра
+                    прокручивается снизу вверх без ручного хранения прошлого числа. */}
+                <span key={count} className="pf-rb-count">
+                  {count}
+                </span>
+                {t.cursor && <span aria-hidden className={cn('pf-rb-cursor', animations && 'pf-rb-blink')} />}
+              </span>
+            </span>
+
+            {/* Слой церемонии. key=burst перемонтирует его целиком — так CSS-анимации
+                стартуют заново на каждой закрытой задаче. */}
+            {playing && (
             <span aria-hidden key={burst} className="pf-rb-fx">
               <span className="pf-rb-split pf-rb-split-r" />
               <span className="pf-rb-split pf-rb-split-c" />
@@ -176,6 +172,14 @@ export function CompletedTodayPill(): React.ReactElement | null {
                 {rank.name}
                 <small>{rank.grade.toUpperCase()}</small>
               </span>
+            </span>
+            )}
+          </span>
+
+          {t.hud && <span aria-hidden className="pf-rb-hud pf-rb-hud-r" />}
+          {t.trace && (
+            <span aria-hidden className="pf-rb-trace pf-rb-trace-r">
+              <Trace />
             </span>
           )}
         </span>

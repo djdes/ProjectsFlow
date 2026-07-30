@@ -512,12 +512,25 @@ a:focus-visible {
     position: relative;
     display: inline-flex;
     flex-direction: column;
-    align-items: flex-end;
+    /* По центру, а не по правому краю: ряд симметричен, поэтому индикатор
+       встаёт ровно под ядром, а не под правой трассой. */
+    align-items: center;
     gap: 3px;
     isolation: isolate;
     user-select: none;
   }
+  /* Ряд деталей. Трассы и скобки — элементы ПОТОКА, а не absolute-навеска:
+     иначе они не входят в габариты бейджа, и правый край вылезал за окно.
+     Теперь правый край ряда всегда на одном расстоянии от края экрана,
+     сколько бы деталей ни накопилось. */
   .pf-rb-stack {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Всё, что центрируется по ЯДРУ, а не по всему ряду: фоновые слои и
+     церемония. Без этого кольца взрыва обнимали бы и трассы тоже. */
+  .pf-rb-anchor {
     position: relative;
     display: inline-flex;
   }
@@ -621,41 +634,38 @@ a:focus-visible {
 
   /* Детали ранга. */
   .pf-rb-hud {
-    position: absolute;
-    top: -1px;
-    bottom: -1px;
+    flex: 0 0 auto;
+    align-self: stretch;
     width: 5px;
     pointer-events: none;
     filter: drop-shadow(0 0 5px var(--rb-c1));
   }
   .pf-rb-hud-l {
-    right: calc(100% + 3px);
+    margin-right: 3px;
     border-left: 1.5px solid var(--rb-c1);
     border-top: 1.5px solid var(--rb-c1);
     border-bottom: 1.5px solid var(--rb-c1);
     border-radius: 3px 0 0 3px;
   }
   .pf-rb-hud-r {
-    left: calc(100% + 3px);
+    margin-left: 3px;
     border-right: 1.5px solid var(--rb-c1);
     border-top: 1.5px solid var(--rb-c1);
     border-bottom: 1.5px solid var(--rb-c1);
     border-radius: 0 3px 3px 0;
   }
   .pf-rb-trace {
-    position: absolute;
-    top: 50%;
+    flex: 0 0 auto;
     height: 15px;
     width: 23px;
-    transform: translateY(-50%);
     pointer-events: none;
   }
   .pf-rb-trace-l {
-    right: calc(100% + 11px);
+    margin-right: 8px;
   }
   .pf-rb-trace-r {
-    left: calc(100% + 11px);
-    transform: translateY(-50%) scaleX(-1);
+    margin-left: 8px;
+    transform: scaleX(-1);
   }
   .pf-rb-trace svg {
     width: 100%;
