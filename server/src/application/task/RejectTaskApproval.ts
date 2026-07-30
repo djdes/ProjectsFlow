@@ -2,7 +2,7 @@ import { ApprovalCommentRequiredError, NotTaskApproverError } from '../../domain
 import type { Task } from '../../domain/task/Task.js';
 import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { CreateTaskComment } from './CreateTaskComment.js';
-import type { MoveTask } from './MoveTask.js';
+import { isRestorableStatus, type MoveTask } from './MoveTask.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskApprovalService } from './TaskApprovalService.js';
 import type { TaskRepository } from './TaskRepository.js';
@@ -55,13 +55,17 @@ export class RejectTaskApproval {
     });
 
     // Возвращаем туда, откуда задачу отправили (снимок в status_before_done), фолбэк —
-    // 'in_progress': работа продолжается, а не начинается заново.
-    const target = task.statusBeforeDone ?? 'in_progress';
+    // 'in_progress': работа продолжается, а не начинается заново. Снимок может оказаться
+    // непригодной целью ('done' или сама очередь приёмки — так делали строки, записанные
+    // до гейта в MoveTask): тогда тоже фолбэк, иначе «вернуть в работу» возвращало бы
+    // задачу в то же состояние и выглядело сломанной кнопкой.
+    const snapshot = task.statusBeforeDone;
+    const target = snapshot && isRestorableStatus(snapshot) ? snapshot : 'in_progress';
     return this.deps.moveTask.execute({
       projectId: input.projectId,
       ownerUserId: input.actorUserId,
       taskId: input.taskId,
-      targetStatus: target === 'done' ? 'in_progress' : target,
+      targetStatus: target,
       beforeTaskId: null,
       afterTaskId: null,
     });

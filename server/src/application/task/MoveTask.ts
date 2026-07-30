@@ -41,11 +41,21 @@ const POSITION_STEP = 1024;
 // перенумеровываем, иначе midpoint перестаёт быть различимым (B1).
 const POSITION_COLLAPSE_GAP = 2;
 
+// Статусы, которые НЕ являются рабочей колонкой и потому не могут быть целью возврата:
+// 'done' — то, откуда возвращаемся, 'pending_approval' — очередь приёмки (вернуть задачу
+// «назад в очередь» значит не вернуть её никуда).
+const NOT_A_RESTORE_TARGET: readonly TaskStatus[] = ['done', 'pending_approval'];
+
+// Можно ли снимать снапшот прежней колонки с этого статуса. Снимок нужен, чтобы вернуть
+// задачу туда, откуда её отправили; сам done и очередь приёмки такими местами не являются.
+export function isRestorableStatus(status: TaskStatus): boolean {
+  return !NOT_A_RESTORE_TARGET.includes(status);
+}
+
 // При снятии галочки восстанавливаем ТОЧНЫЙ прежний статус (требование «запомнить
-// прежний статус»). Фолбэк 'todo' — только если снапшота нет (null/legacy) или он
-// невалиден. 'done' в снапшот не попадает (guard при захвате в execute).
-function restoreTargetFrom(prev: TaskStatus | null): TaskStatus {
-  if (prev && prev !== 'done' && TASK_STATUSES.includes(prev)) return prev;
+// прежний статус»). Фолбэк 'todo' — если снапшота нет (null/legacy) или он невалиден.
+export function restoreTargetFrom(prev: TaskStatus | null): TaskStatus {
+  if (prev && TASK_STATUSES.includes(prev) && isRestorableStatus(prev)) return prev;
   return 'todo';
 }
 
@@ -73,8 +83,12 @@ export class MoveTask {
       // Снятие галочки: восстанавливаем прежний статус, чистим снапшот.
       targetStatus = restoreTargetFrom(task.statusBeforeDone);
       statusBeforeDonePatch = null;
-    } else if (targetStatus === 'done' && task.status !== 'done') {
-      // Переход в done: запоминаем текущий статус (guard !=='done' => не запишем 'done').
+    } else if (targetStatus === 'done' && isRestorableStatus(task.status)) {
+      // Переход в done: запоминаем текущую КОЛОНКУ. Гейт isRestorableStatus не пускает в
+      // снимок ни 'done', ни 'pending_approval'. Второе — не теория: приёмка принимает
+      // задачу тем же move'ом в 'done', и без гейта снимок затирался очередью приёмки, а
+      // «Вернуть в работу» после этого возвращало задачу в неё же — кнопка отрабатывала
+      // без ошибки и без результата.
       statusBeforeDonePatch = task.status;
     } else if (task.status === 'done' && targetStatus !== 'done') {
       // Явный уход из done (drag в другую колонку): снапшот больше не нужен.

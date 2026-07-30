@@ -44,7 +44,7 @@ function makeMove(input: {
   isInbox?: boolean;
   taskStatus?: TaskStatus;
 }) {
-  let saved: { status: TaskStatus } | null = null;
+  let saved: { status: TaskStatus; statusBeforeDone?: TaskStatus | null } | null = null;
   const task = makeTask(input.taskStatus ?? 'todo');
   const notified: string[] = [];
 
@@ -99,8 +99,8 @@ function makeMove(input: {
     tasks: {
       getById: async () => task,
       getPositionBounds: async () => ({ min: 0, max: 2048 }),
-      update: async (_id: string, patch: { status?: TaskStatus }) => {
-        saved = { status: patch.status ?? task.status };
+      update: async (_id: string, patch: { status?: TaskStatus; statusBeforeDone?: TaskStatus | null }) => {
+        saved = { status: patch.status ?? task.status, statusBeforeDone: patch.statusBeforeDone };
         return { ...task, status: patch.status ?? task.status };
       },
     } as never,
@@ -110,6 +110,8 @@ function makeMove(input: {
   return {
     move,
     savedStatus: (): TaskStatus | null => saved?.status ?? null,
+    // undefined = поле не патчилось вовсе (снимок сохранён как был).
+    savedStatusBeforeDone: (): TaskStatus | null | undefined => saved?.statusBeforeDone,
     notified: (): string[] => notified,
   };
 }
@@ -225,6 +227,21 @@ test('исполнитель не может двигать задачу, кот
     /утверждени/u,
   );
   assert.equal(h.savedStatus(), null);
+});
+
+// Регрессия: приёмка принимает работу тем же move'ом в 'done'. Без гейта снимок прежней
+// колонки затирался очередью приёмки, и «Вернуть в работу» возвращало задачу в неё же.
+test('приёмка не затирает снимок колонки очередью утверждения', async () => {
+  const h = makeMove({
+    requireTaskApproval: true,
+    actorRole: 'lead',
+    taskStatus: 'pending_approval',
+  });
+
+  await h.move.execute({ ...done, ownerUserId: 'boss' });
+
+  assert.equal(h.savedStatus(), 'done');
+  assert.equal(h.savedStatusBeforeDone(), undefined, 'снимок не должен перезаписываться');
 });
 
 test('руководитель задачу на утверждении двигать может', async () => {

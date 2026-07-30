@@ -83,6 +83,50 @@ test('возврат пишет комментарий и возвращает �
   assert.equal(updated.status, 'in_progress');
 });
 
+// Регрессия с прода: у задачи снимок прежней колонки оказался равен 'pending_approval'
+// (его затирала сама приёмка, см. гейт в MoveTask). Возврат отправлял задачу в очередь
+// приёмки, то есть туда же, где она стояла: кнопка «Вернуть в работу» отрабатывала без
+// ошибки и без результата.
+test('снимок «pending_approval» не берётся целью — иначе возврат никуда не возвращает', async () => {
+  const h = makeReject({ canApprove: true, statusBeforeDone: 'pending_approval' });
+
+  const updated = await h.reject.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    actorUserId: 'boss',
+    comment: 'Переделай отступы',
+  });
+
+  assert.deepEqual(h.calls.moves, ['in_progress']);
+  assert.equal(updated.status, 'in_progress');
+});
+
+test('снимок «done» тоже не берётся целью', async () => {
+  const h = makeReject({ canApprove: true, statusBeforeDone: 'done' });
+
+  await h.reject.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    actorUserId: 'boss',
+    comment: 'Ещё раз посмотри',
+  });
+
+  assert.deepEqual(h.calls.moves, ['in_progress']);
+});
+
+test('валидный снимок колонки уважается', async () => {
+  const h = makeReject({ canApprove: true, statusBeforeDone: 'backlog' });
+
+  await h.reject.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    actorUserId: 'boss',
+    comment: 'Вернул в черновики',
+  });
+
+  assert.deepEqual(h.calls.moves, ['backlog']);
+});
+
 test('комментарий пишется РАНЬШЕ переноса — иначе исполнитель узнает о возврате без причины', async () => {
   const h = makeReject({ canApprove: true });
 
