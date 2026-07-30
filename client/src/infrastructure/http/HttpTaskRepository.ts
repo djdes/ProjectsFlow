@@ -263,6 +263,13 @@ export class HttpTaskRepository implements TaskRepository {
     );
     return fromDto(task);
   }
+  async rejectApproval(projectId: string, taskId: string, comment: string): Promise<Task> {
+    const { task } = await httpClient.post<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/approval/reject`,
+      { comment },
+    );
+    return fromDto(task);
+  }
   async delete(projectId: string, taskId: string): Promise<void> {
     await httpClient.delete<void>(`/projects/${projectId}/tasks/${taskId}`);
   }

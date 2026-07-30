@@ -88,6 +88,18 @@ export type TaskAssigneeChangedPayload = {
   readonly actorDisplayName: string;
 };
 
+// Приёмка задач (db/150): исполнитель отправил работу на утверждение. Получатели —
+// руководители и владелец пространства (сам отправитель уведомление не получает).
+export type TaskApprovalRequestedPayload = {
+  readonly type: 'task_approval_requested';
+  readonly taskId: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly taskExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
 // Legacy-контракт старого accept/decline-флоу; новые события такого типа не создаются.
 export type TaskDelegationResolvedPayload = {
   readonly type: 'task_delegation_resolved';
@@ -179,6 +191,7 @@ export type NotificationPayload =
   | JoinRequestPayload
   | TaskDelegationPayload
   | TaskAssigneeChangedPayload
+  | TaskApprovalRequestedPayload
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
   | ServerAlertPayload

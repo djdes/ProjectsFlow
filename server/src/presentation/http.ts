@@ -120,6 +120,7 @@ import { digestRouter } from './digest/routes.js';
 import type { SearchTasks } from '../application/task/SearchTasks.js';
 import type { CreateTask } from '../application/task/CreateTask.js';
 import type { UpdateTask } from '../application/task/UpdateTask.js';
+import type { RejectTaskApproval } from '../application/task/RejectTaskApproval.js';
 import type { MoveTask } from '../application/task/MoveTask.js';
 import type { DeleteTask } from '../application/task/DeleteTask.js';
 import type { ListTrashedTasks } from '../application/task/ListTrashedTasks.js';
@@ -572,6 +573,8 @@ type AppDeps = {
     readonly createTask: CreateTask;
     readonly updateTask: UpdateTask;
     readonly moveTask: MoveTask;
+    // Приёмка (db/150): вернуть работу исполнителю с обязательным комментарием.
+    readonly rejectTaskApproval: RejectTaskApproval;
     readonly deleteTask: DeleteTask;
     readonly listTrashedTasks: ListTrashedTasks;
     readonly restoreDeletedTask: RestoreDeletedTask;

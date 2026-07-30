@@ -2,6 +2,8 @@ import type { CloseProposal } from '../../domain/close-proposal/CloseProposal.js
 import { CloseProposalNotFoundError } from '../../domain/close-proposal/errors.js';
 import type { CloseProposalRepository } from './CloseProposalRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { TaskApprovalService } from '../task/TaskApprovalService.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { LinkCommit } from '../task/LinkCommit.js';
 
@@ -16,6 +18,9 @@ type Deps = {
   readonly closeProposals: CloseProposalRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  // Проект нужен, чтобы решить про приёмку (флаг живёт у пространства проекта).
+  readonly projects: ProjectRepository;
+  readonly approval: TaskApprovalService;
   // Привязать коммит к задаче (видимая ссылка). Best-effort, сбой не валит подтверждение.
   readonly linkCommit?: LinkCommit;
 };
@@ -47,11 +52,22 @@ export class ConfirmCloseProposal {
 
     const task = await this.deps.tasks.getById(proposal.taskId);
     if (task && task.status !== 'done') {
-      await this.deps.tasks.update(
+      // Приёмка (db/150): подтверждение close-proposal — такое же «выполнено», как кнопка
+      // в интерфейсе. Раньше этот путь шёл мимо приёмки и закрывал задачу напрямую.
+      const project = await this.deps.projects.getById(proposal.projectId);
+      const target = project
+        ? await this.deps.approval.resolveTargetStatus(project, input.userId, 'done')
+        : 'done';
+      const updated = await this.deps.tasks.update(
         task.id,
-        { status: 'done', statusBeforeDone: task.status },
+        { status: target, statusBeforeDone: task.status },
         input.userId,
       );
+      if (project && updated && target === 'pending_approval') {
+        void this.deps.approval
+          .notifyApprovalRequested({ task: updated, project, actorUserId: input.userId })
+          .catch((err: unknown) => console.error('[task:approval] notify failed:', err));
+      }
     }
 
     try {

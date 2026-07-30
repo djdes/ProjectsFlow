@@ -9,6 +9,8 @@ import {
   NotDispatcherForCommitSyncJobError,
 } from '../../domain/commit-sync/errors.js';
 import type { Task } from '../../domain/task/Task.js';
+import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { TaskApprovalService } from '../task/TaskApprovalService.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { LinkCommit } from '../task/LinkCommit.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
@@ -29,6 +31,10 @@ const MAX_MATCHES = 500;
 type Deps = {
   readonly commitSyncJobs: CommitSyncJobRepository;
   readonly tasks: TaskRepository;
+  // Приёмка задач руководителем (db/150): проект нужен, чтобы прочитать настройку
+  // пространства, политика — чтобы решить, закрывать или отправлять на утверждение.
+  readonly projects: ProjectRepository;
+  readonly approval: TaskApprovalService;
   // Опционально: привязать совпавший коммит к карточке (видимая ссылка). Сбой не валит move.
   readonly linkCommit?: LinkCommit;
   // Метеринг расхода ИИ (best-effort) — списываем с подписки диспетчера.
@@ -119,6 +125,8 @@ export class CompleteCommitSyncJob {
     const handledTasks = new Set<string>();
     // Реально закрытые задачи — для короткой сводки «что закрыто» в Telegram.
     const moved: CommitSyncMatch[] = [];
+    // Один проект на весь прогон (задачи фильтруются по job.projectId) — читаем один раз.
+    const project = await this.deps.projects.getById(job.projectId);
 
     for (const m of matches) {
       if (handledTasks.has(m.taskId)) continue;
@@ -141,13 +149,28 @@ export class CompleteCommitSyncJob {
         continue;
       }
 
-      // Совпадение = коммит РЕАЛИЗУЕТ черновик (см. промпт) → сразу в готово.
+      // Совпадение = коммит РЕАЛИЗУЕТ черновик (см. промпт) → закрываем.
       // status_before_done — снимок текущей колонки, как в MoveTask (для «вернуть из готово»).
-      await this.deps.tasks.update(
+      // Приёмка (db/150): авто-закрытие по коммиту — тоже закрытие чужой работы, поэтому
+      // проходит через ту же политику. Диспетчер-руководитель закроет сразу, обычный — на
+      // утверждение.
+      const target = project
+        ? await this.deps.approval.resolveTargetStatus(project, job.dispatcherUserId, 'done')
+        : 'done';
+      const updated = await this.deps.tasks.update(
         task.id,
-        { status: 'done', statusBeforeDone: task.status },
+        { status: target, statusBeforeDone: task.status },
         job.dispatcherUserId,
       );
+      if (project && updated && target === 'pending_approval') {
+        void this.deps.approval
+          .notifyApprovalRequested({
+            task: updated,
+            project,
+            actorUserId: job.dispatcherUserId,
+          })
+          .catch((err: unknown) => console.error('[task:approval] notify failed:', err));
+      }
       handledTasks.add(task.id);
       moved.push(m);
       await this.tryLinkCommit(job.projectId, job.dispatcherUserId, task, m.commitSha);

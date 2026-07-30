@@ -826,15 +826,19 @@ export function AssignedToMeBlock({
   // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
   // пустит в done только руководителя/владельца — кнопки видит тот, кому это доступно,
   // но окончательное слово всё равно за гейтом в MoveTask.
-  const resolveApproval = useCallback(
-    async (item: InboxBlockTask, accept: boolean): Promise<void> => {
+  // Возврат работы требует объяснения (сервер отклонит пустое) — держим цель в состоянии
+  // и открываем диалог, вместо мгновенного переноса.
+  const [rejectTarget, setRejectTarget] = useState<InboxBlockTask | null>(null);
+
+  const acceptApproval = useCallback(
+    async (item: InboxBlockTask): Promise<void> => {
       try {
         await taskRepository.move(item.projectId, item.id, {
-          targetStatus: accept ? 'done' : 'in_progress',
+          targetStatus: 'done',
           beforeTaskId: null,
           afterTaskId: null,
         });
-        toast.success(accept ? 'Задача принята' : 'Возвращена в работу');
+        toast.success('Задача принята');
         await refresh();
         onChanged?.();
       } catch (e) {
@@ -843,6 +847,20 @@ export function AssignedToMeBlock({
     },
     [taskRepository, refresh, onChanged],
   );
+
+  // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
+  // он уходит в один диалог, а не в мемоизированный список карточек.
+  const rejectApproval = async (item: InboxBlockTask, comment: string): Promise<void> => {
+    try {
+      await taskRepository.rejectApproval(item.projectId, item.id, comment);
+      toast.success('Возвращена в работу — комментарий добавлен');
+      setRejectTarget(null);
+      await refresh();
+      onChanged?.();
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
 
   const handleDragStart = (e: DragStartEvent): void => {
     setDragActive(true);
@@ -1014,8 +1032,8 @@ export function AssignedToMeBlock({
         <ApprovalShelf
           items={approvalTasks}
           onOpen={(t) => setDrawerTask(t)}
-          onAccept={(t) => void resolveApproval(t, true)}
-          onReject={(t) => void resolveApproval(t, false)}
+          onAccept={(t) => void acceptApproval(t)}
+          onReject={(t) => setRejectTarget(t)}
           className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
@@ -1287,6 +1305,16 @@ export function AssignedToMeBlock({
       />
 
       {/* Удаление карточки из hover-панели — тот же диалог, что и на досках проектов. */}
+      {/* Возврат работы (db/150): без объяснения исполнитель не знает, что доделать, —
+          поэтому комментарий обязателен и здесь, и на сервере. */}
+      <RejectApprovalDialog
+        task={rejectTarget}
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={(comment) => {
+          if (rejectTarget) void rejectApproval(rejectTarget, comment);
+        }}
+      />
+
       <ConfirmDeleteDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
@@ -1574,6 +1602,56 @@ function PhantomDropColumn({
       <span className="text-xs font-medium text-foreground/80">{label}</span>
       <span className="text-[10px] leading-tight text-muted-foreground/70">{hint}</span>
     </div>
+  );
+}
+
+// Диалог возврата работы из приёмки: причина обязательна. Кнопка неактивна, пока поле
+// пустое, — правило видно сразу, а не после отказа сервера.
+function RejectApprovalDialog({
+  task,
+  onCancel,
+  onSubmit,
+}: {
+  task: InboxBlockTask | null;
+  onCancel: () => void;
+  onSubmit: (comment: string) => void;
+}): React.ReactElement {
+  const [comment, setComment] = useState('');
+  // Сбрасываем поле при смене задачи, иначе прошлый текст «переезжает» на следующую.
+  useEffect(() => {
+    setComment('');
+  }, [task?.id]);
+
+  const trimmed = comment.trim();
+  return (
+    <Dialog open={task !== null} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Вернуть в работу</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Напишите, что доделать. Комментарий появится в задаче, и ответственный получит
+          уведомление.
+        </p>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          autoFocus
+          rows={4}
+          maxLength={4000}
+          placeholder="Например: не хватает адаптива на мобиле"
+          className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+        />
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
+            Отмена
+          </Button>
+          <Button disabled={trimmed.length === 0} onClick={() => onSubmit(trimmed)}>
+            Вернуть в работу
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

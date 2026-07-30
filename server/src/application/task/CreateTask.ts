@@ -5,6 +5,7 @@ import {
 } from '../../domain/task/errors.js';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { TaskApprovalService } from './TaskApprovalService.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
@@ -18,6 +19,8 @@ import { moscowDateOnly } from '../../domain/time/moscowDate.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  // Приёмка задач руководителем (db/150): создание сразу в 'done' тоже проходит гейт.
+  readonly approval: TaskApprovalService;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly users: UserRepository;
@@ -94,6 +97,15 @@ export class CreateTask {
     const assigneeUserId = input.assigneeUserId ?? createdBy;
     await this.validateAssignee(project, assigneeUserId);
 
+    // Приёмка (db/150): задачу можно создать сразу закрытой — так работает «Готово …» в
+    // Telegram-композере (логирование уже сделанной работы). Это тоже закрытие работы, и
+    // если приёмка включена, а создатель не руководитель — карточка встаёт на утверждение.
+    const status = await this.deps.approval.resolveTargetStatus(
+      project,
+      input.ownerUserId,
+      input.status,
+    );
+
     // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
     // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).
     // Исключение: если задан afterTaskId — ставим сразу ПОСЛЕ якорной задачи (в той же
@@ -103,11 +115,11 @@ export class CreateTask {
     if (
       anchor &&
       anchor.projectId === input.projectId &&
-      anchor.status === input.status
+      anchor.status === status
     ) {
       position = anchor.position + 1;
     } else {
-      const bounds = await this.deps.tasks.getPositionBounds(input.projectId, input.status);
+      const bounds = await this.deps.tasks.getPositionBounds(input.projectId, status);
       position = bounds ? bounds.min - POSITION_STEP : POSITION_STEP;
     }
 
@@ -128,7 +140,7 @@ export class CreateTask {
       icon: input.icon ?? null,
       cover: input.cover ?? null,
       coverPosition: input.coverPosition ?? 50,
-      status: input.status,
+      status,
       position,
       ralphMode: input.ralphMode,
       deadline: this.resolveDeadline(input),

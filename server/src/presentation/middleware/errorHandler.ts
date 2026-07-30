@@ -82,6 +82,8 @@ import {
   TaskCommentNotFoundError,
   TaskCommitNotFoundError,
   TaskDescriptionEmptyError,
+  ApprovalCommentRequiredError,
+  NotTaskApproverError,
   AssigneeNotProjectMemberError,
   AssigneeNotSharedMemberError,
   TaskNotFoundError,
@@ -488,6 +490,14 @@ export function errorHandler(
 
   if (err instanceof TaskNotFoundError) {
     res.status(404).json({ error: 'task_not_found' });
+    return;
+  }
+  if (err instanceof ApprovalCommentRequiredError) {
+    res.status(400).json({ error: 'approval_comment_required', message: err.message });
+    return;
+  }
+  if (err instanceof NotTaskApproverError) {
+    res.status(403).json({ error: 'not_task_approver', message: err.message });
     return;
   }
   if (err instanceof TaskDescriptionEmptyError) {

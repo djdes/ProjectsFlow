@@ -110,3 +110,20 @@ export class TargetProjectIsInboxError extends Error {
     this.name = 'TargetProjectIsInboxError';
   }
 }
+
+// Приёмка задач (db/150): возврат работы исполнителю без объяснения запрещён — иначе он
+// не знает, что доделать.
+export class ApprovalCommentRequiredError extends Error {
+  constructor() {
+    super('Нужен комментарий: объясните, что доделать');
+    this.name = 'ApprovalCommentRequiredError';
+  }
+}
+
+// Принимать и возвращать работу вправе только руководитель или владелец пространства.
+export class NotTaskApproverError extends Error {
+  constructor() {
+    super('Принимать работу может только руководитель или владелец пространства');
+    this.name = 'NotTaskApproverError';
+  }
+}

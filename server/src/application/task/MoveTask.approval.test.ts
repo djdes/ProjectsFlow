@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { Task, TaskStatus } from '../../domain/task/Task.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import { MoveTask } from './MoveTask.js';
+import { TaskApprovalService } from './TaskApprovalService.js';
 
 // Приёмка задач руководителем (db/150). Проверяем ровно правило, а не позиционную
 // математику: исполнитель своим «выполнено» отправляет задачу НА УТВЕРЖДЕНИЕ, закрывает
@@ -45,6 +46,38 @@ function makeMove(input: {
 }) {
   let saved: { status: TaskStatus } | null = null;
   const task = makeTask(input.taskStatus ?? 'todo');
+  const notified: string[] = [];
+
+  // Политика — настоящая: тогда тест проверяет реальное правило, а не заглушку. Внешние
+  // зависимости (пространство, юзеры, уведомления) фейковые.
+  const workspacesFake = {
+    getById: async () => ({
+      id: WORKSPACE_ID,
+      name: 'Команда',
+      icon: null,
+      kind: 'team',
+      requireTaskApproval: input.requireTaskApproval,
+      ownerUserId: 'owner',
+      createdAt: new Date(0),
+    }),
+    getMembership: async (workspaceId: string, userId: string) =>
+      input.actorRole === null ? null : { workspaceId, userId, role: input.actorRole },
+    listMembers: async () => [{ workspaceId: WORKSPACE_ID, userId: 'boss', role: 'lead' }],
+  } as never;
+
+  const approval = new TaskApprovalService({
+    workspaces: workspacesFake,
+    users: { getById: async (id: string) => ({ id, email: `${id}@x`, displayName: id }) } as never,
+    notifications: {
+      create: async (i: { userId: string }) => {
+        notified.push(i.userId);
+        return {} as never;
+      },
+    } as never,
+    email: { send: async () => {} },
+    idGen: () => 'n1',
+    appUrl: 'https://pf.test/',
+  });
 
   const move = new MoveTask({
     projects: {
@@ -71,22 +104,14 @@ function makeMove(input: {
         return { ...task, status: patch.status ?? task.status };
       },
     } as never,
-    workspaces: {
-      getById: async () => ({
-        id: WORKSPACE_ID,
-        name: 'Команда',
-        icon: null,
-        kind: 'team',
-        requireTaskApproval: input.requireTaskApproval,
-        ownerUserId: 'owner',
-        createdAt: new Date(0),
-      }),
-      getMembership: async (workspaceId: string, userId: string) =>
-        input.actorRole === null ? null : { workspaceId, userId, role: input.actorRole },
-    } as never,
+    approval,
   });
 
-  return { move, savedStatus: (): TaskStatus | null => saved?.status ?? null };
+  return {
+    move,
+    savedStatus: (): TaskStatus | null => saved?.status ?? null,
+    notified: (): string[] => notified,
+  };
 }
 
 const done = { projectId: PROJECT_ID, taskId: TASK_ID, targetStatus: 'done' as const, beforeTaskId: null, afterTaskId: null };
@@ -156,4 +181,24 @@ test('перенос в другую колонку приёмкой не зат
   });
 
   assert.equal(h.savedStatus(), 'in_progress');
+});
+
+test('попадание в очередь приёмки уведомляет руководителя', async () => {
+  const h = makeMove({ requireTaskApproval: true, actorRole: 'editor' });
+
+  await h.move.execute({ ...done, ownerUserId: 'employee' });
+  // Уведомление отправляется вне основного потока (void + catch), поэтому даём микротаскам
+  // провернуться — иначе тест проверял бы состояние до отправки.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(h.notified(), ['boss']);
+});
+
+test('руководитель, закрывший задачу сам, уведомление не получает', async () => {
+  const h = makeMove({ requireTaskApproval: true, actorRole: 'lead' });
+
+  await h.move.execute({ ...done, ownerUserId: 'boss' });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(h.notified(), []);
 });

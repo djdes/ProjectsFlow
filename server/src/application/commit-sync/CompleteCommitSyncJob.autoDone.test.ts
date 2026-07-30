@@ -35,6 +35,14 @@ function harness(job: ReturnType<typeof buildJob>, task: { id: string; projectId
   const updated: Updated[] = [];
   let completed: { status: string; summary: string | null } | null = null;
   const svc = new CompleteCommitSyncJob({
+    projects: {
+      getById: async (id: string) => ({ id, workspaceId: 'ws', isInbox: false, name: 'Проект' }),
+    } as never,
+    approval: {
+      resolveTargetStatus: async (_p: unknown, _u: unknown, requested: unknown) => requested,
+      notifyApprovalRequested: async () => {},
+      canApprove: async () => true,
+    } as never,
     commitSyncJobs: {
       async findById() { return job as never; },
       async complete(input: { status: string; resultSummary: string | null }) {

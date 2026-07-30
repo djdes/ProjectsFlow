@@ -6,6 +6,7 @@ import type { UpdateTask } from '../../application/task/UpdateTask.js';
 import type { GetTaskVersions } from '../../application/task/GetTaskVersions.js';
 import type { GetProjectTaskVersions } from '../../application/task/GetProjectTaskVersions.js';
 import type { RestoreTaskVersion } from '../../application/task/RestoreTaskVersion.js';
+import type { RejectTaskApproval } from '../../application/task/RejectTaskApproval.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { DeleteTask } from '../../application/task/DeleteTask.js';
 import type { ListTrashedTasks } from '../../application/task/ListTrashedTasks.js';
@@ -49,6 +50,7 @@ import {
   exportDigestSchema,
   linkCommitSchema,
   moveTaskSchema,
+  rejectApprovalSchema,
   updateTaskCommentSchema,
   updateTaskSchema,
 } from './schemas.js';
@@ -58,6 +60,7 @@ type Deps = {
   readonly createTask: CreateTask;
   readonly updateTask: UpdateTask;
   readonly moveTask: MoveTask;
+  readonly rejectTaskApproval: RejectTaskApproval;
   readonly deleteTask: DeleteTask;
   // Корзина проекта + откат удаления (db/134).
   readonly listTrashedTasks: ListTrashedTasks;
@@ -401,6 +404,36 @@ export function tasksRouter(deps: Deps): Router {
           ownerUserId: req.user!.id,
         });
         deps.notifyTaskChanged(projectId);
+        res.json({ task: toDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Приёмка (db/150): вернуть работу исполнителю. Комментарий обязателен — гейт в
+  // RejectTaskApproval, а не только в UI, иначе правило обходится любым другим клиентом.
+  router.post(
+    '/:taskId/approval/reject',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const body = rejectApprovalSchema.parse(req.body);
+        const before = await deps.tasks.getById(taskId);
+        const task = await deps.rejectTaskApproval.execute({
+          projectId,
+          taskId,
+          actorUserId: req.user!.id,
+          comment: body.comment,
+        });
+        deps.notifyTaskChanged(projectId);
+        if (before && before.status !== task.status) {
+          deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
+          void deps.notifier
+            .onStatusChanged(projectId, req.user!.id, task, before.status, task.status, 'team')
+            .catch(() => {});
+        }
         res.json({ task: toDto(task) });
       } catch (e) {
         next(e);

@@ -93,6 +93,9 @@ export interface TaskRepository {
   create(projectId: string, input: CreateTaskInput): Promise<Task>;
   update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task>;
   move(projectId: string, taskId: string, input: MoveTaskInput): Promise<Task>;
+  // Приёмка (db/150): вернуть работу исполнителю. Комментарий обязателен — сервер
+  // отклонит пустой, поэтому UI спрашивает причину прежде, чем звать этот метод.
+  rejectApproval(projectId: string, taskId: string, comment: string): Promise<Task>;
   delete(projectId: string, taskId: string): Promise<void>;
   // История версий задачи (окно версий + Restore, как в Notion).
   getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult>;

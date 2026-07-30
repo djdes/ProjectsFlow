@@ -15,6 +15,11 @@ function makeHarness(
   const created: CreateTaskInput[] = [];
   const counters = { notifications: 0, emails: 0 };
   const create = new CreateTask({
+    approval: {
+      resolveTargetStatus: async (_p: unknown, _u: unknown, requested: unknown) => requested,
+      notifyApprovalRequested: async () => {},
+      canApprove: async () => true,
+    } as never,
     projects: {
       getById: async () => ({
         id: 'p1',

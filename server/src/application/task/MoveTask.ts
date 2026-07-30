@@ -6,14 +6,14 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { Project } from '../../domain/project/Project.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
-import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
+import type { TaskApprovalService } from './TaskApprovalService.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  // Приёмка задач руководителем (db/150): флаг пространства + роль актора в нём.
-  readonly workspaces: WorkspaceRepository;
+  // Приёмка задач руководителем (db/150): одна политика на все пути закрытия задачи.
+  readonly approval: TaskApprovalService;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
   // Снимок версии при смене статуса (для окна версий + restore).
@@ -85,11 +85,13 @@ export class MoveTask {
     // «выполнить» — чекбокс, drag, ПКМ/Ctrl+клик, массовые действия, кнопка в письме,
     // «Готово» в Telegram. Исполнитель своим действием отправляет задачу НА УТВЕРЖДЕНИЕ;
     // закрыть её может только руководитель (lead) или владелец пространства.
-    if (targetStatus === 'done' && (await this.needsApproval(project, input.ownerUserId))) {
-      targetStatus = 'pending_approval';
-      // Снапшот прежней колонки оставляем: приёмка ещё не состоялась, и при возврате в
-      // работу задача должна попасть туда, откуда её отправили.
-    }
+    // Снапшот прежней колонки оставляем: приёмка ещё не состоялась, и при возврате в
+    // работу задача должна попасть туда, откуда её отправили.
+    targetStatus = await this.deps.approval.resolveTargetStatus(
+      project,
+      input.ownerUserId,
+      targetStatus,
+    );
 
     const beforePos = await this.resolvePosition(input.beforeTaskId, input.projectId);
     const afterPos = await this.resolvePosition(input.afterTaskId, input.projectId);
@@ -133,6 +135,14 @@ export class MoveTask {
     }, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
 
+    // Попала в очередь приёмки — сообщаем тем, кто принимает. best-effort: сбой
+    // уведомления не должен отменять уже выполненный перенос.
+    if (updated.status === 'pending_approval' && task.status !== 'pending_approval') {
+      void this.deps.approval
+        .notifyApprovalRequested({ task: updated, project, actorUserId: input.ownerUserId })
+        .catch((err: unknown) => console.error('[task:approval] notify failed:', err));
+    }
+
     // Лента действий: только при реальной смене статуса (не при reorder внутри колонки).
     if (updated.status !== task.status) {
       void this.deps.activityRecorder?.record({
@@ -148,21 +158,6 @@ export class MoveTask {
       });
     }
     return updated;
-  }
-
-  // true — задачу нельзя закрыть напрямую: в пространстве включена приёмка, проект не
-  // личный, а актор не руководитель. Личные входящие исключены осознанно: свою задачу
-  // утверждать не у кого.
-  private async needsApproval(project: Project, actorUserId: string): Promise<boolean> {
-    if (project.isInbox) return false;
-    const workspace = await this.deps.workspaces.getById(project.workspaceId);
-    if (!workspace?.requireTaskApproval) return false;
-    const membership = await this.deps.workspaces.getMembership(project.workspaceId, actorUserId);
-    // Руководитель и владелец закрывают задачи сами — иначе им пришлось бы утверждать
-    // собственную работу. Роли нет вовсе (admin-bypass) — тоже пропускаем: у такого
-    // актора прав больше, чем у участника.
-    if (!membership) return false;
-    return membership.role !== 'lead' && membership.role !== 'owner';
   }
 
   private async resolvePosition(taskId: string | null, projectId: string): Promise<number | null> {

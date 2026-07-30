@@ -171,6 +171,18 @@ export function NotificationItem({
           </>
         )}
 
+        {payload.type === 'task_approval_requested' && (
+          <>
+            <p className="text-sm leading-tight">
+              <span className="font-medium">{payload.actorDisplayName}</span> отметил(а) задачу
+              выполненной в «{payload.projectName}» — работа ждёт вашего утверждения:
+            </p>
+            <p className="line-clamp-2 text-xs italic text-muted-foreground">
+              «{payload.taskExcerpt || '(без описания)'}»
+            </p>
+          </>
+        )}
+
         {payload.type === 'task_delegation_resolved' && payload.resolution === 'declined' && (
           <p className="text-sm leading-tight">
             <span className="font-medium">{payload.actorDisplayName}</span> снял(а) с себя задачу

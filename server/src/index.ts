@@ -284,6 +284,8 @@ import { TaskVersionRecorder } from './application/task/TaskVersionRecorder.js';
 import { GetTaskVersions } from './application/task/GetTaskVersions.js';
 import { GetProjectTaskVersions } from './application/task/GetProjectTaskVersions.js';
 import { RestoreTaskVersion } from './application/task/RestoreTaskVersion.js';
+import { TaskApprovalService } from './application/task/TaskApprovalService.js';
+import { RejectTaskApproval } from './application/task/RejectTaskApproval.js';
 import { MoveTask } from './application/task/MoveTask.js';
 import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories/DrizzleEmailActionTokenRepository.js';
 import { CreateEmailActionToken } from './application/email-action/CreateEmailActionToken.js';
@@ -584,6 +586,17 @@ const emailSender: EmailSender = process.env['SMTP_HOST']
 const appBaseUrl =
   process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173';
 
+// Приёмка задач руководителем (db/150): одна политика для MoveTask и системных потоков
+// закрытия задач (close-proposal, commit-sync, Telegram-композер).
+const taskApprovalService = new TaskApprovalService({
+  workspaces: workspaceRepo,
+  users: userRepo,
+  notifications: notificationRepo,
+  email: emailSender,
+  idGen: idGenerator,
+  appUrl: appBaseUrl,
+});
+
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 
 // Один экземпляр на процесс — внутри TTL-кэш package.json. Второй экземпляр означал бы
@@ -878,6 +891,23 @@ const createTaskCommentUseCase = new CreateTaskComment({
   idGen: idGenerator,
   activityRecorder,
 });
+
+// Приёмка (db/150): возврат работы исполнителю. Комментарий обязателен (гейт в use-case),
+// перенос делаем тем же MoveTask, что и остальные пути — политика приёмки внутри него.
+const rejectTaskApprovalUseCase = new RejectTaskApproval({
+  projects: projectRepo,
+  tasks: taskRepo,
+  approval: taskApprovalService,
+  createComment: createTaskCommentUseCase,
+  moveTask: new MoveTask({
+    projects: projectRepo,
+    approval: taskApprovalService,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    activityRecorder,
+  }),
+});
+
 const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: taskRepo });
 
 // --- Telegram-конструктор задач (+проект текст @ответственный) ---
@@ -910,6 +940,7 @@ const telegramComposer = new TelegramComposerService({
   projects: projectRepo,
   users: userRepo,
   createTask: new CreateTask({
+    approval: taskApprovalService,
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
@@ -1023,6 +1054,8 @@ const confirmCloseProposal = new ConfirmCloseProposal({
   closeProposals: closeProposalRepo,
   members: projectMemberRepo,
   tasks: taskRepo,
+  projects: projectRepo,
+  approval: taskApprovalService,
   linkCommit: new LinkCommit({
     projects: projectRepo,
     members: projectMemberRepo,
@@ -1057,7 +1090,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   // Инлайн «Завершить/Отменить» на задачных уведомлениях (nd:/nu: callback).
   moveTask: new MoveTask({
     projects: projectRepo,
-    workspaces: workspaceRepo,
+    approval: taskApprovalService,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -1532,6 +1565,8 @@ const flushCommitSyncBatch = new FlushCommitSyncBatch({
 const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
   tasks: taskRepo,
+  projects: projectRepo,
+  approval: taskApprovalService,
   recordUsage,
   // Ветка action='propose' (db/101): создаём предложения закрыть вместо авто-перемещения.
   createProposals: createCloseProposals,
@@ -1671,7 +1706,7 @@ const emailActionService = new EmailActionService({
   tasks: taskRepo,
   moveTask: new MoveTask({
     projects: projectRepo,
-    workspaces: workspaceRepo,
+    approval: taskApprovalService,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -1892,6 +1927,7 @@ const { app, devProxyUpgrade } = createApp({
       sites: siteArtifactRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+        approval: taskApprovalService,
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
@@ -1910,6 +1946,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+        approval: taskApprovalService,
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
@@ -2149,6 +2186,7 @@ const { app, devProxyUpgrade } = createApp({
         ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
       }),
       createTask: new CreateTask({
+        approval: taskApprovalService,
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
@@ -2330,6 +2368,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2346,9 +2385,10 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       activity: activityRecorder,
     }),
+    rejectTaskApproval: rejectTaskApprovalUseCase,
     moveTask: new MoveTask({
       projects: projectRepo,
-      workspaces: workspaceRepo,
+      approval: taskApprovalService,
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,
@@ -2680,6 +2720,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2703,7 +2744,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
-      workspaces: workspaceRepo,
+      approval: taskApprovalService,
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,
