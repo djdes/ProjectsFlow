@@ -81,8 +81,9 @@ function fromDto(dto: WorkspaceDto): Workspace {
     icon: dto.icon ?? null,
     // Старый бэк без kind → считаем командным (дефолт явно помечается миграцией db/079).
     kind: dto.kind ?? 'team',
-    // Старый бэк без db/150 → приёмка выключена (прежнее поведение).
-    requireTaskApproval: dto.requireTaskApproval ?? false,
+    // Поле отсутствует только у бэка без db/150. Фолбэк — включено: это дефолт продукта,
+    // и показывать выключенный тумблер там, где сервер уже требует приёмку, хуже.
+    requireTaskApproval: dto.requireTaskApproval ?? true,
     ownerUserId: dto.ownerUserId,
     role: normalizeRole(dto.role),
     projectCount: dto.projectCount ?? 0,

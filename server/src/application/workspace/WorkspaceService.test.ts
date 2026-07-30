@@ -13,10 +13,11 @@ import {
   CannotDeleteDefaultWorkspaceError,
   UserNotFoundByEmailError,
   NotProjectOwnerError,
+  NotWorkspaceOwnerError,
 } from '../../domain/workspace/errors.js';
 
 type Seed = {
-  workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind }>;
+  workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind; requireTaskApproval?: boolean }>;
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   current?: Record<string, string>; // userId -> workspaceId
   projects?: Array<{ id: string; ownerId: string; workspaceId: string; isInbox?: boolean }>;
@@ -26,7 +27,7 @@ type Seed = {
 function makeFakes(seed: Seed) {
   const workspaces = new Map<string, Workspace>();
   for (const w of seed.workspaces ?? []) {
-    workspaces.set(w.id, { id: w.id, name: w.name ?? 'WS', icon: null, kind: w.kind ?? 'team', ownerUserId: w.ownerUserId, createdAt: new Date('2026-01-01') });
+    workspaces.set(w.id, { id: w.id, name: w.name ?? 'WS', icon: null, kind: w.kind ?? 'team', requireTaskApproval: w.requireTaskApproval ?? true, ownerUserId: w.ownerUserId, createdAt: new Date('2026-01-01') });
   }
   const members = (seed.members ?? []).map((m) => ({ ...m }));
   const current = new Map<string, string>(Object.entries(seed.current ?? {}));
@@ -69,7 +70,12 @@ function makeFakes(seed: Seed) {
     async update(id, patch: UpdateWorkspaceInput) {
       const w = workspaces.get(id);
       if (!w) return null;
-      const next: Workspace = { ...w, name: patch.name ?? w.name, icon: patch.icon === undefined ? w.icon : patch.icon };
+      const next: Workspace = {
+        ...w,
+        name: patch.name ?? w.name,
+        icon: patch.icon === undefined ? w.icon : patch.icon,
+        requireTaskApproval: patch.requireTaskApproval ?? w.requireTaskApproval,
+      };
       workspaces.set(id, next);
       return next;
     },
@@ -388,4 +394,46 @@ test('switchCurrent: non-member rejected (404 not-found, no leak)', async () => 
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
   });
   await assert.rejects(() => service.switchCurrent('intruder', 'w1'));
+});
+
+// Приёмка задач (db/150, дефолт включён в db/151). Настройка управленческая: её меняет
+// только руководитель или владелец — участник, которого она ограничивает, не может её снять.
+test('setTaskApproval: руководитель выключает приёмку, и это сохраняется', async () => {
+  const f = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'owner', requireTaskApproval: true }],
+    members: [
+      { workspaceId: 'w1', userId: 'owner', role: 'owner' },
+      { workspaceId: 'w1', userId: 'boss', role: 'lead' },
+    ],
+  });
+
+  const updated = await f.service.setTaskApproval('w1', 'boss', false);
+
+  assert.equal(updated.requireTaskApproval, false);
+  // Читаем ещё раз из репозитория: баг, который это ловит, — «патч потерялся по пути»,
+  // и он виден только на повторном чтении (ровно так он и проявился у пользователя).
+  assert.equal((await f.repo.getById('w1'))?.requireTaskApproval, false);
+});
+
+test('setTaskApproval: владелец включает приёмку обратно', async () => {
+  const f = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'owner', requireTaskApproval: false }],
+    members: [{ workspaceId: 'w1', userId: 'owner', role: 'owner' }],
+  });
+
+  const updated = await f.service.setTaskApproval('w1', 'owner', true);
+
+  assert.equal(updated.requireTaskApproval, true);
+});
+
+test('setTaskApproval: рядовой участник снять приёмку не может', async () => {
+  const f = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'owner', requireTaskApproval: true }],
+    members: [
+      { workspaceId: 'w1', userId: 'owner', role: 'owner' },
+      { workspaceId: 'w1', userId: 'worker', role: 'editor' },
+    ],
+  });
+
+  await assert.rejects(() => f.service.setTaskApproval('w1', 'worker', false), NotWorkspaceOwnerError);
 });

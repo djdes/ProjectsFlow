@@ -372,9 +372,10 @@ export const workspaces = mysqlTable(
     // 'default' = личный хаб-со-всеми-моими-проектами (один на владельца, неудаляем, скрыт у чужих);
     // 'team' = созданное вручную командное пространство (свои участники/проекты/чат). См. db/079.
     kind: mysqlEnum('kind', ['default', 'team']).notNull().default('team'),
-    // Приёмка задач руководителем (db/150): «выполнено» от исполнителя переводит задачу
-    // в pending_approval, а закрыть её может только lead/owner пространства.
-    requireTaskApproval: boolean('require_task_approval').notNull().default(false),
+    // Приёмка задач руководителем: «выполнено» от исполнителя переводит задачу в
+    // pending_approval, а закрыть её может только lead/owner пространства. Включена по
+    // умолчанию (db/151) — отключение это исключение, а не наоборот.
+    requireTaskApproval: boolean('require_task_approval').notNull().default(true),
     ownerUserId: fkUserId('owner_user_id'),
     createdAt: createdAtCol(),
   },

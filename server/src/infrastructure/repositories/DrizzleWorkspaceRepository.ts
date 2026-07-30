@@ -120,6 +120,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
     const set: Partial<WorkspaceRow> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
+    if (patch.requireTaskApproval !== undefined) {
+      set.requireTaskApproval = patch.requireTaskApproval;
+    }
     if (Object.keys(set).length > 0) {
       await this.db.update(workspaces).set(set).where(eq(workspaces.id, id));
     }
