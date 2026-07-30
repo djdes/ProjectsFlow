@@ -818,10 +818,9 @@ export function AssignedToMeBlock({
     [user, taskRepository, refresh, onChanged],
   );
 
-  // Счётчик вспышек полки «В работе»: растёт на каждое взятие задачи в работу, полка
-  // проигрывает по нему блик. Ключ, а не булев флаг — иначе две задачи подряд не дали бы
-  // перезапустить анимацию.
-  const [workFlashKey, setWorkFlashKey] = useState(0);
+  // Вспышка полки «В работе»: `key` растёт на каждое взятие задачи (булев флаг не дал бы
+  // перезапустить анимацию на второй задаче подряд), `id` — какую карточку подсветить.
+  const [workFlash, setWorkFlash] = useState<{ id: string; key: number } | null>(null);
 
   // Взять в работу / убрать из работы. 'manual' — «делаю руками», агент такие задачи
   // никогда не подхватывает; backlog — «Черновики», нейтральное «не занимаюсь сейчас».
@@ -835,9 +834,9 @@ export function AssignedToMeBlock({
           beforeTaskId: null,
           afterTaskId: null,
         });
-        // Полка вспыхивает только на ВЗЯТИЕ в работу и только после ответа сервера:
-        // на возврат в черновики праздновать нечего, а на отказ — тем более.
-        if (next === 'manual') setWorkFlashKey((k) => k + 1);
+        // Полка и карточка вспыхивают только на ВЗЯТИЕ в работу и только после ответа
+        // сервера: на возврат в черновики праздновать нечего, а на отказ — тем более.
+        if (next === 'manual') setWorkFlash((prev) => ({ id: item.id, key: (prev?.key ?? 0) + 1 }));
         await refresh();
         onChanged?.();
       } catch (e) {
@@ -1072,7 +1071,8 @@ export function AssignedToMeBlock({
           onChanged={handleToggled}
           onDelete={handleDelete}
           onRemoveFromWork={(t) => void setWorkStatus(t, 'backlog')}
-          flashKey={workFlashKey}
+          flashKey={workFlash?.key ?? 0}
+          flashItemId={workFlash?.id ?? null}
           className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
@@ -1763,6 +1763,7 @@ function InProgressShelf({
   onDelete,
   onRemoveFromWork,
   flashKey,
+  flashItemId,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -1772,6 +1773,8 @@ function InProgressShelf({
   onRemoveFromWork: (item: InboxBlockTask) => void;
   // Растёт на каждое взятие задачи в работу — полка проигрывает вспышку.
   flashKey: number;
+  // Какую карточку подсветить вместе с полкой (та, что только что приехала).
+  flashItemId: string | null;
   className?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
@@ -1818,7 +1821,16 @@ function InProgressShelf({
         ) : (
           <div className="flex flex-wrap gap-2">
             {items.map((item) => (
-              <div key={item.id} className="group relative w-[min(100%,17rem)]">
+              <div
+                key={item.id}
+                // rounded-xl на обёртке — чтобы вспышка (::after с border-radius: inherit)
+                // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
+                // эффекта от радиуса самого по себе тоже.
+                className={cn(
+                  'group relative w-[min(100%,17rem)] rounded-xl',
+                  flash && item.id === flashItemId && 'pf-card-flash',
+                )}
+              >
                 <DraggableTask item={item} disabled={!item.canModify}>
                   <AcceptedCard
                     item={item}
