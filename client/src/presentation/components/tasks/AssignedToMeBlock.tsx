@@ -54,6 +54,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
+import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import {
@@ -251,6 +252,14 @@ export function AssignedToMeBlock({
   const { user } = useCurrentUser();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
+  // Принимает работу руководитель/владелец активного пространства. Нужно, чтобы показать
+  // ему очередь приёмки даже пустой — иначе новую область попросту не находят. Остальным
+  // пустую полку не показываем: это не их инструмент.
+  const { data: workspaces } = useWorkspaces();
+  const currentWorkspace = (workspaces ?? []).find((w) => w.isCurrent) ?? null;
+  const isApprover =
+    currentWorkspace?.requireTaskApproval === true &&
+    (currentWorkspace.role === 'lead' || currentWorkspace.role === 'owner');
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
   // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
@@ -539,13 +548,17 @@ export function AssignedToMeBlock({
     () => visibleTasks.filter((t) => t.status === 'manual'),
     [visibleTasks],
   );
-  // Приёмка руководителем (db/150): задачи, которые исполнители отправили на утверждение.
-  // Показываем их отдельной полкой — чтобы руководитель видел очередь приёмки сразу, не
-  // заходя в каждый проект. Из обычных групп исключены, как и «В работе».
-  const approvalTasks = useMemo(
-    () => visibleTasks.filter((t) => t.status === 'pending_approval'),
-    [visibleTasks],
-  );
+  // Приёмка руководителем (db/150): очередь приёмки — сумма ОБОИХ направлений, а не
+  // активной вкладки. Задачи на утверждении назначены исполнителям, поэтому на вкладке
+  // «Мои» их не бывает, и полка, привязанная к вкладке, оказывалась пустой ровно у того,
+  // кому она нужна. Фильтры вкладок здесь тоже не применяем: очередь не должна прятаться.
+  const approvalTasks = useMemo(() => {
+    const byId = new Map<string, InboxBlockTask>();
+    for (const t of [...toMeTasks, ...byMeDisplayTasks]) {
+      if (t.status === 'pending_approval') byId.set(t.id, t);
+    }
+    return [...byId.values()];
+  }, [toMeTasks, byMeDisplayTasks]);
   const groupedTasks = useMemo(
     () => visibleTasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval'),
     [visibleTasks],
@@ -1028,7 +1041,7 @@ export function AssignedToMeBlock({
           прямо сейчас». Принимает дроп карточки (статус → manual), карточки внутри
           можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
           отключён и полка была бы мёртвой. */}
-      {!selectionActive && approvalTasks.length > 0 && (
+      {!selectionActive && (approvalTasks.length > 0 || isApprover) && (
         <ApprovalShelf
           items={approvalTasks}
           onOpen={(t) => setDrawerTask(t)}
@@ -1677,8 +1690,16 @@ function ApprovalShelf({
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-violet-800 dark:text-violet-300/90">
           <ShieldCheck className="size-3 shrink-0" />
           <span>На утверждении</span>
-          <span className="tabular-nums opacity-70">{items.length}</span>
+          {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
         </div>
+        {items.length === 0 ? (
+          // Пустую очередь показываем только принимающему (см. isApprover): без этого
+          // новую область не находят и решают, что приёмка не работает.
+          <p className="px-0.5 py-1 text-xs text-violet-800/60 dark:text-violet-200/45">
+            Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их
+            можете только вы.
+          </p>
+        ) : (
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
             <div key={item.id} className="w-[min(100%,17rem)] space-y-1">
@@ -1708,6 +1729,7 @@ function ApprovalShelf({
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );
