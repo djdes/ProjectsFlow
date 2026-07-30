@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Task, TaskStatus } from '../../domain/task/Task.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
+import { CreateTaskComment } from './CreateTaskComment.js';
 import { DeleteTask } from './DeleteTask.js';
 import { MoveTaskToProject } from './MoveTaskToProject.js';
 import { TaskApprovalService } from './TaskApprovalService.js';
@@ -86,6 +87,9 @@ function membersFake(): never {
       role: 'editor',
     }),
     listSharedUsers: async () => [],
+    // CreateTaskComment дёргает его для @-упоминаний (best-effort). Без заглушки тест
+    // проходит, но сыпет в вывод пойманной ошибкой — шум маскирует реальные падения.
+    listByProject: async () => [],
   } as never;
 }
 
@@ -125,6 +129,70 @@ function makeMoveToProject(input: { actorRole: WorkspaceRole | null; taskStatus:
   });
   return { move, movedTo: (): string | null => movedTo };
 }
+
+function makeComment(input: { actorRole: WorkspaceRole | null; taskStatus: TaskStatus }) {
+  let created: string | null = null;
+  const task = makeTask(input.taskStatus);
+  const create = new CreateTaskComment({
+    projects: projectsFake(),
+    members: membersFake(),
+    tasks: { getById: async () => task } as never,
+    comments: {
+      create: async (row: { body: string }) => {
+        created = row.body;
+        return { ...row, createdAt: new Date(0), updatedAt: new Date(0) };
+      },
+    } as never,
+    idGen: () => 'c1',
+    approval: makeApproval(input.actorRole),
+  } as never);
+  return { create, created: (): string | null => created };
+}
+
+// Тред — часть задачи: пока работа на утверждении, исполнитель его не дописывает. Раньше
+// комментарии были намеренно открыты, и получалось хуже всего: коммент успевал создаться,
+// а следом падал перенос задачи — юзер видел «не удалось отправить» и опубликованный текст.
+test('исполнитель не может комментировать задачу, которая ждёт утверждения', async () => {
+  const h = makeComment({ actorRole: 'editor', taskStatus: 'pending_approval' });
+
+  await assert.rejects(
+    () =>
+      h.create.execute({
+        projectId: PROJECT_ID,
+        taskId: TASK_ID,
+        ownerUserId: 'employee',
+        body: 'готово, посмотрите',
+      }),
+    /утверждени/u,
+  );
+  assert.equal(h.created(), null);
+});
+
+test('руководитель задачу на утверждении комментировать может', async () => {
+  const h = makeComment({ actorRole: 'lead', taskStatus: 'pending_approval' });
+
+  await h.create.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    ownerUserId: 'boss',
+    body: 'переделай отступы',
+  });
+
+  assert.equal(h.created(), 'переделай отступы');
+});
+
+test('вне очереди приёмки комментарий работает как раньше', async () => {
+  const h = makeComment({ actorRole: 'editor', taskStatus: 'todo' });
+
+  await h.create.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    ownerUserId: 'employee',
+    body: 'взял в работу',
+  });
+
+  assert.equal(h.created(), 'взял в работу');
+});
 
 test('исполнитель не может удалить задачу, которая ждёт утверждения', async () => {
   const h = makeDelete({ actorRole: 'editor', taskStatus: 'pending_approval' });

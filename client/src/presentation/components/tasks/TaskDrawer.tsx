@@ -2128,15 +2128,14 @@ export function TaskDrawer({
                 onHoverChange={(enter) => (enter ? enterTopZone() : leaveTopZone())}
               />
 
-              {/* Заморозка приёмкой: объясняем, ПОЧЕМУ поля не правятся. Без плашки окно
-                  выглядит просто сломанным — контролы есть, но ничего не меняется.
-                  Комментарии при этом открыты: отвечать на замечания нужно. */}
+              {/* Заморозка приёмкой: объясняем, ПОЧЕМУ ничего не правится. Без плашки окно
+                  выглядит просто сломанным — контролы есть, но ничего не меняется. */}
               {frozenByApproval && (
                 <div className="mx-[var(--pf-drawer-px)] mb-2 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
                   <Lock className="mt-0.5 size-3.5 shrink-0" />
                   <span>
-                    Задача на утверждении — изменить её может только руководитель. Комментарии
-                    доступны: напишите здесь, если нужно что-то поправить.
+                    Задача на утверждении — до решения руководителя её нельзя ни изменить, ни
+                    комментировать. Задачу можно читать.
                   </span>
                 </div>
               )}
@@ -2413,6 +2412,7 @@ export function TaskDrawer({
                     onReply={(commentId, authorName, quotedText) =>
                       setReplyDraft({ commentId, authorName, quotedText })
                     }
+                    frozen={frozenByApproval}
                   />
                 </div>
               </TabsContent>
@@ -2462,20 +2462,30 @@ export function TaskDrawer({
                     {task.status === 'awaiting_clarification' && (
                       <CancelWorkButton task={task} onChanged={() => notifyChanged()} />
                     )}
-                    <TaskDrawerComposer
-                      task={task}
-                      backlogTail={backlogTail}
-                      todoTail={todoTail}
-                      replyDraft={replyDraft}
-                      onClearReply={() => setReplyDraft(null)}
-                      onNavigateToComment={flashComment}
-                      onCommentCreated={(c) => {
-                        onCommentCreatedRef.current?.(c);
-                        scrollBodyToBottom();
-                        notifyChanged();
-                      }}
-                      onTaskChanged={() => notifyChanged()}
-                    />
+                    {frozenByApproval ? (
+                      // Композер убран целиком, а не задизейблен: сервер отклоняет и сам
+                      // комментарий (409), и «В черновики/Воркеру» после него — раньше
+                      // коммент успевал создаться, а тост говорил «не удалось отправить».
+                      <div className="flex items-center justify-center gap-2 border-t px-3 py-3 text-xs text-muted-foreground">
+                        <Lock className="size-3.5 shrink-0" />
+                        Задача на утверждении — обсуждение закрыто до решения руководителя
+                      </div>
+                    ) : (
+                      <TaskDrawerComposer
+                        task={task}
+                        backlogTail={backlogTail}
+                        todoTail={todoTail}
+                        replyDraft={replyDraft}
+                        onClearReply={() => setReplyDraft(null)}
+                        onNavigateToComment={flashComment}
+                        onCommentCreated={(c) => {
+                          onCommentCreatedRef.current?.(c);
+                          scrollBodyToBottom();
+                          notifyChanged();
+                        }}
+                        onTaskChanged={() => notifyChanged()}
+                      />
+                    )}
                   </div>
                 ))}
             </div>
@@ -2738,6 +2748,8 @@ function TaskCommentsSection({
   scrollToCommentId,
   // Ответ/цитата: тред просит композер ответить на коммент (с опц. выделенным фрагментом).
   onReply,
+  // Задача на утверждении, а юзер её не принимает: тред read-only (сервер вернёт 409).
+  frozen = false,
 }: {
   projectId: string;
   taskId: string;
@@ -2746,6 +2758,7 @@ function TaskCommentsSection({
   onCountChange?: (count: number) => void;
   scrollToCommentId?: string;
   onReply?: (commentId: string, authorName: string, quotedText: string | null) => void;
+  frozen?: boolean;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -2849,7 +2862,8 @@ function TaskCommentsSection({
               members={members}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
-              onReply={onReply}
+              onReply={frozen ? undefined : onReply}
+              frozen={frozen}
               replyParent={
                 c.replyToCommentId ? (comments.find((x) => x.id === c.replyToCommentId) ?? null) : null
               }
@@ -3114,6 +3128,7 @@ function CommentItem({
   onReply,
   replyParent,
   onNavigateToComment,
+  frozen = false,
 }: {
   projectId: string;
   taskId: string;
@@ -3126,6 +3141,9 @@ function CommentItem({
   onReply?: (commentId: string, authorName: string, quotedText: string | null) => void;
   replyParent?: TaskComment | null;
   onNavigateToComment?: (commentId: string, quotedText?: string | null) => void;
+  // Задача на утверждении и юзер её не принимает: правка/удаление коммента вернут 409,
+  // поэтому ряд действий не рисуем вовсе. Читать тред при этом можно.
+  frozen?: boolean;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -3269,8 +3287,14 @@ function CommentItem({
             {isEdited && <span className="ml-1 opacity-70">· изменён</span>}
           </span>
           {/* Действия — ровный ряд size-6 кнопок (карандаш + три точки). Удаление
-              переехало в меню три-точки. Native title — подпись при наведении. */}
-          <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              переехало в меню три-точки. Native title — подпись при наведении.
+              На задаче в очереди приёмки ряда нет: тред заморожен. */}
+          <div
+            className={cn(
+              'ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+              frozen && 'hidden',
+            )}
+          >
             {onReply && (
               <Button
                 type="button"
