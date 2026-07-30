@@ -491,35 +491,480 @@ a:focus-visible {
     }
   }
 
-  /* Счётчик «выполнено сегодня» (CompletedTodayPill): галочка прочерчивается,
-     пилюля упруго подпрыгивает, кольцо расходится. Один жест на одно закрытие. */
-  @keyframes pf-check-draw {
-    from {
-      stroke-dashoffset: 1;
-    }
-    to {
-      stroke-dashoffset: 0;
-    }
+  /* ═══════════════════════════════════════════════════════════════════
+     СЧЁТЧИК «ВЫПОЛНЕНО СЕГОДНЯ» — ранг-бейдж (CompletedTodayPill, ranks.ts).
+     Ранг = число закрытых задач; каждая задача повышает его и добавляет
+     деталь. Утверждённый макет: заливка цветом ранга, обводки нет.
+     Принципы, которые НЕ надо «оптимизировать» обратно:
+       • глубина у нижней кромки — сдвигом тона (--rb-c3), не чёрным:
+         примесь чёрного грязнит заливку;
+       • блик локальный (радиальный), не сплошная белая засветка — та
+         выцвечивает верх плашки;
+       • свечение двумя слоями: тугой ореол + широкий разлёт. Одиночная
+         тень читается как размытая копия, две — как свет.
+     ═══════════════════════════════════════════════════════════════════ */
+  .pf-rb {
+    --rb-c1: #64748b;
+    --rb-c2: #94a3b8;
+    --rb-c3: #475569;
+    --rb-fg: #e2e8f0;
+    --rb-bloom: 0px;
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    isolation: isolate;
+    user-select: none;
   }
-  @keyframes pf-pill-pop {
-    0% {
-      transform: scale(1);
-    }
-    35% {
-      transform: scale(1.16);
-    }
-    100% {
-      transform: scale(1);
-    }
+  .pf-rb-stack {
+    position: relative;
+    display: inline-flex;
   }
-  @keyframes pf-pill-ring {
-    0% {
-      transform: scale(1);
-      opacity: 0.75;
-    }
-    100% {
-      transform: scale(1.85);
-      opacity: 0;
+  /* Свет, падающий на поверхность под плашкой: бейдж получает «место»,
+     а не выглядит наклейкой поверх страницы. */
+  .pf-rb-glowbed {
+    position: absolute;
+    inset: -55% -14%;
+    z-index: -3;
+    border-radius: 999px;
+    background: radial-gradient(closest-side, var(--rb-c1), transparent 74%);
+    opacity: 0.26;
+    filter: blur(9px);
+    pointer-events: none;
+  }
+  .pf-rb-frame {
+    position: relative;
+    border-radius: 999px;
+    filter: drop-shadow(0 0 calc(var(--rb-bloom) * 0.34) var(--rb-c1))
+      drop-shadow(0 1px var(--rb-bloom) var(--rb-c3));
+    transition: filter 0.35s cubic-bezier(0.16, 0.84, 0.28, 1);
+  }
+  .pf-rb-core {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5625rem 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: linear-gradient(160deg, #101a2e, #0a0f1a 60%);
+    color: var(--rb-c2);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    transition: color 0.3s cubic-bezier(0.16, 0.84, 0.28, 1);
+  }
+  .pf-rb[data-fill='1'] .pf-rb-core {
+    background:
+      radial-gradient(125% 150% at 22% 10%, rgb(255 255 255 / 0.34), rgb(255 255 255 / 0) 46%),
+      linear-gradient(148deg, var(--rb-c2) 0%, var(--rb-c1) 54%, var(--rb-c3) 100%);
+    color: var(--rb-fg);
+    /* Освещённая кромка: ярко сверху, почти ничего снизу. Равномерное
+       кольцо по кругу выглядит наклейкой. */
+    box-shadow:
+      inset 0 1px 0.5px rgb(255 255 255 / 0.55),
+      inset 0 -1px 1px rgb(255 255 255 / 0.14);
+  }
+  /* Тихий отблеск по всем залитым рангам — цвет перестаёт быть «напечатанным». */
+  .pf-rb[data-fill='1'] .pf-rb-core::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(108deg, transparent 34%, rgb(255 255 255 / 0.5) 50%, transparent 66%);
+    background-size: 300% 100%;
+    opacity: 0.14;
+    animation: pf-rb-specular 7s ease-in-out infinite;
+  }
+  .pf-rb[data-holo='1'] .pf-rb-core::before {
+    background: linear-gradient(
+      104deg,
+      transparent 30%,
+      rgb(255 255 255 / 0.8) 44%,
+      rgb(0 229 255 / 0.55) 52%,
+      rgb(255 0 168 / 0.5) 60%,
+      transparent 72%
+    );
+    opacity: 0.5;
+    animation-duration: 3.6s;
+  }
+  .pf-rb[data-scan='1'] .pf-rb-core::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 45%;
+    background: linear-gradient(180deg, transparent, rgb(255 255 255 / 0.85), transparent);
+    opacity: 0.3;
+    mix-blend-mode: soft-light;
+    animation: pf-rb-scan 2.4s linear infinite;
+  }
+  .pf-rb[data-iris='1'] .pf-rb-core {
+    animation: pf-rb-iris 9s ease-in-out infinite;
+  }
+  .pf-rb-check {
+    width: 13px;
+    height: 13px;
+    display: block;
+    overflow: visible;
+    opacity: 0.82;
+  }
+  .pf-rb-check path {
+    fill: none;
+    stroke: var(--rb-c1);
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 3px var(--rb-c1));
+  }
+  .pf-rb[data-fill='1'] .pf-rb-check path {
+    stroke: var(--rb-fg);
+    stroke-width: 2.7;
+    filter: none;
+  }
+  .pf-rb-count {
+    display: inline-block;
+    min-width: 0.72em;
+    text-align: center;
+    animation: pf-rb-roll 400ms cubic-bezier(0.16, 0.84, 0.28, 1);
+  }
+  .pf-rb[data-rgb='1'] .pf-rb-count {
+    text-shadow: -0.7px 0 rgb(190 0 60 / 0.55), 0.7px 0 rgb(0 120 190 / 0.55);
+  }
+
+  /* Детали ранга. */
+  .pf-rb-hud {
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    width: 5px;
+    pointer-events: none;
+    filter: drop-shadow(0 0 5px var(--rb-c1));
+  }
+  .pf-rb-hud-l {
+    right: calc(100% + 3px);
+    border-left: 1.5px solid var(--rb-c1);
+    border-top: 1.5px solid var(--rb-c1);
+    border-bottom: 1.5px solid var(--rb-c1);
+    border-radius: 3px 0 0 3px;
+  }
+  .pf-rb-hud-r {
+    left: calc(100% + 3px);
+    border-right: 1.5px solid var(--rb-c1);
+    border-top: 1.5px solid var(--rb-c1);
+    border-bottom: 1.5px solid var(--rb-c1);
+    border-radius: 0 3px 3px 0;
+  }
+  .pf-rb-trace {
+    position: absolute;
+    top: 50%;
+    height: 15px;
+    width: 23px;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .pf-rb-trace-l {
+    right: calc(100% + 11px);
+  }
+  .pf-rb-trace-r {
+    left: calc(100% + 11px);
+    transform: translateY(-50%) scaleX(-1);
+  }
+  .pf-rb-trace svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+  .pf-rb-trace path {
+    fill: none;
+    stroke: var(--rb-c1);
+    stroke-width: 2.2;
+    opacity: 0.9;
+    filter: drop-shadow(0 0 3px var(--rb-c1));
+  }
+  .pf-rb-trace circle {
+    fill: #0a0f1a;
+    stroke: var(--rb-c1);
+    stroke-width: 2.2;
+  }
+  .pf-rb-dot {
+    fill: var(--rb-c2);
+    stroke: none;
+    filter: drop-shadow(0 0 4px var(--rb-c2));
+    animation: pf-rb-dot 1.9s linear infinite;
+  }
+  .pf-rb-rain {
+    position: absolute;
+    inset: -12px -4px -5px;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .pf-rb-rain i {
+    position: absolute;
+    top: -10px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 9px;
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1;
+    color: var(--rb-c2);
+    opacity: 0;
+    animation: pf-rb-mote 2.4s linear infinite;
+  }
+  .pf-rb-grid {
+    position: absolute;
+    inset: -7px;
+    z-index: -1;
+    border-radius: 999px;
+    border: 2px dashed var(--rb-c1);
+    opacity: 0.6;
+    pointer-events: none;
+    animation: pf-rb-spin 6s linear infinite;
+  }
+  .pf-rb-grid-b {
+    inset: -12px;
+    border-style: dotted;
+    border-color: var(--rb-c2);
+    opacity: 0.35;
+    animation-duration: 9s;
+    animation-direction: reverse;
+  }
+  .pf-rb-reactor {
+    position: absolute;
+    inset: -13px;
+    z-index: -2;
+    border-radius: 999px;
+    background: radial-gradient(closest-side, var(--rb-c1) 0%, transparent 72%);
+    opacity: 0.32;
+    filter: blur(6px);
+    pointer-events: none;
+    animation: pf-rb-reactor 2.1s ease-in-out infinite;
+  }
+  .pf-rb-meter {
+    display: flex;
+    align-items: center;
+    gap: 2.5px;
+    height: 5px;
+  }
+  .pf-rb-meter i {
+    width: 5px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--rb-c1);
+    opacity: 0.16;
+    transition: opacity 0.25s cubic-bezier(0.16, 0.84, 0.28, 1);
+  }
+  .pf-rb-meter i.pf-rb-on {
+    opacity: 1;
+    box-shadow: 0 0 7px var(--rb-c1), 0 0 2px var(--rb-c2);
+  }
+  .pf-rb-sys {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--rb-c2);
+    text-shadow: 0 0 6px var(--rb-c1);
+    margin-left: 2px;
+  }
+
+  /* Церемония: замах — удар — лучи — кольца — трассеры — плашка ранга. */
+  .pf-rb-fx {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .pf-rb-playing .pf-rb-frame {
+    animation: pf-rb-slam 980ms cubic-bezier(0.22, 1.4, 0.36, 1);
+  }
+  .pf-rb-playing .pf-rb-check path {
+    animation: pf-rb-draw 560ms cubic-bezier(0.16, 0.84, 0.28, 1);
+  }
+  .pf-rb-split {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    animation: pf-rb-split 420ms steps(3) forwards;
+  }
+  .pf-rb-split-r {
+    background: rgb(255 0 90 / 0.5);
+  }
+  .pf-rb-split-c {
+    background: rgb(0 225 255 / 0.5);
+  }
+  .pf-rb-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 999px;
+    border: 2.5px solid var(--rb-c1);
+    animation: pf-rb-ring 700ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  }
+  .pf-rb-ring-b {
+    animation-delay: 90ms;
+    border-color: var(--rb-c2);
+  }
+  .pf-rb-ring-c {
+    animation-delay: 185ms;
+    border-color: #fff;
+  }
+  .pf-rb-rays {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 180px;
+    height: 180px;
+    margin: -90px 0 0 -90px;
+    border-radius: 999px;
+    background: repeating-conic-gradient(from 0deg, var(--rb-c1) 0deg 4.5deg, transparent 4.5deg 22deg);
+    mask-image: radial-gradient(closest-side, transparent 19%, #000 38%, transparent 70%);
+    -webkit-mask-image: radial-gradient(closest-side, transparent 19%, #000 38%, transparent 70%);
+    animation: pf-rb-rays 1020ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  }
+  /* Трассеры — короткие лучи-черты, а не круглые искры: читается как выброс данных. */
+  .pf-rb-tracer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--len);
+    height: 2.5px;
+    margin: -1.25px 0 0 0;
+    background: var(--c);
+    box-shadow: 0 0 5px var(--c);
+    transform-origin: 0 50%;
+    animation-name: pf-rb-tracer;
+    animation-timing-function: cubic-bezier(0.16, 0.84, 0.28, 1);
+    animation-fill-mode: forwards;
+  }
+  .pf-rb-digit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--c);
+    text-shadow: 0 0 6px var(--c);
+    animation: pf-rb-digit 780ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  }
+  .pf-rb-tag {
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 0.9rem);
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    white-space: nowrap;
+    padding: 0.32rem 0.55rem;
+    border-radius: 999px;
+    border: 1.5px solid rgb(255 255 255 / 0.3);
+    background: linear-gradient(140deg, var(--rb-c2), var(--rb-c1) 78%);
+    color: var(--rb-fg);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: 0 0 14px -2px var(--rb-c1);
+    animation: pf-rb-tag 2200ms cubic-bezier(0.24, 1.5, 0.34, 1) 120ms forwards;
+  }
+  .pf-rb-tag small {
+    font-size: 0.5625rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    opacity: 0.7;
+  }
+
+  @keyframes pf-rb-slam {
+    0% { transform: scale(1); }
+    10% { transform: scale(0.86); }
+    30% { transform: scale(1.4); }
+    48% { transform: scale(0.96); }
+    66% { transform: scale(1.08); }
+    84% { transform: scale(0.99); }
+    100% { transform: scale(1); }
+  }
+  @keyframes pf-rb-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes pf-rb-ring {
+    from { transform: scale(1); opacity: 0.9; }
+    to { transform: scale(2.4); opacity: 0; }
+  }
+  @keyframes pf-rb-rays {
+    0% { transform: scale(0.2) rotate(0); opacity: 0; }
+    18% { opacity: 0.92; }
+    100% { transform: scale(1.32) rotate(64deg); opacity: 0; }
+  }
+  @keyframes pf-rb-split {
+    0% { opacity: 0.7; transform: translate(0); }
+    33% { transform: translate(-3px, 1px); }
+    66% { transform: translate(3px, -1px); }
+    100% { opacity: 0; transform: translate(0); }
+  }
+  @keyframes pf-rb-tracer {
+    from { transform: rotate(var(--rot)) translateX(6px) scaleX(1); opacity: 1; }
+    to { transform: rotate(var(--rot)) translateX(var(--dist)) scaleX(0.2); opacity: 0; }
+  }
+  @keyframes pf-rb-digit {
+    from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    to { transform: translate(var(--dx), var(--dy)) scale(0.6); opacity: 0; }
+  }
+  @keyframes pf-rb-tag {
+    0% { opacity: 0; transform: translate(1rem, -50%) scaleX(0.6); }
+    14%, 64% { opacity: 1; transform: translate(0, -50%) scaleX(1); }
+    100% { opacity: 0; transform: translate(0.3rem, -50%) scaleX(0.96); }
+  }
+  @keyframes pf-rb-roll {
+    from { transform: translateY(105%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes pf-rb-scan {
+    0% { transform: translateY(-120%); }
+    100% { transform: translateY(320%); }
+  }
+  @keyframes pf-rb-specular {
+    0% { background-position: 180% 0; }
+    55%, 100% { background-position: -80% 0; }
+  }
+  @keyframes pf-rb-iris {
+    0%, 100% { filter: hue-rotate(-14deg); }
+    50% { filter: hue-rotate(14deg); }
+  }
+  @keyframes pf-rb-spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pf-rb-mote {
+    0% { opacity: 0; transform: translateY(0); }
+    20% { opacity: 0.85; }
+    100% { opacity: 0; transform: translateY(42px); }
+  }
+  @keyframes pf-rb-reactor {
+    0%, 100% { opacity: 0.2; transform: scale(0.94); }
+    50% { opacity: 0.45; transform: scale(1.06); }
+  }
+  @keyframes pf-rb-dot {
+    0% { opacity: 0; transform: translateX(0); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(14px); }
+  }
+  /* Постоянное движение — только по согласию: аура, сетка, дождь и пульс просто
+     не рендерятся (гейт в компоненте), а всё остальное глушим здесь. */
+  @media (prefers-reduced-motion: reduce) {
+    .pf-rb *,
+    .pf-rb-fx * {
+      animation: none !important;
+      transition: none !important;
     }
   }
 
