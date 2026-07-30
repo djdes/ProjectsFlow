@@ -491,6 +491,56 @@ a:focus-visible {
     }
   }
 
+  /* Полка «В работе» (InProgressShelf): задачу взяли в работу — зона вспыхивает
+     тёплым и по ней проходит блик. Два слоя: сама полка даёт вспышку изнутри и
+     расходящееся кольцо (box-shadow), псевдоэлемент — диагональный отблеск.
+     Отблеск живёт в ::after с inset:0 и border-radius:inherit, поэтому обрезан
+     по форме полки — overflow:hidden на самой зоне вешать нельзя, он срезал бы
+     кнопки «убрать из работы» на углах карточек. */
+  .pf-shelf-flash {
+    animation: pf-shelf-pulse 900ms cubic-bezier(0.16, 0.84, 0.28, 1);
+  }
+  .pf-shelf-flash::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 32%,
+      rgb(255 255 255 / 0.72) 48%,
+      rgb(253 230 138 / 0.5) 56%,
+      transparent 70%
+    );
+    background-size: 230% 100%;
+    animation: pf-shelf-sheen 900ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  }
+  @keyframes pf-shelf-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgb(251 191 36 / 0.6), inset 0 0 26px 0 rgb(251 191 36 / 0.55);
+    }
+    45% {
+      box-shadow: 0 0 0 7px rgb(251 191 36 / 0.18), inset 0 0 20px 0 rgb(251 191 36 / 0.3);
+    }
+    100% {
+      box-shadow: 0 0 0 16px rgb(251 191 36 / 0), inset 0 0 0 0 rgb(251 191 36 / 0);
+    }
+  }
+  @keyframes pf-shelf-sheen {
+    0% {
+      background-position: 165% 0;
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    100% {
+      background-position: -65% 0;
+      opacity: 0;
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════════════
      СЧЁТЧИК «ВЫПОЛНЕНО СЕГОДНЯ» — ранг-бейдж (CompletedTodayPill, ranks.ts).
      Ранг = число закрытых задач; каждая задача повышает его и добавляет

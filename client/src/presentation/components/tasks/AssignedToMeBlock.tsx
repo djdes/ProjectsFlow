@@ -53,6 +53,7 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -817,6 +818,11 @@ export function AssignedToMeBlock({
     [user, taskRepository, refresh, onChanged],
   );
 
+  // Счётчик вспышек полки «В работе»: растёт на каждое взятие задачи в работу, полка
+  // проигрывает по нему блик. Ключ, а не булев флаг — иначе две задачи подряд не дали бы
+  // перезапустить анимацию.
+  const [workFlashKey, setWorkFlashKey] = useState(0);
+
   // Взять в работу / убрать из работы. 'manual' — «делаю руками», агент такие задачи
   // никогда не подхватывает; backlog — «Черновики», нейтральное «не занимаюсь сейчас».
   // Возврат НЕ в todo: в личных входящих это колонка «Воркер», задачу забрал бы Ralph.
@@ -829,6 +835,9 @@ export function AssignedToMeBlock({
           beforeTaskId: null,
           afterTaskId: null,
         });
+        // Полка вспыхивает только на ВЗЯТИЕ в работу и только после ответа сервера:
+        // на возврат в черновики праздновать нечего, а на отказ — тем более.
+        if (next === 'manual') setWorkFlashKey((k) => k + 1);
         await refresh();
         onChanged?.();
       } catch (e) {
@@ -1063,6 +1072,7 @@ export function AssignedToMeBlock({
           onChanged={handleToggled}
           onDelete={handleDelete}
           onRemoveFromWork={(t) => void setWorkStatus(t, 'backlog')}
+          flashKey={workFlashKey}
           className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
@@ -1752,6 +1762,7 @@ function InProgressShelf({
   onChanged,
   onDelete,
   onRemoveFromWork,
+  flashKey,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -1759,12 +1770,28 @@ function InProgressShelf({
   onChanged: () => void;
   onDelete: (item: InboxBlockTask) => void;
   onRemoveFromWork: (item: InboxBlockTask) => void;
+  // Растёт на каждое взятие задачи в работу — полка проигрывает вспышку.
+  flashKey: number;
   className?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
     id: 'work-in-progress',
     data: { type: 'work', status: 'manual' },
   });
+  const { animations } = useMotion();
+  const [flash, setFlash] = useState(false);
+
+  useEffect(() => {
+    if (flashKey === 0 || !animations) return;
+    // Снимаем класс на кадр: без этого повторная вспышка не стартует — класс уже висит.
+    setFlash(false);
+    const raf = requestAnimationFrame(() => setFlash(true));
+    const off = window.setTimeout(() => setFlash(false), 1000);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(off);
+    };
+  }, [flashKey, animations]);
 
   return (
     <div className={className}>
@@ -1773,9 +1800,10 @@ function InProgressShelf({
         className={cn(
           // Мягкий жёлтый: amber с низкой насыщенностью, чтобы полка читалась как «тёплая
           // зона», а не как предупреждение. В тёмной теме — тот же оттенок в глубину.
-          'rounded-xl border border-amber-300/50 bg-amber-100/45 px-2.5 py-2 transition-colors duration-150',
+          'relative rounded-xl border border-amber-300/50 bg-amber-100/45 px-2.5 py-2 transition-colors duration-150',
           'dark:border-amber-400/20 dark:bg-amber-400/[0.07]',
           isOver && 'border-amber-400/80 bg-amber-200/60 dark:border-amber-300/50 dark:bg-amber-400/[0.16]',
+          flash && 'pf-shelf-flash',
         )}
       >
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
