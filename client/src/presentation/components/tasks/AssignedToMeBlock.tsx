@@ -1045,6 +1045,7 @@ export function AssignedToMeBlock({
         <ApprovalShelf
           items={approvalTasks}
           onOpen={(t) => setDrawerTask(t)}
+          onChanged={handleToggled}
           onAccept={(t) => void acceptApproval(t)}
           onReject={(t) => setRejectTarget(t)}
           className={cn(bleedNegClass, bleedPadClass)}
@@ -1674,12 +1675,14 @@ function RejectApprovalDialog({
 function ApprovalShelf({
   items,
   onOpen,
+  onChanged,
   onAccept,
   onReject,
   className,
 }: {
   items: readonly InboxBlockTask[];
   onOpen: (item: InboxBlockTask) => void;
+  onChanged: () => void;
   onAccept: (item: InboxBlockTask) => void;
   onReject: (item: InboxBlockTask) => void;
   className?: string;
@@ -1706,8 +1709,9 @@ function ApprovalShelf({
               <AcceptedCard
                 item={item}
                 onOpen={() => onOpen(item)}
-                onChanged={() => onAccept(item)}
+                onChanged={onChanged}
                 onDelete={() => onReject(item)}
+                hideQuickActions
               />
               {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. */}
               <div className="flex gap-1">
@@ -2506,6 +2510,7 @@ function AcceptedCard({
   selecting = false,
   selected = false,
   onSelectToggle,
+  hideQuickActions = false,
 }: {
   item: InboxBlockTask;
   onOpen: () => void;
@@ -2519,6 +2524,9 @@ function AcceptedCard({
   selecting?: boolean;
   selected?: boolean;
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
+  // Приёмка (db/150): в полке утверждения действия живут в явных кнопках «Принять» /
+  // «Вернуть в работу», поэтому встроенные чекбокс и корзина только путают.
+  hideQuickActions?: boolean;
 }): React.ReactElement {
   const isDone = item.status === 'done';
   const { taskRepository } = useContainer();
@@ -2607,7 +2615,7 @@ function AcceptedCard({
   // В режиме выделения действий нет: карточка целиком — цель выбора, а «выполнить»/«удалить»
   // на ней конфликтовали бы с кликом-тоглом (и есть в панели массовых действий).
   const renderActions = (big: boolean): React.ReactNode =>
-    selecting ? null : (
+    selecting || hideQuickActions ? null : (
     <>
       <InboxCheckbox
         task={item}

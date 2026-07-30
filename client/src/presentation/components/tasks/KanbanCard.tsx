@@ -20,6 +20,7 @@ import { DeadlineBadge } from './DeadlineBadge';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
+import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 
 type Props = {
   task: Task;
@@ -98,6 +99,9 @@ function KanbanCardImpl({
   dropLine = null,
   readOnly = false,
 }: Props): React.ReactElement {
+  // Роль в активном пространстве: ею решаем, показывать ли «выполнено» на задаче,
+  // которая уже ждёт приёмки (см. checkboxVisible ниже).
+  const { data: workspaces } = useWorkspaces();
   // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
   const selecting = selectionMode && !preview;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -156,6 +160,14 @@ function KanbanCardImpl({
   // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
   const promoteNext = onQuickPromote ? quickPromoteNext(task.status) : null;
+  // Приёмка (db/150): задача уже отправлена на утверждение. Исполнителю кнопка «выполнено»
+  // здесь бесполезна — сервер вернёт ту же очередь приёмки, и ничего не произойдёт. Прячем
+  // её и оставляем только принимающему: для него это и есть «принять работу».
+  const awaitingApproval = task.status === 'pending_approval';
+  const currentWorkspace = (workspaces ?? []).find((w) => w.isCurrent) ?? null;
+  const canApproveWork =
+    currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
+  const checkboxVisible = showCheckbox && (!awaitingApproval || canApproveWork);
 
   // Есть ли вообще кнопки действий на карточке.
   const showActions = !readOnly && !selecting && !preview;
@@ -166,13 +178,14 @@ function KanbanCardImpl({
   const renderActions = (big: boolean): React.ReactNode =>
     showActions ? (
       <>
-        {showCheckbox && (
+        {checkboxVisible && (
           <InboxCheckbox
             task={task}
             lastDoneTaskId={lastDoneTaskId}
             lastTodoTaskId={lastTodoTaskId}
             onChanged={onTaskChanged}
             variant="toolbar"
+            doneTitle={awaitingApproval ? 'Принять работу' : undefined}
           />
         )}
         {onQuickPromote && promoteNext && (

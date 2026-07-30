@@ -19,6 +19,9 @@ type Props = {
   // На канбан-карточке действие живёт в общей hover-панели и выглядит как обычная
   // квадратная icon-кнопка. В списке сохраняем привычный круглый чекбокс.
   variant?: 'circle' | 'toolbar';
+  // Переопределение подсказки для незакрытой задачи. Приёмка (db/150): на задаче в очереди
+  // утверждения та же кнопка означает «принять работу», а не «отметить выполненной».
+  doneTitle?: string;
 };
 
 // Круглый чекбокс «выполнено» в строке inbox-задачи. Optimistic UI: тиково
@@ -33,6 +36,7 @@ export function InboxCheckbox({
   disabled = false,
   disabledTitle,
   variant = 'circle',
+  doneTitle,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
@@ -83,7 +87,13 @@ export function InboxCheckbox({
       disabled={pending || disabled}
       aria-label={isDone ? 'Снять отметку «выполнено»' : 'Отметить выполненным'}
       aria-pressed={isDone}
-      title={disabled ? (disabledTitle ?? 'Нет прав менять статус') : isDone ? 'Снять отметку' : 'Выполнено'}
+      title={
+        disabled
+          ? (disabledTitle ?? 'Нет прав менять статус')
+          : isDone
+            ? 'Снять отметку'
+            : (doneTitle ?? 'Выполнено')
+      }
       className={cn(
         'grid shrink-0 place-items-center transition-colors',
         variant === 'toolbar'
