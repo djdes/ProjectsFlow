@@ -75,12 +75,10 @@ export function CompletedTodayPill(): React.ReactElement | null {
         data-fill={t.fill ? '1' : undefined}
         data-scan={t.scan && animations ? '1' : undefined}
         data-rgb={t.rgb ? '1' : undefined}
-        data-holo={t.holo && animations ? '1' : undefined}
         data-iris={t.iris && animations ? '1' : undefined}
         title={`Сегодня выполнено задач: ${count} · ранг ${rank.name}`}
       >
         <span className="pf-rb-stack">
-          {t.fill && <span aria-hidden className="pf-rb-glowbed" />}
           {t.reactor && animations && <span aria-hidden className="pf-rb-reactor" />}
           {t.grid && animations && (
             <>
@@ -122,6 +120,7 @@ export function CompletedTodayPill(): React.ReactElement | null {
               <span key={count} className="pf-rb-count">
                 {count}
               </span>
+              {t.cursor && <span aria-hidden className={cn('pf-rb-cursor', animations && 'pf-rb-blink')} />}
             </span>
           </span>
 

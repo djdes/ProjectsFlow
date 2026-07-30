@@ -521,23 +521,15 @@ a:focus-visible {
     position: relative;
     display: inline-flex;
   }
-  /* Свет, падающий на поверхность под плашкой: бейдж получает «место»,
-     а не выглядит наклейкой поверх страницы. */
-  .pf-rb-glowbed {
-    position: absolute;
-    inset: -55% -14%;
-    z-index: -3;
-    border-radius: 999px;
-    background: radial-gradient(closest-side, var(--rb-c1), transparent 74%);
-    opacity: 0.26;
-    filter: blur(9px);
-    pointer-events: none;
-  }
+  /* Свечение СИММЕТРИЧНОЕ, без вертикального смещения и без подложки-тени:
+     смещённая вниз мягкая тень читается как приподнятая кнопка, а бейдж —
+     не кнопка, его нельзя нажать. Оба слоя идут ровно вокруг плашки, то
+     есть работают светом, а не высотой. */
   .pf-rb-frame {
     position: relative;
     border-radius: 999px;
     filter: drop-shadow(0 0 calc(var(--rb-bloom) * 0.34) var(--rb-c1))
-      drop-shadow(0 1px var(--rb-bloom) var(--rb-c3));
+      drop-shadow(0 0 var(--rb-bloom) var(--rb-c3));
     transition: filter 0.35s cubic-bezier(0.16, 0.84, 0.28, 1);
   }
   .pf-rb-core {
@@ -557,40 +549,13 @@ a:focus-visible {
     overflow: hidden;
     transition: color 0.3s cubic-bezier(0.16, 0.84, 0.28, 1);
   }
+  /* Плоская заливка: ни бевела, ни внутренних теней. Верхний светлый inset и
+     нижний тёмный давали объём выдавленной кнопки — ровно то, чем бейдж быть
+     не должен. Объём остался только в самом градиенте: светлый тон сверху,
+     глубокий у нижней кромки, оба из одного семейства. */
   .pf-rb[data-fill='1'] .pf-rb-core {
-    background:
-      radial-gradient(125% 150% at 22% 10%, rgb(255 255 255 / 0.34), rgb(255 255 255 / 0) 46%),
-      linear-gradient(148deg, var(--rb-c2) 0%, var(--rb-c1) 54%, var(--rb-c3) 100%);
+    background: linear-gradient(148deg, var(--rb-c2) 0%, var(--rb-c1) 54%, var(--rb-c3) 100%);
     color: var(--rb-fg);
-    /* Освещённая кромка: ярко сверху, почти ничего снизу. Равномерное
-       кольцо по кругу выглядит наклейкой. */
-    box-shadow:
-      inset 0 1px 0.5px rgb(255 255 255 / 0.55),
-      inset 0 -1px 1px rgb(255 255 255 / 0.14);
-  }
-  /* Тихий отблеск по всем залитым рангам — цвет перестаёт быть «напечатанным». */
-  .pf-rb[data-fill='1'] .pf-rb-core::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    background: linear-gradient(108deg, transparent 34%, rgb(255 255 255 / 0.5) 50%, transparent 66%);
-    background-size: 300% 100%;
-    opacity: 0.14;
-    animation: pf-rb-specular 7s ease-in-out infinite;
-  }
-  .pf-rb[data-holo='1'] .pf-rb-core::before {
-    background: linear-gradient(
-      104deg,
-      transparent 30%,
-      rgb(255 255 255 / 0.8) 44%,
-      rgb(0 229 255 / 0.55) 52%,
-      rgb(255 0 168 / 0.5) 60%,
-      transparent 72%
-    );
-    opacity: 0.5;
-    animation-duration: 3.6s;
   }
   .pf-rb[data-scan='1'] .pf-rb-core::after {
     content: '';
@@ -634,6 +599,24 @@ a:focus-visible {
   }
   .pf-rb[data-rgb='1'] .pf-rb-count {
     text-shadow: -0.7px 0 rgb(190 0 60 / 0.55), 0.7px 0 rgb(0 120 190 / 0.55);
+  }
+  /* Терминальный курсор (ранг 9+) — деталь, которая не трогает заливку. Пришла
+     на замену голографическому переливу: радужная полоса перебивала цвет. */
+  .pf-rb-cursor {
+    width: 2px;
+    height: 11px;
+    margin-left: 1px;
+    border-radius: 1px;
+    background: currentColor;
+    opacity: 0.75;
+  }
+  .pf-rb-cursor.pf-rb-blink {
+    animation: pf-rb-blink 1.1s steps(1) infinite;
+  }
+  @keyframes pf-rb-blink {
+    0%, 45% { opacity: 0.85; }
+    50%, 95% { opacity: 0.12; }
+    100% { opacity: 0.85; }
   }
 
   /* Детали ранга. */
@@ -932,10 +915,6 @@ a:focus-visible {
   @keyframes pf-rb-scan {
     0% { transform: translateY(-120%); }
     100% { transform: translateY(320%); }
-  }
-  @keyframes pf-rb-specular {
-    0% { background-position: 180% 0; }
-    55%, 100% { background-position: -80% 0; }
   }
   @keyframes pf-rb-iris {
     0%, 100% { filter: hue-rotate(-14deg); }

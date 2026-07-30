@@ -27,7 +27,7 @@ export const RANKS: readonly Rank[] = [
   { n: 6, name: 'CIPHER', grade: 'signal', c1: '#60a5fa', c2: '#93c5fd', c3: '#3b82f6', ink: '#17346e' },
   { n: 7, name: 'SHIFT', grade: 'data', c1: '#818cf8', c2: '#a5b4fc', c3: '#6366f1', ink: '#292573' },
   { n: 8, name: 'GLITCH', grade: 'data', c1: '#a78bfa', c2: '#c4b5fd', c3: '#8b5cf6', ink: '#3d1785' },
-  { n: 9, name: 'HOLO', grade: 'neural', c1: '#c084fc', c2: '#d8b4fe', c3: '#a855f7', ink: '#4a1678' },
+  { n: 9, name: 'PROMPT', grade: 'neural', c1: '#c084fc', c2: '#d8b4fe', c3: '#a855f7', ink: '#4a1678' },
   { n: 10, name: 'STREAM', grade: 'neural', c1: '#e879f9', c2: '#f0abfc', c3: '#d946ef', ink: '#5d1566' },
   { n: 11, name: 'GRID', grade: 'neural', c1: '#fb7185', c2: '#fda4af', c3: '#f43f5e', ink: '#6d0f2c' },
   { n: 12, name: 'ROOT', grade: 'root', c1: '#fcd34d', c2: '#fef08a', c3: '#f59e0b', ink: '#5c3208' },
@@ -50,7 +50,7 @@ export type RankTraits = {
   readonly trace: boolean;
   readonly hud: boolean;
   readonly rgb: boolean;
-  readonly holo: boolean;
+  readonly cursor: boolean;
   readonly rain: boolean;
   readonly grid: boolean;
   readonly reactor: boolean;
@@ -73,7 +73,11 @@ export function traitsFor(count: number): RankTraits {
     rgb: n >= 7,
     // Ранг 8 назывался GLITCH, но постоянное подёргивание в рабочем интерфейсе читается как
     // «сломался интерфейс». Глитч оставлен только на момент повышения (см. PILL: burst).
-    holo: n >= 9,
+    //
+    // Ранг 9 сперва был голографическим переливом — радужная полоса поперёк плашки. Владелец
+    // её забраковал: она перебивала чистый цвет заливки. Вместо неё мигающий терминальный
+    // курсор — тот же айтишный словарь, но он не трогает цвет.
+    cursor: n >= 9,
     rain: n >= 10,
     grid: n >= 11,
     reactor: n >= 12,
