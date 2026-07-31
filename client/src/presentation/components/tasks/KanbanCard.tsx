@@ -21,6 +21,7 @@ import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
+import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useContainer } from '@/infrastructure/di/container';
 import { toast } from '@/components/ui/sonner';
 
@@ -115,6 +116,7 @@ function KanbanCardImpl({
   // отсутствия. Открыть и читать задачу при этом можно. Объявлено ДО useSortable: хук
   // читает флаг в своих опциях (иначе TDZ — «used before declaration»).
   const frozenByApproval = awaitingApproval && !canApproveWork;
+  const { isUnread } = useUnreadTasks();
   // Отзыв с утверждения прямо с карточки: отправил по ошибке — забрал, не открывая задачу.
   // Кнопка только у ответственного: остальным сервер откажет, и обещать её нельзя.
   const { taskRepository } = useContainer();
@@ -135,6 +137,9 @@ function KanbanCardImpl({
   };
   // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
   const selecting = selectionMode && !preview;
+  // Непрочитанная задача: назначена на меня и я её ещё не открывал. Гаснет при открытии
+  // (см. UnreadTasksProvider и TaskDrawer). ПОСЛЕ `selecting` — иначе TDZ.
+  const unread = !preview && !selecting && isUnread(task.id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
@@ -397,6 +402,9 @@ function KanbanCardImpl({
           // Status-акцент: TODO — статичный тонкий янтарный ring «задача ждёт воркера».
           // Стоит ДО selection-ring ниже, чтобы при выделении twMerge оставил ring выбора.
           !preview && task.status === 'todo' && 'ring-1 ring-amber-400/40 dark:ring-amber-300/20',
+          // Непрочитанная: синий неон по контуру. Стоит ДО состояний выбора/открытия —
+          // те временные и должны перебивать подсветку, а не спорить с ней.
+          unread && 'pf-unread',
           // Подсветка выбранной карточки в режиме выделения.
           selecting && selected && 'border-primary ring-2 ring-primary/60',
           // E4: открыта в drawer'е — слегка синяя заливка + синий бордер (как в Notion).

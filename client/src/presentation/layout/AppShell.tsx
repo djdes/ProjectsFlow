@@ -35,6 +35,7 @@ import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
+import { UnreadTasksProvider } from '@/presentation/hooks/UnreadTasksProvider';
 import { CompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { CompletionCelebration } from '@/presentation/components/stats/CompletionCelebration';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
@@ -226,6 +227,9 @@ export function AppShell(): React.ReactElement {
     {/* Счётчик «выполнено сегодня» — над роутером, чтобы цифра не сбрасывалась при переходах
         между страницами. Внутри AppShell (а не в main.tsx): запрос требует авторизации. */}
     <CompletedTodayProvider>
+    {/* Непрочитанные задачи — над роутером: подсветка нужна и на доске, и во «Входящих»,
+        и не должна перезапрашиваться на каждом переходе. */}
+    <UnreadTasksProvider>
     <UsageProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
@@ -437,6 +441,7 @@ export function AppShell(): React.ReactElement {
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </UsageProvider>
+    </UnreadTasksProvider>
     </CompletedTodayProvider>
     </ProjectsProvider>
     </WorkspacesProvider>

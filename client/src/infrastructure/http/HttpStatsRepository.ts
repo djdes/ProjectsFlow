@@ -8,4 +8,9 @@ export class HttpStatsRepository implements StatsRepository {
     );
     return count;
   }
+
+  async unreadTaskIds(): Promise<string[]> {
+    const { taskIds } = await httpClient.get<{ taskIds: string[] }>('/me/unread-tasks');
+    return taskIds;
+  }
 }

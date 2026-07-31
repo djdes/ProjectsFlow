@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
+import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
@@ -2612,6 +2613,7 @@ function AcceptedCard({
   const { taskRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
   const { celebrate } = useCompletedToday();
+  const { isUnread } = useUnreadTasks();
   // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
   // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
   // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание).
@@ -2795,6 +2797,9 @@ function AcceptedCard({
       className={cn(
         'group relative flex cursor-pointer select-none flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-all duration-200 dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
+        // Непрочитанная: синий неон по контуру. До состояний выбора/вспышки — те
+        // временные и должны перебивать подсветку.
+        !selecting && isUnread(item.id) && 'pf-unread',
         // Выбор показываем ТОЛЬКО рамкой и кольцом. Кружок-отметку в левом верхнем углу
         // убрали: он повторял вид старого круглого чекбокса «готово» и читался как он.
         selected && 'border-primary ring-2 ring-primary/60',

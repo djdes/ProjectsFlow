@@ -7,4 +7,9 @@ export interface StatsRepository {
    * ведёт туда, и иначе его счётчик всегда был бы нулём.
    */
   completedToday(since: Date): Promise<number>;
+  /**
+   * Задачи, назначенные на меня и ни разу мной не открытые, — «непрочитанное».
+   * Отдаются только id: сами задачи у клиента уже есть из списков.
+   */
+  unreadTaskIds(): Promise<string[]>;
 }

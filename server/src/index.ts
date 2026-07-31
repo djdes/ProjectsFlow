@@ -183,6 +183,7 @@ import { DrizzleTaskCommentRepository } from './infrastructure/repositories/Driz
 import { DrizzleTaskBillingAttributionRepository } from './infrastructure/repositories/DrizzleTaskBillingAttributionRepository.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { CountMyCompletedToday } from './application/stats/CountMyCompletedToday.js';
+import { ListUnreadTasks } from './application/task/ListUnreadTasks.js';
 import { ListTasksAssignedToOthers } from './application/task/ListTasksAssignedToOthers.js';
 import { ListPersonalTasksOfColleagues } from './application/task/ListPersonalTasksOfColleagues.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
@@ -2630,6 +2631,7 @@ const { app, devProxyUpgrade } = createApp({
   },
   meStats: {
     countMyCompletedToday: new CountMyCompletedToday({ activity: activityRepo }),
+    listUnreadTasks: new ListUnreadTasks({ views: recentTaskViewRepo }),
   },
   assignees: {
     listAssignedToMe: new ListTasksAssignedToMe({

@@ -157,6 +157,7 @@ import type { TaskTemplateRepository } from '../application/task/TaskTemplateRep
 import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
 import type { TaskVersionRecorder } from '../application/task/TaskVersionRecorder.js';
 import type { CountMyCompletedToday } from '../application/stats/CountMyCompletedToday.js';
+import type { ListUnreadTasks } from '../application/task/ListUnreadTasks.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAssignedToOthers.js';
 import type { ListPersonalTasksOfColleagues } from '../application/task/ListPersonalTasksOfColleagues.js';
@@ -636,6 +637,7 @@ type AppDeps = {
   // Личная статистика caller'а (счётчик «выполнено сегодня» в интерфейсе).
   readonly meStats: {
     readonly countMyCompletedToday: CountMyCompletedToday;
+    readonly listUnreadTasks: ListUnreadTasks;
   };
   readonly assignees: {
     readonly listAssignedToMe: ListTasksAssignedToMe;

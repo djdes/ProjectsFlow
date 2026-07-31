@@ -52,6 +52,7 @@ import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useApprovalFreeze } from '@/presentation/hooks/useApprovalFreeze';
+import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -843,6 +844,20 @@ export function TaskDrawer({
   useEffect(() => {
     openTaskIdRef.current = openTaskId;
   }, [openTaskId]);
+  // Открытие задачи = «прочитано». Раньше просмотр писался только при правке, и задача,
+  // которую человек открыл и закрыл не тронув, оставалась подсвеченной как новая.
+  const { markRead } = useUnreadTasks();
+  useEffect(() => {
+    if (!openTaskId) return;
+    markRead(openTaskId);
+    if (recordedTaskIdRef.current === openTaskId) return;
+    recordedTaskIdRef.current = openTaskId;
+    void recordTaskView
+      .execute(openTaskId)
+      .then(() => window.dispatchEvent(new CustomEvent('pf:recent-changed')))
+      .catch(() => {});
+  }, [openTaskId, markRead, recordTaskView]);
+
   const markViewedOnEdit = useCallback(() => {
     const id = openTaskIdRef.current;
     if (!id || recordedTaskIdRef.current === id) return;
