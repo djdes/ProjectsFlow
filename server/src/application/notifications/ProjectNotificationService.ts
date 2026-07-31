@@ -19,7 +19,12 @@ type Deps = {
   readonly appUrl: string;
 };
 
-type TaskCtx = { readonly id: string; readonly description: string | null };
+// Вызыватели передают полную задачу, поэтому ответственный доступен без доп. запроса.
+type TaskCtx = {
+  readonly id: string;
+  readonly description: string | null;
+  readonly assignee?: { readonly userId: string };
+};
 
 // Рассылает email-оповещения участникам проекта (кроме актора) по их персональным
 // настройкам. Все методы best-effort: вызываются из роутов fire-and-forget, ошибки
@@ -44,6 +49,13 @@ export class ProjectNotificationService {
     type: NotifEventType,
     source: NotifSource,
     buildInput: (to: string, projectName: string, actorName: string) => ActivityEmailInput,
+    // Задан для СОБЫТИЙ ЗАДАЧИ. Тогда аудитория сужается до руководителей пространства и
+    // ответственного за задачу: рядовой сотрудник не должен получать почту о чужих
+    // задачах. Раньше письмо уходило каждому участнику проекта, а с единым пространством
+    // «участник проекта» — это вообще все, и любое действие рассылалось всей команде.
+    // Для событий проекта/участников (не задачных) параметр не передаётся, и аудитория
+    // остаётся прежней.
+    taskAudience?: { readonly assigneeUserId: string | null },
   ): Promise<void> {
     const [project, members] = await Promise.all([
       this.deps.projects.getById(projectId),
@@ -54,8 +66,18 @@ export class ProjectNotificationService {
     const actor = members.find((m) => m.userId === actorUserId);
     const actorName = actor?.user.displayName ?? 'Участник';
 
+    const allowed = taskAudience
+      ? new Set([
+          ...(await this.deps.members.listApproverUserIdsForProject(projectId)),
+          ...(taskAudience.assigneeUserId ? [taskAudience.assigneeUserId] : []),
+        ])
+      : null;
+
     const recipients = members.filter(
-      (m) => m.userId !== actorUserId && resolvePref(m.notificationPrefs, type, source),
+      (m) =>
+        m.userId !== actorUserId &&
+        (allowed === null || allowed.has(m.userId)) &&
+        resolvePref(m.notificationPrefs, type, source),
     );
     if (recipients.length === 0) return;
 
@@ -79,7 +101,7 @@ export class ProjectNotificationService {
       actorDisplayName: actorName,
       taskExcerpt: task.description ?? undefined,
       ctaUrl: this.taskUrl(projectId, task.id),
-    }));
+    }), { assigneeUserId: task.assignee?.userId ?? null });
   }
 
   onTaskDone(projectId: string, actorUserId: string, task: TaskCtx, source: NotifSource): Promise<void> {
@@ -90,7 +112,7 @@ export class ProjectNotificationService {
       actorDisplayName: actorName,
       taskExcerpt: task.description ?? undefined,
       ctaUrl: this.taskUrl(projectId, task.id),
-    }));
+    }), { assigneeUserId: task.assignee?.userId ?? null });
   }
 
   async onComment(
@@ -110,7 +132,7 @@ export class ProjectNotificationService {
       commentExcerpt: commentBody,
       ctaUrl: this.taskUrl(projectId, taskId),
       ctaLabel: 'Открыть обсуждение',
-    }));
+    }), { assigneeUserId: task?.assignee.userId ?? null });
   }
 
   async onStatusChanged(
@@ -129,7 +151,7 @@ export class ProjectNotificationService {
       taskExcerpt: task.description ?? undefined,
       detail: `${oldStatus} → ${newStatus}`,
       ctaUrl: this.taskUrl(projectId, task.id),
-    }));
+    }), { assigneeUserId: task.assignee?.userId ?? null });
   }
 
   onMemberChanged(

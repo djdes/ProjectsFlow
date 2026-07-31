@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, eq, isNotNull, ne, or, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, eq, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectMembers,
@@ -386,6 +386,20 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .from(projects)
       .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, projects.workspaceId))
       .where(and(eq(projects.id, projectId), eq(workspaceMembers.role, 'lead')));
+    return rows.map((r) => r.userId);
+  }
+
+  async listApproverUserIdsForProject(projectId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ userId: workspaceMembers.userId })
+      .from(projects)
+      .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, projects.workspaceId))
+      .where(
+        and(
+          eq(projects.id, projectId),
+          inArray(workspaceMembers.role, ['lead', 'owner']),
+        ),
+      );
     return rows.map((r) => r.userId);
   }
 

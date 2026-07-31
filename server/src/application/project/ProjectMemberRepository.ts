@@ -84,6 +84,12 @@ export interface ProjectMemberRepository {
   // достаточно user-id. Пустой массив, если проекта нет или руководителей не назначили.
   listLeadUserIdsForProject(projectId: string): Promise<string[]>;
 
+  // Руководители пространства проекта: lead И owner. Отличается от
+  // listLeadUserIdsForProject, который возвращает только lead'ов: для уведомлений
+  // владелец — тоже руководитель, и в пространстве без назначенных лидов иначе не
+  // осталось бы ни одного адресата.
+  listApproverUserIdsForProject(projectId: string): Promise<string[]>;
+
   // Руководители пространства — для ежедневной личной сводки (адресаты рассылки).
   listLeadUserIds(workspaceId: string): Promise<string[]>;
 }
