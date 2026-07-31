@@ -3,6 +3,9 @@ import { Inbox as InboxIcon, Loader2, PlayCircle } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 
+// Просьба открыть задачу во «Входящих». Слушает AppShell — он внутри роутера.
+export const OPEN_INBOX_TASK_EVENT = 'pf:open-inbox-task';
+
 export type AssignedTaskToastData = {
   readonly taskId: string;
   readonly projectId: string;
@@ -47,9 +50,12 @@ function AssignedTaskToastCard({
 
   const openInInbox = (): void => {
     toast.dismiss(toastId);
-    // Полная навигация, а не router.push: тост живёт вне роутера (портал sonner), и
-    // тащить сюда navigate значило бы тянуть роутер в компонент уведомления.
-    window.location.assign(`/inbox?task=${encodeURIComponent(data.taskId)}`);
+    // Тост живёт ВНЕ роутера (портал sonner), поэтому useNavigate здесь недоступен.
+    // Полная перезагрузка сработала бы, но порвала бы SSE-коннект и заново подняла всё
+    // приложение — поэтому просим о переходе событием, а навигацию делает AppShell.
+    window.dispatchEvent(
+      new CustomEvent(OPEN_INBOX_TASK_EVENT, { detail: { taskId: data.taskId } }),
+    );
   };
 
   const excerpt = data.taskExcerpt.trim();

@@ -54,6 +54,7 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { useSpotlightTask } from '@/presentation/hooks/useSpotlightTask';
 import {
   REALTIME_CONNECTED_EVENT,
   TASK_CHANGED_EVENT,
@@ -344,6 +345,9 @@ export function AssignedToMeBlock({
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     }
   }, [taskAssigneeRepository]);
+
+  // Пришли по ссылке из плашки «вам назначили задачу» — подсвечиваем карточку.
+  useSpotlightTask(!loading && boardTasks !== null);
 
   // Realtime: задачу изменили в другой вкладке или это сделал коллега — например поставил
   // срочный приоритет. Без подписки подсветка появлялась бы только после перезагрузки.

@@ -36,6 +36,7 @@ import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/use
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
 import { UnreadTasksProvider } from '@/presentation/hooks/UnreadTasksProvider';
+import { OPEN_INBOX_TASK_EVENT } from '@/presentation/components/tasks/AssignedTaskToast';
 import { CompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { CompletionCelebration } from '@/presentation/components/stats/CompletionCelebration';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
@@ -47,6 +48,7 @@ import { useEdgeSwipe } from '@/presentation/hooks/useEdgeSwipe';
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 
 export function AppShell(): React.ReactElement {
+  const navigate = useNavigate();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mainScrolled, setMainScrolled] = useState(false);
@@ -219,6 +221,17 @@ export function AppShell(): React.ReactElement {
 
   // ProjectsProvider — внутри ProtectedRoute (этот компонент рендерится только для authenticated),
   // поэтому не делает 401-запросов когда пользователь не залогинен.
+  // Переход по кнопке «Открыть» из плашки о назначенной задаче. Сам тост навигацию
+  // сделать не может — он отрисован вне роутера.
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const taskId = (e as CustomEvent<{ taskId?: string }>).detail?.taskId;
+      if (taskId) navigate(`/inbox?task=${encodeURIComponent(taskId)}`);
+    };
+    window.addEventListener(OPEN_INBOX_TASK_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_INBOX_TASK_EVENT, onOpen);
+  }, [navigate]);
+
   return (
     <SidebarCollapsedContext.Provider value={isDesktop && collapsed}>
     <SidebarResizingContext.Provider value={sidebarDragging}>
