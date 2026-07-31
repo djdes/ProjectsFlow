@@ -539,8 +539,8 @@ const projectEventBroadcaster = new ProjectEventBroadcaster({
   publisher: realtimeHub,
 });
 // Best-effort: ошибка резолва участников не должна влиять на основной запрос.
-const notifyTaskChanged = (projectId: string): void => {
-  void projectEventBroadcaster.broadcast(projectId, 'task_changed').catch(() => {});
+const notifyTaskChanged = (projectId: string, extraUserIds: readonly string[] = []): void => {
+  void projectEventBroadcaster.broadcast(projectId, 'task_changed', extraUserIds).catch(() => {});
 };
 const notifyProjectChanged = (projectId: string): void => {
   void projectEventBroadcaster.broadcast(projectId, 'project_changed').catch(() => {});

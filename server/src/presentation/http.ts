@@ -606,7 +606,7 @@ type AppDeps = {
     readonly revokeRalphCancel: RevokeRalphCancel;
     readonly exportDigest: ExportTasksDigest;
     readonly maxAttachmentBytes: number;
-    readonly notifyTaskChanged: (projectId: string) => void;
+    readonly notifyTaskChanged: (projectId: string, extraUserIds?: readonly string[]) => void;
     readonly notifyCommentAdded: (
       projectId: string,
       taskId: string,

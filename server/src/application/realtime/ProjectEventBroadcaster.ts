@@ -16,10 +16,16 @@ export class ProjectEventBroadcaster {
   async broadcast(
     projectId: string,
     kind: 'task_changed' | 'project_changed',
+    // Адресаты СВЕРХ участников проекта. Нужны для делегированных задач: задача может
+    // лежать во «Входящих» делегатора, где единственный участник — он сам, а видит её и
+    // ответственный. Без этого правка (например срочный приоритет) не доезжала до того,
+    // кому задача назначена.
+    extraUserIds: readonly string[] = [],
   ): Promise<void> {
     const members = await this.deps.members.listByProject(projectId);
-    for (const m of members) {
-      this.deps.publisher.publish(m.userId, { kind, projectId } as RealtimeEvent);
+    const userIds = new Set([...members.map((m) => m.userId), ...extraUserIds]);
+    for (const userId of userIds) {
+      this.deps.publisher.publish(userId, { kind, projectId } as RealtimeEvent);
     }
   }
 

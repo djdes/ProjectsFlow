@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
+import { showAssignedTaskToast } from '@/presentation/components/tasks/AssignedTaskToast';
 
 // Window-событие, по которому счётчик непрочитанных делает мгновенный refresh.
 export const NOTIFICATIONS_CHANGED_EVENT = 'pf:notifications-changed';
@@ -50,7 +51,17 @@ type StreamPayload =
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
   | { type: 'workspace_invite'; workspaceName: string; actorDisplayName: string }
   | { type: 'chat_mention'; workspaceName: string; actorDisplayName: string }
-  | { type: 'join_request'; projectName: string; requesterDisplayName: string };
+  | { type: 'join_request'; projectName: string; requesterDisplayName: string }
+  // Задачу создали для человека или делегировали ему. Показываем не строку, а плашку с
+  // действиями: узнать мало — надо иметь возможность сразу открыть или взять в работу.
+  | {
+      type: 'task_assignee_changed';
+      taskId: string;
+      projectId: string;
+      projectName: string;
+      taskExcerpt: string;
+      actorDisplayName: string;
+    };
 
 function toastFor(payload: StreamPayload): void {
   switch (payload.type) {
@@ -68,6 +79,15 @@ function toastFor(payload: StreamPayload): void {
       break;
     case 'join_request':
       toast(`${payload.requesterDisplayName} просит доступ к «${payload.projectName}»`);
+      break;
+    case 'task_assignee_changed':
+      showAssignedTaskToast({
+        taskId: payload.taskId,
+        projectId: payload.projectId,
+        projectName: payload.projectName,
+        taskExcerpt: payload.taskExcerpt,
+        actorDisplayName: payload.actorDisplayName,
+      });
       break;
   }
 }

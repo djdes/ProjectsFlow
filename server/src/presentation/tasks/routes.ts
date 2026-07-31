@@ -91,7 +91,7 @@ type Deps = {
   readonly maxAttachmentBytes: number;
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
   // Best-effort, не блокирует ответ.
-  readonly notifyTaskChanged: (projectId: string) => void;
+  readonly notifyTaskChanged: (projectId: string, extraUserIds?: readonly string[]) => void;
   // SSE comment_added — для realtime-реакции диспетчера/UI на новый комментарий.
   // actorKind/agentName опциональны — для Claude-стилизации agent-комментов в UI.
   readonly notifyCommentAdded: (
@@ -369,7 +369,7 @@ export function tasksRouter(deps: Deps): Router {
         startDate: body.startDate,
         priority: body.priority,
       });
-      deps.notifyTaskChanged(projectId);
+      deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       res.json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -405,7 +405,7 @@ export function tasksRouter(deps: Deps): Router {
           versionId: req.params['versionId'] as string,
           ownerUserId: req.user!.id,
         });
-        deps.notifyTaskChanged(projectId);
+        deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         res.json({ task: toDto(task) });
       } catch (e) {
         next(e);
@@ -429,7 +429,7 @@ export function tasksRouter(deps: Deps): Router {
           actorUserId: req.user!.id,
           comment: body.comment,
         });
-        deps.notifyTaskChanged(projectId);
+        deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         if (before && before.status !== task.status) {
           deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
           void deps.notifier
@@ -457,7 +457,7 @@ export function tasksRouter(deps: Deps): Router {
           taskId,
           actorUserId: req.user!.id,
         });
-        deps.notifyTaskChanged(projectId);
+        deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         if (before && before.status !== task.status) {
           deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
           void deps.notifier
@@ -488,7 +488,7 @@ export function tasksRouter(deps: Deps): Router {
         afterTaskId: body.afterTaskId,
         restore: body.restore,
       });
-      deps.notifyTaskChanged(projectId);
+      deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       if (before && before.status !== task.status) {
         deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
         if (body.targetStatus === 'done') {
@@ -542,7 +542,7 @@ export function tasksRouter(deps: Deps): Router {
         const projectId = req.params['projectId'] as string;
         const taskId = req.params['taskId'] as string;
         const task = await deps.restoreDeletedTask.execute(projectId, req.user!.id, taskId);
-        deps.notifyTaskChanged(projectId);
+        deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         res.json({ task: toDto(task) });
       } catch (e) {
         next(e);
@@ -601,7 +601,7 @@ export function tasksRouter(deps: Deps): Router {
           req.user!.id,
           body.assigneeUserId,
         );
-        deps.notifyTaskChanged(projectId);
+        deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         res.json({ task: toDto(task) });
       } catch (e) {
         next(e);
@@ -620,7 +620,7 @@ export function tasksRouter(deps: Deps): Router {
         ownerUserId: req.user!.id,
         taskId,
       });
-      deps.notifyTaskChanged(projectId);
+      deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       res.json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -637,7 +637,7 @@ export function tasksRouter(deps: Deps): Router {
         ownerUserId: req.user!.id,
         taskId,
       });
-      deps.notifyTaskChanged(projectId);
+      deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       res.json({ task: toDto(task) });
     } catch (e) {
       next(e);

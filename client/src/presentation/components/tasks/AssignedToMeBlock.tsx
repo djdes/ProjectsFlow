@@ -54,6 +54,10 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import {
+  REALTIME_CONNECTED_EVENT,
+  TASK_CHANGED_EVENT,
+} from '@/presentation/hooks/useNotificationStream';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -340,6 +344,26 @@ export function AssignedToMeBlock({
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     }
   }, [taskAssigneeRepository]);
+
+  // Realtime: задачу изменили в другой вкладке или это сделал коллега — например поставил
+  // срочный приоритет. Без подписки подсветка появлялась бы только после перезагрузки.
+  // Дебаунс: серия правок (приоритет + дедлайн + перенос) даёт пачку событий, а список
+  // тяжёлый — перечитываем один раз в конце пачки.
+  useEffect(() => {
+    let timer: number | undefined;
+    const schedule = (): void => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void refresh(), 250);
+    };
+    window.addEventListener(TASK_CHANGED_EVENT, schedule);
+    // Реконнект SSE: события, случившиеся при обрыве, до нас не дошли — читаем снапшот.
+    window.addEventListener(REALTIME_CONNECTED_EVENT, schedule);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(TASK_CHANGED_EVENT, schedule);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, schedule);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
