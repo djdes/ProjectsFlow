@@ -1782,7 +1782,7 @@ function ApprovalShelf({
         ) : (
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
-            <div key={item.id} className="w-full min-w-0 max-w-[17rem] space-y-1">
+            <div key={item.id} className="w-[17rem] max-w-full shrink-0 grow-0 space-y-1">
               <AcceptedCard
                 item={item}
                 onOpen={() => onOpen(item)}
@@ -1903,7 +1903,7 @@ function InProgressShelf({
                 // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
                 // эффекта от радиуса самого по себе тоже.
                 className={cn(
-                  'group relative w-full min-w-0 max-w-[17rem] rounded-xl',
+                  'group relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl',
                   flash && item.id === flashItemId && 'pf-card-flash',
                 )}
               >

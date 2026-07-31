@@ -67,6 +67,10 @@ type Props = {
   // не занимает место в потоке (соседи НЕ раздвигаются). 'before'/'after'/null.
   dropLine?: 'before' | 'after' | null;
   readOnly?: boolean;
+  // Отключить layout-анимацию motion'а. Нужно там, где карточка живёт вне колонок —
+  // например в полке «В работе»: там анимация позиции ничего не даёт, а её трансформ
+  // после переезда карточки остаётся висеть, и карточки наезжают друг на друга.
+  disableLayoutAnimation?: boolean;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -103,6 +107,7 @@ function KanbanCardImpl({
   currentUserId = null,
   dropLine = null,
   readOnly = false,
+  disableLayoutAnimation = false,
 }: Props): React.ReactElement {
   // Роль в активном пространстве: ею решаем, показывать ли «выполнено» на задаче,
   // которая уже ждёт приёмки (см. checkboxVisible ниже).
@@ -169,7 +174,8 @@ function KanbanCardImpl({
   // Для preview-варианта (DragOverlay) motion-обёртка отключена — иначе два элемента с одним
   // layoutId. На тач-устройствах (IS_COARSE_POINTER) тоже отключаем — layout-анимация карточек
   // на мобиле только жрёт кадры при скролле, визуально она там почти не нужна.
-  const Wrapper = preview || IS_COARSE_POINTER ? PassthroughWrapper : MotionWrapper;
+  const Wrapper =
+    preview || IS_COARSE_POINTER || disableLayoutAnimation ? PassthroughWrapper : MotionWrapper;
 
   // Гасим mousedown/touchstart на actions, чтобы нажатие по Edit/Delete/чекбоксу не
   // стартовало drag через активаторы dnd-kit (MouseSensor/TouchSensor) на родителе.

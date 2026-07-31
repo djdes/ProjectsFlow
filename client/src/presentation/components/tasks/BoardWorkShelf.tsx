@@ -77,7 +77,10 @@ export function BoardWorkShelf({
                   // rounded-xl — чтобы вспышка (::after с border-radius: inherit) повторяла
                   // скругление карточки. Фона и рамки у обёртки нет.
                   className={cn(
-                    'relative w-full min-w-0 max-w-[17rem] rounded-xl',
+                    // Явный размер вместо процентов: flex-базис в 100% с max-width
+                    // раскладка трактует неоднозначно, а фиксированный не даёт
+                    // карточкам ни растекаться, ни наезжать друг на друга.
+                    'relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl',
                     flash && t.id === flashTaskId && 'pf-card-flash',
                   )}
                 >

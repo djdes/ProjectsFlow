@@ -1200,6 +1200,9 @@ export function KanbanBoard({
               open={t.id === openTaskId}
               recentlyMoved={t.id === recentlyMovedId}
               readOnly={!canEdit}
+              // В полке layout-анимация не нужна: карточка тут не переезжает между
+              // колонками, а её «залипший» трансформ клал карточки друг на друга.
+              disableLayoutAnimation
             />
           )}
           flashKey={workFlash.key}
