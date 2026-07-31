@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, countDistinct, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { activityEvents, type ActivityEventRow } from '../db/schema.js';
 import type { ActivityEvent, ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
@@ -100,9 +100,13 @@ export class DrizzleActivityRepository implements ActivityRepository {
   // «кто и когда её закрыл» (status_before_done — про откат, updated_at перезаписывается
   // любой правкой), а событие task_status_changed хранит и актора, и момент, и целевой
   // статус. JSON_UNQUOTE нужен: JSON_EXTRACT вернул бы строку в кавычках.
+  //
+  // Считаем РАЗНЫЕ задачи, а не события. Иначе счётчик фармится циклом «выполнил →
+  // забрал с утверждения → выполнил снова»: каждый проход писал бы новое событие, и одна
+  // задача накручивала бы ранг сколько угодно раз.
   async countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number> {
     const rows = await this.db
-      .select({ n: count() })
+      .select({ n: countDistinct(sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))`) })
       .from(activityEvents)
       .where(
         and(

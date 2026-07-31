@@ -4,12 +4,12 @@ import { useContainer } from '@/infrastructure/di/container';
 type CompletedToday = {
   // Сколько задач я закрыл сегодня. null — ещё не загрузили (пилюлю не рисуем).
   readonly count: number | null;
-  // Растёт на каждое закрытие: пилюля и конфетти перезапускают анимацию по этому ключу.
+  // Растёт на каждое ЗАСЧИТАННОЕ закрытие: пилюля и конфетти перезапускают анимацию.
   readonly celebrationKey: number;
-  // Вызывать ПОСЛЕ успешного ответа сервера: оптимистично +1 и запуск праздника.
-  readonly celebrate: () => void;
-  // Отмена закрытия (сняли галочку) — цифру возвращаем, но без анимации.
-  readonly uncount: () => void;
+  // Вызывать ПОСЛЕ успешного ответа сервера. Задача, уже закрытая сегодня, не считается
+  // повторно и праздника не запускает — иначе цикл «выполнил → забрал с утверждения →
+  // выполнил снова» накручивал бы ранг одной задачей.
+  readonly celebrate: (taskId: string) => void;
 };
 
 const CompletedTodayContext = createContext<CompletedToday | null>(null);
@@ -39,6 +39,8 @@ export function CompletedTodayProvider({
 
   const refresh = useCallback((): void => {
     const midnight = localMidnight();
+    // Сутки сменились — набор засчитанных задач больше не про сегодня.
+    if (dayRef.current && dayRef.current !== midnight.toDateString()) countedRef.current.clear();
     dayRef.current = midnight.toDateString();
     statsRepository
       .completedToday(midnight)
@@ -64,18 +66,23 @@ export function CompletedTodayProvider({
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
-  const celebrate = useCallback((): void => {
-    setCount((c) => (c ?? 0) + 1);
-    setCelebrationKey((k) => k + 1);
-  }, []);
+  // Задачи, уже засчитанные в этой сессии. Сервер считает РАЗНЫЕ задачи, и клиент обязан
+  // считать так же — иначе локальная цифра разъезжается с реальной до ближайшего refresh.
+  const countedRef = useRef<Set<string>>(new Set());
 
-  const uncount = useCallback((): void => {
-    setCount((c) => (c === null ? null : Math.max(0, c - 1)));
-  }, []);
+  const celebrate = useCallback(
+    (taskId: string): void => {
+      if (countedRef.current.has(taskId)) return;
+      countedRef.current.add(taskId);
+      setCount((c) => (c ?? 0) + 1);
+      setCelebrationKey((k) => k + 1);
+    },
+    [],
+  );
 
   const value = useMemo(
-    () => ({ count, celebrationKey, celebrate, uncount }),
-    [count, celebrationKey, celebrate, uncount],
+    () => ({ count, celebrationKey, celebrate }),
+    [count, celebrationKey, celebrate],
   );
 
   return (
@@ -89,7 +96,6 @@ const NOOP: CompletedToday = {
   count: null,
   celebrationKey: 0,
   celebrate: () => {},
-  uncount: () => {},
 };
 
 export function useCompletedToday(): CompletedToday {

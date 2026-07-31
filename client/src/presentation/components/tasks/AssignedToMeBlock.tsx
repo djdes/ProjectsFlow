@@ -861,7 +861,7 @@ export function AssignedToMeBlock({
           afterTaskId: null,
         });
         // Принятая работа — тоже закрытая задача для принимающего: счётчик и праздник его.
-        celebrate();
+        celebrate(item.id);
         toast.success('Задача принята');
         await refresh();
         onChanged?.();
@@ -2638,7 +2638,7 @@ function AcceptedCard({
               beforeTaskId: null,
               afterTaskId: null,
             });
-            celebrate();
+            celebrate(item.id);
             onChangedRef.current();
           } catch (err) {
             setCompletePhase('idle');

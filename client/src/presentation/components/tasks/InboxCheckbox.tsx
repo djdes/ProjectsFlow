@@ -40,7 +40,7 @@ export function InboxCheckbox({
   doneTitle,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
-  const { celebrate, uncount } = useCompletedToday();
+  const { celebrate } = useCompletedToday();
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -74,8 +74,10 @@ export function InboxCheckbox({
       });
       // Праздник и +1 к счётчику — только после подтверждения сервером: оптимистично
       // поднимать цифру нельзя, задачу могло отклонить (нет прав, заморозка приёмкой).
-      if (next) celebrate();
-      else uncount();
+      // Снятие галочки цифру НЕ уменьшает: сервер считает разные задачи по журналу
+      // событий, и запись о закрытии никуда не девается — иначе клиент разъезжался бы
+      // с сервером до ближайшего обновления.
+      if (next) celebrate(task.id);
       onChanged?.();
     } catch (err) {
       setOptimistic(null);

@@ -935,7 +935,7 @@ export function KanbanBoard({
       }
       // Микро-праздник: дотащили в «Готово» (не реордер внутри done).
       if (targetStatus === 'done' && activeTask.status !== 'done') {
-        celebrate();
+        celebrate(movedId);
       }
     } catch (err) {
       toast.error(`Не удалось переместить: ${(err as Error).message}`);
