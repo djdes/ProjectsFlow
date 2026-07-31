@@ -36,7 +36,6 @@ import {
   ImageIcon,
   Inbox as InboxIcon,
   ListFilter,
-  Loader2,
   ShieldCheck,
   MessageSquare,
   Plus,
@@ -1809,8 +1808,9 @@ function InProgressShelf({
           flash && 'pf-shelf-flash',
         )}
       >
+        {/* Без спиннера: крутящийся лоадер в заголовке читался как «идёт загрузка»,
+            хотя это просто зона. Заголовок и жёлтый фон говорят всё сами. */}
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
-          <Loader2 className={cn('size-3 shrink-0', items.length > 0 && 'animate-spin')} />
           <span>В работе</span>
           {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
         </div>

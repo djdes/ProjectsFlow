@@ -83,6 +83,8 @@ import {
   type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
+import { BoardWorkShelf } from './BoardWorkShelf';
+import { KanbanCard } from './KanbanCard';
 import { plainTaskTitle } from '@/lib/taskTitleBody';
 import type { ViewCreateRequest } from './views/ProjectBoardViews';
 import {
@@ -658,6 +660,12 @@ export function KanbanBoard({
     setFilterAssignee(null);
   };
 
+  // Вспышка полки «В работе»: key перезапускает анимацию, id — какую карточку подсветить.
+  const [workFlash, setWorkFlash] = useState<{ id: string | null; key: number }>({
+    id: null,
+    key: 0,
+  });
+
   // Праздник при переносе карточки в «Готово» живёт в приложении, а не на доске: та же
   // анимация нужна чекбоксу в списке и в окне задачи, а счётчик «выполнено сегодня» —
   // один на всё приложение (CompletedTodayProvider).
@@ -921,6 +929,10 @@ export function KanbanBoard({
       });
       // Перемещённая карточка остаётся выделенной синим до следующего клика (E4).
       setRecentlyMovedId(movedId);
+      // Взяли в работу — полка и карточка вспыхивают (как во «Входящих»).
+      if (targetStatus === 'manual' && activeTask.status !== 'manual') {
+        setWorkFlash((prev) => ({ id: movedId, key: prev.key + 1 }));
+      }
       // Микро-праздник: дотащили в «Готово» (не реордер внутри done).
       if (targetStatus === 'done' && activeTask.status !== 'done') {
         celebrate();
@@ -1024,14 +1036,22 @@ export function KanbanBoard({
 
   // Скрытые колонки исключаем из рендера (задачи скрытых статусов остаются в `grouped`,
   // поэтому drag-математика в handleDragEnd не ломается). Скрытые перечисляем в меню доски.
-  const visibleStatuses = VISIBLE_KANBAN_STATUSES.filter((s) => !isColumnHidden(settings?.[s]));
+  // 'manual' из колонок исключён: на доске он живёт полкой «В работе» над рядом (см.
+  // BoardWorkShelf). Иначе одна и та же задача была бы видна в двух местах сразу.
+  const visibleStatuses = VISIBLE_KANBAN_STATUSES.filter(
+    (s) => s !== 'manual' && !isColumnHidden(settings?.[s]),
+  );
   // Приёмка задач руководителем (db/150): колонка «На утверждении» появляется, когда есть
   // что утверждать. Показываем по данным, а не по флагу пространства — тогда доски команд
   // без приёмки выглядят ровно как раньше, а плюс колонка не требует настроек/цветов.
   const shownStatuses: TaskStatus[] = grouped.pending_approval.length
     ? visibleStatuses.flatMap((s) => (s === 'done' ? ['pending_approval' as TaskStatus, s] : [s]))
     : visibleStatuses;
-  const hiddenColumns = VISIBLE_KANBAN_STATUSES.filter((s) => isColumnHidden(settings?.[s])).map(
+  // 'manual' исключён и здесь: колонки больше нет, и пункт «показать» в меню скрытых
+  // колонок был бы мёртвым — вернуть её всё равно некуда.
+  const hiddenColumns = VISIBLE_KANBAN_STATUSES.filter(
+    (s) => s !== 'manual' && isColumnHidden(settings?.[s]),
+  ).map(
     (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]) }),
   );
 
@@ -1160,6 +1180,33 @@ export function KanbanBoard({
             работает в обоих режимах: все колонки в DOM, просто проскроллены.
             items-start — каждая колонка своей высоты по контенту (не тянется до самой длинной);
             высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
+        {/* Полка «В работе» — над колонками, вместо колонки «Вручную». Дроп в неё
+            обрабатывает общий handleDragEnd: droppable совпадает с колонкой по id и data. */}
+        <BoardWorkShelf
+          tasks={filterTasks(grouped.manual)}
+          renderCard={(t) => (
+            <KanbanCard
+              task={t}
+              onEdit={(task) => setDialog({ mode: 'edit', task })}
+              onDelete={handleDelete}
+              showShortId={showCommits}
+              onQuickPromote={canEdit ? handleQuickPromote : undefined}
+              onTaskChanged={() => void refetch()}
+              showCheckbox={canEdit}
+              lastDoneTaskId={lastDoneTaskId}
+              lastTodoTaskId={lastTodoTaskId}
+              currentUserId={user?.id ?? null}
+              liveRunning={liveTaskIds?.has(t.id) ?? false}
+              open={t.id === openTaskId}
+              recentlyMoved={t.id === recentlyMovedId}
+              readOnly={!canEdit}
+            />
+          )}
+          flashKey={workFlash.key}
+          flashTaskId={workFlash.id}
+          className={cn(bleedNegClass, bleedPadClass, 'pb-3')}
+        />
+
         <div
           ref={boardScrollRef}
           data-pf-kanban-scroll
