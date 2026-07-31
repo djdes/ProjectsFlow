@@ -2810,7 +2810,9 @@ function AcceptedCard({
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
         // Непрочитанная: синий неон по контуру. До состояний выбора/вспышки — те
         // временные и должны перебивать подсветку.
-        !selecting && isUnread(item.id) && 'pf-unread',
+        !selecting && item.priority !== 1 && isUnread(item.id) && 'pf-unread',
+        // Срочная: красное свечение. Перебивает синее — «сделай сейчас» важнее «посмотри».
+        !selecting && item.priority === 1 && 'pf-urgent',
         // Выбор показываем ТОЛЬКО рамкой и кольцом. Кружок-отметку в левом верхнем углу
         // убрали: он повторял вид старого круглого чекбокса «готово» и читался как он.
         selected && 'border-primary ring-2 ring-primary/60',

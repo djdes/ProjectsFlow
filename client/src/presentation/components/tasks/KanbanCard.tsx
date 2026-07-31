@@ -144,6 +144,9 @@ function KanbanCardImpl({
   // Непрочитанная задача: назначена на меня и я её ещё не открывал. Гаснет при открытии
   // (см. UnreadTasksProvider и TaskDrawer). ПОСЛЕ `selecting` — иначе TDZ.
   const unread = !preview && !selecting && isUnread(task.id);
+  // Срочный приоритет — красное свечение. Перебивает синее «непрочитано»: два ореола на
+  // одной карточке спорят друг с другом, а «сделай сейчас» важнее, чем «посмотри».
+  const urgent = !preview && !selecting && task.priority === 1;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
@@ -408,7 +411,9 @@ function KanbanCardImpl({
           !preview && task.status === 'todo' && 'ring-1 ring-amber-400/40 dark:ring-amber-300/20',
           // Непрочитанная: синий неон по контуру. Стоит ДО состояний выбора/открытия —
           // те временные и должны перебивать подсветку, а не спорить с ней.
-          unread && 'pf-unread',
+          unread && !urgent && 'pf-unread',
+          // Срочная: красное свечение, сильнее непрочитанного.
+          urgent && 'pf-urgent',
           // Подсветка выбранной карточки в режиме выделения.
           selecting && selected && 'border-primary ring-2 ring-primary/60',
           // E4: открыта в drawer'е — слегка синяя заливка + синий бордер (как в Notion).

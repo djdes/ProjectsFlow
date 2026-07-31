@@ -373,6 +373,9 @@ function TaskListRow({
         // понятный «прокрашенный» strip слева, не меняя bg и не конкурируя с
         // bg-muted hover.
         task.priority && `border-l-4 ${PRIORITY_META[task.priority].border}`,
+        // Срочная задача светится красным и в списке — иначе приоритет виден только на
+        // доске, а люди, живущие в списке, его пропускают.
+        task.priority === 1 && !isDone && 'pf-urgent',
       )}
       onClick={onEdit}
     >
