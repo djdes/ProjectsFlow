@@ -96,6 +96,9 @@ export interface TaskRepository {
   // Приёмка (db/150): вернуть работу исполнителю. Комментарий обязателен — сервер
   // отклонит пустой, поэтому UI спрашивает причину прежде, чем звать этот метод.
   rejectApproval(projectId: string, taskId: string, comment: string): Promise<Task>;
+  // Приёмка (db/150): исполнитель забирает СВОЮ задачу из очереди утверждения
+  // («случайно нажал выполнено»). Комментарий не нужен — объяснять себе нечего.
+  withdrawApproval(projectId: string, taskId: string): Promise<Task>;
   delete(projectId: string, taskId: string): Promise<void>;
   // История версий задачи (окно версий + Restore, как в Notion).
   getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult>;

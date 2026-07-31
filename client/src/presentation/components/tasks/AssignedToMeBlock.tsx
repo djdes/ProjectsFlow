@@ -872,6 +872,18 @@ export function AssignedToMeBlock({
     [taskRepository, refresh, onChanged, celebrate],
   );
 
+  // Отзыв задачи с утверждения самим исполнителем: «случайно нажал выполнено».
+  const withdrawApproval = async (item: InboxBlockTask): Promise<void> => {
+    try {
+      await taskRepository.withdrawApproval(item.projectId, item.id);
+      toast.success('Задача снова в работе');
+      await refresh();
+      onChanged?.();
+    } catch (e) {
+      toast.error(`Не удалось забрать: ${(e as Error).message}`);
+    }
+  };
+
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
   // он уходит в один диалог, а не в мемоизированный список карточек.
   const rejectApproval = async (item: InboxBlockTask, comment: string): Promise<void> => {
@@ -1059,6 +1071,9 @@ export function AssignedToMeBlock({
           onChanged={handleToggled}
           onAccept={(t) => void acceptApproval(t)}
           onReject={(t) => setRejectTarget(t)}
+          onWithdraw={(t) => void withdrawApproval(t)}
+          isApprover={isApprover}
+          currentUserId={user?.id ?? null}
           className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
@@ -1691,6 +1706,9 @@ function ApprovalShelf({
   onChanged,
   onAccept,
   onReject,
+  onWithdraw,
+  isApprover,
+  currentUserId,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -1698,6 +1716,12 @@ function ApprovalShelf({
   onChanged: () => void;
   onAccept: (item: InboxBlockTask) => void;
   onReject: (item: InboxBlockTask) => void;
+  // Исполнитель забирает свою задачу обратно («случайно нажал выполнено»).
+  onWithdraw: (item: InboxBlockTask) => void;
+  // Кнопки решения видит только принимающий. Исполнителю они всё равно не сработали бы:
+  // сервер пускает в done лишь руководителя — показывать их значит обещать невозможное.
+  isApprover: boolean;
+  currentUserId: string | null;
   className?: string;
 }): React.ReactElement {
   return (
@@ -1727,22 +1751,34 @@ function ApprovalShelf({
                 hideQuickActions
               />
               {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. */}
-              <div className="flex gap-1">
+              {isApprover ? (
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onAccept(item)}
+                    className="flex-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
+                  >
+                    Принять
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReject(item)}
+                    className="flex-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    Вернуть в работу
+                  </button>
+                </div>
+              ) : item.assignee.userId === currentUserId ? (
+                // Исполнителю — выход из тупика: отправил по ошибке, забрал обратно.
                 <button
                   type="button"
-                  onClick={() => onAccept(item)}
-                  className="flex-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
+                  onClick={() => onWithdraw(item)}
+                  className="w-full rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  title="Забрать задачу с утверждения и продолжить работу"
                 >
-                  Принять
+                  Забрать обратно
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onReject(item)}
-                  className="flex-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  Вернуть в работу
-                </button>
-              </div>
+              ) : null}
             </div>
           ))}
         </div>

@@ -85,6 +85,7 @@ import {
   ApprovalCommentRequiredError,
   TaskAwaitingApprovalError,
   NotTaskApproverError,
+  NotTaskAssigneeError,
   AssigneeNotProjectMemberError,
   AssigneeNotSharedMemberError,
   TaskNotFoundError,
@@ -504,6 +505,10 @@ export function errorHandler(
   }
   if (err instanceof NotTaskApproverError) {
     res.status(403).json({ error: 'not_task_approver', message: err.message });
+    return;
+  }
+  if (err instanceof NotTaskAssigneeError) {
+    res.status(403).json({ error: 'not_task_assignee', message: err.message });
     return;
   }
   if (err instanceof TaskDescriptionEmptyError) {

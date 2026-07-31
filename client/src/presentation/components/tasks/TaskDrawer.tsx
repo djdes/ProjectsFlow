@@ -1804,6 +1804,25 @@ export function TaskDrawer({
   // причине, что и для viewer'а: иначе исполнитель правит поля, а каждое сохранение
   // откатывается.
   const frozenByApproval = useApprovalFreeze(task?.status);
+  // Отзыв задачи с утверждения самим исполнителем.
+  const [withdrawing, setWithdrawing] = useState(false);
+  const withdrawApproval = useCallback(async (): Promise<void> => {
+    const t = state?.mode === 'edit' ? state.task : null;
+    if (!t || withdrawing) return;
+    setWithdrawing(true);
+    try {
+      await taskRepository.withdrawApproval(t.projectId, t.id);
+      toast.success('Задача снова в работе');
+      notifyChanged();
+    } catch (e) {
+      toast.error(`Не удалось забрать: ${(e as Error).message}`);
+    } finally {
+      setWithdrawing(false);
+    }
+    // notifyChanged стабилен по ссылке ниже по файлу; включать его в deps не нужно и
+    // нельзя — он объявлен позже.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, taskRepository, withdrawing]);
   // Редактируем задачу в ЛЮБОМ статусе, включая done (по требованию: «задача всегда
   // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
   // canEditProp сверху может опустить в read-only (viewer на чужой задаче) — иначе
@@ -2133,10 +2152,23 @@ export function TaskDrawer({
               {frozenByApproval && (
                 <div className="mx-[var(--pf-drawer-px)] mb-2 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
                   <Lock className="mt-0.5 size-3.5 shrink-0" />
-                  <span>
+                  <span className="min-w-0 flex-1">
                     Задача на утверждении — до решения руководителя её нельзя ни изменить, ни
                     комментировать. Задачу можно читать.
                   </span>
+                  {/* Исполнителю — выход из тупика: отправил по ошибке, забрал обратно.
+                      Сервер всё равно проверит, что забирает именно ответственный. */}
+                  {task.assignee.userId === currentUser?.id && (
+                    <button
+                      type="button"
+                      disabled={withdrawing}
+                      onClick={() => void withdrawApproval()}
+                      className="shrink-0 self-center rounded-md border border-violet-500/40 px-2 py-1 text-[11px] font-medium transition-colors hover:bg-violet-500/15 disabled:opacity-60"
+                      title="Забрать задачу с утверждения и продолжить работу"
+                    >
+                      {withdrawing ? 'Возвращаю…' : 'Забрать обратно'}
+                    </button>
+                  )}
                 </div>
               )}
 

@@ -287,6 +287,7 @@ import { GetProjectTaskVersions } from './application/task/GetProjectTaskVersion
 import { RestoreTaskVersion } from './application/task/RestoreTaskVersion.js';
 import { TaskApprovalService } from './application/task/TaskApprovalService.js';
 import { RejectTaskApproval } from './application/task/RejectTaskApproval.js';
+import { WithdrawTaskApproval } from './application/task/WithdrawTaskApproval.js';
 import { MoveTask } from './application/task/MoveTask.js';
 import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories/DrizzleEmailActionTokenRepository.js';
 import { CreateEmailActionToken } from './application/email-action/CreateEmailActionToken.js';
@@ -892,6 +893,19 @@ const createTaskCommentUseCase = new CreateTaskComment({
   notifications: notificationRepo,
   idGen: idGenerator,
   activityRecorder,
+});
+
+// Приёмка (db/150): исполнитель забирает свою задачу из очереди утверждения. Гейт
+// «только ответственный» — в use-case, снятие заморозки ровно для этого перехода — в MoveTask.
+const withdrawTaskApprovalUseCase = new WithdrawTaskApproval({
+  tasks: taskRepo,
+  moveTask: new MoveTask({
+    projects: projectRepo,
+    approval: taskApprovalService,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    activityRecorder,
+  }),
 });
 
 // Приёмка (db/150): возврат работы исполнителю. Комментарий обязателен (гейт в use-case),
@@ -2396,6 +2410,7 @@ const { app, devProxyUpgrade } = createApp({
       activity: activityRecorder,
     }),
     rejectTaskApproval: rejectTaskApprovalUseCase,
+    withdrawTaskApproval: withdrawTaskApprovalUseCase,
     moveTask: new MoveTask({
       projects: projectRepo,
       approval: taskApprovalService,

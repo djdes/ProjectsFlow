@@ -104,6 +104,11 @@ export async function requireTaskModifyAccess(
   taskId: string,
   userId: string,
   action: ProjectAction,
+  // Отзыв работы из очереди приёмки самим исполнителем: он не ПРАВИТ задачу, а забирает
+  // её из очереди целиком, поэтому смысл заморозки («руководитель принимает то, что
+  // видел») не нарушается. Условия проверяет вызывающий (MoveTask), здесь только флаг —
+  // так исключение остаётся в одном месте и его видно на ревью.
+  opts?: { readonly skipApprovalFreeze?: boolean },
 ): Promise<TaskAccessResult> {
   const project = await deps.projects.getById(projectId);
   if (!project) throw new ProjectNotFoundError();
@@ -113,7 +118,9 @@ export async function requireTaskModifyAccess(
   // Заморозка на время приёмки. Проверяем ДО ролевых веток: правило одинаково и для
   // именованного проекта, и для inbox, и для назначенного viewer'а — пока работа висит на
   // утверждении, менять её вправе только тот, кто эту работу принимает.
-  await assertNotFrozenByApproval(deps.approval, project, task, userId, action);
+  if (!opts?.skipApprovalFreeze) {
+    await assertNotFrozenByApproval(deps.approval, project, task, userId, action);
+  }
 
   if (project.isInbox) {
     if (project.ownerId === userId) {

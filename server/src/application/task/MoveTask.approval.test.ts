@@ -244,6 +244,66 @@ test('приёмка не затирает снимок колонки очер�
   assert.equal(h.savedStatusBeforeDone(), undefined, 'снимок не должен перезаписываться');
 });
 
+// Отзыв из приёмки: заморозка снимается ровно для этого перехода и только для самого
+// исполнителя. Флаг от клиента сам по себе ничего не открывает.
+test('исполнитель забирает свою задачу из очереди утверждения', async () => {
+  const h = makeMove({
+    requireTaskApproval: true,
+    actorRole: 'editor',
+    taskStatus: 'pending_approval',
+  });
+
+  await h.move.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    ownerUserId: 'employee',
+    targetStatus: 'manual',
+    beforeTaskId: null,
+    afterTaskId: null,
+    withdrawFromApproval: true,
+  });
+
+  assert.equal(h.savedStatus(), 'manual');
+});
+
+test('флаг отзыва не пускает в done — это был бы обход приёмки', async () => {
+  const h = makeMove({
+    requireTaskApproval: true,
+    actorRole: 'editor',
+    taskStatus: 'pending_approval',
+  });
+
+  // targetStatus='done' + флаг: условие не выполнено, работает обычный гейт заморозки.
+  await assert.rejects(
+    () => h.move.execute({ ...done, ownerUserId: 'employee', withdrawFromApproval: true }),
+    /утверждени/u,
+  );
+  assert.equal(h.savedStatus(), null);
+});
+
+test('чужую задачу флагом отзыва не забрать', async () => {
+  const h = makeMove({
+    requireTaskApproval: true,
+    actorRole: 'editor',
+    taskStatus: 'pending_approval',
+  });
+
+  await assert.rejects(
+    () =>
+      h.move.execute({
+        projectId: PROJECT_ID,
+        taskId: TASK_ID,
+        ownerUserId: 'someone-else',
+        targetStatus: 'manual',
+        beforeTaskId: null,
+        afterTaskId: null,
+        withdrawFromApproval: true,
+      }),
+    /утверждени/u,
+  );
+  assert.equal(h.savedStatus(), null);
+});
+
 test('руководитель задачу на утверждении двигать может', async () => {
   const h = makeMove({
     requireTaskApproval: true,
