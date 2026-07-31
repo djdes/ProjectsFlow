@@ -9,10 +9,12 @@ export const SPOTLIGHT_TASK_EVENT = 'pf:spotlight-task';
 // ещё не успел её получить: сначала просим обновиться, потом ждём результат.
 const MAX_WAIT_MS = 5000;
 const POLL_MS = 120;
-const FLASH_MS = 1900;
+const FLASH_MS = 2600;
 
 /**
- * Подсветка задачи «прожектором»: скроллим к карточке и проигрываем разовый эффект.
+ * Подсветка «задача прилетела»: скроллим к карточке и даём горячую оранжевую вспышку,
+ * которая остывает. Если задача непрочитана, под ней остаётся обычная синяя подсветка —
+ * получается переход «горячее → остыло → синее», без отдельной логики на стыке.
  *
  * Два входа, одно поведение:
  *  - `?task=<id>` в адресе — пришли на страницу по ссылке из плашки-уведомления;
@@ -31,41 +33,47 @@ export function useSpotlightTask(ready: boolean, refresh?: () => unknown): void 
     refreshRef.current = refresh;
   }, [refresh]);
 
-  const spotlight = useCallback((id: string): (() => void) => {
-    let stop = false;
+  // Ожидание карточки живёт в ref, а НЕ в очистке эффекта. Из-за этого была неочевидная
+  // поломка: убирая `?task=` из адреса, эффект перезапускался, его cleanup останавливал
+  // поиск — и подсветка не срабатывала вообще, потому что карточка к первому тику ещё
+  // не отрисована. Теперь остановить поиск может только новый запуск или размонтирование.
+  const stopRef = useRef<(() => void) | null>(null);
+
+  const spotlight = useCallback((id: string): void => {
+    stopRef.current?.();
+    let stopped = false;
+    stopRef.current = () => {
+      stopped = true;
+    };
+
     // Задача могла появиться только что — просим список обновиться и параллельно ждём
-    // карточку в DOM. Ждать ответ refresh'а незачем: поллинг всё равно нужен на случай,
-    // когда данные приезжают realtime-событием.
+    // карточку в DOM. Ответа refresh'а не ждём: данные могут приехать и realtime-событием.
     void refreshRef.current?.();
     const started = Date.now();
 
     const tick = (): void => {
-      if (stop) return;
+      if (stopped) return;
       const el = document.querySelector<HTMLElement>(`[data-pf-task-id="${CSS.escape(id)}"]`);
       if (!el) {
         if (Date.now() - started < MAX_WAIT_MS) window.setTimeout(tick, POLL_MS);
         return;
       }
       el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-      el.classList.add('pf-spotlight');
-      window.setTimeout(() => el.classList.remove('pf-spotlight'), FLASH_MS);
+      el.classList.add('pf-arrive');
+      window.setTimeout(() => el.classList.remove('pf-arrive'), FLASH_MS);
     };
 
     tick();
-    return () => {
-      stop = true;
-    };
   }, []);
 
   // Вход 1: ссылка с ?task=. Параметр убираем сразу — иначе обновление страницы или
   // возврат по истории включали бы эффект заново, а он разовый по смыслу.
   useEffect(() => {
     if (!taskId || !ready) return;
-    const cancel = spotlight(taskId);
+    spotlight(taskId);
     const next = new URLSearchParams(searchParams);
     next.delete('task');
     setSearchParams(next, { replace: true });
-    return cancel;
     // searchParams/setSearchParams меняются на каждый рендер роутера — держим зависимость
     // на id и готовности, иначе эффект перезапускался бы и подсвечивал повторно.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,17 +81,14 @@ export function useSpotlightTask(ready: boolean, refresh?: () => unknown): void 
 
   // Вход 2: мы уже на странице — подсвечиваем без навигации.
   useEffect(() => {
-    let cancel: (() => void) | undefined;
     const onSpotlight = (e: Event): void => {
       const id = (e as CustomEvent<{ taskId?: string }>).detail?.taskId;
-      if (!id) return;
-      cancel?.();
-      cancel = spotlight(id);
+      if (id) spotlight(id);
     };
     window.addEventListener(SPOTLIGHT_TASK_EVENT, onSpotlight);
-    return () => {
-      cancel?.();
-      window.removeEventListener(SPOTLIGHT_TASK_EVENT, onSpotlight);
-    };
+    return () => window.removeEventListener(SPOTLIGHT_TASK_EVENT, onSpotlight);
   }, [spotlight]);
+
+  // Размонтирование страницы — единственная причина бросить незавершённое ожидание.
+  useEffect(() => () => stopRef.current?.(), []);
 }

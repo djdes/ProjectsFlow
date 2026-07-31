@@ -528,51 +528,6 @@ a:focus-visible {
     }
   }
 
-  /* «Прожектор»: пришли по ссылке из плашки-уведомления — надо показать, ГДЕ задача.
-     Эффект разовый и заметный, в отличие от фоновых подсветок (непрочитанное, срочное):
-     его задача — поймать взгляд один раз, а не жить на экране. Три расходящихся кольца
-     плюс короткий подскок; дальше карточка возвращается к обычному виду. */
-  .pf-spotlight {
-    position: relative;
-    animation: pf-spotlight-pop 1.9s cubic-bezier(0.22, 1.4, 0.36, 1);
-    z-index: 3;
-  }
-  .pf-spotlight::after {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: inherit;
-    pointer-events: none;
-    border: 2px solid hsl(var(--primary));
-    animation: pf-spotlight-ring 1.9s cubic-bezier(0.16, 0.84, 0.28, 1) 3;
-  }
-  @keyframes pf-spotlight-pop {
-    0% { transform: scale(1); }
-    14% { transform: scale(1.035); }
-    38% { transform: scale(0.995); }
-    100% { transform: scale(1); }
-  }
-  @keyframes pf-spotlight-ring {
-    0% {
-      opacity: 0.95;
-      box-shadow: 0 0 0 0 color-mix(in srgb, hsl(var(--primary)) 55%, transparent);
-    }
-    100% {
-      opacity: 0;
-      box-shadow: 0 0 0 14px color-mix(in srgb, hsl(var(--primary)) 0%, transparent);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .pf-spotlight,
-    .pf-spotlight::after {
-      animation: none;
-    }
-    /* Движение убрали — но показать, где задача, всё равно надо: оставляем статичную рамку. */
-    .pf-spotlight::after {
-      opacity: 1;
-    }
-  }
-
   /* Срочная задача (приоритет 1): красное свечение по контуру. Приём тот же, что у
      непрочитанного, и это осознанно — один визуальный язык, разный цвет: синий зовёт
      «посмотри», красный «сделай сейчас». Геометрия свечения постоянная, пульсирует
@@ -604,6 +559,53 @@ a:focus-visible {
   @media (prefers-reduced-motion: reduce) {
     .pf-urgent {
       animation: none;
+    }
+  }
+
+  /* Задача «прилетела»: пришли по ссылке из плашки или её только что назначили.
+     Горячая оранжевая вспышка, которая остывает — а дальше, если задача непрочитана,
+     сама собой проступает синяя подсветка (класс .pf-unread никуда не девается).
+     Свечение сделано box-shadow'ом, а НЕ псевдоэлементом: у карточек overflow:hidden,
+     и кольцо-псевдоэлемент по краю просто срезалось — эффекта не было видно вовсе.
+     Правило стоит ПОСЛЕ .pf-unread/.pf-urgent, чтобы перебивать их на время вспышки. */
+  .pf-arrive {
+    border-color: rgb(251 146 60 / 0.95) !important;
+    animation: pf-arrive 2600ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  }
+  @keyframes pf-arrive {
+    0% {
+      box-shadow:
+        0 0 0 2px rgb(251 146 60 / 0.95),
+        0 0 30px 6px rgb(251 146 60 / 0.9),
+        inset 0 0 22px -6px rgb(251 146 60 / 0.75);
+    }
+    18% {
+      box-shadow:
+        0 0 0 2px rgb(251 146 60 / 0.85),
+        0 0 24px 3px rgb(251 146 60 / 0.75),
+        inset 0 0 18px -6px rgb(251 146 60 / 0.55);
+    }
+    62% {
+      box-shadow:
+        0 0 0 1px rgb(251 146 60 / 0.45),
+        0 0 16px 0 rgb(251 146 60 / 0.4),
+        inset 0 0 12px -8px rgb(251 146 60 / 0.25);
+    }
+    100% {
+      box-shadow:
+        0 0 0 0 rgb(251 146 60 / 0),
+        0 0 0 0 rgb(251 146 60 / 0),
+        inset 0 0 0 0 rgb(251 146 60 / 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* Движение убрали, но показать «вот она» всё равно надо: держим ровное свечение,
+       гасить его будет снятие класса по таймеру. */
+    .pf-arrive {
+      animation: none;
+      box-shadow:
+        0 0 0 2px rgb(251 146 60 / 0.9),
+        0 0 20px 2px rgb(251 146 60 / 0.6);
     }
   }
 
