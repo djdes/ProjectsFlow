@@ -1,9 +1,9 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -21,6 +21,8 @@ import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
+import { useContainer } from '@/infrastructure/di/container';
+import { toast } from '@/components/ui/sonner';
 
 type Props = {
   task: Task;
@@ -96,6 +98,7 @@ function KanbanCardImpl({
   selectionMode = false,
   selected = false,
   onSelectToggle,
+  currentUserId = null,
   dropLine = null,
   readOnly = false,
 }: Props): React.ReactElement {
@@ -112,6 +115,24 @@ function KanbanCardImpl({
   // отсутствия. Открыть и читать задачу при этом можно. Объявлено ДО useSortable: хук
   // читает флаг в своих опциях (иначе TDZ — «used before declaration»).
   const frozenByApproval = awaitingApproval && !canApproveWork;
+  // Отзыв с утверждения прямо с карточки: отправил по ошибке — забрал, не открывая задачу.
+  // Кнопка только у ответственного: остальным сервер откажет, и обещать её нельзя.
+  const { taskRepository } = useContainer();
+  const [withdrawing, setWithdrawing] = useState(false);
+  const canWithdraw = frozenByApproval && !!currentUserId && task.assignee.userId === currentUserId;
+  const withdraw = async (): Promise<void> => {
+    if (withdrawing) return;
+    setWithdrawing(true);
+    try {
+      await taskRepository.withdrawApproval(task.projectId, task.id);
+      toast.success('Задача снова в работе');
+      onTaskChanged?.();
+    } catch (e) {
+      toast.error(`Не удалось забрать: ${(e as Error).message}`);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
   // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
   const selecting = selectionMode && !preview;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -216,6 +237,25 @@ function KanbanCardImpl({
                 big ? 'size-4' : 'size-3',
               )}
             />
+          </Button>
+        )}
+        {canWithdraw && (
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={withdrawing}
+            className={cn(
+              'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground',
+              big ? 'size-9' : 'size-6',
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              void withdraw();
+            }}
+            aria-label="Забрать с утверждения"
+            title="Забрать с утверждения и продолжить работу"
+          >
+            <Undo2 className={big ? 'size-4' : 'size-3'} />
           </Button>
         )}
         {!frozenByApproval && (
