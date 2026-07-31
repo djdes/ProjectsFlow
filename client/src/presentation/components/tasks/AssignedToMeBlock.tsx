@@ -347,7 +347,7 @@ export function AssignedToMeBlock({
   }, [taskAssigneeRepository]);
 
   // Пришли по ссылке из плашки «вам назначили задачу» — подсвечиваем карточку.
-  useSpotlightTask(!loading && boardTasks !== null);
+  useSpotlightTask(!loading && boardTasks !== null, refresh);
 
   // Realtime: задачу изменили в другой вкладке или это сделал коллега — например поставил
   // срочный приоритет. Без подписки подсветка появлялась бы только после перезагрузки.

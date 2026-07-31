@@ -37,6 +37,7 @@ import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext
 import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
 import { UnreadTasksProvider } from '@/presentation/hooks/UnreadTasksProvider';
 import { OPEN_INBOX_TASK_EVENT } from '@/presentation/components/tasks/AssignedTaskToast';
+import { SPOTLIGHT_TASK_EVENT } from '@/presentation/hooks/useSpotlightTask';
 import { CompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { CompletionCelebration } from '@/presentation/components/stats/CompletionCelebration';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
@@ -226,11 +227,18 @@ export function AppShell(): React.ReactElement {
   useEffect(() => {
     const onOpen = (e: Event): void => {
       const taskId = (e as CustomEvent<{ taskId?: string }>).detail?.taskId;
-      if (taskId) navigate(`/inbox?task=${encodeURIComponent(taskId)}`);
+      if (!taskId) return;
+      // Уже на «Входящих» — навигация не нужна и вредна: она сбросила бы позицию
+      // скролла и состояние страницы. Просто просим подсветить задачу на месте.
+      if (pathname.startsWith('/inbox')) {
+        window.dispatchEvent(new CustomEvent(SPOTLIGHT_TASK_EVENT, { detail: { taskId } }));
+        return;
+      }
+      navigate(`/inbox?task=${encodeURIComponent(taskId)}`);
     };
     window.addEventListener(OPEN_INBOX_TASK_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_INBOX_TASK_EVENT, onOpen);
-  }, [navigate]);
+  }, [navigate, pathname]);
 
   return (
     <SidebarCollapsedContext.Provider value={isDesktop && collapsed}>
