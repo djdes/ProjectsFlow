@@ -1,6 +1,6 @@
-import { and, countDistinct, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, countDistinct, desc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { activityEvents, type ActivityEventRow } from '../db/schema.js';
+import { activityEvents, tasks, type ActivityEventRow } from '../db/schema.js';
 import type { ActivityEvent, ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 import type {
   ActivityRepository,
@@ -106,14 +106,24 @@ export class DrizzleActivityRepository implements ActivityRepository {
   // задача накручивала бы ранг сколько угодно раз.
   async countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number> {
     const rows = await this.db
-      .select({ n: countDistinct(sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))`) })
+      .select({ n: countDistinct(tasks.id) })
       .from(activityEvents)
+      // JOIN к задаче нужен, чтобы проверить её ТЕКУЩЕЕ состояние: событие о закрытии
+      // остаётся в журнале навсегда, но задача могла вернуться в работу — руководитель
+      // отклонил приёмку или исполнитель забрал её сам. Такая задача не выполнена, и в
+      // рейтинге ей не место. Заодно отсекаются удалённые.
+      .innerJoin(
+        tasks,
+        sql`${tasks.id} = JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))`,
+      )
       .where(
         and(
           eq(activityEvents.actorUserId, actorUserId),
           eq(activityEvents.kind, 'task_status_changed'),
           gte(activityEvents.createdAt, since),
           sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')`,
+          isNull(tasks.deletedAt),
+          inArray(tasks.status, ['done', 'pending_approval']),
         ),
       );
     return Number(rows[0]?.n ?? 0);

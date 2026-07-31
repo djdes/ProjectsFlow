@@ -10,6 +10,10 @@ type CompletedToday = {
   // повторно и праздника не запускает — иначе цикл «выполнил → забрал с утверждения →
   // выполнил снова» накручивал бы ранг одной задачей.
   readonly celebrate: (taskId: string) => void;
+  // Задача вернулась в работу (возврат руководителем или отзыв исполнителем) — она больше
+  // не выполнена. Забываем её и пересчитываем цифру с сервера: он считает по текущему
+  // состоянию задач, и локальная арифметика тут только разошлась бы с ним.
+  readonly forget: (taskId: string) => void;
 };
 
 const CompletedTodayContext = createContext<CompletedToday | null>(null);
@@ -80,9 +84,17 @@ export function CompletedTodayProvider({
     [],
   );
 
+  const forget = useCallback(
+    (taskId: string): void => {
+      countedRef.current.delete(taskId);
+      refresh();
+    },
+    [refresh],
+  );
+
   const value = useMemo(
-    () => ({ count, celebrationKey, celebrate }),
-    [count, celebrationKey, celebrate],
+    () => ({ count, celebrationKey, celebrate, forget }),
+    [count, celebrationKey, celebrate, forget],
   );
 
   return (
@@ -96,6 +108,7 @@ const NOOP: CompletedToday = {
   count: null,
   celebrationKey: 0,
   celebrate: () => {},
+  forget: () => {},
 };
 
 export function useCompletedToday(): CompletedToday {

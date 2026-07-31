@@ -53,6 +53,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useApprovalFreeze } from '@/presentation/hooks/useApprovalFreeze';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -1819,6 +1820,7 @@ export function TaskDrawer({
   // причине, что и для viewer'а: иначе исполнитель правит поля, а каждое сохранение
   // откатывается.
   const frozenByApproval = useApprovalFreeze(task?.status);
+  const { forget: forgetCompleted } = useCompletedToday();
   // Отзыв задачи с утверждения самим исполнителем.
   const [withdrawing, setWithdrawing] = useState(false);
   const withdrawApproval = useCallback(async (): Promise<void> => {
@@ -1827,6 +1829,7 @@ export function TaskDrawer({
     setWithdrawing(true);
     try {
       await taskRepository.withdrawApproval(t.projectId, t.id);
+      forgetCompleted(t.id);
       toast.success('Задача снова в работе');
       notifyChanged();
     } catch (e) {

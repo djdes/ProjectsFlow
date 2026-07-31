@@ -252,7 +252,7 @@ export function AssignedToMeBlock({
     useContainer();
   const navigate = useNavigate();
   const { user } = useCurrentUser();
-  const { celebrate } = useCompletedToday();
+  const { celebrate, forget } = useCompletedToday();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
   // Принимает работу руководитель/владелец активного пространства. Нужно, чтобы показать
@@ -884,6 +884,7 @@ export function AssignedToMeBlock({
   const withdrawApproval = async (item: InboxBlockTask): Promise<void> => {
     try {
       await taskRepository.withdrawApproval(item.projectId, item.id);
+      forget(item.id);
       toast.success('Задача снова в работе');
       await refresh();
       onChanged?.();
@@ -897,6 +898,9 @@ export function AssignedToMeBlock({
   const rejectApproval = async (item: InboxBlockTask, comment: string): Promise<void> => {
     try {
       await taskRepository.rejectApproval(item.projectId, item.id, comment);
+      // Возврат снимает задачу с рейтинга исполнителя, а у принимающего она и не
+      // считалась: цифру всё равно пересчитываем с сервера — она общая на сессию.
+      forget(item.id);
       toast.success('Возвращена в работу — комментарий добавлен');
       setRejectTarget(null);
       await refresh();

@@ -22,6 +22,7 @@ import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useContainer } from '@/infrastructure/di/container';
 import { toast } from '@/components/ui/sonner';
 
@@ -117,6 +118,7 @@ function KanbanCardImpl({
   // читает флаг в своих опциях (иначе TDZ — «used before declaration»).
   const frozenByApproval = awaitingApproval && !canApproveWork;
   const { isUnread } = useUnreadTasks();
+  const { forget: forgetCompleted } = useCompletedToday();
   // Отзыв с утверждения прямо с карточки: отправил по ошибке — забрал, не открывая задачу.
   // Кнопка только у ответственного: остальным сервер откажет, и обещать её нельзя.
   const { taskRepository } = useContainer();
@@ -127,6 +129,8 @@ function KanbanCardImpl({
     setWithdrawing(true);
     try {
       await taskRepository.withdrawApproval(task.projectId, task.id);
+      // Задача вернулась в работу — в рейтинге ей больше не место.
+      forgetCompleted(task.id);
       toast.success('Задача снова в работе');
       onTaskChanged?.();
     } catch (e) {
