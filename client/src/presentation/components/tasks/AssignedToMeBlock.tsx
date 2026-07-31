@@ -551,17 +551,24 @@ export function AssignedToMeBlock({
     () => visibleTasks.filter((t) => t.status === 'manual'),
     [visibleTasks],
   );
-  // Приёмка руководителем (db/150): очередь приёмки — сумма ОБОИХ направлений, а не
-  // активной вкладки. Задачи на утверждении назначены исполнителям, поэтому на вкладке
-  // «Мои» их не бывает, и полка, привязанная к вкладке, оказывалась пустой ровно у того,
-  // кому она нужна. Фильтры вкладок здесь тоже не применяем: очередь не должна прятаться.
+  // Приёмка руководителем (db/150). Состав полки зависит от роли, и это не косметика:
+  //
+  //  - ПРИНИМАЮЩИЙ видит очередь целиком — сумму обоих направлений, а не активной вкладки.
+  //    Задачи на утверждении назначены исполнителям, поэтому на вкладке «Мои» их не бывает,
+  //    и полка, привязанная к вкладке, оказывалась бы пустой ровно у того, кому она нужна.
+  //  - ИСПОЛНИТЕЛЮ показываем ТОЛЬКО его собственные задачи. Раньше сюда попадали и чужие
+  //    (из направления «Другим»): человек видел десятки карточек, которые не может ни
+  //    принять, ни забрать — чужая очередь выдавалась за его собственную.
+  //
+  // Фильтры вкладок не применяем: очередь не должна прятаться за фильтром.
   const approvalTasks = useMemo(() => {
+    const source = isApprover ? [...toMeTasks, ...byMeDisplayTasks] : toMeTasks;
     const byId = new Map<string, InboxBlockTask>();
-    for (const t of [...toMeTasks, ...byMeDisplayTasks]) {
+    for (const t of source) {
       if (t.status === 'pending_approval') byId.set(t.id, t);
     }
     return [...byId.values()];
-  }, [toMeTasks, byMeDisplayTasks]);
+  }, [toMeTasks, byMeDisplayTasks, isApprover]);
   const groupedTasks = useMemo(
     () => visibleTasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval'),
     [visibleTasks],
