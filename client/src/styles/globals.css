@@ -498,24 +498,28 @@ a:focus-visible {
   .pf-unread {
     border-color: rgb(56 189 248 / 0.75) !important;
     box-shadow:
-      0 0 0 1px rgb(56 189 248 / 0.55),
-      0 0 12px -1px rgb(56 189 248 / 0.75),
-      inset 0 0 14px -6px rgb(56 189 248 / 0.6);
-    animation: pf-unread-breathe 3.4s ease-in-out infinite;
+      0 0 0 1px rgb(56 189 248 / 0.5),
+      0 0 13px -1px rgb(56 189 248 / 0.6),
+      inset 0 0 14px -6px rgb(56 189 248 / 0.5);
+    animation: pf-unread-breathe 6s ease-in-out infinite;
   }
+  /* Геометрия свечения в обоих кадрах ОДИНАКОВАЯ (блюр 13px, spread -1px) — меняется
+     только прозрачность, и та в узком диапазоне. Свечение, которое дышит размером,
+     в периферийном зрении читается как мигание и тянет взгляд на себя; подсветка
+     должна напоминать о задаче, а не мешать работать. */
   @keyframes pf-unread-breathe {
     0%,
     100% {
       box-shadow:
-        0 0 0 1px rgb(56 189 248 / 0.45),
-        0 0 10px -2px rgb(56 189 248 / 0.6),
-        inset 0 0 14px -6px rgb(56 189 248 / 0.5);
+        0 0 0 1px rgb(56 189 248 / 0.42),
+        0 0 13px -1px rgb(56 189 248 / 0.48),
+        inset 0 0 14px -6px rgb(56 189 248 / 0.42);
     }
     50% {
       box-shadow:
-        0 0 0 1px rgb(56 189 248 / 0.7),
-        0 0 18px 0 rgb(56 189 248 / 0.9),
-        inset 0 0 16px -5px rgb(56 189 248 / 0.7);
+        0 0 0 1px rgb(56 189 248 / 0.6),
+        0 0 13px -1px rgb(56 189 248 / 0.72),
+        inset 0 0 14px -6px rgb(56 189 248 / 0.58);
     }
   }
   @media (prefers-reduced-motion: reduce) {
