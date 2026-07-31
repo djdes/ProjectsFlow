@@ -497,7 +497,7 @@ function KanbanCardImpl({
               // На мобиле показываем ВЕСЬ текст задачи (line-clamp-none): на телефоне карточка
               // и так почти во всю ширину, обрезать нечего — юзер хочет читать задачу целиком.
               // На десктопе оставляем компактный клэмп в 4 строки.
-              <div className="line-clamp-4 max-sm:line-clamp-none text-sm leading-snug">
+              <div className="max-h-[4lh] overflow-hidden text-sm leading-snug max-sm:max-h-none">
                 {/* Иконка задачи (эмодзи/lucide/картинка) — перед заголовком, как в Notion. */}
                 {task.icon && (
                   <span className="mr-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">

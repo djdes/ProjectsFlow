@@ -77,7 +77,7 @@ export function BoardWorkShelf({
                   // rounded-xl — чтобы вспышка (::after с border-radius: inherit) повторяла
                   // скругление карточки. Фона и рамки у обёртки нет.
                   className={cn(
-                    'relative w-[min(100%,17rem)] rounded-xl',
+                    'relative w-full min-w-0 max-w-[17rem] rounded-xl',
                     flash && t.id === flashTaskId && 'pf-card-flash',
                   )}
                 >

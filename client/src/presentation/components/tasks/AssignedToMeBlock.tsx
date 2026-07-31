@@ -1782,7 +1782,7 @@ function ApprovalShelf({
         ) : (
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
-            <div key={item.id} className="w-[min(100%,17rem)] space-y-1">
+            <div key={item.id} className="w-full min-w-0 max-w-[17rem] space-y-1">
               <AcceptedCard
                 item={item}
                 onOpen={() => onOpen(item)}
@@ -1903,7 +1903,7 @@ function InProgressShelf({
                 // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
                 // эффекта от радиуса самого по себе тоже.
                 className={cn(
-                  'group relative w-[min(100%,17rem)] rounded-xl',
+                  'group relative w-full min-w-0 max-w-[17rem] rounded-xl',
                   flash && item.id === flashItemId && 'pf-card-flash',
                 )}
               >
@@ -2931,7 +2931,7 @@ function AcceptedCard({
         <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
           // Моб: весь текст задачи (line-clamp-none). Заголовок полужирный, как на доске.
-          <div className="line-clamp-4 max-sm:line-clamp-none text-sm leading-snug">
+          <div className="max-h-[4lh] overflow-hidden text-sm leading-snug max-sm:max-h-none">
             <TaskTitleText title={title} className="font-medium text-foreground" />
             {body.trim() && (
               <Markdown
