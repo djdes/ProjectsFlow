@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type ReactElement } from 'react';
-import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '@/presentation/layout/AppShell';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { boardSlugFromHost } from '@/lib/publicBoardUrl';
@@ -23,6 +23,14 @@ function RouteFallback(): ReactElement {
 
 function el(node: ReactElement): ReactElement {
   return <Suspense fallback={<RouteFallback />}>{node}</Suspense>;
+}
+
+// Редирект старого пути с СОХРАНЕНИЕМ query-строки. Обычный <Navigate to="/"> её теряет,
+// а по ссылкам вида /inbox?task=<id> (Telegram-сводки, письма) приходит подсветка задачи —
+// без ?task приземление было бы просто на «Входящие», без открытой задачи.
+function RedirectKeepingSearch({ to }: { to: string }): ReactElement {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: to, search, hash }} replace />;
 }
 
 const ProjectPage = page(() => import('@/presentation/pages/ProjectPage'), 'ProjectPage');
@@ -129,8 +137,9 @@ export const router = createBrowserRouter(
       { index: true, element: el(<InboxPage />) },
       { path: 'ai', element: el(<AiPage />) },
       { path: 'ai/c/:conversationId', element: el(<AiPage />) },
-      // Старые ссылки на /inbox редиректим на канонический «/».
-      { path: 'inbox', element: <Navigate to="/" replace /> },
+      // Старые ссылки на /inbox редиректим на канонический «/» — вместе с ?task=<id>,
+      // иначе подсветка задачи из сводок терялась на редиректе.
+      { path: 'inbox', element: <RedirectKeepingSearch to="/" /> },
       // Уведомления переехали в чат-ленту; старые ссылки редиректим на главную.
       { path: 'notifications', element: <Navigate to="/" replace /> },
       { path: 'monitoring', element: el(<MonitoringOverviewPage />) },
