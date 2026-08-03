@@ -611,15 +611,23 @@ export function AssignedToMeBlock({
   //    (из направления «Другим»): человек видел десятки карточек, которые не может ни
   //    принять, ни забрать — чужая очередь выдавалась за его собственную.
   //
+  //  - НА ДОСКЕ СОТРУДНИКА полка показывает очередь ЭТОГО человека: руководитель смотрит
+  //    конкретного исполнителя, и «на утверждении» должно означать «сдал он». Берём все его
+  //    задачи, а не только личные входящие: сдают работу и по проектам тоже, а прятать их
+  //    здесь значило бы показывать неполную картину по человеку.
+  //
   // Фильтры вкладок не применяем: очередь не должна прятаться за фильтром.
   const approvalTasks = useMemo(() => {
-    const source = isApprover ? [...toMeTasks, ...byMeDisplayTasks] : toMeTasks;
+    const source =
+      isApprover || focusedMemberId ? [...toMeTasks, ...byMeDisplayTasks] : toMeTasks;
     const byId = new Map<string, InboxBlockTask>();
     for (const t of source) {
-      if (t.status === 'pending_approval') byId.set(t.id, t);
+      if (t.status !== 'pending_approval') continue;
+      if (focusedMemberId && t.assignee.userId !== focusedMemberId) continue;
+      byId.set(t.id, t);
     }
     return [...byId.values()];
-  }, [toMeTasks, byMeDisplayTasks, isApprover]);
+  }, [toMeTasks, byMeDisplayTasks, isApprover, focusedMemberId]);
   const groupedTasks = useMemo(
     () => visibleTasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval'),
     [visibleTasks],
@@ -1204,6 +1212,11 @@ export function AssignedToMeBlock({
           onWithdraw={(t) => void withdrawApproval(t)}
           isApprover={isApprover}
           currentUserId={user?.id ?? null}
+          {...(focusedMember
+            ? {
+                emptyHint: `Задач на утверждении от ${focusedMember.displayName} сейчас нет.`,
+              }
+            : {})}
           className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
@@ -1839,6 +1852,7 @@ function ApprovalShelf({
   onWithdraw,
   isApprover,
   currentUserId,
+  emptyHint,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -1852,6 +1866,9 @@ function ApprovalShelf({
   // сервер пускает в done лишь руководителя — показывать их значит обещать невозможное.
   isApprover: boolean;
   currentUserId: string | null;
+  // Чем объяснить пустую полку. На доске сотрудника это «у него нечего принимать», а не
+  // общее «сотрудники ещё ничего не сдали» — иначе руководитель читает чужую очередь как свою.
+  emptyHint?: string;
   className?: string;
 }): React.ReactElement {
   return (
@@ -1866,8 +1883,8 @@ function ApprovalShelf({
           // Пустую очередь показываем только принимающему (см. isApprover): без этого
           // новую область не находят и решают, что приёмка не работает.
           <p className="px-0.5 py-1 text-xs text-violet-800/60 dark:text-violet-200/45">
-            Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их
-            можете только вы.
+            {emptyHint ??
+              'Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их можете только вы.'}
           </p>
         ) : (
         <div className="flex flex-wrap gap-2">
