@@ -35,7 +35,7 @@ import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
-import { UnreadTasksProvider } from '@/presentation/hooks/UnreadTasksProvider';
+import { UnreadTasksProvider, useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { OPEN_INBOX_TASK_EVENT } from '@/presentation/components/tasks/AssignedTaskToast';
 import { SPOTLIGHT_TASK_EVENT } from '@/presentation/hooks/useSpotlightTask';
 import { CompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
@@ -528,10 +528,12 @@ type NavItem = {
 function MobileBottomNav(): React.ReactElement {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // Новые (ни разу не открытые) задачи для меня — та же цифра, что на иконке в сайдбаре.
+  const { count: unreadTaskCount } = useUnreadTasks();
 
   // Три вкладки: Входящие · ИИ · Профиль (все route-based).
   const items: NavItem[] = [
-    { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/') },
+    { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/'), badge: unreadTaskCount },
     { key: 'ai', label: 'ИИ', icon: <Sparkles className="size-5" />, active: pathname === '/ai' || pathname.startsWith('/ai/'), run: () => navigate('/ai') },
     { key: 'profile', label: 'Профиль', icon: <AnimatedUser className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
   ];
@@ -647,7 +649,14 @@ function MobileBottomNav(): React.ReactElement {
                 isActive ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
-              <span className="relative inline-flex">{icon}</span>
+              <span className="relative inline-flex">
+                {icon}
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute -right-2 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
+              </span>
               <span>{item.label}</span>
             </button>
           );

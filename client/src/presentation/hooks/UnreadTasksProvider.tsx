@@ -1,9 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
+import {
+  REALTIME_CONNECTED_EVENT,
+  TASK_CHANGED_EVENT,
+} from '@/presentation/hooks/useNotificationStream';
 
 type UnreadTasks = {
   // Непрочитана ли задача для текущего пользователя.
   readonly isUnread: (taskId: string) => boolean;
+  // Сколько всего непрочитанных — счётчик на иконке «Входящие».
+  readonly count: number;
   // Пометить прочитанной локально — вызывать при открытии задачи, вместе с записью
   // просмотра на сервере. Ждать ответа сервера незачем: подсветка должна гаснуть сразу.
   readonly markRead: (taskId: string) => void;
@@ -50,6 +56,25 @@ export function UnreadTasksProvider({
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
+  // Задачу назначили прямо сейчас — счётчик на «Входящих» должен подрасти без перезагрузки
+  // и без перехода на другую вкладку. Дебаунс: серия правок (приоритет + дедлайн + перенос)
+  // даёт пачку событий, а нам хватает одного перечитывания в конце пачки.
+  useEffect(() => {
+    let timer: number | undefined;
+    const schedule = (): void => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => refresh(), 250);
+    };
+    window.addEventListener(TASK_CHANGED_EVENT, schedule);
+    // Реконнект SSE: события за время обрыва до нас не дошли — читаем снапшот.
+    window.addEventListener(REALTIME_CONNECTED_EVENT, schedule);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(TASK_CHANGED_EVENT, schedule);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, schedule);
+    };
+  }, [refresh]);
+
   const markRead = useCallback((taskId: string): void => {
     setIds((prev) => {
       if (!prev.has(taskId)) return prev;
@@ -62,8 +87,8 @@ export function UnreadTasksProvider({
   const isUnread = useCallback((taskId: string): boolean => ids.has(taskId), [ids]);
 
   const value = useMemo(
-    () => ({ isUnread, markRead, refresh }),
-    [isUnread, markRead, refresh],
+    () => ({ isUnread, count: ids.size, markRead, refresh }),
+    [isUnread, ids, markRead, refresh],
   );
 
   return <UnreadTasksContext.Provider value={value}>{children}</UnreadTasksContext.Provider>;
@@ -73,6 +98,7 @@ export function UnreadTasksProvider({
 // предпросмотр), и там подсветка непрочитанного не нужна.
 const NOOP: UnreadTasks = {
   isUnread: () => false,
+  count: 0,
   markRead: () => {},
   refresh: () => {},
 };

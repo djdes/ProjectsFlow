@@ -18,6 +18,7 @@ import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchPr
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
+import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { SidebarNavRail, type RailItem } from '@/presentation/components/nav/SidebarNavRail';
@@ -84,6 +85,9 @@ export function Sidebar({
   // Непрочитанное в ВИДИМОМ чате (активное пространство, с фолбэком на хаб владельца для
   // приглашённого) — совпадает с тем, что откроется по клику, и гасится при прочтении.
   const chatUnread = useActiveChatUnread();
+  // Новые задачи для меня — счётчик на иконке «Входящие» (тот же источник, что подсветка
+  // непрочитанных карточек, поэтому цифра и подсветка всегда сходятся).
+  const { count: unreadTaskCount } = useUnreadTasks();
   const { animations } = useMotion();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -167,6 +171,9 @@ export function Sidebar({
       key: 'inbox',
       label: 'Входящие',
       icon: <AnimatedInbox className="size-5" />,
+      // Счётчик = задачи, назначенные на меня и ни разу мной не открытые (окно 14 дней,
+      // см. ListUnreadTasks). Гаснет по одной, когда задачу открывают.
+      badge: unreadTaskCount,
       variant: 'action',
       onAction: () => navigate('/'),
     },
@@ -207,7 +214,7 @@ export function Sidebar({
           <RailButton onClick={openSearch} label="Глобальный поиск" animated>
             <AnimatedSearch className="size-4" />
           </RailButton>
-          <RailNavLink to="/" end label="Входящие" animated>
+          <RailNavLink to="/" end label="Входящие" badge={unreadTaskCount} animated>
             <AnimatedInbox className="size-4" />
           </RailNavLink>
           <RailButton
