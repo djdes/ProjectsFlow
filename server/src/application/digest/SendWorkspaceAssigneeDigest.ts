@@ -48,10 +48,16 @@ export type WorkspaceAssigneeDigestSendResult = {
 
 type ProjectTasks = {
   readonly project: { id: string; name: string };
+  // Группа «Делегированные»: задачи без проекта, живущие в личных входящих исполнителя.
+  // Ссылки у них ведут на /inbox, а не на /projects/<id>.
+  readonly isInbox?: boolean;
   readonly tasks: Task[];
 };
 
 const MAX_MESSAGE_LENGTH = 3800;
+
+// Заголовок колонки задач без проекта.
+const DELEGATED_GROUP_NAME = 'Делегированные';
 
 export class SendWorkspaceAssigneeDigest {
   constructor(private readonly deps: Deps) {}
@@ -110,6 +116,8 @@ export class SendWorkspaceAssigneeDigest {
         byAssignee.set(task.assignee.userId, current);
       }
     }
+
+    await this.appendDelegatedGroups(byAssignee, allowedRecipients);
 
     const memberById = new Map(members.map((member) => [member.userId, member] as const));
     const taskCount = [...byAssignee.values()].reduce(
@@ -237,6 +245,46 @@ export class SendWorkspaceAssigneeDigest {
     };
   }
 
+  // Колонка «Делегированные» — задачи, у которых нет проекта. Они лежат в личных
+  // входящих исполнителя (ChangeTaskAssignee переносит личную задачу в inbox нового
+  // ответственного), поэтому источник — inbox'ы самих получателей, а не проекты
+  // пространства: выбор проектов в настройках сводки такие задачи не описывает.
+  // Берём только созданные КЕМ-ТО ДРУГИМ: собственные заметки человека — не делегирование
+  // и в общий чат не выносятся.
+  private async appendDelegatedGroups(
+    byAssignee: Map<string, ProjectTasks[]>,
+    allowedRecipients: ReadonlySet<string>,
+  ): Promise<void> {
+    const recipientIds = [...allowedRecipients];
+    if (recipientIds.length === 0) return;
+    const inboxes = await this.deps.projects
+      .listInboxesByOwners(recipientIds)
+      .catch(() => []);
+    const delegated = await Promise.all(
+      inboxes.map(async (inbox) => ({
+        inbox,
+        tasks: (await this.deps.tasks.listByProject(inbox.id)).filter(
+          (task) =>
+            task.status !== 'done' &&
+            task.assignee.userId === inbox.ownerId &&
+            task.createdBy !== null &&
+            task.createdBy !== inbox.ownerId,
+        ),
+      })),
+    );
+    for (const { inbox, tasks } of delegated) {
+      if (tasks.length === 0) continue;
+      const current = byAssignee.get(inbox.ownerId) ?? [];
+      // Последней группой: сначала проекты, «Делегированные» — хвостом.
+      current.push({
+        project: { id: inbox.id, name: DELEGATED_GROUP_NAME },
+        isInbox: true,
+        tasks,
+      });
+      byAssignee.set(inbox.ownerId, current);
+    }
+  }
+
   private async cleanupPreviousTest(workspaceId: string): Promise<void> {
     const previous = await this.deps.settings
       .getLastTestDeliveries(workspaceId)
@@ -275,12 +323,16 @@ export function buildWorkspaceAssigneeDigestMessage(input: {
   const base = input.appUrl.replace(/\/+$/, '');
 
   outer: for (const group of input.projects) {
-    const projectUrl = `${base}/projects/${group.project.id}`;
-    const projectHeader = `<b>📁 <a href="${escapeHtml(projectUrl)}">${escapeHtml(group.project.name)}</a></b>`;
+    const groupUrl = group.isInbox ? `${base}/inbox` : `${base}/projects/${group.project.id}`;
+    const projectHeader =
+      `<b>${group.isInbox ? '🤝' : '📁'} ` +
+      `<a href="${escapeHtml(groupUrl)}">${escapeHtml(group.project.name)}</a></b>`;
     const projectLines: string[] = [projectHeader];
     for (const task of group.tasks) {
       const { name } = splitDescription(task.description);
-      const taskUrl = `${base}/projects/${group.project.id}?task=${task.id}`;
+      const taskUrl = group.isInbox
+        ? `${base}/inbox?task=${task.id}`
+        : `${base}/projects/${group.project.id}?task=${task.id}`;
       const completeUrl = input.completeActionLinks?.get(task.id) ?? `${taskUrl}&done=1`;
       const taskLine =
         `• <b>${escapeHtml(telegramDigestTaskTitle(name))}</b> ` +
@@ -344,7 +396,8 @@ function buildWorkspaceAssigneeDigestModel(input: {
     const projectModel = buildDigestModel(tasks, {
       projectName: group.project.name,
       appUrl: input.appUrl,
-      isInbox: false,
+      // Задачи без проекта живут во входящих — ссылки должны вести на /inbox.
+      isInbox: group.isInbox === true,
       attachmentsByTask: new Map(),
       grouping: { by: 'priority' },
       completeActionLinks: input.completeActionLinks,
@@ -352,7 +405,7 @@ function buildWorkspaceAssigneeDigestModel(input: {
     });
     return {
       priority: null,
-      heading: `📁 ${group.project.name}`,
+      heading: `${group.isInbox ? '🤝' : '📁'} ${group.project.name}`,
       items: projectModel.groups.flatMap((projectGroup) => projectGroup.items),
       telegramAssignee: null,
     };

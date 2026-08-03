@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import {
+  SendWorkspaceAssigneeDigest,
   buildWorkspaceAssigneeDigestMessage,
   buildWorkspaceAssigneeDigestRichMessage,
 } from './SendWorkspaceAssigneeDigest.js';
@@ -117,4 +119,120 @@ test('workspace assignee digest uses the same rich layout as regular Telegram di
   assert.doesNotMatch(message, /Завершить|Перейти|Подробности/);
   assert.match(message, />осталось 2 дня<\/td>/);
   assert.match(message, /<td>Денис<\/td>/);
+});
+
+test('workspace assignee digest renders delegated projectless tasks as their own column', () => {
+  const message = buildWorkspaceAssigneeDigestRichMessage({
+    displayName: 'Денис',
+    telegramLink: link,
+    appUrl: 'https://projectsflow.ru',
+    now: new Date('2026-07-16T09:00:00.000Z'),
+    projects: [
+      {
+        project: { id: 'project-a', name: 'DocsFlow' },
+        tasks: [task('task-a', 'project-a', 'Проверить документы', null)],
+      },
+      {
+        project: { id: 'inbox-denis', name: 'Делегированные' },
+        isInbox: true,
+        tasks: [task('task-c', 'inbox-denis', 'Позвонить подрядчику', null)],
+      },
+    ],
+  });
+
+  assert.match(message, /<h3>📁 DocsFlow<\/h3>/);
+  assert.match(message, /<h3>🤝 Делегированные<\/h3>/);
+  assert.match(message, /<p>Открытых задач: <b>2<\/b><\/p>/);
+  // Задача без проекта открывается во «Входящих», а не по /projects/<inbox-id>.
+  assert.match(message, /https:\/\/projectsflow\.ru\/inbox\?task=task-c/);
+  assert.doesNotMatch(message, /projects\/inbox-denis/);
+});
+
+test('workspace assignee digest adds a delegated column from personal inboxes', async () => {
+  const rich: Array<{ chatId: number; html: string }> = [];
+  const inboxTask = (
+    id: string,
+    description: string,
+    createdBy: string | null,
+    assigneeUserId: string,
+    status = 'todo',
+  ): unknown => ({
+    ...task(id, 'inbox-u1', description, null),
+    createdBy,
+    status,
+    assignee: { userId: assigneeUserId, displayName: 'Анна', avatarUrl: null },
+  });
+  const send = new SendWorkspaceAssigneeDigest({
+    settings: {
+      async get() {
+        return {
+          ...defaultWorkspaceAssigneeDigestSettings('w1'),
+          enabled: true,
+          telegramGroupChatId: -1007,
+        };
+      },
+      async replaceLastTestDeliveries() {},
+      async getLastTestDeliveries() {
+        return [];
+      },
+    } as never,
+    workspaces: {
+      async listMembers() {
+        return [{ workspaceId: 'w1', userId: 'u1', role: 'editor', displayName: 'Анна' }];
+      },
+    } as never,
+    projects: {
+      async listByWorkspace() {
+        return [];
+      },
+      async listInboxesByOwners() {
+        return [{ id: 'inbox-u1', name: 'Входящие', ownerId: 'u1', isInbox: true }];
+      },
+    } as never,
+    tasks: {
+      async listByProject(projectId: string) {
+        return projectId === 'inbox-u1'
+          ? [
+              inboxTask('t1', 'Позвонить подрядчику', 'u2', 'u1'),
+              // Своя личная заметка — не делегирование, в общий чат не выносим.
+              inboxTask('t2', 'Купить кофе', 'u1', 'u1'),
+              // Выполненная делегированная — в сводке открытых задач ей не место.
+              inboxTask('t3', 'Старое поручение', 'u2', 'u1', 'done'),
+            ]
+          : [];
+      },
+    } as never,
+    users: {
+      async getTelegramLink() {
+        return { telegramUserId: 101, telegramUsername: 'anna_pf' };
+      },
+    } as never,
+    createEmailActionToken: {
+      async execute() {
+        return 'c'.repeat(64);
+      },
+    } as never,
+    telegramDigestActions: {
+      async attach() {},
+    } as never,
+    telegram: {
+      async sendRichMessage(input: { chatId: number; html: string }) {
+        rich.push(input);
+        return { kind: 'ok' as const, messageId: 7 };
+      },
+      async sendMessage() {
+        throw new Error('fallback must not be used');
+      },
+    } as never,
+    appUrl: 'https://projectsflow.ru',
+  });
+
+  const result = await send.execute('w1');
+
+  assert.equal(result.taskCount, 1);
+  assert.equal(result.sentCount, 1);
+  assert.equal(rich.length, 1);
+  assert.match(rich[0]!.html, /<h3>🤝 Делегированные<\/h3>/);
+  assert.match(rich[0]!.html, /Позвонить подрядчику/);
+  assert.doesNotMatch(rich[0]!.html, /Купить кофе|Старое поручение/);
 });
