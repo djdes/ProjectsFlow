@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useContainer } from '@/infrastructure/di/container';
 import {
   REALTIME_CONNECTED_EVENT,
@@ -42,9 +43,14 @@ export function UnreadTasksProvider({
       });
   }, [statsRepository]);
 
+  // Открыли другую страницу (например доску проекта) — перечитываем. SPA-переход не
+  // размонтирует провайдер, поэтому без этого список оставался таким, каким был на момент
+  // загрузки вкладки: задачу назначили позже, человек зашёл в проект — и подсветки нет.
+  // Realtime закрывает тот же случай, но только когда SSE жив; навигация — второй замок.
+  const { pathname } = useLocation();
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, pathname]);
 
   // Вернулись во вкладку — перечитываем: пока человека не было, ему могли делегировать
   // задачу, и подсветка должна появиться без перезагрузки страницы.
