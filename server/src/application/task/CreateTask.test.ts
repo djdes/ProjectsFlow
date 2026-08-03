@@ -7,7 +7,14 @@ const OWNER_ID = 'u-owner';
 const OTHER_ID = 'u-other';
 
 function makeHarness(
-  opts: { isInbox?: boolean; strangers?: readonly string[]; now?: Date } = {},
+  opts: {
+    isInbox?: boolean;
+    strangers?: readonly string[];
+    now?: Date;
+    // Есть ли у OTHER_ID собственные «Входящие». Личная задача, созданная на коллегу,
+    // должна лечь именно туда (правило «я ответственный ⇒ задача в моих личных»).
+    assigneeInboxId?: string | null;
+  } = {},
 ) {
   const isInbox = opts.isInbox ?? true;
   // Users with no membership in the target project (findForProject → null).
@@ -27,6 +34,11 @@ function makeHarness(
         isInbox,
         ownerId: OWNER_ID,
       }),
+      findInboxByOwner: async (ownerId: string) => {
+        const id = opts.assigneeInboxId === undefined ? 'p-other-inbox' : opts.assigneeInboxId;
+        if (ownerId !== OTHER_ID || id === null) return null;
+        return { id, name: 'Входящие', isInbox: true, ownerId: OTHER_ID };
+      },
     } as never,
     members: {
       findForProject: async (projectId: string, userId: string) =>
@@ -247,4 +259,63 @@ test('a viewer can be the assignee of a named-project task', async () => {
   });
 
   assert.equal(task.assignee.userId, OTHER_ID);
+});
+
+// --- Личная задача на коллегу ложится в ЕГО «Входящие» ---
+
+test('inbox task created for a colleague lands in the colleague inbox', async () => {
+  const h = makeHarness({ isInbox: true });
+  await h.create.execute({
+    projectId: 'p1',
+    ownerUserId: OWNER_ID,
+    description: 'Позвонить подрядчику',
+    status: 'backlog',
+    assigneeUserId: OTHER_ID,
+  } as never);
+
+  // Проект создания подменён на inbox ответственного: иначе задача осталась бы в личных
+  // у автора и на доске получателя не появилась бы.
+  assert.equal(h.created[0]?.projectId, 'p-other-inbox');
+  assert.equal(h.created[0]?.assigneeUserId, OTHER_ID);
+});
+
+test('no inbox for the colleague — task stays where it was created', async () => {
+  const h = makeHarness({ isInbox: true, assigneeInboxId: null });
+  await h.create.execute({
+    projectId: 'p1',
+    ownerUserId: OWNER_ID,
+    description: 'Позвонить подрядчику',
+    status: 'backlog',
+    assigneeUserId: OTHER_ID,
+  } as never);
+
+  // Назначение важнее переезда: создавать чужой проект здесь мы не вправе.
+  assert.equal(h.created[0]?.projectId, 'p1');
+  assert.equal(h.created[0]?.assigneeUserId, OTHER_ID);
+});
+
+test('own inbox task is not moved anywhere', async () => {
+  const h = makeHarness({ isInbox: true });
+  await h.create.execute({
+    projectId: 'p1',
+    ownerUserId: OWNER_ID,
+    description: 'Своя заметка',
+    status: 'backlog',
+    assigneeUserId: OWNER_ID,
+  } as never);
+
+  assert.equal(h.created[0]?.projectId, 'p1');
+});
+
+test('named-project task is never retargeted to an inbox', async () => {
+  const h = makeHarness({ isInbox: false });
+  await h.create.execute({
+    projectId: 'p1',
+    ownerUserId: OWNER_ID,
+    description: 'Задача проекта',
+    status: 'backlog',
+    assigneeUserId: OTHER_ID,
+  } as never);
+
+  assert.equal(h.created[0]?.projectId, 'p1');
 });

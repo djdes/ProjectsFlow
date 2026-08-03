@@ -100,11 +100,25 @@ export class CreateTask {
     const assigneeUserId = input.assigneeUserId ?? createdBy;
     await this.validateAssignee(project, assigneeUserId);
 
+    // Правило «я ответственный ⇒ задача в моих личных» действует и при СОЗДАНИИ, не только
+    // при смене ответственного (см. ChangeTaskAssignee). Создали личную задачу на коллегу —
+    // она сразу ложится в ЕГО входящие. Иначе она оставалась бы в личных у автора: коллега
+    // видел бы её в своих назначенных, а на собственной доске «Входящие» — нет, и человек,
+    // который делегировал, тоже не находил бы её там, куда смотрит.
+    // Нет inbox'а у коллеги (ни разу не открывал) — оставляем на месте: назначение важнее,
+    // а создавать чужой проект здесь мы не вправе (тот же компромисс, что и при смене).
+    let targetProject = project;
+    if (project.isInbox && assigneeUserId !== project.ownerId) {
+      const assigneeInbox = await this.deps.projects.findInboxByOwner(assigneeUserId);
+      if (assigneeInbox) targetProject = assigneeInbox;
+    }
+    const targetProjectId = targetProject.id;
+
     // Приёмка (db/150): задачу можно создать сразу закрытой — так работает «Готово …» в
     // Telegram-композере (логирование уже сделанной работы). Это тоже закрытие работы, и
     // если приёмка включена, а создатель не руководитель — карточка встаёт на утверждение.
     const approvedStatus = await this.deps.approval.resolveTargetStatus(
-      project,
+      targetProject,
       input.ownerUserId,
       input.status,
     );
@@ -115,7 +129,7 @@ export class CreateTask {
     const status =
       approvedStatus === 'todo' &&
       this.deps.workerPolicy &&
-      !(await this.deps.workerPolicy.isEnabledForProject(input.projectId))
+      !(await this.deps.workerPolicy.isEnabledForProject(targetProjectId))
         ? 'backlog'
         : approvedStatus;
 
@@ -127,12 +141,12 @@ export class CreateTask {
     const anchor = input.afterTaskId ? await this.deps.tasks.getById(input.afterTaskId) : null;
     if (
       anchor &&
-      anchor.projectId === input.projectId &&
+      anchor.projectId === targetProjectId &&
       anchor.status === status
     ) {
       position = anchor.position + 1;
     } else {
-      const bounds = await this.deps.tasks.getPositionBounds(input.projectId, status);
+      const bounds = await this.deps.tasks.getPositionBounds(targetProjectId, status);
       position = bounds ? bounds.min - POSITION_STEP : POSITION_STEP;
     }
 
@@ -140,12 +154,12 @@ export class CreateTask {
     let parentTaskId: string | null = null;
     if (input.parentTaskId) {
       const parent = await this.deps.tasks.getById(input.parentTaskId);
-      if (parent && parent.projectId === input.projectId) parentTaskId = parent.id;
+      if (parent && parent.projectId === targetProjectId) parentTaskId = parent.id;
     }
 
     const task = await this.deps.tasks.create({
       id: this.deps.idGen(),
-      projectId: input.projectId,
+      projectId: targetProjectId,
       createdBy,
       actorUserId: input.ownerUserId,
       assigneeUserId,
@@ -164,13 +178,13 @@ export class CreateTask {
 
     // Лента действий (best-effort, не блокирует создание).
     void this.deps.activityRecorder?.record({
-      projectId: input.projectId,
+      projectId: targetProjectId,
       actorUserId: input.ownerUserId,
       kind: 'task_created',
       payload: { taskId: task.id, taskExcerpt: description.slice(0, 120) },
     });
     if (assigneeUserId !== input.ownerUserId) {
-      void this.notifyAssigned(task, input.ownerUserId, project).catch((err: unknown) => {
+      void this.notifyAssigned(task, input.ownerUserId, targetProject).catch((err: unknown) => {
         console.error('[task:assignee:create] notify failed:', err);
       });
     }

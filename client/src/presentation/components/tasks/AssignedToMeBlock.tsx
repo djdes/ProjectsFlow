@@ -53,6 +53,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useSpotlightTask } from '@/presentation/hooks/useSpotlightTask';
 import {
@@ -274,7 +275,10 @@ export function AssignedToMeBlock({
   // «Для всех». Просто открывать их одним кликом — инструмент руководителя.
   const isWorkspaceLead =
     currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
-  const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
+  // Состояние общее с диалогом быстрого добавления: он подставляет этого сотрудника
+  // ответственным, чтобы задача, созданная с его доски, создавалась для него.
+  const { member: focusedMember, setMember: setFocusedMember } = useFocusedInbox();
+  const focusedMemberId = focusedMember?.userId ?? null;
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
   // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
@@ -838,13 +842,12 @@ export function AssignedToMeBlock({
   }, [projectRepository]);
   // Сотрудник выпал из пространства (или роль перестала быть руководящей) — возвращаемся
   // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
-  const focusedMember = members.find((m) => m.id === focusedMemberId) ?? null;
   useEffect(() => {
     if (focusedMemberId === null) return;
     if (!isWorkspaceLead || (members.length > 0 && !members.some((m) => m.id === focusedMemberId))) {
-      setFocusedMemberId(null);
+      setFocusedMember(null);
     }
-  }, [focusedMemberId, isWorkspaceLead, members]);
+  }, [focusedMemberId, isWorkspaceLead, members, setFocusedMember]);
 
   // === Дроп карточек ДОСКИ в колонки-группы (план inbox-grouped-dnd) ===
   // Идёт drag именно с нижней доски: общий контекст активен, а карточка не наша.
@@ -1130,7 +1133,7 @@ export function AssignedToMeBlock({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setFocusedMemberId(null)}
+                    onClick={() => setFocusedMember(null)}
                     aria-label="Вернуться к своим входящим"
                     title="Вернуться к своим входящим"
                     className="shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -1181,7 +1184,11 @@ export function AssignedToMeBlock({
                   ? {
                       filterActive: focusedMemberId === m.id,
                       onToggleFilter: () =>
-                        setFocusedMemberId((prev) => (prev === m.id ? null : m.id)),
+                        setFocusedMember(
+                          focusedMemberId === m.id
+                            ? null
+                            : { userId: m.id, displayName: m.displayName },
+                        ),
                       clearLabel: 'Вернуться к своим входящим',
                       hint: 'нажмите, чтобы открыть его входящие',
                     }

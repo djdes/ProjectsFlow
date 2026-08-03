@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
+import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import {
@@ -122,6 +123,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const { user } = useCurrentUser();
   const { data: projects } = useProjects();
   const [description, setDescription] = useState('');
+  const { member: focusedMember } = useFocusedInbox();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(user?.id ?? null);
@@ -224,6 +226,13 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     if (open) {
       // Черновик есть, если жив in-session снимок ИЛИ остался персистентный (после reload).
       setHasStash(stashRef.current !== null || readDraft() !== null);
+      // Открыта доска входящих сотрудника — задача создаётся ДЛЯ НЕГО: подставляем его
+      // ответственным и цель «Без проекта (Входящие)». Сервер сам положит её в его личные
+      // (правило «я ответственный ⇒ задача в моих личных», см. CreateTask).
+      if (focusedMember) {
+        setProjectId(null);
+        setAssigneeUserId(focusedMember.userId);
+      }
       return;
     }
     // Закрытие: чистим ЖИВЫЕ поля. blob'ы НЕ ревокаем — либо форма была пустой (нечего),
@@ -231,14 +240,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     setDescription('');
     setProjectId(null);
     setRalphMode('normal');
-    setAssigneeUserId(user?.id ?? null);
+    setAssigneeUserId(focusedMember?.userId ?? user?.id ?? null);
     setDeadline(null);
     setPriority(null);
     setError(null);
     setDragActive(false);
     setPending([]);
     inlineImagesRef.current = new Map();
-  }, [open, user?.id]);
+  }, [open, user?.id, focusedMember]);
 
   // При открытии этого окна закрываем inline-композер на доске (единая поверхность
   // создания — см. KanbanBoard). Слушатель — в KanbanBoard.
@@ -246,10 +255,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     if (open) window.dispatchEvent(new CustomEvent('pf:close-inline-composer'));
   }, [open]);
 
-  // При смене проекта возвращаем безопасный default: текущего пользователя.
+  // При смене проекта возвращаем безопасный default: текущего пользователя. Исключение —
+  // открытая доска сотрудника и цель «Входящие»: там дефолт он, иначе задача, созданная с
+  // его доски, молча уходила бы себе.
   useEffect(() => {
-    setAssigneeUserId(user?.id ?? null);
-  }, [projectId, user?.id]);
+    setAssigneeUserId(
+      projectId === null && focusedMember ? focusedMember.userId : (user?.id ?? null),
+    );
+  }, [projectId, user?.id, focusedMember]);
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -379,9 +392,13 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       onOpenChange(false);
       toast.success(
-        projectId === null ? 'Задача добавлена во «Входящие»' : 'Задача добавлена в проект',
+        projectId !== null
+          ? 'Задача добавлена в проект'
+          : assigneeUserId && assigneeUserId !== user?.id
+            ? `Задача добавлена во «Входящие» — ${focusedMember?.displayName ?? 'сотруднику'}`
+            : 'Задача добавлена во «Входящие»',
       );
-      navigate(projectId === null ? '/inbox' : `/projects/${projectId}`);
+      navigate(projectId === null ? '/' : `/projects/${projectId}`);
     } catch (err) {
       setError(`Не удалось добавить задачу: ${(err as Error).message}`);
     } finally {
