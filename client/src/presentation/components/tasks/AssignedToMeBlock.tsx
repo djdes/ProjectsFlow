@@ -268,6 +268,13 @@ export function AssignedToMeBlock({
   const isApprover =
     currentWorkspace?.requireTaskApproval === true &&
     (currentWorkspace.role === 'lead' || currentWorkspace.role === 'owner');
+  // Руководитель пространства смотрит входящие сотрудника: клик по кубику переводит блок
+  // на его личную доску. Это ЖЕСТ, а не новая граница видимости — личные задачи коллег и
+  // так приходят всем со-участникам (см. ListPersonalTasksOfColleagues) и видны на вкладке
+  // «Для всех». Просто открывать их одним кликом — инструмент руководителя.
+  const isWorkspaceLead =
+    currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
+  const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
   // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
@@ -521,7 +528,23 @@ export function AssignedToMeBlock({
     () => byMeVisibleAll.filter(matchesByMeFilters),
     [byMeVisibleAll, matchesByMeFilters],
   );
-  const visibleTasks = tab === 'toMe' ? toMeVisible : byMeVisible;
+  // Доска сотрудника: его личные входящие целиком, без фильтров вкладки «Для всех» —
+  // отбираем по ВЛАДЕЛЬЦУ входящих, а не по ответственному (это его доска, а не его задачи).
+  const focusedTasks = useMemo(() => {
+    if (!focusedMemberId) return [];
+    return colleaguePersonalTasks
+      .filter((t) => t.isInbox && t.inboxOwner?.userId === focusedMemberId)
+      .map(asAssignedInboxBlockTask);
+  }, [colleaguePersonalTasks, focusedMemberId]);
+  const focusedVisible = useMemo(
+    () => (hideDone ? focusedTasks.filter(notDone) : focusedTasks),
+    [focusedTasks, hideDone],
+  );
+  const visibleTasks = focusedMemberId
+    ? focusedVisible
+    : tab === 'toMe'
+      ? toMeVisible
+      : byMeVisible;
   // Ждём оба независимых источника (назначенные задачи + нижнюю доску), иначе быстрый endpoint
   // «Другим» успевал выбрать не ту стартовую вкладку до появления личных зеркал. Явный
   // сохранённый выбор пользователя при этом не перебиваем.
@@ -605,8 +628,17 @@ export function AssignedToMeBlock({
   // стояли на месте и не переезжали, когда задача уходит с доски.
   const projectOrder = useMemo(() => (allProjects ?? []).map((p) => p.id), [allProjects]);
   const groups = useMemo(
-    () => groupAssignedTasks(groupedTasks, grouping, new Date(), tab, projectOrder),
-    [groupedTasks, grouping, tab, projectOrder],
+    // На чужой доске подписываем «Личные · <имя>» (направление 'byMe') — иначе колонка
+    // называлась бы «Личные» и читалась как свои.
+    () =>
+      groupAssignedTasks(
+        groupedTasks,
+        grouping,
+        new Date(),
+        focusedMemberId ? 'byMe' : tab,
+        projectOrder,
+      ),
+    [groupedTasks, grouping, tab, projectOrder, focusedMemberId],
   );
   // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
@@ -796,6 +828,15 @@ export function AssignedToMeBlock({
       cancelled = true;
     };
   }, [projectRepository]);
+  // Сотрудник выпал из пространства (или роль перестала быть руководящей) — возвращаемся
+  // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
+  const focusedMember = members.find((m) => m.id === focusedMemberId) ?? null;
+  useEffect(() => {
+    if (focusedMemberId === null) return;
+    if (!isWorkspaceLead || (members.length > 0 && !members.some((m) => m.id === focusedMemberId))) {
+      setFocusedMemberId(null);
+    }
+  }, [focusedMemberId, isWorkspaceLead, members]);
 
   // === Дроп карточек ДОСКИ в колонки-группы (план inbox-grouped-dnd) ===
   // Идёт drag именно с нижней доски: общий контекст активен, а карточка не наша.
@@ -987,17 +1028,27 @@ export function AssignedToMeBlock({
 
   // #2: единая кнопка «Фильтры» в шапке страницы. Сортировка (когда есть задачи) +
   // скрыть-выполненные (всегда) + фильтры ответственного/проекта (только вкладка «Другим»).
-  const hasAny = toMeVisible.length > 0 || byMeVisibleAll.length > 0;
+  // Открытая доска сотрудника держит блок на экране, даже если своих задач нет вовсе, —
+  // иначе руководитель кликнул бы по кубику и зона исчезла бы у него из-под рук. По той же
+  // причине руководителю с пустыми входящими зона показывается ради самих кубиков: без
+  // них инструмент «открыть входящие сотрудника» ему просто негде взять (тот же приём,
+  // что и с полкой приёмки для принимающего).
+  const hasAny =
+    toMeVisible.length > 0 ||
+    byMeVisibleAll.length > 0 ||
+    focusedMemberId !== null ||
+    (isWorkspaceLead && members.length > 0);
   const filtersPopover = (
     <InboxFiltersPopover
       showSort={hasAny}
-      showFilters={hasAny && tab === 'byMe' && byMeTasks.length > 0}
+      // Фильтры «кому/проект» — про вкладку «Для всех»; на чужой доске фильтровать нечего.
+      showFilters={hasAny && !focusedMemberId && tab === 'byMe' && byMeTasks.length > 0}
       grouping={grouping}
       onGroupingChange={handleGroupingChange}
       hideDone={hideDone}
       onHideDoneChange={onHideDoneChange}
       // «Скрыть личные» — только там, где личные доски коллег реально мешают.
-      showHidePersonal={tab === 'byMe'}
+      showHidePersonal={!focusedMemberId && tab === 'byMe'}
       hidePersonal={hidePersonal}
       onHidePersonalChange={handleHidePersonalChange}
       options={filterOptions}
@@ -1017,12 +1068,19 @@ export function AssignedToMeBlock({
   // кнопку «Фильтры» (скрыть-выполненные для доски ниже) в шапке страницы оставляем.
   if (!hasAny) return filtersToolbar;
 
-  const subtitleBase = tab === 'toMe' ? 'Задачи, за которые отвечаете вы' : 'Задачи других участников';
+  const subtitleBase = focusedMember
+    ? 'Личные входящие сотрудника — открыты вам как руководителю пространства'
+    : tab === 'toMe'
+      ? 'Задачи, за которые отвечаете вы'
+      : 'Задачи других участников';
   // Пустая видимая вкладка: сначала честно про фильтры, затем про скрытые done
   // (непустой СЫРОЙ список без фильтров = всё выполнено и скрыто Eye-toggle'ом),
   // и только при реально пустых данных — «ничего нет».
-  const emptyText =
-    tab === 'toMe'
+  const emptyText = focusedMember
+    ? focusedTasks.length > 0
+      ? 'Все задачи сотрудника выполнены и скрыты («Скрыть выполненные»)'
+      : 'В личных входящих сотрудника пусто'
+    : tab === 'toMe'
       ? toMeTasks.length > 0
         ? 'Все задачи выполнены и скрыты («Скрыть выполненные»)'
         : 'Назначенных вам задач пока нет'
@@ -1052,17 +1110,39 @@ export function AssignedToMeBlock({
               <UserAvatar displayName="" className="size-8 text-[11px]" />
             )}
             <div className="min-w-0">
-              {/* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
-                  там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
-              <AssigneeTabs
-                tab={tab}
-                onChange={handleTabChange}
-                toMeCount={toMeVisible.length}
-                // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
-                // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
-                // расходилось с количеством видимых карточек («неверное количество»).
-                byMeCount={byMeVisible.length}
-              />
+              {/* Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для
+                  всех» тут не про что — показывается одна конкретная доска. Возврат — ×. */}
+              {focusedMember ? (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <h2 className="min-w-0 truncate text-lg font-semibold tracking-tight">
+                    Входящие · {focusedMember.displayName}
+                  </h2>
+                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-primary">
+                    {focusedVisible.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFocusedMemberId(null)}
+                    aria-label="Вернуться к своим входящим"
+                    title="Вернуться к своим входящим"
+                    className="shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                /* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
+                   там, где стоял бы обычный заголовок (и подзаголовок под ним). */
+                <AssigneeTabs
+                  tab={tab}
+                  onChange={handleTabChange}
+                  toMeCount={toMeVisible.length}
+                  // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
+                  // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
+                  // расходилось с количеством видимых карточек («неверное количество»).
+                  byMeCount={byMeVisible.length}
+                />
+              )}
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
             </div>
           </div>
@@ -1085,15 +1165,25 @@ export function AssignedToMeBlock({
                 key={m.id}
                 member={m}
                 dragging={dragActive}
-                // Клик-фильтр «кому» — только на вкладке «Другим» (спека 2026-07-13); на
-                // «Для меня» пропы не передаём, кубик остаётся только drop-целью.
-                {...(tab === 'byMe'
+                // Руководитель/владелец: клик открывает личные входящие сотрудника (на любой
+                // вкладке). Остальным остаётся прежний клик-фильтр «кому» на «Для всех»
+                // (спека 2026-07-13); руководителю тот же фильтр доступен в меню «Фильтры».
+                // На «Для меня» без обеих ролей пропы не передаём — кубик только drop-цель.
+                {...(isWorkspaceLead
                   ? {
-                      filterActive: filterTo === m.id,
+                      filterActive: focusedMemberId === m.id,
                       onToggleFilter: () =>
-                        setFilterTo((prev) => (prev === m.id ? null : m.id)),
+                        setFocusedMemberId((prev) => (prev === m.id ? null : m.id)),
+                      clearLabel: 'Вернуться к своим входящим',
+                      hint: 'нажмите, чтобы открыть его входящие',
                     }
-                  : {})}
+                  : tab === 'byMe'
+                    ? {
+                        filterActive: filterTo === m.id,
+                        onToggleFilter: () =>
+                          setFilterTo((prev) => (prev === m.id ? null : m.id)),
+                      }
+                    : {})}
               />
             ))}
           </div>
@@ -1983,18 +2073,27 @@ function DraggableTask({
 // primary-ринг (сигнал «сюда можно»), а тот, что под курсором, плавно всплывает: лёгкий
 // scale + сплошной ринг + подпись сменяется на «Назначить». Себя тут нет — «забрать себе»
 // делается дропом на свою аву слева (SelfDropAvatar).
-// filterActive/onToggleFilter (спека 2026-07-13, только вкладка «Другим») — клик по кубику
-// (не по хвостовой ×) переключает single-фильтр «кому», общий с шапочным меню-фильтром.
+// filterActive/onToggleFilter — клик по кубику (не по хвостовой ×) переключает состояние,
+// за которое отвечает вызывающий: у руководителя пространства это открытая доска входящих
+// сотрудника, у остальных на вкладке «Для всех» — single-фильтр «кому» (спека 2026-07-13),
+// общий с шапочным меню-фильтром.
 function UserCube({
   member,
   dragging,
   filterActive = false,
   onToggleFilter,
+  clearLabel = 'Снять фильтр',
+  hint,
 }: {
   member: SharedMember;
   dragging: boolean;
   filterActive?: boolean;
   onToggleFilter?: () => void;
+  // Подпись хвостовой ×: «снять фильтр» у обычного участника, «вернуться к своим» у
+  // руководителя, который смотрит чужие входящие.
+  clearLabel?: string;
+  // Что даёт клик — уходит в hover-подсказку аватара рядом с «перетащите, чтобы назначить».
+  hint?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
   // Клик-фильтр доступен только вне drag'а (в drag-режиме кубик — цель назначения, не
@@ -2028,7 +2127,9 @@ function UserCube({
         <UserAvatarHover
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
-          subtitle="участник пространства · перетащите сюда задачу, чтобы назначить"
+          subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
+            hint ? ` · ${hint}` : ''
+          }`}
           triggerClassName="size-7 text-[11px]"
         />
       )}
@@ -2045,7 +2146,8 @@ function UserCube({
             e.stopPropagation();
             onToggleFilter();
           }}
-          aria-label="Снять фильтр"
+          aria-label={clearLabel}
+          title={clearLabel}
           className="-mr-1 ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-full text-primary/70 transition-colors hover:bg-primary/15 hover:text-primary"
         >
           <X className="size-3" />
@@ -2817,12 +2919,19 @@ function AcceptedCard({
     // overflow скрываем ТОЛЬКО на фазе exit — иначе на вспышке обрезался бы зелёный ring.
     <div
       className={cn(
-        'grid transition-all duration-300 ease-out motion-reduce:transition-none',
+        // grid-cols-[minmax(0,1fr)] — не косметика: у единственной неявной колонки
+        // размер `auto`, а её минимум = min-content содержимого. Карточка с неразрывным
+        // куском шире колонки (длинное имя проекта в шапке, ряд nowrap-бейджей на узком
+        // экране) раздвигала трек, вылезала за свои 17rem в полках и наезжала на соседнюю.
+        // Замер: 400px вместо 272px; minmax(0,1fr) и min-w-0 ниже дают ровно 272px.
+        'grid grid-cols-[minmax(0,1fr)] transition-all duration-300 ease-out motion-reduce:transition-none',
         completePhase === 'exit' && 'opacity-0',
       )}
       style={{ gridTemplateRows: completePhase === 'exit' ? '0fr' : '1fr' }}
     >
-    <div className={cn('min-h-0', completePhase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
+    {/* min-w-0 к min-h-0: у grid-элемента min-width по умолчанию auto (= min-content) и
+        без сброса он сам распирает колонку — второй замок на ту же дверь. */}
+    <div className={cn('min-h-0 min-w-0', completePhase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
     <div
       // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
       data-pf-task-id={item.id}
@@ -2910,7 +3019,9 @@ function AcceptedCard({
           ) : (
             <FolderKanban className="size-2.5 shrink-0" />
           )}
-          <span className="truncate">{projectLabel}</span>
+          {/* min-w-0 — иначе flex-элемент не сжимается ниже min-content и truncate не
+              срабатывает: длинное имя проекта просто обрезалось краем карточки без «…». */}
+          <span className="min-w-0 truncate">{projectLabel}</span>
         </div>
       )}
       {/* Моб: колонка (текст сверху, ряд мета/действий снизу); десктоп — строка с
