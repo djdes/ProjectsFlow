@@ -1,10 +1,9 @@
-// Ранги счётчика «выполнено сегодня». Каждая закрытая задача повышает ранг и добавляет бейджу
-// деталь, которой у него ещё не было. Утверждено владельцем на макете (кибер-стиль):
-// заливка цветом ранга, никакой обводки, детали из айтишного словаря.
+// Цвета счётчика «выполнено сегодня»: ранг = число закрытых задач за день, каждый ранг —
+// свой тон. Раньше рангу соответствовал ещё и набор декоративных деталей бейджа (трассы,
+// HUD-скобки, реактор, дождь) — их убрали вместе с анимациями, остался только цвет.
 //
-// Три тона одного семейства на ранг — это не украшательство: глубина у нижней кромки делается
-// СДВИГОМ ТОНА (c3), а не примесью чёрного, иначе заливка грязнится. `ink` — тёмный тон того же
-// семейства для надписи: белый текст на зелёном и бирюзе даёт контраст ~2:1, тёмный ~7:1.
+// `ink` — тёмный тон того же семейства для надписи: белый текст на зелёном и бирюзе даёт
+// контраст ~2:1, тёмный ~7:1.
 export type Rank = {
   readonly n: number;
   readonly name: string;
@@ -39,49 +38,4 @@ export const MAX_RANK = RANKS.length - 1;
 // значит придумывать новые детали, а не множить одинаковые.
 export function rankFor(count: number): Rank {
   return RANKS[Math.min(Math.max(count, 0), MAX_RANK)]!;
-}
-
-// Какие детали включены на ранге. Накопительно: деталь, появившись, остаётся до конца дня.
-export type RankTraits = {
-  readonly fill: boolean;
-  readonly bloom: boolean;
-  readonly meter: boolean;
-  readonly scan: boolean;
-  readonly trace: boolean;
-  readonly hud: boolean;
-  readonly rgb: boolean;
-  readonly cursor: boolean;
-  readonly rain: boolean;
-  readonly grid: boolean;
-  readonly reactor: boolean;
-  readonly iris: boolean;
-  // Сколько сегментов индикатора горит (всего 10).
-  readonly filledSegments: number;
-};
-
-export const METER_SEGMENTS = 10;
-
-export function traitsFor(count: number): RankTraits {
-  const n = Math.min(Math.max(count, 0), MAX_RANK);
-  return {
-    fill: n >= 1,
-    bloom: n >= 2,
-    meter: n >= 3,
-    scan: n >= 4,
-    trace: n >= 5,
-    hud: n >= 6,
-    rgb: n >= 7,
-    // Ранг 8 назывался GLITCH, но постоянное подёргивание в рабочем интерфейсе читается как
-    // «сломался интерфейс». Глитч оставлен только на момент повышения (см. PILL: burst).
-    //
-    // Ранг 9 сперва был голографическим переливом — радужная полоса поперёк плашки. Владелец
-    // её забраковал: она перебивала чистый цвет заливки. Вместо неё мигающий терминальный
-    // курсор — тот же айтишный словарь, но он не трогает цвет.
-    cursor: n >= 9,
-    rain: n >= 10,
-    grid: n >= 11,
-    reactor: n >= 12,
-    iris: n >= 12,
-    filledSegments: Math.max(0, Math.min(METER_SEGMENTS, n - 2)),
-  };
 }
