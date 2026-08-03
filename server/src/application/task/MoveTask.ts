@@ -7,6 +7,7 @@ import type { Project } from '../../domain/project/Project.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import type { TaskApprovalService } from './TaskApprovalService.js';
+import type { WorkerPolicy } from '../workspace/WorkerPolicy.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -14,6 +15,8 @@ type Deps = {
   readonly tasks: TaskRepository;
   // Приёмка задач руководителем (db/150): одна политика на все пути закрытия задачи.
   readonly approval: TaskApprovalService;
+  // Воркер пространства (db/152). Опционален: без него правило просто не применяется.
+  readonly workerPolicy?: WorkerPolicy;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
   // Снимок версии при смене статуса (для окна версий + restore).
@@ -117,6 +120,14 @@ export class MoveTask {
     // закрыть её может только руководитель (lead) или владелец пространства.
     // Снапшот прежней колонки оставляем: приёмка ещё не состоялась, и при возврате в
     // работу задача должна попасть туда, откуда её отправили.
+    // Воркер выключен в пространстве (db/152) — переносить задачу в его колонку некуда.
+    // В отличие от создания задачи здесь ОШИБКА, а не тихий коэрсинг: перенос — всегда
+    // осознанное «положи вот сюда» (drag, массовое действие, MCP), и молча положить не туда
+    // значит соврать вызывающему. UI такой цели не показывает, так что это путь для API.
+    if (targetStatus === 'todo' && this.deps.workerPolicy) {
+      await this.deps.workerPolicy.requireEnabledForProject(input.projectId);
+    }
+
     targetStatus = await this.deps.approval.resolveTargetStatus(
       project,
       input.ownerUserId,

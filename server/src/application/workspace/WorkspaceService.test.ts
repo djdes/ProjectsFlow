@@ -17,7 +17,7 @@ import {
 } from '../../domain/workspace/errors.js';
 
 type Seed = {
-  workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind; requireTaskApproval?: boolean }>;
+  workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind; requireTaskApproval?: boolean; workerEnabled?: boolean }>;
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   current?: Record<string, string>; // userId -> workspaceId
   projects?: Array<{ id: string; ownerId: string; workspaceId: string; isInbox?: boolean }>;
@@ -27,7 +27,7 @@ type Seed = {
 function makeFakes(seed: Seed) {
   const workspaces = new Map<string, Workspace>();
   for (const w of seed.workspaces ?? []) {
-    workspaces.set(w.id, { id: w.id, name: w.name ?? 'WS', icon: null, kind: w.kind ?? 'team', requireTaskApproval: w.requireTaskApproval ?? true, ownerUserId: w.ownerUserId, createdAt: new Date('2026-01-01') });
+    workspaces.set(w.id, { id: w.id, name: w.name ?? 'WS', icon: null, kind: w.kind ?? 'team', requireTaskApproval: w.requireTaskApproval ?? true, workerEnabled: w.workerEnabled ?? true, ownerUserId: w.ownerUserId, createdAt: new Date('2026-01-01') });
   }
   const members = (seed.members ?? []).map((m) => ({ ...m }));
   const current = new Map<string, string>(Object.entries(seed.current ?? {}));
@@ -75,6 +75,7 @@ function makeFakes(seed: Seed) {
         name: patch.name ?? w.name,
         icon: patch.icon === undefined ? w.icon : patch.icon,
         requireTaskApproval: patch.requireTaskApproval ?? w.requireTaskApproval,
+        workerEnabled: patch.workerEnabled ?? w.workerEnabled,
       };
       workspaces.set(id, next);
       return next;
@@ -177,8 +178,22 @@ function makeFakes(seed: Seed) {
     },
   };
 
-  const service = new WorkspaceService({ repo, projects: projectsPort, users: usersPort, idGen });
-  return { service, repo, projects, absorbCalls };
+  // Фейковый task-порт тумблера воркера: помнит вызовы и «переносит» фиксированное число.
+  const bulkCalls: Array<{ projectIds: readonly string[]; from: string; to: string }> = [];
+  const tasksPort = {
+    async bulkChangeStatus(projectIds: readonly string[], from: 'todo', to: 'backlog') {
+      bulkCalls.push({ projectIds, from, to });
+      return projectIds.length; // по одной «перенесённой» задаче на проект
+    },
+  };
+  const service = new WorkspaceService({
+    repo,
+    projects: projectsPort,
+    users: usersPort,
+    tasks: tasksPort,
+    idGen,
+  });
+  return { service, repo, projects, absorbCalls, bulkCalls };
 }
 
 test('create: creates workspace, adds creator as owner, sets it current', async () => {
@@ -436,4 +451,59 @@ test('setTaskApproval: рядовой участник снять приёмку
   });
 
   await assert.rejects(() => f.service.setTaskApproval('w1', 'worker', false), NotWorkspaceOwnerError);
+});
+
+// --- Воркер в пространстве (db/152) ---
+
+test('worker toggle: выключение уводит задачи из колонки «Воркер» в черновики', async () => {
+  const { service, repo, bulkCalls } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'owner' }],
+    members: [{ workspaceId: 'w1', userId: 'owner', role: 'owner' }],
+    projects: [
+      { id: 'p1', ownerId: 'owner', workspaceId: 'w1' },
+      { id: 'p2', ownerId: 'owner', workspaceId: 'w1' },
+    ],
+  });
+
+  const result = await service.setWorkerEnabled('w1', 'owner', false);
+
+  assert.equal(result.workspace.workerEnabled, false);
+  assert.equal((await repo.getById('w1'))?.workerEnabled, false);
+  assert.equal(bulkCalls.length, 1);
+  assert.deepEqual(bulkCalls[0]?.projectIds, ['p1', 'p2']);
+  assert.equal(bulkCalls[0]?.from, 'todo');
+  assert.equal(bulkCalls[0]?.to, 'backlog');
+  assert.equal(result.movedTaskCount, 2);
+});
+
+test('worker toggle: включение задачи не трогает', async () => {
+  const { service, bulkCalls } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'owner', workerEnabled: false }],
+    members: [{ workspaceId: 'w1', userId: 'owner', role: 'owner' }],
+    projects: [{ id: 'p1', ownerId: 'owner', workspaceId: 'w1' }],
+  });
+
+  const result = await service.setWorkerEnabled('w1', 'owner', true);
+
+  assert.equal(result.workspace.workerEnabled, true);
+  assert.equal(result.movedTaskCount, 0);
+  assert.equal(bulkCalls.length, 0);
+});
+
+test('worker toggle: рядовой участник переключить не может', async () => {
+  const { service, bulkCalls } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'owner' }],
+    members: [
+      { workspaceId: 'w1', userId: 'owner', role: 'owner' },
+      { workspaceId: 'w1', userId: 'member', role: 'editor' },
+    ],
+    projects: [{ id: 'p1', ownerId: 'owner', workspaceId: 'w1' }],
+  });
+
+  await assert.rejects(
+    () => service.setWorkerEnabled('w1', 'member', false),
+    NotWorkspaceOwnerError,
+  );
+  // Отказ должен быть ДО переноса задач, иначе чужие доски пострадали бы зря.
+  assert.equal(bulkCalls.length, 0);
 });

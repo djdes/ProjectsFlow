@@ -31,15 +31,29 @@ type ProjectsPort = {
   getWorkspaceId(projectId: string): Promise<string | null>;
   setWorkspace(projectId: string, workspaceId: string): Promise<void>;
   listByWorkspace(workspaceId: string): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>>;
+  // Полный список, включая личные inbox-проекты (см. ProjectRepository.listAllByWorkspace).
+  listAllByWorkspace?(
+    workspaceId: string,
+  ): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>>;
 };
 type UsersPort = {
   getByEmail(email: string): Promise<{ id: string } | null>;
+};
+// Выключение воркера уводит задачи из его колонки в черновики — нужен ровно один метод.
+type TasksPort = {
+  bulkChangeStatus(
+    projectIds: readonly string[],
+    from: 'todo',
+    to: 'backlog',
+  ): Promise<number>;
 };
 
 type Deps = {
   readonly repo: WorkspaceRepository;
   readonly projects: ProjectsPort;
   readonly users: UsersPort;
+  // Опционален: без него тумблер воркера просто не перекладывает задачи (старые сборки/тесты).
+  readonly tasks?: TasksPort;
   readonly idGen: () => string;
 };
 
@@ -114,6 +128,44 @@ export class WorkspaceService {
     const updated = await this.deps.repo.update(workspaceId, { requireTaskApproval: enabled });
     if (!updated) throw new WorkspaceNotFoundError();
     return updated;
+  }
+
+  /**
+   * Тумблер воркера в пространстве (db/152). Право — как у приёмки: lead/owner.
+   *
+   * Выключение уводит задачи из колонки «Воркер» ('todo') в «Черновики» по ВСЕМ проектам
+   * пространства, включая личные входящие участников: колонка исчезает с досок, и задачи,
+   * оставленные в ней, исчезли бы вместе с ней — человек считал бы их потерянными.
+   * Обратное включение задачи не возвращает: где им место после выключения, знает команда,
+   * а не сервер.
+   */
+  async setWorkerEnabled(
+    workspaceId: string,
+    actorId: string,
+    enabled: boolean,
+  ): Promise<{ workspace: Workspace; movedTaskCount: number }> {
+    const member = await requireWorkspaceMember(this.deps.repo, workspaceId, actorId);
+    if (member.role !== 'owner' && member.role !== 'lead') throw new NotWorkspaceOwnerError();
+
+    let movedTaskCount = 0;
+    if (!enabled && this.deps.tasks) {
+      // Личные входящие тоже живут в пространстве и тоже показывают колонку «Воркер»,
+      // поэтому берём полный список проектов, а не UI-срез listByWorkspace.
+      const projects = this.deps.projects.listAllByWorkspace
+        ? await this.deps.projects.listAllByWorkspace(workspaceId)
+        : await this.deps.projects.listByWorkspace(workspaceId);
+      if (projects.length > 0) {
+        movedTaskCount = await this.deps.tasks.bulkChangeStatus(
+          projects.map((p) => p.id),
+          'todo',
+          'backlog',
+        );
+      }
+    }
+
+    const updated = await this.deps.repo.update(workspaceId, { workerEnabled: enabled });
+    if (!updated) throw new WorkspaceNotFoundError();
+    return { workspace: updated, movedTaskCount };
   }
 
   async switchCurrent(userId: string, workspaceId: string): Promise<void> {

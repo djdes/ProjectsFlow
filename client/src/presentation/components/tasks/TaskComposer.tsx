@@ -12,6 +12,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
+import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -43,6 +44,9 @@ const QUICK_STATUS_OPTIONS = [
   { value: 'todo', label: 'Воркеру', icon: Inbox },
   { value: 'backlog', label: 'Черновик', icon: NotebookPen },
 ] as const;
+
+// Воркер выключен в пространстве (db/152) — цели «Воркеру» не существует, остаётся черновик.
+const QUICK_STATUS_OPTIONS_NO_WORKER = QUICK_STATUS_OPTIONS.filter((o) => o.value !== 'todo');
 
 type PendingFile = {
   readonly id: string;
@@ -119,6 +123,11 @@ export function TaskComposer({
   const [ralphMode, setRalphMode] = useState<RalphMode>(initialDraft.ralphMode);
   // По умолчанию — черновик (backlog): быстрое добавление кидает в бэклог, а не сразу воркеру.
   const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('backlog');
+  // Воркер выключен в пространстве (db/152): каретка отправки предлагает только черновик,
+  // а уже выбранная цель «Воркеру» (её мог оставить прошлый рендер) схлопывается туда же —
+  // иначе кнопка отправляла бы в статус, который сервер не примет.
+  const workerEnabled = useWorkerEnabled();
+  const effectiveQuickStatus = !workerEnabled && quickStatus === 'todo' ? 'backlog' : quickStatus;
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(
     initialDraft.assigneeUserId ?? defaultAssigneeUserId,
   );
@@ -222,7 +231,7 @@ export function TaskComposer({
 
   // Лимит исчерпан → блокируем ТОЛЬКО путь «Воркеру» (todo); «Черновик» (backlog) разрешён.
   const { blocked: aiBlocked, reason: aiBlockedReason } = useAiBlocked();
-  const workerBlocked = aiBlocked && (forcedStatus ?? quickStatus) === 'todo';
+  const workerBlocked = aiBlocked && (forcedStatus ?? effectiveQuickStatus) === 'todo';
 
   const submit = async (): Promise<void> => {
     const trimmed = text.trim();
@@ -235,7 +244,7 @@ export function TaskComposer({
     try {
       const task = await onCreate({
         description: trimmed,
-        status: forcedStatus ?? quickStatus,
+        status: forcedStatus ?? effectiveQuickStatus,
         ralphMode,
         assigneeUserId,
         priority,
@@ -465,8 +474,14 @@ export function TaskComposer({
           ) : (
             <SendTargetButton
               size="sm"
-              options={forcedStatus ? undefined : QUICK_STATUS_OPTIONS}
-              value={quickStatus}
+              options={
+                forcedStatus
+                  ? undefined
+                  : workerEnabled
+                    ? QUICK_STATUS_OPTIONS
+                    : QUICK_STATUS_OPTIONS_NO_WORKER
+              }
+              value={effectiveQuickStatus}
               onChange={setQuickStatus}
               onSend={() => void submit()}
               submitting={submitting}

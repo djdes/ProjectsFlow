@@ -22,6 +22,7 @@ import { DrizzleProductTelemetryRepository } from './infrastructure/repositories
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
+import { WorkerPolicy } from './application/workspace/WorkerPolicy.js';
 import { resolveWorkspaceForNewProject } from './application/workspace/resolveWorkspaceForNewProject.js';
 import type { WorkspaceKind } from './domain/workspace/Workspace.js';
 import { DrizzleActivityRepository } from './infrastructure/repositories/DrizzleActivityRepository.js';
@@ -397,8 +398,16 @@ const workspaceService = new WorkspaceService({
   repo: workspaceRepo,
   projects: projectRepo,
   users: userRepo,
+  // Выключение воркера уводит задачи из его колонки в черновики (db/152). Ленивая
+  // обёртка, а не прямая ссылка: taskRepo собирается ниже по файлу, и обращение к нему
+  // здесь упало бы в TDZ ещё на старте процесса.
+  tasks: {
+    bulkChangeStatus: (projectIds, from, to) => taskRepo.bulkChangeStatus(projectIds, from, to),
+  },
   idGen: idGenerator,
 });
+// Воркер пространства (db/152): одна политика на все двери в статус 'todo'.
+const workerPolicy = new WorkerPolicy({ projects: projectRepo, workspaces: workspaceRepo });
 // Активное пространство юзера (current ?? первое доступное), с уводом новых проектов
 // из личного дефолт-хаба в единственное командное пространство юзера — чтобы «единое
 // пространство» не разъезжалось (см. resolveWorkspaceForNewProject). Кидает если
@@ -903,6 +912,7 @@ const withdrawTaskApprovalUseCase = new WithdrawTaskApproval({
   moveTask: new MoveTask({
     projects: projectRepo,
     approval: taskApprovalService,
+    workerPolicy,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -919,6 +929,7 @@ const rejectTaskApprovalUseCase = new RejectTaskApproval({
   moveTask: new MoveTask({
     projects: projectRepo,
     approval: taskApprovalService,
+    workerPolicy,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -958,6 +969,7 @@ const telegramComposer = new TelegramComposerService({
   users: userRepo,
   createTask: new CreateTask({
     approval: taskApprovalService,
+    workerPolicy,
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
@@ -1110,6 +1122,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   moveTask: new MoveTask({
     projects: projectRepo,
     approval: taskApprovalService,
+    workerPolicy,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -1726,6 +1739,7 @@ const emailActionService = new EmailActionService({
   moveTask: new MoveTask({
     projects: projectRepo,
     approval: taskApprovalService,
+    workerPolicy,
     members: projectMemberRepo,
     tasks: taskRepo,
     activityRecorder,
@@ -1952,6 +1966,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       createTask: new CreateTask({
         approval: taskApprovalService,
+        workerPolicy,
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
@@ -1971,6 +1986,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       createTask: new CreateTask({
         approval: taskApprovalService,
+        workerPolicy,
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
@@ -2211,6 +2227,7 @@ const { app, devProxyUpgrade } = createApp({
       }),
       createTask: new CreateTask({
         approval: taskApprovalService,
+        workerPolicy,
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
@@ -2393,6 +2410,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     createTask: new CreateTask({
       approval: taskApprovalService,
+      workerPolicy,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2760,6 +2778,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     createTask: new CreateTask({
       approval: taskApprovalService,
+      workerPolicy,
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,

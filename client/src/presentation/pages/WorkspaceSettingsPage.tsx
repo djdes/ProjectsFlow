@@ -145,6 +145,13 @@ export function WorkspaceSettingsPage(): React.ReactElement {
           canManage={isOwner || workspace.role === 'lead'}
         />
       )}
+      {!isDefault && (
+        <WorkerCard
+          workspaceId={workspace.id}
+          enabled={workspace.workerEnabled}
+          canManage={isOwner || workspace.role === 'lead'}
+        />
+      )}
       {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
@@ -284,6 +291,77 @@ function TaskApprovalCard({
         <p className="mt-2 text-xs text-muted-foreground">
           {canManage
             ? 'Личные «Входящие» приёмку не проходят — свою задачу утверждать не у кого. Задачи на утверждении видны в колонке «На утверждении» на доске проекта.'
+            : 'Настройку меняет руководитель или владелец пространства.'}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Воркер (Ralph) в пространстве (db/152). Тот же управленческий гейт, что у приёмки:
+// рядовой участник видит состояние, но не меняет его.
+function WorkerCard({
+  workspaceId,
+  enabled,
+  canManage,
+}: {
+  workspaceId: string;
+  enabled: boolean;
+  canManage: boolean;
+}): React.ReactElement {
+  const { workspaceRepository } = useContainer();
+  const { applyReplace } = useWorkspacesContext();
+  const [saving, setSaving] = useState(false);
+  const [value, setValue] = useState(enabled);
+  useEffect(() => {
+    setValue(enabled);
+  }, [enabled]);
+
+  const toggle = async (next: boolean): Promise<void> => {
+    setValue(next);
+    setSaving(true);
+    try {
+      const result = await workspaceRepository.setWorkerEnabled(workspaceId, next);
+      applyReplace(result.workspace);
+      // Про перенос задач говорим вслух: тумблер тронул чужие доски, и молчать об этом
+      // нельзя — человек должен знать, где искать задачи из исчезнувшей колонки.
+      const moved = result.movedTaskCount;
+      toast.success(
+        next
+          ? 'Воркер включён — колонка «Воркер» вернулась на доски'
+          : moved > 0
+            ? `Воркер выключен. Задач перенесено в «Черновики»: ${moved}`
+            : 'Воркер выключен — колонки «Воркер» больше нет',
+      );
+    } catch (e) {
+      setValue(!next);
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>AI-воркер</CardTitle>
+        <CardDescription>
+          Колонка «Воркер» на&nbsp;досках проектов и&nbsp;во&nbsp;«Входящих»: задача, попавшая
+          в&nbsp;неё, уходит AI-исполнителю. Выключите, если команда ведёт задачи руками.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+          <Switch
+            checked={value}
+            disabled={!canManage || saving}
+            onCheckedChange={(next) => void toggle(next)}
+          />
+          <Label className="min-w-0 flex-1">Использовать воркера в этом пространстве</Label>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {canManage
+            ? 'При выключении задачи из колонки «Воркер» переезжают в «Черновики» — обратное включение их туда не вернёт. Сервер перестаёт принимать задачи в эту колонку и из MCP, и из Telegram.'
             : 'Настройку меняет руководитель или владелец пространства.'}
         </p>
       </CardContent>

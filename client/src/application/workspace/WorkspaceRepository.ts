@@ -18,6 +18,7 @@ export type UpdateWorkspaceInput = {
   readonly icon?: string | null;
   // Приёмка задач руководителем. Менять может только lead/owner — гейт на сервере.
   readonly requireTaskApproval?: boolean;
+  readonly workerEnabled?: boolean;
 };
 
 export type CreateWorkspaceInviteInput = {
@@ -29,6 +30,15 @@ export interface WorkspaceRepository {
   list(): Promise<Workspace[]>;
   create(input: CreateWorkspaceInput): Promise<Workspace>;
   rename(id: string, patch: UpdateWorkspaceInput): Promise<Workspace>;
+  /**
+   * Тумблер воркера (db/152). Отдельным методом, а не через rename: выключение — не правка
+   * поля, а операция с последствием (задачи из колонки «Воркер» уезжают в «Черновики»), и
+   * счётчик перенесённых нужен, чтобы сказать об этом человеку.
+   */
+  setWorkerEnabled(
+    id: string,
+    enabled: boolean,
+  ): Promise<{ workspace: Workspace; movedTaskCount: number }>;
   switchCurrent(id: string): Promise<void>;
   remove(id: string): Promise<void>;
 

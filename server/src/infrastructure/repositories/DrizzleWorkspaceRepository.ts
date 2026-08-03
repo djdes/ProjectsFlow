@@ -27,6 +27,7 @@ function toWorkspace(row: WorkspaceRow): Workspace {
     icon: row.icon ?? null,
     kind: row.kind,
     requireTaskApproval: Boolean(row.requireTaskApproval),
+    workerEnabled: Boolean(row.workerEnabled),
     ownerUserId: row.ownerUserId,
     createdAt: row.createdAt,
   };
@@ -122,6 +123,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.requireTaskApproval !== undefined) {
       set.requireTaskApproval = patch.requireTaskApproval;
+    }
+    if (patch.workerEnabled !== undefined) {
+      set.workerEnabled = patch.workerEnabled;
     }
     if (Object.keys(set).length > 0) {
       await this.db.update(workspaces).set(set).where(eq(workspaces.id, id));

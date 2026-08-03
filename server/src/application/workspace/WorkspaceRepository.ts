@@ -15,6 +15,8 @@ export type UpdateWorkspaceInput = {
   readonly icon?: string | null;
   // Приёмка задач руководителем (db/150).
   readonly requireTaskApproval?: boolean;
+  // Воркер в пространстве (db/152).
+  readonly workerEnabled?: boolean;
 };
 
 // Пространство в списке для юзера: + его роль и счётчик проектов (read-model).

@@ -47,6 +47,7 @@ type WorkspaceDto = {
   kind: WorkspaceKind;
   // Приёмка задач руководителем (db/150): включена ли она в этом пространстве.
   requireTaskApproval: boolean;
+  workerEnabled: boolean;
   ownerUserId: string;
   role?: WorkspaceRole;
   projectCount?: number;
@@ -65,6 +66,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
     icon: ws.icon,
     kind: ws.kind,
     requireTaskApproval: ws.requireTaskApproval,
+    workerEnabled: ws.workerEnabled,
     ownerUserId: ws.ownerUserId,
     role: listItem.role,
     projectCount: listItem.projectCount,
@@ -194,8 +196,19 @@ export function workspacesRouter(deps: Deps): Router {
       if (body.requireTaskApproval !== undefined) {
         await deps.service.setTaskApproval(workspaceId, req.user!.id, body.requireTaskApproval);
       }
+      // Тот же гейт lead/owner, что у приёмки. Выключение перекладывает задачи из колонки
+      // «Воркер» в черновики — сколько именно, отдаём клиенту, чтобы он сказал это вслух.
+      let movedTaskCount = 0;
+      if (body.workerEnabled !== undefined) {
+        const result = await deps.service.setWorkerEnabled(
+          workspaceId,
+          req.user!.id,
+          body.workerEnabled,
+        );
+        movedTaskCount = result.movedTaskCount;
+      }
       const ws = await deps.service.rename(workspaceId, req.user!.id, body);
-      res.json({ workspace: toDto(ws) });
+      res.json({ workspace: toDto(ws), movedTaskCount });
     } catch (e) {
       next(e);
     }

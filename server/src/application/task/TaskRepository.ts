@@ -63,6 +63,16 @@ export type TrashedTaskRef = {
 
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
+  /**
+   * Массовый перевод статуса в нескольких проектах. Нужен выключению воркера (db/152):
+   * колонка «Воркер» исчезает, и лежащие в ней задачи уезжают в «Черновики», чтобы не
+   * пропасть с доски вместе с колонкой. Возвращает число перенесённых задач.
+   */
+  bulkChangeStatus(
+    projectIds: readonly string[],
+    from: TaskStatus,
+    to: TaskStatus,
+  ): Promise<number>;
   // Батч-выборка задач по id (для верхнего личного канбана — задачи из разных проектов).
   // Порядок результата не гарантируется; вызывающий строит Map по id.
   listByIds(taskIds: readonly string[]): Promise<Task[]>;

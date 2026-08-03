@@ -6,6 +6,7 @@ import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
+import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
@@ -37,6 +38,9 @@ const DRAWER_TARGETS = [
   { value: 'draft', label: 'В черновики' },
   { value: 'worker', label: 'Воркеру' },
 ] as const;
+
+// Воркер выключен в пространстве (db/152) — «Воркеру» отправлять некуда, остаются черновики.
+const DRAWER_TARGETS_NO_WORKER = DRAWER_TARGETS.filter((t) => t.value !== 'worker');
 
 type ReplyDraft = { commentId: string; authorName: string; quotedText: string | null };
 
@@ -110,6 +114,10 @@ export function TaskDrawerComposer({
   const [target, setTarget] = useState<ComposerTarget>(() =>
     task.status === 'awaiting_clarification' ? 'worker' : readTarget(task.projectId),
   );
+  // Сохранённый в localStorage выбор «Воркеру» переживает выключение воркера — схлопываем
+  // его в черновики, иначе кнопка целилась бы в статус, который сервер уже не принимает.
+  const workerEnabled = useWorkerEnabled();
+  const effectiveTarget: ComposerTarget = workerEnabled ? target : 'draft';
   const [submitting, setSubmitting] = useState(false);
   // Участники проекта для @-упоминаний. Грузим как TaskCommentsSection; ошибка не блокирует
   // композер (degrade gracefully — без упоминаний).
@@ -223,7 +231,7 @@ export function TaskDrawerComposer({
       }
       onCommentCreated({ ...created, attachments: uploaded });
 
-      const moveTo = resolveMoveTarget(task.status, target);
+      const moveTo = resolveMoveTarget(task.status, effectiveTarget);
       if (moveTo !== null) {
         const tail = moveTo === 'backlog' ? backlogTail : todoTail;
         await taskRepository.move(task.projectId, task.id, {
@@ -378,8 +386,8 @@ export function TaskDrawerComposer({
           <div className="shrink-0">
             <SendTargetButton
               size="sm"
-              options={DRAWER_TARGETS}
-              value={target}
+              options={workerEnabled ? DRAWER_TARGETS : DRAWER_TARGETS_NO_WORKER}
+              value={effectiveTarget}
               onChange={setTarget}
               onSend={() => void submit()}
               submitting={submitting}

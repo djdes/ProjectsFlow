@@ -22,9 +22,13 @@ export const ADVANCE_NEXT: Partial<Record<TaskStatus, TaskStatus>> = {
 
 // Следующий статус для быстрого «передать дальше». in_progress/awaiting_clarification
 // визуально живут в колонке «Воркер» (todo) → у них следующий = done. null = дальше некуда.
-export function quickPromoteNext(status: TaskStatus): TaskStatus | null {
+// workerEnabled=false (db/152): колонки «Воркер» нет, поэтому шаг из «Вручную» ведёт сразу
+// в «Готово» — иначе стрелка перекладывала бы задачу в колонку, которой не видно.
+export function quickPromoteNext(status: TaskStatus, workerEnabled = true): TaskStatus | null {
   const visible = status === 'in_progress' || status === 'awaiting_clarification' ? 'todo' : status;
-  return ADVANCE_NEXT[visible] ?? null;
+  const next = ADVANCE_NEXT[visible] ?? null;
+  if (next === 'todo' && !workerEnabled) return 'done';
+  return next;
 }
 
 // Optional small subtitle rendered next to the main label in column header.

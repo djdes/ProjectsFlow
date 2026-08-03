@@ -58,6 +58,7 @@ import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanColumnMenu } from './KanbanColumnMenu';
 import { WorkerLockOffer } from './WorkerLockOffer';
+import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useUsage } from '@/presentation/usage/UsageProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { isFree } from '@/domain/usage/Usage';
@@ -291,6 +292,13 @@ export function KanbanBoard({
   const { usage } = useUsage();
   const { open: openUpgrade } = useUpgradeDialog();
   const workerLocked = !isInbox && usage !== null && isFree(usage.plan) && !usage.isAdmin;
+  // Воркер выключен в пространстве (db/152) — колонки «Воркер» на доске нет вообще: ни
+  // среди видимых, ни в меню скрытых, ни как цель drag'а. Задачи в 'todo' туда попасть уже
+  // не могут (сервер их не принимает), а лежавшие раньше увёл в «Черновики» сам тумблер.
+  const workerEnabled = useWorkerEnabled();
+  const boardStatuses = workerEnabled
+    ? VISIBLE_KANBAN_STATUSES
+    : VISIBLE_KANBAN_STATUSES.filter((s) => s !== 'todo');
   // Перезагрузка страницы не должна закрывать открытое окно задачи. Какое окно открыто
   // (edit-<taskId> / create-<status>) держим в sessionStorage пер-проект — переживает
   // reload, чистится на закрытие. Черновик create-формы хранит сам TaskDrawer.
@@ -680,7 +688,7 @@ export function KanbanBoard({
   // Видимый порядок карточек по колонкам — ровно то, что реально отрисовано (те же
   // фильтры и hideDone, что в рендере колонок ниже). Нужен и для Shift-диапазона, и
   // для «Все», и для дозаполнения пропусков при быстрой протяжке.
-  const shownSelectionStatuses = VISIBLE_KANBAN_STATUSES.filter(
+  const shownSelectionStatuses = boardStatuses.filter(
     (s) => !isColumnHidden(settings?.[s]),
   );
   const columnSelectionIds = new Map<VisibleKanbanStatus, string[]>(
@@ -970,7 +978,7 @@ export function KanbanBoard({
 
   const handleQuickPromote = async (task: Task): Promise<void> => {
     // «Шаг вперёд» по колонкам: Черновики→Вручную→Воркер→Готово (quickPromoteNext).
-    const next = quickPromoteNext(task.status);
+    const next = quickPromoteNext(task.status, workerEnabled);
     if (!next) return;
     try {
       await move(task.id, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
@@ -1038,7 +1046,7 @@ export function KanbanBoard({
   // поэтому drag-математика в handleDragEnd не ломается). Скрытые перечисляем в меню доски.
   // 'manual' из колонок исключён: на доске он живёт полкой «В работе» над рядом (см.
   // BoardWorkShelf). Иначе одна и та же задача была бы видна в двух местах сразу.
-  const visibleStatuses = VISIBLE_KANBAN_STATUSES.filter(
+  const visibleStatuses = boardStatuses.filter(
     (s) => s !== 'manual' && !isColumnHidden(settings?.[s]),
   );
   // Приёмка задач руководителем (db/150): колонка «На утверждении» появляется, когда есть
@@ -1049,7 +1057,7 @@ export function KanbanBoard({
     : visibleStatuses;
   // 'manual' исключён и здесь: колонки больше нет, и пункт «показать» в меню скрытых
   // колонок был бы мёртвым — вернуть её всё равно некуда.
-  const hiddenColumns = VISIBLE_KANBAN_STATUSES.filter(
+  const hiddenColumns = boardStatuses.filter(
     (s) => s !== 'manual' && isColumnHidden(settings?.[s]),
   ).map(
     (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]) }),

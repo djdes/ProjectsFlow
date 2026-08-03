@@ -26,6 +26,7 @@ export const updateWorkspaceSchema = z.object({
   icon: z.string().max(16).nullable().optional(),
   // Приёмка задач руководителем (db/150). Отдельный гейт по роли — см. setTaskApproval.
   requireTaskApproval: z.boolean().optional(),
+  workerEnabled: z.boolean().optional(),
 });
 
 export const setCurrentSchema = z.object({

@@ -6,6 +6,7 @@ import {
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskApprovalService } from './TaskApprovalService.js';
+import type { WorkerPolicy } from '../workspace/WorkerPolicy.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
@@ -22,6 +23,8 @@ type Deps = {
   // Приёмка задач руководителем (db/150): создание сразу в 'done' тоже проходит гейт.
   readonly approval: TaskApprovalService;
   readonly members: ProjectMemberRepository;
+  // Воркер пространства (db/152). Опционален: старые сборки/тесты работают как раньше.
+  readonly workerPolicy?: WorkerPolicy;
   readonly tasks: TaskRepository;
   readonly users: UserRepository;
   readonly notifications: NotificationRepository;
@@ -100,11 +103,21 @@ export class CreateTask {
     // Приёмка (db/150): задачу можно создать сразу закрытой — так работает «Готово …» в
     // Telegram-композере (логирование уже сделанной работы). Это тоже закрытие работы, и
     // если приёмка включена, а создатель не руководитель — карточка встаёт на утверждение.
-    const status = await this.deps.approval.resolveTargetStatus(
+    const approvedStatus = await this.deps.approval.resolveTargetStatus(
       project,
       input.ownerUserId,
       input.status,
     );
+    // Воркер выключен в пространстве (db/152) — колонки «Воркер» нет, класть в неё нечего.
+    // Здесь именно КОЭРСИМ в черновики, а не отвечаем ошибкой: 'todo' — это ДЕФОЛТ создания
+    // задачи (см. POST /tasks), а не осознанный выбор автора. Ошибка на дефолт сломала бы
+    // быстрое добавление, Telegram-композер и MCP там, где человек про воркера и не думал.
+    const status =
+      approvedStatus === 'todo' &&
+      this.deps.workerPolicy &&
+      !(await this.deps.workerPolicy.isEnabledForProject(input.projectId))
+        ? 'backlog'
+        : approvedStatus;
 
     // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
     // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).

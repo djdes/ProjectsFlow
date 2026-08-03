@@ -22,6 +22,7 @@ import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useContainer } from '@/infrastructure/di/container';
 import { toast } from '@/components/ui/sonner';
@@ -123,6 +124,8 @@ function KanbanCardImpl({
   // читает флаг в своих опциях (иначе TDZ — «used before declaration»).
   const frozenByApproval = awaitingApproval && !canApproveWork;
   const { isUnread } = useUnreadTasks();
+  // Воркер выключен в пространстве — «шаг вперёд» не должен целиться в исчезнувшую колонку.
+  const workerEnabled = useWorkerEnabled();
   const { forget: forgetCompleted } = useCompletedToday();
   // Отзыв с утверждения прямо с карточки: отправил по ошибке — забрал, не открывая задачу.
   // Кнопка только у ответственного: остальным сервер откажет, и обещать её нельзя.
@@ -208,7 +211,7 @@ function KanbanCardImpl({
 
   // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
-  const promoteNext = onQuickPromote ? quickPromoteNext(task.status) : null;
+  const promoteNext = onQuickPromote ? quickPromoteNext(task.status, workerEnabled) : null;
   // Исполнителю кнопка «выполнено» на задаче в очереди приёмки бесполезна — сервер вернёт
   // ту же очередь, и ничего не произойдёт. Оставляем её только принимающему: для него это
   // и есть «принять работу». (awaitingApproval/canApproveWork объявлены выше — их читает

@@ -105,3 +105,14 @@ export class CannotInviteToDefaultWorkspaceError extends Error {
     this.name = 'CannotInviteToDefaultWorkspaceError';
   }
 }
+
+// Воркер выключен в пространстве (db/152): колонки «Воркер» на досках нет, и статус
+// 'todo' перестаёт быть достижимым — как из UI, так и из MCP/Telegram/агентского API.
+// Отдельная ошибка, а не «невалидный статус»: причина управленческая, и человек должен
+// понять, что дело в настройке пространства, а не в кривом запросе.
+export class WorkerDisabledError extends Error {
+  constructor() {
+    super('Worker is disabled for this workspace');
+    this.name = 'WorkerDisabledError';
+  }
+}

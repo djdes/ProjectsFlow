@@ -131,6 +131,7 @@ import {
 } from '../../domain/live/errors.js';
 import { PlanRequiredError, PrimeTrialUsedError, UsageBlockedError, VipNotSelfServeError } from '../../domain/usage/errors.js';
 import {
+  WorkerDisabledError,
   WorkspaceNotFoundError,
   NotWorkspaceMemberError,
   NotWorkspaceOwnerError,
@@ -829,6 +830,13 @@ export function errorHandler(
   }
 
   // --- Пространства (workspaces) ---
+  if (err instanceof WorkerDisabledError) {
+    res.status(403).json({
+      error: 'worker_disabled',
+      message: 'Воркер выключен в этом пространстве — колонки «Воркер» нет',
+    });
+    return;
+  }
   if (err instanceof WorkspaceNotFoundError || err instanceof NotWorkspaceMemberError) {
     // Не разглашаем существование чужого пространства — 404 и для not-found, и для not-member.
     res.status(404).json({ error: 'workspace_not_found' });

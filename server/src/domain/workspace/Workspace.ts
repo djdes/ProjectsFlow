@@ -18,6 +18,10 @@ export type Workspace = {
   // pending_approval, закрыть её может только lead/owner. Выключено по умолчанию —
   // включение меняет привычный сценарий всей команде.
   readonly requireTaskApproval: boolean;
+  // Воркер (Ralph) в пространстве (db/152). Выключен — на досках нет колонки «Воркер»
+  // (статус 'todo'), а сервер не принимает задачи в этот статус и не отдаёт их агенту.
+  // Включён по умолчанию: это привычное поведение, выключение — осознанный выбор команды.
+  readonly workerEnabled: boolean;
   readonly ownerUserId: string;
   readonly createdAt: Date;
 };

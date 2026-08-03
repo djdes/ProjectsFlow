@@ -376,6 +376,9 @@ export const workspaces = mysqlTable(
     // pending_approval, а закрыть её может только lead/owner пространства. Включена по
     // умолчанию (db/151) — отключение это исключение, а не наоборот.
     requireTaskApproval: boolean('require_task_approval').notNull().default(true),
+    // Воркер (Ralph) в пространстве. Выключен — колонки «Воркер» (todo) на досках нет и
+    // сервер не пускает задачи в этот статус, см. db/152.
+    workerEnabled: boolean('worker_enabled').notNull().default(true),
     ownerUserId: fkUserId('owner_user_id'),
     createdAt: createdAtCol(),
   },

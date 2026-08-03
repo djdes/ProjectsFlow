@@ -397,6 +397,24 @@ export class DrizzleTaskRepository implements TaskRepository {
     return updated;
   }
 
+  async bulkChangeStatus(
+    projectIds: readonly string[],
+    from: TaskStatus,
+    to: TaskStatus,
+  ): Promise<number> {
+    if (projectIds.length === 0) return 0;
+    // Позиции не пересчитываем: внутри целевой колонки порядок задаётся position, и
+    // приехавшие задачи встают среди существующих по своим старым значениям. Это может
+    // перемешать их с черновиками, но не ломает ни доску, ни drag — а переставить руками
+    // дешевле, чем держать здесь ещё одну транзакцию перенумерации.
+    const result = await this.db
+      .update(tasks)
+      .set({ status: to })
+      .where(activeTasks(inArray(tasks.projectId, [...projectIds]), eq(tasks.status, from)));
+    const affected = (result as unknown as { affectedRows?: number }[])[0]?.affectedRows;
+    return typeof affected === 'number' ? affected : 0;
+  }
+
   async rebalanceColumn(
     projectId: string,
     status: TaskStatus,

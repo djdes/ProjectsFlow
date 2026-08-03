@@ -26,6 +26,7 @@ type WorkspaceDto = {
   icon: string | null;
   kind?: WorkspaceKind;
   requireTaskApproval?: boolean;
+  workerEnabled?: boolean;
   ownerUserId: string;
   // Сервер старой версии мог отдавать 'member' — нормализуем через normalizeRole.
   role?: string;
@@ -84,6 +85,8 @@ function fromDto(dto: WorkspaceDto): Workspace {
     // Поле отсутствует только у бэка без db/150. Фолбэк — включено: это дефолт продукта,
     // и показывать выключенный тумблер там, где сервер уже требует приёмку, хуже.
     requireTaskApproval: dto.requireTaskApproval ?? true,
+    // Старый сервер без флага — считаем воркера включённым: это прежнее поведение.
+    workerEnabled: dto.workerEnabled ?? true,
     ownerUserId: dto.ownerUserId,
     role: normalizeRole(dto.role),
     projectCount: dto.projectCount ?? 0,
@@ -123,6 +126,17 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
       patch,
     );
     return fromDto(workspace);
+  }
+
+  async setWorkerEnabled(
+    id: string,
+    enabled: boolean,
+  ): Promise<{ workspace: Workspace; movedTaskCount: number }> {
+    const { workspace, movedTaskCount } = await httpClient.patch<{
+      workspace: WorkspaceDto;
+      movedTaskCount?: number;
+    }>(`/workspaces/${id}`, { workerEnabled: enabled });
+    return { workspace: fromDto(workspace), movedTaskCount: movedTaskCount ?? 0 };
   }
 
   async switchCurrent(id: string): Promise<void> {
