@@ -12,10 +12,14 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary';
 import { router } from '@/presentation/app/routes';
+import { trackInputModality } from '@/lib/inputModality';
 
 // Маркер версии в консоль: `ProjectsFlow build <sha>` — быстрый способ проверить,
 // какую сборку реально выполняет вкладка (диагностика «у меня старое поведение»).
 console.info(`ProjectsFlow build ${__PF_BUILD__}`);
+
+// Указатель/клавиатура — от этого зависит, показывать ли фокус-кольцо (см. globals.css).
+trackInputModality();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root element not found in index.html');

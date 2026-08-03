@@ -420,6 +420,20 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Управление указателем (мышь, тап) — колец не показываем вообще.
+   Одного :focus-visible не хватает: Radix при закрытии меню/диалога возвращает фокус на
+   триггер программно, и браузер помечает такой фокус как клавиатурный. Из-за этого после
+   обычного тапа по «…» кнопка оставалась обведённой синим — и на телефоне, и в PWA, и на
+   десктопе. Модальность ставит lib/inputModality.ts; первый Tab возвращает кольца тем,
+   кто ходит с клавиатуры, поэтому доступность не страдает.
+   --tw-ring-shadow гасим отдельно: у общей кнопки (components/ui/button) кольцо рисуется
+   не outline'ом, а Tailwind-ring'ом через box-shadow. */
+html[data-pf-modality='pointer'] :focus-visible {
+  outline: none;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+}
+
 /* Claude-стилизация комментария актора 'agent'. Принципиально не через
    Tailwind-arbitrary values — keyframe-анимация и :where-host для контейнера хотят
    нормальный CSS. Используется в TaskDialog CommentItem; см. spec comment-actor-kind.md. */
