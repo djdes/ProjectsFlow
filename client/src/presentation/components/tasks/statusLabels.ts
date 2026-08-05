@@ -1,4 +1,9 @@
 import type { TaskStatus } from '@/domain/task/Task';
+import {
+  customColumnLabel,
+  isCustomKanbanSlot,
+  type KanbanBoardSettings,
+} from '@/domain/kanban/KanbanSettings';
 
 // Visual-only label for kanban column header, status badge, in-card chip.
 // The domain enum keeps `backlog/todo/...`; this is the user-facing rename.
@@ -10,7 +15,25 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   awaiting_clarification: '🤔 На уточнении',
   pending_approval: 'На утверждении',
   done: 'Готово',
+  // Кастомные колонки (db/154): настоящее название задаёт проект в kanban_settings —
+  // используй resolveStatusLabel(settings, status) везде, где настройки доступны.
+  // Эти строки — фолбэк для мест без доступа к настройкам доски.
+  custom_1: 'Колонка 1',
+  custom_2: 'Колонка 2',
+  custom_3: 'Колонка 3',
+  custom_4: 'Колонка 4',
+  custom_5: 'Колонка 5',
 };
+
+// Подпись статуса с учётом кастомных колонок проекта. Встроенные — STATUS_LABEL,
+// кастомные — label из настроек доски (фолбэк «Колонка N»).
+export function resolveStatusLabel(
+  settings: KanbanBoardSettings | null | undefined,
+  status: TaskStatus,
+): string {
+  if (isCustomKanbanSlot(status)) return customColumnLabel(settings?.[status], status);
+  return STATUS_LABEL[status];
+}
 
 // Прогрессия «шаг вперёд» по видимым колонкам: Черновики→Вручную→Воркер→Готово.
 // Один источник для кнопки-стрелки на карточке (KanbanCard) и сплит-пилюли в окне задачи.

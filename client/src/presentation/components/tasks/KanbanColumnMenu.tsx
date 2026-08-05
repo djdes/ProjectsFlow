@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { EyeOff, ListChecks, MoreHorizontal } from 'lucide-react';
+import { EyeOff, ListChecks, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,11 +9,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { KanbanColor, VisibleKanbanStatus } from '@/domain/kanban/KanbanSettings';
+import type { KanbanColor, KanbanColumnStatus } from '@/domain/kanban/KanbanSettings';
 import { KanbanColorPicker } from './KanbanColorPicker';
 
 type Props = {
-  status: VisibleKanbanStatus;
+  status: KanbanColumnStatus;
   // Текущий резолвнутый цвет колонки (для подсветки активного свотча).
   currentColor: KanbanColor;
   // Текущий резолвнутый заголовок (дефолтный или переименованный).
@@ -23,6 +23,8 @@ type Props = {
   onHide: () => void;
   // Включить режим мультивыделения карточек ЭТОЙ колонки (Telegram-стиль).
   onSelect: () => void;
+  // Удаление доступно только у кастомных колонок (db/154); undefined = встроенная.
+  onDelete?: (() => void) | undefined;
 };
 
 // Меню колонки (троеточие, как в Notion): переименование, выбор цвета, скрытие.
@@ -35,6 +37,7 @@ export function KanbanColumnMenu({
   onLabel,
   onHide,
   onSelect,
+  onDelete,
 }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [labelDraft, setLabelDraft] = useState(currentLabel);
@@ -124,6 +127,23 @@ export function KanbanColumnMenu({
           <EyeOff className="size-4" />
           Скрыть колонку
         </DropdownMenuItem>
+        {onDelete && (
+          <DropdownMenuItem
+            onClick={() => {
+              // Колонка исчезает у всей команды, а её задачи переезжают — подтверждаем.
+              const ok = window.confirm(
+                `Удалить колонку «${currentLabel}»? Её задачи переедут в «Черновики».`,
+              );
+              if (!ok) return;
+              setOpen(false);
+              onDelete();
+            }}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="size-4" />
+            Удалить колонку
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

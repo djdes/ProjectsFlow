@@ -676,6 +676,7 @@ export const tasks = mysqlTable(
     cover: text('cover'),
     // Вертикальное положение фокуса обложки (0..100), как у проекта. DEFAULT 50 = центр. См. db/094.
     coverPosition: int('cover_position').notNull().default(50),
+    // 'custom_1'..'custom_5' — слоты кастомных колонок проекта (db/154).
     status: mysqlEnum('status', [
       'backlog',
       'todo',
@@ -684,6 +685,11 @@ export const tasks = mysqlTable(
       'pending_approval',
       'done',
       'manual',
+      'custom_1',
+      'custom_2',
+      'custom_3',
+      'custom_4',
+      'custom_5',
     ])
       .notNull()
       .default('todo'),

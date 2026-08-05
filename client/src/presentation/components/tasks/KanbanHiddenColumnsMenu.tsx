@@ -8,16 +8,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { VisibleKanbanStatus } from '@/domain/kanban/KanbanSettings';
+import type { KanbanColumnStatus } from '@/domain/kanban/KanbanSettings';
 
 export type HiddenColumn = {
-  status: VisibleKanbanStatus;
+  status: KanbanColumnStatus;
   label: string;
 };
 
 type Props = {
   hidden: readonly HiddenColumn[];
-  onShow: (status: VisibleKanbanStatus) => void;
+  onShow: (status: KanbanColumnStatus) => void;
 };
 
 // Меню доски для возврата скрытых колонок (по образцу Notion «Hide group → Edit groups»).

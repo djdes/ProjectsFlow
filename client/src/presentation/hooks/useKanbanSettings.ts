@@ -6,7 +6,8 @@ import type {
   KanbanColor,
   KanbanColumnSettings,
   KanbanDefaultColors,
-  VisibleKanbanStatus,
+  CustomKanbanSlot,
+  KanbanColumnStatus,
 } from '@/domain/kanban/KanbanSettings';
 
 // Загружает ОБЩИЕ (на весь проект) настройки канбан-доски + персональные дефолтные цвета юзера.
@@ -16,9 +17,13 @@ export function useKanbanSettings(projectId: string): {
   settings: KanbanBoardSettings | null;
   defaults: KanbanDefaultColors | null;
   loading: boolean;
-  setColor: (status: VisibleKanbanStatus, color: KanbanColor) => void;
-  setLabel: (status: VisibleKanbanStatus, label: string) => void;
-  setHidden: (status: VisibleKanbanStatus, hidden: boolean) => void;
+  setColor: (status: KanbanColumnStatus, color: KanbanColor) => void;
+  setLabel: (status: KanbanColumnStatus, label: string) => void;
+  setHidden: (status: KanbanColumnStatus, hidden: boolean) => void;
+  // Кастомные колонки (db/154). Слот выбирает сервер, поэтому здесь без optimistic:
+  // ждём ответ и берём из него авторитетную карту настроек.
+  createColumn: (label: string) => Promise<CustomKanbanSlot | null>;
+  deleteColumn: (slot: CustomKanbanSlot) => Promise<boolean>;
 } {
   const { projectRepository, userRepository } = useContainer();
   const [settings, setSettings] = useState<KanbanBoardSettings | null>(null);
@@ -71,7 +76,7 @@ export function useKanbanSettings(projectId: string): {
   );
 
   const patchColumn = useCallback(
-    (status: VisibleKanbanStatus, patch: Partial<KanbanColumnSettings>, debounce: boolean) => {
+    (status: KanbanColumnStatus, patch: Partial<KanbanColumnSettings>, debounce: boolean) => {
       setSettings((prev) => {
         const base = prev ?? {};
         const column: KanbanColumnSettings = { ...base[status], ...patch };
@@ -84,16 +89,47 @@ export function useKanbanSettings(projectId: string): {
   );
 
   const setColor = useCallback(
-    (status: VisibleKanbanStatus, color: KanbanColor) => patchColumn(status, { color }, false),
+    (status: KanbanColumnStatus, color: KanbanColor) => patchColumn(status, { color }, false),
     [patchColumn],
   );
   const setLabel = useCallback(
-    (status: VisibleKanbanStatus, label: string) => patchColumn(status, { label }, true),
+    (status: KanbanColumnStatus, label: string) => patchColumn(status, { label }, true),
     [patchColumn],
   );
   const setHidden = useCallback(
-    (status: VisibleKanbanStatus, hidden: boolean) => patchColumn(status, { hidden }, false),
+    (status: KanbanColumnStatus, hidden: boolean) => patchColumn(status, { hidden }, false),
     [patchColumn],
+  );
+
+  const createColumn = useCallback(
+    async (label: string): Promise<CustomKanbanSlot | null> => {
+      try {
+        const res = await projectRepository.createKanbanColumn(projectId, label);
+        setSettings(res.settings);
+        return res.slot;
+      } catch (e) {
+        toast.error((e as Error).message || 'Не удалось создать колонку');
+        return null;
+      }
+    },
+    [projectRepository, projectId],
+  );
+
+  const deleteColumn = useCallback(
+    async (slot: CustomKanbanSlot): Promise<boolean> => {
+      try {
+        const res = await projectRepository.deleteKanbanColumn(projectId, slot);
+        setSettings(res.settings);
+        if (res.movedTasks > 0) {
+          toast.success(`Колонка удалена, задач перенесено в «Черновики»: ${res.movedTasks}`);
+        }
+        return true;
+      } catch (e) {
+        toast.error((e as Error).message || 'Не удалось удалить колонку');
+        return false;
+      }
+    },
+    [projectRepository, projectId],
   );
 
   return {
@@ -103,5 +139,7 @@ export function useKanbanSettings(projectId: string): {
     setColor,
     setLabel,
     setHidden,
+    createColumn,
+    deleteColumn,
   };
 }

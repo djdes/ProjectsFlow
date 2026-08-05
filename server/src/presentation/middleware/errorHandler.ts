@@ -161,6 +161,12 @@ import {
   AppDuplicateValueError,
   AppUniqueViolationError,
 } from '../../domain/app-backend/errors.js';
+import {
+  KanbanColumnDuplicateError,
+  KanbanColumnForbiddenError,
+  KanbanColumnLimitError,
+  KanbanColumnNotFoundError,
+} from '../../application/kanban/ManageKanbanColumns.js';
 
 type ErrorPayload = {
   error: string;
@@ -234,6 +240,24 @@ export function errorHandler(
 
   if (err instanceof ProjectNotFoundError) {
     res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  // Кастомные колонки доски (db/154).
+  if (err instanceof KanbanColumnLimitError) {
+    res.status(409).json({ error: 'kanban_column_limit', message: err.message });
+    return;
+  }
+  if (err instanceof KanbanColumnDuplicateError) {
+    res.status(409).json({ error: 'kanban_column_duplicate', message: err.message });
+    return;
+  }
+  if (err instanceof KanbanColumnNotFoundError) {
+    res.status(404).json({ error: 'kanban_column_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof KanbanColumnForbiddenError) {
+    res.status(403).json({ error: 'forbidden', message: err.message });
     return;
   }
 

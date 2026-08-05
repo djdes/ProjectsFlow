@@ -41,7 +41,7 @@ import type {
 import { AppRowVersionConflictError } from "@/application/project/ProjectRepository";
 import type { UpdateProjectInput } from "@/application/project/ProjectRepository";
 import type { NotificationPrefs } from "@/domain/notifications/NotificationPrefs";
-import type { KanbanBoardSettings } from "@/domain/kanban/KanbanSettings";
+import type { CustomKanbanSlot, KanbanBoardSettings } from "@/domain/kanban/KanbanSettings";
 import type {
   ProjectAnalytics,
   ProjectActivity,
@@ -449,6 +449,31 @@ export class HttpProjectRepository implements ProjectRepository {
       settings?: KanbanBoardSettings;
     }>(`/projects/${projectId}/kanban-settings`, { settings });
     return saved ?? {};
+  }
+
+  async createKanbanColumn(
+    projectId: string,
+    label: string,
+  ): Promise<{ slot: CustomKanbanSlot; settings: KanbanBoardSettings }> {
+    const res = await httpClient.post<{ slot: CustomKanbanSlot; settings?: KanbanBoardSettings }>(
+      `/projects/${projectId}/kanban-columns`,
+      { label },
+    );
+    return { slot: res.slot, settings: asPlainObject<KanbanBoardSettings>(res.settings) };
+  }
+
+  async deleteKanbanColumn(
+    projectId: string,
+    slot: CustomKanbanSlot,
+  ): Promise<{ settings: KanbanBoardSettings; movedTasks: number }> {
+    const res = await httpClient.delete<{
+      settings?: KanbanBoardSettings;
+      movedTasks?: number;
+    }>(`/projects/${projectId}/kanban-columns/${slot}`);
+    return {
+      settings: asPlainObject<KanbanBoardSettings>(res?.settings),
+      movedTasks: res?.movedTasks ?? 0,
+    };
   }
 
   async listMembers(projectId: string): Promise<ProjectMember[]> {

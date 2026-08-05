@@ -213,6 +213,7 @@ import { telegramDigestActionsRouter } from './telegramDigestActions/routes.js';
 import type { TelegramDigestActionService } from '../application/digest/TelegramDigestActionService.js';
 import { avatarRouter } from './users/avatarRoutes.js';
 import { projectsRouter } from './projects/routes.js';
+import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
@@ -433,6 +434,9 @@ type AppDeps = {
     readonly resolveJoinRequest: ResolveProjectJoinRequest;
     readonly appUrl: string;
     readonly notifyProjectChanged: (projectId: string) => void;
+    // Удаление кастомной колонки переселяет её задачи — доска должна перечитаться (db/154).
+    readonly notifyTaskChanged: (projectId: string, extraUserIds?: readonly string[]) => void;
+    readonly manageKanbanColumns: ManageKanbanColumns;
     // Deep-link авто-switch: при открытии проекта делает его пространство активным.
     readonly setActiveWorkspaceForProject: (userId: string, projectId: string) => Promise<void>;
     readonly members: ProjectMemberRepository;

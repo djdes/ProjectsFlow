@@ -12,6 +12,9 @@ import type { TaskCreator } from './TaskCreator.js';
 // 'pending_approval' — работа исполнителем закончена и ждёт приёмки руководителем
 // (db/150). Появляется только в пространствах с включённой приёмкой; в 'done' такую
 // задачу переводит лишь lead/owner. Стоит перед 'done' — это предпоследний шаг pipeline'а.
+// 'custom_1'..'custom_5' — резервные слоты под кастомные колонки проекта (db/154).
+// Колонка «существует» только пока в projects.kanban_settings у слота задан label;
+// сам статус — обычный, без авто-переходов, как 'manual'. См. domain/kanban/KanbanSettings.
 export type TaskStatus =
   | 'backlog'
   | 'todo'
@@ -19,7 +22,12 @@ export type TaskStatus =
   | 'awaiting_clarification'
   | 'pending_approval'
   | 'done'
-  | 'manual';
+  | 'manual'
+  | 'custom_1'
+  | 'custom_2'
+  | 'custom_3'
+  | 'custom_4'
+  | 'custom_5';
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'backlog',
@@ -29,6 +37,11 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'pending_approval',
   'done',
   'manual',
+  'custom_1',
+  'custom_2',
+  'custom_3',
+  'custom_4',
+  'custom_5',
 ];
 
 // Режим работы Ralph по задаче. См. spec C:/www/ralph/prompts/task-ralph-mode.md.

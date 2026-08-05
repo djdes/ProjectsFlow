@@ -50,6 +50,8 @@ import {
 
 // Цвета статус-пилюли — как в шапке задачи (зеркало STATUS_BADGE_COLOR из TaskDrawer),
 // чтобы превью версии выглядело один-в-один со «своим» окном задачи.
+const CUSTOM_STATUS_BADGE_COLOR =
+  'bg-slate-500/15 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300';
 const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
   backlog: 'bg-stone-500/15 text-stone-600 dark:bg-stone-500/20 dark:text-stone-300',
   manual: 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
@@ -58,6 +60,12 @@ const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
   awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
   pending_approval: 'bg-violet-500/15 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
   done: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+  // Кастомные колонки (db/154) — нейтральный slate, как в шапке задачи.
+  custom_1: CUSTOM_STATUS_BADGE_COLOR,
+  custom_2: CUSTOM_STATUS_BADGE_COLOR,
+  custom_3: CUSTOM_STATUS_BADGE_COLOR,
+  custom_4: CUSTOM_STATUS_BADGE_COLOR,
+  custom_5: CUSTOM_STATUS_BADGE_COLOR,
 };
 
 function fmtDateTime(d: Date): string {

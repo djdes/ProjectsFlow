@@ -13,8 +13,24 @@ const actionTypeSchema = z.enum([
 const beforeSnapshotSchema = z
   .object({
     description: z.string().max(20_000).nullable().optional(),
+    // Полный список статусов: 'pending_approval' (db/150) отсутствовал по недосмотру,
+    // 'custom_*' — слоты кастомных колонок (db/154). Иначе откат AI-действия по задаче
+    // из такой колонки отбивался бы валидацией снимка.
     status: z
-      .enum(['backlog', 'todo', 'in_progress', 'awaiting_clarification', 'done', 'manual'])
+      .enum([
+        'backlog',
+        'todo',
+        'in_progress',
+        'awaiting_clarification',
+        'pending_approval',
+        'done',
+        'manual',
+        'custom_1',
+        'custom_2',
+        'custom_3',
+        'custom_4',
+        'custom_5',
+      ])
       .optional(),
     deadline: z.string().max(40).nullable().optional(),
     priority: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).nullable().optional(),

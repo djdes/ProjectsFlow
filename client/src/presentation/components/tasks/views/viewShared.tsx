@@ -37,9 +37,17 @@ export const STATUS_DOT: Record<TaskStatus, string> = {
   awaiting_clarification: 'bg-amber-500',
   pending_approval: 'bg-violet-500',
   done: 'bg-emerald-500',
+  // Кастомные колонки (db/154): цвет колонки — пер-проектная настройка, а эти карты
+  // статичные (v1), поэтому нейтральный slate для всех слотов.
+  custom_1: 'bg-slate-400',
+  custom_2: 'bg-slate-400',
+  custom_3: 'bg-slate-400',
+  custom_4: 'bg-slate-400',
+  custom_5: 'bg-slate-400',
 };
 
 // Цветные пилюли значений select-свойств (Notion: статус в таблице — pill с фоном).
+const CUSTOM_STATUS_PILL = 'bg-slate-100 text-slate-900 dark:bg-slate-500/15 dark:text-slate-300';
 export const STATUS_PILL: Record<TaskStatus, string> = {
   backlog: 'bg-muted text-foreground/70',
   manual: 'bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300',
@@ -48,6 +56,11 @@ export const STATUS_PILL: Record<TaskStatus, string> = {
   awaiting_clarification: 'bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300',
   pending_approval: 'bg-violet-100 text-violet-900 dark:bg-violet-500/15 dark:text-violet-300',
   done: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-300',
+  custom_1: CUSTOM_STATUS_PILL,
+  custom_2: CUSTOM_STATUS_PILL,
+  custom_3: CUSTOM_STATUS_PILL,
+  custom_4: CUSTOM_STATUS_PILL,
+  custom_5: CUSTOM_STATUS_PILL,
 };
 
 export const PRIORITY_PILL: Record<TaskPriority, string> = {

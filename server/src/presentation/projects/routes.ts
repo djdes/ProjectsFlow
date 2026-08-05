@@ -54,6 +54,7 @@ import type { TaskTemplate } from '../../domain/task/TaskTemplate.js';
 import type { TaskPropertyRepository } from '../../application/task/TaskPropertyRepository.js';
 import type { TaskProperty } from '../../domain/task/TaskProperty.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
+import type { ManageKanbanColumns } from '../../application/kanban/ManageKanbanColumns.js';
 import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
 import type { BoardView } from '../../domain/project/BoardView.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
@@ -67,6 +68,7 @@ import {
   setTaskPropertyValueSchema,
   createProjectSchema,
   kanbanSettingsSchema,
+  createKanbanColumnSchema,
   updateBoardViewSchema,
   notificationPrefsSchema,
   reorderFavoritesSchema,
@@ -134,6 +136,10 @@ type Deps = {
   readonly appUrl: string;
   // Live-обновление: сигнал «проект изменился» всем участникам (SSE). Best-effort.
   readonly notifyProjectChanged: (projectId: string) => void;
+  // Сигнал «задачи проекта изменились» — удаление колонки переселяет её задачи (db/154).
+  readonly notifyTaskChanged: (projectId: string, extraUserIds?: readonly string[]) => void;
+  // Создание/удаление кастомных колонок доски (db/154).
+  readonly manageKanbanColumns: ManageKanbanColumns;
   // Deep-link авто-switch активного пространства при открытии проекта. Best-effort.
   readonly setActiveWorkspaceForProject: (userId: string, projectId: string) => Promise<void>;
   // Email-оповещения команде (изменения состава) + чтение/запись пер-участниковых настроек.
@@ -733,6 +739,50 @@ export function projectsRouter(deps: Deps): Router {
         // Доска — shared: сигналим остальным участникам, чтобы их вкладки перечитали настройки.
         deps.notifyProjectChanged(id);
         res.json({ settings });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Кастомные колонки доски (db/154) -----------------------------------------
+  // Создание занимает первый свободный слот статуса; удаление освобождает слот и
+  // переселяет задачи в «Черновики». Гейт — editor+, как у kanban-settings.
+  router.post('/:id/kanban-columns', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const body = createKanbanColumnSchema.parse(req.body);
+      const result = await deps.manageKanbanColumns.create({
+        projectId: id,
+        actorUserId: req.user!.id,
+        label: body.label,
+        ...(body.color ? { color: body.color } : {}),
+        ...(body.position !== undefined ? { position: body.position } : {}),
+      });
+      deps.notifyProjectChanged(id);
+      res.status(201).json({ slot: result.slot, settings: result.settings });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.delete(
+    '/:id/kanban-columns/:slot',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        const slot = req.params.slot;
+        if (typeof id !== 'string' || typeof slot !== 'string') throw new ProjectNotFoundError();
+        const result = await deps.manageKanbanColumns.delete({
+          projectId: id,
+          actorUserId: req.user!.id,
+          slot,
+        });
+        deps.notifyProjectChanged(id);
+        // Задачи переехали в «Черновики» — доска у всех участников должна перечитаться.
+        deps.notifyTaskChanged(id);
+        res.json({ slot: result.slot, settings: result.settings, movedTasks: result.movedTasks });
       } catch (e) {
         next(e);
       }

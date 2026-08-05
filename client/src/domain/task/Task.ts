@@ -16,7 +16,14 @@ export type TaskStatus =
   // lead/owner переводит такую задачу в 'done'.
   | 'pending_approval'
   | 'done'
-  | 'manual';
+  | 'manual'
+  // Резервные слоты под кастомные колонки проекта (db/154). Колонка существует, пока
+  // у слота задан label в kanban_settings; авто-переходов нет, как у 'manual'.
+  | 'custom_1'
+  | 'custom_2'
+  | 'custom_3'
+  | 'custom_4'
+  | 'custom_5';
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'backlog',
@@ -26,6 +33,11 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'pending_approval',
   'done',
   'manual',
+  'custom_1',
+  'custom_2',
+  'custom_3',
+  'custom_4',
+  'custom_5',
 ];
 
 // Режим работы Ralph по задаче. Mirrors server/src/domain/task/Task.ts.

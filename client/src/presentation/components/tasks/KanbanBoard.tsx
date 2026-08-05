@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -73,16 +73,20 @@ import {
 import { useDragSelect } from './selection/useDragSelect';
 import { KanbanHiddenColumnsMenu } from './KanbanHiddenColumnsMenu';
 import { KANBAN_COLOR_CLASSES } from './kanbanColors';
-import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
+import { STATUS_LABEL, quickPromoteNext, resolveStatusLabel } from './statusLabels';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { useKanbanSettings } from '@/presentation/hooks/useKanbanSettings';
 import {
-  VISIBLE_KANBAN_STATUSES,
+  activeCustomSlots,
   isColumnHidden,
+  isCustomKanbanSlot,
+  kanbanColumnOrder,
   resolveColumnColor,
   resolveColumnLabel,
+  type KanbanColumnStatus,
   type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
+import { KanbanAddColumnButton } from './KanbanAddColumnButton';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { BoardWorkShelf } from './BoardWorkShelf';
 import { KanbanCard } from './KanbanCard';
@@ -236,15 +240,12 @@ export const MEASURING_CONFIG = {
 function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStatus, Task[]> {
   // Группируем по визуальной колонке: in_progress / awaiting_clarification визуально
   // лежат в TODO (статус на task'е сохраняется и отображается badge'ом справа снизу).
-  const out: Record<TaskStatus, Task[]> = {
-    backlog: [],
-    manual: [],
-    todo: [],
-    in_progress: [],
-    awaiting_clarification: [],
-    pending_approval: [],
-    done: [],
-  };
+  // Строим из TASK_STATUSES, а не литералом: новый статус (например слот кастомной
+  // колонки, db/154) иначе давал бы undefined-бакет и падение на первой же задаче.
+  const out = Object.fromEntries(TASK_STATUSES.map((s) => [s, [] as Task[]])) as Record<
+    TaskStatus,
+    Task[]
+  >;
   for (const t of tasks) out[toVisibleStatus(t.status)].push(t);
   for (const s of TASK_STATUSES) {
     if (s === 'done') {
@@ -286,7 +287,8 @@ export function KanbanBoard({
   const isShared = !isInbox && (memberCount ?? 0) > 1;
   // Общие (на проект) настройки доски: цвета/переименования/скрытие колонок + глобальные
   // дефолтные цвета юзера. Резолв цвета/подписи делаем на лету при рендере колонок.
-  const { settings, defaults, setColor, setLabel, setHidden } = useKanbanSettings(projectId);
+  const { settings, defaults, setColor, setLabel, setHidden, createColumn, deleteColumn } =
+    useKanbanSettings(projectId);
   // I6: на бесплатном тарифе колонка «Воркер» (todo) заперта оффером апгрейда. Админ/владелец
   // безлимитного доступа не гейтится. В inbox воркера нет — там замок не нужен.
   const { usage } = useUsage();
@@ -296,9 +298,8 @@ export function KanbanBoard({
   // среди видимых, ни в меню скрытых, ни как цель drag'а. Задачи в 'todo' туда попасть уже
   // не могут (сервер их не принимает), а лежавшие раньше увёл в «Черновики» сам тумблер.
   const workerEnabled = useWorkerEnabled();
-  const boardStatuses = workerEnabled
-    ? VISIBLE_KANBAN_STATUSES
-    : VISIBLE_KANBAN_STATUSES.filter((s) => s !== 'todo');
+  // Порядок колонок доски = встроенные + активные кастомные (db/154), на своих позициях.
+  const boardStatuses = kanbanColumnOrder(settings).filter((s) => workerEnabled || s !== 'todo');
   // Перезагрузка страницы не должна закрывать открытое окно задачи. Какое окно открыто
   // (edit-<taskId> / create-<status>) держим в sessionStorage пер-проект — переживает
   // reload, чистится на закрытие. Черновик create-формы хранит сам TaskDrawer.
@@ -681,7 +682,7 @@ export function KanbanBoard({
 
   // === Мультивыделение (scoped к одной колонке) ===
   // selectionStatus — колонка в режиме выделения (null = режим выключен).
-  const [selectionStatus, setSelectionStatus] = useState<VisibleKanbanStatus | null>(null);
+  const [selectionStatus, setSelectionStatus] = useState<KanbanColumnStatus | null>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const anchorRef = useRef<string | null>(null); // якорь для Shift-диапазона
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
@@ -691,7 +692,7 @@ export function KanbanBoard({
   const shownSelectionStatuses = boardStatuses.filter(
     (s) => !isColumnHidden(settings?.[s]),
   );
-  const columnSelectionIds = new Map<VisibleKanbanStatus, string[]>(
+  const columnSelectionIds = new Map<KanbanColumnStatus, string[]>(
     shownSelectionStatuses.map((s) => [
       s,
       filterTasks(hideDone && s === 'done' ? [] : grouped[s]).map((t) => t.id),
@@ -702,7 +703,7 @@ export function KanbanBoard({
     ? (columnSelectionIds.get(selectionStatus) ?? [])
     : [];
 
-  const enterSelection = (status: VisibleKanbanStatus): void => {
+  const enterSelection = (status: KanbanColumnStatus): void => {
     setSelectionStatus(status);
     setSelectedIds(new Set());
     anchorRef.current = null;
@@ -1060,7 +1061,7 @@ export function KanbanBoard({
   const hiddenColumns = boardStatuses.filter(
     (s) => s !== 'manual' && isColumnHidden(settings?.[s]),
   ).map(
-    (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]) }),
+    (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], resolveStatusLabel(settings, s)) }),
   );
 
   // Пред/след задача для навигации в окне: соседи в той же колонке (в порядке отображения).
@@ -1236,15 +1237,17 @@ export function KanbanBoard({
             // «На утверждении» — служебная колонка: пер-проектных цвета/названия у неё нет
             // (её нет в VISIBLE_KANBAN_STATUSES и в настройках доски), поэтому фиксированные.
             const approvalColumn = status === 'pending_approval';
-            const perColumn = approvalColumn ? undefined : settings?.[status as VisibleKanbanStatus];
+            const perColumn = approvalColumn ? undefined : settings?.[status as KanbanColumnStatus];
             const color = approvalColumn
               ? ('purple' as const)
               : resolveColumnColor(
                   perColumn,
+                  // Персональные дефолт-цвета есть только у встроенных колонок; у
+                  // кастомного слота здесь undefined — цвет берётся из настроек проекта.
                   defaults?.[status as VisibleKanbanStatus],
-                  status as VisibleKanbanStatus,
+                  status as KanbanColumnStatus,
                 );
-            const label = resolveColumnLabel(perColumn, STATUS_LABEL[status]);
+            const label = resolveColumnLabel(perColumn, resolveStatusLabel(settings, status));
             return (
               <KanbanColumn
                 key={status}
@@ -1270,7 +1273,7 @@ export function KanbanBoard({
                 colorClasses={KANBAN_COLOR_CLASSES[color]}
                 onRename={
                   canEdit && !approvalColumn && label.length > 0
-                    ? (l) => setLabel(status as VisibleKanbanStatus, l)
+                    ? (l) => setLabel(status as KanbanColumnStatus, l)
                     : undefined
                 }
                 lockOffer={
@@ -1287,16 +1290,16 @@ export function KanbanBoard({
                 isInbox={isInbox}
                 isShared={isShared}
                 aiProjectId={isInbox ? null : projectId}
-                composerStorageKey={composerKey(status as VisibleKanbanStatus)}
+                composerStorageKey={composerKey(status as KanbanColumnStatus)}
                 composing={!approvalColumn && composingStatus === status}
                 onComposingChange={(open) =>
-                  open ? openComposer(status as VisibleKanbanStatus) : closeComposer()
+                  open ? openComposer(status as KanbanColumnStatus) : closeComposer()
                 }
                 openInlineSeq={inlineCreateReq?.status === status ? inlineCreateReq.nonce : 0}
                 selectionMode={selectionStatus === status}
                 selectedIds={selectionStatus === status ? selectedIds : undefined}
                 selectedCount={
-                  (columnSelectionIds.get(status as VisibleKanbanStatus) ?? []).filter((id) =>
+                  (columnSelectionIds.get(status as KanbanColumnStatus) ?? []).filter((id) =>
                     selectedIds.has(id),
                   ).length
                 }
@@ -1307,18 +1310,25 @@ export function KanbanBoard({
                 onDragSelectStart={dragSelect.onPointerDown}
                 onEnterSelection={
                   canEdit && !approvalColumn
-                    ? () => enterSelection(status as VisibleKanbanStatus)
+                    ? () => enterSelection(status as KanbanColumnStatus)
                     : undefined
                 }
                 columnMenu={canEdit && !approvalColumn ? (
                   <KanbanColumnMenu
-                    status={status as VisibleKanbanStatus}
+                    status={status as KanbanColumnStatus}
                     currentColor={color}
                     currentLabel={label}
-                    onColor={(c) => setColor(status as VisibleKanbanStatus, c)}
-                    onLabel={(l) => setLabel(status as VisibleKanbanStatus, l)}
-                    onHide={() => setHidden(status as VisibleKanbanStatus, true)}
-                    onSelect={() => enterSelection(status as VisibleKanbanStatus)}
+                    onColor={(c) => setColor(status as KanbanColumnStatus, c)}
+                    onLabel={(l) => setLabel(status as KanbanColumnStatus, l)}
+                    onHide={() => setHidden(status as KanbanColumnStatus, true)}
+                    onSelect={() => enterSelection(status as KanbanColumnStatus)}
+                    // Удалять можно только кастомные колонки (db/154): встроенные — часть
+                    // модели статусов, их прячут через «Скрыть».
+                    onDelete={
+                      isCustomKanbanSlot(status)
+                        ? () => void deleteColumn(status)
+                        : undefined
+                    }
                   />
                 ) : undefined}
                 headerExtra={
@@ -1350,6 +1360,14 @@ export function KanbanBoard({
             hidden={hiddenColumns}
             onShow={(status) => setHidden(status, false)}
           />
+          {/* Своя колонка проекта (db/154). В личных «Входящих» не нужна: там доска
+              персональная и без командного процесса. */}
+          {canEdit && !isInbox && (
+            <KanbanAddColumnButton
+              activeCount={activeCustomSlots(settings).length}
+              onCreate={createColumn}
+            />
+          )}
           {/* Хвостовой спейсер (моб): пустота справа, чтобы ПОСЛЕДНЯЯ колонка вставала по
               ЦЕНТРУ. Ширина = «пипке» соседа (col = min(92vw,24rem) → peek = (100vw−col)/2):
               тогда центрирует и snap-center, И просто max-scroll (iOS капризен со snap на

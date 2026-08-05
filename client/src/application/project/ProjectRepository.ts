@@ -13,7 +13,7 @@ import type {
   ProjectRole,
 } from "@/domain/project/ProjectMembership";
 import type { NotificationPrefs } from "@/domain/notifications/NotificationPrefs";
-import type { KanbanBoardSettings } from "@/domain/kanban/KanbanSettings";
+import type { CustomKanbanSlot, KanbanBoardSettings } from "@/domain/kanban/KanbanSettings";
 
 // Сайт-результат проекта (db/100). siteSlug — постоянный адрес <slug>.projectsflow.ru (до
 // деплоя воркером отдаётся заглушка). deployedAt/fileCount — из site_artifacts (null/0 до деплоя).
@@ -681,6 +681,18 @@ export interface ProjectRepository {
     projectId: string,
     settings: KanbanBoardSettings,
   ): Promise<KanbanBoardSettings>;
+
+  // Кастомные колонки доски (db/154). Слот под колонку выбирает сервер (первый свободный),
+  // поэтому обе операции возвращают авторитетную карту настроек целиком.
+  createKanbanColumn(
+    projectId: string,
+    label: string,
+  ): Promise<{ slot: CustomKanbanSlot; settings: KanbanBoardSettings }>;
+  // movedTasks — сколько задач удалённой колонки переехало в «Черновики».
+  deleteKanbanColumn(
+    projectId: string,
+    slot: CustomKanbanSlot,
+  ): Promise<{ settings: KanbanBoardSettings; movedTasks: number }>;
 
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-выбором ответственного во входящих.

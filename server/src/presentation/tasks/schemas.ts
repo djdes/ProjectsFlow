@@ -1,12 +1,21 @@
 import { z } from 'zod';
 
+// Полный список статусов задачи. 'pending_approval' долго отсутствовал здесь по недосмотру
+// (db/150) — из-за этого задачу нельзя было перенести в «На утверждении» через API.
+// 'custom_*' — слоты кастомных колонок проекта (db/154).
 export const taskStatusSchema = z.enum([
   'backlog',
   'todo',
   'in_progress',
   'awaiting_clarification',
+  'pending_approval',
   'done',
   'manual',
+  'custom_1',
+  'custom_2',
+  'custom_3',
+  'custom_4',
+  'custom_5',
 ]);
 
 // Режим работы Ralph. См. spec C:/www/ralph/prompts/task-ralph-mode.md.

@@ -19,6 +19,14 @@ export const STATUS_DIGEST_LABEL: Record<TaskStatus, string> = {
   awaiting_clarification: 'На уточнении',
   pending_approval: 'На утверждении',
   done: 'Готово',
+  // Кастомные колонки (db/154): настоящая подпись живёт в kanban_settings проекта и
+  // подставляется вызывающим (см. resolveColumnLabel). Здесь — нейтральный фолбэк,
+  // чтобы сводка не показывала сырой ключ статуса, если настройки недоступны.
+  custom_1: 'Колонка 1',
+  custom_2: 'Колонка 2',
+  custom_3: 'Колонка 3',
+  custom_4: 'Колонка 4',
+  custom_5: 'Колонка 5',
 };
 
 // Визуальная колонка: in_progress/awaiting_clarification живут в колонке «Воркер» (todo).

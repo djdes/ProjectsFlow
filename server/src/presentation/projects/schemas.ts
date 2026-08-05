@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { KANBAN_COLORS, VISIBLE_KANBAN_STATUSES } from '../../domain/kanban/KanbanSettings.js';
+import {
+  KANBAN_COLORS,
+  KANBAN_COLUMN_STATUSES,
+  VISIBLE_KANBAN_STATUSES,
+} from '../../domain/kanban/KanbanSettings.js';
 import { NOTIF_EVENT_TYPES, type NotifEventType } from '../../domain/notifications/NotificationPrefs.js';
 import { ASSIGNED_GROUPINGS } from '../../domain/user/UiPrefs.js';
 import { BOARD_VIEW_TYPES } from '../../domain/project/BoardView.js';
@@ -116,13 +120,23 @@ const kanbanColumnSettingsSchema = z.object({
   color: z.enum(KANBAN_COLORS).optional(),
   label: z.string().trim().max(40).optional(),
   hidden: z.boolean().optional(),
+  // Только для кастомных слотов: индекс вставки среди встроенных колонок (db/154).
+  position: z.number().int().min(0).max(20).optional(),
 });
 
-// Общие настройки доски: карта status→{color,label,hidden}. Ключи — только видимые колонки.
+// Общие настройки доски: карта status→{color,label,hidden}. Ключи — встроенные колонки
+// и слоты кастомных (db/154); у кастомного слота непустой label = колонка существует.
 export const kanbanSettingsSchema = z.record(
-  z.enum(VISIBLE_KANBAN_STATUSES),
+  z.enum(KANBAN_COLUMN_STATUSES),
   kanbanColumnSettingsSchema,
 );
+
+// Создание кастомной колонки: только имя (слот выбирает сервер — первый свободный).
+export const createKanbanColumnSchema = z.object({
+  label: z.string().trim().min(1, 'Введите название колонки').max(40),
+  color: z.enum(KANBAN_COLORS).optional(),
+  position: z.number().int().min(0).max(20).optional(),
+});
 
 // Глобальная карта дефолтных цветов колонок (профиль юзера): status→color.
 export const kanbanDefaultColorsSchema = z.record(
