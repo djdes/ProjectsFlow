@@ -108,6 +108,7 @@ import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
+  canSendToApproval,
   type AssignedInboxBlockTask,
   type InboxBlockTask,
 } from './inboxBlockTasks';
@@ -1220,6 +1221,7 @@ export function AssignedToMeBlock({
           onWithdraw={(t) => void withdrawApproval(t)}
           isApprover={isApprover}
           currentUserId={user?.id ?? null}
+          canDrop={activeDrag ? canSendToApproval(activeDrag, user?.id ?? null) : false}
           {...(focusedMember
             ? {
                 emptyHint: `Задач на утверждении от ${focusedMember.displayName} сейчас нет.`,
@@ -1860,6 +1862,7 @@ function ApprovalShelf({
   onWithdraw,
   isApprover,
   currentUserId,
+  canDrop,
   emptyHint,
   className,
 }: {
@@ -1874,14 +1877,31 @@ function ApprovalShelf({
   // сервер пускает в done лишь руководителя — показывать их значит обещать невозможное.
   isApprover: boolean;
   currentUserId: string | null;
+  // Можно ли бросить в полку карточку, которую тащат прямо сейчас. Считает родитель:
+  // только он знает, что именно в руке (activeDrag). false — цель погашена.
+  canDrop: boolean;
   // Чем объяснить пустую полку. На доске сотрудника это «у него нечего принимать», а не
   // общее «сотрудники ещё ничего не сдали» — иначе руководитель читает чужую очередь как свою.
   emptyHint?: string;
   className?: string;
 }): React.ReactElement {
+  // Цель дропа. disabled гасит её целиком: недоступная полка не попадает в коллизии,
+  // не подсвечивается и не может принять карточку.
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'approval-shelf',
+    data: { type: 'approval' },
+    disabled: !canDrop,
+  });
   return (
     <div className={className}>
-      <div className="rounded-xl border border-violet-300/50 bg-violet-100/40 px-2.5 py-2 dark:border-violet-400/20 dark:bg-violet-400/[0.07]">
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'rounded-xl border border-violet-300/50 bg-violet-100/40 px-2.5 py-2 transition-colors duration-150 dark:border-violet-400/20 dark:bg-violet-400/[0.07]',
+          isOver &&
+            'border-violet-400/80 bg-violet-200/60 dark:border-violet-300/50 dark:bg-violet-400/[0.16]',
+        )}
+      >
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-violet-800 dark:text-violet-300/90">
           <ShieldCheck className="size-3 shrink-0" />
           <span>На утверждении</span>
