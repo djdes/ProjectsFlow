@@ -1552,6 +1552,7 @@ const manageAppDashboardSettings = new ManageAppDashboardSettings({
 });
 const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
   projects: projectRepo,
+  workspaces: workspaceRepo,
   automation: automationRepo,
   tasks: taskRepo,
   listProjectCommits: new ListProjectCommits({

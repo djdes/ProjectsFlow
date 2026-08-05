@@ -7,9 +7,11 @@ test('daily commit review is queued even when there are no open tasks or commits
   const useCase = new EnqueueCommitSyncJob({
     projects: {
       async getById() {
-        return { id: 'p1', ownerId: 'owner', dispatcherUserId: 'dispatcher' };
+        return { id: 'p1', ownerId: 'owner', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
       },
     } as never,
+    // Личный хаб: владелец пространства = владелец проекта, плательщик тот же.
+    workspaces: { async getById() { return { id: 'ws1', ownerUserId: 'owner' }; } } as never,
     automation: {
       async getConfig() {
         return {
@@ -61,9 +63,11 @@ test('reads commits with the owner token when the dispatcher has no GitHub conne
   const useCase = new EnqueueCommitSyncJob({
     projects: {
       async getById() {
-        return { id: 'p1', ownerId: 'owner', dispatcherUserId: 'dispatcher' };
+        return { id: 'p1', ownerId: 'owner', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
       },
     } as never,
+    // Личный хаб: владелец пространства = владелец проекта, плательщик тот же.
+    workspaces: { async getById() { return { id: 'ws1', ownerUserId: 'owner' }; } } as never,
     automation: {
       async getConfig() {
         return { projectId: 'p1', commitSyncEnabled: true, commitSyncThresholdHours: 24, commitSyncAction: 'propose' };
@@ -97,9 +101,11 @@ test('reads commits with the dispatcher token when the dispatcher has GitHub con
   const useCase = new EnqueueCommitSyncJob({
     projects: {
       async getById() {
-        return { id: 'p1', ownerId: 'owner', dispatcherUserId: 'dispatcher' };
+        return { id: 'p1', ownerId: 'owner', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
       },
     } as never,
+    // Личный хаб: владелец пространства = владелец проекта, плательщик тот же.
+    workspaces: { async getById() { return { id: 'ws1', ownerUserId: 'owner' }; } } as never,
     automation: {
       async getConfig() {
         return { projectId: 'p1', commitSyncEnabled: true, commitSyncThresholdHours: 24, commitSyncAction: 'propose' };
@@ -125,4 +131,68 @@ test('reads commits with the dispatcher token when the dispatcher has GitHub con
 
   await useCase.execute('p1', new Date('2026-07-17T14:00:00.000Z'));
   assert.equal(readerUserId, 'dispatcher');
+});
+
+// Плательщик прогона = владелец ПРОСТРАНСТВА, а не создатель проекта. В команде проекты
+// заводят участники, а тариф один — у владельца пространства. Пока гейт claim'а смотрел на
+// создателя, сверка проектов, заведённых участником без своей подписки, отбивалась 402
+// plan_required, раннер логировал «claim FAILED» и в группу уходило «диспетчер не ответил».
+test('bills the run to the workspace owner, not to the member who created the project', async () => {
+  let created: Record<string, unknown> | null = null;
+  const useCase = new EnqueueCommitSyncJob({
+    projects: {
+      async getById() {
+        return { id: 'p1', ownerId: 'member', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
+      },
+    } as never,
+    workspaces: {
+      async getById(id: string) {
+        return id === 'ws1' ? { id, ownerUserId: 'space-owner' } : null;
+      },
+    } as never,
+    automation: {
+      async getConfig() {
+        return { projectId: 'p1', commitSyncEnabled: true, commitSyncThresholdHours: 24, commitSyncAction: 'propose' };
+      },
+    } as never,
+    tasks: { async listByProject() { return []; } } as never,
+    listProjectCommits: { async execute() { return []; } } as never,
+    commitSyncJobs: {
+      async existsActiveForProject() { return false; },
+      async create(input: Record<string, unknown>) { created = input; return { id: 'job1', ...input }; },
+    } as never,
+    tokens: { async getByUserId() { return null; } } as never,
+  });
+
+  await useCase.execute('p1', new Date('2026-07-17T14:00:00.000Z'));
+  assert.equal(created!['createdBy'], 'space-owner');
+});
+
+// Личный хаб: владелец пространства и владелец проекта — один человек, поведение прежнее.
+// И страховка: пространство не нашлось → платит владелец проекта (как было до правки).
+test('falls back to the project owner when the workspace is missing', async () => {
+  let created: Record<string, unknown> | null = null;
+  const useCase = new EnqueueCommitSyncJob({
+    projects: {
+      async getById() {
+        return { id: 'p1', ownerId: 'owner', workspaceId: 'ws-gone', dispatcherUserId: 'dispatcher' };
+      },
+    } as never,
+    workspaces: { async getById() { return null; } } as never,
+    automation: {
+      async getConfig() {
+        return { projectId: 'p1', commitSyncEnabled: true, commitSyncThresholdHours: 24, commitSyncAction: 'propose' };
+      },
+    } as never,
+    tasks: { async listByProject() { return []; } } as never,
+    listProjectCommits: { async execute() { return []; } } as never,
+    commitSyncJobs: {
+      async existsActiveForProject() { return false; },
+      async create(input: Record<string, unknown>) { created = input; return { id: 'job1', ...input }; },
+    } as never,
+    tokens: { async getByUserId() { return null; } } as never,
+  });
+
+  await useCase.execute('p1', new Date('2026-07-17T14:00:00.000Z'));
+  assert.equal(created!['createdBy'], 'owner');
 });

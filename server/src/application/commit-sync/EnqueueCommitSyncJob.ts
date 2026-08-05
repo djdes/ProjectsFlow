@@ -1,5 +1,6 @@
 import type { CommitSyncJob } from '../../domain/commit-sync/CommitSyncJob.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { AutomationRepository } from '../automation/AutomationRepository.js';
 import { defaultAutomationConfig } from '../automation/criteria.js';
@@ -17,6 +18,8 @@ const COMMIT_FETCH_LIMIT = 100;
 
 type Deps = {
   readonly projects: ProjectRepository;
+  // Владелец пространства = плательщик прогона (см. resolveBilledUserId ниже).
+  readonly workspaces: Pick<WorkspaceRepository, 'getById'>;
   readonly automation: AutomationRepository;
   readonly tasks: TaskRepository;
   readonly listProjectCommits: ListProjectCommits;
@@ -87,9 +90,8 @@ export class EnqueueCommitSyncJob {
 
     return this.deps.commitSyncJobs.create({
       projectId,
-      // Инициатор = владелец проекта (включивший автоматизацию): на его тариф метерим/гейтим,
-      // чтобы commit-sync не был бесплатным расходом подписки.
-      createdBy: project.ownerId,
+      // Плательщик прогона: на его тариф метерим и по нему гейтим claim.
+      createdBy: await this.resolveBilledUserId(project),
       dispatcherUserId,
       action: config.commitSyncAction,
       batchKey: opts.batchKey ?? null,
@@ -97,5 +99,26 @@ export class EnqueueCommitSyncJob {
       context,
       commitsJson: JSON.stringify(commitSnapshot),
     });
+  }
+
+  /**
+   * Кто платит за прогон — владелец ПРОСТРАНСТВА, а не создатель проекта.
+   *
+   * Тариф в единой рабочей области один: его оплачивает владелец пространства, а проекты
+   * внутри заводят любые участники. Пока плательщиком считался `project.ownerId`, сверка
+   * проектов, созданных участником без собственной подписки, отбивалась гейтом claim'а
+   * (`assertDispatcherAllowed` → 402 `plan_required`): раннер писал «claim FAILED», job'ы
+   * висели до отмены по застою, а в группу уходило «диспетчер не ответил вовремя» — то есть
+   * диагностика уводила к раннеру, который был совершенно ни при чём.
+   *
+   * В личном хабе владелец пространства и владелец проекта — один человек, поведение прежнее.
+   * Пространство не нашлось (рассинхрон данных) → платит владелец проекта, как раньше.
+   */
+  private async resolveBilledUserId(project: {
+    ownerId: string;
+    workspaceId: string;
+  }): Promise<string> {
+    const workspace = await this.deps.workspaces.getById(project.workspaceId).catch(() => null);
+    return workspace?.ownerUserId ?? project.ownerId;
   }
 }
