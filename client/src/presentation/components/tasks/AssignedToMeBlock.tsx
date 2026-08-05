@@ -935,6 +935,26 @@ export function AssignedToMeBlock({
     [taskRepository, refresh, onChanged],
   );
 
+  // Отправить свою задачу на приёмку жестом. Явный 'pending_approval' сервер пропускает
+  // без подмены (подмена срабатывает только на 'done'), а уведомление принимающему шлёт
+  // сам MoveTask — отдельного вызова не нужно.
+  const sendToApproval = useCallback(
+    async (item: InboxBlockTask): Promise<void> => {
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: 'pending_approval',
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось отправить на утверждение: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, refresh, onChanged],
+  );
+
   // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
   // пустит в done только руководителя/владельца — кнопки видит тот, кому это доступно,
   // но окончательное слово всё равно за гейтом в MoveTask.
@@ -1009,6 +1029,12 @@ export function AssignedToMeBlock({
     // Дроп в полку «В работе» (и обратно в колонки — тем же типом).
     if (data.type === 'work' && data.status) {
       void setWorkStatus(item, data.status);
+      return;
+    }
+    // Дроп в полку «На утверждении»: сдать свою работу. Предикат повторяем и здесь —
+    // disabled на цели защищает от промаха мышью, но не от гонки состояний.
+    if (data.type === 'approval') {
+      if (canSendToApproval(item, user?.id ?? null)) void sendToApproval(item);
       return;
     }
     // Дроп на кубик человека → сменить ответственного с подтверждением. Дроп на СВОЙ
