@@ -160,12 +160,13 @@ export function WorkspaceSettingsPage(): React.ReactElement {
           canManage={isOwner || workspace.role === 'lead'}
         />
       )}
-      {!isDefault && (
-        <KanbanColumnsCard
-          workspaceId={workspace.id}
-          canManage={isOwner || workspace.role === 'lead'}
-        />
-      )}
+      {/* Колонки — в ЛЮБОМ пространстве, включая личный хаб: там живут собственные проекты
+          юзера, и «одна колонка во все» нужна ровно там же. (Приёмка и воркер выше скрыты
+          в хабе по своей причине — им нужна команда; к колонкам это не относится.) */}
+      <KanbanColumnsCard
+        workspaceId={workspace.id}
+        canManage={isOwner || workspace.role === 'lead'}
+      />
       {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
