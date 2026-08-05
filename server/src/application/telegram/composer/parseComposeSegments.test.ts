@@ -44,6 +44,21 @@ test('taskType: распознаёт feature/bug, мусор и отсутств
   );
 });
 
+test('existingTaskId: строка сохраняется, пустое/отсутствие → null', () => {
+  const raw = JSON.stringify({
+    segments: [
+      { id: 's1', title: 'Дополнение', simpleBody: 'ещё деталь', existingTaskId: 't-42' },
+      { id: 's2', title: 'Новая', simpleBody: 'тело', existingTaskId: '' },
+      { id: 's3', title: 'Новая 2', simpleBody: 'тело' },
+    ],
+  });
+  const segs = parseComposeSegments(raw);
+  assert.deepEqual(
+    segs.map((s) => s.existingTaskId),
+    ['t-42', null, null],
+  );
+});
+
 test('устойчив к ```-обёртке и тексту вокруг JSON', () => {
   const raw = 'Вот результат:\n```json\n{"segments":[{"id":"s1","title":"Т","simpleBody":"тело"}]}\n```\nготово';
   const segs = parseComposeSegments(raw);

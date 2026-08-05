@@ -16,6 +16,9 @@ export type ParsedComposeSegment = {
   // Тип задачи по классификации модели. null = модель не определила (старый промпт,
   // незнакомое значение) — тогда тип у задачи остаётся пустым.
   readonly taskType: TaskType | null;
+  // Модель решила, что сегмент ДОПОЛНЯЕТ существующую задачу, а не заводит новую.
+  // Тогда вместо createTask пишем комментарий в эту задачу. null = обычная новая задача.
+  readonly existingTaskId: string | null;
 };
 
 export class ComposeParseError extends Error {
@@ -74,6 +77,7 @@ export function parseComposeSegments(raw: string): ParsedComposeSegment[] {
       assigneeName: str(o, 'assigneeName'),
       deadline: validDeadline(o['deadline']),
       taskType: isTaskType(o['taskType']) ? o['taskType'] : null,
+      existingTaskId: str(o, 'existingTaskId'),
     };
   });
   // Сегменты без какого-либо текста выкидываем — создавать пустую задачу нельзя.

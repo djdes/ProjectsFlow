@@ -23,6 +23,7 @@ import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
 import type { CreateTaskComment } from '../../task/CreateTaskComment.js';
+import type { TaskRepository } from '../../task/TaskRepository.js';
 import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { parseDonePrefix } from './parseDonePrefix.js';
@@ -82,6 +83,9 @@ type Deps = {
   readonly updateTask?: UpdateTask;
   // Оригинал сообщения — первым комментарием созданной задачи (см. postOriginalComment).
   readonly createTaskComment: Pick<CreateTaskComment, 'execute'>;
+  // Проверка сегментов-дополнений (existingTaskId). Опционально: без него такие сегменты
+  // деградируют в обычные новые задачи.
+  readonly tasks?: Pick<TaskRepository, 'getById'>;
 };
 
 // composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
@@ -1551,6 +1555,7 @@ export class TelegramComposerService {
         // приходит из «Готово»-режима и ставит все сегменты сразу в «Готово».
         targetStatus: forceStatus,
         taskType: s.taskType,
+        existingTaskId: s.existingTaskId,
       });
     }
     return out;
@@ -1657,7 +1662,14 @@ export class TelegramComposerService {
     const projName = await this.projNameOf(seg.projectId);
     const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
     const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
-    const lines = ['🆕 <b>Новая задача</b>', `📁 Проект: <b>${escapeHtml(projName)}</b>`];
+    // Сегмент-дополнение (B3): показываем это ДО подтверждения, чтобы юзер успел отменить,
+    // если модель ошиблась и это на самом деле отдельная задача.
+    const append = await this.resolveAppendTarget(seg);
+    const lines = [
+      append ? '➕ <b>Дополню существующую задачу</b>' : '🆕 <b>Новая задача</b>',
+      `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+    ];
+    if (append) lines.push(`🎯 Задача: <b>${escapeHtml(excerpt(append.excerpt, 60))}</b>`);
     lines.push(`👤 Ответственный: <b>${escapeHtml(assignee)}</b>`);
     lines.push(`📊 Колонка: <b>${escapeHtml(columnName)}</b>`);
     if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
@@ -1705,8 +1717,13 @@ export class TelegramComposerService {
       meta.push(`📅 ${seg.deadline ? escapeHtml(seg.deadline) : '—'}`);
       const titleText = seg.title.trim() || excerpt(seg.body, 60);
       const strike = seg.included ? '' : ' <i>(исключена)</i>';
-      lines.push(`${i + 1}. ${seg.included ? '' : '🚫 '}<b>${mdToPlain(titleText)}</b>${strike}`);
+      // Сегмент-дополнение (B3) помечаем «➕», чтобы список честно показывал, что задача
+      // не появится — текст уйдёт комментарием в уже существующую.
+      const append = await this.resolveAppendTarget(seg);
+      const marker = seg.included ? (append ? '➕ ' : '') : '🚫 ';
+      lines.push(`${i + 1}. ${marker}<b>${mdToPlain(titleText)}</b>${strike}`);
       lines.push(`   ${meta.join(' · ')}`);
+      if (append) lines.push(`   🎯 дополню: ${escapeHtml(excerpt(append.excerpt, 50))}`);
     }
     if (draft.attachments.length > 0) {
       lines.push('', ...this.attachmentAssignmentSummary(draft));
@@ -2332,6 +2349,9 @@ export class TelegramComposerService {
       return;
     }
     let created = 0;
+    // Сегменты, ушедшие комментарием в существующую задачу (B3), считаем отдельно:
+    // «создано» про них врало бы, но и провалом это не является.
+    let appended = 0;
     let failed = 0;
     let lastTaskId: string | null = null;
     let lastProjectId: string | null = null;
@@ -2349,6 +2369,28 @@ export class TelegramComposerService {
         const description = title ? `**${title}**\n\n${body}` : body;
         if (description.trim().length === 0) {
           failed += 1;
+          continue;
+        }
+        // Сегмент-дополнение: модель узнала существующую задачу и предлагает не плодить
+        // дубль, а дописать в неё комментарий. Описание задачи НЕ переписываем — UpdateTask
+        // делает полный replace, и любая ошибка модели стёрла бы работу человека.
+        const appendTo = await this.resolveAppendTarget(seg);
+        if (appendTo) {
+          await this.deps.createTaskComment.execute({
+            projectId: appendTo.projectId,
+            taskId: appendTo.taskId,
+            ownerUserId: userId,
+            body: description,
+            actorKind: 'agent',
+            agentName: 'telegram-composer',
+          });
+          appended += 1;
+          if (created + appended === 1) {
+            await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+          }
+          summary.push(
+            `➕ дополнил задачу: ${escapeHtml(excerpt(appendTo.excerpt, 40))}`,
+          );
           continue;
         }
         const assigneeUserId =
@@ -2413,7 +2455,11 @@ export class TelegramComposerService {
         failed: attachmentResult.failed + result.failed,
       };
     }
-    if (created === 0) await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+    // Дополнение существующей задачи — такой же успешный исход, как создание: черновик
+    // отработан, повторять его через минуту не нужно.
+    if (created + appended === 0) {
+      await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+    }
     // reply→комментарий: маппим сообщение только когда создана РОВНО одна задача (для N задач
     // одно сообщение к нескольким задачам однозначно не привязать).
     if (created === 1 && lastTaskId && lastProjectId && messageId) {
@@ -2425,10 +2471,13 @@ export class TelegramComposerService {
         projectId: lastProjectId,
       });
     }
-    const autoSuffix = opts.automatic && created > 0 ? ' · автоматически через 10 минут' : '';
+    const autoSuffix =
+      opts.automatic && created + appended > 0 ? ' · автоматически через 10 минут' : '';
+    const appendedSuffix = appended > 0 ? `, дополнено: ${appended}` : '';
     const header =
-      (failed === 0 ? `✅ Создано задач: ${created}` : `Создано: ${created}, ошибок: ${failed}`) +
-      autoSuffix;
+      (failed === 0
+        ? `✅ Создано задач: ${created}${appendedSuffix}`
+        : `Создано: ${created}${appendedSuffix}, ошибок: ${failed}`) + autoSuffix;
     const attachmentSummary = this.attachmentResultText(attachmentResult).trim();
     if (messageId) {
       await this.edit(
@@ -2439,8 +2488,38 @@ export class TelegramComposerService {
     }
     if (cqId) {
       await this.deps.client.answerCallbackQuery(cqId, {
-        text: created > 0 ? 'Создано' : 'Не удалось — повторю через минуту',
+        text: created + appended > 0 ? 'Готово' : 'Не удалось — повторю через минуту',
       });
+    }
+  }
+
+  /**
+   * Проверяет предложенное моделью «дополню существующую задачу» (B3).
+   *
+   * Возвращает цель дополнения только если задача реально существует, жива и лежит в том
+   * же проекте, который сегмент выбрал (то есть в проекте, доступном пользователю — список
+   * кандидатов собирается по его правам). Иначе — null, и сегмент создаётся обычной новой
+   * задачей: галлюцинация id не должна ни ронять создание, ни утаскивать текст в чужую задачу.
+   */
+  private async resolveAppendTarget(
+    seg: TelegramDraftSegment,
+  ): Promise<{ taskId: string; projectId: string; excerpt: string } | null> {
+    const taskId = seg.existingTaskId?.trim();
+    if (!taskId || !this.deps.tasks) return null;
+    try {
+      const task = await this.deps.tasks.getById(taskId);
+      if (!task || task.deletedAt) return null;
+      // Проект сегмента — единственный, про который мы знаем, что он доступен автору.
+      // Без совпадения дополнение ушло бы в задачу, которую пользователь мог и не видеть.
+      if (!seg.projectId || task.projectId !== seg.projectId) return null;
+      return {
+        taskId: task.id,
+        projectId: task.projectId,
+        excerpt: (task.description ?? '').split('\n')[0]?.trim() ?? '',
+      };
+    } catch (err) {
+      console.warn('[tg-composer] resolveAppendTarget failed:', err);
+      return null;
     }
   }
 

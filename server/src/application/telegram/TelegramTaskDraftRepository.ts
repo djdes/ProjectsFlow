@@ -85,6 +85,9 @@ export type TelegramDraftSegment = {
   // Тип задачи по классификации модели ('feature' | 'bug'). null/отсутствует = не определён
   // (в том числе у черновиков, созданных до db/153).
   readonly taskType?: TaskType | null;
+  // Дополнение существующей задачи вместо создания новой: id задачи из compose-контекста.
+  // null/отсутствует = обычный сегмент (новая задача).
+  readonly existingTaskId?: string | null;
 };
 
 export type TelegramTaskDraft = {

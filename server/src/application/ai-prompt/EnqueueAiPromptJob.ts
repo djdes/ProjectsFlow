@@ -10,6 +10,7 @@ import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemor
 import type { ListProjects } from '../project/ListProjects.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
+import type { TaskRepository } from '../task/TaskRepository.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
 import { prepareKbContext } from './prepareKbContext.js';
 import { prepareComposeContext } from './prepareComposeContext.js';
@@ -33,6 +34,9 @@ type Deps = {
   readonly listProjects: ListProjects;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
+  // Открытые задачи проектов-кандидатов для compose-контекста (см. prepareComposeContext).
+  // Опционально: без него модель не увидит существующие задачи и всегда создаст новые.
+  readonly tasks?: Pick<TaskRepository, 'listByProjects'>;
   readonly rateLimiter: InMemoryRateLimiter;
   /**
    * Резолвер дефолтного диспетчера для Inbox-задач (без projectId).

@@ -52,6 +52,8 @@ function makeHarness(opts?: {
   now?: () => Date;
   // 'throw' — CreateTaskComment отказывает (нет доступа): проверяем, что задача всё равно создана.
   commentOutcome?: 'throw';
+  // Уже существующие задачи (для сегментов-дополнений, B3): taskId → задача.
+  existingTasks?: Record<string, any>;
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
@@ -60,6 +62,7 @@ function makeHarness(opts?: {
   const kanbanByProject = opts?.kanbanByProject ?? {};
   const telegramUsernames = opts?.telegramUsernames ?? {};
   const commentOutcome = opts?.commentOutcome;
+  const existingTasks = opts?.existingTasks ?? {};
 
   const drafts = new Map<string, TelegramTaskDraft>();
   let seq = 0;
@@ -347,6 +350,11 @@ function makeHarness(opts?: {
       async execute(input: any) {
         updatedDescriptions.push(input.description);
         return {} as any;
+      },
+    },
+    tasks: {
+      async getById(id: string) {
+        return existingTasks[id] ?? null;
       },
     },
     createTaskComment: {
@@ -1233,6 +1241,47 @@ const seg1 = (over: Partial<AiSeg> = {}): AiSeg => ({
   assigneeName: null,
   deadline: null,
   ...over,
+});
+
+// ===================== Дополнение существующей задачи (B3) =====================
+
+test('existingTaskId валиден → комментарий в существующую задачу вместо новой', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1({ title: 'Ещё деталь', existingTaskId: 'old-1' })],
+    existingTasks: {
+      'old-1': { id: 'old-1', projectId: 'p1', description: 'Починить сборку', deletedAt: null },
+    },
+  });
+  await h.service.startFromMessage(111, 500, 'ещё про сборку');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 0); // новой задачи нет
+  assert.equal(h.comments.length, 1);
+  assert.equal(h.comments[0]!.taskId, 'old-1');
+  assert.equal(h.comments[0]!.projectId, 'p1');
+  assert.match(h.comments[0]!.body, /Ещё деталь/);
+});
+
+test('existingTaskId мёртвый/чужой → фолбэк на создание новой задачи', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [
+      seg1({ id: 's1', title: 'Нет такой', existingTaskId: 'ghost' }),
+      seg1({ id: 's2', title: 'Удалённая', existingTaskId: 'dead' }),
+      seg1({ id: 's3', title: 'Чужой проект', existingTaskId: 'other' }),
+    ],
+    existingTasks: {
+      dead: { id: 'dead', projectId: 'p1', description: 'Старая', deletedAt: new Date() },
+      other: { id: 'other', projectId: 'p2', description: 'Из другого', deletedAt: null },
+    },
+  });
+  await h.service.startFromMessage(111, 500, 'три сомнительных сегмента');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 3); // все три создались как обычные задачи
+  // Комментарии — только «оригинал сообщения» к каждой созданной, без дополнений.
+  assert.ok(h.comments.every((c) => /Оригинал сообщения/.test(c.body)));
 });
 
 test('Тип: классификация модели доезжает до создаваемой задачи', async () => {

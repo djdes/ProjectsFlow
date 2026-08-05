@@ -954,6 +954,7 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
   listKbDocuments: new ListKbDocuments({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
+  tasks: taskRepo,
   rateLimiter: agentRateLimiter,
   resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
 });
@@ -968,6 +969,7 @@ const telegramComposer = new TelegramComposerService({
   projects: projectRepo,
   users: userRepo,
   createTaskComment: createTaskCommentUseCase,
+  tasks: taskRepo,
   createTask: new CreateTask({
     approval: taskApprovalService,
     workerPolicy,
