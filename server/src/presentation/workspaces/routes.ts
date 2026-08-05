@@ -1,6 +1,10 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
-import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
+import type {
+  Workspace,
+  WorkspaceCommitSyncMode,
+  WorkspaceKind,
+} from '../../domain/workspace/Workspace.js';
 import type { WorkspaceListItem } from '../../application/workspace/WorkspaceRepository.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import type { WorkspaceInvite } from '../../domain/workspace/WorkspaceInvite.js';
@@ -55,6 +59,8 @@ type WorkspaceDto = {
   // Приёмка задач руководителем (db/150): включена ли она в этом пространстве.
   requireTaskApproval: boolean;
   workerEnabled: boolean;
+  // Режим сверки коммитов в пространстве (db/155): 'off' | 'propose' | 'auto'.
+  commitSyncMode: WorkspaceCommitSyncMode;
   ownerUserId: string;
   role?: WorkspaceRole;
   projectCount?: number;
@@ -74,6 +80,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
     kind: ws.kind,
     requireTaskApproval: ws.requireTaskApproval,
     workerEnabled: ws.workerEnabled,
+    commitSyncMode: ws.commitSyncMode,
     ownerUserId: ws.ownerUserId,
     role: listItem.role,
     projectCount: listItem.projectCount,
@@ -215,6 +222,10 @@ export function workspacesRouter(deps: Deps): Router {
           body.workerEnabled,
         );
         movedTaskCount = result.movedTaskCount;
+      }
+      // Режим сверки коммитов (db/155) — тот же управленческий гейт lead/owner.
+      if (body.commitSyncMode !== undefined) {
+        await deps.service.setCommitSyncMode(workspaceId, req.user!.id, body.commitSyncMode);
       }
       const ws = await deps.service.rename(workspaceId, req.user!.id, body);
       res.json({ workspace: toDto(ws), movedTaskCount });

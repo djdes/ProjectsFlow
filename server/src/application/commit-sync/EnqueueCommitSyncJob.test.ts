@@ -1,10 +1,16 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EnqueueCommitSyncJob } from './EnqueueCommitSyncJob.js';
+import { CommitSyncPolicy } from './CommitSyncPolicy.js';
 
 test('daily commit review is queued even when there are no open tasks or commits', async () => {
   let created: Record<string, unknown> | null = null;
   const useCase = new EnqueueCommitSyncJob({
+    // Пространство без своего режима сверки (db/155) — решает проект, как раньше.
+    commitSyncPolicy: new CommitSyncPolicy({
+      projects: { async getWorkspaceId() { return null; } },
+      workspaces: { async getById() { return null; } },
+    }),
     projects: {
       async getById() {
         return { id: 'p1', ownerId: 'owner', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
@@ -61,6 +67,11 @@ test('daily commit review is queued even when there are no open tasks or commits
 test('reads commits with the owner token when the dispatcher has no GitHub connection', async () => {
   let readerUserId: string | null = null;
   const useCase = new EnqueueCommitSyncJob({
+    // Пространство без своего режима сверки (db/155) — решает проект, как раньше.
+    commitSyncPolicy: new CommitSyncPolicy({
+      projects: { async getWorkspaceId() { return null; } },
+      workspaces: { async getById() { return null; } },
+    }),
     projects: {
       async getById() {
         return { id: 'p1', ownerId: 'owner', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
@@ -99,6 +110,11 @@ test('reads commits with the owner token when the dispatcher has no GitHub conne
 test('reads commits with the dispatcher token when the dispatcher has GitHub connected', async () => {
   let readerUserId: string | null = null;
   const useCase = new EnqueueCommitSyncJob({
+    // Пространство без своего режима сверки (db/155) — решает проект, как раньше.
+    commitSyncPolicy: new CommitSyncPolicy({
+      projects: { async getWorkspaceId() { return null; } },
+      workspaces: { async getById() { return null; } },
+    }),
     projects: {
       async getById() {
         return { id: 'p1', ownerId: 'owner', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
@@ -140,6 +156,11 @@ test('reads commits with the dispatcher token when the dispatcher has GitHub con
 test('bills the run to the workspace owner, not to the member who created the project', async () => {
   let created: Record<string, unknown> | null = null;
   const useCase = new EnqueueCommitSyncJob({
+    // Пространство без своего режима сверки (db/155) — решает проект, как раньше.
+    commitSyncPolicy: new CommitSyncPolicy({
+      projects: { async getWorkspaceId() { return null; } },
+      workspaces: { async getById() { return null; } },
+    }),
     projects: {
       async getById() {
         return { id: 'p1', ownerId: 'member', workspaceId: 'ws1', dispatcherUserId: 'dispatcher' };
@@ -173,6 +194,11 @@ test('bills the run to the workspace owner, not to the member who created the pr
 test('falls back to the project owner when the workspace is missing', async () => {
   let created: Record<string, unknown> | null = null;
   const useCase = new EnqueueCommitSyncJob({
+    // Пространство без своего режима сверки (db/155) — решает проект, как раньше.
+    commitSyncPolicy: new CommitSyncPolicy({
+      projects: { async getWorkspaceId() { return null; } },
+      workspaces: { async getById() { return null; } },
+    }),
     projects: {
       async getById() {
         return { id: 'p1', ownerId: 'owner', workspaceId: 'ws-gone', dispatcherUserId: 'dispatcher' };

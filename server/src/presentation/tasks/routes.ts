@@ -30,6 +30,7 @@ import type { MoveTaskToProject } from '../../application/task/MoveTaskToProject
 import type { ChangeTaskAssignee } from '../../application/task/ChangeTaskAssignee.js';
 import type { ExportTasksDigest } from '../../application/task/ExportTasksDigest.js';
 import type { Task } from '../../domain/task/Task.js';
+import { STATUS_LABEL as TASK_STATUS_LABEL } from '../../domain/task/statusLabels.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
@@ -209,15 +210,9 @@ function attachmentToDto(att: TaskAttachment): AttachmentDto {
   };
 }
 
-// Статус-лейблы для TG-сообщений (совпадают с client-side statusLabels).
-const TG_STATUS_LABEL: Record<string, string> = {
-  backlog: 'Черновики',
-  manual: 'В ручную',
-  todo: 'Воркер',
-  in_progress: 'В работе',
-  awaiting_clarification: 'На уточнении',
-  done: 'Готово',
-};
+// Статус-лейблы для TG-сообщений. Своей копии больше нет: у неё уже успело разъехаться
+// написание ('В ручную' против 'Вручную' в сводках). Единый источник — domain/task/statusLabels.
+const TG_STATUS_LABEL: Record<string, string> = TASK_STATUS_LABEL;
 
 function tgExcerpt(text: string | null, limit = 100): string {
   const s = (text ?? '').trim().replace(/\s+/g, ' ');

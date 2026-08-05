@@ -223,6 +223,7 @@ import { CompleteMonitoringAnalysisJob } from './application/monitoring-analysis
 import { MonitoringAnalysisJobCleanup } from './application/monitoring-analysis/MonitoringAnalysisJobCleanup.js';
 import { DrizzleCommitSyncJobRepository } from './infrastructure/repositories/DrizzleCommitSyncJobRepository.js';
 import { EnqueueCommitSyncJob } from './application/commit-sync/EnqueueCommitSyncJob.js';
+import { CommitSyncPolicy } from './application/commit-sync/CommitSyncPolicy.js';
 import { ListPendingCommitSyncJobs } from './application/commit-sync/ListPendingCommitSyncJobs.js';
 import { ClaimCommitSyncJob } from './application/commit-sync/ClaimCommitSyncJob.js';
 import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitSyncJob.js';
@@ -1558,6 +1559,7 @@ const manageAppDashboardSettings = new ManageAppDashboardSettings({
 const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
   projects: projectRepo,
   workspaces: workspaceRepo,
+  commitSyncPolicy: new CommitSyncPolicy({ projects: projectRepo, workspaces: workspaceRepo }),
   automation: automationRepo,
   tasks: taskRepo,
   listProjectCommits: new ListProjectCommits({

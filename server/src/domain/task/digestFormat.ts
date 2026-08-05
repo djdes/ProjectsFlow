@@ -10,24 +10,10 @@ export const PRIORITY_DIGEST_META: Record<TaskPriority, { label: string; emoji: 
 
 export const NO_PRIORITY_LABEL = 'Без приоритета';
 
-// Подписи колонок для группировки сводки по статусу (совпадают с client statusLabels).
-export const STATUS_DIGEST_LABEL: Record<TaskStatus, string> = {
-  backlog: 'Черновики',
-  manual: 'Вручную',
-  todo: 'Воркер',
-  in_progress: 'В работе',
-  awaiting_clarification: 'На уточнении',
-  pending_approval: 'На утверждении',
-  done: 'Готово',
-  // Кастомные колонки (db/154): настоящая подпись живёт в kanban_settings проекта и
-  // подставляется вызывающим (см. resolveColumnLabel). Здесь — нейтральный фолбэк,
-  // чтобы сводка не показывала сырой ключ статуса, если настройки недоступны.
-  custom_1: 'Колонка 1',
-  custom_2: 'Колонка 2',
-  custom_3: 'Колонка 3',
-  custom_4: 'Колонка 4',
-  custom_5: 'Колонка 5',
-};
+// Подписи колонок для группировки сводки по статусу. Собственной копии больше нет —
+// единый источник в domain/task/statusLabels.ts (иначе строки расходятся, как было
+// с «Вручную»/«В ручную»). Алиас оставлен ради существующих импортов.
+export { STATUS_LABEL as STATUS_DIGEST_LABEL } from './statusLabels.js';
 
 // Визуальная колонка: in_progress/awaiting_clarification живут в колонке «Воркер» (todo).
 export function toVisibleStatus(status: TaskStatus): TaskStatus {

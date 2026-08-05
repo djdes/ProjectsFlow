@@ -1,4 +1,8 @@
-import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
+import type {
+  Workspace,
+  WorkspaceCommitSyncMode,
+  WorkspaceKind,
+} from '../../domain/workspace/Workspace.js';
 import type {
   WorkspaceMember,
   WorkspaceRole,
@@ -118,6 +122,25 @@ export class WorkspaceService {
   // Приёмка задач руководителем (db/150). Настройка управленческая: включать её может
   // только руководитель или владелец пространства — не рядовой участник, которого она
   // как раз и ограничивает.
+  /**
+   * Режим сверки коммитов в пространстве (db/155). Право — как у приёмки и воркера:
+   * lead/owner. Настройка управленческая, действует на доски и уведомления всей команды.
+   *
+   * Задачи никуда не переезжают: режим влияет только на будущие прогоны сверки
+   * (см. CommitSyncPolicy), а уже созданные job'ы несут снимок своего действия.
+   */
+  async setCommitSyncMode(
+    workspaceId: string,
+    actorId: string,
+    mode: WorkspaceCommitSyncMode,
+  ): Promise<Workspace> {
+    const member = await requireWorkspaceMember(this.deps.repo, workspaceId, actorId);
+    if (member.role !== 'owner' && member.role !== 'lead') throw new NotWorkspaceOwnerError();
+    const updated = await this.deps.repo.update(workspaceId, { commitSyncMode: mode });
+    if (!updated) throw new WorkspaceNotFoundError();
+    return updated;
+  }
+
   async setTaskApproval(
     workspaceId: string,
     actorId: string,

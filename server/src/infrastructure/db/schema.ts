@@ -379,6 +379,8 @@ export const workspaces = mysqlTable(
     // Воркер (Ralph) в пространстве. Выключен — колонки «Воркер» (todo) на досках нет и
     // сервер не пускает задачи в этот статус, см. db/152.
     workerEnabled: boolean('worker_enabled').notNull().default(true),
+    // Режим сверки коммитов в пространстве: 'off' | 'propose' | 'auto'. См. db/155.
+    commitSyncMode: varchar('commit_sync_mode', { length: 16 }).notNull().default('propose'),
     ownerUserId: fkUserId('owner_user_id'),
     createdAt: createdAtCol(),
   },

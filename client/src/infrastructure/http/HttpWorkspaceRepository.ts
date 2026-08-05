@@ -1,5 +1,6 @@
 import type {
   Workspace,
+  WorkspaceCommitSyncMode,
   WorkspaceKind,
   WorkspaceMember,
   WorkspaceRole,
@@ -27,6 +28,7 @@ type WorkspaceDto = {
   kind?: WorkspaceKind;
   requireTaskApproval?: boolean;
   workerEnabled?: boolean;
+  commitSyncMode?: WorkspaceCommitSyncMode;
   ownerUserId: string;
   // Сервер старой версии мог отдавать 'member' — нормализуем через normalizeRole.
   role?: string;
@@ -87,6 +89,8 @@ function fromDto(dto: WorkspaceDto): Workspace {
     requireTaskApproval: dto.requireTaskApproval ?? true,
     // Старый сервер без флага — считаем воркера включённым: это прежнее поведение.
     workerEnabled: dto.workerEnabled ?? true,
+    // Старый сервер без db/155 — 'propose': это историческое поведение сверки.
+    commitSyncMode: dto.commitSyncMode ?? 'propose',
     ownerUserId: dto.ownerUserId,
     role: normalizeRole(dto.role),
     projectCount: dto.projectCount ?? 0,
@@ -137,6 +141,14 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
       movedTaskCount?: number;
     }>(`/workspaces/${id}`, { workerEnabled: enabled });
     return { workspace: fromDto(workspace), movedTaskCount: movedTaskCount ?? 0 };
+  }
+
+  async setCommitSyncMode(id: string, mode: WorkspaceCommitSyncMode): Promise<Workspace> {
+    const { workspace } = await httpClient.patch<{ workspace: WorkspaceDto }>(
+      `/workspaces/${id}`,
+      { commitSyncMode: mode },
+    );
+    return fromDto(workspace);
   }
 
   async switchCurrent(id: string): Promise<void> {

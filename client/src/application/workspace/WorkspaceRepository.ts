@@ -1,4 +1,9 @@
-import type { Workspace, WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
+import type {
+  Workspace,
+  WorkspaceCommitSyncMode,
+  WorkspaceMember,
+  WorkspaceRole,
+} from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type {
   SaveWorkspaceAssigneeDigestInput,
@@ -39,6 +44,11 @@ export interface WorkspaceRepository {
     id: string,
     enabled: boolean,
   ): Promise<{ workspace: Workspace; movedTaskCount: number }>;
+  /**
+   * Режим сверки коммитов в пространстве (db/155). Задачи не переезжают: режим влияет
+   * только на будущие прогоны сверки.
+   */
+  setCommitSyncMode(id: string, mode: WorkspaceCommitSyncMode): Promise<Workspace>;
   switchCurrent(id: string): Promise<void>;
   remove(id: string): Promise<void>;
 

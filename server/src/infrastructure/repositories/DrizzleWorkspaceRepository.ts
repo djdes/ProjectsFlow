@@ -8,7 +8,7 @@ import {
   workspaceMembers,
   type WorkspaceRow,
 } from '../db/schema.js';
-import type { Workspace } from '../../domain/workspace/Workspace.js';
+import { isWorkspaceCommitSyncMode, type Workspace } from '../../domain/workspace/Workspace.js';
 import type {
   WorkspaceMember,
   WorkspaceRole,
@@ -28,6 +28,9 @@ function toWorkspace(row: WorkspaceRow): Workspace {
     kind: row.kind,
     requireTaskApproval: Boolean(row.requireTaskApproval),
     workerEnabled: Boolean(row.workerEnabled),
+    // VARCHAR в БД: неизвестное значение (ручной UPDATE, откат релиза) читаем как
+    // историческое поведение 'propose', а не протаскиваем мусор в домен.
+    commitSyncMode: isWorkspaceCommitSyncMode(row.commitSyncMode) ? row.commitSyncMode : 'propose',
     ownerUserId: row.ownerUserId,
     createdAt: row.createdAt,
   };
@@ -126,6 +129,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
     }
     if (patch.workerEnabled !== undefined) {
       set.workerEnabled = patch.workerEnabled;
+    }
+    if (patch.commitSyncMode !== undefined) {
+      set.commitSyncMode = patch.commitSyncMode;
     }
     if (Object.keys(set).length > 0) {
       await this.db.update(workspaces).set(set).where(eq(workspaces.id, id));

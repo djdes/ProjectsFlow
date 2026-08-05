@@ -1192,6 +1192,9 @@ export function KanbanBoard({
         {/* Полка «В работе» — над колонками, вместо колонки «Вручную». Дроп в неё
             обрабатывает общий handleDragEnd: droppable совпадает с колонкой по id и data. */}
         <BoardWorkShelf
+          // Полка = колонка 'manual', поэтому и подпись у неё та же (переименование
+          // колонки в настройках доски меняет и полку).
+          label={resolveColumnLabel(settings?.manual, STATUS_LABEL.manual)}
           tasks={filterTasks(grouped.manual)}
           renderCard={(t) => (
             <KanbanCard

@@ -15,6 +15,15 @@ export const WORKSPACE_ROLE_LABEL: Record<WorkspaceRole, string> = {
 // 'team' — созданное вручную командное пространство.
 export type WorkspaceKind = 'default' | 'team';
 
+// Режим сверки коммитов в пространстве (db/155). Зеркало серверного домена.
+export type WorkspaceCommitSyncMode = 'off' | 'propose' | 'auto';
+
+export const WORKSPACE_COMMIT_SYNC_MODE_LABEL: Record<WorkspaceCommitSyncMode, string> = {
+  off: 'Выключена',
+  propose: 'Предлагать закрыть',
+  auto: 'Закрывать автоматически',
+};
+
 // Пространство (workspace): верхнеуровневый изолированный контейнер над проектами.
 export type Workspace = {
   readonly id: string;
@@ -29,6 +38,10 @@ export type Workspace = {
   // (статус 'todo'), быстрое добавление не предлагает «Воркеру», сервер не пускает в этот
   // статус. Команда работает как в обычном канбане.
   readonly workerEnabled: boolean;
+  // Режим сверки коммитов в пространстве (db/155). 'off' — сверки нет вообще; 'propose' —
+  // предлагать закрыть задачу; 'auto' — закрывать самостоятельно. Пер-проектный режим
+  // перекрывает значение пространства, пока оно не 'off'.
+  readonly commitSyncMode: WorkspaceCommitSyncMode;
   readonly ownerUserId: string;
   // Роль текущего юзера в пространстве.
   readonly role: WorkspaceRole;

@@ -43,7 +43,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { WORKSPACE_ROLE_LABEL, type WorkspaceRole } from '@/domain/workspace/Workspace';
+import {
+  WORKSPACE_ROLE_LABEL,
+  type WorkspaceCommitSyncMode,
+  type WorkspaceRole,
+} from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import type {
   WorkspaceAssigneeDigestGroup,
@@ -137,7 +141,11 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         disabled={!canEditSharedSettings}
       />
       <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
-      <AssigneeDigestCard workspaceId={workspace.id} canManage={canEditSharedSettings} />
+      <AssigneeDigestCard
+        workspaceId={workspace.id}
+        canManage={canEditSharedSettings}
+        commitSyncMode={workspace.commitSyncMode}
+      />
       {!isDefault && (
         <TaskApprovalCard
           workspaceId={workspace.id}
@@ -544,11 +552,18 @@ type AssigneeDigestDraft = {
 function AssigneeDigestCard({
   workspaceId,
   canManage,
+  commitSyncMode,
 }: {
   workspaceId: string;
   canManage: boolean;
+  // Режим сверки уровня ПРОСТРАНСТВА (db/155). Живёт на самом пространстве, а не в
+  // настройках рассылки, поэтому приходит пропом, а не грузится этой карточкой.
+  commitSyncMode: WorkspaceCommitSyncMode;
 }): React.ReactElement {
   const { workspaceRepository } = useContainer();
+  // Черновик режима: сохраняется вместе с остальными настройками карточки.
+  const [modeDraft, setModeDraft] = useState<WorkspaceCommitSyncMode>(commitSyncMode);
+  useEffect(() => setModeDraft(commitSyncMode), [commitSyncMode]);
   const [draft, setDraft] = useState<AssigneeDigestDraft | null>(null);
   const [members, setMembers] = useState<WorkspaceAssigneeDigestMember[]>([]);
   const [groups, setGroups] = useState<WorkspaceAssigneeDigestGroup[]>([]);
@@ -738,6 +753,17 @@ function AssigneeDigestCard({
         eodReminderHour: settings.eodReminderHour,
         eodReminderMinute: settings.eodReminderMinute,
       });
+      // Режим сверки пространства (db/155) сохраняем отдельным вызовом: он живёт на самом
+      // пространстве, а не в настройках рассылки. Best-effort — остальное уже сохранено.
+      if (modeDraft !== commitSyncMode) {
+        try {
+          await workspaceRepository.setCommitSyncMode(workspaceId, modeDraft);
+        } catch (error) {
+          toast.error(
+            `Настройки сохранены, но режим сверки пространства не изменён: ${(error as Error).message}`,
+          );
+        }
+      }
       // Per-project enabled from the checklist comes FIRST: it creates/updates each project's
       // automation row, so the schedule push below then lands on rows that already exist. This is
       // the source of truth for WHICH projects sync — no longer the old master toggle.
@@ -1060,13 +1086,20 @@ function AssigneeDigestCard({
                           title: 'Просто оповестить',
                           hint: 'Бот предложит закрыть — переносите вручную.',
                         },
+                        {
+                          // Режим пространства (db/155) старше пер-проектных галочек: это
+                          // единственный способ снять сверку со всей команды одним действием.
+                          value: 'off',
+                          title: 'Выключить сверку',
+                          hint: 'Во всём пространстве, независимо от списка проектов ниже.',
+                        },
                       ] as const
                     ).map((option) => (
                       <label
                         key={option.value}
                         className={cn(
                           'flex min-w-[13rem] flex-1 items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                          draft.commitSyncAction === option.value
+                          modeDraft === option.value
                             ? 'border-primary bg-primary/5'
                             : 'border-input hover:bg-accent',
                           canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
@@ -1076,9 +1109,14 @@ function AssigneeDigestCard({
                           type="radio"
                           name={`commit-sync-action-${workspaceId}`}
                           className="mt-0.5"
-                          checked={draft.commitSyncAction === option.value}
+                          checked={modeDraft === option.value}
                           disabled={!canManage}
-                          onChange={() => update({ commitSyncAction: option.value })}
+                          onChange={() => {
+                            setModeDraft(option.value);
+                            // 'off' не трогает пер-проектное действие: включив сверку
+                            // обратно, команда получит прежний режим, а не сброшенный.
+                            if (option.value !== 'off') update({ commitSyncAction: option.value });
+                          }}
                         />
                         <span className="min-w-0">
                           <span className="block font-medium text-foreground">{option.title}</span>

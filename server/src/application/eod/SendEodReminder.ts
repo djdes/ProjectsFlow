@@ -1,4 +1,5 @@
 import type { Task } from '../../domain/task/Task.js';
+import { STATUS_LABEL } from '../../domain/task/statusLabels.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
@@ -18,9 +19,11 @@ type Deps = {
 };
 
 const OPEN_STATUSES = new Set<string>(['todo', 'in_progress', 'awaiting_clarification']);
-const STATUS_LABEL: Record<string, string> = {
+// Строчная форма для встраивания в предложение («задача X — в работе»). Смысл слов —
+// из общего domain/task/statusLabels; собственных названий здесь не заводим.
+const EOD_STATUS_LABEL: Record<string, string> = {
   todo: 'в очереди',
-  in_progress: 'в работе',
+  in_progress: STATUS_LABEL.in_progress.toLowerCase(),
   awaiting_clarification: 'ждёт уточнения',
 };
 const MAX_TASKS_IN_MSG = 12;
@@ -112,7 +115,7 @@ export class SendEodReminder {
   private withTasksMessage(projectName: string, tasks: Task[], boardUrl: string): string {
     const shown = tasks.slice(0, MAX_TASKS_IN_MSG);
     const lines = shown.map(
-      (t) => `• <b>${escapeHtml(taskTitle(t))}</b> — <i>${STATUS_LABEL[t.status] ?? t.status}</i>`,
+      (t) => `• <b>${escapeHtml(taskTitle(t))}</b> — <i>${EOD_STATUS_LABEL[t.status] ?? t.status}</i>`,
     );
     const more = tasks.length > shown.length ? `\n…и ещё ${tasks.length - shown.length}` : '';
     return (

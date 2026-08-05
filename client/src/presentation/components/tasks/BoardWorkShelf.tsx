@@ -14,6 +14,11 @@ type Props = {
   flashKey: number;
   // Какую карточку подсветить вместе с полкой.
   flashTaskId: string | null;
+  // Подпись полки. Полка ЗАМЕНЯЕТ собой колонку 'manual', поэтому и называться должна
+  // так же, как эта колонка названа в настройках доски (дефолт — «Вручную»). Раньше здесь
+  // был хардкод «В работе», и одно и то же слово означало разное на доске (колонка manual)
+  // и в дайджестах/TG/EOD (статус in_progress).
+  label: string;
   className?: string;
 };
 
@@ -28,6 +33,7 @@ export function BoardWorkShelf({
   renderCard,
   flashKey,
   flashTaskId,
+  label,
   className,
 }: Props): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
@@ -61,7 +67,7 @@ export function BoardWorkShelf({
         )}
       >
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
-          <span>В работе</span>
+          <span>{label}</span>
           {tasks.length > 0 && <span className="tabular-nums opacity-70">{tasks.length}</span>}
         </div>
         {tasks.length === 0 ? (

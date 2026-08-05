@@ -1,4 +1,8 @@
-import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
+import type {
+  Workspace,
+  WorkspaceCommitSyncMode,
+  WorkspaceKind,
+} from '../../domain/workspace/Workspace.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 
 export type CreateWorkspaceInput = {
@@ -17,6 +21,8 @@ export type UpdateWorkspaceInput = {
   readonly requireTaskApproval?: boolean;
   // Воркер в пространстве (db/152).
   readonly workerEnabled?: boolean;
+  // Режим сверки коммитов в пространстве (db/155).
+  readonly commitSyncMode?: WorkspaceCommitSyncMode;
 };
 
 // Пространство в списке для юзера: + его роль и счётчик проектов (read-model).

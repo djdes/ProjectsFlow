@@ -27,6 +27,8 @@ export const updateWorkspaceSchema = z.object({
   // Приёмка задач руководителем (db/150). Отдельный гейт по роли — см. setTaskApproval.
   requireTaskApproval: z.boolean().optional(),
   workerEnabled: z.boolean().optional(),
+  // Режим сверки коммитов в пространстве (db/155). Тот же гейт lead/owner.
+  commitSyncMode: z.enum(['off', 'propose', 'auto']).optional(),
 });
 
 export const setCurrentSchema = z.object({

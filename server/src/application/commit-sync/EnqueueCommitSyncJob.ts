@@ -7,6 +7,7 @@ import { defaultAutomationConfig } from '../automation/criteria.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import type { ListProjectCommits } from '../github/ListProjectCommits.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
+import type { CommitSyncPolicy } from './CommitSyncPolicy.js';
 import {
   commitReviewWindowHours,
   prepareCommitSyncContext,
@@ -25,6 +26,8 @@ type Deps = {
   readonly listProjectCommits: ListProjectCommits;
   readonly commitSyncJobs: CommitSyncJobRepository;
   readonly tokens: Pick<GithubTokenRepository, 'getByUserId'>;
+  // Режим сверки пространства vs пер-проектный (db/155).
+  readonly commitSyncPolicy: CommitSyncPolicy;
 };
 
 // Системный путь (вызывает планировщик): ставит commit-sync job для проекта.
@@ -47,8 +50,19 @@ export class EnqueueCommitSyncJob {
     if (!project?.dispatcherUserId) return null;
     const dispatcherUserId = project.dispatcherUserId;
 
-    const config = (await this.deps.automation.getConfig(projectId)) ?? defaultAutomationConfig(projectId);
+    // null = проект режим сверки не выбирал (строки автоматизации нет) — тогда его задаёт
+    // пространство (см. CommitSyncPolicy).
+    const storedConfig = await this.deps.automation.getConfig(projectId);
+    const config = storedConfig ?? defaultAutomationConfig(projectId);
     if (!config.commitSyncEnabled && !opts.forceEnabled) return null;
+
+    // Режим пространства (db/155) старше пер-проектных галочек: 'off' снимает сверку со
+    // всей команды одним действием, включая ручное «Сверить сейчас» (forceEnabled).
+    const decision = await this.deps.commitSyncPolicy.resolve(
+      projectId,
+      storedConfig?.commitSyncAction ?? null,
+    );
+    if (!decision.enabled) return null;
 
     // Дедуп: не плодим параллельные прогоны если предыдущий ещё в очереди/работе.
     if (await this.deps.commitSyncJobs.existsActiveForProject(projectId)) return null;
@@ -93,7 +107,7 @@ export class EnqueueCommitSyncJob {
       // Плательщик прогона: на его тариф метерим и по нему гейтим claim.
       createdBy: await this.resolveBilledUserId(project),
       dispatcherUserId,
-      action: config.commitSyncAction,
+      action: decision.action,
       batchKey: opts.batchKey ?? null,
       thresholdHours: config.commitSyncThresholdHours,
       context,

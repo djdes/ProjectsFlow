@@ -18,6 +18,7 @@ import {
   type Modifier,
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
+import { STATUS_LABEL } from './statusLabels';
 import { motion } from 'motion/react';
 import {
   CalendarClock,
@@ -2001,7 +2002,10 @@ function InProgressShelf({
         {/* Без спиннера: крутящийся лоадер в заголовке читался как «идёт загрузка»,
             хотя это просто зона. Заголовок и жёлтый фон говорят всё сами. */}
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
-          <span>В работе</span>
+          {/* Полка — это статус 'manual', и называться должна так же. «В работе» здесь
+              было бы вторым смыслом того же слова: в сводках/TG/EOD «В работе» — это
+              статус 'in_progress' (задача у воркера), а не «делаю руками». */}
+          <span>{STATUS_LABEL.manual}</span>
           {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
         </div>
         {items.length === 0 ? (
