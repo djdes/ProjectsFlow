@@ -90,4 +90,23 @@ export interface WorkspaceRepository {
     id: string,
     enabledProjectIds: readonly string[],
   ): Promise<{ affected: number }>;
+
+  // Кастомные колонки канбана на уровне пространства (db/154). Колонка идентифицируется
+  // НАЗВАНИЕМ: в разных проектах она может занимать разные слоты статуса.
+  listKanbanColumns(id: string): Promise<Array<{ label: string; projectCount: number }>>;
+  // Создать колонку во ВСЕХ проектах пространства. skipped — проекты, где не получилось
+  // (колонка уже есть / кончились слоты).
+  createKanbanColumnEverywhere(
+    id: string,
+    label: string,
+  ): Promise<{
+    affected: number;
+    skipped: ReadonlyArray<{ projectId: string; name: string; reason: string }>;
+  }>;
+  // Удалить колонку по названию во всех проектах, где она есть. movedTasks — сколько
+  // задач переехало в «Черновики».
+  deleteKanbanColumnEverywhere(
+    id: string,
+    label: string,
+  ): Promise<{ affected: number; movedTasks: number }>;
 }

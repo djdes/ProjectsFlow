@@ -123,6 +123,7 @@ import { DrizzleSiteEditorRepository } from './infrastructure/repositories/Drizz
 import { SiteEditorService } from './application/site-editor/SiteEditorService.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { ManageKanbanColumns } from './application/kanban/ManageKanbanColumns.js';
+import { BulkManageWorkspaceKanbanColumns } from './application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
@@ -2112,6 +2113,11 @@ const { app, devProxyUpgrade } = createApp({
     bulkCommitSync: bulkSetWorkspaceCommitSync,
     listCommitSyncProjects: listWorkspaceCommitSyncProjects,
     setCommitSyncProjects: setWorkspaceCommitSyncProjects,
+    bulkKanbanColumns: new BulkManageWorkspaceKanbanColumns({
+      workspaces: workspaceRepo,
+      projects: projectRepo,
+      tasks: taskRepo,
+    }),
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo,

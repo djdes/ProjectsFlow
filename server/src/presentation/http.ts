@@ -214,6 +214,7 @@ import type { TelegramDigestActionService } from '../application/digest/Telegram
 import { avatarRouter } from './users/avatarRoutes.js';
 import { projectsRouter } from './projects/routes.js';
 import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
+import type { BulkManageWorkspaceKanbanColumns } from '../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
@@ -450,6 +451,8 @@ type AppDeps = {
     readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
     readonly listCommitSyncProjects: ListWorkspaceCommitSyncProjects;
     readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
+    // Кастомные колонки канбана на все проекты пространства (db/154).
+    readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
     readonly invites: {
       readonly create: CreateWorkspaceInvite;
       readonly list: ListWorkspaceInvites;

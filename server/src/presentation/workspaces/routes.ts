@@ -11,6 +11,7 @@ import type { ManageWorkspaceAssigneeDigest } from '../../application/digest/Man
 import type { BulkSetWorkspaceCommitSync } from '../../application/commit-sync/BulkSetWorkspaceCommitSync.js';
 import type { ListWorkspaceCommitSyncProjects } from '../../application/commit-sync/ListWorkspaceCommitSyncProjects.js';
 import type { SetWorkspaceCommitSyncProjects } from '../../application/commit-sync/SetWorkspaceCommitSyncProjects.js';
+import type { BulkManageWorkspaceKanbanColumns } from '../../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { z } from 'zod';
 import {
@@ -38,6 +39,12 @@ const bulkCommitSyncSchema = z.object({
 // Пер-проектная включённость сверки из чеклиста: список id включённых проектов.
 const setCommitSyncProjectsSchema = z.object({
   enabledProjectIds: z.array(z.string()).max(1000).default([]),
+});
+
+// Кастомная колонка на все проекты пространства (db/154). Идентификатор — название:
+// слоты в разных проектах свои, и пользователь оперирует именно названием.
+const workspaceKanbanColumnSchema = z.object({
+  label: z.string().trim().min(1, 'Введите название колонки').max(40),
 });
 
 type WorkspaceDto = {
@@ -141,6 +148,8 @@ type Deps = {
   readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
   readonly listCommitSyncProjects: ListWorkspaceCommitSyncProjects;
   readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
+  // Кастомные колонки канбана на все проекты пространства (db/154).
+  readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
   readonly appUrl: string;
 };
 
@@ -327,6 +336,50 @@ export function workspacesRouter(deps: Deps): Router {
           req.params.id as string,
           req.user!.id,
           body.enabledProjectIds,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // Кастомные колонки канбана на уровне пространства (db/154). Колонка идентифицируется
+  // НАЗВАНИЕМ: в разных проектах она может занимать разные слоты.
+  router.get('/:id/kanban-columns', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const columns = await deps.bulkKanbanColumns.list(req.params.id as string, req.user!.id);
+      res.json({ columns });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/:id/kanban-columns', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = workspaceKanbanColumnSchema.parse(req.body);
+      const result = await deps.bulkKanbanColumns.createEverywhere(
+        req.params.id as string,
+        req.user!.id,
+        body.label,
+      );
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // DELETE с телом плохо переносится прокси/клиентами, а название колонки в пути ломается
+  // на слешах/кириллице — поэтому удаление у всех оформлено как POST-действие.
+  router.post(
+    '/:id/kanban-columns/delete-all',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = workspaceKanbanColumnSchema.parse(req.body);
+        const result = await deps.bulkKanbanColumns.deleteEverywhere(
+          req.params.id as string,
+          req.user!.id,
+          body.label,
         );
         res.json(result);
       } catch (error) {

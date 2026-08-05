@@ -253,6 +253,38 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
     return httpClient.post(`/workspaces/${id}/commit-sync/apply-all`, input);
   }
 
+  async listKanbanColumns(id: string): Promise<Array<{ label: string; projectCount: number }>> {
+    const { columns } = await httpClient.get<{
+      columns?: Array<{ label: string; projectCount: number }>;
+    }>(`/workspaces/${id}/kanban-columns`);
+    return columns ?? [];
+  }
+
+  async createKanbanColumnEverywhere(
+    id: string,
+    label: string,
+  ): Promise<{
+    affected: number;
+    skipped: ReadonlyArray<{ projectId: string; name: string; reason: string }>;
+  }> {
+    const res = await httpClient.post<{
+      affected?: number;
+      skipped?: Array<{ projectId: string; name: string; reason: string }>;
+    }>(`/workspaces/${id}/kanban-columns`, { label });
+    return { affected: res.affected ?? 0, skipped: res.skipped ?? [] };
+  }
+
+  async deleteKanbanColumnEverywhere(
+    id: string,
+    label: string,
+  ): Promise<{ affected: number; movedTasks: number }> {
+    const res = await httpClient.post<{ affected?: number; movedTasks?: number }>(
+      `/workspaces/${id}/kanban-columns/delete-all`,
+      { label },
+    );
+    return { affected: res.affected ?? 0, movedTasks: res.movedTasks ?? 0 };
+  }
+
   async listCommitSyncProjects(
     id: string,
   ): Promise<Array<{ id: string; name: string; icon: string | null; commitSyncEnabled: boolean }>> {

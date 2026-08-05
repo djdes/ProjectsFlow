@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -149,6 +149,12 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         <WorkerCard
           workspaceId={workspace.id}
           enabled={workspace.workerEnabled}
+          canManage={isOwner || workspace.role === 'lead'}
+        />
+      )}
+      {!isDefault && (
+        <KanbanColumnsCard
+          workspaceId={workspace.id}
           canManage={isOwner || workspace.role === 'lead'}
         />
       )}
@@ -363,6 +369,152 @@ function WorkerCard({
           {canManage
             ? 'При выключении задачи из колонки «Воркер» переезжают в «Черновики» — обратное включение их туда не вернёт. Сервер перестаёт принимать задачи в эту колонку и из MCP, и из Telegram.'
             : 'Настройку меняет руководитель или владелец пространства.'}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Кастомные колонки канбана на всё пространство (db/154). Колонка тут — НАЗВАНИЕ: в разных
+// проектах она занимает разные слоты статуса, и команда думает названиями.
+function KanbanColumnsCard({
+  workspaceId,
+  canManage,
+}: {
+  workspaceId: string;
+  canManage: boolean;
+}): React.ReactElement {
+  const { workspaceRepository } = useContainer();
+  const [columns, setColumns] = useState<Array<{ label: string; projectCount: number }> | null>(
+    null,
+  );
+  const [label, setLabel] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const reload = useCallback(async (): Promise<void> => {
+    try {
+      setColumns(await workspaceRepository.listKanbanColumns(workspaceId));
+    } catch {
+      setColumns([]);
+    }
+  }, [workspaceRepository, workspaceId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const createEverywhere = async (): Promise<void> => {
+    const name = label.trim();
+    if (name.length === 0 || busy) return;
+    setBusy(true);
+    try {
+      const res = await workspaceRepository.createKanbanColumnEverywhere(workspaceId, name);
+      // Пропуски показываем явно: «создано во всех» при частичном успехе — вранье, из-за
+      // которого потом ищут пропавшую колонку в конкретном проекте.
+      toast.success(
+        res.skipped.length > 0
+          ? `Колонка создана в проектах: ${res.affected}, пропущено: ${res.skipped.length}`
+          : `Колонка создана в проектах: ${res.affected}`,
+      );
+      if (res.skipped.length > 0) {
+        toast.message('Пропущены', {
+          description: res.skipped.map((s) => `${s.name} — ${s.reason}`).join('; '),
+        });
+      }
+      setLabel('');
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось создать колонку');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteEverywhere = async (name: string): Promise<void> => {
+    const ok = window.confirm(
+      `Удалить колонку «${name}» во всех проектах пространства? Её задачи переедут в «Черновики».`,
+    );
+    if (!ok || busy) return;
+    setBusy(true);
+    try {
+      const res = await workspaceRepository.deleteKanbanColumnEverywhere(workspaceId, name);
+      toast.success(
+        res.movedTasks > 0
+          ? `Колонка удалена в проектах: ${res.affected}. Задач перенесено: ${res.movedTasks}`
+          : `Колонка удалена в проектах: ${res.affected}`,
+      );
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось удалить колонку');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Колонки канбана</CardTitle>
+        <CardDescription>
+          Свои колонки в&nbsp;дополнение к&nbsp;встроенным — сразу во&nbsp;всех проектах
+          пространства. В&nbsp;отдельном проекте колонку можно завести кнопкой
+          «+&nbsp;Колонка» на&nbsp;его доске.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={label}
+            maxLength={40}
+            disabled={!canManage || busy}
+            placeholder="Название колонки, например «Ревью»"
+            className="min-w-0 flex-1"
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void createEverywhere();
+            }}
+          />
+          <Button
+            disabled={!canManage || busy || label.trim().length === 0}
+            onClick={() => void createEverywhere()}
+          >
+            Создать во всех проектах
+          </Button>
+        </div>
+
+        {columns === null ? (
+          <p className="text-xs text-muted-foreground">Загружаем…</p>
+        ) : columns.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Своих колонок в пространстве пока нет.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {columns.map((c) => (
+              <li
+                key={c.label}
+                className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm">{c.label}</span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  в проектах: {c.projectCount}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={!canManage || busy}
+                  onClick={() => void deleteEverywhere(c.label)}
+                >
+                  Удалить у всех
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          {canManage
+            ? 'При удалении задачи из колонки переезжают в «Черновики» — они не пропадут, но обратно не вернутся. В каждом проекте не больше 5 своих колонок.'
+            : 'Колонки меняет руководитель или владелец пространства.'}
         </p>
       </CardContent>
     </Card>
