@@ -3159,6 +3159,8 @@ function agentMeta(agentName: string | null): { name: string; sub: string } {
       return { name: 'Grillme-агент', sub: 'Claude Opus 4.7' };
     case 'ralph-verify':
       return { name: 'Верификатор', sub: 'Claude Sonnet 4.6' };
+    case 'telegram-composer':
+      return { name: 'Конструктор задач', sub: 'Telegram' };
     case 'ralph-dispatcher':
     case null:
       return { name: 'Диспетчер', sub: 'Claude Code/Opus' };

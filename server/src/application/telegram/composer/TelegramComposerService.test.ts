@@ -48,6 +48,8 @@ function makeHarness(opts?: {
   telegramUsernames?: Record<string, string>;
   // Фиксированные часы: «конец недели» иначе плавал бы по дню прогона тестов.
   now?: () => Date;
+  // 'throw' — CreateTaskComment отказывает (нет доступа): проверяем, что задача всё равно создана.
+  commentOutcome?: 'throw';
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
@@ -55,6 +57,7 @@ function makeHarness(opts?: {
   const aiOutcome = opts?.aiOutcome ?? (aiSegments ? undefined : 'enqueue-throw');
   const kanbanByProject = opts?.kanbanByProject ?? {};
   const telegramUsernames = opts?.telegramUsernames ?? {};
+  const commentOutcome = opts?.commentOutcome;
 
   const drafts = new Map<string, TelegramTaskDraft>();
   let seq = 0;
@@ -70,6 +73,14 @@ function makeHarness(opts?: {
     taskId: string;
     filename: string;
     mimeType: string;
+  }[] = [];
+  const comments: {
+    taskId: string;
+    projectId: string;
+    ownerUserId: string;
+    body: string;
+    actorKind?: string;
+    agentName?: string;
   }[] = [];
 
   const draftsRepo = {
@@ -335,6 +346,20 @@ function makeHarness(opts?: {
         return {} as any;
       },
     },
+    createTaskComment: {
+      async execute(input: any) {
+        if (commentOutcome === 'throw') throw new Error('нет доступа к задаче (тест)');
+        comments.push({
+          taskId: input.taskId,
+          projectId: input.projectId,
+          ownerUserId: input.ownerUserId,
+          body: input.body,
+          actorKind: input.actorKind,
+          agentName: input.agentName,
+        });
+        return { id: `c${comments.length}` } as any;
+      },
+    },
     idGen: () => 'uuid',
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
@@ -354,6 +379,7 @@ function makeHarness(opts?: {
     updatedDescriptions,
     downloadedFileIds,
     uploadedAttachments,
+    comments,
   };
 }
 
@@ -659,6 +685,57 @@ test('истёкший/неизвестный черновик → алерт, �
   const h = makeHarness();
   await h.service.handleCallback(cq('tc:nope'));
   assert.equal(h.createTaskCalls.length, 0);
+});
+
+// ===================== Оригинал сообщения в комментарии =====================
+
+test('ручной флоу: созданная задача получает комментарий с оригиналом сообщения', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' });
+  await h.service.startFromMessage(111, 500, '+Альфа починить сборку на проде');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.comments.length, 1);
+  const c = h.comments[0]!;
+  assert.equal(c.taskId, 't1');
+  assert.equal(c.projectId, 'p1');
+  assert.equal(c.actorKind, 'agent');
+  assert.equal(c.agentName, 'telegram-composer');
+  assert.match(c.body, /Оригинал сообщения/);
+  assert.match(c.body, /починить сборку на проде/); // текст ДО перефраза
+});
+
+test('AI-сегменты: оригинал уходит комментарием в каждую созданную задачу', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p1', name: 'Альфа' },
+      { id: 'p2', name: 'Бета' },
+    ],
+    aiSegments: [
+      seg1({ id: 's1', title: 'Раз', projectId: 'p1', projectName: 'Альфа' }),
+      seg1({ id: 's2', title: 'Два', projectId: 'p2', projectName: 'Бета' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'надо сделать раз и два');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 2);
+  assert.equal(h.comments.length, 2);
+  // Оригинал общий для всех сегментов одного сообщения.
+  assert.ok(h.comments.every((c) => /надо сделать раз и два/.test(c.body)));
+  assert.deepEqual(
+    h.comments.map((c) => c.taskId),
+    ['t1', 't2'],
+  );
+});
+
+test('отказ комментария не валит создание задачи', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout', commentOutcome: 'throw' });
+  await h.service.startFromMessage(111, 500, '+Альфа что-то важное');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1); // задача создана
+  assert.equal(h.comments.length, 0); // комментарий не записался — и это ок
 });
 
 // ===================== AI-перефраз (compose) =====================

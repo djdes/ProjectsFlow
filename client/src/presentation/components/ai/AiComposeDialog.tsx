@@ -189,6 +189,9 @@ export function AiComposeDialog({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   // Монотонный счётчик: «Отмена»/закрытие инкрементит → поздний результат отбрасывается.
   const reqIdRef = useRef(0);
+  // Текст, с которого начали перефраз: поле правится и дальше, а комментарий-оригинал
+  // должен хранить именно то, что ушло в модель.
+  const sourceTextRef = useRef('');
   // Ленивый pass-2 («Продвинутый»): грузится при первом открытии вкладки. idle→loading→ready|error.
   const [advancedPhase, setAdvancedPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [advancedById, setAdvancedById] = useState<Record<string, string>>({});
@@ -267,6 +270,7 @@ export function AiComposeDialog({
     setAdvancedById({});
     setAdvancedErr('');
     setPhase('loading');
+    sourceTextRef.current = trimmed; // оригинал ДО перефраза — уйдёт комментарием к задачам
     try {
       const res = await composeTasks.execute({ text: trimmed, projectId });
       if (reqId !== reqIdRef.current) return;
@@ -393,6 +397,8 @@ export function AiComposeDialog({
 
     let ok = 0;
     let droppedAssignees = 0;
+    const source = sourceTextRef.current.trim();
+    const originalComment = source ? `**Оригинал сообщения:**\n\n${source}` : '';
     setProgress({ done: 0, total: included.length });
     for (const r of included) {
       const seg = result.segments.find((s) => s.id === r.id);
@@ -430,13 +436,20 @@ export function AiComposeDialog({
           currentUpdated = true;
         } else {
           if (!createAssignee) throw new Error('Не удалось определить ответственного');
-          await taskRepository.create(targetId, {
+          const createdTask = await taskRepository.create(targetId, {
             description,
             status: 'todo',
             ralphMode,
             assigneeUserId: createAssignee,
             deadline: r.deadline ?? undefined,
           });
+          // Оригинал текста ДО перефраза — первым комментарием (как в TG-конструкторе).
+          // Best-effort и без уведомлений: это архивная запись, а не обращение к людям.
+          if (originalComment) {
+            void taskRepository
+              .createComment(targetId, createdTask.id, originalComment, { mode: 'none' })
+              .catch(() => {});
+          }
         }
         ok += 1;
       } catch (e) {

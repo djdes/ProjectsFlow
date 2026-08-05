@@ -22,6 +22,7 @@ import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
+import type { CreateTaskComment } from '../../task/CreateTaskComment.js';
 import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { parseDonePrefix } from './parseDonePrefix.js';
@@ -79,6 +80,8 @@ type Deps = {
   readonly waitForAiPromptJob: WaitForAiPromptJob;
   readonly uploadAttachment?: UploadTaskAttachment;
   readonly updateTask?: UpdateTask;
+  // Оригинал сообщения — первым комментарием созданной задачи (см. postOriginalComment).
+  readonly createTaskComment: Pick<CreateTaskComment, 'execute'>;
 };
 
 // composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
@@ -1211,6 +1214,7 @@ export class TelegramComposerService {
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
       await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+      await this.postOriginalComment(task.id, targetId, userId, text);
       const attachmentResult = await this.attachDraftAttachments(
         draft.attachments,
         task.id,
@@ -2384,6 +2388,10 @@ export class TelegramComposerService {
         summary.push(`⚠️ ${escapeHtml(seg.title.trim() || excerpt(seg.body, 40))} — не удалось`);
       }
     }
+    // Оригинал исходного сообщения — в каждую созданную задачу (для N сегментов оригинал общий).
+    for (const target of createdTargets) {
+      await this.postOriginalComment(target.taskId, target.projectId, userId, draft.taskText ?? '');
+    }
     const downloadCache: AttachmentDownloadCache = new Map();
     let attachmentResult: AttachmentResult = { attached: 0, failed: 0 };
     for (const target of createdTargets) {
@@ -2431,6 +2439,32 @@ export class TelegramComposerService {
       await this.deps.client.answerCallbackQuery(cqId, {
         text: created > 0 ? 'Создано' : 'Не удалось — повторю через минуту',
       });
+    }
+  }
+
+  // Оригинал исходного TG-сообщения — первым комментарием созданной задачи: пользователь
+  // видит, что именно он писал, до AI-перефраза. Best-effort: CreateTaskComment гоняет
+  // requireTaskModifyAccess и может отказать (например, делегированная inbox-задача) —
+  // сбой комментария не должен валить уже созданную задачу.
+  private async postOriginalComment(
+    taskId: string,
+    projectId: string,
+    userId: string,
+    original: string,
+  ): Promise<void> {
+    const text = original.trim();
+    if (text.length === 0) return;
+    try {
+      await this.deps.createTaskComment.execute({
+        projectId,
+        taskId,
+        ownerUserId: userId,
+        body: `**Оригинал сообщения:**\n\n${text}`,
+        actorKind: 'agent',
+        agentName: 'telegram-composer',
+      });
+    } catch (err) {
+      console.warn('[tg-composer] postOriginalComment failed:', err);
     }
   }
 

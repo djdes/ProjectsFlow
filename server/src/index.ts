@@ -967,6 +967,7 @@ const telegramComposer = new TelegramComposerService({
   members: projectMemberRepo,
   projects: projectRepo,
   users: userRepo,
+  createTaskComment: createTaskCommentUseCase,
   createTask: new CreateTask({
     approval: taskApprovalService,
     workerPolicy,
