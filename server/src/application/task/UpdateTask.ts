@@ -1,6 +1,6 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
-import type { RalphMode, Task, TaskPriority } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
 import type { ActivityFieldChange } from '../../domain/activity/ActivityEvent.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -42,6 +42,8 @@ export type UpdateTaskCommand = {
   readonly startDate?: string | null;
   // null = убрать приоритет; undefined = не менять.
   readonly priority?: TaskPriority | null;
+  // null = сбросить тип задачи; undefined = не менять.
+  readonly taskType?: TaskType | null;
 };
 
 export class UpdateTask {
@@ -72,6 +74,7 @@ export class UpdateTask {
     if (input.deadline !== undefined) patch.deadline = input.deadline;
     if (input.startDate !== undefined) patch.startDate = input.startDate;
     if (input.priority !== undefined) patch.priority = input.priority;
+    if (input.taskType !== undefined) patch.taskType = input.taskType;
 
     const updated = await this.deps.tasks.update(input.taskId, patch, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);

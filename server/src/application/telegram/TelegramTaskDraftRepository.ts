@@ -4,6 +4,7 @@
 // См. db/048. Заполняется TelegramComposerService, читается им же при callback'ах.
 
 import type { VisibleKanbanStatus } from '../../domain/kanban/KanbanSettings.js';
+import type { TaskType } from '../../domain/task/Task.js';
 
 // Лайфцикл-статус черновика конструктора (НЕ путать с targetStatus = колонка канбана задачи).
 export type TelegramTaskDraftStatus =
@@ -81,6 +82,9 @@ export type TelegramDraftSegment = {
   // Хранится канонический ключ статуса (backlog/manual/todo/done); имя колонки резолвится
   // под проект сегмента при рендере. См. db/067 (поле внутри JSON segments).
   readonly targetStatus: VisibleKanbanStatus | null;
+  // Тип задачи по классификации модели ('feature' | 'bug'). null/отсутствует = не определён
+  // (в том числе у черновиков, созданных до db/153).
+  readonly taskType?: TaskType | null;
 };
 
 export type TelegramTaskDraft = {

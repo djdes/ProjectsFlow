@@ -709,6 +709,8 @@ export const tasks = mysqlTable(
     startDate: date('start_date', { mode: 'string' }),
     // Приоритет 1..4 (1=urgent, 4=low — стиль Todoist). NULL = без приоритета. См. db/041.
     priority: tinyint('priority', { unsigned: true }),
+    // Тип задачи: 'feature' | 'bug'. NULL = не определён. См. db/153.
+    taskType: varchar('task_type', { length: 16 }),
     // Мягкое удаление (db/134). NULL = живая задача. Заполнено = задача в корзине:
     // скрыта из ВСЕХ выборок, но строка и все её child-таблицы целы, поэтому
     // восстановление возвращает задачу с ТЕМ ЖЕ id.

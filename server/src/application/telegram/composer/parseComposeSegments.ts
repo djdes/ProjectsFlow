@@ -3,6 +3,8 @@
 // (client/src/application/ai/ComposeTasks.ts), но без advancedBody (pass-2 не используем).
 // Устойчив к ```-обёрткам и тексту вокруг JSON. Бросает на нераспознаваемом ответе.
 
+import { isTaskType, type TaskType } from '../../../domain/task/Task.js';
+
 export type ParsedComposeSegment = {
   readonly title: string;
   readonly body: string; // simpleBody
@@ -11,6 +13,9 @@ export type ParsedComposeSegment = {
   readonly assigneeUserId: string | null;
   readonly assigneeName: string | null;
   readonly deadline: string | null; // YYYY-MM-DD
+  // Тип задачи по классификации модели. null = модель не определила (старый промпт,
+  // незнакомое значение) — тогда тип у задачи остаётся пустым.
+  readonly taskType: TaskType | null;
 };
 
 export class ComposeParseError extends Error {
@@ -68,6 +73,7 @@ export function parseComposeSegments(raw: string): ParsedComposeSegment[] {
       assigneeUserId: str(o, 'assigneeUserId'),
       assigneeName: str(o, 'assigneeName'),
       deadline: validDeadline(o['deadline']),
+      taskType: isTaskType(o['taskType']) ? o['taskType'] : null,
     };
   });
   // Сегменты без какого-либо текста выкидываем — создавать пустую задачу нельзя.

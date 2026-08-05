@@ -442,6 +442,7 @@ export function AiComposeDialog({
             ralphMode,
             assigneeUserId: createAssignee,
             deadline: r.deadline ?? undefined,
+            taskType: seg.taskType,
           });
           // Оригинал текста ДО перефраза — первым комментарием (как в TG-конструкторе).
           // Best-effort и без уведомлений: это архивная запись, а не обращение к людям.

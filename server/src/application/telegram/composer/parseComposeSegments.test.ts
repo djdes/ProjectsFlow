@@ -28,6 +28,22 @@ test('парсит валидный compose-JSON в сегменты', () => {
   assert.equal(segs[0]!.deadline, '2026-06-09');
 });
 
+test('taskType: распознаёт feature/bug, мусор и отсутствие → null', () => {
+  const raw = JSON.stringify({
+    segments: [
+      { id: 's1', title: 'Баг', simpleBody: 'падает', taskType: 'bug' },
+      { id: 's2', title: 'Фича', simpleBody: 'сделать', taskType: 'feature' },
+      { id: 's3', title: 'Мусор', simpleBody: 'тело', taskType: 'chore' },
+      { id: 's4', title: 'Без типа', simpleBody: 'тело' },
+    ],
+  });
+  const segs = parseComposeSegments(raw);
+  assert.deepEqual(
+    segs.map((s) => s.taskType),
+    ['bug', 'feature', null, null],
+  );
+});
+
 test('устойчив к ```-обёртке и тексту вокруг JSON', () => {
   const raw = 'Вот результат:\n```json\n{"segments":[{"id":"s1","title":"Т","simpleBody":"тело"}]}\n```\nготово';
   const segs = parseComposeSegments(raw);

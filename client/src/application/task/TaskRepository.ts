@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskVersionsResult } from '@/domain/task/TaskVersion';
@@ -32,6 +32,8 @@ export type CreateTaskInput = {
   readonly parentTaskId?: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета.
   readonly priority?: TaskPriority | null;
+  // Тип задачи. null/undefined = не определён.
+  readonly taskType?: TaskType | null;
 };
 
 export type UpdateTaskInput = {
@@ -49,6 +51,8 @@ export type UpdateTaskInput = {
   readonly startDate?: string | null;
   // null = убрать приоритет; undefined = не менять.
   readonly priority?: TaskPriority | null;
+  // null = сбросить тип задачи; undefined = не менять.
+  readonly taskType?: TaskType | null;
 };
 
 export type MoveTaskInput = {

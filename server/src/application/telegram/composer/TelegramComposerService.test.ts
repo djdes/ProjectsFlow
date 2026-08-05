@@ -13,6 +13,7 @@ type CreateTaskCall = {
   deadline?: string | null;
   status?: string;
   allowInboxDelegation?: boolean;
+  taskType?: 'feature' | 'bug' | null;
 };
 
 // Тексты кнопок из replyMarkup (для проверки пикера колонок).
@@ -34,6 +35,7 @@ type AiSeg = {
   assigneeUserId: string | null;
   assigneeName: string | null;
   deadline: string | null;
+  taskType?: 'feature' | 'bug' | null;
 };
 
 function makeHarness(opts?: {
@@ -281,6 +283,7 @@ function makeHarness(opts?: {
           deadline: input.deadline ?? null,
           status: input.status,
           allowInboxDelegation: input.allowInboxDelegation ?? false,
+          taskType: input.taskType ?? null,
         });
         return {
           id: `t${createTaskCalls.length}`,
@@ -1230,6 +1233,31 @@ const seg1 = (over: Partial<AiSeg> = {}): AiSeg => ({
   assigneeName: null,
   deadline: null,
   ...over,
+});
+
+test('Тип: классификация модели доезжает до создаваемой задачи', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [
+      seg1({ id: 's1', title: 'Падает сборка', taskType: 'bug' }),
+      seg1({ id: 's2', title: 'Новый экспорт', taskType: 'feature' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сборка падает, и нужен экспорт');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.deepEqual(
+    h.createTaskCalls.map((c) => c.taskType),
+    ['bug', 'feature'],
+  );
+});
+
+test('Тип: модель не определила → задача создаётся без типа', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiSegments: [seg1()] });
+  await h.service.startFromMessage(111, 500, 'сделать дело');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.taskType, null);
 });
 
 test('Колонка: дефолт по умолчанию — backlog (AI)', async () => {

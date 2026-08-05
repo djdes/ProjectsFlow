@@ -44,6 +44,7 @@ export type TaskDto = Omit<
   | 'startDate'
   | 'parentTaskId'
   | 'priority'
+  | 'taskType'
   | 'statusBeforeDone'
   | 'icon'
   | 'cover'
@@ -72,6 +73,8 @@ export type TaskDto = Omit<
   // Optional — старый backend без db/107 не присылает.
   parentTaskId?: string | null;
   priority?: import('@/domain/task/Task').TaskPriority | null;
+  // Optional — старый backend без db/153 не присылает.
+  taskType?: import('@/domain/task/Task').TaskType | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -121,6 +124,7 @@ export function fromDto(dto: TaskDto): Task {
     startDate: dto.startDate ?? null,
     parentTaskId: dto.parentTaskId ?? null,
     priority: dto.priority ?? null,
+    taskType: dto.taskType ?? null,
   };
 }
 

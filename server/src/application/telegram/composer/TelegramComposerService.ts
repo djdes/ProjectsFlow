@@ -1550,6 +1550,7 @@ export class TelegramComposerService {
         // null = дефолт 'backlog' (ЧЕРНОВИКИ) пока юзер не выбрал колонку; forceStatus='done'
         // приходит из «Готово»-режима и ставит все сегменты сразу в «Готово».
         targetStatus: forceStatus,
+        taskType: s.taskType,
       });
     }
     return out;
@@ -2368,6 +2369,7 @@ export class TelegramComposerService {
           deadline: seg.deadline,
           assigneeUserId: assigneeUserId ?? userId,
           allowInboxDelegation: delegatedInbox,
+          taskType: seg.taskType ?? null,
         });
         created += 1;
         if (created === 1) {

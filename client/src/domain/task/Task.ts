@@ -41,6 +41,18 @@ export type TaskPriority = 1 | 2 | 3 | 4;
 
 export const TASK_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
 
+// Тип задачи: новая функциональность или починка сломанного. null = не определён.
+// Проставляется автоматически при разборе сообщения, меняется вручную в панели задачи.
+// Mirrors server/src/domain/task/Task.ts. См. db/153.
+export type TaskType = 'feature' | 'bug';
+
+export const TASK_TYPES: readonly TaskType[] = ['feature', 'bug'];
+
+export const TASK_TYPE_LABEL: Record<TaskType, string> = {
+  feature: 'Фича',
+  bug: 'Баг',
+};
+
 // Метаданные для UI dropdown / badge — label, описание (tooltip), иконка.
 // Иконки — emoji для быстрой визуальной идентификации в плотной канбан-сетке.
 export const RALPH_MODE_META: Record<RalphMode, { label: string; description: string; icon: string }> = {
@@ -104,6 +116,8 @@ export type Task = {
   readonly parentTaskId: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
   readonly priority: TaskPriority | null;
+  // Тип задачи ('feature' | 'bug'). null = не определён. См. db/153.
+  readonly taskType: TaskType | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

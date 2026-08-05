@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
-import type { TaskPriority } from '@/domain/task/Task';
+import type { TaskPriority, TaskType } from '@/domain/task/Task';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
@@ -18,6 +18,7 @@ function mk(overrides: {
   createdAt?: Date;
   deadline?: string | null;
   priority?: TaskPriority | null;
+  taskType?: TaskType | null;
   assigneeId?: string;
   assigneeName?: string;
   position?: number;
@@ -48,6 +49,7 @@ function mk(overrides: {
     startDate: null,
     parentTaskId: null,
     priority: overrides.priority ?? null,
+    taskType: overrides.taskType ?? null,
     projectName: overrides.projectName ?? 'Проект 1',
     isInbox: overrides.isInbox ?? false,
     canModify: true,

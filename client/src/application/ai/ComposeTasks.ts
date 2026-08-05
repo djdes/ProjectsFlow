@@ -1,4 +1,5 @@
 import type { AiPromptRepository } from './AiPromptRepository';
+import type { TaskType } from '@/domain/task/Task';
 import { ImproveTaskDescriptionError } from './ImproveTaskDescription';
 
 // Один сегмент = одна будущая задача. Модель разбивает свободный текст на сегменты,
@@ -18,6 +19,8 @@ export type ComposeSegment = {
   readonly assigneeName: string | null;
   // Дедлайн 'YYYY-MM-DD' (только при явном сроке в тексте) или null.
   readonly deadline: string | null;
+  // Тип задачи по классификации модели (db/153). null = не определила.
+  readonly taskType: TaskType | null;
 };
 
 export type ComposeResult = {
@@ -235,6 +238,7 @@ export function parseComposeResult(raw: string): ComposeResult {
           ? (o['assigneeName'] as string)
           : null,
       deadline: validDeadline(o['deadline']),
+      taskType: o['taskType'] === 'feature' || o['taskType'] === 'bug' ? o['taskType'] : null,
     };
   });
   if (segments.length === 0) {

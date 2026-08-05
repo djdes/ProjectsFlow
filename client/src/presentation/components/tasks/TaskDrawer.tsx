@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Tag, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -77,6 +77,7 @@ import { AssigneeTaskButton } from './AssigneeTaskButton';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
+import { TaskTypeChip } from './TaskTypeChip';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
 import { PropertyRow, PROPERTY_VALUE_CLASS } from './PropertyRow';
 import { CopyTaskButton } from './CopyTaskButton';
@@ -462,6 +463,7 @@ const PROP_ICON: Record<TaskPropertyKey, LucideIcon> = {
   assignee: UserPlus,
   deadline: CalendarClock,
   priority: Flag,
+  taskType: Tag,
   mode: Bot,
   files: Paperclip,
   created: Clock,
@@ -470,6 +472,7 @@ const PROP_LABEL: Record<TaskPropertyKey, string> = {
   assignee: 'Ответственный',
   deadline: 'Дедлайн',
   priority: 'Приоритет',
+  taskType: 'Тип',
   mode: 'Режим',
   files: 'Файлы',
   created: 'Создано',
@@ -2316,6 +2319,14 @@ export function TaskDrawer({
                         disabled={!canEdit}
                       />
                     ),
+                    taskType: (
+                      <TaskTypeChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
                     mode: (
                       <TaskRalphModeChip
                         task={task}
@@ -2352,6 +2363,7 @@ export function TaskDrawer({
                     assignee: true,
                     deadline: true,
                     priority: true,
+                    taskType: true,
                     mode: true,
                     files: true,
                     created: true,

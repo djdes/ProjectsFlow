@@ -34,6 +34,8 @@ export function groupAssignedTasks(
       return groupByDeadline(tasks, now);
     case 'priority':
       return groupByPriority(tasks);
+    case 'taskType':
+      return groupByTaskType(tasks);
     case 'project':
     default:
       return groupByProject(tasks, direction, projectOrder);
@@ -248,6 +250,22 @@ function groupByPriority(tasks: readonly InboxBlockTask[]): AssignedDisplayGroup
       { key: '3', label: 'Средний' },
       { key: '4', label: 'Низкий' },
       { key: 'none', label: 'Без приоритета' },
+    ],
+    bucketOf,
+    within,
+  );
+}
+
+function groupByTaskType(tasks: readonly InboxBlockTask[]): AssignedDisplayGroup[] {
+  const bucketOf = (t: InboxBlockTask): string => t.taskType ?? 'none';
+  const within = (a: InboxBlockTask, b: InboxBlockTask): number => a.position - b.position;
+  // Баги первыми: сломанное важнее нового. Подписи — из domain/task/taskTypeMeta.ts.
+  return buildFixed(
+    tasks,
+    [
+      { key: 'bug', label: 'Баги' },
+      { key: 'feature', label: 'Фичи' },
+      { key: 'none', label: 'Без типа' },
     ],
     bucketOf,
     within,

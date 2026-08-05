@@ -4,8 +4,8 @@
 
 // Режим группировки личного блока на «Входящих».
 // project — по проекту (дефолт, как было исторически); created — по дате создания;
-// deadline — по дедлайну; priority — по приоритету.
-export const ASSIGNED_GROUPINGS = ['project', 'created', 'deadline', 'priority'] as const;
+// deadline — по дедлайну; priority — по приоритету; taskType — по типу (Фича/Баг).
+export const ASSIGNED_GROUPINGS = ['project', 'created', 'deadline', 'priority', 'taskType'] as const;
 export type AssignedGrouping = (typeof ASSIGNED_GROUPINGS)[number];
 
 // Дефолт — «дедлайн»: блок ответственных открывается 3 колонками по времени (Без срока/
@@ -18,13 +18,16 @@ export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {
   created: 'Дата создания',
   deadline: 'Дедлайн',
   priority: 'Приоритет',
+  taskType: 'Тип',
 };
 
-// Ключи строк-свойств в окне задачи. Порядок ниже — дефолтный (как было исторически).
+// Ключи строк-свойств в окне задачи. Порядок ниже — дефолтный (как было исторически;
+// новые ключи normalizeTaskPropertyOrder дописывает в конец сохранённого порядка).
 export const TASK_PROPERTY_KEYS = [
   'assignee',
   'deadline',
   'priority',
+  'taskType',
   'mode',
   'files',
   'created',

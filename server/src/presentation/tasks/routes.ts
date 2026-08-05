@@ -301,6 +301,7 @@ export function tasksRouter(deps: Deps): Router {
         startDate: body.startDate ?? null,
         parentTaskId: body.parentTaskId ?? null,
         priority: body.priority ?? null,
+        taskType: body.taskType ?? null,
       });
       deps.notifyTaskChanged(projectId);
       void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
@@ -368,6 +369,7 @@ export function tasksRouter(deps: Deps): Router {
         deadline: body.deadline,
         startDate: body.startDate,
         priority: body.priority,
+        taskType: body.taskType,
       });
       deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       res.json({ task: toDto(task) });

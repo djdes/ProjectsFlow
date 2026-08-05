@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus } from './Task.js';
+import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from './Task.js';
 import type { TaskAssignee } from './TaskAssignee.js';
 
 export type TaskVersionField =
@@ -8,6 +8,7 @@ export type TaskVersionField =
   | 'assignee'
   | 'deadline'
   | 'priority'
+  | 'taskType'
   | 'ralphMode'
   | 'appearance'
   | 'parent'
@@ -32,6 +33,8 @@ export type TaskSnapshot = {
   readonly startDate: string | null;
   readonly parentTaskId: string | null;
   readonly priority: TaskPriority | null;
+  // Может отсутствовать в снимках, снятых до db/153 — читаем как «не определён».
+  readonly taskType?: TaskType | null;
   readonly ralphCancelRequestedAt: string | null;
   readonly ralphCancelRequestedBy: string | null;
 };
@@ -70,6 +73,7 @@ export function snapshotOfTask(task: Task): TaskSnapshot {
     startDate: task.startDate,
     parentTaskId: task.parentTaskId,
     priority: task.priority,
+    taskType: task.taskType,
     ralphCancelRequestedAt: task.ralphCancelRequestedAt?.toISOString() ?? null,
     ralphCancelRequestedBy: task.ralphCancelRequestedBy,
   };
@@ -99,6 +103,7 @@ export function changedTaskFields(
   }
   if (previous.parentTaskId !== current.parentTaskId) fields.push('parent');
   if (previous.priority !== current.priority) fields.push('priority');
+  if ((previous.taskType ?? null) !== (current.taskType ?? null)) fields.push('taskType');
   if (
     previous.ralphCancelRequestedAt !== current.ralphCancelRequestedAt ||
     previous.ralphCancelRequestedBy !== current.ralphCancelRequestedBy

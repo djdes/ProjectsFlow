@@ -45,6 +45,17 @@ export type TaskPriority = 1 | 2 | 3 | 4;
 
 export const TASK_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
 
+// Тип задачи: новая функциональность или починка сломанного. null = не определён
+// (все задачи до db/153 и всё, что заводят без явного типа). Compose-пайплайн
+// проставляет автоматически, человек может переопределить в панели задачи.
+export type TaskType = 'feature' | 'bug';
+
+export const TASK_TYPES: readonly TaskType[] = ['feature', 'bug'];
+
+export function isTaskType(value: unknown): value is TaskType {
+  return value === 'feature' || value === 'bug';
+}
+
 export type Task = {
   readonly id: string;
   readonly projectId: string;
@@ -90,6 +101,8 @@ export type Task = {
   readonly parentTaskId: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
   readonly priority: TaskPriority | null;
+  // Тип задачи: 'feature' | 'bug'. null = не определён. См. db/153.
+  readonly taskType: TaskType | null;
   // Мягкое удаление (db/134). null = живая задача, Date = лежит в корзине.
   // Optional, а не обязательное: обычные выборки задач отдают только живые задачи,
   // поэтому подавляющее большинство мест не должно думать про это поле —

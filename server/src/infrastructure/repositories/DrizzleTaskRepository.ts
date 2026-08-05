@@ -18,6 +18,7 @@ import {
 } from '../db/schema.js';
 import {
   TASK_STATUSES,
+  isTaskType,
   type RalphMode,
   type Task,
   type TaskPriority,
@@ -91,6 +92,9 @@ function toTask(row: TaskRowJoined): Task {
     priority: row.priority !== null && row.priority !== undefined
       ? (row.priority as TaskPriority)
       : null,
+    // VARCHAR в БД: неизвестное значение (ручной UPDATE, будущий тип со старого клиента)
+    // читаем как «не определён», а не протаскиваем мусор в домен.
+    taskType: isTaskType(row.taskType) ? row.taskType : null,
     deletedAt: row.deletedAt ?? null,
     deletedBy: row.deletedBy ?? null,
     createdAt: row.createdAt,
@@ -135,6 +139,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         startDate: tasks.startDate,
         parentTaskId: tasks.parentTaskId,
         priority: tasks.priority,
+        taskType: tasks.taskType,
         deletedAt: tasks.deletedAt,
         deletedBy: tasks.deletedBy,
         createdAt: tasks.createdAt,
@@ -249,6 +254,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
       ...(input.parentTaskId !== undefined ? { parentTaskId: input.parentTaskId } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');
@@ -278,6 +284,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         | 'startDate'
         | 'parentTaskId'
         | 'priority'
+        | 'taskType'
       >
     > = {};
     if (patch.assigneeUserId !== undefined) set.assigneeUserId = patch.assigneeUserId;
@@ -293,6 +300,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (patch.startDate !== undefined) set.startDate = patch.startDate;
     if (patch.parentTaskId !== undefined) set.parentTaskId = patch.parentTaskId;
     if (patch.priority !== undefined) set.priority = patch.priority;
+    if (patch.taskType !== undefined) set.taskType = patch.taskType;
 
     if (Object.keys(set).length > 0) {
       await this.db.update(tasks).set(set).where(activeTasks(eq(tasks.id, taskId)));

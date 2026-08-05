@@ -24,6 +24,9 @@ const prioritySchema = z
   .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
   .nullable();
 
+// Тип задачи (db/153). nullable: null = сбросить в «не определён».
+const taskTypeSchema = z.enum(['feature', 'bug']).nullable();
+
 // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. nullable: null = убрать иконку.
 // Лимит 2_000_000 — вмещает base64 data-URL картинки, защищая от гигантского payload'а.
 const iconSchema = z.string().max(2_000_000).nullable();
@@ -54,6 +57,7 @@ export const createTaskSchema = z.object({
   // Подзадача (db/107): id родительской задачи того же проекта.
   parentTaskId: z.string().uuid().nullable().optional(),
   priority: prioritySchema.optional(),
+  taskType: taskTypeSchema.optional(),
 });
 
 export const updateTaskSchema = z
@@ -66,6 +70,7 @@ export const updateTaskSchema = z
     deadline: deadlineSchema.optional(),
     startDate: deadlineSchema.optional(),
     priority: prioritySchema.optional(),
+    taskType: taskTypeSchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 

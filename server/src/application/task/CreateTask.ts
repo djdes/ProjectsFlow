@@ -3,7 +3,7 @@ import {
   AssigneeNotSharedMemberError,
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskApprovalService } from './TaskApprovalService.js';
 import type { WorkerPolicy } from '../workspace/WorkerPolicy.js';
@@ -66,6 +66,8 @@ export type CreateTaskCommand = {
   readonly parentTaskId?: string | null;
   // Приоритет 1..4. null/undefined — без приоритета.
   readonly priority?: TaskPriority | null;
+  // Тип задачи ('feature' | 'bug'). null/undefined — не определён.
+  readonly taskType?: TaskType | null;
   // true — атрибутировать создателя (created_by) НЕ на actor'а (ownerUserId), а на владельца
   // проекта. Для автоматизации (агент создаёт задачу от имени диспетчера-админа): расход
   // воркера по такой задаче должен списываться на владельца проекта, а не на безлимитного
@@ -174,6 +176,7 @@ export class CreateTask {
       startDate: input.startDate ?? null,
       parentTaskId,
       priority: input.priority ?? null,
+      taskType: input.taskType ?? null,
     });
 
     // Лента действий (best-effort, не блокирует создание).

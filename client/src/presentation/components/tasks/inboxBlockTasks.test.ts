@@ -28,6 +28,7 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
     startDate: null,
     parentTaskId: null,
     priority: null,
+    taskType: null,
     ...overrides,
   };
 }

@@ -18,6 +18,7 @@ import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -329,6 +330,18 @@ function KanbanCardImpl({
         </span>
       )}
       <RalphModeBadge mode={task.ralphMode} />
+      {/* Тип задачи (db/153). Показываем только когда он определён — «без типа» это
+          нормальное состояние большинства задач, и плашка про него была бы шумом. */}
+      {task.taskType && (
+        <span
+          className={cn(
+            'shrink-0 whitespace-nowrap rounded px-1.5 py-px font-medium',
+            TASK_TYPE_META[task.taskType].badge,
+          )}
+        >
+          {TASK_TYPE_META[task.taskType].label}
+        </span>
+      )}
       {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
       {task.status === 'in_progress' && (
         <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">

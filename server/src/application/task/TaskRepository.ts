@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
 
 export type CreateTaskInput = {
   readonly id: string;
@@ -28,6 +28,8 @@ export type CreateTaskInput = {
   readonly parentTaskId?: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета.
   readonly priority?: TaskPriority | null;
+  // Тип задачи. null/undefined = не определён.
+  readonly taskType?: TaskType | null;
 };
 
 export type UpdateTaskPatch = {
@@ -52,6 +54,8 @@ export type UpdateTaskPatch = {
   readonly parentTaskId?: string | null;
   // null = убрать приоритет. undefined = не менять.
   readonly priority?: TaskPriority | null;
+  // null = сбросить тип в «не определён». undefined = не менять.
+  readonly taskType?: TaskType | null;
 };
 
 // Лёгкая ссылка на задачу в корзине (для авто-purge).

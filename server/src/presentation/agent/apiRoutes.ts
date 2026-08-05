@@ -295,6 +295,8 @@ const updateTaskAgentSchema = z
       .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
       .nullable()
       .optional(),
+    // Тип задачи (db/153). null = сбросить в «не определён».
+    taskType: z.enum(['feature', 'bug']).nullable().optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 
@@ -987,6 +989,7 @@ export function agentApiRouter(deps: Deps): Router {
           ralphMode: body.ralphMode,
           deadline: body.deadline ?? null,
           priority: body.priority ?? null,
+          taskType: body.taskType ?? null,
         });
         void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'mcp').catch(() => {});
         // taskToDto ожидает Task с commitCount, но из CreateTask он не приходит — оборачиваем
@@ -1837,6 +1840,7 @@ export function agentApiRouter(deps: Deps): Router {
           ralphMode: body.ralphMode,
           deadline: body.deadline,
           priority: body.priority,
+          taskType: body.taskType,
         });
         res.json({ task: taskToDto(task) });
       } catch (e) {
