@@ -988,6 +988,22 @@ export function KanbanBoard({
     }
   };
 
+  // Свайп карточки полки вправо: сразу в «Готово», без промежуточных колонок. Полка — это
+  // «делаю руками прямо сейчас», и единственный осмысленный следующий шаг у неё один.
+  // Приёмка (db/150) не обходится: сервер сам переведёт задачу в pending_approval, если
+  // в пространстве включено утверждение.
+  const handleQuickComplete = async (task: Task): Promise<void> => {
+    try {
+      await move(task.id, {
+        targetStatus: 'done',
+        beforeTaskId: null,
+        afterTaskId: topAnchorFor('done'),
+      });
+    } catch (err) {
+      toast.error(`Не удалось перенести: ${(err as Error).message}`);
+    }
+  };
+
   // Отмена drag'а (Esc/потеря захвата): гасим индикатор и оверлей сразу, без drop-анимации.
   // Вынесено из JSX: в external-режиме этот же хендлер регистрируется в общем контексте.
   const handleDragCancel = (): void => {
@@ -1195,6 +1211,9 @@ export function KanbanBoard({
           // Полка = колонка 'manual', поэтому и подпись у неё та же (переименование
           // колонки в настройках доски меняет и полку).
           label={resolveColumnLabel(settings?.manual, STATUS_LABEL.manual)}
+          // Свайп карточки вправо на телефоне = «сделано». Тот же путь, что кнопка-стрелка
+          // в мобильном ряду действий, только без прицеливания в мелкую иконку.
+          {...(canEdit ? { onComplete: (t: Task) => handleQuickComplete(t) } : {})}
           tasks={filterTasks(grouped.manual)}
           renderCard={(t) => (
             <KanbanCard

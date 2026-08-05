@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Tag, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -78,6 +78,7 @@ import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { TaskTypeChip } from './TaskTypeChip';
+import { TaskApproverRow } from './TaskApproverRow';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
 import { PropertyRow, PROPERTY_VALUE_CLASS } from './PropertyRow';
 import { CopyTaskButton } from './CopyTaskButton';
@@ -461,6 +462,7 @@ function DrawerShell({
 // Иконки и подписи строк-свойств по ключу (task 11) — единый источник для порядка.
 const PROP_ICON: Record<TaskPropertyKey, LucideIcon> = {
   assignee: UserPlus,
+  approver: ShieldCheck,
   deadline: CalendarClock,
   priority: Flag,
   taskType: Tag,
@@ -470,6 +472,7 @@ const PROP_ICON: Record<TaskPropertyKey, LucideIcon> = {
 };
 const PROP_LABEL: Record<TaskPropertyKey, string> = {
   assignee: 'Ответственный',
+  approver: 'Утверждающий',
   deadline: 'Дедлайн',
   priority: 'Приоритет',
   taskType: 'Тип',
@@ -2312,6 +2315,9 @@ export function TaskDrawer({
                         />
                       </div>
                     ),
+                    // Read-only: утверждающий вычисляется из ролей пространства, а не
+                    // хранится на задаче. Ряд сам скрывается, когда приёмка выключена.
+                    approver: <TaskApproverRow />,
                     deadline: (
                       <TaskDeadlineChip
                         task={task}
@@ -2370,6 +2376,9 @@ export function TaskDrawer({
                   const propVisible: Record<TaskPropertyKey, boolean> = {
                     // Ответственный — показываем ВСЕГДА (даже solo-проект: доступен только «Я»).
                     assignee: true,
+                    // Ряд решает сам, показываться ли (приёмка выключена → null),
+                    // поэтому здесь он всегда «видим».
+                    approver: true,
                     deadline: true,
                     priority: true,
                     taskType: true,

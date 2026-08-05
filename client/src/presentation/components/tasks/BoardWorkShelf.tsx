@@ -3,7 +3,9 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
+import { Check } from 'lucide-react';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 
 type Props = {
   tasks: readonly Task[];
@@ -19,6 +21,8 @@ type Props = {
   // был хардкод «В работе», и одно и то же слово означало разное на доске (колонка manual)
   // и в дайджестах/TG/EOD (статус in_progress).
   label: string;
+  // Свайп карточки вправо = «сделано». undefined — жест выключен (нет прав на правку).
+  onComplete?: (task: Task) => void;
   className?: string;
 };
 
@@ -34,6 +38,7 @@ export function BoardWorkShelf({
   flashKey,
   flashTaskId,
   label,
+  onComplete,
   className,
 }: Props): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
@@ -78,24 +83,88 @@ export function BoardWorkShelf({
           <SortableContext items={tasks.map((t) => t.id)}>
             <div className="flex flex-wrap gap-2">
               {tasks.map((t) => (
-                <div
+                <ShelfCard
                   key={t.id}
-                  // rounded-xl — чтобы вспышка (::after с border-radius: inherit) повторяла
-                  // скругление карточки. Фона и рамки у обёртки нет.
-                  className={cn(
-                    // Явный размер вместо процентов: flex-базис в 100% с max-width
-                    // раскладка трактует неоднозначно, а фиксированный не даёт
-                    // карточкам ни растекаться, ни наезжать друг на друга.
-                    'relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl',
-                    flash && t.id === flashTaskId && 'pf-card-flash',
-                  )}
+                  flashing={flash && t.id === flashTaskId}
+                  {...(onComplete ? { onComplete: () => onComplete(t) } : {})}
                 >
                   {renderCard(t)}
-                </div>
+                </ShelfCard>
               ))}
             </div>
           </SortableContext>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Карточка внутри полки: та же обёртка, что была раньше, плюс свайп «вправо = готово»
+ * на тач-устройствах.
+ *
+ * Почему свайп только здесь, а не на всех карточках доски: полка — единственное место,
+ * где следующий шаг однозначен («делаю руками» → «готово»). В колонках следующий статус
+ * зависит от колонки, и один и тот же жест означал бы разное.
+ *
+ * Кнопочный путь никуда не делся: в мобильном ряду действий карточки есть стрелка
+ * «передать дальше» — свайп её дублирует, а не заменяет.
+ */
+function ShelfCard({
+  children,
+  flashing,
+  onComplete,
+}: {
+  children: React.ReactNode;
+  flashing: boolean;
+  onComplete?: () => void;
+}): React.ReactElement {
+  const { animations } = useMotion();
+  const { ref, offset, armed } = useCardSwipe({
+    disabled: !onComplete,
+    onCommit: () => onComplete?.(),
+  });
+
+  return (
+    <div
+      // rounded-xl — чтобы вспышка (::after с border-radius: inherit) повторяла
+      // скругление карточки. Фона и рамки у обёртки нет.
+      className={cn(
+        // Явный размер вместо процентов: flex-базис в 100% с max-width
+        // раскладка трактует неоднозначно, а фиксированный не даёт
+        // карточкам ни растекаться, ни наезжать друг на друга.
+        'relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl',
+        flashing && 'pf-card-flash',
+      )}
+      // Document-level жест сайдбара не должен перехватывать свайп карточки.
+      data-pf-no-edge-swipe
+      ref={ref}
+    >
+      {/* Подложка: видна ровно настолько, насколько утащили карточку. */}
+      {offset > 0 && (
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-0 flex items-center rounded-xl pl-3 text-sm font-medium transition-colors',
+            armed
+              ? 'bg-emerald-500/25 text-emerald-800 dark:text-emerald-300'
+              : 'bg-emerald-500/10 text-emerald-700/70 dark:text-emerald-300/70',
+          )}
+        >
+          <Check className="mr-1.5 size-4" />
+          Готово
+        </div>
+      )}
+      <div
+        className="relative"
+        style={{
+          transform: offset > 0 ? `translateX(${offset}px)` : undefined,
+          // Возврат на место — только когда палец отпущен (offset обнулён) и анимации
+          // не выключены настройкой/pointer:coarse-правилами проекта.
+          transition: offset === 0 && animations ? 'transform 180ms ease-out' : undefined,
+        }}
+      >
+        {children}
       </div>
     </div>
   );

@@ -25,6 +25,9 @@ export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {
 // новые ключи normalizeTaskPropertyOrder дописывает в конец сохранённого порядка).
 export const TASK_PROPERTY_KEYS = [
   'assignee',
+  // «Утверждающий» — вычисляемый read-only ряд (lead/owner пространства). Стоит сразу за
+  // ответственным: оба отвечают на вопрос «кто по этой задаче люди».
+  'approver',
   'deadline',
   'priority',
   'taskType',
