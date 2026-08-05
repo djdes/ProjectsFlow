@@ -2,7 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { Task } from '@/domain/task/Task';
-import { buildToMeInboxBlockTasks, isPersonalInboxBlockTask } from './inboxBlockTasks';
+import {
+  asAssignedInboxBlockTask,
+  buildToMeInboxBlockTasks,
+  canSendToApproval,
+  isPersonalInboxBlockTask,
+} from './inboxBlockTasks';
 
 const NOW = new Date('2026-07-14T09:00:00.000Z');
 
@@ -33,9 +38,9 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
   };
 }
 
-function assigned(id: string): AssignedTask {
+function assigned(id: string, overrides: Partial<Task> = {}): AssignedTask {
   return {
-    ...task(id, { projectId: 'inbox-other' }),
+    ...task(id, { projectId: 'inbox-other', ...overrides }),
     projectName: 'Входящие',
     isInbox: true,
     canModify: true,
@@ -77,4 +82,25 @@ test('не зеркалит чужого ответственного и дед�
       ['duplicate', 'assigned'],
     ],
   );
+});
+
+test('canSendToApproval: свою задачу сдать можно', () => {
+  assert.equal(canSendToApproval(asAssignedInboxBlockTask(assigned('t1')), 'me'), true);
+});
+
+test('canSendToApproval: чужую задачу сдать нельзя', () => {
+  // «Сдать работу за другого» — не то действие, которое отдаётся жесту.
+  const t = assigned('t2', {
+    assignee: { userId: 'other', displayName: 'Коллега', avatarUrl: null },
+  });
+  assert.equal(canSendToApproval(asAssignedInboxBlockTask(t), 'me'), false);
+});
+
+test('canSendToApproval: задача уже на утверждении — повторно нельзя', () => {
+  const t = assigned('t3', { status: 'pending_approval' });
+  assert.equal(canSendToApproval(asAssignedInboxBlockTask(t), 'me'), false);
+});
+
+test('canSendToApproval: без текущего юзера цель недоступна', () => {
+  assert.equal(canSendToApproval(asAssignedInboxBlockTask(assigned('t4')), null), false);
 });
