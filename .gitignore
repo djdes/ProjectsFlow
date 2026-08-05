@@ -35,3 +35,6 @@ uploads/
 
 # Interface-research artifacts (screenshots of third-party accounts). Keep local.
 reference/
+
+# Subagent-driven-development scratch (ledger, briefs, review packages). Local only.
+.superpowers/
