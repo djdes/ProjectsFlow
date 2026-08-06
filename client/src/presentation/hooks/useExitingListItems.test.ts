@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeOrderedIds } from './useExitingListItems';
+import { mergeOrderedIds, reconcileExitTimers } from './useExitingListItems';
 
 // mergeOrderedIds — единственная чистая часть useExitingListItems (реконсиляция порядка
 // id при появлении/уходе элементов); всё, что зависит от таймеров/React-состояния,
@@ -38,4 +38,42 @@ test('mergeOrderedIds: mixes ghosts and new arrivals in one pass', () => {
 test('mergeOrderedIds: empty prev order just adopts nextIds', () => {
   const merged = mergeOrderedIds([], ['x', 'y']);
   assert.deepEqual(merged, ['x', 'y']);
+});
+
+// reconcileExitTimers — решение «завести/снять таймер коллапса», вынесенное из эффекта
+// useExitingListItems специально для теста без React/DOM/fake-таймеров (ревью, находка
+// Important 2: таймер призрака не отменялся, если элемент вернулся раньше срока).
+
+test('reconcileExitTimers: schedules a timer for an id that just disappeared', () => {
+  const { toSchedule, toClear } = reconcileExitTimers(['a', 'b'], ['a'], new Set());
+  assert.deepEqual(toSchedule, ['b']);
+  assert.deepEqual(toClear, []);
+});
+
+test('reconcileExitTimers: does not re-schedule an id that is already timing out', () => {
+  const { toSchedule, toClear } = reconcileExitTimers(['a', 'b'], ['a'], new Set(['b']));
+  assert.deepEqual(toSchedule, []);
+  assert.deepEqual(toClear, []);
+});
+
+test('reconcileExitTimers: clears the pending timer when an exiting id comes back alive', () => {
+  // 'b' пропало на предыдущем проходе (таймер уже заведён), но теперь снова есть в
+  // nextIds — оптимистичный move откатился/данные вернулись раньше `ms`. Без этой ветки
+  // уже запущенный таймер всё равно сработал бы и вычистил живой элемент из state.
+  const { toSchedule, toClear } = reconcileExitTimers(['a', 'b'], ['a', 'b'], new Set(['b']));
+  assert.deepEqual(toClear, ['b']);
+  assert.deepEqual(toSchedule, []);
+});
+
+test('reconcileExitTimers: a live id with no pending timer needs no action either way', () => {
+  const { toSchedule, toClear } = reconcileExitTimers(['a'], ['a'], new Set());
+  assert.deepEqual(toSchedule, []);
+  assert.deepEqual(toClear, []);
+});
+
+test('reconcileExitTimers: mixes schedule and clear in one pass', () => {
+  // 'b' just disappeared → schedule. 'c' was exiting and came back → clear.
+  const { toSchedule, toClear } = reconcileExitTimers(['a', 'b', 'c'], ['a', 'c'], new Set(['c']));
+  assert.deepEqual(toSchedule, ['b']);
+  assert.deepEqual(toClear, ['c']);
 });

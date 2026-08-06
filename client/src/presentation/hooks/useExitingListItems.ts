@@ -10,6 +10,33 @@ export function mergeOrderedIds(prevOrder: readonly string[], nextIds: readonly 
   return [...prevOrder, ...appended];
 }
 
+// Чистое решение «какие таймеры коллапса завести/снять на этот проход» — вынесено из
+// эффекта, чтобы протестировать без React/DOM/поддельных таймеров. Проходит по ТЕМ ЖЕ
+// id, что и prevOrder (ровно то, что уже отрисовано), и делит их на три исхода:
+//  - toSchedule — id только что пропал из nextIds и ещё не таймерится — завести таймер;
+//  - toClear    — id уже таймерится, НО вернулся живым в nextIds — снять таймер, иначе он
+//                 всё равно сработает через `ms` и вычистит уже живой элемент (баг
+//                 «возврат элемента внутри окна анимации», см. тест ниже);
+//  - (без действия) — id пропал и уже таймерится, либо id живой и не таймерился.
+export function reconcileExitTimers(
+  prevOrder: readonly string[],
+  nextIds: readonly string[],
+  pendingTimerIds: ReadonlySet<string>,
+): { toSchedule: string[]; toClear: string[] } {
+  const nextIdSet = new Set(nextIds);
+  const toSchedule: string[] = [];
+  const toClear: string[] = [];
+  for (const id of prevOrder) {
+    const hasPendingTimer = pendingTimerIds.has(id);
+    if (nextIdSet.has(id)) {
+      if (hasPendingTimer) toClear.push(id);
+      continue;
+    }
+    if (!hasPendingTimer) toSchedule.push(id);
+  }
+  return { toSchedule, toClear };
+}
+
 export type ExitingListEntry<T> = {
   item: T;
   // true — элемента уже нет в текущем `items`, он держится в DOM только на время
@@ -43,7 +70,6 @@ export function useExitingListItems<T>(
 
   useEffect(() => {
     const nextIds = items.map(getId);
-    const nextIdSet = new Set(nextIds);
 
     // Свежее содержимое живых id (призраков не трогаем — их последний вид уже сохранён).
     setItemById((prev) => {
@@ -53,10 +79,21 @@ export function useExitingListItems<T>(
     });
 
     setOrderedIds((prev) => {
-      // orderedIds ДО merge — ровно то, что уже отрисовано; именно среди него ищем id,
-      // только что пропавшие из nextIds, чтобы завести таймер их коллапса один раз.
-      for (const id of prev) {
-        if (nextIdSet.has(id) || timersRef.current.has(id)) continue;
+      // orderedIds ДО merge — ровно то, что уже отрисовано; именно среди него решаем,
+      // какие таймеры коллапса завести/снять (см. reconcileExitTimers).
+      const { toSchedule, toClear } = reconcileExitTimers(prev, nextIds, new Set(timersRef.current.keys()));
+      for (const id of toClear) {
+        // Элемент вернулся живым ДО того, как отыграл собственный таймер коллапса
+        // (оптимистичный move откатился, быстрый двойной тоггл «Скрыть выполненные»,
+        // и т.п. — см. InboxCheckbox.rollback.test.ts). Не снять таймер здесь значило
+        // бы, что он всё равно сработает через `ms` и вычистит уже живой элемент из
+        // orderedIds/itemById — карточка пропала бы и вернулась только со следующей
+        // сменой ссылки `items`, в хвост порядка.
+        const pending = timersRef.current.get(id);
+        if (pending !== undefined) window.clearTimeout(pending);
+        timersRef.current.delete(id);
+      }
+      for (const id of toSchedule) {
         const t = window.setTimeout(() => {
           timersRef.current.delete(id);
           setOrderedIds((cur) => cur.filter((c) => c !== id));

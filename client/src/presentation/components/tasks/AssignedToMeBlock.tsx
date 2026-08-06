@@ -359,9 +359,10 @@ export function AssignedToMeBlock({
   }, [hideDone]);
 
   // Таймстемп ЛЮБОГО своего refresh() — не только после мутации, но и mount-эффекта,
-  // смены вкладки/фильтра, возврата фокуса и т.п. (refresh() пишет сюда безусловно).
-  // Грубый гвард (см. useEffect ниже) на 400мс глушит ЛЮБОЕ SSE-обновление в этом окне,
-  // не только «эхо своей же мутации» — включая легитимное параллельное действие коллеги.
+  // смены вкладки/фильтра, возврата фокуса и т.п. (refresh() пишет сюда безусловно —
+  // И в начале запроса, И по его завершении, см. refresh() ниже). Грубый гвард (см.
+  // useEffect ниже) на 400мс глушит ЛЮБОЕ SSE-обновление в этом окне, не только
+  // «эхо своей же мутации» — включая легитимное параллельное действие коллеги.
   // Осознанный компромисс брифа («грубый гвард»): в среднем такое окно раз в 250-400мс
   // после любого своего рефетча — цена редких секундных задержек чужого realtime-события
   // против частых двойных перерисовок от гарантированного эха своей же мутации.
@@ -403,6 +404,13 @@ export function AssignedToMeBlock({
       }
     } catch (e) {
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
+    } finally {
+      // Штампуем ещё раз ПОСЛЕ применения ответа, не только в начале запроса: на медленной
+      // сети (ответ дольше 400мс) эхо этой же мутации от SSE прилетает уже за пределами
+      // окна, отсчитанного от старта, и второй refetch всё равно проходит гвард ниже.
+      // Отсчёт от конца — гвард действительно перекрывает момент, когда наши же данные
+      // только-только легли в state.
+      lastRefreshAtRef.current = Date.now();
     }
   }, [taskAssigneeRepository]);
 
@@ -1564,8 +1572,14 @@ export function AssignedToMeBlock({
                     <DraggableTask
                       key={item.id}
                       item={item}
-                      disabled={!item.canModify}
+                      disabled={!item.canModify || exiting}
                       selecting={selectionActive}
+                      // Вся ГРУППА-колонка сейчас призрак (useExitingListItems держит её старый
+                      // снимок вместе с карточками) — карточка внутри могла уже переехать в
+                      // другую живую колонку с тем же item.id. Без суффикса unmount призрака
+                      // стёр бы draggableNodes-запись живой карточки, и та молча переставала
+                      // бы таскаться (см. draggableTaskId).
+                      ghost={exiting}
                     >
                       <AcceptedCard
                         item={item}
@@ -2317,7 +2331,11 @@ function InProgressShelf({
                       exiting && 'pointer-events-none opacity-0',
                     )}
                   >
-                    <DraggableTask item={item} disabled={!item.canModify || exiting}>
+                    {/* Полка «В работе»: та же ловушка dnd-id, что и у ghost-групп выше —
+                        item могли снять с полки (принята/удалена), а призрак ещё доигрывает
+                        коллапс поверх уже отрисованной живой карточки этой же задачи в другом
+                        месте доски. ghost={exiting} суффиксует dnd-id (см. draggableTaskId). */}
+                    <DraggableTask item={item} disabled={!item.canModify || exiting} ghost={exiting}>
                       <AcceptedCard
                         item={item}
                         onOpen={() => onOpen(item)}
@@ -2356,22 +2374,42 @@ function InProgressShelf({
 // disabled — нет прав менять задачу (canModify=false): карточка не таскается.
 // selecting — режим выделения: dnd отключён полностью (как в KanbanCard), слушатели не
 // навешиваются, чтобы протяжка-выделение не превращалась в перенос карточки.
+// Чистое решение dnd-id карточки (тестируется без React/dnd-kit) — вынесено из компонента
+// специально под ревью (Important: призрак дублировал dnd-id живой карточки). @dnd-kit/core
+// 6.3.1 регистрирует draggableNodes.set(id, ...) БЕЗУСЛОВНО в useDraggable — переданный
+// `disabled` его не гейтит, он влияет только на активацию сенсоров. Пока призрак
+// (useExitingListItems, exiting:true) держит СТАРЫЙ снимок карточки ещё useExitingListItems'ов
+// `ms`, в DOM одновременно живут призрак и уже переехавшая на новое место живая карточка с
+// тем же item.id — если призрачный узел стоит в документе ПОСЛЕ живого, его unmount вычищает
+// draggableNodes-запись живой карточки, и та молча перестаёт таскаться. Суффикс на ghost-id —
+// не «просто не рендерить DraggableTask на призраке», потому что тогда пришлось бы дублировать
+// разметку (обёртки/классы/aria) в каждом из двух мест рендера (группы-колонки и InProgressShelf);
+// суффикс меняет только то, под каким id узел регистрируется, разметка остаётся одна.
+export function draggableTaskId(itemId: string, ghost: boolean): string {
+  // id с префиксом: в едином контексте «Входящих» та же задача может одновременно висеть
+  // карточкой на доске снизу (useSortable с голым task.id) — двум draggable нельзя делить id.
+  // Хендлеры блока id не используют (читают data.item), так что префикс безопасен всегда.
+  return ghost ? `assigned-ghost-${itemId}` : `assigned-${itemId}`;
+}
+
 function DraggableTask({
   item,
   disabled,
   selecting = false,
+  // Карточка — призрак useExitingListItems (уже пропала из живых данных, доигрывает CSS-
+  // коллапс). Всегда disabled=true у вызывающих, но id ВСЁ РАВНО должен отличаться от живой
+  // карточки с тем же item.id — см. draggableTaskId.
+  ghost = false,
   children,
 }: {
   item: InboxBlockTask;
   disabled: boolean;
   selecting?: boolean;
+  ghost?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
-  // id с префиксом: в едином контексте «Входящих» та же задача может одновременно висеть
-  // карточкой на доске снизу (useSortable с голым task.id) — двум draggable нельзя делить id.
-  // Хендлеры блока id не используют (читают data.item), так что префикс безопасен всегда.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
-    id: `assigned-${item.id}`,
+    id: draggableTaskId(item.id, ghost),
     data: { type: 'task', item },
     disabled: disabled || selecting,
   });
