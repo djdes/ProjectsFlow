@@ -129,6 +129,38 @@ export class DrizzleActivityRepository implements ActivityRepository {
     return Number(rows[0]?.n ?? 0);
   }
 
+  async countCompletedByActorPerWorkspaceSince(
+    actorUserId: string,
+    since: Date,
+  ): Promise<Array<{ workspaceId: string; count: number }>> {
+    // Условия — те же, что в countTasksCompletedByActorSince (включая JOIN к задаче, чтобы
+    // не считать работу, которую вернули в работу или удалили), плюс группировка по
+    // пространству. Пространство берём из самого события: оно записано при создании и не
+    // «поедет», если проект потом перенесут в другое пространство.
+    const rows = await this.db
+      .select({
+        workspaceId: activityEvents.workspaceId,
+        n: countDistinct(tasks.id),
+      })
+      .from(activityEvents)
+      .innerJoin(
+        tasks,
+        sql`${tasks.id} = JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))`,
+      )
+      .where(
+        and(
+          eq(activityEvents.actorUserId, actorUserId),
+          eq(activityEvents.kind, 'task_status_changed'),
+          gte(activityEvents.createdAt, since),
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')`,
+          isNull(tasks.deletedAt),
+          inArray(tasks.status, ['done', 'pending_approval']),
+        ),
+      )
+      .groupBy(activityEvents.workspaceId);
+    return rows.map((r) => ({ workspaceId: r.workspaceId, count: Number(r.n) }));
+  }
+
   async deleteOlderThan(cutoff: Date): Promise<number> {
     const result = await this.db.delete(activityEvents).where(lt(activityEvents.createdAt, cutoff));
     // mysql2: первый элемент — ResultSetHeader с affectedRows.

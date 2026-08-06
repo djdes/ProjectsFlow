@@ -1,4 +1,7 @@
-import type { StatsRepository } from '@/application/stats/StatsRepository';
+import type {
+  StatsRepository,
+  WorkspaceCompletedStats,
+} from '@/application/stats/StatsRepository';
 import { httpClient } from './httpClient';
 
 export class HttpStatsRepository implements StatsRepository {
@@ -7,6 +10,13 @@ export class HttpStatsRepository implements StatsRepository {
       `/me/stats/completed-today?since=${encodeURIComponent(since.toISOString())}`,
     );
     return count;
+  }
+
+  async completedByWorkspace(): Promise<WorkspaceCompletedStats[]> {
+    const { workspaces } = await httpClient.get<{ workspaces: WorkspaceCompletedStats[] }>(
+      '/me/stats/completed-by-workspace',
+    );
+    return workspaces;
   }
 
   async unreadTaskIds(): Promise<string[]> {

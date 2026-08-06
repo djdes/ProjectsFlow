@@ -249,6 +249,7 @@ import { workflowRouter } from './automation/workflowRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { taskAssigneesRouter } from './assignees/routes.js';
 import { meStatsRouter } from './stats/routes.js';
+import type { GetMyCompletedStats } from '../application/stats/GetMyCompletedStats.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
 import { projectAnalyticsRouter } from './project/analyticsRoutes.js';
@@ -645,6 +646,7 @@ type AppDeps = {
   // Личная статистика caller'а (счётчик «выполнено сегодня» в интерфейсе).
   readonly meStats: {
     readonly countMyCompletedToday: CountMyCompletedToday;
+    readonly getMyCompletedStats: GetMyCompletedStats;
     readonly listUnreadTasks: ListUnreadTasks;
   };
   readonly assignees: {

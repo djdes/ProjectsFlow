@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Monitor, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,8 @@ import { NotificationDefaultsCard } from '@/presentation/components/profile/Noti
 import { KanbanColorsCard } from '@/presentation/components/profile/KanbanColorsCard';
 import { PlanAndUsageCard } from '@/presentation/components/profile/PlanAndUsageCard';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
+import { CompletedStatsCard } from '@/presentation/components/profile/CompletedStatsCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 function PersonalDataCard(): React.ReactElement {
   const { user, loading } = useCurrentUser();
@@ -320,6 +322,13 @@ function MonitoringCard(): React.ReactElement {
 }
 
 export function ProfilePage(): React.ReactElement {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'stats' ? 'stats' : 'settings';
+  const handleTabChange = (next: string): void => {
+    // replace: переключение вкладок не должно засорять историю браузера.
+    setSearchParams(next === 'stats' ? { tab: 'stats' } : {}, { replace: true });
+  };
+
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6">
       {/* pf-burger-gap на ОБЁРТКЕ, а не на кнопке: правило даёт padding-left, и на ghost-кнопке
@@ -334,8 +343,21 @@ export function ProfilePage(): React.ReactElement {
         </Button>
       </div>
 
-      <h1 className="text-xl font-semibold tracking-tight">Настройки</h1>
+      <h1 className="text-xl font-semibold tracking-tight">Профиль</h1>
 
+      {/* Вкладка запоминается в адресе (?tab=stats): по ссылке на статистику попадаешь
+          сразу в неё, а «назад» в браузере возвращает на настройки, а не на другую страницу. */}
+      <Tabs value={tab} onValueChange={handleTabChange}>
+        <TabsList>
+          <TabsTrigger value="settings">Настройки</TabsTrigger>
+          <TabsTrigger value="stats">Статистика</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="stats" className="mt-6 space-y-6">
+          <CompletedStatsCard />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-6 space-y-6">
       <PersonalDataCard />
       <PlanAndUsageCard />
       <ProjectsShareCard />
@@ -349,6 +371,8 @@ export function ProfilePage(): React.ReactElement {
       <PreferencesCard />
       <MonitoringCard />
       <InstallAppPrompt variant="card" />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

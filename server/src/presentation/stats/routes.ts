@@ -1,11 +1,13 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { CountMyCompletedToday } from '../../application/stats/CountMyCompletedToday.js';
+import type { GetMyCompletedStats } from '../../application/stats/GetMyCompletedStats.js';
 import type { ListUnreadTasks } from '../../application/task/ListUnreadTasks.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
   readonly countMyCompletedToday: CountMyCompletedToday;
+  readonly getMyCompletedStats: GetMyCompletedStats;
   readonly listUnreadTasks: ListUnreadTasks;
 };
 
@@ -24,6 +26,17 @@ export function meStatsRouter(deps: Deps): Router {
       const { since } = querySchema.parse(req.query);
       const count = await deps.countMyCompletedToday.execute(req.user!.id, new Date(since));
       res.json({ count });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Выполненные задачи по пространствам — вкладка «Статистика» в профиле. Список
+  // пространств берётся из членства caller'а, поэтому гейт доступа отдельный не нужен.
+  r.get('/stats/completed-by-workspace', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workspaces = await deps.getMyCompletedStats.execute(req.user!.id);
+      res.json({ workspaces });
     } catch (e) {
       next(e);
     }
