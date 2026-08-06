@@ -21,6 +21,7 @@ import {
   ArrowUpNarrowWide,
   Bot,
   CalendarClock,
+  Filter,
   Flag,
   Plus,
   Search,
@@ -101,6 +102,14 @@ import {
   type ViewSort,
 } from './views/viewShared';
 import { ViewLoadFeedback } from './views/ViewLoadFeedback';
+
+// Бейдж фильтра колонки говорит о МНОЖЕСТВЕ показанных задач («Баги» / «Фичи»), а не об
+// одной — в отличие от TASK_TYPE_META.label (ед. число), который используется на карточках
+// задач и трогать его в угоду бейджу нельзя.
+const TYPE_FILTER_LABEL_PLURAL: Record<'bug' | 'feature', string> = {
+  bug: 'Баги',
+  feature: 'Фичи',
+};
 
 type Props = {
   projectId: string;
@@ -692,15 +701,19 @@ export function KanbanBoard({
   const anchorRef = useRef<string | null>(null); // якорь для Shift-диапазона
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
   // Видимый порядок карточек по колонкам — ровно то, что реально отрисовано (те же
-  // фильтры и hideDone, что в рендере колонок ниже). Нужен и для Shift-диапазона, и
-  // для «Все», и для дозаполнения пропусков при быстрой протяжке.
+  // фильтры, hideDone и фильтр по типу задачи, что в рендере колонок ниже). Нужен и
+  // для Shift-диапазона, и для «Все», и для дозаполнения пропусков при быстрой протяжке —
+  // скрытая фильтром задача в выбор попасть не должна, иначе bulk-действие затронет
+  // карточку, которую пользователь на экране не видел.
   const shownSelectionStatuses = boardStatuses.filter(
     (s) => !isColumnHidden(settings?.[s]),
   );
   const columnSelectionIds = new Map<KanbanColumnStatus, string[]>(
     shownSelectionStatuses.map((s) => [
       s,
-      filterTasks(hideDone && s === 'done' ? [] : grouped[s]).map((t) => t.id),
+      filterTasks(hideDone && s === 'done' ? [] : grouped[s])
+        .filter((t) => matchesTypeFilter(t.taskType, typeFilterFor(s)))
+        .map((t) => t.id),
     ]),
   );
   // Режим живёт внутри ОДНОЙ колонки: и диапазон, и «Все», и протяжка ограничены ею.
@@ -1292,16 +1305,25 @@ export function KanbanBoard({
                       type="button"
                       onClick={() => setTypeFilter(status, 'all')}
                       title="Показаны не все задачи. Нажмите, чтобы снять фильтр"
+                      aria-label={`Фильтр: показаны только «${TYPE_FILTER_LABEL_PLURAL[typeFilter]}». Нажмите, чтобы снять фильтр и показать все задачи`}
                       className={cn(
-                        'shrink-0 rounded px-1 py-px text-[10px] font-medium leading-4',
+                        'inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] font-medium leading-4',
                         TASK_TYPE_META[typeFilter].badge,
                       )}
                     >
-                      {TASK_TYPE_META[typeFilter].label}
+                      <Filter className="size-3" aria-hidden="true" />
+                      {TYPE_FILTER_LABEL_PLURAL[typeFilter]}
                     </button>
                   )
                 }
-                onCreate={canEdit ? (s) => setDialog({ mode: 'create', status: s }) : undefined}
+                // Создание в отфильтрованной колонке недоступно: свежесозданная задача без типа
+                // считается фичей и при активном фильтре «только баги» тут же пропала бы с глаз
+                // (находка 2), а пользователь потерял бы введённый текст.
+                onCreate={
+                  canEdit && typeFilter === 'all'
+                    ? (s) => setDialog({ mode: 'create', status: s })
+                    : undefined
+                }
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}
                 onDelete={handleDelete}
                 showShortId={showCommits}
@@ -1328,7 +1350,7 @@ export function KanbanBoard({
                   ) : undefined
                 }
                 onInlineCreate={
-                  canEdit && !approvalColumn
+                  canEdit && !approvalColumn && typeFilter === 'all'
                     ? (input) => create({ ...input, status: input.status ?? status })
                     : undefined
                 }

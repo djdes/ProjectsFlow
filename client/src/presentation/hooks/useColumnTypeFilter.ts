@@ -48,7 +48,14 @@ export function useColumnTypeFilter(projectId: string): {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(STORAGE_PREFIX + projectId, JSON.stringify(filters));
+      // Пустая карта не пишется в хранилище — иначе на каждый посещённый проект
+      // остаётся ключ со значением '{}', даже если фильтр никогда не включали.
+      // Заодно это самоочистка: сняли последний фильтр — ключ убран.
+      if (Object.keys(filters).length === 0) {
+        window.localStorage.removeItem(STORAGE_PREFIX + projectId);
+      } else {
+        window.localStorage.setItem(STORAGE_PREFIX + projectId, JSON.stringify(filters));
+      }
     } catch {
       // Переполненное/заблокированное хранилище не должно ломать работу с доской.
     }

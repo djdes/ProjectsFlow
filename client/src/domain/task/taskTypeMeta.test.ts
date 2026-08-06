@@ -6,12 +6,14 @@ test('режим «всё» пропускает любую задачу', () =>
   assert.equal(matchesTypeFilter('bug', 'all'), true);
   assert.equal(matchesTypeFilter('feature', 'all'), true);
   assert.equal(matchesTypeFilter(null, 'all'), true);
+  assert.equal(matchesTypeFilter(undefined, 'all'), true);
 });
 
 test('режим «только баги» пропускает лишь явные баги', () => {
   assert.equal(matchesTypeFilter('bug', 'bug'), true);
   assert.equal(matchesTypeFilter('feature', 'bug'), false);
   assert.equal(matchesTypeFilter(null, 'bug'), false);
+  assert.equal(matchesTypeFilter(undefined, 'bug'), false);
 });
 
 test('режим «только фичи» пропускает и задачи без типа', () => {
