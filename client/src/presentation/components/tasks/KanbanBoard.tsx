@@ -53,6 +53,8 @@ import { stashComposerDraft } from './composerDraft';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
+import { useColumnTypeFilter } from '@/presentation/hooks/useColumnTypeFilter';
+import { TASK_TYPE_META, matchesTypeFilter } from '@/domain/task/taskTypeMeta';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { KanbanColumn } from './KanbanColumn';
@@ -594,6 +596,9 @@ export function KanbanBoard({
   );
 
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
+  // Личный фильтр колонок по типу задачи (баги/фичи). Не общий: настройки доски
+  // видит вся команда, а этот выбор — только тот, кто его сделал.
+  const { filterFor: typeFilterFor, setFilter: setTypeFilter } = useColumnTypeFilter(projectId);
   // Нижняя доска остаётся физическим представлением проекта и показывает все
   // его задачи независимо от того, кто сейчас ответственный.
   const boardTasks = useMemo(
@@ -1270,13 +1275,32 @@ export function KanbanBoard({
                   status as KanbanColumnStatus,
                 );
             const label = resolveColumnLabel(perColumn, resolveStatusLabel(settings, status));
+            const typeFilter = typeFilterFor(status);
+            const columnTasks = filterTasks(
+              hideDone && status === 'done' ? [] : grouped[status],
+            ).filter((t) => matchesTypeFilter(t.taskType, typeFilter));
             return (
               <KanbanColumn
                 key={status}
                 status={status}
                 label={label}
                 stickyHeaderTop={stickyHeaderTop}
-                tasks={filterTasks(hideDone && status === 'done' ? [] : grouped[status])}
+                tasks={columnTasks}
+                headerBadge={
+                  typeFilter === 'all' ? undefined : (
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter(status, 'all')}
+                      title="Показаны не все задачи. Нажмите, чтобы снять фильтр"
+                      className={cn(
+                        'shrink-0 rounded px-1 py-px text-[10px] font-medium leading-4',
+                        TASK_TYPE_META[typeFilter].badge,
+                      )}
+                    >
+                      {TASK_TYPE_META[typeFilter].label}
+                    </button>
+                  )
+                }
                 onCreate={canEdit ? (s) => setDialog({ mode: 'create', status: s }) : undefined}
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}
                 onDelete={handleDelete}
@@ -1344,6 +1368,8 @@ export function KanbanBoard({
                     onLabel={(l) => setLabel(status as KanbanColumnStatus, l)}
                     onHide={() => setHidden(status as KanbanColumnStatus, true)}
                     onSelect={() => enterSelection(status as KanbanColumnStatus)}
+                    typeFilter={typeFilter}
+                    onTypeFilter={(mode) => setTypeFilter(status, mode)}
                     // Удалять можно только кастомные колонки (db/154): встроенные — часть
                     // модели статусов, их прячут через «Скрыть».
                     onDelete={
