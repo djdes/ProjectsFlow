@@ -12,6 +12,7 @@ import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import type { Task } from '@/domain/task/Task';
+import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AssigneeBadge } from './AssigneeBadge';
 import { InboxCheckbox } from './InboxCheckbox';
@@ -50,6 +51,10 @@ type Props = {
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
+  // Оптимистичный useTasks().move родителя. Прокидывается в чекбокс «выполнено»/«принять
+  // работу», чтобы карточка переезжала между колонками доски мгновенно, как при drag,
+  // а не только после onTaskChanged→refetch (см. InboxCheckbox.move).
+  onMove?: (taskId: string, input: MoveTaskInput) => Promise<void>;
   // Оставлен в публичном контракте карточки для совместимости с представлениями.
   currentUserId?: string | null;
   // У задачи активна LIVE-сессия воркера — рисуем пульсирующую 🔴 точку в углу карточки.
@@ -100,6 +105,7 @@ function KanbanCardImpl({
   showCheckbox = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
+  onMove,
   liveRunning = false,
   open = false,
   recentlyMoved = false,
@@ -236,6 +242,7 @@ function KanbanCardImpl({
             onChanged={onTaskChanged}
             variant="toolbar"
             doneTitle={awaitingApproval ? 'Принять работу' : undefined}
+            move={onMove ? (input) => onMove(task.id, input) : undefined}
           />
         )}
         {onQuickPromote && promoteNext && (

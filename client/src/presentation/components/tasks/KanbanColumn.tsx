@@ -9,6 +9,7 @@ const noReflowStrategy: SortingStrategy = () => null;
 import { FileText, ListChecks, PanelRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
 import { COLUMN_SCROLL_CLASS } from './ColumnPreview';
@@ -115,6 +116,9 @@ type Props = {
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
+  // Прокидывается в KanbanCard → InboxCheckbox: оптимистичный useTasks().move доски,
+  // чтобы «Принять работу» на карточке переезжала между колонками мгновенно.
+  onMove?: (taskId: string, input: MoveTaskInput) => Promise<void>;
   // id текущего пользователя для дочерних карточек.
   currentUserId?: string | null;
   // Drop indicator: id перетаскиваемой карточки (null = нет активного drag'а).
@@ -205,6 +209,7 @@ export function KanbanColumn({
   showCheckbox = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
+  onMove,
   currentUserId = null,
   activeId = null,
   openTaskId = null,
@@ -406,6 +411,7 @@ export function KanbanColumn({
       showCheckbox={showCheckbox}
       lastDoneTaskId={lastDoneTaskId}
       lastTodoTaskId={lastTodoTaskId}
+      onMove={onMove}
       currentUserId={currentUserId}
       liveRunning={liveTaskIds?.has(t.id) ?? false}
       open={t.id === openTaskId}

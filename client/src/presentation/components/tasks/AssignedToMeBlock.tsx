@@ -37,6 +37,7 @@ import {
   ImageIcon,
   Inbox as InboxIcon,
   ListFilter,
+  Loader2,
   ShieldCheck,
   MessageSquare,
   Plus,
@@ -260,7 +261,7 @@ export function AssignedToMeBlock({
     useContainer();
   const navigate = useNavigate();
   const { user } = useCurrentUser();
-  const { celebrate, forget } = useCompletedToday();
+  const { forget } = useCompletedToday();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
   // Принимает работу руководитель/владелец активного пространства. Нужно, чтобы показать
@@ -346,7 +347,13 @@ export function AssignedToMeBlock({
     hideDoneRef.current = hideDone;
   }, [hideDone]);
 
+  // Таймстемп последнего своего refresh() — грубый гвард против дублирующей волны SSE-эха
+  // (см. useEffect ниже): своя мутация уже отражена в списках, повторный рефетч по эху того
+  // же изменения только вызвал бы лишний мигающий перерендер.
+  const lastRefreshAtRef = useRef(0);
+
   const refresh = useCallback(async (): Promise<void> => {
+    lastRefreshAtRef.current = Date.now();
     try {
       const [mine, byMe, personal] = await Promise.all([
         taskAssigneeRepository.listMine(),
@@ -372,7 +379,13 @@ export function AssignedToMeBlock({
     let timer: number | undefined;
     const schedule = (): void => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => void refresh(), 250);
+      timer = window.setTimeout(() => {
+        // Грубый гвард: наша же мутация (например, приёмка задачи) только что дёрнула
+        // refresh() напрямую — SSE-эхо того же изменения приходит следом и раздувало бы
+        // одну волну обновления в две подряд. Не архитектурная дедупликация, просто окно.
+        if (Date.now() - lastRefreshAtRef.current < 400) return;
+        void refresh();
+      }, 250);
     };
     window.addEventListener(TASK_CHANGED_EVENT, schedule);
     // Реконнект SSE: события, случившиеся при обрыве, до нас не дошли — читаем снапшот.
@@ -964,24 +977,24 @@ export function AssignedToMeBlock({
   // и открываем диалог, вместо мгновенного переноса.
   const [rejectTarget, setRejectTarget] = useState<InboxBlockTask | null>(null);
 
+  // Сама сетевая мутация, БЕЗ конфетти/анимации — их ведёт ApprovalItemCard (flash→exit,
+  // тот же паттерн, что и AcceptedCard.completePhase). Раньше конфетти и тост стреляли
+  // сразу по ответу сервера, а карточка ждала ещё refresh() (3 GET) + onChanged() (ещё
+  // GET) — ощущалось как «нажал, и ничего не произошло». Теперь карточка скрывается
+  // локально ДО того, как эта функция вообще вызвана (после 500мс анимации), а refresh()
+  // здесь — фоновая сверка снимка, её не ждём.
   const acceptApproval = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
-      try {
-        await taskRepository.move(item.projectId, item.id, {
-          targetStatus: 'done',
-          beforeTaskId: null,
-          afterTaskId: null,
-        });
-        // Принятая работа — тоже закрытая задача для принимающего: счётчик и праздник его.
-        celebrate(item.id);
-        toast.success('Задача принята');
-        await refresh();
-        onChanged?.();
-      } catch (e) {
-        toast.error(`Не удалось: ${(e as Error).message}`);
-      }
+      await taskRepository.move(item.projectId, item.id, {
+        targetStatus: 'done',
+        beforeTaskId: null,
+        afterTaskId: null,
+      });
+      toast.success('Задача принята');
+      void refresh();
+      onChanged?.();
     },
-    [taskRepository, refresh, onChanged, celebrate],
+    [taskRepository, refresh, onChanged],
   );
 
   // Отзыв задачи с утверждения самим исполнителем: «случайно нажал выполнено».
@@ -1247,7 +1260,7 @@ export function AssignedToMeBlock({
           items={approvalTasks}
           onOpen={(t) => setDrawerTask(t)}
           onChanged={handleToggled}
-          onAccept={(t) => void acceptApproval(t)}
+          onAccept={acceptApproval}
           onReject={(t) => setRejectTarget(t)}
           onWithdraw={(t) => void withdrawApproval(t)}
           isApprover={isApprover}
@@ -1902,7 +1915,9 @@ function ApprovalShelf({
   items: readonly InboxBlockTask[];
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
-  onAccept: (item: InboxBlockTask) => void;
+  // Сетевая мутация приёмки. Реджект пробрасывается наверх — ApprovalItemCard сам решает,
+  // что делать с уже скрытой локально карточкой (вернуть на место + error-тост).
+  onAccept: (item: InboxBlockTask) => Promise<void>;
   onReject: (item: InboxBlockTask) => void;
   // Исполнитель забирает свою задачу обратно («случайно нажал выполнено»).
   onWithdraw: (item: InboxBlockTask) => void;
@@ -1963,47 +1978,139 @@ function ApprovalShelf({
         ) : (
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
-            <div key={item.id} className="w-[17rem] max-w-full shrink-0 grow-0 space-y-1">
-              <AcceptedCard
-                item={item}
-                onOpen={() => onOpen(item)}
-                onChanged={onChanged}
-                onDelete={() => onReject(item)}
-                hideQuickActions
-              />
-              {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. */}
-              {isApprover ? (
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onAccept(item)}
-                    className="flex-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
-                  >
-                    Принять
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onReject(item)}
-                    className="flex-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    Вернуть в работу
-                  </button>
-                </div>
-              ) : item.assignee.userId === currentUserId ? (
-                // Исполнителю — выход из тупика: отправил по ошибке, забрал обратно.
-                <button
-                  type="button"
-                  onClick={() => onWithdraw(item)}
-                  className="w-full rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Забрать задачу с утверждения и продолжить работу"
-                >
-                  Забрать обратно
-                </button>
-              ) : null}
-            </div>
+            <ApprovalItemCard
+              key={item.id}
+              item={item}
+              onOpen={() => onOpen(item)}
+              onChanged={onChanged}
+              onReject={() => onReject(item)}
+              onWithdraw={() => onWithdraw(item)}
+              onAccept={onAccept}
+              isApprover={isApprover}
+              currentUserId={currentUserId}
+            />
           ))}
         </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Карточка полки «На утверждении»: кнопка «Принять» проигрывает тот же паттерн, что и
+// AcceptedCard.completePhase (flash 200мс → collapse 300мс → сеть после), только триггером
+// служит явная кнопка, а не жест по самой карточке. Раньше конфетти/тост стреляли сразу
+// после ответа сервера, а карточка висела до конца refresh() — казалось, что клик не сработал.
+function ApprovalItemCard({
+  item,
+  onOpen,
+  onChanged,
+  onReject,
+  onWithdraw,
+  onAccept,
+  isApprover,
+  currentUserId,
+}: {
+  item: InboxBlockTask;
+  onOpen: () => void;
+  onChanged: () => void;
+  onReject: () => void;
+  onWithdraw: () => void;
+  onAccept: (item: InboxBlockTask) => Promise<void>;
+  isApprover: boolean;
+  currentUserId: string | null;
+}): React.ReactElement {
+  const { celebrate, forget } = useCompletedToday();
+  const [phase, setPhase] = useState<'idle' | 'flash' | 'exit'>('idle');
+
+  useEffect(() => {
+    if (phase === 'flash') {
+      const t = setTimeout(() => setPhase('exit'), 200);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'exit') {
+      const t = setTimeout(() => {
+        void (async () => {
+          try {
+            await onAccept(item);
+          } catch (err) {
+            // Сеть подвела уже ПОСЛЕ того, как карточка визуально исчезла — возвращаем её
+            // и снимаем преждевременно засчитанный праздник (forget пересчитает цифру с
+            // сервера, как и в rejectApproval/withdrawApproval).
+            setPhase('idle');
+            forget(item.id);
+            toast.error(`Не удалось принять: ${(err as Error).message}`);
+          }
+        })();
+      }, 300);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [phase, item, onAccept, forget]);
+
+  const startAccept = (): void => {
+    if (phase !== 'idle') return;
+    // Конфетти — в момент клика, не после сети: это и есть мгновенный отклик. Если move
+    // всё же упадёт, forget() выше откатит счётчик.
+    celebrate(item.id);
+    setPhase('flash');
+  };
+
+  const accepting = phase !== 'idle';
+
+  return (
+    // Тот же коллапс-паттерн, что у AcceptedCard: grid 1fr→0fr + затухание, только тут он
+    // охватывает и карточку, и ряд кнопок под ней — снаружи AcceptedCard трогать не нужно.
+    <div
+      className={cn(
+        'grid grid-cols-[minmax(0,1fr)] transition-all duration-300 ease-out motion-reduce:transition-none',
+        phase === 'exit' && 'opacity-0',
+      )}
+      style={{ gridTemplateRows: phase === 'exit' ? '0fr' : '1fr' }}
+    >
+      <div className={cn('min-h-0 min-w-0', phase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
+        <div
+          className={cn(
+            'w-[17rem] max-w-full shrink-0 grow-0 space-y-1 rounded-lg transition-all duration-200 motion-reduce:transition-none',
+            phase === 'flash' && 'scale-[1.02] ring-2 ring-emerald-500/50',
+            phase === 'exit' && 'scale-[0.96]',
+          )}
+        >
+          <AcceptedCard item={item} onOpen={onOpen} onChanged={onChanged} onDelete={onReject} hideQuickActions />
+          {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. */}
+          {isApprover ? (
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={startAccept}
+                disabled={accepting}
+                className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-70 dark:text-emerald-400"
+              >
+                {accepting && <Loader2 className="size-3 animate-spin" />}
+                Принять
+              </button>
+              <button
+                type="button"
+                onClick={onReject}
+                disabled={accepting}
+                className="flex-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Вернуть в работу
+              </button>
+            </div>
+          ) : item.assignee.userId === currentUserId ? (
+            // Исполнителю — выход из тупика: отправил по ошибке, забрал обратно.
+            <button
+              type="button"
+              onClick={onWithdraw}
+              disabled={accepting}
+              className="w-full rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              title="Забрать задачу с утверждения и продолжить работу"
+            >
+              Забрать обратно
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

@@ -1244,6 +1244,7 @@ export function KanbanBoard({
               showCheckbox={canEdit}
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
+              onMove={move}
               currentUserId={user?.id ?? null}
               liveRunning={liveTaskIds?.has(t.id) ?? false}
               open={t.id === openTaskId}
@@ -1332,6 +1333,7 @@ export function KanbanBoard({
                 showCheckbox={canEdit}
                 lastDoneTaskId={lastDoneTaskId}
                 lastTodoTaskId={lastTodoTaskId}
+                onMove={move}
                 currentUserId={user?.id ?? null}
                 activeId={activeId}
                 openTaskId={openTaskId}

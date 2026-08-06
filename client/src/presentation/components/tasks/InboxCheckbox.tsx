@@ -3,6 +3,7 @@ import { Check, Loader2, Undo2 } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
+import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 
@@ -23,6 +24,11 @@ type Props = {
   // Переопределение подсказки для незакрытой задачи. Приёмка (db/150): на задаче в очереди
   // утверждения та же кнопка означает «принять работу», а не «отметить выполненной».
   doneTitle?: string;
+  // Опциональная замена прямого taskRepository.move: доска передаёт сюда оптимистичный
+  // useTasks().move, чтобы отметка «Принять работу» на карточке двигала её между колонками
+  // сразу (как drag), а не только после onChanged→refetch. Без него (списки, полки
+  // входящих без общего useTasks) поведение прежнее — прямой вызов репозитория.
+  move?: (input: MoveTaskInput) => Promise<void>;
 };
 
 // Круглый чекбокс «выполнено» в строке inbox-задачи. Optimistic UI: тиково
@@ -38,6 +44,7 @@ export function InboxCheckbox({
   disabledTitle,
   variant = 'circle',
   doneTitle,
+  move,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const { celebrate } = useCompletedToday();
@@ -65,13 +72,18 @@ export function InboxCheckbox({
       // быть НЕ todo), поэтому todo-якорь неуместен — отдаём null, сервер возьмёт bounds
       // нужной колонки. При отметке done — якорь на хвост done-колонки.
       const afterTaskId = next ? lastDoneTaskId : null;
-      await taskRepository.move(task.projectId, task.id, {
+      const moveInput: MoveTaskInput = {
         targetStatus,
         beforeTaskId: null,
         afterTaskId,
         // Снятие галочки → сервер восстановит прежний статус (status_before_done).
         ...(next ? {} : { restore: true }),
-      });
+      };
+      // move (если передан) — оптимистичный useTasks().move: карточка на доске переезжает
+      // в целевую колонку СРАЗУ, локально, а не только после onChanged→refetch. Без него —
+      // прежний прямой вызов репозитория (списки/полки без общего useTasks за доской).
+      if (move) await move(moveInput);
+      else await taskRepository.move(task.projectId, task.id, moveInput);
       // Праздник и +1 к счётчику — только после подтверждения сервером: оптимистично
       // поднимать цифру нельзя, задачу могло отклонить (нет прав, заморозка приёмкой).
       // Снятие галочки цифру НЕ уменьшает: сервер считает разные задачи по журналу
