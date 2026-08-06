@@ -54,6 +54,7 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
+import { useFlashExitPhase } from '@/presentation/hooks/useFlashExitPhase';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -347,9 +348,13 @@ export function AssignedToMeBlock({
     hideDoneRef.current = hideDone;
   }, [hideDone]);
 
-  // Таймстемп последнего своего refresh() — грубый гвард против дублирующей волны SSE-эха
-  // (см. useEffect ниже): своя мутация уже отражена в списках, повторный рефетч по эху того
-  // же изменения только вызвал бы лишний мигающий перерендер.
+  // Таймстемп ЛЮБОГО своего refresh() — не только после мутации, но и mount-эффекта,
+  // смены вкладки/фильтра, возврата фокуса и т.п. (refresh() пишет сюда безусловно).
+  // Грубый гвард (см. useEffect ниже) на 400мс глушит ЛЮБОЕ SSE-обновление в этом окне,
+  // не только «эхо своей же мутации» — включая легитимное параллельное действие коллеги.
+  // Осознанный компромисс брифа («грубый гвард»): в среднем такое окно раз в 250-400мс
+  // после любого своего рефетча — цена редких секундных задержек чужого realtime-события
+  // против частых двойных перерисовок от гарантированного эха своей же мутации.
   const lastRefreshAtRef = useRef(0);
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -380,9 +385,13 @@ export function AssignedToMeBlock({
     const schedule = (): void => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        // Грубый гвард: наша же мутация (например, приёмка задачи) только что дёрнула
-        // refresh() напрямую — SSE-эхо того же изменения приходит следом и раздувало бы
-        // одну волну обновления в две подряд. Не архитектурная дедупликация, просто окно.
+        // Грубый гвард: ЛЮБОЙ refresh() (наш собственный, в т.ч. mount/фокус, не только
+        // после мутации) в последние 400мс глушит эту SSE-волну целиком — она может
+        // нести и эхо нашего же изменения (в подавляющем большинстве случаев — именно
+        // его, приёмка/сдача на утверждение и т.п.), и легитимное действие коллеги,
+        // прилетевшее в то же окно. Различить их без версионирования снапшота нельзя —
+        // бриф разрешил именно грубый гвард; чужое событие в худшем случае долетит со
+        // следующей волной (следующий SSE-event/фокус/интервал), не потеряется совсем.
         if (Date.now() - lastRefreshAtRef.current < 400) return;
         void refresh();
       }, 250);
@@ -2021,39 +2030,32 @@ function ApprovalItemCard({
   currentUserId: string | null;
 }): React.ReactElement {
   const { celebrate, forget } = useCompletedToday();
-  const [phase, setPhase] = useState<'idle' | 'flash' | 'exit'>('idle');
-
-  useEffect(() => {
-    if (phase === 'flash') {
-      const t = setTimeout(() => setPhase('exit'), 200);
-      return () => clearTimeout(t);
-    }
-    if (phase === 'exit') {
-      const t = setTimeout(() => {
-        void (async () => {
-          try {
-            await onAccept(item);
-          } catch (err) {
-            // Сеть подвела уже ПОСЛЕ того, как карточка визуально исчезла — возвращаем её
-            // и снимаем преждевременно засчитанный праздник (forget пересчитает цифру с
-            // сервера, как и в rejectApproval/withdrawApproval).
-            setPhase('idle');
-            forget(item.id);
-            toast.error(`Не удалось принять: ${(err as Error).message}`);
-          }
-        })();
-      }, 300);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [phase, item, onAccept, forget]);
+  // Общий движок фаз (useFlashExitPhase, см. AcceptedCard.completePhase выше и сам хук):
+  // в зависимостях его эффекта — только item.id, а onAccept/onError уходят через ref
+  // внутри хука. Это важно именно здесь — полка рендерит НЕСКОЛЬКО таких карточек сразу,
+  // и refresh() от соседней (свой же после её приёмки, SSE-эхо, mount/visibilitychange)
+  // пересобирает approvalTasks и меняет ссылку на item у ВСЕХ смонтированных карточек.
+  // Раньше это был весь `item` в зависимостях — эффект перезапускался, отменял уже
+  // тикающий таймер и взводил его заново: при приёмке нескольких задач подряд карточка
+  // могла визуально исчезнуть, а move() так и не вызваться.
+  const { phase, start: startPhase } = useFlashExitPhase(
+    item.id,
+    () => onAccept(item),
+    (err) => {
+      // Сеть подвела уже ПОСЛЕ того, как карточка визуально исчезла — возвращаем её
+      // и снимаем преждевременно засчитанный праздник (forget пересчитает цифру с
+      // сервера, как и в rejectApproval/withdrawApproval).
+      forget(item.id);
+      toast.error(`Не удалось принять: ${(err as Error).message}`);
+    },
+  );
 
   const startAccept = (): void => {
-    if (phase !== 'idle') return;
     // Конфетти — в момент клика, не после сети: это и есть мгновенный отклик. Если move
-    // всё же упадёт, forget() выше откатит счётчик.
+    // всё же упадёт, forget() выше откатит счётчик. start() сам no-op'ает, если фаза уже
+    // не idle (кнопка и так disabled, это подстраховка).
     celebrate(item.id);
-    setPhase('flash');
+    startPhase();
   };
 
   const accepting = phase !== 'idle';
@@ -2958,48 +2960,35 @@ function AcceptedCard({
   const { isUnread } = useUnreadTasks();
   // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
   // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
-  // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание).
-  const [completePhase, setCompletePhase] = useState<'idle' | 'flash' | 'exit'>('idle');
+  // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание). Движок
+  // фаз — общий хук useFlashExitPhase (см. его же в ApprovalItemCard ниже): в зависимостях
+  // его внутреннего эффекта только item.id, а не сторонние onChanged/onCommit — иначе
+  // посторонний refresh() посреди анимации сбрасывал бы уже тикающий таймер.
   // Держать ли серую вуаль во время анимации. true только для Ctrl-пути, где она уже видна
   // под курсором: снять её на клике — из-под неё на миг проступит текст. Для ПКМ остаётся
   // false, иначе вуаль резко «выпрыгнет» на пустом месте.
   const [completeVeiled, setCompleteVeiled] = useState(false);
-  const onChangedRef = useRef(onChanged);
-  useEffect(() => {
-    onChangedRef.current = onChanged;
-  }, [onChanged]);
-  useEffect(() => {
-    if (completePhase === 'flash') {
-      const t = setTimeout(() => setCompletePhase('exit'), 200);
-      return () => clearTimeout(t);
-    }
-    if (completePhase === 'exit') {
-      const t = setTimeout(() => {
-        void (async () => {
-          try {
-            await taskRepository.move(item.projectId, item.id, {
-              targetStatus: 'done',
-              beforeTaskId: null,
-              afterTaskId: null,
-            });
-            celebrate(item.id);
-            onChangedRef.current();
-          } catch (err) {
-            setCompletePhase('idle');
-            setCompleteVeiled(false);
-            toast.error(`Не удалось выполнить: ${(err as Error).message}`);
-          }
-        })();
-      }, 300);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [completePhase, item.id, item.projectId, taskRepository, celebrate]);
+  const { phase: completePhase, start: startCompletePhase } = useFlashExitPhase(
+    item.id,
+    async () => {
+      await taskRepository.move(item.projectId, item.id, {
+        targetStatus: 'done',
+        beforeTaskId: null,
+        afterTaskId: null,
+      });
+      celebrate(item.id);
+      onChanged();
+    },
+    (err) => {
+      setCompleteVeiled(false);
+      toast.error(`Не удалось выполнить: ${(err as Error).message}`);
+    },
+  );
 
   // Единая точка запуска для обоих жестов: withVeil — оставлять ли серую вуаль на анимацию.
   const startComplete = (withVeil: boolean): void => {
     setCompleteVeiled(withVeil);
-    setCompletePhase('flash');
+    startCompletePhase();
   };
 
   const completeByContextMenu = (e: React.MouseEvent): void => {
