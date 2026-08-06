@@ -1451,6 +1451,7 @@ export function AssignedToMeBlock({
               id={`group-${grouping}-${group.key}`}
               data={dropData}
               highlight={boardDragActive}
+              exiting={exiting}
               className={cn(
                 'group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none',
                 exiting && 'pointer-events-none opacity-0 transition-opacity duration-200 motion-reduce:transition-none',
@@ -1821,18 +1822,27 @@ function GroupDropColumn({
   data,
   highlight,
   className,
+  // Колонка сейчас схлопывается (группа опустела) — её собственный opacity-переход
+  // (см. className вызывающего кода) получает data-pf-collapse, иначе на тач он
+  // проседает в 0.01ms под pf-no-motion отдельно от grid-схлопывания враппера снаружи
+  // (то же рассинхрон-ревью, что было у InProgressShelf: коробка едет, карточка гаснет
+  // рывком). Не ставим атрибут БЕЗУСЛОВНО — иначе он заодно форсировал бы duration и у
+  // соседнего drag-highlight ring'а (transition-all выше), которого сейчас это не касается.
+  exiting = false,
   children,
 }: {
   id: string;
   data: Record<string, unknown> | null;
   highlight: boolean;
   className: string;
+  exiting?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id, data: data ?? {}, disabled: data === null });
   return (
     <div
       ref={setNodeRef}
+      {...(exiting ? { 'data-pf-collapse': true } : {})}
       className={cn(
         className,
         // Пока тащат карточку с доски: все колонки-цели получают тихий ринг-намёк, а та, что
@@ -2249,7 +2259,13 @@ function InProgressShelf({
                   <div
                     // rounded-xl на обёртке — чтобы вспышка (::after с border-radius: inherit)
                     // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
-                    // эффекта от радиуса самого по себе тоже.
+                    // эффекта от радиуса самого по себе тоже. data-pf-collapse — ТОЖЕ на этом
+                    // div'е (не только на внешнем grid-враппере выше): без него на тач
+                    // pf-no-motion зануляет именно ЭТОТ opacity-transition (у него своя
+                    // duration, отдельная от grid-схлопывания снаружи) — карточка гасла бы
+                    // рывком, пока пустая коробка вокруг нее ещё 300мс едет схлопыванием
+                    // (ревью этапа 3, Important).
+                    data-pf-collapse
                     className={cn(
                       'group relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl transition-opacity duration-200 motion-reduce:transition-none',
                       flash && item.id === flashItemId && 'pf-card-flash',

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -1305,9 +1305,12 @@ export function KanbanBoard({
             const columnTasks = filterTasks(
               hideDone && status === 'done' ? [] : grouped[status],
             ).filter((t) => matchesTypeFilter(t.taskType, typeFilter));
+            // Без key здесь: key принадлежит ровно ОДНОМУ элементу массива — либо самой
+            // колонке (ветка «без обёртки» ниже), либо схлопывающему врапперу поверх неё
+            // (approval-ветка). Дублировать его на KanbanColumn и на обёртке одновременно
+            // не нужно (ревью этапа 3, minor).
             const column = (
               <KanbanColumn
-                key={status}
                 status={status}
                 label={label}
                 stickyHeaderTop={stickyHeaderTop}
@@ -1445,7 +1448,7 @@ export function KanbanBoard({
             // KanbanColumn — overflow:hidden их не задевает, только measure самого враппера,
             // который в drag-математике не участвует). Остальные колонки — БЕЗ обёртки,
             // как раньше (не трогаем их DOM/layout лишний раз).
-            if (!approvalColumn) return column;
+            if (!approvalColumn) return <Fragment key={status}>{column}</Fragment>;
             return (
               <div
                 key={status}
