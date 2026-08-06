@@ -495,6 +495,13 @@ const TOOLS = [
             "ambiguity → blocked immediately; grillme skipped), 'grillme' (force pre-worker " +
             'grillme interview up to 10 questions, then worker as normal).',
         },
+        taskType: {
+          type: ['string', 'null'],
+          enum: ['feature', 'bug', null],
+          description:
+            "Task type: 'feature' (new functionality) or 'bug' (fixing something broken). " +
+            'Omit or pass null if the type is not determined.',
+        },
       },
       required: ['projectId', 'description'],
       additionalProperties: false,
@@ -1069,9 +1076,10 @@ const TOOLS = [
   {
     name: 'pf_update_task',
     description:
-      "Update a task's description (markdown), Ralph mode, priority and/or deadline. Requires " +
-      'editor+ role. Returns the updated task. Pass at least one of `description`, `ralphMode`, ' +
-      '`priority` or `deadline`. Use for triage: set priority/deadline on raw backlog cards.',
+      "Update a task's description (markdown), Ralph mode, priority, deadline and/or task type. " +
+      'Requires editor+ role. Returns the updated task. Pass at least one of `description`, ' +
+      '`ralphMode`, `priority`, `deadline` or `taskType`. Use for triage: set priority/deadline/' +
+      'taskType on raw backlog cards.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1095,6 +1103,13 @@ const TOOLS = [
         deadline: {
           type: ['string', 'null'],
           description: "Deadline 'YYYY-MM-DD'. null clears it. Omit to leave unchanged.",
+        },
+        taskType: {
+          type: ['string', 'null'],
+          enum: ['feature', 'bug', null],
+          description:
+            "Task type: 'feature' (new functionality) or 'bug' (fixing something broken). " +
+            'null clears it (back to not determined). Omit to leave unchanged.',
         },
       },
       required: ['projectId', 'taskId'],
@@ -1688,6 +1703,7 @@ const CreateTaskInputZ = z.object({
   description: z.string().min(1),
   status: z.enum(TASK_STATUS_VALUES).optional(),
   ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+  taskType: z.enum(['feature', 'bug']).nullable().optional(),
 });
 const WriteKbDocInputZ = z.object({
   projectId: z.string().min(1),
@@ -1877,14 +1893,19 @@ const UpdateTaskInputZ = z
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'deadline must be YYYY-MM-DD')
       .nullable()
       .optional(),
+    taskType: z.enum(['feature', 'bug']).nullable().optional(),
   })
   .refine(
     (o) =>
       o.description !== undefined ||
       o.ralphMode !== undefined ||
       o.priority !== undefined ||
-      o.deadline !== undefined,
-    { message: 'Pass at least one of `description`, `ralphMode`, `priority` or `deadline`.' },
+      o.deadline !== undefined ||
+      o.taskType !== undefined,
+    {
+      message:
+        'Pass at least one of `description`, `ralphMode`, `priority`, `deadline` or `taskType`.',
+    },
   );
 const DeleteTaskInputZ = z.object({
   projectId: z.string().min(1),
@@ -2133,6 +2154,7 @@ async function main(): Promise<void> {
             description: input.description,
             status: input.status,
             ralphMode: input.ralphMode,
+            taskType: input.taskType,
           });
           return jsonResult(task);
         }
@@ -2328,6 +2350,7 @@ async function main(): Promise<void> {
             ralphMode: input.ralphMode,
             priority: input.priority,
             deadline: input.deadline,
+            taskType: input.taskType,
           });
           return jsonResult(task);
         }

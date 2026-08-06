@@ -212,10 +212,15 @@ export type CreateCredentialResult = {
   secretsWritten: string[];
 };
 
+// Тип задачи (db/153): 'feature' — новая функциональность, 'bug' — починка сломанного.
+// null/undefined — не определён.
+export type TaskType = 'feature' | 'bug';
+
 export type CreateTaskInput = {
   description: string;
   status?: TaskStatus;
   ralphMode?: RalphMode;
+  taskType?: TaskType | null;
 };
 
 export type UpdateTaskInput = {
@@ -225,6 +230,8 @@ export type UpdateTaskInput = {
   priority?: number | null;
   // Дедлайн 'YYYY-MM-DD'. null очищает. undefined — не менять.
   deadline?: string | null;
+  // Тип задачи. null очищает (сбрасывает в «не определён»). undefined — не менять.
+  taskType?: TaskType | null;
 };
 
 export type WriteKbDocInput = {
@@ -798,9 +805,16 @@ export class ApiClient {
   }
 
   async createTask(projectId: string, input: CreateTaskInput): Promise<Task> {
+    // Не шлём undefined taskType — старые серверы могут не понимать поле и упасть на validate.
+    const body: Record<string, unknown> = {
+      description: input.description,
+      status: input.status,
+      ralphMode: input.ralphMode,
+    };
+    if (input.taskType !== undefined) body.taskType = input.taskType;
     const { task } = await this.request<{ task: Task }>(
       `/agent/projects/${encodeURIComponent(projectId)}/tasks`,
-      { method: 'POST', body: input },
+      { method: 'POST', body },
     );
     return task;
   }
@@ -1040,6 +1054,7 @@ export class ApiClient {
     if (patch.ralphMode !== undefined) body.ralphMode = patch.ralphMode;
     if (patch.priority !== undefined) body.priority = patch.priority;
     if (patch.deadline !== undefined) body.deadline = patch.deadline;
+    if (patch.taskType !== undefined) body.taskType = patch.taskType;
     const { task } = await this.request<{ task: Task }>(
       `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
       { method: 'PATCH', body },
