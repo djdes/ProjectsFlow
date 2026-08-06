@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
-import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { Task } from '@/domain/task/Task';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
@@ -18,6 +18,11 @@ import type {
   MentionMember,
   RichTextEditorHandle,
 } from '@/presentation/components/editor/RichTextEditor';
+import {
+  resolveMoveTarget,
+  shouldAutoMoveAfterComment,
+  type ComposerTarget,
+} from '@/presentation/components/tasks/taskDrawerComposerRules';
 
 // Tiptap-редактор грузим лениво (тяжёлый chunk, не нужен на read-heavy экранах).
 const RichTextEditor = lazy(() =>
@@ -31,8 +36,6 @@ type PendingFile = {
   readonly file: File;
   readonly previewUrl: string;
 };
-
-type ComposerTarget = 'draft' | 'worker';
 
 const DRAWER_TARGETS = [
   { value: 'draft', label: 'В черновики' },
@@ -76,17 +79,6 @@ function readTarget(projectId: string): ComposerTarget {
   if (typeof window === 'undefined') return 'draft';
   const raw = window.localStorage.getItem(targetStorageKey(projectId));
   return raw === 'worker' ? 'worker' : 'draft';
-}
-
-// Куда move'нуть задачу при текущем статусе + выбранном target'е. null = no move.
-function resolveMoveTarget(
-  current: TaskStatus,
-  target: ComposerTarget,
-): TaskStatus | null {
-  if (target === 'draft') {
-    return current === 'backlog' ? null : 'backlog';
-  }
-  return current === 'todo' ? null : 'todo';
 }
 
 export function TaskDrawerComposer({
@@ -231,7 +223,11 @@ export function TaskDrawerComposer({
       }
       onCommentCreated({ ...created, attachments: uploaded });
 
-      const moveTo = resolveMoveTarget(task.status, effectiveTarget);
+      // Только свои задачи двигаются автоматически по комментарию — на чужой задаче
+      // (например руководитель комментирует задачу сотрудника) move был бы сюрпризом.
+      const moveTo = shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
+        ? resolveMoveTarget(task.status, effectiveTarget)
+        : null;
       if (moveTo !== null) {
         const tail = moveTo === 'backlog' ? backlogTail : todoTail;
         await taskRepository.move(task.projectId, task.id, {
@@ -392,7 +388,6 @@ export function TaskDrawerComposer({
               onSend={() => void submit()}
               submitting={submitting}
               disabled={!canSubmit}
-              showLabel={false}
             />
           </div>
 

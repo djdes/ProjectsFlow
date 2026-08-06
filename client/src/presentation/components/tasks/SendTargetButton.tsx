@@ -72,21 +72,25 @@ export function SendTargetButton<V extends string>({
   if (!hasChoice) return sendButton;
 
   // Выбор цели (Воркеру/Черновик) — отдельная тихая ghost-каретка слева, не «приваренная» к кнопке.
+  // Текстовая подпись цели видна только на ≥sm (на узкой панели дравера ей некуда влезть без
+  // переноса строки) — на мобиле ориентир заменяет тултип и цвет каретки под текущую цель.
+  const caretTitle = current ? `Куда отправить — ${current.label}` : 'Куда отправить';
   return (
     <div className="inline-flex items-center gap-1">
       {showLabel && current && (
-        <span className="text-[11px] text-muted-foreground">{current.label}</span>
+        <span className="hidden text-[11px] text-muted-foreground sm:inline">{current.label}</span>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             disabled={submitting}
-            aria-label="Куда отправить"
-            title="Куда отправить"
+            aria-label={caretTitle}
+            title={caretTitle}
             className={cn(
               caretDim,
-              'grid shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+              'grid shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+              showLabel && current?.value === 'worker' ? 'text-primary' : 'text-muted-foreground',
             )}
           >
             <ChevronDown className="size-4" />
