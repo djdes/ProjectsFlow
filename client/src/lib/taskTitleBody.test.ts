@@ -9,7 +9,10 @@ import {
   parseTitleHeading,
   formatTitleHeading,
   stripInlineMarkdown,
+  plainTaskTitle,
 } from './taskTitleBody';
+
+const FIGURE = '<figure data-figure-image><img src="/api/attachments/x" alt="" /></figure>';
 
 test('stripInlineMarkdown: срезает парные маркеры, оставляет текст', () => {
   assert.equal(stripInlineMarkdown('**жирный**'), 'жирный');
@@ -111,6 +114,46 @@ test('round-trip: split → join возвращает исходник (с мн�
     const { title, body } = splitTitleBody(md);
     assert.equal(joinTitleBody(title, body), md, `round-trip потерял данные: «${md}»`);
   }
+});
+
+// --- BUG E: скриншот первым действием не должен становиться заголовком-мусором ---
+
+test('split: описание — целиком одна figure-картинка (Ctrl+V первым действием, без текста) → пустой заголовок, картинка остаётся в теле', () => {
+  assert.deepEqual(splitTitleBody(FIGURE), { title: '', body: FIGURE });
+});
+
+test('split: несколько figure-картинок подряд без текста → пустой заголовок, обе картинки в теле', () => {
+  const desc = `${FIGURE}\n\n${FIGURE}`;
+  const { title, body } = splitTitleBody(desc);
+  assert.equal(title, '');
+  assert.match(body, /<figure/);
+  assert.equal((body.match(/<figure/g) ?? []).length, 2, 'обе картинки сохранились в теле');
+});
+
+test('split: figure-картинка, затем реальный текст → заголовком становится текст, картинка остаётся в теле', () => {
+  const desc = `${FIGURE}\n\nЗаголовок из головы`;
+  const { title, body } = splitTitleBody(desc);
+  assert.equal(title, 'Заголовок из головы');
+  assert.match(body, /<figure/);
+});
+
+test('split: одинокая пустая первая строка БЕЗ figure — заголовок по-прежнему пустой (не путать с BUG E)', () => {
+  // Регрессия: скип-логика для figure не должна начать «прыгать» через обычные пустые
+  // строки без картинки — это отдельный, уже покрытый случай (см. тест выше в файле).
+  assert.deepEqual(splitTitleBody('\nПросто текст'), { title: '', body: 'Просто текст' });
+});
+
+test('plainTaskTitle: описание — только скриншот(ы) без текста → фолбэк «Скриншот»', () => {
+  assert.equal(plainTaskTitle(FIGURE), 'Скриншот');
+  assert.equal(plainTaskTitle(`${FIGURE}\n\n${FIGURE}`), 'Скриншот');
+});
+
+test('plainTaskTitle: полностью пустое описание — фолбэк не подставляем (остаётся пустая строка)', () => {
+  assert.equal(plainTaskTitle(''), '');
+});
+
+test('plainTaskTitle: figure + реальный текст → реальный текст, без фолбэка', () => {
+  assert.equal(plainTaskTitle(`${FIGURE}\n\nНастоящий заголовок`), 'Настоящий заголовок');
 });
 
 test('round-trip: смена заголовка сохраняет тело без изменений', () => {

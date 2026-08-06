@@ -1042,8 +1042,11 @@ export function TaskDrawer({
       if (state?.mode !== 'edit') return;
       const { projectId, id } = state.task;
       const trimmed = nextDescription.trim();
-      // Заголовок (1-я строка) обязателен: пустое описание — не сохраняем (как прежде).
-      if (splitTitleBody(trimmed).title.length === 0) return;
+      // Пустое описание — не сохраняем (как прежде). Раньше здесь смотрели на
+      // splitTitleBody(trimmed).title — но это не то же самое, что «trimmed пуст»:
+      // описание-скриншот без единого слова текста (BUG E) даёт пустой title при непустом
+      // trimmed, и такая правка молча не сохранялась бы (та же болезнь, что и в баге).
+      if (trimmed.length === 0) return;
       if (trimmed === originalEditDescRef.current.trim()) return;
       setEditSaving(true);
       try {
@@ -1195,7 +1198,7 @@ export function TaskDrawer({
       const s = editLiveRef.current;
       if (!s.taskId || !s.projectId || s.saving) return;
       const trimmed = s.description.trim();
-      if (splitTitleBody(trimmed).title.length === 0) return;
+      if (trimmed.length === 0) return;
       // Ничего не правили — НЕ шлём update: иначе сервер бампит updatedAt и задача
       // всплывает наверх «как отредактированная» при простом открытии/переключении.
       if (trimmed === originalEditDescRef.current.trim()) return;

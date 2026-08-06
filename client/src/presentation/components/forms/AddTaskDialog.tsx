@@ -112,6 +112,23 @@ function clearDraft(): void {
   }
 }
 
+// BUG E (пункт 2): персистентный черновик хранит только `description` — сами File-объекты
+// вставленных скринов живут в inlineImagesRef и НЕ переживают перезагрузку страницы. Blob-URL
+// тоже умирает при reload (браузер их не восстанавливает), поэтому figure-ноды с `blob:`-src
+// в восстановленном описании — заведомо мёртвые ссылки без шанса на повторную загрузку.
+// Вычищаем их из текста (сама картинка потеряна безвозвратно — файла для перезалива больше
+// нет), а не оставляем как надгробие. Возвращаем ещё и признак «что-то вычистили» — под это
+// показываем тост.
+const DEAD_BLOB_FIGURE_RE = /\n?<figure data-figure-image><img src="blob:[^"]*" alt="" \/><\/figure>\n?/g;
+function stripDeadBlobFigures(description: string): { text: string; removed: boolean } {
+  let removed = false;
+  const text = description.replace(DEAD_BLOB_FIGURE_RE, () => {
+    removed = true;
+    return '\n';
+  });
+  return { text: text.trim(), removed };
+}
+
 // Глобальное окно создания задачи (кнопка «Создать задачу» в левой панели). Как окно
 // создания по проекту: Tiptap rich-редактор (форматирование по выделению, WYSIWYG,
 // вставка картинок), плюсики «+ Подзадача»/«+ Файл», ряд icon-контролов (Приоритет,
@@ -208,15 +225,20 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       inlineImagesRef.current = new Map(s.inlineImages);
       stashRef.current = null; // blob'ы теперь снова «живые» в форме — не ревокаем
     } else {
-      // После перезагрузки остался только персистентный черновик (без файлов/картинок).
+      // После перезагрузки остался только персистентный черновик (без файлов/картинок) —
+      // вставленные скрины в нём уже мёртвые blob-ссылки (пункт 2, файла для перезалива нет).
       const d = readDraft();
       if (!d) return;
-      setDescription(d.description);
+      const { text: cleanedDescription, removed } = stripDeadBlobFigures(d.description);
+      setDescription(cleanedDescription);
       setProjectId(d.projectId);
       setRalphMode(d.ralphMode);
       setAssigneeUserId(d.assigneeUserId ?? user?.id ?? null);
       setDeadline(d.deadline);
       setPriority(d.priority);
+      if (removed) {
+        toast.warning('Вставленные картинки не сохранились в черновике — вставьте их заново.');
+      }
     }
     clearDraft();
     setHasStash(false);
@@ -345,8 +367,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     setError(null);
     try {
       // По умолчанию (без проекта) — во «Входящие»; иначе в выбранный проект.
-      const targetId = projectId ?? (await projectRepository.getInbox()).id;
-      const task = await taskRepository.create(targetId, {
+      const createTargetId = projectId ?? (await projectRepository.getInbox()).id;
+      const task = await taskRepository.create(createTargetId, {
         description: trimmed,
         status: 'backlog',
         ralphMode,
@@ -354,6 +376,16 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         deadline,
         priority,
       });
+      // BUG E: дальше используем task.projectId ИЗ ОТВЕТА, а не createTargetId. Сервер мог
+      // переселить задачу инбокса в инбокс ответственного (правило «я ответственный ⇒ задача
+      // в моих личных», см. CreateTask.ts) — со старым targetId upload/update ниже падали бы
+      // на гварде task.projectId !== input.projectId (UploadTaskAttachment/UpdateTask), и
+      // вставленный скрин навсегда оставался мёртвой blob:-ссылкой в описании. Тот же паттерн,
+      // что и в TaskDrawer.tsx (create-режим).
+      const targetId = task.projectId;
+      // Хоть одна догрузка/дозапись после создания упала — success-тост нельзя показывать
+      // как ни в чём не бывало (сама задача уже создана, откатывать её мы не можем).
+      let uploadFailed = false;
       // Inline-скрины: грузим отложенные картинки и заменяем blob-URL на URL вложений.
       if (inlineImagesRef.current.size > 0) {
         let desc = trimmed;
@@ -364,17 +396,24 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               const att = await taskRepository.uploadAttachment(targetId, task.id, file);
               desc = desc.split(blobUrl).join(att.url);
               changed = true;
+              // Ревокаем ТОЛЬКО после успешной замены — раньше ревокали безусловно, даже
+              // если загрузка упала, и упавшая blob-ссылка так и оставалась в описании без
+              // рабочего превью.
+              URL.revokeObjectURL(blobUrl);
             } catch (err) {
+              uploadFailed = true;
               toast.error(`Не удалось загрузить картинку: ${(err as Error).message}`);
             }
+          } else {
+            URL.revokeObjectURL(blobUrl);
           }
-          URL.revokeObjectURL(blobUrl);
         }
         inlineImagesRef.current.clear();
         if (changed) {
           try {
             await taskRepository.update(targetId, task.id, { description: desc });
           } catch (err) {
+            uploadFailed = true;
             toast.error(`Не удалось сохранить картинки в описании: ${(err as Error).message}`);
           }
         }
@@ -384,6 +423,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         try {
           await taskRepository.uploadAttachment(targetId, task.id, pf.file);
         } catch (err) {
+          uploadFailed = true;
           toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
         }
       }
@@ -391,13 +431,19 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       discardStash();
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       onOpenChange(false);
-      toast.success(
-        projectId !== null
-          ? 'Задача добавлена в проект'
-          : assigneeUserId && assigneeUserId !== user?.id
-            ? `Задача добавлена во «Входящие» — ${focusedMember?.displayName ?? 'сотруднику'}`
-            : 'Задача добавлена во «Входящие»',
-      );
+      // Задачу уже не откатить — но радостный success-тост при упавшей догрузке маскировал
+      // бы поломку (BUG E: диалог рапортовал успех, а картинка в описании умирала).
+      if (uploadFailed) {
+        toast.warning('Задача создана, но часть вложений не сохранилась — проверьте описание.');
+      } else {
+        toast.success(
+          projectId !== null
+            ? 'Задача добавлена в проект'
+            : assigneeUserId && assigneeUserId !== user?.id
+              ? `Задача добавлена во «Входящие» — ${focusedMember?.displayName ?? 'сотруднику'}`
+              : 'Задача добавлена во «Входящие»',
+        );
+      }
       navigate(projectId === null ? '/' : `/projects/${projectId}`);
     } catch (err) {
       setError(`Не удалось добавить задачу: ${(err as Error).message}`);

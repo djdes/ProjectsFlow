@@ -11,20 +11,79 @@ export type TitleBody = {
 
 // Чистый plain-текст заголовка задачи для мест, где нельзя рендерить компонент
 // (drag-пилюля, tooltip): первая строка → без `#`-префикса → без инлайн-markdown.
+// BUG E: если в описании нет НИ ОДНОГО слова текста (задача — это только вставленный(е)
+// скриншот(ы)), splitTitleBody отдаёт пустой title — молчаливая пустая строка хуже честного
+// лейбла, поэтому фолбэк «Скриншот». Полностью пустое описание — исключение, там остаётся ''
+// (у пустой задачи и так есть свои фолбэки в местах отображения, например «Задача»).
 export function plainTaskTitle(description: string): string {
-  const raw = splitTitleBody(description ?? '').title;
-  return stripInlineMarkdown(parseTitleHeading(raw).text).trim();
+  const desc = description ?? '';
+  const raw = splitTitleBody(desc).title;
+  const text = stripInlineMarkdown(parseTitleHeading(raw).text).trim();
+  if (text) return text;
+  return desc.trim() ? 'Скриншот' : '';
+}
+
+// Строка-картинка (à la FigureImage.renderMarkdown): `<figure data-figure-image>…</figure>`
+// целиком на одной строке. Сериализатор редактора ВСЕГДА оборачивает такую строку переносами
+// с обеих сторон, поэтому она никогда не смешивается с обычным текстом на одной строке.
+const FIGURE_LINE_RE = /^<figure\b[^>]*>[\s\S]*<\/figure>$/i;
+function isFigureLine(line: string): boolean {
+  return FIGURE_LINE_RE.test(line.trim());
+}
+function isBlankLine(line: string): boolean {
+  return line.trim() === '';
 }
 
 // Разбить описание по первому '\n': title = первая строка, body = остаток (с переносами).
 // Нет переноса строки → всё описание это заголовок, тело пустое.
+//
+// BUG E: если юзер вставляет скриншот (Ctrl+V) ПЕРВЫМ действием — ни слова текста ещё нет —
+// «первая строка» описания оказывается ЦЕЛИКОМ HTML-тегом `<figure data-figure-image>…`
+// (см. FigureImage.renderMarkdown). Без защиты этот HTML буквально становился заголовком
+// карточки/публичной доски/уведомления. Поэтому: ведущий прогон figure-строк (и пустых строк
+// внутри/после него) в заголовок не берём — они остаются в теле (там они корректно
+// рендерятся как картинка через Markdown), а заголовком становится первая строка РЕАЛЬНОГО
+// текста после них (если она есть). Одинокие пустые строки БЕЗ figure — как раньше, title
+// остаётся пустым (round-trip-тесты на это полагаются).
 export function splitTitleBody(description: string): TitleBody {
   const src = description ?? '';
-  const nl = src.indexOf('\n');
-  if (nl === -1) {
-    return { title: src, body: '' };
+
+  let pos = 0;
+  let sawFigure = false;
+  let exhausted = false;
+  for (;;) {
+    const nl = src.indexOf('\n', pos);
+    const line = nl === -1 ? src.slice(pos) : src.slice(pos, nl);
+    const figure = isFigureLine(line);
+    const skippable = figure || (sawFigure && isBlankLine(line));
+    if (!skippable) break;
+    if (figure) sawFigure = true;
+    if (nl === -1) {
+      exhausted = true;
+      pos = src.length;
+      break;
+    }
+    pos = nl + 1;
   }
-  return { title: src.slice(0, nl), body: src.slice(nl + 1) };
+
+  if (!sawFigure) {
+    // Обычное описание (или ведущая пустая строка без картинки) — старое поведение.
+    const nl = src.indexOf('\n');
+    if (nl === -1) return { title: src, body: '' };
+    return { title: src.slice(0, nl), body: src.slice(nl + 1) };
+  }
+
+  const prefix = src.slice(0, pos);
+  if (exhausted) {
+    // Описание целиком — служебный пролог (одна/несколько картинок без единого слова текста).
+    // Заголовка нет, но сами картинки сохраняем в теле — иначе они бы пропали из вида.
+    return { title: '', body: prefix };
+  }
+  const rest = src.slice(pos);
+  const nl = rest.indexOf('\n');
+  const title = nl === -1 ? rest : rest.slice(0, nl);
+  const restBody = nl === -1 ? '' : rest.slice(nl + 1);
+  return { title, body: `${prefix}${restBody}` };
 }
 
 // Склеить заголовок и тело обратно в единое описание. Заголовок тримим (это одна
