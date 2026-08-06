@@ -26,6 +26,16 @@ export class NotWorkspaceEditorError extends Error {
   }
 }
 
+// Доска сотрудника для руководителя (BUG D): расширенный доступ ко ВСЕМ задачам члена
+// пространства (включая чужие проекты) требует именно lead/owner — обычный editor/viewer
+// этим инструментом не пользуется.
+export class NotWorkspaceLeadError extends Error {
+  constructor() {
+    super('Workspace lead/owner role required');
+    this.name = 'NotWorkspaceLeadError';
+  }
+}
+
 export class LastOwnerError extends Error {
   constructor() {
     super('Cannot remove or demote the last owner');

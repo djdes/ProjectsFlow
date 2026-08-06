@@ -81,6 +81,19 @@ export function buildToMeInboxBlockTasks(input: {
  * Гейта «приёмка включена в пространстве» здесь нет намеренно: полка рендерится только
  * когда приёмка включена (или уже что-то в очереди), поэтому там, где её нет, нет и цели дропа.
  */
+/**
+ * Основная доска (колонки-группы): исключает полку «В работе» ('manual') и полку «На
+ * утверждении» ('pending_approval') — иначе карточка висела бы сразу в двух местах.
+ *
+ * Общий для всех источников (свои задачи / «Другим» / доска сотрудника — BUG D): доска
+ * сотрудника смешивает его личные (isInbox=true) и проектные (isInbox=false) задачи в
+ * одном списке, а этот фильтр как раз и держит её в синхроне с отдельной полкой приёмки,
+ * не показывая одну и ту же задачу дважды.
+ */
+export function selectBoardTasks(tasks: readonly InboxBlockTask[]): InboxBlockTask[] {
+  return tasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval');
+}
+
 export function canSendToApproval(
   task: InboxBlockTask,
   currentUserId: string | null,

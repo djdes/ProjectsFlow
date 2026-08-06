@@ -5,6 +5,7 @@ import type {
 } from '../../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksAssignedToOthers } from '../../application/task/ListTasksAssignedToOthers.js';
 import type { ListPersonalTasksOfColleagues } from '../../application/task/ListPersonalTasksOfColleagues.js';
+import type { ListMemberTasksForLead } from '../../application/task/ListMemberTasksForLead.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { toDto as taskToDto } from '../tasks/routes.js';
 
@@ -12,6 +13,7 @@ type Deps = {
   readonly listAssignedToMe: ListTasksAssignedToMe;
   readonly listAssignedToOthers: ListTasksAssignedToOthers;
   readonly listPersonalOfColleagues: ListPersonalTasksOfColleagues;
+  readonly listMemberTasksForLead: ListMemberTasksForLead;
 };
 
 export function taskAssigneesRouter(deps: Deps): Router {
@@ -58,6 +60,19 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/personal', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listPersonalOfColleagues.execute(req.user!.id);
+      res.json({ items: items.map(assignedViewToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Доска сотрудника для руководителя пространства (BUG D): ВСЕ его незавершённые задачи
+  // по всем проектам активного пространства, включая проекты, где сам вызывающий не
+  // участник. Гейт (lead/owner + memberId — участник того же пространства) — целиком
+  // внутри use-case; здесь только 403/404 из его ошибок через errorHandler.
+  r.get('/member/:userId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const items = await deps.listMemberTasksForLead.execute(req.user!.id, req.params.userId as string);
       res.json({ items: items.map(assignedViewToDto) });
     } catch (e) {
       next(e);

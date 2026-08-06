@@ -7,6 +7,7 @@ import {
   buildToMeInboxBlockTasks,
   canSendToApproval,
   isPersonalInboxBlockTask,
+  selectBoardTasks,
 } from './inboxBlockTasks';
 
 const NOW = new Date('2026-07-14T09:00:00.000Z');
@@ -103,6 +104,30 @@ test('canSendToApproval: задача уже на утверждении — п�
 
 test('canSendToApproval: без текущего юзера цель недоступна', () => {
   assert.equal(canSendToApproval(asAssignedInboxBlockTask(assigned('t4')), null), false);
+});
+
+test('доска сотрудника (BUG D): личные и проектные задачи выходят вместе, без дублей с полкой «На утверждении»', () => {
+  // Фокус-режим кормит доску одним источником (ListMemberTasksForLead), где вперемешку
+  // личные (isInbox: true) и проектные задачи сотрудника — selectBoardTasks должен
+  // разложить их в общий список колонок, но исключить всё, что уже показано на отдельных
+  // полках («В работе» = 'manual', «На утверждении» = 'pending_approval').
+  const personal = { ...assigned('personal-1'), isInbox: true, projectName: 'Личные' };
+  const projectTask = {
+    ...assigned('project-1', { projectId: 'proj-a' }),
+    isInbox: false,
+    projectName: 'Проект А',
+  };
+  const pendingApproval = assigned('pending-1', { status: 'pending_approval' });
+  const inProgress = assigned('wip-1', { status: 'manual' });
+
+  const board = selectBoardTasks(
+    [personal, projectTask, pendingApproval, inProgress].map(asAssignedInboxBlockTask),
+  );
+
+  assert.deepEqual(
+    board.map((t) => t.id).sort(),
+    ['personal-1', 'project-1'],
+  );
 });
 
 test('canSendToApproval: личная inbox-задача — сервер не требует приёмки, гейт закрыт', () => {

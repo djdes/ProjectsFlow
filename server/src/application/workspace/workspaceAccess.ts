@@ -3,6 +3,7 @@ import {
   WorkspaceNotFoundError,
   NotWorkspaceOwnerError,
   NotWorkspaceEditorError,
+  NotWorkspaceLeadError,
 } from '../../domain/workspace/errors.js';
 
 // Минимальный порт, нужный guard'ам (структурно совместим с WorkspaceRepository).
@@ -46,5 +47,20 @@ export async function requireWorkspaceEditor(
 ): Promise<WorkspaceMember> {
   const m = await requireWorkspaceMember(repo, workspaceId, userId);
   if (m.role === 'viewer') throw new NotWorkspaceEditorError();
+  return m;
+}
+
+/**
+ * Юзер должен быть руководителем (lead) или владельцем пространства. Нужен для гейтов
+ * расширенного доступа к данным других участников (например, доска сотрудника для
+ * руководителя, BUG D) — то же деление ролей, что и в TaskApprovalService.canApprove.
+ */
+export async function requireWorkspaceLead(
+  repo: MembershipReader,
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceMember> {
+  const m = await requireWorkspaceMember(repo, workspaceId, userId);
+  if (m.role !== 'lead' && m.role !== 'owner') throw new NotWorkspaceLeadError();
   return m;
 }

@@ -112,6 +112,7 @@ import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
   canSendToApproval,
+  selectBoardTasks,
   type AssignedInboxBlockTask,
   type InboxBlockTask,
 } from './inboxBlockTasks';
@@ -276,10 +277,11 @@ export function AssignedToMeBlock({
   const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
   const isApprover =
     approvalEnabled && (currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner');
-  // Руководитель пространства смотрит входящие сотрудника: клик по кубику переводит блок
-  // на его личную доску. Это ЖЕСТ, а не новая граница видимости — личные задачи коллег и
-  // так приходят всем со-участникам (см. ListPersonalTasksOfColleagues) и видны на вкладке
-  // «Для всех». Просто открывать их одним кликом — инструмент руководителя.
+  // Руководитель пространства смотрит доску сотрудника: клик по кубику переводит блок на
+  // ВСЕ его незавершённые задачи по пространству (личные входящие + проекты, включая те,
+  // где сам руководитель не участник — BUG D). Это РАСШИРЕНИЕ доступа к данным (не просто
+  // ярлык к уже видимому), поэтому гейт целиком на сервере — см. ListMemberTasksForLead
+  // (lead/owner пространства + memberId обязан быть участником того же пространства).
   const isWorkspaceLead =
     currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
   // Состояние общее с диалогом быстрого добавления: он подставляет этого сотрудника
@@ -291,6 +293,10 @@ export function AssignedToMeBlock({
   // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
   // Сервер отдаёт их только по кругу общих рабочих пространств и всегда canModify: false.
   const [colleaguePersonalTasks, setColleaguePersonalTasks] = useState<AssignedTask[]>([]);
+  // Доска сотрудника (клик по кубику руководителем) — отдельный источник: ВСЕ его
+  // незавершённые задачи по всем проектам пространства, включая те, где сам руководитель
+  // не участник (см. BUG D). Личных инбоксов colleaguePersonalTasks для этого мало.
+  const [focusedMemberTasks, setFocusedMemberTasks] = useState<AssignedTask[]>([]);
   const [tab, setTab] = useState<AssigneeTab>(() => readStoredTab() ?? 'toMe');
   // Зафиксирован ли стартовый выбор вкладки: сохранённый выбор фиксирует его сразу,
   // иначе авто-переключение выполняется один раз после загрузки обоих источников.
@@ -361,18 +367,46 @@ export function AssignedToMeBlock({
   const refresh = useCallback(async (): Promise<void> => {
     lastRefreshAtRef.current = Date.now();
     try {
-      const [mine, byMe, personal] = await Promise.all([
+      const [mine, byMe, personal, focused] = await Promise.all([
         taskAssigneeRepository.listMine(),
         taskAssigneeRepository.listOthers(),
         taskAssigneeRepository.listColleaguesPersonal(),
+        focusedMemberId
+          ? taskAssigneeRepository.listMemberTasks(focusedMemberId)
+          : Promise.resolve<AssignedTask[]>([]),
       ]);
       setTasks(mine);
       setByMeTasks(byMe);
       setColleaguePersonalTasks(personal);
+      if (focusedMemberId) setFocusedMemberTasks(focused);
     } catch (e) {
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     }
-  }, [taskAssigneeRepository]);
+  }, [taskAssigneeRepository, focusedMemberId]);
+
+  // Открыли доску сотрудника (клик по кубику) — подтягиваем его задачи сразу, не дожидаясь
+  // следующей SSE-волны/фокуса. Закрыли доску — сбрасываем, чтобы старые карточки не мелькали
+  // при повторном открытии другого сотрудника.
+  useEffect(() => {
+    if (!focusedMemberId) {
+      setFocusedMemberTasks([]);
+      return;
+    }
+    let cancelled = false;
+    taskAssigneeRepository
+      .listMemberTasks(focusedMemberId)
+      .then((items) => {
+        if (!cancelled) setFocusedMemberTasks(items);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          toast.error(`Не удалось загрузить задачи сотрудника: ${(e as Error).message}`);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedMemberId, taskAssigneeRepository]);
 
   // Пришли по ссылке из плашки «вам назначили задачу» — подсвечиваем карточку.
   useSpotlightTask(!loading && boardTasks !== null, refresh);
@@ -559,14 +593,13 @@ export function AssignedToMeBlock({
     () => byMeVisibleAll.filter(matchesByMeFilters),
     [byMeVisibleAll, matchesByMeFilters],
   );
-  // Доска сотрудника: его личные входящие целиком, без фильтров вкладки «Для всех» —
-  // отбираем по ВЛАДЕЛЬЦУ входящих, а не по ответственному (это его доска, а не его задачи).
+  // Доска сотрудника: ВСЕ его незавершённые задачи по всем проектам пространства (личные
+  // входящие + проектные — включая проекты, где сам руководитель не участник; см. BUG D).
+  // groupAssignedTasks сам разложит по колонкам: «Личные · <имя>» + проектные.
   const focusedTasks = useMemo(() => {
     if (!focusedMemberId) return [];
-    return colleaguePersonalTasks
-      .filter((t) => t.isInbox && t.inboxOwner?.userId === focusedMemberId)
-      .map(asAssignedInboxBlockTask);
-  }, [colleaguePersonalTasks, focusedMemberId]);
+    return focusedMemberTasks.map(asAssignedInboxBlockTask);
+  }, [focusedMemberTasks, focusedMemberId]);
   const focusedVisible = useMemo(
     () => (hideDone ? focusedTasks.filter(notDone) : focusedTasks),
     [focusedTasks, hideDone],
@@ -659,10 +692,7 @@ export function AssignedToMeBlock({
     }
     return [...byId.values()];
   }, [toMeTasks, byMeDisplayTasks, isApprover, focusedMemberId]);
-  const groupedTasks = useMemo(
-    () => visibleTasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval'),
-    [visibleTasks],
-  );
+  const groupedTasks = useMemo(() => selectBoardTasks(visibleTasks), [visibleTasks]);
   // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
   // стояли на месте и не переезжали, когда задача уходит с доски.
   const projectOrder = useMemo(() => (allProjects ?? []).map((p) => p.id), [allProjects]);
@@ -1138,7 +1168,7 @@ export function AssignedToMeBlock({
   if (!hasAny) return filtersToolbar;
 
   const subtitleBase = focusedMember
-    ? 'Личные входящие сотрудника — открыты вам как руководителю пространства'
+    ? 'Все задачи сотрудника по пространству — открыты вам как руководителю'
     : tab === 'toMe'
       ? 'Задачи, за которые отвечаете вы'
       : 'Задачи других участников';
@@ -1148,7 +1178,7 @@ export function AssignedToMeBlock({
   const emptyText = focusedMember
     ? focusedTasks.length > 0
       ? 'Все задачи сотрудника выполнены и скрыты («Скрыть выполненные»)'
-      : 'В личных входящих сотрудника пусто'
+      : 'У сотрудника пока нет незавершённых задач'
     : tab === 'toMe'
       ? toMeTasks.length > 0
         ? 'Все задачи выполнены и скрыты («Скрыть выполненные»)'
@@ -1184,7 +1214,7 @@ export function AssignedToMeBlock({
               {focusedMember ? (
                 <div className="flex min-w-0 items-center gap-1.5">
                   <h2 className="min-w-0 truncate text-lg font-semibold tracking-tight">
-                    Входящие · {focusedMember.displayName}
+                    Задачи · {focusedMember.displayName}
                   </h2>
                   <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-primary">
                     {focusedVisible.length}
