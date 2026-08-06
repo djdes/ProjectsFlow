@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { EyeOff, ListChecks, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Check, EyeOff, ListChecks, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { KanbanColor, KanbanColumnStatus } from '@/domain/kanban/KanbanSettings';
+import type { ColumnTypeFilter } from '@/domain/task/taskTypeMeta';
+import { cn } from '@/lib/utils';
 import { KanbanColorPicker } from './KanbanColorPicker';
 
 type Props = {
@@ -25,6 +27,10 @@ type Props = {
   onSelect: () => void;
   // Удаление доступно только у кастомных колонок (db/154); undefined = встроенная.
   onDelete?: (() => void) | undefined;
+  // Фильтр колонки по типу задачи. undefined — секция «Показывать» не рендерится
+  // (колонка, для которой фильтр не поддержан).
+  typeFilter?: ColumnTypeFilter | undefined;
+  onTypeFilter?: ((mode: ColumnTypeFilter) => void) | undefined;
 };
 
 // Меню колонки (троеточие, как в Notion): переименование, выбор цвета, скрытие.
@@ -38,6 +44,8 @@ export function KanbanColumnMenu({
   onHide,
   onSelect,
   onDelete,
+  typeFilter,
+  onTypeFilter,
 }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [labelDraft, setLabelDraft] = useState(currentLabel);
@@ -109,6 +117,38 @@ export function KanbanColumnMenu({
         <div className="px-2 pb-1.5 pt-1">
           <KanbanColorPicker value={currentColor} onChange={onColor} />
         </div>
+        {onTypeFilter && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+              Показывать
+            </DropdownMenuLabel>
+            {(
+              [
+                { mode: 'all', label: 'Всё' },
+                { mode: 'bug', label: 'Только баги' },
+                { mode: 'feature', label: 'Только фичи' },
+              ] as const
+            ).map((option) => (
+              <DropdownMenuItem
+                key={option.mode}
+                onClick={() => {
+                  setOpen(false);
+                  onTypeFilter(option.mode);
+                }}
+                className={cn('gap-2', (typeFilter ?? 'all') === option.mode && 'font-medium')}
+              >
+                <Check
+                  className={cn(
+                    'size-3.5',
+                    (typeFilter ?? 'all') === option.mode ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {

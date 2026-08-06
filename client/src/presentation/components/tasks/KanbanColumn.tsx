@@ -131,6 +131,9 @@ type Props = {
   colorClasses?: KanbanColumnColorClasses;
   // Меню колонки (троеточие): переименование / цвет / скрытие. Рендерится в шапке.
   columnMenu?: React.ReactNode;
+  // Бейдж состояния колонки (например включённый фильтр по типу). Рендерится в шапке
+  // между названием и счётчиком. Содержимое и обработчики задаёт доска.
+  headerBadge?: React.ReactNode;
   // Если задан — клик по названию колонки открывает inline-правку (тот же setLabel,
   // что и в меню). Без него заголовок некликабельный.
   onRename?: (label: string) => void;
@@ -210,6 +213,7 @@ export function KanbanColumn({
   liveTaskIds,
   colorClasses,
   columnMenu,
+  headerBadge,
   onRename,
   lockOffer,
   onInlineCreate,
@@ -624,6 +628,7 @@ export function KanbanColumn({
                   )}
                 </>
               )}
+              {headerBadge}
               <span className="shrink-0 px-0.5 text-xs tabular-nums text-muted-foreground/70">
                 {tasks.length}
               </span>
