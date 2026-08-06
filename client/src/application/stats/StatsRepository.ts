@@ -1,3 +1,13 @@
+// Строка вкладки «Статистика» в профиле: одно пространство, две честные цифры.
+export type WorkspaceCompletedStats = {
+  readonly workspaceId: string;
+  readonly name: string;
+  // Задач в «Готово», где я ответственный, — снимок досок за всё время.
+  readonly doneTotal: number;
+  // Сколько я закрыл своими руками за последние 30 дней (глубже журнал не хранится).
+  readonly completedRecent: number;
+};
+
 export interface StatsRepository {
   /**
    * Сколько задач текущий пользователь закрыл с начала своих суток.
@@ -12,4 +22,6 @@ export interface StatsRepository {
    * Отдаются только id: сами задачи у клиента уже есть из списков.
    */
   unreadTaskIds(): Promise<string[]>;
+  /** Выполненные задачи по пространствам — вкладка «Статистика» в профиле. */
+  completedByWorkspace(): Promise<WorkspaceCompletedStats[]>;
 }

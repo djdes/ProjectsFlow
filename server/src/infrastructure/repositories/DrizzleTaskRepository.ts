@@ -405,6 +405,18 @@ export class DrizzleTaskRepository implements TaskRepository {
     return updated;
   }
 
+  async countDoneByWorkspaceForAssignee(
+    userId: string,
+  ): Promise<Array<{ workspaceId: string; count: number }>> {
+    const rows = await this.db
+      .select({ workspaceId: projects.workspaceId, n: sql<number>`COUNT(*)` })
+      .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .where(activeTasks(eq(tasks.assigneeUserId, userId), eq(tasks.status, 'done')))
+      .groupBy(projects.workspaceId);
+    return rows.map((r) => ({ workspaceId: r.workspaceId, count: Number(r.n) }));
+  }
+
   async bulkChangeStatus(
     projectIds: readonly string[],
     from: TaskStatus,

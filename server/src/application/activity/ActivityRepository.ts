@@ -34,6 +34,15 @@ export interface ActivityRepository {
    * состояние доски.
    */
   countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number>;
+  /**
+   * То же, но с разбивкой по пространствам: «сколько я закрыл за окно и где». Журнал
+   * чистится через 30 дней (см. sweepActivity в index.ts) — окно шире отдаст те же цифры,
+   * и обещать по нему «за всё время» нельзя.
+   */
+  countCompletedByActorPerWorkspaceSince(
+    actorUserId: string,
+    since: Date,
+  ): Promise<Array<{ workspaceId: string; count: number }>>;
   /** GC: удалить события старше cutoff. Возвращает число удалённых. */
   deleteOlderThan(cutoff: Date): Promise<number>;
 }
