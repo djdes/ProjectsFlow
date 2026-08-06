@@ -72,8 +72,14 @@ export function buildToMeInboxBlockTasks(input: {
  * Только СВОЮ задачу: «сдать работу за другого» — не то действие, которое стоит отдавать
  * перетаскиванию. Повторная сдача уже сданной задачи смысла не имеет.
  *
+ * Личные inbox-задачи исключены отдельно: сервер (TaskApprovalService.requiresApproval)
+ * намеренно не требует приёмки для project.isInbox — «свою задачу утверждать не у кого».
+ * Явный запрос статуса 'pending_approval' (в отличие от 'done') этот гейт не проходит —
+ * без проверки здесь жест обошёл бы серверное правило и завёл личную задачу в
+ * approval-freeze с уведомлением руководителям, которым не над чем принимать решение.
+ *
  * Гейта «приёмка включена в пространстве» здесь нет намеренно: полка рендерится только
- * когда приёмка включена, поэтому там, где её нет, нет и цели дропа.
+ * когда приёмка включена (или уже что-то в очереди), поэтому там, где её нет, нет и цели дропа.
  */
 export function canSendToApproval(
   task: InboxBlockTask,
@@ -81,5 +87,6 @@ export function canSendToApproval(
 ): boolean {
   if (!currentUserId) return false;
   if (task.assignee.userId !== currentUserId) return false;
+  if (task.isInbox) return false;
   return task.status !== 'pending_approval';
 }

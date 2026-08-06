@@ -268,9 +268,11 @@ export function AssignedToMeBlock({
   // пустую полку не показываем: это не их инструмент.
   const { data: workspaces } = useWorkspaces();
   const currentWorkspace = (workspaces ?? []).find((w) => w.isCurrent) ?? null;
+  // Приёмка включена в пространстве вообще (независимо от роли смотрящего) — используется
+  // отдельно от isApprover, чтобы решить, показывать ли полку рядовому исполнителю.
+  const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
   const isApprover =
-    currentWorkspace?.requireTaskApproval === true &&
-    (currentWorkspace.role === 'lead' || currentWorkspace.role === 'owner');
+    approvalEnabled && (currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner');
   // Руководитель пространства смотрит входящие сотрудника: клик по кубику переводит блок
   // на его личную доску. Это ЖЕСТ, а не новая граница видимости — личные задачи коллег и
   // так приходят всем со-участникам (см. ListPersonalTasksOfColleagues) и видны на вкладке
@@ -1237,7 +1239,10 @@ export function AssignedToMeBlock({
           прямо сейчас». Принимает дроп карточки (статус → manual), карточки внутри
           можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
           отключён и полка была бы мёртвой. */}
-      {!selectionActive && (approvalTasks.length > 0 || isApprover) && (
+      {/* Полка нужна и рядовому исполнителю с пустой очередью: это единственная цель
+          дропа для «сдать первую задачу» жестом, и без неё жест физически некуда
+          применить, пока в очереди не появится хотя бы одна чужая/старая карточка. */}
+      {!selectionActive && (approvalTasks.length > 0 || approvalEnabled) && (
         <ApprovalShelf
           items={approvalTasks}
           onOpen={(t) => setDrawerTask(t)}
@@ -1248,6 +1253,7 @@ export function AssignedToMeBlock({
           isApprover={isApprover}
           currentUserId={user?.id ?? null}
           canDrop={activeDrag ? canSendToApproval(activeDrag, user?.id ?? null) : false}
+          dragActive={dragActive}
           {...(focusedMember
             ? {
                 emptyHint: `Задач на утверждении от ${focusedMember.displayName} сейчас нет.`,
@@ -1889,6 +1895,7 @@ function ApprovalShelf({
   isApprover,
   currentUserId,
   canDrop,
+  dragActive,
   emptyHint,
   className,
 }: {
@@ -1906,6 +1913,9 @@ function ApprovalShelf({
   // Можно ли бросить в полку карточку, которую тащат прямо сейчас. Считает родитель:
   // только он знает, что именно в руке (activeDrag). false — цель погашена.
   canDrop: boolean;
+  // Идёт ЛЮБОЙ drag общего контекста — нужен для тихого ring-намёка «сюда можно», того же,
+  // что у соседних GroupDropColumn: полка не должна раскрываться только под курсором.
+  dragActive: boolean;
   // Чем объяснить пустую полку. На доске сотрудника это «у него нечего принимать», а не
   // общее «сотрудники ещё ничего не сдали» — иначе руководитель читает чужую очередь как свою.
   emptyHint?: string;
@@ -1918,12 +1928,22 @@ function ApprovalShelf({
     data: { type: 'approval' },
     disabled: !canDrop,
   });
+  // Пустую полку видит теперь и рядовой исполнитель (не только принимающий) — текст
+  // по умолчанию должен объяснять её именно ему: это цель для СВОЕЙ сделанной работы,
+  // а не чужая очередь. emptyHint (доска сотрудника) и isApprover-текст — не трогаем.
+  const defaultEmptyHint = isApprover
+    ? 'Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их можете только вы.'
+    : 'Сюда перетаскивают свою сделанную работу, чтобы её принял руководитель.';
   return (
     <div className={className}>
       <div
         ref={setNodeRef}
         className={cn(
           'rounded-xl border border-violet-300/50 bg-violet-100/40 px-2.5 py-2 transition-colors duration-150 dark:border-violet-400/20 dark:bg-violet-400/[0.07]',
+          // Пока тащат карточку, которую можно бросить сюда: тихий ring-намёк того же
+          // языка, что у GroupDropColumn (та же ring-1/inset-primary/15), плюс сплошной
+          // ring под курсором — иначе полка «молчит» до тех пор, пока не наведёшься точно.
+          canDrop && dragActive && !isOver && 'ring-1 ring-inset ring-primary/15',
           isOver &&
             'border-violet-400/80 bg-violet-200/60 dark:border-violet-300/50 dark:bg-violet-400/[0.16]',
         )}
@@ -1934,11 +1954,11 @@ function ApprovalShelf({
           {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
         </div>
         {items.length === 0 ? (
-          // Пустую очередь показываем только принимающему (см. isApprover): без этого
-          // новую область не находят и решают, что приёмка не работает.
+          // Пустую очередь теперь видят и принимающий, и рядовой исполнитель (см.
+          // approvalEnabled у родителя) — без этого либо новую область не находят, либо
+          // цели дропа для «сдать первую задачу» жестом попросту нет.
           <p className="px-0.5 py-1 text-xs text-violet-800/60 dark:text-violet-200/45">
-            {emptyHint ??
-              'Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их можете только вы.'}
+            {emptyHint ?? defaultEmptyHint}
           </p>
         ) : (
         <div className="flex flex-wrap gap-2">

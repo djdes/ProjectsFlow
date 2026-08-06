@@ -42,7 +42,7 @@ function assigned(id: string, overrides: Partial<Task> = {}): AssignedTask {
   return {
     ...task(id, { projectId: 'inbox-other', ...overrides }),
     projectName: 'Входящие',
-    isInbox: true,
+    isInbox: false,
     canModify: true,
   };
 }
@@ -103,4 +103,12 @@ test('canSendToApproval: задача уже на утверждении — п�
 
 test('canSendToApproval: без текущего юзера цель недоступна', () => {
   assert.equal(canSendToApproval(asAssignedInboxBlockTask(assigned('t4')), null), false);
+});
+
+test('canSendToApproval: личная inbox-задача — сервер не требует приёмки, гейт закрыт', () => {
+  // project.isInbox: сервер (TaskApprovalService.requiresApproval) намеренно не требует
+  // приёмки — «свою задачу утверждать не у кого». Явный статус обходит серверную подмену,
+  // поэтому клиент должен отказать сам, до отправки запроса.
+  const t = { ...assigned('t5'), isInbox: true };
+  assert.equal(canSendToApproval(asAssignedInboxBlockTask(t), 'me'), false);
 });
