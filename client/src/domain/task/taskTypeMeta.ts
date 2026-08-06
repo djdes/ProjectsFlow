@@ -25,3 +25,22 @@ export const TASK_TYPE_META: Record<TaskType, TaskTypeMeta> = {
     badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
   },
 };
+
+// Режим показа колонки канбана по типу задачи. 'all' — колонка как раньше.
+export type ColumnTypeFilter = 'all' | 'bug' | 'feature';
+
+/**
+ * Проходит ли задача фильтр колонки по типу.
+ *
+ * Задача без типа считается ФИЧЕЙ — та же логика, что у классификатора в compose-промпте
+ * («при сомнениях — feature»). Поле типа появилось недавно, и у большинства задач оно
+ * пустое: отсекай мы null, режим «только фичи» показывал бы почти пустую доску.
+ */
+export function matchesTypeFilter(
+  taskType: TaskType | null | undefined,
+  mode: ColumnTypeFilter,
+): boolean {
+  if (mode === 'all') return true;
+  if (mode === 'bug') return taskType === 'bug';
+  return taskType !== 'bug';
+}
