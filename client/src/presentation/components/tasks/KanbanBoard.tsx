@@ -54,6 +54,8 @@ import { stashComposerDraft } from './composerDraft';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
+import { useCollapsingPresence } from '@/presentation/hooks/useCollapsingPresence';
+import { EXIT_MS } from '@/presentation/hooks/useFlashExitPhase';
 import { useColumnTypeFilter } from '@/presentation/hooks/useColumnTypeFilter';
 import { TASK_TYPE_META, matchesTypeFilter } from '@/domain/task/taskTypeMeta';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -619,6 +621,14 @@ export function KanbanBoard({
     [tasks, viewFilters, viewSort],
   );
   const grouped = useMemo(() => groupByStatus(boardTasks, doneOrder), [boardTasks, doneOrder]);
+  // «На утверждении» — служебная колонка, появляется/пропадает вместе с наличием таких
+  // задач (см. shownStatuses ниже). Раньше она выбрасывалась из ряда МГНОВЕННО, как только
+  // grouped.pending_approval пустел — соседние колонки прыгали влево скачком. Держим её
+  // смонтированной ещё EXIT_MS и схлопываем ширину CSS-ом (см. рендер ниже), а не
+  // framer-layout (на тач отключён осознанно, KanbanCard.IS_COARSE_POINTER).
+  const approvalColumnHasTasks = grouped.pending_approval.length > 0;
+  const { mounted: approvalColumnMounted, collapsing: approvalColumnCollapsing } =
+    useCollapsingPresence(approvalColumnHasTasks, EXIT_MS);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
   // Открытая в drawer'е задача — её карточку подсвечиваем синим бордером (E4).
   const openTaskId = dialog?.mode === 'edit' ? dialog.task.id : null;
@@ -1087,7 +1097,9 @@ export function KanbanBoard({
   // Приёмка задач руководителем (db/150): колонка «На утверждении» появляется, когда есть
   // что утверждать. Показываем по данным, а не по флагу пространства — тогда доски команд
   // без приёмки выглядят ровно как раньше, а плюс колонка не требует настроек/цветов.
-  const shownStatuses: TaskStatus[] = grouped.pending_approval.length
+  // approvalColumnMounted (а не approvalColumnHasTasks напрямую) — колонка ещё видна EXIT_MS
+  // после того, как opустела, чтобы успеть плавно схлопнуть ширину (см. рендер колонок ниже).
+  const shownStatuses: TaskStatus[] = approvalColumnMounted
     ? visibleStatuses.flatMap((s) => (s === 'done' ? ['pending_approval' as TaskStatus, s] : [s]))
     : visibleStatuses;
   // 'manual' исключён и здесь: колонки больше нет, и пункт «показать» в меню скрытых
@@ -1293,7 +1305,7 @@ export function KanbanBoard({
             const columnTasks = filterTasks(
               hideDone && status === 'done' ? [] : grouped[status],
             ).filter((t) => matchesTypeFilter(t.taskType, typeFilter));
-            return (
+            const column = (
               <KanbanColumn
                 key={status}
                 status={status}
@@ -1426,6 +1438,25 @@ export function KanbanBoard({
                   ) : undefined
                 }
               />
+            );
+            // «На утверждении» — единственная колонка, которая появляется/пропадает по
+            // данным (см. approvalColumnMounted выше). Оборачиваем ТОЛЬКО её в схлопывающий
+            // grid-враппер СНАРУЖИ колонки (droppable/sortable-узлы dnd-kit живут внутри
+            // KanbanColumn — overflow:hidden их не задевает, только measure самого враппера,
+            // который в drag-математике не участвует). Остальные колонки — БЕЗ обёртки,
+            // как раньше (не трогаем их DOM/layout лишний раз).
+            if (!approvalColumn) return column;
+            return (
+              <div
+                key={status}
+                data-pf-collapse
+                className="grid shrink-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+                style={{ gridTemplateColumns: approvalColumnCollapsing ? '0fr' : '1fr' }}
+              >
+                <div className={cn('min-w-0', approvalColumnCollapsing ? 'overflow-hidden' : 'overflow-visible')}>
+                  {column}
+                </div>
+              </div>
             );
           })}
           <KanbanHiddenColumnsMenu

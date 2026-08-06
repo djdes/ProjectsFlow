@@ -764,6 +764,18 @@ html[data-pf-modality='pointer'] :focus-visible {
   html.pf-no-motion .pf-nav-glass {
     transition-duration: 380ms !important;
   }
+
+  /* Схлопывание уходящих карточек/колонок (полки «На утверждении»/«В работе», группы
+     «Входящих», колонка «На утверждении» на доске) обязано плавно ехать даже на тач —
+     это ЛЁГКИЙ CSS grid-template-columns/rows transition, не framer-layout (тот на тач
+     отключён осознанно, см. KanbanCard.IS_COARSE_POINTER — источник лагов при скролле).
+     pf-no-motion по умолчанию активен на тач (MotionProvider.readInitial), поэтому без
+     этого исключения схлопывание было бы мгновенным ровно там, где рывок заметнее всего.
+     Настоящий a11y-сигнал (prefers-reduced-motion) отключает этот transition отдельно,
+     через Tailwind-класс motion-reduce:transition-none на самих элементах. */
+  html.pf-no-motion [data-pf-collapse] {
+    transition-duration: 300ms !important;
+  }
 }
 
 /* Tiptap WYSIWYG-редактор (RichTextEditor): placeholder, mention, task-list. */

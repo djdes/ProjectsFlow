@@ -54,7 +54,8 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
-import { useFlashExitPhase } from '@/presentation/hooks/useFlashExitPhase';
+import { useFlashExitPhase, EXIT_MS } from '@/presentation/hooks/useFlashExitPhase';
+import { useExitingListItems } from '@/presentation/hooks/useExitingListItems';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -678,6 +679,11 @@ export function AssignedToMeBlock({
       ),
     [groupedTasks, grouping, tab, projectOrder, focusedMemberId],
   );
+  // group/priority/created/taskType-группировки (buildFixed/groupByProject в
+  // assignedGrouping.ts) выбрасывают опустевшую группу из массива сразу — колонка исчезала
+  // скачком, соседние колонки прыгали влево. Держим её ещё EXIT_MS с exiting:true, схлопывая
+  // CSS-ом (см. рендер ниже), а не framer-layout (на тач отключён осознанно).
+  const displayGroups = useExitingListItems(groups, (g) => g.key, EXIT_MS);
   // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
   const kanbanGroups = useMemo(
@@ -1402,17 +1408,24 @@ export function AssignedToMeBlock({
               hint="Бросьте сюда, чтобы выбрать приоритет"
             />
           )}
-          {groups.map((group, index) => {
+          {displayGroups.map(({ item: group, exiting }) => {
+            // Индекс в РЕАЛЬНОМ groups (не в displayGroups — там есть ещё «призраки»
+            // опустевших колонок) — columnSelectionAt индексирует именно groups/selectableGroups.
+            // Для призрака индекса нет: выделение на исчезающей колонке не имеет смысла.
+            const index = groups.findIndex((g) => g.key === group.key);
             // Смысл дропа карточки доски на колонку: project → перенос задачи в проект
             // («Личные» — не цель, задача и так в инбоксе); priority → смена приоритета;
-            // created — колонки не принимают (дату создания не изменить).
+            // created — колонки не принимают (дату создания не изменить). Призрак дроп не
+            // принимает вовсе — она уже уходит.
             const dropData =
-              grouping === 'project' && !group.isInbox
-                ? { type: 'group', grouping: 'project', projectId: group.key }
-                : grouping === 'priority'
-                  ? { type: 'group', grouping: 'priority', priority: group.key }
-                  : null;
-            const columnSelection = columnSelectionAt(index);
+              exiting
+                ? null
+                : grouping === 'project' && !group.isInbox
+                  ? { type: 'group', grouping: 'project', projectId: group.key }
+                  : grouping === 'priority'
+                    ? { type: 'group', grouping: 'priority', priority: group.key }
+                    : null;
+            const columnSelection = index >= 0 ? columnSelectionAt(index) : null;
             // #2 (af1ebf44): колонка = реальный проект (группировка по проекту, не «Личные»).
             // Тогда её название кликабельно (→ страница проекта), а по ховеру доступна «+».
             const isProjectColumn = grouping === 'project' && !group.isInbox;
@@ -1420,14 +1433,28 @@ export function AssignedToMeBlock({
             // «где плюсы» на «Для всех»). Гейт по canModify: показываем там, где у юзера есть
             // право менять задачи проекта (≈ право создавать). Задача создаётся в этом проекте
             // на текущего юзера, поэтому попадёт во вкладку «Мои» (о чём говорит тост).
-            const canQuickAdd = isProjectColumn && group.items.some((i) => i.canModify);
+            const canQuickAdd = !exiting && isProjectColumn && group.items.some((i) => i.canModify);
             return (
-            <GroupDropColumn
+            // Обёртка-коллапс СНАРУЖИ droppable-колонки (не на самом её узле — droppable
+            // ref живёт внутри GroupDropColumn) — overflow:hidden тут не задевает measure
+            // dnd-kit'а над самим droppable/sortable-узлом (см. брифа примечание про
+            // «залипший transform»). data-pf-collapse — едет и при выключенных на тач
+            // анимациях (globals.css .pf-no-motion исключение).
+            <div
               key={group.key}
+              data-pf-collapse
+              className="grid shrink-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+              style={{ gridTemplateColumns: exiting ? '0fr' : '1fr' }}
+            >
+            <div className={cn('min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
+            <GroupDropColumn
               id={`group-${grouping}-${group.key}`}
               data={dropData}
               highlight={boardDragActive}
-              className="group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
+              className={cn(
+                'group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none',
+                exiting && 'pointer-events-none opacity-0 transition-opacity duration-200 motion-reduce:transition-none',
+              )}
             >
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
@@ -1510,6 +1537,8 @@ export function AssignedToMeBlock({
                 />
               </div>
             </GroupDropColumn>
+            </div>
+            </div>
             );
           })}
           {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
@@ -2061,14 +2090,22 @@ function ApprovalItemCard({
   const accepting = phase !== 'idle';
 
   return (
-    // Тот же коллапс-паттерн, что у AcceptedCard: grid 1fr→0fr + затухание, только тут он
-    // охватывает и карточку, и ряд кнопок под ней — снаружи AcceptedCard трогать не нужно.
+    // Тот же коллапс-паттерн, что у AcceptedCard, но по ОБЕИМ осям: полка — flex-wrap-ряд
+    // (ApprovalShelf), и только схлопывание ШИРИНЫ сдвигает соседей по строке влево; высота
+    // сама по себе (как у одиночного AcceptedCard в вертикальном списке) на flex-wrap не
+    // влияет. Здесь он охватывает и карточку, и ряд кнопок под ней — снаружи AcceptedCard
+    // трогать не нужно. data-pf-collapse — едет даже при выключенных на тач анимациях
+    // (globals.css .pf-no-motion исключение), полка «На утверждении» видна и на телефоне.
     <div
+      data-pf-collapse
       className={cn(
-        'grid grid-cols-[minmax(0,1fr)] transition-all duration-300 ease-out motion-reduce:transition-none',
+        'grid transition-all duration-300 ease-out motion-reduce:transition-none',
         phase === 'exit' && 'opacity-0',
       )}
-      style={{ gridTemplateRows: phase === 'exit' ? '0fr' : '1fr' }}
+      style={{
+        gridTemplateColumns: phase === 'exit' ? '0fr' : '1fr',
+        gridTemplateRows: phase === 'exit' ? '0fr' : '1fr',
+      }}
     >
       <div className={cn('min-h-0 min-w-0', phase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
         <div
@@ -2148,6 +2185,10 @@ function InProgressShelf({
   });
   const { animations } = useMotion();
   const [flash, setFlash] = useState(false);
+  // Убранная из работы/удалённая карточка не выбрасывается из полки мгновенно — держим
+  // «призрак» ещё EXIT_MS и схлопываем его CSS-ом (grid 1fr→0fr по обеим осям), чтобы
+  // соседи по flex-wrap-ряду сдвигались влево плавно, а не скачком (см. useExitingListItems).
+  const displayItems = useExitingListItems(items, (t) => t.id, EXIT_MS);
 
   useEffect(() => {
     if (flashKey === 0 || !animations) return;
@@ -2183,46 +2224,63 @@ function InProgressShelf({
           <span>{STATUS_LABEL.manual}</span>
           {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
         </div>
-        {items.length === 0 ? (
+        {items.length === 0 && displayItems.length === 0 ? (
           <p className="px-0.5 py-1 text-xs text-amber-800/60 dark:text-amber-200/45">
             Перетащите сюда задачу, которой занимаетесь сейчас.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {items.map((item) => (
+            {displayItems.map(({ item, exiting }) => (
+              // Обёртка-коллапс (аналог AcceptedCard/ApprovalItemCard, но по ОБЕИМ осям —
+              // карточка живёт в flex-wrap-ряду, соседи по строке сдвигаются только когда
+              // схлопывается именно ширина, а не высота). overflow — только на exit,
+              // иначе на вспышке обрезался бы зелёный ring. data-pf-collapse — исключение
+              // из pf-no-motion (globals.css): едет даже когда анимации на тач выключены.
               <div
                 key={item.id}
-                // rounded-xl на обёртке — чтобы вспышка (::after с border-radius: inherit)
-                // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
-                // эффекта от радиуса самого по себе тоже.
-                className={cn(
-                  'group relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl',
-                  flash && item.id === flashItemId && 'pf-card-flash',
-                )}
+                data-pf-collapse
+                className="grid shrink-0 grow-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+                style={{
+                  gridTemplateColumns: exiting ? '0fr' : '1fr',
+                  gridTemplateRows: exiting ? '0fr' : '1fr',
+                }}
               >
-                <DraggableTask item={item} disabled={!item.canModify}>
-                  <AcceptedCard
-                    item={item}
-                    onOpen={() => onOpen(item)}
-                    onChanged={onChanged}
-                    onDelete={() => onDelete(item)}
-                  />
-                </DraggableTask>
-                {item.canModify && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveFromWork(item);
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    title="Убрать из работы (вернуть в «Черновики»)"
-                    className="absolute -right-1.5 -top-1.5 z-20 grid size-5 place-items-center rounded-full border border-amber-300/70 bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 dark:border-amber-400/30"
-                    aria-label="Убрать из работы"
+                <div className={cn('min-h-0 min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
+                  <div
+                    // rounded-xl на обёртке — чтобы вспышка (::after с border-radius: inherit)
+                    // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
+                    // эффекта от радиуса самого по себе тоже.
+                    className={cn(
+                      'group relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl transition-opacity duration-200 motion-reduce:transition-none',
+                      flash && item.id === flashItemId && 'pf-card-flash',
+                      exiting && 'pointer-events-none opacity-0',
+                    )}
                   >
-                    <X className="size-3" />
-                  </button>
-                )}
+                    <DraggableTask item={item} disabled={!item.canModify || exiting}>
+                      <AcceptedCard
+                        item={item}
+                        onOpen={() => onOpen(item)}
+                        onChanged={onChanged}
+                        onDelete={() => onDelete(item)}
+                      />
+                    </DraggableTask>
+                    {item.canModify && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveFromWork(item);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        title="Убрать из работы (вернуть в «Черновики»)"
+                        className="absolute -right-1.5 -top-1.5 z-20 grid size-5 place-items-center rounded-full border border-amber-300/70 bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 dark:border-amber-400/30"
+                        aria-label="Убрать из работы"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -3107,7 +3165,11 @@ function AcceptedCard({
   return (
     // Обёртка-аниматор: плавный коллапс высоты (grid 1fr→0fr) + затухание при «выполнено».
     // overflow скрываем ТОЛЬКО на фазе exit — иначе на вспышке обрезался бы зелёный ring.
+    // data-pf-collapse — исключение из pf-no-motion (globals.css): едет даже когда анимации
+    // на тач выключены по умолчанию (MotionProvider), иначе на телефоне карточка исчезала бы
+    // скачком и соседи снизу прыгали бы на её место без анимации.
     <div
+      data-pf-collapse
       className={cn(
         // grid-cols-[minmax(0,1fr)] — не косметика: у единственной неявной колонки
         // размер `auto`, а её минимум = min-content содержимого. Карточка с неразрывным
