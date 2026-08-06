@@ -111,7 +111,9 @@ import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
+  canOpenMemberBoard,
   canSendToApproval,
+  selectApprovalTasks,
   selectBoardTasks,
   type AssignedInboxBlockTask,
   type InboxBlockTask,
@@ -282,8 +284,9 @@ export function AssignedToMeBlock({
   // где сам руководитель не участник — BUG D). Это РАСШИРЕНИЕ доступа к данным (не просто
   // ярлык к уже видимому), поэтому гейт целиком на сервере — см. ListMemberTasksForLead
   // (lead/owner пространства + memberId обязан быть участником того же пространства).
-  const isWorkspaceLead =
-    currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner';
+  // canOpenMemberBoard дополнительно требует kind === 'team' — см. её комментарий в
+  // inboxBlockTasks.ts (личный дефолт-хаб структурно несовместим с этим жестом).
+  const isWorkspaceLead = canOpenMemberBoard(currentWorkspace);
   // Состояние общее с диалогом быстрого добавления: он подставляет этого сотрудника
   // ответственным, чтобы задача, созданная с его доски, создавалась для него.
   const { member: focusedMember, setMember: setFocusedMember } = useFocusedInbox();
@@ -364,29 +367,49 @@ export function AssignedToMeBlock({
   // против частых двойных перерисовок от гарантированного эха своей же мутации.
   const lastRefreshAtRef = useRef(0);
 
+  // Зеркало focusedMemberId для refresh(): refresh не должен зависеть от него напрямую —
+  // иначе его identity меняется при каждом открытии/закрытии доски сотрудника, а refresh
+  // стоит в deps mount-эффекта ниже (перечитал бы listMine/listOthers/listColleaguesPersonal
+  // + getUiPrefs и заново мигнул скелетоном на КАЖДЫЙ клик по кубику — не то, ради чего он
+  // существует). Читаем актуальное значение через ref в момент вызова.
+  const focusedMemberIdRef = useRef(focusedMemberId);
+  useEffect(() => {
+    focusedMemberIdRef.current = focusedMemberId;
+  }, [focusedMemberId]);
+
   const refresh = useCallback(async (): Promise<void> => {
     lastRefreshAtRef.current = Date.now();
+    // Снимок на момент старта запроса — сверяем с актуальным ПОСЛЕ await (см. ниже), а не
+    // просто читаем ref второй раз: доска могла закрыться и открыться на ДРУГОГО сотрудника
+    // за время в полёте, и тогда актуальный id формально снова совпал бы со снимком, но
+    // ответ всё равно принадлежал бы уже не тому запросу.
+    const focusedAtStart = focusedMemberIdRef.current;
     try {
       const [mine, byMe, personal, focused] = await Promise.all([
         taskAssigneeRepository.listMine(),
         taskAssigneeRepository.listOthers(),
         taskAssigneeRepository.listColleaguesPersonal(),
-        focusedMemberId
-          ? taskAssigneeRepository.listMemberTasks(focusedMemberId)
+        focusedAtStart
+          ? taskAssigneeRepository.listMemberTasks(focusedAtStart)
           : Promise.resolve<AssignedTask[]>([]),
       ]);
       setTasks(mine);
       setByMeTasks(byMe);
       setColleaguePersonalTasks(personal);
-      if (focusedMemberId) setFocusedMemberTasks(focused);
+      // Пишем focusedMemberTasks только если доска всё ещё открыта на ТОГО ЖЕ сотрудника —
+      // иначе устаревший ответ перезаписал бы уже актуальные данные другого/пустого фокуса.
+      if (focusedAtStart && focusedMemberIdRef.current === focusedAtStart) {
+        setFocusedMemberTasks(focused);
+      }
     } catch (e) {
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     }
-  }, [taskAssigneeRepository, focusedMemberId]);
+  }, [taskAssigneeRepository]);
 
   // Открыли доску сотрудника (клик по кубику) — подтягиваем его задачи сразу, не дожидаясь
   // следующей SSE-волны/фокуса. Закрыли доску — сбрасываем, чтобы старые карточки не мелькали
-  // при повторном открытии другого сотрудника.
+  // при повторном открытии другого сотрудника. Отдельный эффект (не refresh()): именно он
+  // реагирует на смену focusedMemberId, а refresh остаётся стабильным между кликами.
   useEffect(() => {
     if (!focusedMemberId) {
       setFocusedMemberTasks([]);
@@ -675,23 +698,15 @@ export function AssignedToMeBlock({
   //    (из направления «Другим»): человек видел десятки карточек, которые не может ни
   //    принять, ни забрать — чужая очередь выдавалась за его собственную.
   //
-  //  - НА ДОСКЕ СОТРУДНИКА полка показывает очередь ЭТОГО человека: руководитель смотрит
-  //    конкретного исполнителя, и «на утверждении» должно означать «сдал он». Берём все его
-  //    задачи, а не только личные входящие: сдают работу и по проектам тоже, а прятать их
-  //    здесь значило бы показывать неполную картину по человеку.
+  //  - НА ДОСКЕ СОТРУДНИКА полка показывает очередь ЭТОГО человека — источник и гейт см.
+  //    в комментарии selectApprovalTasks (inboxBlockTasks.ts).
   //
   // Фильтры вкладок не применяем: очередь не должна прятаться за фильтром.
-  const approvalTasks = useMemo(() => {
-    const source =
-      isApprover || focusedMemberId ? [...toMeTasks, ...byMeDisplayTasks] : toMeTasks;
-    const byId = new Map<string, InboxBlockTask>();
-    for (const t of source) {
-      if (t.status !== 'pending_approval') continue;
-      if (focusedMemberId && t.assignee.userId !== focusedMemberId) continue;
-      byId.set(t.id, t);
-    }
-    return [...byId.values()];
-  }, [toMeTasks, byMeDisplayTasks, isApprover, focusedMemberId]);
+  const approvalTasks = useMemo(
+    () =>
+      selectApprovalTasks({ toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover }),
+    [toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover],
+  );
   const groupedTasks = useMemo(() => selectBoardTasks(visibleTasks), [visibleTasks]);
   // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
   // стояли на месте и не переезжали, когда задача уходит с доски.
@@ -1176,9 +1191,9 @@ export function AssignedToMeBlock({
   // (непустой СЫРОЙ список без фильтров = всё выполнено и скрыто Eye-toggle'ом),
   // и только при реально пустых данных — «ничего нет».
   const emptyText = focusedMember
-    ? focusedTasks.length > 0
-      ? 'Все задачи сотрудника выполнены и скрыты («Скрыть выполненные»)'
-      : 'У сотрудника пока нет незавершённых задач'
+    ? // Сервер (ListMemberTasksForLead) уже не отдаёт done — ветки «выполнены и скрыты»
+      // здесь быть не может, hideDone/notDone на этом списке всегда no-op.
+      'У сотрудника пока нет незавершённых задач'
     : tab === 'toMe'
       ? toMeTasks.length > 0
         ? 'Все задачи выполнены и скрыты («Скрыть выполненные»)'

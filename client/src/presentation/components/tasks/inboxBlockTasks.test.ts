@@ -5,8 +5,10 @@ import type { Task } from '@/domain/task/Task';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
+  canOpenMemberBoard,
   canSendToApproval,
   isPersonalInboxBlockTask,
+  selectApprovalTasks,
   selectBoardTasks,
 } from './inboxBlockTasks';
 
@@ -128,6 +130,62 @@ test('доска сотрудника (BUG D): личные и проектны�
     board.map((t) => t.id).sort(),
     ['personal-1', 'project-1'],
   );
+});
+
+test('selectApprovalTasks: доска сотрудника видит его «На утверждении» даже из проекта, где руководитель не участник (BUG D, Important 2)', () => {
+  // Задача сидит только в focusedTasks (ListMemberTasksForLead) — toMe/byMeDisplayTasks её
+  // не видят вовсе, потому что membership-скоуплены на /assignees/mine|others. Раньше полка
+  // читала только их и такая карточка пропадала отовсюду разом (доска её и так вырезает
+  // как pending_approval). Регрессионный тест на фикс.
+  const notMemberProjectTask = {
+    ...assigned('pend-in-foreign-project', { projectId: 'proj-not-a-member', status: 'pending_approval' }),
+    isInbox: false,
+  };
+  const result = selectApprovalTasks({
+    toMeTasks: [],
+    byMeDisplayTasks: [],
+    focusedTasks: [asAssignedInboxBlockTask(notMemberProjectTask)],
+    focusedMemberId: notMemberProjectTask.assignee.userId,
+    isApprover: true,
+  });
+  assert.deepEqual(result.map((t) => t.id), ['pend-in-foreign-project']);
+});
+
+test('selectApprovalTasks: вне фокус-режима approver видит очередь по обоим направлениям, исполнитель — только свою', () => {
+  const mine = assigned('mine-pending', { status: 'pending_approval' });
+  const other = {
+    ...assigned('other-pending', { status: 'pending_approval' }),
+    assignee: { userId: 'colleague', displayName: 'Коллега', avatarUrl: null },
+  };
+  const approverView = selectApprovalTasks({
+    toMeTasks: [asAssignedInboxBlockTask(mine)],
+    byMeDisplayTasks: [asAssignedInboxBlockTask(other)],
+    focusedTasks: [],
+    focusedMemberId: null,
+    isApprover: true,
+  });
+  assert.deepEqual(approverView.map((t) => t.id).sort(), ['mine-pending', 'other-pending']);
+
+  const executorView = selectApprovalTasks({
+    toMeTasks: [asAssignedInboxBlockTask(mine)],
+    byMeDisplayTasks: [asAssignedInboxBlockTask(other)],
+    focusedTasks: [],
+    focusedMemberId: null,
+    isApprover: false,
+  });
+  assert.deepEqual(executorView.map((t) => t.id), ['mine-pending']);
+});
+
+test('canOpenMemberBoard: только team-пространство и роль lead/owner (Important 1 — регрессия в дефолт-хабе)', () => {
+  assert.equal(canOpenMemberBoard(null), false);
+  assert.equal(canOpenMemberBoard({ kind: 'team', role: 'lead' }), true);
+  assert.equal(canOpenMemberBoard({ kind: 'team', role: 'owner' }), true);
+  assert.equal(canOpenMemberBoard({ kind: 'team', role: 'editor' }), false);
+  assert.equal(canOpenMemberBoard({ kind: 'team', role: 'viewer' }), false);
+  // В личном дефолт-хабе владелец формально 'owner', но ListMemberTasksForLead скоупит
+  // строго по ws.id этого хаба, куда коллеги не входят (кубики там — из ВСЕХ общих
+  // пространств) — жест должен быть выключен, а не бить 404 на каждый клик.
+  assert.equal(canOpenMemberBoard({ kind: 'default', role: 'owner' }), false);
 });
 
 test('canSendToApproval: личная inbox-задача — сервер не требует приёмки, гейт закрыт', () => {

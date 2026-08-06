@@ -243,6 +243,23 @@ test('completed ("done") tasks are excluded', async () => {
   assert.deepEqual(items.map((i) => i.task.id), ['t1']);
 });
 
+test('inboxOwner name resolves to the REAL project owner, not always the focused member (delegated-into-colleague-inbox case)', async () => {
+  // bob получил задачу в личных входящих carol (carol делегировала ему) — колонка должна
+  // подписаться «Личные · carol», а не именем bob (регрессия, которую ловит этот тест).
+  const { list } = makeList({
+    callerRole: 'lead',
+    memberRole: 'editor',
+    projects: [
+      project({ id: 'carol-inbox', workspaceId: 'ws-team', ownerId: 'carol', name: 'Входящие', isInbox: true }),
+    ],
+    tasks: [task('t1', 'carol-inbox', 'bob')],
+  });
+
+  const items = await list.execute('lead', 'bob');
+  assert.equal(items[0]!.inboxOwner?.userId, 'carol');
+  assert.equal(items[0]!.inboxOwner?.displayName, 'carol');
+});
+
 test('other assignees in the same workspace are not leaked into the member board', async () => {
   const { list } = makeList({
     callerRole: 'lead',

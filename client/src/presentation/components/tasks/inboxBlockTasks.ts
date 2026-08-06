@@ -1,5 +1,6 @@
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { Task } from '@/domain/task/Task';
+import type { WorkspaceKind, WorkspaceRole } from '@/domain/workspace/Workspace';
 
 export type AssignedInboxBlockTask = AssignedTask & {
   readonly displaySource: 'assigned';
@@ -92,6 +93,58 @@ export function buildToMeInboxBlockTasks(input: {
  */
 export function selectBoardTasks(tasks: readonly InboxBlockTask[]): InboxBlockTask[] {
   return tasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval');
+}
+
+/**
+ * Полка «На утверждении» (db/150). Источник зависит от режима — и это не косметика:
+ *
+ *  - НА ДОСКЕ СОТРУДНИКА (focusedMemberId) — источник ВСЕГДА focusedTasks
+ *    (ListMemberTasksForLead: все задачи человека по пространству, включая проекты, где
+ *    сам руководитель не участник). toMeTasks/byMeDisplayTasks здесь НЕ годятся — это
+ *    membership-скоуплённые /assignees/mine|others, которые такую задачу вообще не видят:
+ *    карточка пропала бы отовсюду разом (доска её вырезает как pending_approval, а полка —
+ *    единственное другое место, где она могла бы всплыть — не находит источник). BUG D.
+ *  - ПРИНИМАЮЩИЙ (isApprover, вне фокус-режима) видит очередь целиком — оба направления.
+ *  - ИСПОЛНИТЕЛЬ (не approver, не в фокус-режиме) видит только свои задачи (toMeTasks).
+ */
+export function selectApprovalTasks(input: {
+  readonly toMeTasks: readonly InboxBlockTask[];
+  readonly byMeDisplayTasks: readonly InboxBlockTask[];
+  readonly focusedTasks: readonly InboxBlockTask[];
+  readonly focusedMemberId: string | null;
+  readonly isApprover: boolean;
+}): InboxBlockTask[] {
+  const source = input.focusedMemberId
+    ? input.focusedTasks
+    : input.isApprover
+      ? [...input.toMeTasks, ...input.byMeDisplayTasks]
+      : input.toMeTasks;
+  const byId = new Map<string, InboxBlockTask>();
+  for (const t of source) {
+    if (t.status !== 'pending_approval') continue;
+    if (input.focusedMemberId && t.assignee.userId !== input.focusedMemberId) continue;
+    byId.set(t.id, t);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Доступна ли руководителю доска сотрудника (клик по кубику, BUG D) в его АКТИВНОМ
+ * пространстве прямо сейчас. Обязательно `kind === 'team'`: серверный
+ * ListMemberTasksForLead скоупит СТРОГО по ws.id одного пространства, а кубики личного
+ * дефолт-хаба (`ListSharedMembers` при `kind === 'default'`) сводят коллег из ВСЕХ общих
+ * пространств сразу — коллега почти никогда не участник самого хаба (там обычно только
+ * его владелец), поэтому клик там либо получил бы 404 от гейта, либо потребовал бы
+ * ослабить сам гейт под кросс-пространственный охват. Ни то ни другое не годится — проще
+ * не показывать жест там, где он структурно не может работать корректно. В team-пространстве
+ * кубики (`ListSharedMembers` при `kind === 'team'`) и гейт (`workspace_id` в
+ * `ListMemberTasksForLead`) считают по ОДНОМУ И ТОМУ ЖЕ пространству — 1:1.
+ */
+export function canOpenMemberBoard(
+  workspace: { readonly kind: WorkspaceKind; readonly role: WorkspaceRole } | null,
+): boolean {
+  if (!workspace) return false;
+  return workspace.kind === 'team' && (workspace.role === 'lead' || workspace.role === 'owner');
 }
 
 export function canSendToApproval(

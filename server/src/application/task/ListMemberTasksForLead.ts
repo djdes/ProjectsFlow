@@ -76,7 +76,16 @@ export class ListMemberTasksForLead {
     const namedProjectIds = [
       ...new Set(visible.filter((t) => !projectById.get(t.projectId)!.isInbox).map((t) => t.projectId)),
     ];
-    const [commitCounts, attachmentCounts, commentCounts, callerMemberships, member] = await Promise.all([
+    // Владелец inbox-проекта задачи — НЕ обязательно memberId: сотруднику могли делегировать
+    // задачу в чужие личные входящие (project.ownerId — тот коллега). Резолвим имя по
+    // РЕАЛЬНОМУ владельцу каждого inbox-проекта в выборке (как в ListTasksAssignedToOthers/
+    // ListPersonalTasksOfColleagues), а не подставляем имя memberId везде.
+    const inboxOwnerIds = [
+      ...new Set(
+        visible.filter((t) => projectById.get(t.projectId)!.isInbox).map((t) => projectById.get(t.projectId)!.ownerId),
+      ),
+    ];
+    const [commitCounts, attachmentCounts, commentCounts, callerMemberships, inboxOwners] = await Promise.all([
       this.deps.taskCommits.countsByTasks(ids),
       this.deps.attachments.countsByTasks(ids),
       this.deps.comments.countsByTasks(ids),
@@ -85,10 +94,12 @@ export class ListMemberTasksForLead {
           async (id) => [id, await this.deps.members.findForProject(id, callerId)] as const,
         ),
       ),
-      this.deps.users.getById(memberId),
+      Promise.all(inboxOwnerIds.map((id) => this.deps.users.getById(id))),
     ]);
     const callerRoleByProject = new Map(callerMemberships);
-    const memberName = member?.displayName ?? '';
+    const inboxOwnerNames = new Map(
+      inboxOwners.filter((u) => u !== null).map((u) => [u.id, u.displayName]),
+    );
 
     return visible.map((task) => {
       const project = projectById.get(task.projectId)!;
@@ -99,7 +110,7 @@ export class ListMemberTasksForLead {
         projectName: project.name,
         isInbox: project.isInbox,
         inboxOwner: project.isInbox
-          ? { userId: project.ownerId, displayName: memberName }
+          ? { userId: project.ownerId, displayName: inboxOwnerNames.get(project.ownerId) ?? '' }
           : null,
         canModify: project.isInbox
           ? true
