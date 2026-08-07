@@ -19,6 +19,7 @@ import type {
   RichTextEditorHandle,
 } from '@/presentation/components/editor/RichTextEditor';
 import {
+  canChooseSendTarget,
   resolveMoveTarget,
   shouldAutoMoveAfterComment,
   type ComposerTarget,
@@ -380,15 +381,26 @@ export function TaskDrawerComposer({
           </div>
 
           <div className="shrink-0">
-            <SendTargetButton
-              size="sm"
-              options={workerEnabled ? DRAWER_TARGETS : DRAWER_TARGETS_NO_WORKER}
-              value={effectiveTarget}
-              onChange={setTarget}
-              onSend={() => void submit()}
-              submitting={submitting}
-              disabled={!canSubmit}
-            />
+            {canChooseSendTarget(task.status) ? (
+              <SendTargetButton
+                size="sm"
+                options={workerEnabled ? DRAWER_TARGETS : DRAWER_TARGETS_NO_WORKER}
+                value={effectiveTarget}
+                onChange={setTarget}
+                onSend={() => void submit()}
+                submitting={submitting}
+                disabled={!canSubmit}
+              />
+            ) : (
+              // «Вручную» и кастомные колонки не двигаются от комментария — показываем
+              // обычную кнопку отправки, без подписи цели, которая обещала бы перенос.
+              <SendTargetButton
+                size="sm"
+                onSend={() => void submit()}
+                submitting={submitting}
+                disabled={!canSubmit}
+              />
+            )}
           </div>
 
           <input
