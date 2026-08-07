@@ -36,19 +36,17 @@ function makeTask(statusBeforeDone: TaskStatus | null): Task {
 }
 
 function makeWithdraw(statusBeforeDone: TaskStatus | null) {
-  const moves: { targetStatus: TaskStatus; withdraw?: boolean; actor: string }[] = [];
+  const moves: { targetStatus: TaskStatus; actor: string }[] = [];
   const task = makeTask(statusBeforeDone);
   const withdraw = new WithdrawTaskApproval({
     tasks: { getById: async () => task } as never,
     moveTask: {
       execute: async (cmd: {
         targetStatus: TaskStatus;
-        withdrawFromApproval?: boolean;
         ownerUserId: string;
       }) => {
         moves.push({
           targetStatus: cmd.targetStatus,
-          withdraw: cmd.withdrawFromApproval,
           actor: cmd.ownerUserId,
         });
         return { ...task, status: cmd.targetStatus };
@@ -67,7 +65,7 @@ test('исполнитель забирает задачу туда, откуд�
     actorUserId: 'employee',
   });
 
-  assert.deepEqual(h.moves, [{ targetStatus: 'manual', withdraw: true, actor: 'employee' }]);
+  assert.deepEqual(h.moves, [{ targetStatus: 'manual', actor: 'employee' }]);
   assert.equal(updated.status, 'manual');
 });
 

@@ -7,9 +7,11 @@ import { DeleteTask } from './DeleteTask.js';
 import { MoveTaskToProject } from './MoveTaskToProject.js';
 import { TaskApprovalService } from './TaskApprovalService.js';
 
-// Заморозка на время приёмки (db/150) на путях, которые ходят мимо requireTaskModifyAccess
-// со своей авторизацией: удаление и перенос в другой проект. Оба уводили задачу из очереди
-// руководителя руками исполнителя — правило должно быть одно для всех мутаций.
+// Заморозки на время приёмки больше НЕТ: задача в очереди утверждения редактируется
+// наравне с остальными (решение владельца продукта). Тесты сторожат именно это — раньше
+// правка/удаление/перенос исполнителем отбивались ошибкой, и массовые действия по такой
+// выборке падали целиком («Перенесено: 0 из 5»). Право закрыть задачу в done осталось
+// за принимающим — это отдельное правило (TaskApprovalService), см. MoveTask.approval.test.
 
 const PROJECT_ID = 'project-1';
 const TARGET_PROJECT_ID = 'project-2';
@@ -149,23 +151,18 @@ function makeComment(input: { actorRole: WorkspaceRole | null; taskStatus: TaskS
   return { create, created: (): string | null => created };
 }
 
-// Тред — часть задачи: пока работа на утверждении, исполнитель его не дописывает. Раньше
-// комментарии были намеренно открыты, и получалось хуже всего: коммент успевал создаться,
-// а следом падал перенос задачи — юзер видел «не удалось отправить» и опубликованный текст.
-test('исполнитель не может комментировать задачу, которая ждёт утверждения', async () => {
+// Тред открыт: исполнителю нужно отвечать на замечания, пока работа лежит в очереди.
+test('исполнитель комментирует задачу на утверждении', async () => {
   const h = makeComment({ actorRole: 'editor', taskStatus: 'pending_approval' });
 
-  await assert.rejects(
-    () =>
-      h.create.execute({
-        projectId: PROJECT_ID,
-        taskId: TASK_ID,
-        ownerUserId: 'employee',
-        body: 'готово, посмотрите',
-      }),
-    /утверждени/u,
-  );
-  assert.equal(h.created(), null);
+  await h.create.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    ownerUserId: 'employee',
+    body: 'готово, посмотрите',
+  });
+
+  assert.equal(h.created(), 'готово, посмотрите');
 });
 
 test('руководитель задачу на утверждении комментировать может', async () => {
@@ -194,11 +191,12 @@ test('вне очереди приёмки комментарий работае
   assert.equal(h.created(), 'взял в работу');
 });
 
-test('исполнитель не может удалить задачу, которая ждёт утверждения', async () => {
+test('исполнитель удаляет задачу на утверждении', async () => {
   const h = makeDelete({ actorRole: 'editor', taskStatus: 'pending_approval' });
 
-  await assert.rejects(() => h.del.execute(PROJECT_ID, 'employee', TASK_ID), /утверждени/u);
-  assert.equal(h.deleted(), null);
+  await h.del.execute(PROJECT_ID, 'employee', TASK_ID);
+
+  assert.equal(h.deleted(), TASK_ID);
 });
 
 test('руководитель задачу на утверждении удалить может', async () => {
@@ -217,14 +215,14 @@ test('вне очереди приёмки удаление работает к�
   assert.equal(h.deleted(), TASK_ID);
 });
 
-test('исполнитель не может перенести в другой проект задачу на утверждении', async () => {
+// Ровно тот случай, из-за которого правило и сняли: массовый перенос из полки
+// «На утверждении» падал целиком.
+test('исполнитель переносит в другой проект задачу на утверждении', async () => {
   const h = makeMoveToProject({ actorRole: 'editor', taskStatus: 'pending_approval' });
 
-  await assert.rejects(
-    () => h.move.execute(TASK_ID, TARGET_PROJECT_ID, 'employee'),
-    /утверждени/u,
-  );
-  assert.equal(h.movedTo(), null);
+  await h.move.execute(TASK_ID, TARGET_PROJECT_ID, 'employee');
+
+  assert.equal(h.movedTo(), TARGET_PROJECT_ID);
 });
 
 test('руководитель задачу на утверждении перенести может', async () => {

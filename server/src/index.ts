@@ -1828,7 +1828,6 @@ const aiActionUndoUpdateTask = new UpdateTask({
 const aiActionUndoDeleteTask = new DeleteTask({
   ...aiActionUndoTaskDeps,
   comments: taskCommentRepo,
-  approval: taskApprovalService,
   activityRecorder,
 });
 const aiActionUndoRestoreTask = new RestoreDeletedTask(aiActionUndoTaskDeps);
@@ -2463,7 +2462,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
-      approval: taskApprovalService,
       activityRecorder,
     }),
     listTrashedTasks: new ListTrashedTasks({
@@ -2721,7 +2719,6 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
-      approval: taskApprovalService,
     }),
     changeAssignee: new ChangeTaskAssignee({
       approval: taskApprovalService,
@@ -2946,7 +2943,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
-      approval: taskApprovalService,
       activityRecorder,
     }),
     listTaskCommits: new ListTaskCommits({

@@ -217,26 +217,24 @@ test('руководитель, закрывший задачу сам, увед
 
 // Заморозка на время приёмки (db/150): пока работа висит на утверждении, исполнитель её не
 // правит — иначе руководитель принял бы уже не то, что проверял.
-test('исполнитель не может двигать задачу, которая ждёт утверждения', async () => {
+// Заморозки на время приёмки больше нет: задача в очереди редактируется как любая другая.
+test('исполнитель двигает задачу, которая ждёт утверждения', async () => {
   const h = makeMove({
     requireTaskApproval: true,
     actorRole: 'editor',
     taskStatus: 'pending_approval',
   });
 
-  await assert.rejects(
-    () =>
-      h.move.execute({
-        projectId: PROJECT_ID,
-        taskId: TASK_ID,
-        ownerUserId: 'employee',
-        targetStatus: 'in_progress',
-        beforeTaskId: null,
-        afterTaskId: null,
-      }),
-    /утверждени/u,
-  );
-  assert.equal(h.savedStatus(), null);
+  await h.move.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    ownerUserId: 'employee',
+    targetStatus: 'in_progress',
+    beforeTaskId: null,
+    afterTaskId: null,
+  });
+
+  assert.equal(h.savedStatus(), 'in_progress');
 });
 
 // Регрессия: приёмка принимает работу тем же move'ом в 'done'. Без гейта снимок прежней
@@ -254,8 +252,7 @@ test('приёмка не затирает снимок колонки очер�
   assert.equal(h.savedStatusBeforeDone(), undefined, 'снимок не должен перезаписываться');
 });
 
-// Отзыв из приёмки: заморозка снимается ровно для этого перехода и только для самого
-// исполнителя. Флаг от клиента сам по себе ничего не открывает.
+// Отзыв из приёмки — обычный move, никакого особого флага для него больше не нужно.
 test('исполнитель забирает свою задачу из очереди утверждения', async () => {
   const h = makeMove({
     requireTaskApproval: true,
@@ -270,49 +267,28 @@ test('исполнитель забирает свою задачу из оче�
     targetStatus: 'manual',
     beforeTaskId: null,
     afterTaskId: null,
-    withdrawFromApproval: true,
   });
 
   assert.equal(h.savedStatus(), 'manual');
 });
 
-test('флаг отзыва не пускает в done — это был бы обход приёмки', async () => {
+// Главная гарантия, которая ПЕРЕЖИЛА снятие заморозки: закрыть работу сам исполнитель
+// по-прежнему не может — 'done' от него снова превращается в очередь приёмки.
+test('исполнитель не закрывает задачу сам — done снова уходит в очередь', async () => {
   const h = makeMove({
     requireTaskApproval: true,
     actorRole: 'editor',
     taskStatus: 'pending_approval',
   });
 
-  // targetStatus='done' + флаг: условие не выполнено, работает обычный гейт заморозки.
-  await assert.rejects(
-    () => h.move.execute({ ...done, ownerUserId: 'employee', withdrawFromApproval: true }),
-    /утверждени/u,
-  );
-  assert.equal(h.savedStatus(), null);
+  await h.move.execute({ ...done, ownerUserId: 'employee' });
+
+  assert.equal(h.savedStatus(), 'pending_approval');
 });
 
-test('чужую задачу флагом отзыва не забрать', async () => {
-  const h = makeMove({
-    requireTaskApproval: true,
-    actorRole: 'editor',
-    taskStatus: 'pending_approval',
-  });
-
-  await assert.rejects(
-    () =>
-      h.move.execute({
-        projectId: PROJECT_ID,
-        taskId: TASK_ID,
-        ownerUserId: 'someone-else',
-        targetStatus: 'manual',
-        beforeTaskId: null,
-        afterTaskId: null,
-        withdrawFromApproval: true,
-      }),
-    /утверждени/u,
-  );
-  assert.equal(h.savedStatus(), null);
-});
+// Ролевой гейт (посторонний вообще не трогает задачу) здесь не проверяем: фейк
+// members.findForProject в этом харнессе выдаёт editor-membership любому userId, поэтому
+// тест проверял бы заглушку, а не правило. Ролевые границы покрыты в taskAuthorization-тестах.
 
 test('руководитель задачу на утверждении двигать может', async () => {
   const h = makeMove({

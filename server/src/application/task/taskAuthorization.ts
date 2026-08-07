@@ -6,8 +6,6 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskRepository } from './TaskRepository.js';
-import type { ApprovalGuard } from './TaskApprovalService.js';
-import { TaskAwaitingApprovalError } from '../../domain/task/errors.js';
 
 export type TaskAccessDeps = {
   readonly projects: ProjectRepository;
@@ -15,56 +13,24 @@ export type TaskAccessDeps = {
   readonly tasks: TaskRepository;
 };
 
-// Зависимости МУТИРУЮЩИХ операций: сверх чтения нужна политика приёмки — задача в очереди
-// утверждения заморожена для всех, кроме принимающего (db/150). Обязательна намеренно:
-// опциональная зависимость означала бы «часть use-case'ов тихо не проверяет правило», а
-// такие дыры не видны на ревью. Read-хелперы её не требуют — им нечего запрещать.
-export type TaskModifyAccessDeps = TaskAccessDeps & {
-  readonly approval: ApprovalGuard;
-};
+// Мутирующие операции ходят по тем же зависимостям, что и чтение: отдельной политики
+// приёмки здесь больше нет (см. комментарий ниже).
+export type TaskModifyAccessDeps = TaskAccessDeps;
 
-// Действия, запрещённые пока задача ждёт приёмки. Чтение НЕ здесь: тред и историю версий
-// исполнителю видно — заморожена правка, не просмотр.
-const FROZEN_WHILE_AWAITING_APPROVAL: readonly ProjectAction[] = [
-  'update_task',
-  'move_task',
-  'assign_task',
-  'manage_attachments',
-  // Удаление — тоже изменение, причём необратимее прочих: пока работа висит на утверждении,
-  // исполнитель не должен убирать её из очереди руководителя (мягкое, но из очереди уходит).
-  'delete_task',
-  // Тред — часть задачи, поэтому по требованию владельца он тоже заморожен: пока работа на
-  // утверждении, исполнитель не дописывает и не переписывает обсуждение, которое читает
-  // руководитель. Раньше комментарии были намеренно открыты («отвечать на замечания»), но
-  // на практике это давало исполнителю возможность менять принимаемое.
-  'create_comment',
-  'update_own_comment',
-  'delete_own_comment',
-  'delete_any_comment',
-];
-
-/**
- * Единый гейт заморозки: задача в очереди утверждения неприкосновенна для всех, кроме того,
- * кто эту работу принимает (db/150).
+/*
+ * Заморозки на время приёмки БОЛЬШЕ НЕТ.
  *
- * Вынесен из requireTaskModifyAccess, потому что часть путей ходит мимо него со своей
- * авторизацией — перенос в другой проект и удаление. Правило должно быть ОДНО: раньше эти
- * два пути гейта не знали, и задача на утверждении спокойно уезжала в другой проект или
- * в корзину руками исполнителя.
+ * Была (db/150): задача в очереди утверждения неприкосновенна для всех, кроме принимающего,
+ * — правка, смена колонки, перенос в другой проект, удаление и комментарии отбивались
+ * ошибкой. Идея была «руководитель принимает ровно то, что видел».
+ *
+ * На практике правило мешало больше, чем защищало: очередь приёмки — это обычная рабочая
+ * полка, из неё нужно и переносить задачи между проектами, и править текст, и дописывать
+ * тред. Массовые действия по такой выборке падали ЦЕЛИКОМ («Перенесено: 0 из 5»), причём
+ * без внятного объяснения, почему. По решению владельца продукта задачи на утверждении
+ * редактируются наравне с остальными; кто вправе перевести задачу в done — по-прежнему
+ * решает TaskApprovalService, и это правило осталось нетронутым.
  */
-export async function assertNotFrozenByApproval(
-  approval: ApprovalGuard,
-  project: Project,
-  task: Pick<Task, 'status'>,
-  userId: string,
-  action: ProjectAction,
-): Promise<void> {
-  if (task.status !== 'pending_approval') return;
-  if (!FROZEN_WHILE_AWAITING_APPROVAL.includes(action)) return;
-  if (await approval.canApprove(project, userId)) return;
-  throw new TaskAwaitingApprovalError();
-}
-
 export type TaskAccessResult = {
   readonly project: Project;
   // true когда caller — текущий ответственный (независимо от creator/owner).
@@ -104,23 +70,11 @@ export async function requireTaskModifyAccess(
   taskId: string,
   userId: string,
   action: ProjectAction,
-  // Отзыв работы из очереди приёмки самим исполнителем: он не ПРАВИТ задачу, а забирает
-  // её из очереди целиком, поэтому смысл заморозки («руководитель принимает то, что
-  // видел») не нарушается. Условия проверяет вызывающий (MoveTask), здесь только флаг —
-  // так исключение остаётся в одном месте и его видно на ревью.
-  opts?: { readonly skipApprovalFreeze?: boolean },
 ): Promise<TaskAccessResult> {
   const project = await deps.projects.getById(projectId);
   if (!project) throw new ProjectNotFoundError();
   const task = await deps.tasks.getById(taskId);
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
-
-  // Заморозка на время приёмки. Проверяем ДО ролевых веток: правило одинаково и для
-  // именованного проекта, и для inbox, и для назначенного viewer'а — пока работа висит на
-  // утверждении, менять её вправе только тот, кто эту работу принимает.
-  if (!opts?.skipApprovalFreeze) {
-    await assertNotFrozenByApproval(deps.approval, project, task, userId, action);
-  }
 
   if (project.isInbox) {
     if (project.ownerId === userId) {

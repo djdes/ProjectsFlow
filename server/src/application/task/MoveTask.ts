@@ -37,10 +37,6 @@ export type MoveTaskCommand = {
   // (status_before_done), а не в переданный targetStatus. Сервер сам резолвит цель —
   // не доверяем клиентскому (возможно устаревшему) чтению. См. db/055.
   readonly restore?: boolean;
-  // Отзыв работы из очереди приёмки САМИМ исполнителем («случайно нажал выполнено»).
-  // Снимает заморозку ровно для этого перехода; условия проверяются ниже и не доверяются
-  // клиенту. Не совпало хоть одно — флаг игнорируется, и работает обычный гейт.
-  readonly withdrawFromApproval?: boolean;
 };
 
 const POSITION_STEP = 1024;
@@ -73,21 +69,12 @@ export class MoveTask {
     // Отзыв из приёмки проверяем ДО гейта: нужно знать задачу, чтобы решить, снимать ли
     // заморозку. Все три условия обязательны — забрать может только сам исполнитель,
     // только из очереди утверждения и только не в 'done' (иначе это обход приёмки).
-    const current = await this.deps.tasks.getById(input.taskId);
-    const withdrawFromApproval =
-      input.withdrawFromApproval === true &&
-      current?.projectId === input.projectId &&
-      current.status === 'pending_approval' &&
-      current.assignee.userId === input.ownerUserId &&
-      input.targetStatus !== 'done';
-
     const { project } = await requireTaskModifyAccess(
       this.deps,
       input.projectId,
       input.taskId,
       input.ownerUserId,
       'move_task',
-      { skipApprovalFreeze: withdrawFromApproval },
     );
 
     const task = await this.deps.tasks.getById(input.taskId);

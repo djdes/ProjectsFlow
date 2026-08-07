@@ -44,7 +44,6 @@ export class WithdrawTaskApproval {
       targetStatus: target,
       beforeTaskId: null,
       afterTaskId: null,
-      withdrawFromApproval: true,
     });
   }
 }
