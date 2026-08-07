@@ -188,10 +188,10 @@ test('canOpenMemberBoard: только team-пространство и роль
   assert.equal(canOpenMemberBoard({ kind: 'default', role: 'owner' }), false);
 });
 
-test('canSendToApproval: личная inbox-задача — сервер не требует приёмки, гейт закрыт', () => {
-  // project.isInbox: сервер (TaskApprovalService.requiresApproval) намеренно не требует
-  // приёмки — «свою задачу утверждать не у кого». Явный статус обходит серверную подмену,
-  // поэтому клиент должен отказать сам, до отправки запроса.
+test('canSendToApproval: личную inbox-задачу тоже можно сдать на приёмку', () => {
+  // Inbox живёт в рабочем пространстве владельца, и серверное правило
+  // (TaskApprovalService.requiresApproval) больше не исключает project.isInbox — жест и
+  // сервер говорят одно и то же.
   const t = { ...assigned('t5'), isInbox: true };
-  assert.equal(canSendToApproval(asAssignedInboxBlockTask(t), 'me'), false);
+  assert.equal(canSendToApproval(asAssignedInboxBlockTask(t), 'me'), true);
 });

@@ -162,8 +162,18 @@ test('приёмка выключена: всё как раньше, задач�
   assert.equal(h.savedStatus(), 'done');
 });
 
-test('личные входящие приёмку не проходят — утверждать не у кого', async () => {
+// Inbox живёт в рабочем пространстве владельца: в командном у личной задачи руководитель
+// есть, и её результат он тоже спрашивает. Отдельного исключения для isInbox больше нет.
+test('личные входящие в командном пространстве проходят приёмку', async () => {
   const h = makeMove({ requireTaskApproval: true, actorRole: 'editor', isInbox: true });
+
+  await h.move.execute({ ...done, ownerUserId: 'employee' });
+
+  assert.equal(h.savedStatus(), 'pending_approval');
+});
+
+test('личные входящие руководителя приёмку не проходят — он сам принимающий', async () => {
+  const h = makeMove({ requireTaskApproval: true, actorRole: 'lead', isInbox: true });
 
   await h.move.execute({ ...done, ownerUserId: 'employee' });
 

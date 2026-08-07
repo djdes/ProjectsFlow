@@ -53,8 +53,11 @@ export class TaskApprovalService {
   }
 
   private async requiresApproval(project: Project, actorUserId: string): Promise<boolean> {
-    // Личные «Входящие» приёмку не проходят: свою задачу утверждать не у кого.
-    if (project.isInbox) return false;
+    // Личные «Входящие» раньше были исключением («свою задачу утверждать не у кого»), но
+    // inbox живёт в РАБОЧЕМ пространстве владельца: в командном пространстве у личной задачи
+    // руководитель есть, и он же спрашивает за неё результат. Исключение просто прятало от
+    // него часть работы. Общее правило справляется само: в личном пространстве владелец —
+    // сам себе owner, canApprove=true, приёмки не будет.
     const workspace = await this.deps.workspaces.getById(project.workspaceId);
     if (!workspace?.requireTaskApproval) return false;
     return !(await this.canApprove(project, actorUserId));

@@ -753,7 +753,16 @@ export function AssignedToMeBlock({
   // Выделяются ЛЮБЫЕ задачи колонки, включая те, что caller изменить не может (личные
   // доски коллег сервер отдаёт с canModify: false). Пользователь просил не ограничивать
   // выбор; задачи без прав просто попадут в «не удалось» при выполнении действия.
-  const selectableGroups = selectionColumns.map((g) => g.items.map((t) => t.id));
+  const columnSelectableGroups = selectionColumns.map((g) => g.items.map((t) => t.id));
+  // Полки «На утверждении» и «Вручную» — такие же участники выделения, как колонки: раньше
+  // при включении режима они просто пропадали с экрана, и до этих задач массовые действия
+  // было не достать вовсе. Идут первыми, потому что первыми же и нарисованы — порядок
+  // важен для Shift-диапазона и протяжки мышью, которые считают по этому же списку.
+  const selectableGroups = [
+    approvalTasks.map((t) => t.id),
+    inProgressTasks.map((t) => t.id),
+    ...columnSelectableGroups,
+  ];
   const selectionOrderedIds = selectableGroups.flat();
   const selectableIds = new Set(selectionOrderedIds);
   const taskById = useMemo(() => new Map(visibleTasks.map((t) => [t.id, t])), [visibleTasks]);
@@ -804,7 +813,9 @@ export function AssignedToMeBlock({
   // (react-hooks/refs) — сами обработчики передаются в JSX ссылками.
   const columnSelectionAt = (index: number): ColumnSelection | null => {
     if (!selectionActive) return null;
-    const ids = selectableGroups[index] ?? [];
+    // Индекс приходит от колонки, поэтому берём из колоночного списка, а не из общего
+    // selectableGroups (там впереди ещё две полки).
+    const ids = columnSelectableGroups[index] ?? [];
     return { count: ids.filter((id) => selectedIds.has(id)).length, ids };
   };
 
@@ -1323,9 +1334,12 @@ export function AssignedToMeBlock({
       {/* Полка нужна и рядовому исполнителю с пустой очередью: это единственная цель
           дропа для «сдать первую задачу» жестом, и без неё жест физически некуда
           применить, пока в очереди не появится хотя бы одна чужая/старая карточка. */}
-      {!selectionActive && (approvalTasks.length > 0 || approvalEnabled) && (
+      {(approvalTasks.length > 0 || (approvalEnabled && !selectionActive)) && (
         <ApprovalShelf
           items={approvalTasks}
+          selecting={selectionActive}
+          selectedIds={selectedIds}
+          onSelectToggle={handleSelectToggle}
           onOpen={(t) => setDrawerTask(t)}
           onChanged={handleToggled}
           onAccept={acceptApproval}
@@ -1344,7 +1358,9 @@ export function AssignedToMeBlock({
         />
       )}
 
-      {!selectionActive && (
+      {/* В режиме выделения пустую полку прячем: тащить в неё нечего, а подсказка
+          «перетащите сюда» врала бы. С задачами — остаётся, их тоже выделяют. */}
+      {(inProgressTasks.length > 0 || !selectionActive) && (
         <InProgressShelf
           items={inProgressTasks}
           onOpen={(t) => setDrawerTask(t)}
@@ -1353,6 +1369,9 @@ export function AssignedToMeBlock({
           onRemoveFromWork={(t) => void setWorkStatus(t, 'backlog')}
           flashKey={workFlash?.key ?? 0}
           flashItemId={workFlash?.id ?? null}
+          selecting={selectionActive}
+          selectedIds={selectedIds}
+          onSelectToggle={handleSelectToggle}
           className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
@@ -1398,12 +1417,14 @@ export function AssignedToMeBlock({
                   // позицию скролла колонки между вкладками).
                   key={[tab, filterTo ?? '', filterProject ?? ''].join('|')}
                   items={group.items}
-                  renderItem={(item) => (
+                  getId={(item) => item.id}
+                  renderItem={(item, cardExiting) => (
                     <DraggableTask
                       key={item.id}
                       item={item}
-                      disabled={!item.canModify}
+                      disabled={!item.canModify || cardExiting}
                       selecting={selectionActive}
+                      ghost={cardExiting}
                     >
                       <AcceptedCard
                         item={item}
@@ -1568,18 +1589,20 @@ export function AssignedToMeBlock({
                 <ColumnPreviewList
                   key={[grouping, group.key].join('|')}
                   items={group.items}
-                  renderItem={(item) => (
+                  getId={(item) => item.id}
+                  renderItem={(item, cardExiting) => (
                     <DraggableTask
                       key={item.id}
                       item={item}
-                      disabled={!item.canModify || exiting}
+                      disabled={!item.canModify || exiting || cardExiting}
                       selecting={selectionActive}
                       // Вся ГРУППА-колонка сейчас призрак (useExitingListItems держит её старый
                       // снимок вместе с карточками) — карточка внутри могла уже переехать в
                       // другую живую колонку с тем же item.id. Без суффикса unmount призрака
                       // стёр бы draggableNodes-запись живой карточки, и та молча переставала
-                      // бы таскаться (см. draggableTaskId).
-                      ghost={exiting}
+                      // бы таскаться (см. draggableTaskId). То же и для призрака ОДНОЙ
+                      // карточки, доигрывающей своё схлопывание внутри живой колонки.
+                      ghost={exiting || cardExiting}
                     >
                       <AcceptedCard
                         item={item}
@@ -2017,6 +2040,9 @@ function ApprovalShelf({
   canDrop,
   dragActive,
   emptyHint,
+  selecting = false,
+  selectedIds,
+  onSelectToggle,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -2041,6 +2067,11 @@ function ApprovalShelf({
   // Чем объяснить пустую полку. На доске сотрудника это «у него нечего принимать», а не
   // общее «сотрудники ещё ничего не сдали» — иначе руководитель читает чужую очередь как свою.
   emptyHint?: string;
+  // Режим выделения: карточки полки выбираются наравне с карточками колонок, решения
+  // приёмки при этом прячем — «Принять» это решение по одной задаче, а не массовое действие.
+  selecting?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
   className?: string;
 }): React.ReactElement {
   // Цель дропа. disabled гасит её целиком: недоступная полка не попадает в коллизии,
@@ -2048,7 +2079,7 @@ function ApprovalShelf({
   const { setNodeRef, isOver } = useDroppable({
     id: 'approval-shelf',
     data: { type: 'approval' },
-    disabled: !canDrop,
+    disabled: !canDrop || selecting,
   });
   // Пустую полку видит теперь и рядовой исполнитель (не только принимающий) — текст
   // по умолчанию должен объяснять её именно ему: это цель для СВОЕЙ сделанной работы,
@@ -2095,6 +2126,9 @@ function ApprovalShelf({
               onAccept={onAccept}
               isApprover={isApprover}
               currentUserId={currentUserId}
+              selecting={selecting}
+              selected={selectedIds?.has(item.id) ?? false}
+              {...(onSelectToggle ? { onSelectToggle } : {})}
             />
           ))}
         </div>
@@ -2117,6 +2151,9 @@ function ApprovalItemCard({
   onAccept,
   isApprover,
   currentUserId,
+  selecting = false,
+  selected = false,
+  onSelectToggle,
 }: {
   item: InboxBlockTask;
   onOpen: () => void;
@@ -2126,6 +2163,9 @@ function ApprovalItemCard({
   onAccept: (item: InboxBlockTask) => Promise<void>;
   isApprover: boolean;
   currentUserId: string | null;
+  selecting?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 }): React.ReactElement {
   const { celebrate, forget } = useCompletedToday();
   // Общий движок фаз (useFlashExitPhase, см. AcceptedCard.completePhase выше и сам хук):
@@ -2184,9 +2224,19 @@ function ApprovalItemCard({
             phase === 'exit' && 'scale-[0.96]',
           )}
         >
-          <AcceptedCard item={item} onOpen={onOpen} onChanged={onChanged} onDelete={onReject} hideQuickActions />
-          {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. */}
-          {isApprover ? (
+          <AcceptedCard
+            item={item}
+            onOpen={onOpen}
+            onChanged={onChanged}
+            onDelete={onReject}
+            hideQuickActions
+            selecting={selecting}
+            selected={selected}
+            {...(onSelectToggle ? { onSelectToggle } : {})}
+          />
+          {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. В режиме
+              выделения их прячем: решение принимают по одной задаче, а не пачкой. */}
+          {selecting ? null : isApprover ? (
             <div className="flex gap-1">
               <button
                 type="button"
@@ -2235,6 +2285,9 @@ function InProgressShelf({
   onRemoveFromWork,
   flashKey,
   flashItemId,
+  selecting = false,
+  selectedIds,
+  onSelectToggle,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -2246,11 +2299,17 @@ function InProgressShelf({
   flashKey: number;
   // Какую карточку подсветить вместе с полкой (та, что только что приехала).
   flashItemId: string | null;
+  // Режим выделения: карточки полки выбираются наравне с колоночными, dnd и точечные
+  // действия («убрать из работы») на это время отключены.
+  selecting?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
   className?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
     id: 'work-in-progress',
     data: { type: 'work', status: 'manual' },
+    disabled: selecting,
   });
   const { animations } = useMotion();
   const [flash, setFlash] = useState(false);
@@ -2335,15 +2394,23 @@ function InProgressShelf({
                         item могли снять с полки (принята/удалена), а призрак ещё доигрывает
                         коллапс поверх уже отрисованной живой карточки этой же задачи в другом
                         месте доски. ghost={exiting} суффиксует dnd-id (см. draggableTaskId). */}
-                    <DraggableTask item={item} disabled={!item.canModify || exiting} ghost={exiting}>
+                    <DraggableTask
+                      item={item}
+                      disabled={!item.canModify || exiting}
+                      ghost={exiting}
+                      selecting={selecting}
+                    >
                       <AcceptedCard
                         item={item}
                         onOpen={() => onOpen(item)}
                         onChanged={onChanged}
                         onDelete={() => onDelete(item)}
+                        selecting={selecting}
+                        selected={selectedIds?.has(item.id) ?? false}
+                        {...(onSelectToggle ? { onSelectToggle } : {})}
                       />
                     </DraggableTask>
-                    {item.canModify && (
+                    {item.canModify && !selecting && (
                       <button
                         type="button"
                         onClick={(e) => {
