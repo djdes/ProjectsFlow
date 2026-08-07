@@ -122,11 +122,24 @@ export function useCrossProjectBulkActions(args: {
     [projectOf, taskRepository, onAfter],
   );
 
+  // Перенос в другой проект. Задачи в наборе — из разных проектов (в том числе личные
+  // «Входящие»), поэтому источник у каждой свой, а цель одна. Сервер сам проверит право
+  // создавать задачи в целевом проекте и членство ответственного: то, что нельзя,
+  // попадёт в failed и панель честно покажет «N из M».
+  const moveToProject = useCallback(
+    (ids: string[], targetProjectId: string) =>
+      fan(ids, (projectId, taskId) =>
+        // Задача уже в целевом проекте — сервер вернёт её как есть, без ошибки.
+        taskRepository.assignToProject(projectId, taskId, targetProjectId).then(() => undefined),
+      ),
+    [fan, taskRepository],
+  );
+
   const remove = useCallback(
     (ids: string[]) =>
       fan(ids, (projectId, taskId) => taskRepository.delete(projectId, taskId)),
     [fan, taskRepository],
   );
 
-  return { setPriority, setDeadline, setRalphMode, assign, moveToColumn, remove };
+  return { setPriority, setDeadline, setRalphMode, assign, moveToColumn, moveToProject, remove };
 }

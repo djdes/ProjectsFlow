@@ -8,6 +8,7 @@ import {
   Columns3,
   Copy,
   Flag,
+  FolderInput,
   Loader2,
   Mail,
   Send,
@@ -85,6 +86,9 @@ export function BulkActionBar({
     title: null,
   });
   const [busy, setBusy] = useState(false);
+  // Проекты-цели для «В проект». null — ещё грузятся; inbox и архив отсеиваем: в архив
+  // задачи не переносят, а «Личные» — не проект в глазах пользователя.
+  const [projectTargets, setProjectTargets] = useState<{ id: string; name: string }[] | null>(null);
   // Подтверждение массового удаления через стильный диалог (U7) вместо window.confirm.
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   // Открытый канал отправки (диалог получателей) + индикатор отправки.
@@ -130,6 +134,28 @@ export function BulkActionBar({
       cancelled = true;
     };
   }, [projectRepository, projectId, isInbox, user]);
+
+  // Проекты, куда можно перенести выбранное. Список тот же, что в сайдбаре: доступные
+  // caller'у, без inbox'ов («Личные» — не цель переноса) и без архивных.
+  useEffect(() => {
+    let cancelled = false;
+    projectRepository
+      .list()
+      .then((list) => {
+        if (cancelled) return;
+        setProjectTargets(
+          list
+            .filter((p) => !p.isInbox && p.status !== 'archived')
+            .map((p) => ({ id: p.id, name: p.name })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setProjectTargets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRepository]);
 
   // Telegram-группа проекта (для опции «В группу» при отправке в Telegram).
   useEffect(() => {
@@ -349,6 +375,39 @@ export function BulkActionBar({
                 onClick={() => void run('Перемещено', () => bulk.moveToColumn(selectedIds, t.status))}
               >
                 {t.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* В проект */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled || (projectTargets?.length ?? 0) === 0}
+              title={
+                projectTargets !== null && projectTargets.length === 0
+                  ? 'Нет доступных проектов для переноса'
+                  : undefined
+              }
+              className="h-8 gap-1.5 px-2 text-xs"
+            >
+              <FolderInput className="size-3.5" />
+              В проект
+              <ChevronDown className="size-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-[60vh] min-w-[220px] overflow-y-auto">
+            <DropdownMenuLabel>Перенести в проект</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {(projectTargets ?? []).map((p) => (
+              <DropdownMenuItem
+                key={p.id}
+                onClick={() => void run('Перенесено', () => bulk.moveToProject(selectedIds, p.id))}
+              >
+                <span className="truncate">{p.name}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

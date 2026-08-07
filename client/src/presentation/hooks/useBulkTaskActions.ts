@@ -41,6 +41,10 @@ export type BulkTaskActions = {
   setRalphMode: (ids: string[], mode: RalphMode) => Promise<BulkResult>;
   assign: (ids: string[], assigneeUserId: string) => Promise<BulkResult>;
   moveToColumn: (ids: string[], targetStatus: TaskStatus) => Promise<BulkResult>;
+  // Перенос выбранных задач в ДРУГОЙ проект. Права на целевой проект (create_task) и
+  // членство ответственного в нём проверяет сервер — задача, которую туда нельзя,
+  // честно попадёт в failed, а не молча потеряется.
+  moveToProject: (ids: string[], targetProjectId: string) => Promise<BulkResult>;
   remove: (ids: string[]) => Promise<BulkResult>;
 };
 
@@ -112,6 +116,18 @@ export function useBulkTaskActions(args: {
     [move],
   );
 
+  const moveToProject = useCallback(
+    async (ids: string[], targetProjectId: string) => {
+      const res = await runPool(ids, async (id) => {
+        await taskRepository.assignToProject(projectId, id, targetProjectId);
+      });
+      // Задачи уехали из текущего проекта — локальные зеркала обязаны их забыть.
+      await refetch();
+      return res;
+    },
+    [taskRepository, projectId, refetch],
+  );
+
   const removeMany = useCallback(
     (ids: string[]) =>
       runPool(
@@ -124,5 +140,13 @@ export function useBulkTaskActions(args: {
     [remove],
   );
 
-  return { setPriority, setDeadline, setRalphMode, assign, moveToColumn, remove: removeMany };
+  return {
+    setPriority,
+    setDeadline,
+    setRalphMode,
+    assign,
+    moveToColumn,
+    moveToProject,
+    remove: removeMany,
+  };
 }
