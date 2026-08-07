@@ -19,6 +19,13 @@ import {
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { STATUS_LABEL } from './statusLabels';
+import {
+  applyPatches,
+  settledPatchIds,
+  withPatch,
+  withoutPatches,
+  type PatchMap,
+} from './optimisticTaskPatches';
 import { motion } from 'motion/react';
 import {
   CalendarClock,
@@ -551,15 +558,22 @@ export function AssignedToMeBlock({
   };
   const confirmDelete = async (): Promise<void> => {
     if (!deleteTarget || deleting) return;
+    const target = deleteTarget;
+    // Карточка уходит СРАЗУ, диалог закрывается сразу — сеть догоняет фоном. Раньше здесь
+    // ждали и ответ сервера, и следующий за ним refresh(): секунда с лишним, за которую
+    // казалось, что удаление не сработало.
+    setPatches((prev) => withPatch(prev, target.id, { kind: 'hidden' }));
+    setDeleteTarget(null);
     setDeleting(true);
     try {
       // projectId берём у самой задачи: в блоке лежат задачи из РАЗНЫХ проектов,
       // а не только из инбокса.
-      await taskRepository.delete(deleteTarget.projectId, deleteTarget.id);
+      await taskRepository.delete(target.projectId, target.id);
       toast.success('Задача удалена');
-      setDeleteTarget(null);
       handleToggled();
     } catch (err) {
+      // Сеть подвела уже ПОСЛЕ того, как карточка исчезла — возвращаем её на место.
+      dropPatch(target.id);
       toast.error(`Не удалось удалить: ${(err as Error).message}`);
     } finally {
       setDeleting(false);
@@ -585,7 +599,16 @@ export function AssignedToMeBlock({
   // Фильтр hide-done — ДО группировок и счётчиков (зеркало TaskListView): done-задачи
   // остаются в data, скрытие только визуальное. Блок из одних выполненных исчезает
   // целиком; вернуть их — тем же Eye-toggle'ом, что и доску ниже.
-  const toMeTasks = useMemo(
+  // Оптимистичные правки: удаление и перенос на полки показываем СРАЗУ, не дожидаясь
+  // ответа сервера и следующего за ним refresh() (три GET'а). Накладываются на все три
+  // источника ниже; снимаются, когда сервер подтвердил (settledPatchIds) или когда
+  // действие упало — тогда вызывающий снимает правку сам и показывает тост.
+  const [patches, setPatches] = useState<PatchMap>(() => new Map());
+  const dropPatch = useCallback((id: string): void => {
+    setPatches((prev) => withoutPatches(prev, [id]));
+  }, []);
+
+  const toMeRaw = useMemo(
     () =>
       buildToMeInboxBlockTasks({
         assignedTasks: tasks,
@@ -595,15 +618,17 @@ export function AssignedToMeBlock({
       }),
     [tasks, boardTasks, inboxProjectId, user],
   );
+  const toMeTasks = useMemo(() => applyPatches(toMeRaw, patches), [toMeRaw, patches]);
   // Вкладка «Другим» = задачи, делегированные мной + личные доски коллег. Дедуп по id:
   // задача, которую я делегировал коллеге в ЕГО инбокс, приезжает из обоих источников.
-  const byMeDisplayTasks = useMemo(() => {
+  const byMeRaw = useMemo(() => {
     const seen = new Set(byMeTasks.map((t) => t.id));
     return [
       ...byMeTasks,
       ...colleaguePersonalTasks.filter((t) => !seen.has(t.id)),
     ].map(asAssignedInboxBlockTask);
   }, [byMeTasks, colleaguePersonalTasks]);
+  const byMeDisplayTasks = useMemo(() => applyPatches(byMeRaw, patches), [byMeRaw, patches]);
   const toMeVisible = useMemo(
     () => (hideDone ? toMeTasks.filter(notDone) : toMeTasks),
     [toMeTasks, hideDone],
@@ -627,10 +652,17 @@ export function AssignedToMeBlock({
   // Доска сотрудника: ВСЕ его незавершённые задачи по всем проектам пространства (личные
   // входящие + проектные — включая проекты, где сам руководитель не участник; см. BUG D).
   // groupAssignedTasks сам разложит по колонкам: «Личные · <имя>» + проектные.
-  const focusedTasks = useMemo(() => {
+  const focusedRaw = useMemo(() => {
     if (!focusedMemberId) return [];
     return focusedMemberTasks.map(asAssignedInboxBlockTask);
   }, [focusedMemberTasks, focusedMemberId]);
+  const focusedTasks = useMemo(() => applyPatches(focusedRaw, patches), [focusedRaw, patches]);
+
+  // Снимаем отработавшие правки, когда подъехали живые данные. Без этого оверрайд навсегда
+  // затеняет реальный статус и прячет чужие изменения (ловушка InboxCheckbox.optimistic).
+  useEffect(() => {
+    setPatches((prev) => withoutPatches(prev, settledPatchIds(prev, [...toMeRaw, ...byMeRaw, ...focusedRaw])));
+  }, [toMeRaw, byMeRaw, focusedRaw]);
   const focusedVisible = useMemo(
     () => (hideDone ? focusedTasks.filter(notDone) : focusedTasks),
     [focusedTasks, hideDone],
@@ -1011,22 +1043,25 @@ export function AssignedToMeBlock({
   const setWorkStatus = useCallback(
     async (item: InboxBlockTask, next: 'manual' | 'backlog'): Promise<void> => {
       if (item.status === next) return;
+      // Карточка переезжает на полку сразу, ещё до ответа сервера — иначе после дропа она
+      // секунду висит на старом месте и жест читается как неудавшийся.
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: next }));
+      // Вспышка полки — тоже сразу: она подтверждает жест, а не ответ сервера.
+      if (next === 'manual') setWorkFlash((prev) => ({ id: item.id, key: (prev?.key ?? 0) + 1 }));
       try {
         await taskRepository.move(item.projectId, item.id, {
           targetStatus: next,
           beforeTaskId: null,
           afterTaskId: null,
         });
-        // Полка и карточка вспыхивают только на ВЗЯТИЕ в работу и только после ответа
-        // сервера: на возврат в черновики праздновать нечего, а на отказ — тем более.
-        if (next === 'manual') setWorkFlash((prev) => ({ id: item.id, key: (prev?.key ?? 0) + 1 }));
-        await refresh();
+        void refresh();
         onChanged?.();
       } catch (e) {
+        dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, refresh, onChanged, dropPatch],
   );
 
   // Отправить свою задачу на приёмку жестом. Явный 'pending_approval' сервер пропускает
@@ -1034,19 +1069,22 @@ export function AssignedToMeBlock({
   // сам MoveTask — отдельного вызова не нужно.
   const sendToApproval = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
+      // Как и на остальных полках: карточка на месте назначения сразу, сеть — фоном.
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: 'pending_approval' }));
       try {
         await taskRepository.move(item.projectId, item.id, {
           targetStatus: 'pending_approval',
           beforeTaskId: null,
           afterTaskId: null,
         });
-        await refresh();
+        void refresh();
         onChanged?.();
       } catch (e) {
+        dropPatch(item.id);
         toast.error(`Не удалось отправить на утверждение: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, refresh, onChanged, dropPatch],
   );
 
   // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
