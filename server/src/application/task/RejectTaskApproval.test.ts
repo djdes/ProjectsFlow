@@ -53,7 +53,8 @@ function makeReject(input: { canApprove: boolean; statusBeforeDone?: TaskStatus 
       execute: async (cmd: { body: string }) => {
         calls.comments.push(cmd.body);
         calls.order.push('comment');
-        return {} as never;
+        // id нужен наружу: к этому комментарию клиент цепляет вложения.
+        return { id: 'comment-1' } as never;
       },
     } as never,
     moveTask: {
@@ -80,7 +81,7 @@ test('возврат пишет комментарий и возвращает �
 
   assert.deepEqual(h.calls.comments, ['Не хватает адаптива на мобиле']);
   assert.deepEqual(h.calls.moves, ['in_progress']);
-  assert.equal(updated.status, 'in_progress');
+  assert.equal(updated.task.status, 'in_progress');
 });
 
 // Регрессия с прода: у задачи снимок прежней колонки оказался равен 'pending_approval'
@@ -98,7 +99,7 @@ test('снимок «pending_approval» не берётся целью — ин�
   });
 
   assert.deepEqual(h.calls.moves, ['in_progress']);
-  assert.equal(updated.status, 'in_progress');
+  assert.equal(updated.task.status, 'in_progress');
 });
 
 test('снимок «done» тоже не берётся целью', async () => {
@@ -199,4 +200,20 @@ test('снимка нет — возвращаем в работу, а не в �
   });
 
   assert.deepEqual(h.calls.moves, ['in_progress']);
+});
+
+// Вложения («что доделать» скриншотом) грузятся в ТОТ ЖЕ комментарий, что создал возврат,
+// поэтому его id обязан выходить наружу — без него клиенту некуда цеплять файлы.
+test('commentId возвращается наружу — к нему цепляются вложения', async () => {
+  const h = makeReject({ canApprove: true });
+
+  const result = await h.reject.execute({
+    projectId: PROJECT_ID,
+    taskId: TASK_ID,
+    actorUserId: 'boss',
+    comment: 'Смотри скриншот',
+  });
+
+  assert.equal(typeof result.commentId, 'string');
+  assert.ok(result.commentId.length > 0);
 });

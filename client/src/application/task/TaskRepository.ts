@@ -99,7 +99,13 @@ export interface TaskRepository {
   move(projectId: string, taskId: string, input: MoveTaskInput): Promise<Task>;
   // Приёмка (db/150): вернуть работу исполнителю. Комментарий обязателен — сервер
   // отклонит пустой, поэтому UI спрашивает причину прежде, чем звать этот метод.
-  rejectApproval(projectId: string, taskId: string, comment: string): Promise<Task>;
+  // Возвращает и задачу, и id созданного комментария: в него UI догружает вложения
+  // («что доделать» скриншотом) — файлы уходят отдельными multipart-запросами.
+  rejectApproval(
+    projectId: string,
+    taskId: string,
+    comment: string,
+  ): Promise<{ task: Task; commentId: string }>;
   // Приёмка (db/150): исполнитель забирает СВОЮ задачу из очереди утверждения
   // («случайно нажал выполнено»). Комментарий не нужен — объяснять себе нечего.
   withdrawApproval(projectId: string, taskId: string): Promise<Task>;

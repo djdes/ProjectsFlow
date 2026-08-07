@@ -47,6 +47,7 @@ import {
   Loader2,
   ShieldCheck,
   MessageSquare,
+  Paperclip,
   Plus,
   Trash2,
   Users,
@@ -1129,9 +1130,23 @@ export function AssignedToMeBlock({
 
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
   // он уходит в один диалог, а не в мемоизированный список карточек.
-  const rejectApproval = async (item: InboxBlockTask, comment: string): Promise<void> => {
+  const rejectApproval = async (
+    item: InboxBlockTask,
+    comment: string,
+    files: readonly File[],
+  ): Promise<void> => {
     try {
-      await taskRepository.rejectApproval(item.projectId, item.id, comment);
+      const { commentId } = await taskRepository.rejectApproval(item.projectId, item.id, comment);
+      // Вложения — в ТОТ ЖЕ комментарий, что создал возврат: причина и скриншот приходят
+      // исполнителю одним сообщением. Падение загрузки не откатывает сам возврат — задача
+      // уже вернулась в работу, и молча «отменить» это было бы хуже, чем сказать про файл.
+      for (const file of files) {
+        try {
+          await taskRepository.uploadCommentAttachment(item.projectId, item.id, commentId, file);
+        } catch (err) {
+          toast.error(`Не удалось приложить ${file.name}: ${(err as Error).message}`);
+        }
+      }
       // Возврат снимает задачу с рейтинга исполнителя, а у принимающего она и не
       // считалась: цифру всё равно пересчитываем с сервера — она общая на сессию.
       forget(item.id);
@@ -1709,8 +1724,8 @@ export function AssignedToMeBlock({
       <RejectApprovalDialog
         task={rejectTarget}
         onCancel={() => setRejectTarget(null)}
-        onSubmit={(comment) => {
-          if (rejectTarget) void rejectApproval(rejectTarget, comment);
+        onSubmit={(comment, files) => {
+          if (rejectTarget) void rejectApproval(rejectTarget, comment, files);
         }}
       />
 
@@ -2015,6 +2030,11 @@ function PhantomDropColumn({
 
 // Диалог возврата работы из приёмки: причина обязательна. Кнопка неактивна, пока поле
 // пустое, — правило видно сразу, а не после отказа сервера.
+// Приложенный к возврату файл + его превью. blob-URL живёт ровно столько, сколько открыт
+// диалог, и отзывается при снятии — иначе утечёт (и, как в BUG E, может утащить за собой
+// мёртвую ссылку в чужую разметку).
+type RejectFile = { id: string; file: File; previewUrl: string | null };
+
 function RejectApprovalDialog({
   task,
   onCancel,
@@ -2022,13 +2042,55 @@ function RejectApprovalDialog({
 }: {
   task: InboxBlockTask | null;
   onCancel: () => void;
-  onSubmit: (comment: string) => void;
+  onSubmit: (comment: string, files: readonly File[]) => void;
 }): React.ReactElement {
   const [comment, setComment] = useState('');
-  // Сбрасываем поле при смене задачи, иначе прошлый текст «переезжает» на следующую.
+  const [files, setFiles] = useState<RejectFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const clearFiles = useCallback((): void => {
+    setFiles((prev) => {
+      prev.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+      return [];
+    });
+  }, []);
+
+  // Сбрасываем поле и вложения при смене задачи, иначе прошлый текст и чужой скриншот
+  // «переезжают» на следующую.
   useEffect(() => {
     setComment('');
-  }, [task?.id]);
+    clearFiles();
+  }, [task?.id, clearFiles]);
+
+  const addFiles = (list: FileList | readonly File[]): void => {
+    const picked = [...list];
+    if (picked.length === 0) return;
+    setFiles((prev) => [
+      ...prev,
+      ...picked.map((file) => ({
+        id: `${file.name}:${file.size}:${file.lastModified}:${prev.length}`,
+        file,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      })),
+    ]);
+  };
+
+  const removeFile = (id: string): void => {
+    setFiles((prev) => {
+      const target = prev.find((f) => f.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((f) => f.id !== id);
+    });
+  };
+
+  // Ctrl+V со скриншотом: главный способ приложить картинку — прицельно берём только
+  // файлы, чтобы обычная вставка текста работала как раньше.
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+    const pasted = [...e.clipboardData.files];
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    addFiles(pasted);
+  };
 
   const trimmed = comment.trim();
   return (
@@ -2039,25 +2101,80 @@ function RejectApprovalDialog({
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           Напишите, что доделать. Комментарий появится в задаче, и ответственный получит
-          уведомление.
+          уведомление. Скриншот можно вставить из буфера (Ctrl+V).
         </p>
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
+          onPaste={handlePaste}
           autoFocus
           rows={4}
           maxLength={4000}
           placeholder="Например: не хватает адаптива на мобиле"
           className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
         />
-        <DialogFooter>
-          <Button variant="ghost" onClick={onCancel}>
-            Отмена
+
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {files.map((f) => (
+              <div key={f.id} className="group relative">
+                {f.previewUrl ? (
+                  <img
+                    src={f.previewUrl}
+                    alt={f.file.name}
+                    className="size-16 rounded-md border object-cover"
+                  />
+                ) : (
+                  <div className="grid size-16 place-items-center rounded-md border px-1 text-center text-[10px] leading-tight text-muted-foreground">
+                    <span className="line-clamp-3 break-all">{f.file.name}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeFile(f.id)}
+                  aria-label={`Убрать ${f.file.name}`}
+                  className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-opacity hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter className="sm:justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            className="gap-1.5"
+          >
+            <Paperclip className="size-4" />
+            Файл
           </Button>
-          <Button disabled={trimmed.length === 0} onClick={() => onSubmit(trimmed)}>
-            Вернуть в работу
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onCancel}>
+              Отмена
+            </Button>
+            <Button
+              disabled={trimmed.length === 0}
+              onClick={() => onSubmit(trimmed, files.map((f) => f.file))}
+            >
+              Вернуть в работу
+            </Button>
+          </div>
         </DialogFooter>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

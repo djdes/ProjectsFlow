@@ -420,7 +420,7 @@ export function tasksRouter(deps: Deps): Router {
         const taskId = req.params['taskId'] as string;
         const body = rejectApprovalSchema.parse(req.body);
         const before = await deps.tasks.getById(taskId);
-        const task = await deps.rejectTaskApproval.execute({
+        const { task, commentId } = await deps.rejectTaskApproval.execute({
           projectId,
           taskId,
           actorUserId: req.user!.id,
@@ -433,7 +433,9 @@ export function tasksRouter(deps: Deps): Router {
             .onStatusChanged(projectId, req.user!.id, task, before.status, task.status, 'team')
             .catch(() => {});
         }
-        res.json({ task: toDto(task) });
+        // commentId наружу: клиент догружает в этот комментарий вложения («что доделать»
+        // скриншотом) отдельными multipart-запросами.
+        res.json({ task: toDto(task), commentId });
       } catch (e) {
         next(e);
       }

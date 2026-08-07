@@ -24,6 +24,14 @@ export type RejectTaskApprovalCommand = {
   readonly comment: string;
 };
 
+// Что вернул возврат: сама задача + id созданного комментария. Комментарий нужен наружу,
+// чтобы клиент мог доложить в него вложения (скриншот «что доделать») — грузятся они
+// отдельными multipart-запросами уже ПОСЛЕ того, как комментарий существует.
+export type RejectTaskApprovalResult = {
+  readonly task: Task;
+  readonly commentId: string;
+};
+
 // Возврат задачи из приёмки в работу (db/150). Комментарий обязателен и пишется в тред
 // задачи ДО переноса — так исполнитель, получив уведомление о смене статуса, уже видит
 // причину. Порядок важен: если бы сначала двигали, а комментарий упал, человек получил бы
@@ -31,7 +39,7 @@ export type RejectTaskApprovalCommand = {
 export class RejectTaskApproval {
   constructor(private readonly deps: Deps) {}
 
-  async execute(input: RejectTaskApprovalCommand): Promise<Task> {
+  async execute(input: RejectTaskApprovalCommand): Promise<RejectTaskApprovalResult> {
     const body = input.comment.trim();
     if (body.length === 0) throw new ApprovalCommentRequiredError();
 
@@ -47,7 +55,7 @@ export class RejectTaskApproval {
       throw new NotTaskApproverError();
     }
 
-    await this.deps.createComment.execute({
+    const comment = await this.deps.createComment.execute({
       projectId: input.projectId,
       ownerUserId: input.actorUserId,
       taskId: input.taskId,
@@ -61,7 +69,7 @@ export class RejectTaskApproval {
     // задачу в то же состояние и выглядело сломанной кнопкой.
     const snapshot = task.statusBeforeDone;
     const target = snapshot && isRestorableStatus(snapshot) ? snapshot : 'in_progress';
-    return this.deps.moveTask.execute({
+    const moved = await this.deps.moveTask.execute({
       projectId: input.projectId,
       ownerUserId: input.actorUserId,
       taskId: input.taskId,
@@ -69,5 +77,6 @@ export class RejectTaskApproval {
       beforeTaskId: null,
       afterTaskId: null,
     });
+    return { task: moved, commentId: comment.id };
   }
 }
