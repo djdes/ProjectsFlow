@@ -46,6 +46,10 @@ export interface ProjectRepository {
   // запросом). Нужна ленте «Личные · <Имя>» во входящих, где владельцев — весь круг
   // коллег caller'а. Владельцы без inbox'а просто отсутствуют в результате.
   listInboxesByOwners(ownerIds: readonly string[]): Promise<Project[]>;
+  // Имена проектов, уже занятые в пространстве. Нужны подбору имени для inbox'а: unique
+  // индексов ДВА — (owner_id, name) из db/002 и (workspace_id, name) из db/073, — и второй
+  // из них про ЧУЖИЕ проекты, которых владелец в своём списке не видит.
+  listProjectNamesInWorkspace(workspaceId: string): Promise<string[]>;
   create(input: CreateProjectInput): Promise<Project>;
   // АТОМАРНО: создаёт проект + добавляет owner'а как member с role='owner'.
   // Без этой связки можно было получить orphan-проект (project существует, но в
