@@ -274,7 +274,7 @@ export function AssignedToMeBlock({
     useContainer();
   const navigate = useNavigate();
   const { user } = useCurrentUser();
-  const { forget } = useCompletedToday();
+  const { celebrate, forget } = useCompletedToday();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
   // Принимает работу руководитель/владелец активного пространства. Нужно, чтобы показать
@@ -1072,6 +1072,11 @@ export function AssignedToMeBlock({
     async (item: InboxBlockTask): Promise<void> => {
       // Как и на остальных полках: карточка на месте назначения сразу, сеть — фоном.
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: 'pending_approval' }));
+      // Сдать работу жестом — то же закрытие, что и кнопкой «готово»: обе ведут в
+      // 'pending_approval', и сервер считает этот статус выполненным наравне с 'done'
+      // (countTasksCompletedByActorSince). Значит и пилюля «выполнено сегодня» обязана
+      // расти одинаково — раньше у дропа она молчала до ближайшего обновления.
+      celebrate(item.id);
       try {
         await taskRepository.move(item.projectId, item.id, {
           targetStatus: 'pending_approval',
@@ -1081,11 +1086,14 @@ export function AssignedToMeBlock({
         void refresh();
         onChanged?.();
       } catch (e) {
+        // Оптимистичный celebrate обязателен к откату на ошибке — иначе локальная цифра
+        // навсегда разъедется с серверной (контракт useCompletedToday).
+        forget(item.id);
         dropPatch(item.id);
         toast.error(`Не удалось отправить на утверждение: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged, dropPatch],
+    [taskRepository, refresh, onChanged, dropPatch, celebrate, forget],
   );
 
   // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
