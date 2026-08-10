@@ -774,9 +774,14 @@ const TOOLS = [
       'These are short-lived requests from the ProjectsFlow web UI: user clicked the "AI" button ' +
       'next to a task-description field, and the site wants the dispatcher to rewrite the text in ' +
       'plain Russian + elaborate on details. Each item has projectId (or null for Inbox tasks), ' +
-      'projectName and createdAt. Call this in /loop or directly from the dispatcher (e.g. ' +
+      'projectName, mode and createdAt. Call this in /loop or directly from the dispatcher (e.g. ' +
       'dispatch.ps1 in repo PFLoopDispatch) — AI requests are time-sensitive (user is waiting ' +
-      'up to 25s on a long-poll). If empty, no work to do.',
+      'up to 25s on a long-poll). If empty, no work to do. ' +
+      'IMPORTANT — filter by mode before claiming: "improve"/"compose"/"compose-advanced" are ' +
+      'web-UI rewrite requests handled by the general dispatcher; "assistant" is the invisible ' +
+      'queue of product AI-assistants (DocsFlow, ScanFlow) — those jobs carry a self-sufficient ' +
+      'instruction in inputText and must be claimed only by that product\'s own worker/session ' +
+      '(match projectId too). Skip jobs that are not yours.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -792,8 +797,11 @@ const TOOLS = [
       'inputText (the original user text, 1..5000 chars), kbContext (pre-fetched KB bundle, may ' +
       'be null — server already collected it, you do NOT need to fetch KB yourself). On 409 ' +
       '"ai_prompt_job_already_claimed" another session won — skip and try the next one. After ' +
-      'claim you have ~5 minutes before server-side cleanup cancels stuck jobs — process and ' +
-      'complete promptly. Call Claude with system prompt "Ты помощник по постановке задач..." ' +
+      'claim you have ~5 minutes (mode "assistant": ~15 minutes) before server-side cleanup ' +
+      'cancels stuck jobs — process and complete promptly. For mode "assistant" inputText is ' +
+      'already a complete instruction (frontmatter + steps) written by the product — just follow ' +
+      'it, then call pf_complete_ai_prompt_job. Otherwise call Claude with the system prompt ' +
+      '"Ты помощник по постановке задач..." ' +
       '(see docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md §8.3) and the ' +
       'inputText + kbContext as the user message.',
     inputSchema: {

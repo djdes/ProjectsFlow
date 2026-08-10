@@ -17,6 +17,9 @@ export type PendingAiPromptJob = {
   readonly id: string;
   readonly projectId: string | null;
   readonly projectName: string | null;
+  // Нужен воркерам ДО claim'а: воркеры продуктов берут только свои ('assistant' + свой
+  // projectId), ralph — только improve/compose-режимы.
+  readonly mode: AiPromptJobMode;
   readonly createdAt: Date;
 };
 
@@ -61,12 +64,14 @@ export type AiPromptJobRepository = {
   }): Promise<void>;
   /**
    * Cleanup: queued/running старше olderThan (TIMESTAMP) → cancelled с reason.
-   * Возвращает количество обновлённых строк.
+   * `modes` сужает выборку по режиму — таймауты у режимов разные (assistant обрабатывает
+   * фото/PDF и живёт дольше). Возвращает количество обновлённых строк.
    */
   cancelStale(input: {
     readonly olderThan: Date;
     readonly reason: string;
     readonly statuses: ReadonlyArray<Extract<AiPromptJobStatus, 'queued' | 'running'>>;
+    readonly modes: ReadonlyArray<AiPromptJobMode>;
   }): Promise<number>;
   /**
    * Cleanup: succeeded/failed старше olderThan → DELETE.

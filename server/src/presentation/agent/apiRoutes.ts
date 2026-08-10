@@ -409,7 +409,9 @@ const enqueueAiPromptBodySchema = z
       .nullable()
       .optional()
       .transform((v) => v ?? null),
-    mode: z.enum(['improve', 'compose', 'compose-advanced']).optional(),
+    // 'assistant' — очередь ИИ-ассистентов продуктов (DocsFlow/ScanFlow). Доступен только
+    // здесь, в agent-API: web-схема (presentation/ai-prompt/routes.ts) его сознательно не знает.
+    mode: z.enum(['improve', 'compose', 'compose-advanced', 'assistant']).optional(),
   })
   .superRefine((b, ctx) => {
     if (b.mode !== 'compose-advanced' && b.text.length > 50000) {
@@ -437,6 +439,9 @@ type PendingAiPromptJobDto = {
   id: string;
   projectId: string | null;
   projectName: string | null;
+  // Отдаём ДО claim'а: воркеры продуктов берут только свои ('assistant' + свой projectId),
+  // ralph — только improve/compose*.
+  mode: PendingAiPromptJob['mode'];
   createdAt: string;
 };
 
@@ -445,6 +450,7 @@ function pendingAiPromptJobToDto(p: PendingAiPromptJob): PendingAiPromptJobDto {
     id: p.id,
     projectId: p.projectId,
     projectName: p.projectName,
+    mode: p.mode,
     createdAt: p.createdAt.toISOString(),
   };
 }

@@ -18,6 +18,9 @@ import { prepareComposeContext } from './prepareComposeContext.js';
 const RATE_LIMIT_PER_HOUR = 60;
 // compose тяжелее (2 прохода opus + KB многих проектов) — отдельный, более строгий лимит.
 const RATE_LIMIT_COMPOSE_PER_HOUR = 30;
+// assistant — машинная очередь продуктов (DocsFlow/ScanFlow), а не кнопка в UI: лимит щедрый,
+// он тут страховка от runaway-цикла продукта, а не защита от живого пользователя.
+const RATE_LIMIT_ASSISTANT_PER_HOUR = 300;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
 export class AiPromptRateLimitedError extends Error {
@@ -51,7 +54,8 @@ export type EnqueueAiPromptJobInput = {
   // Для 'compose-advanced' — это JSON-строка сегментов из pass-1, а не свободный текст.
   readonly text: string;
   readonly projectId: string | null;
-  // 'improve' (legacy, default) | 'compose' (pass-1) | 'compose-advanced' (ленивый pass-2).
+  // 'improve' (legacy, default) | 'compose' (pass-1) | 'compose-advanced' (ленивый pass-2)
+  // | 'assistant' (очередь ИИ-ассистентов продуктов, только agent-API).
   readonly mode?: AiPromptJobMode;
 };
 
@@ -64,11 +68,23 @@ export class EnqueueAiPromptJob {
     // логика резолва диспетчера. advanced отличается лишь тем, что НЕ собирает контекст
     // кандидатов (полную KB воркер берёт сам по projectId'ам из сегментов через /kb-bundle).
     const isComposeLike = mode === 'compose' || mode === 'compose-advanced';
+    // assistant: payload самодостаточен (frontmatter + шаги) — KB не собираем вовсе,
+    // диспетчер резолвится с fallback'ом на дефолтного (как у compose), чтобы очередь
+    // продукта не падала 503, если у его проекта диспетчер не назначен.
+    const isAssistant = mode === 'assistant';
 
     // Rate-limit (per userId). Ставим bucket до permission-checks, чтобы подбор валидных
-    // projectId'ов не обходил лимит. compose — отдельный, более строгий bucket.
-    const bucket = isComposeLike ? `ai-compose:${input.userId}` : `ai-prompt:${input.userId}`;
-    const perHour = isComposeLike ? RATE_LIMIT_COMPOSE_PER_HOUR : RATE_LIMIT_PER_HOUR;
+    // projectId'ов не обходил лимит. compose и assistant — отдельные bucket'ы.
+    const bucket = isAssistant
+      ? `ai-assistant:${input.userId}`
+      : isComposeLike
+        ? `ai-compose:${input.userId}`
+        : `ai-prompt:${input.userId}`;
+    const perHour = isAssistant
+      ? RATE_LIMIT_ASSISTANT_PER_HOUR
+      : isComposeLike
+        ? RATE_LIMIT_COMPOSE_PER_HOUR
+        : RATE_LIMIT_PER_HOUR;
     if (!this.deps.rateLimiter.hit(bucket, perHour, RATE_LIMIT_WINDOW_MS)) {
       throw new AiPromptRateLimitedError();
     }
@@ -90,9 +106,11 @@ export class EnqueueAiPromptJob {
       );
       if (project.dispatcherUserId) {
         dispatcherUserId = project.dispatcherUserId;
-      } else if (isComposeLike) {
+      } else if (isComposeLike || isAssistant) {
         // compose кросс-проектный: если у текущего проекта нет диспетчера — отдаём
         // дефолтному (он лишь гоняет Claude, не обязан быть диспетчером всех кандидатов).
+        // assistant — по той же причине: очередь продукта не должна вставать из-за
+        // неназначенного диспетчера у его проекта.
         const fallback = await this.deps.resolveDefaultDispatcherUserId();
         if (!fallback) throw new AiPromptProjectHasNoDispatcherError(input.projectId);
         dispatcherUserId = fallback;

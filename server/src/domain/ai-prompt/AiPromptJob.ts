@@ -16,12 +16,16 @@ export const AI_PROMPT_JOB_STATUSES: readonly AiPromptJobStatus[] = [
 // 'compose-advanced' — ПРОХОД 2: по сегментам из pass-1 (приходят JSON-строкой в inputText)
 //   и полной KB задетектированных проектов считает только advancedBody («Продвинутый»).
 //   Запускается лениво, когда пользователь открыл вкладку «Продвинутый» в UI.
-export type AiPromptJobMode = 'improve' | 'compose' | 'compose-advanced';
+// 'assistant' — невидимая очередь ИИ-ассистентов продуктов (DocsFlow, ScanFlow): inputText
+//   уже самодостаточная инструкция (frontmatter + шаги), KB сервер не собирает, результат
+//   потребляет сам продукт. Ставится ТОЛЬКО через agent-API (Bearer), из браузера недоступен.
+export type AiPromptJobMode = 'improve' | 'compose' | 'compose-advanced' | 'assistant';
 
 export const AI_PROMPT_JOB_MODES: readonly AiPromptJobMode[] = [
   'improve',
   'compose',
   'compose-advanced',
+  'assistant',
 ];
 
 export type AiPromptJob = {

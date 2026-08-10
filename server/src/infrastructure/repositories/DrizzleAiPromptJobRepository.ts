@@ -1,6 +1,10 @@
 import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import type { AiPromptJob, AiPromptJobStatus } from '../../domain/ai-prompt/AiPromptJob.js';
+import type {
+  AiPromptJob,
+  AiPromptJobMode,
+  AiPromptJobStatus,
+} from '../../domain/ai-prompt/AiPromptJob.js';
 import type {
   AiPromptJobCountByProject,
   AiPromptJobRepository,
@@ -42,6 +46,7 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
         jobId: aiPromptJobs.id,
         projectId: aiPromptJobs.projectId,
         projectName: projects.name,
+        mode: aiPromptJobs.mode,
         createdAt: aiPromptJobs.createdAt,
       })
       .from(aiPromptJobs)
@@ -56,6 +61,7 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
       id: r.jobId,
       projectId: r.projectId ?? null,
       projectName: r.projectName ?? null,
+      mode: r.mode,
       createdAt: r.createdAt,
     }));
   }
@@ -119,7 +125,9 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
     olderThan: Date;
     reason: string;
     statuses: ReadonlyArray<Extract<AiPromptJobStatus, 'queued' | 'running'>>;
+    modes: ReadonlyArray<AiPromptJobMode>;
   }): Promise<number> {
+    if (input.modes.length === 0) return 0;
     const result = await this.db
       .update(aiPromptJobs)
       .set({
@@ -130,6 +138,7 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
       .where(
         and(
           inArray(aiPromptJobs.status, [...input.statuses] as AiPromptJobStatus[]),
+          inArray(aiPromptJobs.mode, [...input.modes] as AiPromptJobMode[]),
           lt(aiPromptJobs.createdAt, input.olderThan),
         ),
       );

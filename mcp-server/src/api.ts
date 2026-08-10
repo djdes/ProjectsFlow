@@ -251,6 +251,9 @@ export type PendingAiPromptJob = {
   id: string;
   projectId: string | null;
   projectName: string | null;
+  // Режим известен ДО claim'а: 'assistant' — очередь ИИ-ассистентов продуктов
+  // (DocsFlow/ScanFlow), её разбирают воркеры этих продуктов, а не общий диспетчер.
+  mode?: 'improve' | 'compose' | 'compose-advanced' | 'assistant';
   createdAt: string;
 };
 
@@ -258,8 +261,9 @@ export type AiPromptJobClaimed = {
   id: string;
   projectId: string | null;
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-  // 'improve' (legacy) | 'compose' (2 варианта + разбивка по проектам).
-  mode?: 'improve' | 'compose';
+  // 'improve' (legacy) | 'compose' (2 варианта + разбивка по проектам)
+  // | 'compose-advanced' (ленивый pass-2) | 'assistant' (очередь ассистентов продуктов).
+  mode?: 'improve' | 'compose' | 'compose-advanced' | 'assistant';
   // Текст от юзера (1..5000 символов).
   inputText: string;
   // Опциональный KB-контекст, пре-собранный сервером.

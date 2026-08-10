@@ -112,6 +112,88 @@ test('improve (inbox): отдельный, более мягкий rate-bucket (
   assert.equal(hits[0]?.perHour, 60);
 });
 
+// --- assistant (очередь ИИ-ассистентов продуктов: DocsFlow/ScanFlow) ---
+// Проверяем: свой щедрый bucket, KB не собирается, а у проекта БЕЗ диспетчера происходит
+// fallback на дефолтного (иначе очередь продукта встала бы с 503).
+
+function makeProjectDeps(opts: {
+  dispatcherUserId: string | null;
+  defaultDispatcher?: string | null;
+}) {
+  const base = makeDeps(opts.defaultDispatcher ?? 'disp-default');
+  const partial = base.deps as unknown as Record<string, unknown>;
+  partial['projects'] = {
+    getById: async () => ({
+      id: 'p1',
+      name: 'DocsFlow',
+      dispatcherUserId: opts.dispatcherUserId,
+      workspaceId: 'w1',
+    }),
+  };
+  partial['members'] = {
+    findForProject: async () => ({
+      projectId: 'p1',
+      userId: 'u1',
+      role: 'owner',
+      joinedAt: new Date(0),
+    }),
+  };
+  // KB не должен собираться для assistant.
+  partial['listKbDocuments'] = {
+    execute: async () => {
+      throw new Error('listKbDocuments must NOT be called for assistant mode');
+    },
+  };
+  return base;
+}
+
+test('assistant: свой щедрый bucket, kbContext=null, KB не собирается', async () => {
+  const { deps, hits, created } = makeProjectDeps({ dispatcherUserId: 'disp-docsflow' });
+  const payload = '---\ntype: docsflow_assistant\n---\nШаг 1...';
+  const job = await new EnqueueAiPromptJob(deps).execute({
+    userId: 'u1',
+    text: payload,
+    projectId: 'p1',
+    mode: 'assistant',
+  });
+
+  assert.equal(job.mode, 'assistant');
+  assert.equal(created[0]?.kbContext, null);
+  assert.equal(created[0]?.inputText, payload);
+  assert.equal(created[0]?.dispatcherUserId, 'disp-docsflow');
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0]?.bucket, 'ai-assistant:u1');
+  assert.equal(hits[0]?.perHour, 300);
+});
+
+test('assistant: у проекта нет диспетчера — fallback на дефолтного, не 503', async () => {
+  const { deps, created } = makeProjectDeps({
+    dispatcherUserId: null,
+    defaultDispatcher: 'disp-default',
+  });
+  await new EnqueueAiPromptJob(deps).execute({
+    userId: 'u1',
+    text: 'инструкция',
+    projectId: 'p1',
+    mode: 'assistant',
+  });
+  assert.equal(created[0]?.dispatcherUserId, 'disp-default');
+});
+
+test('improve: у проекта нет диспетчера — по-прежнему ошибка (регрессия)', async () => {
+  const { deps } = makeProjectDeps({ dispatcherUserId: null, defaultDispatcher: 'disp-default' });
+  await assert.rejects(
+    () =>
+      new EnqueueAiPromptJob(deps).execute({
+        userId: 'u1',
+        text: 'почини логин',
+        projectId: 'p1',
+        mode: 'improve',
+      }),
+    /dispatcher/i,
+  );
+});
+
 test('compose-advanced: при срабатывании лимита — AiPromptRateLimitedError', async () => {
   const { deps } = makeDeps();
   (deps.rateLimiter as unknown as { hit: () => boolean }).hit = () => false;
