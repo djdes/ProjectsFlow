@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@/domain/task/Task';
-import type { TaskSearchResult } from '@/domain/task/TaskSearchResult';
+import type { TaskSearchMatchKind, TaskSearchResult } from '@/domain/task/TaskSearchResult';
 import type { TaskSearchRepository } from '@/application/task/TaskSearchRepository';
 import { httpClient } from './httpClient';
 
@@ -10,6 +10,9 @@ type TaskSearchResultDto = {
   status: TaskStatus;
   excerpt: string;
   createdAt: string;
+  match?: TaskSearchMatchKind;
+  commentId?: string;
+  commentExcerpt?: string;
 };
 
 export class HttpTaskSearchRepository implements TaskSearchRepository {

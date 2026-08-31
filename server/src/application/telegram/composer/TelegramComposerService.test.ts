@@ -36,6 +36,7 @@ type AiSeg = {
   assigneeName: string | null;
   deadline: string | null;
   taskType?: 'feature' | 'bug' | null;
+  sourceExcerpt?: string | null;
 };
 
 function makeHarness(opts?: {
@@ -738,6 +739,64 @@ test('AI-сегменты: оригинал уходит комментарие�
     h.comments.map((c) => c.taskId),
     ['t1', 't2'],
   );
+});
+
+test('sourceExcerpt: в каждую задачу уходит ТОЛЬКО её фрагмент сообщения, а не всё письмо', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p1', name: 'Альфа' },
+      { id: 'p2', name: 'Бета' },
+    ],
+    aiSegments: [
+      seg1({ id: 's1', title: 'Раз', projectId: 'p1', projectName: 'Альфа', sourceExcerpt: 'почини сборку' }),
+      seg1({ id: 's2', title: 'Два', projectId: 'p2', projectName: 'Бета', sourceExcerpt: 'обнови счета' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'почини сборку, обнови счета');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.comments.length, 2);
+  const [c1, c2] = h.comments as [{ body: string }, { body: string }];
+  assert.match(c1.body, /почини сборку/);
+  assert.doesNotMatch(c1.body.split('Связанные задачи')[0]!, /обнови счета/);
+  assert.match(c2.body, /обнови счета/);
+  assert.doesNotMatch(c2.body.split('Связанные задачи')[0]!, /почини сборку/);
+});
+
+test('связанные задачи: комментарий каждой задачи ссылается на остальные из того же сообщения', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p1', name: 'Альфа' },
+      { id: 'p2', name: 'Бета' },
+    ],
+    aiSegments: [
+      seg1({ id: 's1', title: 'Раз', projectId: 'p1', projectName: 'Альфа' }),
+      seg1({ id: 's2', title: 'Два', projectId: 'p2', projectName: 'Бета' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'надо сделать раз и два');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.comments.length, 2);
+  const [c1, c2] = h.comments as [{ body: string }, { body: string }];
+  // Каждая ссылается на соседа и НЕ ссылается на саму себя.
+  assert.match(c1.body, /Связанные задачи/);
+  assert.match(c1.body, /\[Два\]\(https:\/\/pf\.test\/projects\/p2\?task=t2\)/);
+  assert.doesNotMatch(c1.body, /task=t1/);
+  assert.match(c2.body, /\[Раз\]\(https:\/\/pf\.test\/projects\/p1\?task=t1\)/);
+  assert.doesNotMatch(c2.body, /task=t2/);
+});
+
+test('одна задача из сообщения — блока «Связанные задачи» нет', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1({ id: 's1', title: 'Раз' })],
+  });
+  await h.service.startFromMessage(111, 500, 'сделай раз');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.comments.length, 1);
+  assert.doesNotMatch(h.comments[0]!.body, /Связанные задачи/);
 });
 
 test('отказ комментария не валит создание задачи', async () => {

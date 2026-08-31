@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   Inbox,
+  MessageSquare,
   Moon,
   Monitor,
   Plus,
@@ -21,6 +22,7 @@ import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { defaultProjectIcon as FolderIcon } from '@/presentation/layout/projectIcons';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { matchesKeyboardLayoutQuery } from '@/lib/keyboardLayoutSearch';
+import { Highlight } from '@/presentation/components/search/Highlight';
 
 const DEBOUNCE_MS = 250;
 
@@ -28,8 +30,12 @@ const DEBOUNCE_MS = 250;
 type PaletteItem = {
   readonly key: string;
   readonly section: 'projects' | 'actions' | 'tasks';
+  // Простой текст строки — он же основа фильтрации и доступного имени кнопки.
   readonly label: string;
   readonly sub?: string;
+  // Размеченные версии label/sub с подсветкой совпадения. Не заданы — рисуем простой текст.
+  readonly labelNode?: React.ReactNode;
+  readonly subNode?: React.ReactNode;
   readonly icon: React.ReactNode;
   readonly run: () => void;
 };
@@ -115,6 +121,7 @@ export function TaskSearchDialog({
         key: `project-${p.id}`,
         section: 'projects',
         label: p.name,
+        labelNode: <Highlight text={p.name} query={q} />,
         icon: p.icon ? (
           <span className="grid size-5 shrink-0 place-items-center overflow-hidden text-sm leading-none" aria-hidden>
             <ProjectIconView icon={p.icon} pixelSize={16} />
@@ -197,17 +204,42 @@ export function TaskSearchDialog({
       .filter((a) => matches(a.label))
       .map((a) => ({ ...a, section: 'actions' as const }));
 
-    const taskItems: PaletteItem[] = results.map((r) => ({
-      key: `task-${r.taskId}`,
-      section: 'tasks',
-      label: r.excerpt || '—',
-      sub: `${r.projectName} · ${STATUS_LABEL[r.status]}`,
-      icon: <Search className="size-4 text-muted-foreground" />,
-      run: () => {
-        close();
-        navigate(`/projects/${r.projectId}`);
-      },
-    }));
+    // Задачи: подсвечиваем именно то, что совпало. Совпало в описании — подсветка в первой
+    // строке; в комментарии — вместо «проект · статус» показываем отрывок комментария, а
+    // переход ведёт прямо на него (?task=X#comment-Y).
+    const taskItems: PaletteItem[] = results.map((r) => {
+      const inComment = r.match === 'comment';
+      const label = r.excerpt || '—';
+      const sub = inComment
+        ? `в комментарии: ${r.commentExcerpt ?? ''}`
+        : `${r.projectName} · ${STATUS_LABEL[r.status]}`;
+      const to =
+        inComment && r.commentId
+          ? `/projects/${r.projectId}?task=${r.taskId}#comment-${r.commentId}`
+          : `/projects/${r.projectId}?task=${r.taskId}`;
+      return {
+        key: `task-${r.taskId}`,
+        section: 'tasks',
+        label,
+        sub,
+        labelNode: inComment ? label : <Highlight text={label} query={q} />,
+        subNode: inComment ? (
+          <>
+            <span className="mr-1 opacity-70">в комментарии:</span>
+            <Highlight text={r.commentExcerpt ?? ''} query={q} />
+          </>
+        ) : undefined,
+        icon: inComment ? (
+          <MessageSquare className="size-4 text-muted-foreground" />
+        ) : (
+          <Search className="size-4 text-muted-foreground" />
+        ),
+        run: () => {
+          close();
+          navigate(to);
+        },
+      };
+    });
 
     return [...projectItems, ...actionItems, ...taskItems];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -275,9 +307,11 @@ export function TaskSearchDialog({
                   <span className="block min-w-0 flex-1">
                     {/* truncate (а не line-clamp): обрезает и одно длинное слово без пробелов
                         с многоточием — иначе имя «выезжает за блок» поиска. */}
-                    <span className="block truncate text-sm">{item.label}</span>
+                    <span className="block truncate text-sm">{item.labelNode ?? item.label}</span>
                     {item.sub && (
-                      <span className="block truncate text-xs text-muted-foreground">{item.sub}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {item.subNode ?? item.sub}
+                      </span>
                     )}
                   </span>
                 </button>

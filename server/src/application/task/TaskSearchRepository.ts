@@ -10,7 +10,17 @@ export type TaskSearchResult = {
   readonly excerpt: string;
   // Дата создания задачи — нужна сайдбар-поиску для сортировки по свежести.
   readonly createdAt: Date;
+  // Где нашлось совпадение: в описании задачи или в её комментарии. UI по этому полю
+  // рисует пометку «в комментарии» и подсвечивает нужный кусок.
+  readonly match: TaskSearchMatchKind;
+  // Заполнены только при match='comment': id комментария (deep-link ?task=X#comment-Y)
+  // и отрывок его тела вокруг найденного вхождения.
+  readonly commentId?: string;
+  readonly commentExcerpt?: string;
 };
+
+// 'description' — совпадение в тексте задачи; 'comment' — в теле одного из комментариев.
+export type TaskSearchMatchKind = 'description' | 'comment';
 
 export type TaskSearchQuery = {
   readonly userId: string;

@@ -138,6 +138,20 @@ function excerpt(text: string, limit = EXCERPT_LIMIT): string {
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
 }
 
+// Одна ссылка блока «Связанные задачи» в комментарии-оригинале.
+type RelatedTaskLink = {
+  readonly taskId: string;
+  readonly projectId: string;
+  readonly label: string;
+};
+
+// Подпись markdown-ссылки: без переносов, без сырых маркеров и без [ ] — квадратная
+// скобка в заголовке задачи разорвала бы ссылку при рендере комментария.
+function mdLinkLabel(label: string): string {
+  const plain = mdToPlain(label).replace(/[[\]]/g, '');
+  return excerpt(plain, 80) || 'задача';
+}
+
 // Markdown → чистый текст без сырых маркеров (**, `, _, ~): прогоняем через TG-конвертер и
 // снимаем теги. Для вставки ВНУТРЬ <b>/<i> (заголовки), где вложенные теги сломали бы парсер.
 function mdToPlain(s: string): string {
@@ -1556,6 +1570,7 @@ export class TelegramComposerService {
         targetStatus: forceStatus,
         taskType: s.taskType,
         existingTaskId: s.existingTaskId,
+        sourceExcerpt: s.sourceExcerpt,
       });
     }
     return out;
@@ -2360,6 +2375,10 @@ export class TelegramComposerService {
       readonly taskId: string;
       readonly projectId: string;
       readonly description: string;
+      // Подпись задачи в блоке «Связанные задачи» соседних комментариев.
+      readonly label: string;
+      // Фрагмент исходного сообщения, относящийся именно к этой задаче (null = весь текст).
+      readonly sourceExcerpt: string | null;
     }[] = [];
     const summary: string[] = [];
     for (const { segment: seg, index: segmentIndex } of segmentEntries) {
@@ -2418,7 +2437,14 @@ export class TelegramComposerService {
           // Защита от дублей при падении на последующих сегментах/уведомлениях.
           await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
         }
-        createdTargets.push({ segmentIndex, taskId: task.id, projectId: targetId, description });
+        createdTargets.push({
+          segmentIndex,
+          taskId: task.id,
+          projectId: targetId,
+          description,
+          label: title || excerpt(body, 60),
+          sourceExcerpt: seg.sourceExcerpt?.trim() || null,
+        });
         lastTaskId = task.id;
         lastProjectId = targetId;
         const projName = await this.projNameOf(seg.projectId);
@@ -2432,9 +2458,19 @@ export class TelegramComposerService {
         summary.push(`⚠️ ${escapeHtml(seg.title.trim() || excerpt(seg.body, 40))} — не удалось`);
       }
     }
-    // Оригинал исходного сообщения — в каждую созданную задачу (для N сегментов оригинал общий).
+    // Оригинал исходного сообщения — в каждую созданную задачу. Из одного сообщения на N
+    // задач в каждую уходит ТОЛЬКО её фрагмент (sourceExcerpt), а не всё письмо целиком;
+    // фрагмента нет (старый промпт/черновик) — падаем на полный текст, как раньше.
+    // Плюс перекрёстные ссылки на остальные задачи, созданные из этого же сообщения.
     for (const target of createdTargets) {
-      await this.postOriginalComment(target.taskId, target.projectId, userId, draft.taskText ?? '');
+      const siblings = createdTargets.filter((t) => t.taskId !== target.taskId);
+      await this.postOriginalComment(
+        target.taskId,
+        target.projectId,
+        userId,
+        target.sourceExcerpt ?? draft.taskText ?? '',
+        siblings,
+      );
     }
     const downloadCache: AttachmentDownloadCache = new Map();
     let attachmentResult: AttachmentResult = { attached: 0, failed: 0 };
@@ -2532,21 +2568,37 @@ export class TelegramComposerService {
     projectId: string,
     userId: string,
     original: string,
+    siblings: readonly RelatedTaskLink[] = [],
   ): Promise<void> {
     const text = original.trim();
     if (text.length === 0) return;
+    const body = [`**Оригинал сообщения:**\n\n${text}`, this.relatedTasksBlock(siblings)]
+      .filter((part) => part.length > 0)
+      .join('\n\n');
     try {
       await this.deps.createTaskComment.execute({
         projectId,
         taskId,
         ownerUserId: userId,
-        body: `**Оригинал сообщения:**\n\n${text}`,
+        body,
         actorKind: 'agent',
         agentName: 'telegram-composer',
       });
     } catch (err) {
       console.warn('[tg-composer] postOriginalComment failed:', err);
     }
+  }
+
+  // Перекрёстные ссылки на остальные задачи, созданные из ТОГО ЖЕ сообщения. Одно письмо
+  // часто распадается на несколько задач, и из карточки должно быть видно её «родню» —
+  // иначе контекст соседних пунктов теряется. Пустой список → блока нет.
+  private relatedTasksBlock(siblings: readonly RelatedTaskLink[]): string {
+    if (siblings.length === 0) return '';
+    const base = this.deps.appUrl.replace(/\/$/, '');
+    const lines = siblings.map(
+      (s) => `- [${mdLinkLabel(s.label)}](${base}/projects/${s.projectId}?task=${s.taskId})`,
+    );
+    return `**Связанные задачи из этого же сообщения:**\n\n${lines.join('\n')}`;
   }
 
   // TG-уведомление ответственному сегмента: кнопки Завершить/Комментировать.

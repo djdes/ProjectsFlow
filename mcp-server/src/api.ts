@@ -438,6 +438,12 @@ export type TaskSearchResult = {
   projectName: string;
   status: TaskStatus;
   excerpt: string;
+  // Где совпало: в описании задачи или в теле её комментария ('comment' — тогда заполнены
+  // commentId/commentExcerpt). Отсутствует у ответов сервера до появления поиска по
+  // комментариям — трактуется как 'description'.
+  match?: 'description' | 'comment';
+  commentId?: string;
+  commentExcerpt?: string;
 };
 
 export type SyncCommitsResult = {

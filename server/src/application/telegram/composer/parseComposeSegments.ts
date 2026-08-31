@@ -19,6 +19,11 @@ export type ParsedComposeSegment = {
   // Модель решила, что сегмент ДОПОЛНЯЕТ существующую задачу, а не заводит новую.
   // Тогда вместо createTask пишем комментарий в эту задачу. null = обычная новая задача.
   readonly existingTaskId: string | null;
+  // Дословный фрагмент исходного сообщения, относящийся ИМЕННО к этой задаче (без
+  // перефразирования). Уходит в комментарий «Оригинал сообщения»: из письма на 10 пунктов
+  // в каждую задачу должен попасть свой пункт, а не всё сообщение целиком.
+  // null = модель не вернула поле (старый промпт) — тогда падаем на полный текст.
+  readonly sourceExcerpt: string | null;
 };
 
 export class ComposeParseError extends Error {
@@ -78,6 +83,7 @@ export function parseComposeSegments(raw: string): ParsedComposeSegment[] {
       deadline: validDeadline(o['deadline']),
       taskType: isTaskType(o['taskType']) ? o['taskType'] : null,
       existingTaskId: str(o, 'existingTaskId'),
+      sourceExcerpt: str(o, 'sourceExcerpt'),
     };
   });
   // Сегменты без какого-либо текста выкидываем — создавать пустую задачу нельзя.
