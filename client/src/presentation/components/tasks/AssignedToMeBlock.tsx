@@ -1004,7 +1004,8 @@ export function AssignedToMeBlock({
       try {
         await taskRepository.assign(item.projectId, item.id, member.id);
         toast.success(`Ответственный — ${member.displayName}`);
-        await refresh();
+        // Не await: перерисовка списков не должна удерживать жест (см. setWorkStatus).
+        void refresh();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось переназначить: ${(e as Error).message}`);
@@ -1025,7 +1026,7 @@ export function AssignedToMeBlock({
       try {
         await taskRepository.assign(item.projectId, item.id, user.id);
         toast.success('Теперь вы ответственный');
-        await refresh();
+        void refresh();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
@@ -1792,11 +1793,13 @@ export function AssignedToMeBlock({
           avatarUrl: pendingReassign?.member.avatarUrl ?? null,
         }}
         onCancel={() => setPendingReassign(null)}
-        onConfirm={async () => {
+        onConfirm={() => {
+          // Закрываем СРАЗУ, не дожидаясь assign + refresh: решение уже принято, а держать
+          // модалку на время трёх GET'ов — это те самые «исчезло через 10 секунд».
+          // Исход показывает тост из reassignTo (как в setWorkStatus и остальных жестах).
           const pending = pendingReassign;
-          if (!pending) return;
-          await reassignTo(pending.item, pending.member);
           setPendingReassign(null);
+          if (pending) void reassignTo(pending.item, pending.member);
         }}
       />
     </section>
