@@ -30,7 +30,12 @@ export class DailyDigestScheduler {
   private running = false;
 
   constructor(
-    private readonly deps: { settings: DigestSettingsRepository; send: SendDailyDigest },
+    private readonly deps: {
+      settings: DigestSettingsRepository;
+      send: SendDailyDigest;
+      // Пауза плановых рассылок (broadcastPause.ts). Отсутствие — без паузы (тесты).
+      isPaused?: (at: Date) => boolean;
+    },
   ) {}
 
   start(): void {
@@ -50,6 +55,7 @@ export class DailyDigestScheduler {
 
   async tick(at: Date = new Date()): Promise<void> {
     if (this.running) return;
+    if (this.deps.isPaused?.(at)) return;
     this.running = true;
     try {
       await this.runTick(at);

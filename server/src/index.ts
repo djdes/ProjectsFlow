@@ -282,6 +282,7 @@ import { LeadDigestScheduler } from './infrastructure/scheduler/LeadDigestSchedu
 import { SendLeadDigest } from './application/lead/SendLeadDigest.js';
 import { DrizzleLeadDigestStateRepository } from './infrastructure/repositories/DrizzleLeadDigestStateRepository.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
+import { scheduledBroadcastsPaused } from './infrastructure/scheduler/broadcastPause.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
@@ -3082,6 +3083,7 @@ const { app, devProxyUpgrade } = createApp({
 const dailyDigestScheduler = new DailyDigestScheduler({
   settings: digestSettingsRepo,
   send: sendDailyDigest,
+  isPaused: scheduledBroadcastsPaused,
 });
 dailyDigestScheduler.start();
 
@@ -3101,6 +3103,7 @@ const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   send: sendWorkspaceAssigneeDigest,
   projects: projectRepo,
   sendEodReminder: sendWorkspaceEodReminder,
+  isPaused: scheduledBroadcastsPaused,
 });
 workspaceAssigneeDigestScheduler.start();
 
@@ -3120,6 +3123,7 @@ const sendLeadDigest = new SendLeadDigest({
 const leadDigestScheduler = new LeadDigestScheduler({
   state: new DrizzleLeadDigestStateRepository(db),
   send: sendLeadDigest,
+  isPaused: scheduledBroadcastsPaused,
 });
 leadDigestScheduler.start();
 
@@ -3134,6 +3138,7 @@ const commitSyncScheduler = new CommitSyncScheduler({
   settings: workspaceAssigneeDigestRepo,
   // Живой прогресс (db/145): после постановки всех job'ов батча шлём одно прогресс-сообщение.
   progress: commitSyncBatchProgress,
+  isPaused: scheduledBroadcastsPaused,
 });
 commitSyncScheduler.start();
 

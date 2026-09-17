@@ -46,6 +46,9 @@ export class CommitSyncScheduler {
       // Живой прогресс сверки (db/145). Опционален: после того как все job'ы батча поставлены,
       // шлём ОДНО «прогресс-сообщение» в группу. Отсутствие — без прогресса (тесты/старый wiring).
       progress?: Pick<CommitSyncBatchProgress, 'start'>;
+      // Пауза плановых рассылок (broadcastPause.ts). Отсутствие — без паузы (тесты). Ручная
+      // «Сверить сейчас» идёт мимо планировщика и паузой не затрагивается.
+      isPaused?: (at: Date) => boolean;
     },
   ) {}
 
@@ -66,6 +69,7 @@ export class CommitSyncScheduler {
 
   async tick(): Promise<void> {
     if (this.running) return;
+    if (this.deps.isPaused?.(new Date())) return;
     this.running = true;
     try {
       await this.runTick();

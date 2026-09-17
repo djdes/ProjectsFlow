@@ -21,6 +21,8 @@ export class LeadDigestScheduler {
     private readonly deps: {
       readonly state: LeadDigestStateRepository;
       readonly send: SendLeadDigest;
+      // Пауза плановых рассылок (broadcastPause.ts). Отсутствие — без паузы (тесты).
+      readonly isPaused?: (at: Date) => boolean;
     },
   ) {}
 
@@ -40,6 +42,7 @@ export class LeadDigestScheduler {
 
   async tick(at: Date = new Date()): Promise<void> {
     if (this.running) return;
+    if (this.deps.isPaused?.(at)) return;
     this.running = true;
     try {
       const now = mskNow(at);
