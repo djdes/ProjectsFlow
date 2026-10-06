@@ -303,3 +303,4 @@ Cursor-style лента действий воркера (`claude -p`) в реа�
 | PM2 не видит env-переменные | `ecosystem.config.cjs` использует `--env-file=.env`. Убедись, что `.env` лежит в `DEPLOY_PATH`. |
 | 502 от nginx | `pm2 ls` на сервере → если процесс мёртв, `pm2 logs projectsflow` покажет причину. |
 | Тёмная тема мерцает белым на загрузке | проверь блокирующий FOUC-скрипт в `client/index.html` (выполняется до React). |
+| Telegram-бот молчит, в `projectsflow.err-0.log` — `[tg-poller] getUpdates failed … Proxy response (403)` | прокси режет `*.telegram.org` по имени хоста. `TELEGRAM_PROXY_CONNECT_HOST=149.154.167.220` в `.env` + `pm2 reload projectsflow` (туннель к IP, Host/SNI — домен) или другой прокси. |

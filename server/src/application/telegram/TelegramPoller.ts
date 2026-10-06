@@ -4,6 +4,15 @@ import type {
   TelegramUpdate as HandlerUpdate,
 } from './HandleTelegramWebhook.js';
 
+// fetch прячет настоящую причину в цепочке cause: «fetch failed» ← … ← «Proxy response (403)».
+function describeError(err: unknown): string {
+  const parts: string[] = [];
+  for (let e: unknown = err; e instanceof Error && parts.length < 4; e = e.cause) {
+    parts.push(e.message);
+  }
+  return parts.join(' ← ') || String(err);
+}
+
 type Deps = {
   readonly client: TelegramClient;
   readonly handler: HandleTelegramWebhook;
@@ -119,7 +128,7 @@ export class TelegramPoller {
         const wait = this.backoffMs(consecutiveErrors);
         console.warn(
           `[tg-poller] getUpdates failed (try=${consecutiveErrors}, sleep=${wait}ms):`,
-          (err as Error).message,
+          describeError(err),
         );
         await this.sleep(wait);
       }

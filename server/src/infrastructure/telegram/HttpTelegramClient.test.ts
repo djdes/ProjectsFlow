@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createTcpServer, type AddressInfo, type Socket } from 'node:net';
 import { test } from 'node:test';
 import { HttpTelegramClient } from './HttpTelegramClient.js';
 
@@ -380,4 +380,46 @@ test('editMessageText can replace a digest with rich HTML', async () => {
       });
     },
   );
+});
+
+// Fake HTTP proxy: records the CONNECT request line and refuses the tunnel, like our real
+// proxy does for *.telegram.org.
+async function captureProxyConnects(run: (proxyUrl: string) => Promise<void>): Promise<string[]> {
+  const lines: string[] = [];
+  const sockets = new Set<Socket>();
+  const proxy = createTcpServer((socket) => {
+    sockets.add(socket);
+    socket.once('data', (chunk: Buffer) => {
+      lines.push(chunk.toString('latin1').split('\r\n')[0] ?? '');
+      socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n');
+    });
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const port = (proxy.address() as AddressInfo).port;
+  try {
+    await run(`http://user:pass@127.0.0.1:${port}`);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  }
+  return lines;
+}
+
+test('proxyConnectHost: proxy tunnel goes to the pinned IP instead of the Telegram hostname', async () => {
+  const pinned = await captureProxyConnects(async (proxyUrl) => {
+    const client = new HttpTelegramClient(
+      'secret',
+      'https://api.telegram.org',
+      proxyUrl,
+      '149.154.167.220',
+    );
+    await assert.rejects(client.getUpdates(0, 0));
+  });
+  assert.deepEqual(pinned, ['CONNECT 149.154.167.220:443 HTTP/1.1']);
+
+  const plain = await captureProxyConnects(async (proxyUrl) => {
+    const client = new HttpTelegramClient('secret', 'https://api.telegram.org', proxyUrl);
+    await assert.rejects(client.getUpdates(0, 0));
+  });
+  assert.deepEqual(plain, ['CONNECT api.telegram.org:443 HTTP/1.1']);
 });

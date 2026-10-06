@@ -847,11 +847,15 @@ const telegramApiBaseUrl =
 // TELEGRAM_HTTP_PROXY — HTTP(S)-proxy URL (стандарт http://user:pass@host:port) для
 // всех исходящих к Telegram. Самый простой способ обойти провайдерскую блокировку.
 const telegramHttpProxy = process.env['TELEGRAM_HTTP_PROXY'] || undefined;
+// TELEGRAM_PROXY_CONNECT_HOST — IP, к которому прокси открывает туннель вместо api.telegram.org,
+// если прокси режет Telegram по имени хоста (наш отвечает 403 с 24.09.2026).
+const telegramProxyConnectHost = process.env['TELEGRAM_PROXY_CONNECT_HOST'] || undefined;
 
 const telegramClient = new HttpTelegramClient(
   telegramBotToken,
   telegramApiBaseUrl,
   telegramHttpProxy,
+  telegramProxyConnectHost,
 );
 const groqVoiceTranscriber = new GroqVoiceTranscriber({
   apiKey: process.env['GROQ_API_KEY'] ?? '',
