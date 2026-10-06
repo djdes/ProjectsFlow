@@ -1,20 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings2, UserPlus } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/domain/project/Project';
 import type { WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
-import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { OverviewSection } from '@/presentation/components/project/OverviewSection';
-import { InviteDialog } from './InviteDialog';
-import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 
 const ROLE_LABEL: Record<WorkspaceRole, string> = {
   // «Владелец» — концепт пространства (показывается на настройках пространства), а не проекта:
@@ -36,18 +33,16 @@ const ROLE_BADGE_CLASS: Record<WorkspaceRole, string> = {
 const CREATOR_BADGE_CLASS = 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
 
 // Секция «Команда» на странице проекта. После унификации доступа команда — это участники
-// ПРОСТРАНСТВА проекта (read-only список). Управление ролями/удаление/инвайт-лист — на
-// странице настроек пространства. Общие настройки открыты каждому участнику, а опасные
-// действия внутри страницы по-прежнему показываются только owner'у.
+// ПРОСТРАНСТВА проекта (read-only список). Приглашения, роли и удаление — только на
+// странице настроек пространства: отдельного «пригласить в проект» нет. Общие настройки
+// открыты каждому участнику, а опасные действия внутри страницы по-прежнему показываются
+// только owner'у.
 export function TeamSection({ project }: { project: Project }): React.ReactElement | null {
   const { workspaceRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
   const { workspace } = useCurrentWorkspace();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
-
-  const canInvite = hasOwnerRights(workspace?.role) || workspace?.role === 'editor';
 
   // В inbox команды не бывает — секцию не показываем.
   const skip = project.isInbox;
@@ -75,41 +70,27 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
 
   if (skip) return null;
 
-  const handleInviteCreated = (invite: WorkspaceInvite): void => {
-    if (invite.url) {
-      void navigator.clipboard.writeText(invite.url).then(
-        () => toast.success('Ссылка скопирована'),
-        () => toast.success('Приглашение создано'),
-      );
-    }
-  };
-
   return (
     <OverviewSection
       title="Команда"
       actions={
-        <div className="flex items-center gap-1.5">
-          {workspaceId && (
-            <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
-              <Link to={`/workspaces/${workspaceId}/settings`}>
-                <Settings2 className="size-4" />
-                Настройки пространства
-              </Link>
-            </Button>
-          )}
-          {canInvite && (
-            <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
-              <UserPlus className="size-4" />
-              Пригласить
-            </Button>
-          )}
-        </div>
+        workspaceId && (
+          <Button asChild size="sm" variant="outline">
+            <Link to={`/workspaces/${workspaceId}/settings`}>
+              <Settings2 className="size-4" />
+              Настройки пространства
+            </Link>
+          </Button>
+        )
       }
     >
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">
           Участники пространства{workspace ? ` «${workspace.name}»` : ''} — им доступны все его
           проекты.
+          {/* В личном хабе (kind 'default') состав собирается автоматически и вручную
+              не пополняется — подсказка про добавление там неверна. */}
+          {workspace?.kind === 'team' && ' Чтобы пригласить участника, добавьте его в пространство.'}
         </p>
         {loading ? (
           <div className="space-y-2">
@@ -154,13 +135,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
           </ul>
         )}
       </div>
-
-      <InviteDialog
-        open={showInviteDialog}
-        onClose={() => setShowInviteDialog(false)}
-        workspaceId={workspaceId ?? undefined}
-        onCreated={handleInviteCreated}
-      />
     </OverviewSection>
   );
 }
