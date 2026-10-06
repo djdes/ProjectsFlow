@@ -25,11 +25,20 @@ export type PendingMonitoringAnalysisJob = {
   readonly createdAt: Date;
 };
 
+// Ожидающий job для серверного исполнителя: забирается тем же claim'ом, что у диспетчера,
+// поэтому нужен и диспетчер, от имени которого действует сервер.
+export type QueuedMonitoringAnalysisJob = {
+  readonly id: string;
+  readonly dispatcherUserId: string;
+};
+
 export type MonitoringAnalysisJobRepository = {
   create(input: NewMonitoringAnalysisJobInput): Promise<MonitoringAnalysisJob>;
   findById(id: string): Promise<MonitoringAnalysisJob | null>;
   /** queued job'ы где dispatcher_user_id = userId, createdAt asc, limit 1..50. */
   listPendingForDispatcher(userId: string, limit: number): Promise<PendingMonitoringAnalysisJob[]>;
+  /** queued job'ы ВСЕХ диспетчеров — для серверного исполнителя (подписка ChatGPT), createdAt asc. */
+  listQueued(limit: number): Promise<QueuedMonitoringAnalysisJob[]>;
   /** История анализов сервера (succeeded в первую очередь полезны), createdAt desc. */
   listByServer(serverId: string, limit: number): Promise<MonitoringAnalysisJob[]>;
   /** Есть ли уже job по этому alertId — дедуп авто-анализа (один на алерт). */

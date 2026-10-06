@@ -1,3 +1,4 @@
+import type { AiPromptJobMode } from '../../domain/ai-prompt/AiPromptJob.js';
 import type {
   AiPromptJobRepository,
   PendingAiPromptJob,
@@ -8,6 +9,8 @@ const MAX_LIMIT = 50;
 
 type Deps = {
   readonly aiPromptJobs: AiPromptJobRepository;
+  // Режимы, которые сейчас исполняет сам сервер (подписка ChatGPT) — диспетчер их не видит.
+  readonly serverHandledModes?: () => Promise<readonly AiPromptJobMode[]>;
 };
 
 export class ListPendingAiPromptJobs {
@@ -15,6 +18,7 @@ export class ListPendingAiPromptJobs {
 
   async execute(input: { userId: string; limit?: number }): Promise<PendingAiPromptJob[]> {
     const limit = Math.min(Math.max(input.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
-    return this.deps.aiPromptJobs.listPendingForDispatcher(input.userId, limit);
+    const excludeModes = this.deps.serverHandledModes ? await this.deps.serverHandledModes() : [];
+    return this.deps.aiPromptJobs.listPendingForDispatcher(input.userId, limit, { excludeModes });
   }
 }

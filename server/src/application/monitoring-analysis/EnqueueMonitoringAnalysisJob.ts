@@ -31,6 +31,10 @@ type Deps = {
   readonly alerts: MonitoringAlertRepository;
   readonly monitoringAnalysisJobs: MonitoringAnalysisJobRepository;
   readonly rateLimiter: InMemoryRateLimiter;
+  // Исполняет ли очередь сам сервер (подписка ChatGPT, см. ServerExecutionPolicy). Тогда
+  // назначенный диспетчер не обязателен: job всё равно возьмёт сервер, а dispatcher_user_id
+  // (NOT NULL) заполняется инициатором. Не задано — прежнее поведение.
+  readonly serverHandles?: () => Promise<boolean>;
 };
 
 export type EnqueueMonitoringAnalysisJobInput = {
@@ -53,7 +57,8 @@ export class EnqueueMonitoringAnalysisJob {
 
     // Запуск анализа жжёт токены диспетчера → требуем manage_monitoring (editor+).
     const { project } = await requireProjectAccess(this.deps, input.projectId, input.userId, 'manage_monitoring');
-    if (!project.dispatcherUserId) {
+    const dispatcherUserId = project.dispatcherUserId ?? (await this.serverFallbackDispatcher(input.userId));
+    if (!dispatcherUserId) {
       throw new MonitoringAnalysisProjectHasNoDispatcherError(input.projectId);
     }
 
@@ -71,7 +76,7 @@ export class EnqueueMonitoringAnalysisJob {
       createdBy: input.userId,
       projectId: input.projectId,
       serverId: input.serverId,
-      dispatcherUserId: project.dispatcherUserId,
+      dispatcherUserId,
       analysisType,
       alertId: input.alertId ?? null,
       context,
@@ -81,14 +86,17 @@ export class EnqueueMonitoringAnalysisJob {
 
   // Системный (не-пользовательский) путь: авто-анализ при critical-алерте. Без rate-limit и
   // permission-гейта (триггерит сам монитор). Дедуп: один авто-job на alertId. createdBy =
-  // диспетчер (он же выполняет). Возвращает null, если у проекта нет диспетчера или дубль.
+  // диспетчер (он же выполняет). Возвращает null, если у проекта нет диспетчера (и очередь не
+  // исполняет сервер) или дубль.
   async enqueueAuto(input: {
     projectId: string;
     serverId: string;
     alertId: string;
   }): Promise<MonitoringAnalysisJob | null> {
     const project = await this.deps.projects.getById(input.projectId);
-    if (!project?.dispatcherUserId) return null;
+    if (!project) return null;
+    const dispatcherUserId = project.dispatcherUserId ?? (await this.serverFallbackDispatcher(project.ownerId));
+    if (!dispatcherUserId) return null;
     if (await this.deps.monitoringAnalysisJobs.existsForAlert(input.alertId)) return null;
 
     const server = await this.deps.servers.getById(input.serverId);
@@ -105,11 +113,18 @@ export class EnqueueMonitoringAnalysisJob {
       createdBy: project.ownerId,
       projectId: input.projectId,
       serverId: input.serverId,
-      dispatcherUserId: project.dispatcherUserId,
+      dispatcherUserId,
       analysisType: 'alert',
       alertId: input.alertId,
       context,
       note: 'Авто-анализ: сработал critical-алерт',
     });
+  }
+
+  // Диспетчер для проекта без назначенного: только если очередь исполняет сервер — тогда
+  // job записывается на инициатора. Сбой проверки = «не исполняет» (прежнее поведение).
+  private async serverFallbackDispatcher(initiatorId: string): Promise<string | null> {
+    if (!this.deps.serverHandles) return null;
+    return (await this.deps.serverHandles().catch(() => false)) ? initiatorId : null;
   }
 }

@@ -308,6 +308,11 @@ import type { ListPendingCommitSyncJobs } from '../application/commit-sync/ListP
 import type { ClaimCommitSyncJob } from '../application/commit-sync/ClaimCommitSyncJob.js';
 import type { CompleteCommitSyncJob } from '../application/commit-sync/CompleteCommitSyncJob.js';
 import type { CheckDispatchAllowed } from '../application/usage/CheckDispatchAllowed.js';
+import type { LlmConnectionService } from '../application/llm/LlmConnectionService.js';
+import type { LlmSettingsService } from '../application/llm/LlmSettingsService.js';
+import type { LlmGateway } from '../application/llm/LlmGateway.js';
+import { llmAdminRouter } from './llm/adminRoutes.js';
+import { llmGatewayRouter } from './llm/gatewayRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -501,6 +506,12 @@ type AppDeps = {
     readonly handler: HandleTelegramWebhook;
     readonly webhookSecret: string | null;
     readonly users: UserRepository;
+  };
+  // Подключение LLM-провайдера (подписка ChatGPT по коду) и шлюз для codex диспетчера.
+  readonly llm: {
+    readonly connections: LlmConnectionService;
+    readonly settings: LlmSettingsService;
+    readonly gateway: LlmGateway;
   };
   readonly admin: {
     readonly listAllProjects: ListAllProjects;
@@ -787,6 +798,16 @@ export function createApp(deps: AppDeps): CreatedApp {
 
   app.disable('x-powered-by');
   app.use(securityHeaders(deps.site.baseDomain));
+  // LLM-шлюз для codex диспетчера — ДО общего express.json: codex шлёт всю историю сессии,
+  // тело быстро перерастает лимит 256kb. Свой raw-парсер и Bearer-авторизация внутри.
+  app.use(
+    '/api/agent',
+    llmGatewayRouter({
+      authenticate: deps.agent.authenticateAgentToken,
+      gateway: deps.llm.gateway,
+      tasks: deps.projects.tasks,
+    }),
+  );
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
@@ -951,6 +972,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
   app.use('/api/me', meStatsRouter(deps.meStats));
   app.use('/api/search', searchRouter(deps.search));
+  app.use('/api/admin/llm', llmAdminRouter(deps.llm));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));
   app.use(

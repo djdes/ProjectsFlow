@@ -134,6 +134,17 @@ export type AiRunMutationValue = {
   readonly assistantMessage: AiConversationMessage;
 };
 
+export type ListPendingAiConversationRunsOptions = {
+  // Режимы, которые сейчас исполняет сам сервер (подписка ChatGPT): диспетчеру их не показываем.
+  readonly excludeModes?: readonly AiConversationRunMode[];
+};
+
+// Run серверной очереди: то же, что получает диспетчер, плюс владелец диалога — на него
+// записывается запрос к подписке (по нему LlmRouter выбирает подключение).
+export type ServerQueuedAiConversationRun = PendingAiConversationRun & {
+  readonly ownerUserId: string;
+};
+
 export interface AiConversationRepository {
   listForOwner(ownerUserId: string, query: ListAiConversationsQuery): Promise<AiConversation[]>;
   findById(id: string): Promise<AiConversation | null>;
@@ -165,7 +176,20 @@ export interface AiConversationRepository {
 
   listEvents(conversationId: string, afterEventSeq: number, limit: number): Promise<AiConversationEvent[]>;
 
-  listPendingForDispatcher(dispatcherUserId: string, limit: number): Promise<PendingAiConversationRun[]>;
+  listPendingForDispatcher(
+    dispatcherUserId: string,
+    limit: number,
+    opts?: ListPendingAiConversationRunsOptions,
+  ): Promise<PendingAiConversationRun[]>;
+  /**
+   * Run'ы ВСЕХ диспетчеров в указанных режимах, которые можно забрать, — для серверного
+   * исполнителя. Условия те же, что у очереди диспетчера: queued или running с истёкшим
+   * lease, без job'а визуального редактора, диалог не удалён. Сортировка createdAt asc.
+   */
+  listQueuedForServer(input: {
+    readonly modes: readonly AiConversationRunMode[];
+    readonly limit: number;
+  }): Promise<ServerQueuedAiConversationRun[]>;
   claimRun(input: ClaimAiConversationRunInput): Promise<AiMutationResult<AiConversationRun> | null>;
   completeRun(input: CompleteAiConversationRunInput): Promise<AiMutationResult<AiRunMutationValue> | null>;
   failRun(input: FailAiConversationRunInput): Promise<AiMutationResult<AiRunMutationValue> | null>;

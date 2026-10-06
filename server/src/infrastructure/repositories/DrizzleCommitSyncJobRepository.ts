@@ -6,6 +6,7 @@ import type {
   CommitSyncJobRepository,
   NewCommitSyncJobInput,
   PendingCommitSyncJob,
+  QueuedCommitSyncJob,
 } from '../../application/commit-sync/CommitSyncJobRepository.js';
 import { idGenerator } from '../id/idGenerator.js';
 import { commitSyncJobs, projects, type CommitSyncJobRow } from '../db/schema.js';
@@ -59,6 +60,25 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
       projectName: r.projectName ?? null,
       createdAt: r.createdAt,
     }));
+  }
+
+  async listQueued(limit: number): Promise<QueuedCommitSyncJob[]> {
+    if (limit <= 0) return [];
+    // Без context/commits_json (MEDIUMTEXT): раннер опрашивает очередь часто, полный job
+    // вернёт claim. Индекс idx_csj_status_created покрывает фильтр и сортировку.
+    const rows = await this.db
+      .select({
+        id: commitSyncJobs.id,
+        projectId: commitSyncJobs.projectId,
+        createdBy: commitSyncJobs.createdBy,
+        dispatcherUserId: commitSyncJobs.dispatcherUserId,
+        createdAt: commitSyncJobs.createdAt,
+      })
+      .from(commitSyncJobs)
+      .where(eq(commitSyncJobs.status, 'queued'))
+      .orderBy(asc(commitSyncJobs.createdAt))
+      .limit(limit);
+    return rows.map((r) => ({ ...r, createdBy: r.createdBy ?? null }));
   }
 
   async existsActiveForProject(projectId: string): Promise<boolean> {

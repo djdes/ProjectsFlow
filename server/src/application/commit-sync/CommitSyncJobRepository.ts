@@ -25,6 +25,16 @@ export type PendingCommitSyncJob = {
   readonly createdAt: Date;
 };
 
+// Ожидающий job для серверного исполнителя: только то, что нужно для claim'а (контекст и
+// снапшот коммитов тяжёлые — их отдаст сам claim).
+export type QueuedCommitSyncJob = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly createdBy: string | null;
+  readonly dispatcherUserId: string;
+  readonly createdAt: Date;
+};
+
 // Строка для «прогресс-сообщения» батча (db/145): проект + его текущий статус. Порядок стабильный
 // (по createdAt), чтобы список проектов не «прыгал» между правками сообщения.
 export type CommitSyncBatchStatus = {
@@ -38,6 +48,11 @@ export type CommitSyncJobRepository = {
   findById(id: string): Promise<CommitSyncJob | null>;
   /** queued job'ы где dispatcher_user_id = userId, createdAt asc, limit 1..50. */
   listPendingForDispatcher(userId: string, limit: number): Promise<PendingCommitSyncJob[]>;
+  /**
+   * Ожидающие (status='queued') job'ы ВСЕХ диспетчеров — для серверного исполнителя
+   * (подписка ChatGPT). Сортировка createdAt asc.
+   */
+  listQueued(limit: number): Promise<QueuedCommitSyncJob[]>;
   /** Есть ли queued/running job у проекта — дедуп enqueue (не плодим параллельные прогоны). */
   existsActiveForProject(projectId: string): Promise<boolean>;
   /** Атомарный claim: UPDATE WHERE id=? AND status='queued' → running. null если не удался. */

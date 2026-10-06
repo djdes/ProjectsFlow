@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, notInArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import type {
   AiPromptJob,
@@ -39,7 +39,12 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
     return row ? rowToJob(row) : null;
   }
 
-  async listPendingForDispatcher(userId: string, limit: number): Promise<PendingAiPromptJob[]> {
+  async listPendingForDispatcher(
+    userId: string,
+    limit: number,
+    opts?: { readonly excludeModes?: readonly AiPromptJobMode[] },
+  ): Promise<PendingAiPromptJob[]> {
+    const excluded = opts?.excludeModes ?? [];
     // LEFT JOIN projects, потому что project_id может быть NULL (Inbox-задачи).
     const rows = await this.db
       .select({
@@ -52,7 +57,11 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
       .from(aiPromptJobs)
       .leftJoin(projects, eq(projects.id, aiPromptJobs.projectId))
       .where(
-        and(eq(aiPromptJobs.dispatcherUserId, userId), eq(aiPromptJobs.status, 'queued')),
+        and(
+          eq(aiPromptJobs.dispatcherUserId, userId),
+          eq(aiPromptJobs.status, 'queued'),
+          excluded.length > 0 ? notInArray(aiPromptJobs.mode, [...excluded]) : undefined,
+        ),
       )
       .orderBy(asc(aiPromptJobs.createdAt))
       .limit(limit);
@@ -64,6 +73,20 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
       mode: r.mode,
       createdAt: r.createdAt,
     }));
+  }
+
+  async listQueued(input: {
+    readonly modes: readonly AiPromptJobMode[];
+    readonly limit: number;
+  }): Promise<AiPromptJob[]> {
+    if (input.modes.length === 0 || input.limit <= 0) return [];
+    const rows = await this.db
+      .select()
+      .from(aiPromptJobs)
+      .where(and(eq(aiPromptJobs.status, 'queued'), inArray(aiPromptJobs.mode, [...input.modes])))
+      .orderBy(asc(aiPromptJobs.createdAt))
+      .limit(input.limit);
+    return rows.map(rowToJob);
   }
 
   async countPendingByProjectForDispatcher(userId: string): Promise<AiPromptJobCountByProject> {

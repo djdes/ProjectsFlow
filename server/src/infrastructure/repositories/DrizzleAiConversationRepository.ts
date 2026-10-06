@@ -9,8 +9,10 @@ import {
   isNull,
   like,
   lt,
+  notInArray,
   or,
   sql,
+  type SQL,
 } from 'drizzle-orm';
 import type {
   AiConversationRepository,
@@ -28,6 +30,8 @@ import type {
   FailAiRunForEditJobInput,
   ListAiConversationsQuery,
   ListAiMessagesQuery,
+  ListPendingAiConversationRunsOptions,
+  ServerQueuedAiConversationRun,
 } from '../../application/ai-conversation/AiConversationRepository.js';
 import type { AiConversation } from '../../domain/ai-conversation/AiConversation.js';
 import type {
@@ -37,6 +41,7 @@ import type {
 import type { AiConversationMessage } from '../../domain/ai-conversation/AiMessage.js';
 import type {
   AiConversationRun,
+  AiConversationRunMode,
   PendingAiConversationRun,
 } from '../../domain/ai-conversation/AiRun.js';
 import {
@@ -410,10 +415,36 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
   async listPendingForDispatcher(
     dispatcherUserId: string,
     limit: number,
+    opts?: ListPendingAiConversationRunsOptions,
   ): Promise<PendingAiConversationRun[]> {
+    const excluded = opts?.excludeModes ?? [];
+    return this.listClaimableRuns(
+      and(
+        eq(aiConversationRuns.dispatcherUserId, dispatcherUserId),
+        excluded.length > 0 ? notInArray(aiConversationRuns.mode, [...excluded]) : undefined,
+      ),
+      limit,
+    );
+  }
+
+  async listQueuedForServer(input: {
+    readonly modes: readonly AiConversationRunMode[];
+    readonly limit: number;
+  }): Promise<ServerQueuedAiConversationRun[]> {
+    if (input.modes.length === 0 || input.limit <= 0) return [];
+    return this.listClaimableRuns(inArray(aiConversationRuns.mode, [...input.modes]), input.limit);
+  }
+
+  // Очередь исполнителя (диспетчера или сервера): queued либо running с истёкшим lease —
+  // исполнитель упал, run можно забрать заново.
+  private async listClaimableRuns(
+    scope: SQL | undefined,
+    limit: number,
+  ): Promise<ServerQueuedAiConversationRun[]> {
     const rows = await this.db.select({
       run: aiConversationRuns,
       conversationTitle: aiConversations.title,
+      ownerUserId: aiConversations.ownerUserId,
       projectName: projects.name,
       inputText: aiConversationMessages.body,
     }).from(aiConversationRuns)
@@ -421,7 +452,7 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
       .innerJoin(aiConversationMessages, eq(aiConversationMessages.id, aiConversationRuns.userMessageId))
       .leftJoin(projects, eq(projects.id, aiConversationRuns.projectId))
       .where(and(
-        eq(aiConversationRuns.dispatcherUserId, dispatcherUserId),
+        scope,
         // Run, привязанный к job'у визуального редактора, исполняет и закрывает сам job.
         // Отдать его ещё и воркеру чата — значит получить два ответа в одном сообщении
         // и гонку двух завершений.
@@ -441,6 +472,7 @@ export class DrizzleAiConversationRepository implements AiConversationRepository
     return Promise.all(rows.map(async (row) => ({
       run: toRun(row.run),
       conversationTitle: row.conversationTitle,
+      ownerUserId: row.ownerUserId,
       projectName: row.projectName ?? null,
       inputText: row.inputText,
       history: (await this.listMessages(row.run.conversationId, { limit: 40 }))

@@ -220,6 +220,8 @@ import { EnqueueMonitoringAnalysisJob } from './application/monitoring-analysis/
 import { WaitForMonitoringAnalysisJob } from './application/monitoring-analysis/WaitForMonitoringAnalysisJob.js';
 import { ListServerAnalysisHistory } from './application/monitoring-analysis/ListServerAnalysisHistory.js';
 import { ListPendingMonitoringAnalysisJobs } from './application/monitoring-analysis/ListPendingMonitoringAnalysisJobs.js';
+import { RunMonitoringAnalysisJobWithLlm } from './application/monitoring-analysis/RunMonitoringAnalysisJobWithLlm.js';
+import { monitoringAnalysisServerQueue } from './application/monitoring-analysis/monitoringAnalysisServerQueue.js';
 import { ClaimMonitoringAnalysisJob } from './application/monitoring-analysis/ClaimMonitoringAnalysisJob.js';
 import { CompleteMonitoringAnalysisJob } from './application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
 import { MonitoringAnalysisJobCleanup } from './application/monitoring-analysis/MonitoringAnalysisJobCleanup.js';
@@ -382,6 +384,29 @@ import { ListMonitoredServers } from './application/monitoring/ListMonitoredServ
 import { MonitoringKbSnapshotWriter } from './application/monitoring/MonitoringKbSnapshotWriter.js';
 import type { ServerSnapshot } from './domain/monitoring/ServerSnapshot.js';
 import { createApp } from './presentation/http.js';
+import { TokenCipher } from './infrastructure/llm/TokenCipher.js';
+import { ChatGptDeviceAuthClient } from './infrastructure/llm/ChatGptDeviceAuthClient.js';
+import { ChatGptCodexTransport } from './infrastructure/llm/ChatGptCodexTransport.js';
+import { DrizzleLlmConnectionRepository } from './infrastructure/repositories/DrizzleLlmConnectionRepository.js';
+import { DrizzleLlmDeviceLoginRepository } from './infrastructure/repositories/DrizzleLlmDeviceLoginRepository.js';
+import { DrizzleLlmSettingsRepository } from './infrastructure/repositories/DrizzleLlmSettingsRepository.js';
+import { LlmAccessService } from './application/llm/LlmAccessService.js';
+import { LlmConnectionService } from './application/llm/LlmConnectionService.js';
+import { LlmGateway } from './application/llm/LlmGateway.js';
+import { LlmRouter } from './application/llm/LlmRouter.js';
+import { LlmSettingsService } from './application/llm/LlmSettingsService.js';
+import { LlmTextGenerator } from './application/llm/LlmTextGenerator.js';
+import { ServerExecutionPolicy } from './application/llm/ServerExecutionPolicy.js';
+import { ServerQueueRunner, type ServerQueueAdapter } from './application/llm/ServerQueueRunner.js';
+import { RunAiPromptJobWithLlm } from './application/ai-prompt/RunAiPromptJobWithLlm.js';
+import { aiPromptServerQueue, SERVER_AI_PROMPT_MODES } from './application/ai-prompt/aiPromptServerQueue.js';
+import { RunAiConversationRunWithLlm } from './application/ai-conversation/RunAiConversationRunWithLlm.js';
+import {
+  aiConversationServerQueue,
+  SERVER_AI_CONVERSATION_MODES,
+} from './application/ai-conversation/aiConversationServerQueue.js';
+import { RunCommitSyncJobWithLlm } from './application/commit-sync/RunCommitSyncJobWithLlm.js';
+import { commitSyncServerQueue } from './application/commit-sync/commitSyncServerQueue.js';
 import { config, sessionTtlMs } from './presentation/config.js';
 
 const passwordHasher = new Argon2PasswordHasher();
@@ -757,6 +782,11 @@ const aiConversationService = new AiConversationService({
   eventHub: aiConversationEventHub,
   idGen: idGenerator,
   resolvePersonalDispatcher: async () => resolveDefaultAiDispatcherUserId(),
+  // Режимы, которые исполняет сервер (подписка ChatGPT): прячутся из очереди диспетчера и не
+  // требуют диспетчера при отправке. llmServerPolicy объявлен ниже — замыкание вызывается
+  // только на запросах, после старта.
+  serverHandledModes: async () =>
+    (await llmServerPolicy.handles('ai_conversation')) ? SERVER_AI_CONVERSATION_MODES : [],
 });
 
 // Periodic cleanup для ai_prompt_jobs (каждые 60 сек). Лог только когда что-то сделано —
@@ -833,6 +863,65 @@ const groqVoiceTranscriber = new GroqVoiceTranscriber({
   // outbound Telegram proxy unless speech has its own route.
   proxyUrl: process.env['GROQ_HTTP_PROXY'] || telegramHttpProxy,
 });
+
+// --- LLM: подписка ChatGPT по коду (db/157) ---
+// Сервер сам держит токены подписки: короткие AI-задания выполняет напрямую, а codex на
+// машине диспетчера ходит через шлюз /api/agent/llm/v1. OpenAI не обслуживает часть регионов,
+// поэтому исходящие к OpenAI идут через OPENAI_HTTP_PROXY, а без него — через тот же прокси,
+// что у Telegram (как у Groq выше). LLM_TOKEN_KEY шифрует токены в БД.
+const llmProxyUrl = process.env['OPENAI_HTTP_PROXY'] || telegramHttpProxy;
+const llmTokenCipher = new TokenCipher(process.env['LLM_TOKEN_KEY']);
+if (!llmTokenCipher.encrypting) {
+  console.warn('[llm] LLM_TOKEN_KEY не задан — токены подписки хранятся в БД без шифрования');
+}
+const llmConnectionRepo = new DrizzleLlmConnectionRepository(db, llmTokenCipher);
+const llmDeviceLoginRepo = new DrizzleLlmDeviceLoginRepository(db);
+const llmSettingsService = new LlmSettingsService({ settings: new DrizzleLlmSettingsRepository(db) });
+const llmAuthClient = new ChatGptDeviceAuthClient({
+  issuer: process.env['CHATGPT_AUTH_ISSUER'],
+  proxyUrl: llmProxyUrl,
+});
+const llmTransport = new ChatGptCodexTransport({
+  baseUrl: process.env['CHATGPT_CODEX_BASE_URL'],
+  proxyUrl: llmProxyUrl,
+});
+const llmAccessService = new LlmAccessService({ connections: llmConnectionRepo, authClient: llmAuthClient });
+const llmRouter = new LlmRouter({ connections: llmConnectionRepo, provider: 'chatgpt' });
+const llmConnectionService = new LlmConnectionService({
+  provider: 'chatgpt',
+  connections: llmConnectionRepo,
+  deviceLogins: llmDeviceLoginRepo,
+  authClient: llmAuthClient,
+  access: llmAccessService,
+  transport: llmTransport,
+  settings: llmSettingsService,
+});
+const llmGateway = new LlmGateway({
+  router: llmRouter,
+  access: llmAccessService,
+  transport: llmTransport,
+  connections: llmConnectionRepo,
+});
+const llmTextGenerator = new LlmTextGenerator({
+  router: llmRouter,
+  access: llmAccessService,
+  transport: llmTransport,
+  settings: llmSettingsService,
+  connections: llmConnectionRepo,
+});
+// Короткие задания, которые админ перевёл на сервер (llm_settings.server_queues), сервер
+// забирает сам; пока подписка недоступна, они остаются диспетчеру (Ralph).
+const llmServerPolicy = new ServerExecutionPolicy({ settings: llmSettingsService, router: llmRouter });
+const llmQueueAdapters: ServerQueueAdapter[] = [];
+const llmQueueRunner = new ServerQueueRunner({
+  policy: llmServerPolicy,
+  adapters: llmQueueAdapters,
+  concurrencyPerQueue: Math.max(1, Number(process.env['LLM_SERVER_CONCURRENCY'] ?? 3) || 3),
+  log: (message, error) => console.warn(message, error instanceof Error ? error.message : error ?? ''),
+});
+llmQueueRunner.start(1_500);
+const serverHandlesAiPromptMode = async (mode: (typeof SERVER_AI_PROMPT_MODES)[number]): Promise<boolean> =>
+  SERVER_AI_PROMPT_MODES.includes(mode) && (await llmServerPolicy.handles('ai_prompt'));
 const telegramOutboundRepo = new DrizzleTelegramOutboundRepository(db);
 const telegramRalphQuestionRepo = new DrizzleTelegramRalphQuestionRepository(db);
 
@@ -963,7 +1052,35 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   tasks: taskRepo,
   rateLimiter: agentRateLimiter,
   resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
+  serverHandlesMode: serverHandlesAiPromptMode,
 });
+llmQueueAdapters.push(
+  aiPromptServerQueue({
+    aiPromptJobs: aiPromptJobRepo,
+    run: new RunAiPromptJobWithLlm({
+      complete: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
+      llm: llmTextGenerator,
+      // KB читается от имени создателя job'а, как у диспетчера (GetAiPromptKbBundle).
+      loadKbBundles: (job, projectIds) =>
+        new GetAiPromptKbBundle({
+          aiPromptJobs: aiPromptJobRepo,
+          projects: projectRepo,
+          members: projectMemberRepo,
+          listKbDocuments: new ListKbDocuments({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
+          getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
+        })
+          .execute({ userId: job.dispatcherUserId, jobId: job.id, projectIds })
+          .then((r) => r.bundles),
+    }),
+  }),
+);
+llmQueueAdapters.push(
+  aiConversationServerQueue({
+    runs: aiConversationRepo,
+    conversations: aiConversationService,
+    run: new RunAiConversationRunWithLlm({ conversations: aiConversationService, llm: llmTextGenerator }),
+  }),
+);
 const waitForAiPromptJob = new WaitForAiPromptJob({
   aiPromptJobs: aiPromptJobRepo,
   isAdmin: async (userId) => (await userRepo.getById(userId))?.isAdmin ?? false,
@@ -1492,6 +1609,7 @@ const enqueueMonitoringAnalysisJob = new EnqueueMonitoringAnalysisJob({
   alerts: monitoringAlertRepo,
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
   rateLimiter: agentRateLimiter,
+  serverHandles: () => llmServerPolicy.handles('monitoring'),
 });
 const waitForMonitoringAnalysisJob = new WaitForMonitoringAnalysisJob({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
@@ -1505,6 +1623,7 @@ const listServerAnalysisHistory = new ListServerAnalysisHistory({
 });
 const listPendingMonitoringAnalysisJobs = new ListPendingMonitoringAnalysisJobs({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+  serverHandles: () => llmServerPolicy.handles('monitoring'),
 });
 const claimMonitoringAnalysisJob = new ClaimMonitoringAnalysisJob({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
@@ -1514,6 +1633,16 @@ const completeMonitoringAnalysisJob = new CompleteMonitoringAnalysisJob({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
   recordUsage,
 });
+llmQueueAdapters.push(
+  monitoringAnalysisServerQueue({
+    monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+    claim: claimMonitoringAnalysisJob,
+    run: new RunMonitoringAnalysisJobWithLlm({
+      complete: completeMonitoringAnalysisJob,
+      llm: llmTextGenerator,
+    }),
+  }),
+);
 // Housekeeping каждые 60 сек (зеркало ai-prompt cleanup).
 const monitoringAnalysisJobCleanup = new MonitoringAnalysisJobCleanup({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
@@ -1576,6 +1705,8 @@ const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
 });
 const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
   commitSyncJobs: commitSyncJobRepo,
+  // Пока очередь исполняет сервер (подписка ChatGPT), диспетчер её не видит.
+  serverHandles: () => llmServerPolicy.handles('commit_sync'),
 });
 const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo, checkBudget });
 // Объединённый дайджест сверки коммитов: собирает результаты нескольких проектов батча в одно
@@ -1630,6 +1761,13 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
     versions: taskVersionRecorder,
   }),
 });
+llmQueueAdapters.push(
+  commitSyncServerQueue({
+    commitSyncJobs: commitSyncJobRepo,
+    claim: claimCommitSyncJob,
+    run: new RunCommitSyncJobWithLlm({ complete: completeCommitSyncJob, llm: llmTextGenerator }),
+  }),
+);
 const commitSyncJobCleanup = new CommitSyncJobCleanup({
   commitSyncJobs: commitSyncJobRepo,
   // Safety flush: досылаем батчи, осиротевшие после добивания зависших job'ов (db/143).
@@ -2317,6 +2455,11 @@ const { app, devProxyUpgrade } = createApp({
     webhookSecret: telegramWebhookSecret,
     users: userRepo,
   },
+  llm: {
+    connections: llmConnectionService,
+    settings: llmSettingsService,
+    gateway: llmGateway,
+  },
   admin: {
     listAllProjects: new ListAllProjects(adminRepo),
     listAllUsers: new ListAllUsers(adminRepo),
@@ -2884,7 +3027,11 @@ const { app, devProxyUpgrade } = createApp({
     // AI prompt-improvement (см. spec 2026-05-28-ai-prompt-improvement-design.md)
     enqueueAiPromptJob,
     waitForAiPromptJob,
-    listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
+    listPendingAiPromptJobs: new ListPendingAiPromptJobs({
+      aiPromptJobs: aiPromptJobRepo,
+      serverHandledModes: async () =>
+        (await llmServerPolicy.handles('ai_prompt')) ? SERVER_AI_PROMPT_MODES : [],
+    }),
     claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     listPendingMonitoringAnalysisJobs,

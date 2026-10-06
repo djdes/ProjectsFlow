@@ -27,10 +27,11 @@ import { planNameRu } from '@/presentation/usage/usageFormat';
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
+import { AdminLlmPanel } from '@/presentation/components/admin/AdminLlmPanel';
 
-type Tab = 'projects' | 'users' | 'support' | 'email';
+type Tab = 'projects' | 'users' | 'support' | 'email' | 'ai';
 
-const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email'];
+const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email', 'ai'];
 
 export function AdminPage(): React.ReactElement {
   const [searchParams] = useSearchParams();
@@ -61,12 +62,16 @@ export function AdminPage(): React.ReactElement {
         <TabButton active={tab === 'email'} onClick={() => setTab('email')}>
           <Mail className="size-4" /> Email
         </TabButton>
+        <TabButton active={tab === 'ai'} onClick={() => setTab('ai')}>
+          <Bot className="size-4" /> ИИ
+        </TabButton>
       </div>
 
       {tab === 'projects' && <ProjectsTab />}
       {tab === 'users' && <UsersTab />}
       {tab === 'support' && <SupportTab />}
       {tab === 'email' && <EmailTab />}
+      {tab === 'ai' && <AdminLlmPanel />}
     </div>
   );
 }

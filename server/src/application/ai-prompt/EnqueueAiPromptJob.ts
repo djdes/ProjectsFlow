@@ -47,6 +47,12 @@ type Deps = {
    * (env AI_PROMPT_DEFAULT_DISPATCHER_EMAIL не задан или юзера нет).
    */
   readonly resolveDefaultDispatcherUserId: () => Promise<string | null>;
+  /**
+   * Исполняет ли этот режим сам сервер (подписка ChatGPT, см. ServerExecutionPolicy). Тогда
+   * назначенный диспетчер не обязателен: job всё равно возьмёт сервер, а dispatcher_user_id
+   * (NOT NULL) заполняется дефолтным диспетчером или автором.
+   */
+  readonly serverHandlesMode?: (mode: AiPromptJobMode) => Promise<boolean>;
 };
 
 export type EnqueueAiPromptJobInput = {
@@ -106,6 +112,8 @@ export class EnqueueAiPromptJob {
       );
       if (project.dispatcherUserId) {
         dispatcherUserId = project.dispatcherUserId;
+      } else if (await this.serverHandles(mode)) {
+        dispatcherUserId = (await this.deps.resolveDefaultDispatcherUserId()) ?? input.userId;
       } else if (isComposeLike || isAssistant) {
         // compose кросс-проектный: если у текущего проекта нет диспетчера — отдаём
         // дефолтному (он лишь гоняет Claude, не обязан быть диспетчером всех кандидатов).
@@ -124,8 +132,13 @@ export class EnqueueAiPromptJob {
       }
     } else {
       const defaultDispatcher = await this.deps.resolveDefaultDispatcherUserId();
-      if (!defaultDispatcher) throw new AiPromptDispatcherNotConfiguredError();
-      dispatcherUserId = defaultDispatcher;
+      if (defaultDispatcher) {
+        dispatcherUserId = defaultDispatcher;
+      } else if (await this.serverHandles(mode)) {
+        dispatcherUserId = input.userId;
+      } else {
+        throw new AiPromptDispatcherNotConfiguredError();
+      }
     }
 
     if (mode === 'compose') {
@@ -143,5 +156,10 @@ export class EnqueueAiPromptJob {
       inputText: input.text,
       kbContext,
     });
+  }
+
+  private async serverHandles(mode: AiPromptJobMode): Promise<boolean> {
+    if (!this.deps.serverHandlesMode) return false;
+    return this.deps.serverHandlesMode(mode).catch(() => false);
   }
 }

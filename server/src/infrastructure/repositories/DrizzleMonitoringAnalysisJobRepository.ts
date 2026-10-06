@@ -8,6 +8,7 @@ import type {
   MonitoringAnalysisJobRepository,
   NewMonitoringAnalysisJobInput,
   PendingMonitoringAnalysisJob,
+  QueuedMonitoringAnalysisJob,
 } from '../../application/monitoring-analysis/MonitoringAnalysisJobRepository.js';
 import { idGenerator } from '../id/idGenerator.js';
 import {
@@ -76,6 +77,20 @@ export class DrizzleMonitoringAnalysisJobRepository implements MonitoringAnalysi
       analysisType: r.analysisType,
       createdAt: r.createdAt,
     }));
+  }
+
+  async listQueued(limit: number): Promise<QueuedMonitoringAnalysisJob[]> {
+    if (limit <= 0) return [];
+    // Только id и диспетчер: тяжёлый context читает claim. Индекс idx_maj_status_created.
+    return this.db
+      .select({
+        id: monitoringAnalysisJobs.id,
+        dispatcherUserId: monitoringAnalysisJobs.dispatcherUserId,
+      })
+      .from(monitoringAnalysisJobs)
+      .where(eq(monitoringAnalysisJobs.status, 'queued'))
+      .orderBy(asc(monitoringAnalysisJobs.createdAt))
+      .limit(limit);
   }
 
   async listByServer(serverId: string, limit: number): Promise<MonitoringAnalysisJob[]> {

@@ -37,7 +37,17 @@ export type AiPromptJobRepository = {
    * Pending (status='queued') job'ы где dispatcher_user_id = userId. Сортировка
    * createdAt asc. limit 1..50.
    */
-  listPendingForDispatcher(userId: string, limit: number): Promise<PendingAiPromptJob[]>;
+  listPendingForDispatcher(
+    userId: string,
+    limit: number,
+    // Режимы, которые сейчас исполняет сервер (подписка ChatGPT): диспетчеру их не показываем.
+    opts?: { readonly excludeModes?: readonly AiPromptJobMode[] },
+  ): Promise<PendingAiPromptJob[]>;
+  /**
+   * Ожидающие (status='queued') job'ы ВСЕХ диспетчеров в указанных режимах — для серверного
+   * исполнителя. Сортировка createdAt asc.
+   */
+  listQueued(input: { readonly modes: readonly AiPromptJobMode[]; readonly limit: number }): Promise<AiPromptJob[]>;
   /**
    * Counter по project_id среди queued job'ов где dispatcher_user_id = userId.
    * Используется в ListMyDispatchedProjects.

@@ -114,6 +114,16 @@ import {
   NotDispatcherForAiPromptJobError,
 } from '../../domain/ai-prompt/errors.js';
 import {
+  LlmDeviceAuthUnavailableError,
+  LlmDeviceLoginNotFoundError,
+  LlmInvalidSettingsError,
+  LlmNotConnectedError,
+  LlmRateLimitedError,
+  LlmReauthRequiredError,
+  LlmUpstreamBlockedError,
+  LlmUpstreamError,
+} from '../../domain/llm/errors.js';
+import {
   AssignmentNotFoundError,
   EmployeeNotFoundError,
   FinanceValidationError,
@@ -673,6 +683,40 @@ export function errorHandler(
   }
   if (err instanceof AgentCapabilityNotFoundError) {
     res.status(404).json({ error: 'agent_capability_not_found' });
+    return;
+  }
+
+  // Подключение LLM (подписка ChatGPT по коду). Сообщения — для админки, на русском.
+  if (err instanceof LlmDeviceAuthUnavailableError) {
+    res.status(409).json({ error: 'llm_device_auth_unavailable', message: err.message });
+    return;
+  }
+  if (err instanceof LlmDeviceLoginNotFoundError) {
+    res.status(404).json({ error: 'llm_device_login_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof LlmInvalidSettingsError) {
+    res.status(400).json({ error: 'llm_invalid_settings', message: err.message });
+    return;
+  }
+  if (err instanceof LlmNotConnectedError) {
+    res.status(503).json({ error: 'llm_not_connected', message: err.message });
+    return;
+  }
+  if (err instanceof LlmReauthRequiredError) {
+    res.status(503).json({ error: 'llm_reauth_required', message: err.message });
+    return;
+  }
+  if (err instanceof LlmRateLimitedError) {
+    res.status(429).json({
+      error: 'llm_rate_limited',
+      message: err.message,
+      resetsAt: err.resetsAt ? err.resetsAt.toISOString() : null,
+    });
+    return;
+  }
+  if (err instanceof LlmUpstreamBlockedError || err instanceof LlmUpstreamError) {
+    res.status(502).json({ error: 'llm_upstream_error', message: err.message });
     return;
   }
 

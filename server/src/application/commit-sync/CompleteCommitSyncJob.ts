@@ -61,6 +61,8 @@ export type CompleteCommitSyncJobInput = {
   readonly costUsd?: number | null;
   readonly tokensIn?: number | null;
   readonly tokensOut?: number | null;
+  // Модель прогона — её знает серверный исполнитель (подписка ChatGPT); диспетчер не шлёт.
+  readonly model?: string | null;
 };
 
 // Завершение commit-sync job'а. ИИ вернул только совпадения коммит↔задача (коммит, который
@@ -285,7 +287,7 @@ export class CompleteCommitSyncJob {
         // Списываем на инициатора (владельца проекта), не на диспетчера-админа.
         dispatcherUserId: job.createdBy ?? job.dispatcherUserId,
         projectId: job.projectId,
-        model: null,
+        model: input.model ?? null,
         tokensIn: input.tokensIn ?? null,
         tokensOut: input.tokensOut ?? null,
         costUsd: input.costUsd ?? null,

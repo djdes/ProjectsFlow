@@ -4,12 +4,13 @@ import type {
   AiConversationRepository,
   CreateAiMessageRunRecord,
   ListAiConversationsQuery,
+  ListPendingAiConversationRunsOptions,
 } from './AiConversationRepository.js';
 import { AiConversationService } from './AiConversationService.js';
 import type { AiConversation } from '../../domain/ai-conversation/AiConversation.js';
 import type { AiConversationEvent } from '../../domain/ai-conversation/AiConversationEvent.js';
 import type { AiConversationMessage } from '../../domain/ai-conversation/AiMessage.js';
-import type { AiConversationRun } from '../../domain/ai-conversation/AiRun.js';
+import type { AiConversationRun, AiConversationRunMode } from '../../domain/ai-conversation/AiRun.js';
 import {
   AiConversationDispatcherMissingError,
   AiConversationNotFoundError,
@@ -30,6 +31,7 @@ class FakeRepo implements AiConversationRepository {
   eventSeq = 0;
 
   lastList: ListAiConversationsQuery | null = null;
+  lastPendingOpts: ListPendingAiConversationRunsOptions | null = null;
 
   async listForOwner(ownerUserId: string, query: ListAiConversationsQuery) {
     this.lastList = query;
@@ -93,7 +95,15 @@ class FakeRepo implements AiConversationRepository {
   }
   async cancelRun() { return null; }
   async listEvents() { return []; }
-  async listPendingForDispatcher() { return []; }
+  async listPendingForDispatcher(
+    _dispatcherUserId: string,
+    _limit: number,
+    opts?: ListPendingAiConversationRunsOptions,
+  ) {
+    this.lastPendingOpts = opts ?? null;
+    return [];
+  }
+  async listQueuedForServer() { return []; }
   async claimRun() { return null; }
   async completeRun() { return null; }
   async failRun() { return null; }
@@ -107,17 +117,35 @@ class FakeRepo implements AiConversationRepository {
   }
 }
 
-function build(options: { dispatcher?: string | null; projectMember?: boolean } = {}) {
+function build(options: {
+  dispatcher?: string | null;
+  // Дежурный диспетчер личных чатов, если он отличается от диспетчера проекта.
+  personalDispatcher?: string | null;
+  projectMember?: boolean;
+  // Режимы, которые исполняет сервер; 'throws' — проверка политики падает.
+  serverModes?: readonly AiConversationRunMode[] | 'throws';
+} = {}) {
   const repo = new FakeRepo();
   const eventHub = new AiConversationEventHub();
   let seq = 0;
-  const project = projectFixture(options.dispatcher === undefined ? DISPATCHER : options.dispatcher);
+  const dispatcher = options.dispatcher === undefined ? DISPATCHER : options.dispatcher;
+  const personalDispatcher = options.personalDispatcher === undefined ? dispatcher : options.personalDispatcher;
+  const serverModes = options.serverModes;
+  const project = projectFixture(dispatcher);
   const service = new AiConversationService({
     repo,
     eventHub,
     idGen: () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`,
     now: () => NOW,
-    resolvePersonalDispatcher: async () => options.dispatcher === undefined ? DISPATCHER : options.dispatcher,
+    resolvePersonalDispatcher: async () => personalDispatcher,
+    ...(serverModes === undefined
+      ? {}
+      : {
+          serverHandledModes: async () => {
+            if (serverModes === 'throws') throw new Error('llm_settings unavailable');
+            return serverModes;
+          },
+        }),
     projectAccess: {
       projects: {
         async getById(id: string) { return id === PROJECT ? project : null; },
@@ -179,6 +207,55 @@ test('send fails before persistence when no dispatcher is configured', async () 
   await assert.rejects(
     () => service.sendMessage(USER, 'conversation-1', {
       body: 'test', clientRequestId: '00000000-0000-4000-8000-000000000099',
+    }),
+    AiConversationDispatcherMissingError,
+  );
+  assert.equal(repo.lastSend, null);
+});
+
+test('dispatcher queue hides runs of the modes the server answers itself', async () => {
+  const handled = build({ serverModes: ['chat', 'studio_plan'] });
+  await handled.service.listPendingRuns(DISPATCHER, 10);
+  assert.deepEqual(handled.repo.lastPendingOpts?.excludeModes, ['chat', 'studio_plan']);
+
+  // Без зависимости и при сбое проверки политики — прежнее поведение: диспетчер видит всё.
+  const plain = build();
+  await plain.service.listPendingRuns(DISPATCHER, 10);
+  assert.deepEqual(plain.repo.lastPendingOpts?.excludeModes, []);
+  const broken = build({ serverModes: 'throws' });
+  await broken.service.listPendingRuns(DISPATCHER, 10);
+  assert.deepEqual(broken.repo.lastPendingOpts?.excludeModes, []);
+});
+
+test('send without a dispatcher is accepted when the server answers that mode', async () => {
+  // Личный чат без дежурного диспетчера: run записывается на автора, ответит сервер.
+  const personal = build({ dispatcher: null, serverModes: ['chat', 'studio_plan'] });
+  personal.repo.conversations.set('conversation-1', conversation({ id: 'conversation-1', ownerUserId: USER }));
+  const chat = await personal.service.sendMessage(USER, 'conversation-1', {
+    body: 'Привет', clientRequestId: '00000000-0000-4000-8000-000000000099',
+  });
+  assert.equal(chat.run.dispatcherUserId, USER);
+  assert.equal(chat.run.mode, 'chat');
+
+  // Студия проекта без диспетчера: run достаётся дежурному — он подхватит его без подписки.
+  const studio = build({ dispatcher: null, personalDispatcher: DISPATCHER, serverModes: ['chat', 'studio_plan'] });
+  const conv = await studio.service.getOrCreateProjectStudio(USER, PROJECT);
+  const plan = await studio.service.sendMessage(USER, conv.id, {
+    body: 'план', clientRequestId: '00000000-0000-4000-8000-000000000098',
+  });
+  assert.equal(plan.run.dispatcherUserId, DISPATCHER);
+  assert.equal(plan.run.mode, 'studio_plan');
+});
+
+test('an editor studio_edit run still requires a project dispatcher', async () => {
+  const { repo, service } = build({ dispatcher: null, serverModes: ['chat', 'studio_plan'] });
+  const conv = await service.getOrCreateProjectStudio(USER, PROJECT);
+  await assert.rejects(
+    () => service.sendMessage(USER, conv.id, {
+      body: 'поменяй заголовок',
+      clientRequestId: '00000000-0000-4000-8000-000000000097',
+      mode: 'studio_edit',
+      projectEditJobId: '00000000-0000-4000-8000-000000000007',
     }),
     AiConversationDispatcherMissingError,
   );

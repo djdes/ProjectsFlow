@@ -1524,6 +1524,79 @@ export type AiUsageLedgerRow = typeof aiUsageLedger.$inferSelect;
 export type NewAiUsageLedgerRow = typeof aiUsageLedger.$inferInsert;
 
 // ============================================================================
+// llm_connections / llm_device_logins / llm_settings — миграция db/157. Подключения к
+// LLM-провайдерам (подписка ChatGPT по коду). access/refresh/id-токены — строки,
+// зашифрованные TokenCipher; расшифровывает только репозиторий. owner_key = 'platform' или
+// user id (UNIQUE пропускает NULL, поэтому уникальность держим на не-NULL ключе).
+// ============================================================================
+export const llmConnections = mysqlTable(
+  'llm_connections',
+  {
+    id: id(),
+    scope: mysqlEnum('scope', ['platform', 'user']).notNull(),
+    ownerUserId: char('owner_user_id', { length: 36 }),
+    ownerKey: varchar('owner_key', { length: 64 }).notNull(),
+    provider: varchar('provider', { length: 32 }).notNull(),
+    status: mysqlEnum('status', ['active', 'reauth_required', 'disabled'])
+      .notNull()
+      .default('active'),
+    accountId: varchar('account_id', { length: 128 }),
+    accountEmail: varchar('account_email', { length: 255 }),
+    planType: varchar('plan_type', { length: 64 }),
+    accessToken: text('access_token').notNull(),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessExpiresAt: timestamp('access_expires_at'),
+    lastRefreshAt: timestamp('last_refresh_at'),
+    rateLimitedUntil: timestamp('rate_limited_until'),
+    lastError: varchar('last_error', { length: 500 }),
+    lastUsedAt: timestamp('last_used_at'),
+    version: int('version', { unsigned: true }).notNull().default(0),
+    createdBy: char('created_by', { length: 36 }),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_llm_connections_owner_provider').on(t.ownerKey, t.provider),
+    index('idx_llm_connections_owner_user').on(t.ownerUserId),
+  ],
+);
+
+export type LlmConnectionRow = typeof llmConnections.$inferSelect;
+
+export const llmDeviceLogins = mysqlTable(
+  'llm_device_logins',
+  {
+    id: id(),
+    scope: mysqlEnum('scope', ['platform', 'user']).notNull(),
+    ownerUserId: char('owner_user_id', { length: 36 }),
+    ownerKey: varchar('owner_key', { length: 64 }).notNull(),
+    provider: varchar('provider', { length: 32 }).notNull(),
+    userCode: varchar('user_code', { length: 32 }).notNull(),
+    deviceAuthId: varchar('device_auth_id', { length: 255 }).notNull(),
+    verificationUrl: varchar('verification_url', { length: 255 }).notNull(),
+    intervalSec: int('interval_sec', { unsigned: true }).notNull().default(5),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdBy: char('created_by', { length: 36 }).notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [uniqueIndex('uq_llm_device_logins_owner_provider').on(t.ownerKey, t.provider)],
+);
+
+export type LlmDeviceLoginRow = typeof llmDeviceLogins.$inferSelect;
+
+export const llmSettings = mysqlTable('llm_settings', {
+  id: varchar('id', { length: 32 }).primaryKey(),
+  defaultModel: varchar('default_model', { length: 64 }),
+  fastModel: varchar('fast_model', { length: 64 }),
+  serverQueues: json('server_queues').$type<string[]>(),
+  updatedBy: char('updated_by', { length: 36 }),
+  updatedAt: updatedAtCol(),
+});
+
+export type LlmSettingsRow = typeof llmSettings.$inferSelect;
+
+// ============================================================================
 // project_automation — миграция db/045. Автоматизация: если у проекта нет открытых
 // задач, диспетчер (ralph) сам генерирует и выполняет задачи по выбранным критериям.
 // Сайт хранит конфиг + редактируемые промпты, считает лимит и round-robin критериев.

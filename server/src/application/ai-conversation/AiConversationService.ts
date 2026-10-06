@@ -42,6 +42,13 @@ export type AiConversationServiceDeps = {
   readonly idGen: () => string;
   readonly now?: () => Date;
   readonly resolvePersonalDispatcher: (userId: string) => Promise<string | null>;
+  /**
+   * Режимы run'ов, которые сейчас исполняет сам сервер (подписка ChatGPT, см.
+   * ServerExecutionPolicy и aiConversationServerQueue). Диспетчер их в своей очереди не
+   * видит, а отсутствие назначенного диспетчера не мешает отправке сообщения. Без
+   * зависимости — прежнее поведение: все run'ы исполняет диспетчер.
+   */
+  readonly serverHandledModes?: () => Promise<readonly AiConversationRunMode[]>;
 };
 
 export type CreateAiConversationInput = {
@@ -244,6 +251,7 @@ export class AiConversationService {
     if (input.mode && input.mode !== 'chat' && conversation.kind !== 'project_studio') {
       throw new AiConversationValidationError('Studio run modes require a project studio conversation');
     }
+    const mode = input.mode ?? (conversation.kind === 'project_studio' ? 'studio_plan' : 'chat');
     let dispatcherUserId: string | null;
     if (conversation.projectId) {
       const access = await requireProjectAccess(
@@ -255,6 +263,16 @@ export class AiConversationService {
       dispatcherUserId = access.project.dispatcherUserId;
     } else {
       dispatcherUserId = await this.deps.resolvePersonalDispatcher(userId);
+    }
+    if (!dispatcherUserId && !input.projectEditJobId && (await this.serverHandlesMode(mode))) {
+      // Ответ напишет сам сервер, а dispatcher_user_id (NOT NULL) заполняется дежурным
+      // диспетчером или автором — как у EnqueueAiPromptJob. Дежурный подхватит run, если
+      // подписка станет недоступна: воркер чата не трогает файлов, ему подходит любой.
+      // Для личного диалога дежурного уже спросили выше — остаётся только автор.
+      const onDuty = conversation.projectId
+        ? await this.deps.resolvePersonalDispatcher(userId)
+        : null;
+      dispatcherUserId = onDuty ?? userId;
     }
     if (!dispatcherUserId) throw new AiConversationDispatcherMissingError();
 
@@ -272,7 +290,7 @@ export class AiConversationService {
       clientRequestId: input.clientRequestId,
       dispatcherUserId,
       projectId: conversation.projectId,
-      mode: input.mode ?? (conversation.kind === 'project_studio' ? 'studio_plan' : 'chat'),
+      mode,
       contextVersion: 1,
       contextSnapshot: {
         conversationId,
@@ -322,7 +340,12 @@ export class AiConversationService {
   }
 
   async listPendingRuns(dispatcherUserId: string, limit = 20): Promise<PendingAiConversationRun[]> {
-    return this.deps.repo.listPendingForDispatcher(dispatcherUserId, clampLimit(limit));
+    // Run'ы режимов, которые сейчас исполняет сервер, диспетчеру не отдаём: их забирает
+    // aiConversationServerQueue.
+    const excludeModes = await this.serverHandledModes();
+    return this.deps.repo.listPendingForDispatcher(dispatcherUserId, clampLimit(limit), {
+      excludeModes,
+    });
   }
 
   async claimRun(input: {
@@ -428,6 +451,16 @@ export class AiConversationService {
 
   private publish(events: readonly AiConversationEvent[]): void {
     for (const event of events) this.deps.eventHub.publish(event.conversationId, event);
+  }
+
+  private async serverHandledModes(): Promise<readonly AiConversationRunMode[]> {
+    if (!this.deps.serverHandledModes) return [];
+    // Сбой проверки не должен останавливать чаты: тогда всё, как раньше, исполняет диспетчер.
+    return this.deps.serverHandledModes().catch(() => []);
+  }
+
+  private async serverHandlesMode(mode: AiConversationRunMode): Promise<boolean> {
+    return (await this.serverHandledModes()).includes(mode);
   }
 }
 
