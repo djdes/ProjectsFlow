@@ -84,6 +84,18 @@ export class ChatGptCodexTransport implements LlmTransport {
           // store: false обязателен — с true бэкенд отклоняет запрос.
           store: false,
           stream: true,
+          ...(request.jsonSchema
+            ? {
+                text: {
+                  format: {
+                    type: 'json_schema',
+                    name: request.jsonSchema.name,
+                    schema: request.jsonSchema.schema,
+                    strict: true,
+                  },
+                },
+              }
+            : {}),
         }),
         signal,
         ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),

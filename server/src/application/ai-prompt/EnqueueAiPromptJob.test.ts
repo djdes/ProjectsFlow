@@ -6,7 +6,7 @@ import type { AiPromptJob } from '../../domain/ai-prompt/AiPromptJob.js';
 // --- Минимальные in-memory фейки (тест гоняется через tsx + node:test, без новых deps) ---
 // Покрываем НОВОЕ поведение compose-advanced (ленивый pass-2) на inbox-пути (projectId=null):
 //  - попадает в строгий compose-bucket (как pass-1), НЕ в общий improve-bucket;
-//  - НЕ собирает контекст кандидатов (prepareComposeContext → listProjects.execute не зовётся);
+//  - НЕ собирает контекст кандидатов (prepareComposeContext → members.listProjectsForUser не зовётся);
 //  - kbContext=null, mode и inputText (JSON сегментов) доходят до create() как есть.
 
 type HitCall = { bucket: string; perHour: number };
@@ -24,14 +24,13 @@ function makeDeps(defaultDispatcher: string | null = 'disp-1') {
   const partial = {
     // На inbox-пути compose-advanced/improve эти репозитории не должны трогаться.
     projects: {},
-    members: {},
-    listKbDocuments: {},
-    getKbDocument: {},
-    listProjects: {
-      execute: async () => {
-        throw new Error('listProjects must NOT be called on inbox compose-advanced/improve');
+    members: {
+      listProjectsForUser: async () => {
+        throw new Error('listProjectsForUser must NOT be called on inbox compose-advanced/improve');
       },
     },
+    listKbDocuments: {},
+    getKbDocument: {},
     aiPromptJobs: {
       create: async (input: {
         createdBy: string;

@@ -5,16 +5,14 @@ import { prepareComposeContext } from './prepareComposeContext.js';
 // Минимальные in-memory фейки (tsx + node:test, без новых deps). Проверяем блок
 // «Открытые задачи» — кандидатов на дополнение вместо создания дубля (B3).
 
-function makeDeps(tasks?: any[]) {
+function makeDeps(tasks?: any[], projects: any[] = [{ id: 'p1', name: 'Альфа', role: 'owner', isInbox: false }]) {
   return {
-    listProjects: {
-      async execute() {
-        return [{ id: 'p1', name: 'Альфа', role: 'owner', isInbox: false }] as any;
-      },
-    },
     listKbDocuments: { async execute() { return []; } },
     getKbDocument: { async execute() { return null; } },
     members: {
+      async listProjectsForUser() {
+        return projects as any;
+      },
       async listByProject() {
         return [{ userId: 'u1', user: { displayName: 'Ярослав' } }] as any;
       },
@@ -71,4 +69,19 @@ test('ошибка чтения задач не валит сборку конт
   assert.ok(ctx);
   assert.match(ctx!.block, /\[projectId=p1\] Альфа/);
   assert.doesNotMatch(ctx!.block, /Открытые задачи/);
+});
+
+test('кандидаты — все проекты пользователя, названный в тексте проект идёт первым и не теряется за лимитом', async () => {
+  const many = Array.from({ length: 45 }, (_, i) => ({ id: `p${i}`, name: `Проект ${i}`, role: 'editor', isInbox: false }));
+  const projects = [
+    ...many,
+    { id: 'pf', name: 'ProjectsFlow', role: 'editor', isInbox: false },
+    { id: 'view', name: 'Только чтение', role: 'viewer', isInbox: false },
+    { id: 'inbox', name: 'Входящие', role: 'owner', isInbox: true },
+  ];
+  const ctx = await prepareComposeContext('u1', makeDeps(undefined, projects), 'в projectsflow проекте 1. Не должны отображаться чужие таски');
+  assert.ok(ctx);
+  assert.equal(ctx!.candidates[0]?.projectId, 'pf');
+  assert.equal(ctx!.candidates.length, 40);
+  assert.ok(!ctx!.candidates.some((c) => c.projectId === 'view' || c.projectId === 'inbox'));
 });

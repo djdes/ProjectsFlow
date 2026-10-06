@@ -75,6 +75,8 @@ test('compose: JSON из ответа в markdown-заборе превраща�
   const { runner, completions, calls } = setup(reply);
   await runner.execute(job({ mode: 'compose', kbContext: 'кандидаты' }));
   assert.equal(calls[0]!.tier, 'fast');
+  // Ответ строго по JSON-схеме: быстрая модель без неё изредка ломала JSON.
+  assert.equal(calls[0]!.jsonSchema?.name, 'compose_segments');
   const result = JSON.parse(completions[0]!.improvedText!);
   assert.deepEqual(result, {
     version: 1,
@@ -149,6 +151,7 @@ test('compose-advanced: KB проектов в промпте, пропущен�
   ]);
   await runner.execute(job({ mode: 'compose-advanced', inputText: input }));
   assert.match(calls[0]!.input, /### Проект: Сайт \[projectId=p1\]\nKB сайта/);
+  assert.equal(calls[0]!.jsonSchema?.name, 'compose_advanced');
   assert.deepEqual(JSON.parse(completions[0]!.improvedText!), {
     version: 1,
     mode: 'compose-advanced',

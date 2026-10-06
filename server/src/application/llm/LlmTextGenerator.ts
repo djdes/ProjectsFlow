@@ -11,6 +11,7 @@ import type { LlmConnectionRepository } from './LlmConnectionRepository.js';
 import type { LlmRouter } from './LlmRouter.js';
 import type { LlmSettingsService } from './LlmSettingsService.js';
 import type {
+  LlmJsonSchema,
   LlmReasoningEffort,
   LlmTextResult,
   LlmTransport,
@@ -30,6 +31,8 @@ export type GenerateLlmTextInput = {
   readonly reasoningEffort?: LlmReasoningEffort;
   readonly timeoutMs: number;
   readonly signal?: AbortSignal;
+  // Ответ строго по JSON-схеме (см. LlmJsonSchema).
+  readonly jsonSchema?: LlmJsonSchema;
 };
 
 export type GenerateLlmTextResult = {
@@ -69,6 +72,7 @@ export class LlmTextGenerator implements GenerateLlmText {
       reasoningEffort: input.reasoningEffort ?? (input.tier === 'fast' ? 'low' : 'medium'),
       timeoutMs: input.timeoutMs,
       signal: input.signal,
+      jsonSchema: input.jsonSchema,
     });
     void this.deps.connections.touchUsed(connection.id, this.now()).catch(() => {});
     const usage = result.usage;

@@ -126,3 +126,35 @@ test('forward: вызов вне рабочей папки подменяетс�
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+
+test('generateText: со схемой просит строгий JSON (text.format json_schema), без схемы — нет', async () => {
+  const { createServer } = await import('node:http');
+  const { ChatGptCodexTransport } = await import('./ChatGptCodexTransport.js');
+  const bodies: Array<Record<string, unknown>> = [];
+  const sse =
+    `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: '{"ok":true}' })}\n\n` +
+    `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'r1', usage: { input_tokens: 1, output_tokens: 1 } } })}\n\n`;
+  const server = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      bodies.push(JSON.parse(raw) as Record<string, unknown>);
+      res.writeHead(200);
+      res.end(sse);
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const port = (server.address() as { port: number }).port;
+    const transport = new ChatGptCodexTransport({ baseUrl: `http://127.0.0.1:${port}` });
+    const base = { model: 'gpt-6-luna', instructions: 'i', input: 'x', reasoningEffort: 'low' as const, timeoutMs: 5_000 };
+    const schema = { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'], additionalProperties: false };
+    const result = await transport.generateText({ accessToken: 'a', accountId: 'acc' }, { ...base, jsonSchema: { name: 'probe', schema } });
+    assert.equal(result.text, '{"ok":true}');
+    assert.deepEqual(bodies[0]!['text'], { format: { type: 'json_schema', name: 'probe', schema, strict: true } });
+    await transport.generateText({ accessToken: 'a', accountId: 'acc' }, base);
+    assert.equal(bodies[1]!['text'], undefined);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});

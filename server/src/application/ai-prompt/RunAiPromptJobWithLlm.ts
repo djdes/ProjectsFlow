@@ -7,6 +7,8 @@ import { AI_PROMPT_IMPROVE_TEMPLATE } from './prompts/improvePrompt.js';
 import { COMPOSE_PASS1_TEMPLATE } from './prompts/composePass1Prompt.js';
 import { COMPOSE_PASS2_TEMPLATE } from './prompts/composePass2Prompt.js';
 import { TASKSFLOW_TEMPLATE } from './prompts/tasksflowPrompt.js';
+import { COMPOSE_PASS1_SCHEMA, COMPOSE_PASS2_SCHEMA } from './prompts/composeSchemas.js';
+import type { LlmJsonSchema } from '../llm/LlmTransport.js';
 import { RUN_PROMPT_INSTRUCTIONS, fillPromptTemplate } from '../llm/promptTemplate.js';
 
 // Серверное исполнение заданий кнопок «AI» (improve, compose, compose-advanced и конверт
@@ -103,7 +105,7 @@ export class RunAiPromptJobWithLlm {
   private async compose(job: AiPromptJob): Promise<Outcome> {
     const candidates = job.kbContext?.trim() ? job.kbContext : '(нет проектов-кандидатов)';
     const prompt = fillPromptTemplate(COMPOSE_PASS1_TEMPLATE, { CANDIDATES_BLOCK: candidates, INPUT_TEXT: job.inputText });
-    const llm = await this.generate(job, prompt, 'fast', 'medium', COMPOSE_TIMEOUT_MS);
+    const llm = await this.generate(job, prompt, 'fast', 'medium', COMPOSE_TIMEOUT_MS, COMPOSE_PASS1_SCHEMA);
     const parsed = parseComposeJson(llm.text);
     if (!parsed) throw new JobFailure('compose_pass1_bad_json');
     // advancedBody здесь не считается — его доберёт ленивый проход 2 (compose-advanced).
@@ -161,7 +163,7 @@ export class RunAiPromptJobWithLlm {
       })),
     );
     const prompt = fillPromptTemplate(COMPOSE_PASS2_TEMPLATE, { SEGMENTS_JSON: segmentsJson, KB_BUNDLES: kbBundles });
-    const llm = await this.generate(job, prompt, 'default', 'medium', COMPOSE_TIMEOUT_MS);
+    const llm = await this.generate(job, prompt, 'default', 'medium', COMPOSE_TIMEOUT_MS, COMPOSE_PASS2_SCHEMA);
     const parsed = parseComposeJson(llm.text);
     if (!parsed) throw new JobFailure('compose_pass2_bad_json');
 
@@ -220,6 +222,9 @@ export class RunAiPromptJobWithLlm {
     tier: 'default' | 'fast',
     reasoningEffort: 'low' | 'medium',
     timeoutMs: number,
+    // Compose отвечает JSON-ом, который разбирают бот и веб: по схеме модель не вернёт битый
+    // JSON (быстрая модель изредка ломала его на длинных сообщениях — бот уходил в ручной флоу).
+    jsonSchema?: LlmJsonSchema,
   ): Promise<GenerateLlmTextResult> {
     return this.deps.llm.generate({
       billedUserId: job.createdBy,
@@ -228,6 +233,7 @@ export class RunAiPromptJobWithLlm {
       input: prompt,
       reasoningEffort,
       timeoutMs,
+      ...(jsonSchema ? { jsonSchema } : {}),
     });
   }
 }

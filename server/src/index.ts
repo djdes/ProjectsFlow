@@ -1054,7 +1054,6 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   projects: projectRepo,
   members: projectMemberRepo,
   aiPromptJobs: aiPromptJobRepo,
-  listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
   listKbDocuments: new ListKbDocuments({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   tasks: taskRepo,

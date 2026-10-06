@@ -7,6 +7,13 @@ export type LlmAccess = {
 
 export type LlmReasoningEffort = 'low' | 'medium' | 'high';
 
+// Строгий JSON-ответ по схеме (Responses API, text.format json_schema): модель не может вернуть
+// битый JSON или пропустить обязательные поля.
+export type LlmJsonSchema = {
+  readonly name: string;
+  readonly schema: Readonly<Record<string, unknown>>;
+};
+
 export type LlmTextRequest = {
   readonly model: string;
   // Системная инструкция (роль, правила, формат ответа).
@@ -16,6 +23,7 @@ export type LlmTextRequest = {
   readonly reasoningEffort: LlmReasoningEffort;
   readonly timeoutMs: number;
   readonly signal?: AbortSignal;
+  readonly jsonSchema?: LlmJsonSchema;
 };
 
 export type LlmUsage = {

@@ -1,5 +1,4 @@
 import { hasOwnerRights } from '../../domain/project/permissions.js';
-import type { ListProjects } from '../project/ListProjects.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -34,7 +33,6 @@ const OPEN_STATUSES = new Set<TaskStatus>([
 ]);
 
 type Deps = {
-  readonly listProjects: ListProjects;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
   readonly members: ProjectMemberRepository;
@@ -74,11 +72,26 @@ export type ComposeContext = {
   readonly candidates: ComposeCandidate[];
 };
 
+// Название проекта без регистра, «ё» и знаков: «ProjectsFlow» ~ «projectsflow», «monitor.32beat.com» ~
+// «monitor32beatcom». Короче 3 символов не ищем — слишком много ложных совпадений.
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function isMentioned(normalizedText: string, projectName: string): boolean {
+  const name = normalizeName(projectName);
+  return name.length >= 3 && normalizedText.includes(name);
+}
+
 /**
  * Готовит контекст для compose-режима: перечень проектов, в которых пользователь
  * МОЖЕТ создавать задачи (роль editor/owner, не Inbox), с коротким KB-дайджестом
- * каждого. Этот блок кладётся в kb_context job'а; ralph отдаёт его модели в pass-1,
- * чтобы та разбила текст на задачи и классифицировала каждую к нужному проекту.
+ * каждого. Этот блок кладётся в kb_context job'а и уходит модели в pass-1, чтобы та
+ * разбила текст на задачи и классифицировала каждую к нужному проекту.
+ *
+ * Кандидаты — проекты ВСЕХ пространств пользователя, а не только активного в веб-интерфейсе:
+ * сообщение из Telegram может быть про любой его проект. Проекты, названные в тексте,
+ * идут первыми — так они точно попадают в лимит кандидатов и получают дайджест.
  *
  * Best-effort: ошибки KB на отдельном проекте не валят сборку (проект попадает в
  * список без дайджеста). Если проектов-кандидатов нет — возвращает null.
@@ -86,17 +99,21 @@ export type ComposeContext = {
 export async function prepareComposeContext(
   userId: string,
   deps: Deps,
+  text = '',
 ): Promise<ComposeContext | null> {
   let projects;
   try {
-    projects = await deps.listProjects.execute(userId);
+    projects = await deps.members.listProjectsForUser(userId);
   } catch {
     return null;
   }
 
-  const creatable = projects
-    .filter((p) => (p.role === 'editor' || hasOwnerRights(p.role)) && !p.isInbox)
-    .slice(0, MAX_PROJECTS);
+  const normalizedText = normalizeName(text);
+  const allowed = projects.filter((p) => (p.role === 'editor' || hasOwnerRights(p.role)) && !p.isInbox);
+  const creatable = [
+    ...allowed.filter((p) => isMentioned(normalizedText, p.name)),
+    ...allowed.filter((p) => !isMentioned(normalizedText, p.name)),
+  ].slice(0, MAX_PROJECTS);
   if (creatable.length === 0) return null;
 
   // Открытые задачи всех кандидатов одним запросом (best-effort: без них compose

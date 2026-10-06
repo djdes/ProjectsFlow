@@ -7,7 +7,6 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
-import type { ListProjects } from '../project/ListProjects.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
@@ -34,7 +33,6 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly aiPromptJobs: AiPromptJobRepository;
-  readonly listProjects: ListProjects;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
   // Открытые задачи проектов-кандидатов для compose-контекста (см. prepareComposeContext).
@@ -144,7 +142,7 @@ export class EnqueueAiPromptJob {
     if (mode === 'compose') {
       // Дайджесты всех проектов-кандидатов пользователя (для разбивки + классификации).
       // Best-effort: если KB/проектов нет — compose всё равно отработает (без заземления).
-      const ctx = await prepareComposeContext(input.userId, this.deps);
+      const ctx = await prepareComposeContext(input.userId, this.deps, input.text);
       kbContext = ctx?.block ?? null;
     }
 
