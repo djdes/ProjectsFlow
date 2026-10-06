@@ -51,6 +51,9 @@ export type LlmRawRequest = {
   readonly body: Buffer;
   readonly headers: Readonly<Record<string, string>>;
   readonly signal?: AbortSignal;
+  // Для потокового ответа: каждый готовый элемент вывода модели (response.output_item.done)
+  // проходит через эту функцию; вернула объект — элемент заменяется, null — уходит как есть.
+  readonly transformOutputItem?: (item: unknown) => Record<string, unknown> | null;
 };
 
 export type LlmRawResponse = {

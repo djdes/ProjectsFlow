@@ -18,7 +18,7 @@ export function WorkerLockOffer({ onUpgrade }: { onUpgrade: () => void }): React
           Задачи делаются сами — пока&nbsp;ты&nbsp;спишь
         </p>
         <p className="mx-auto max-w-[16rem] text-xs leading-relaxed text-muted-foreground">
-          AI-воркер на&nbsp;Claude&nbsp;Opus сам берёт задачи из&nbsp;этой колонки и&nbsp;доводит
+          AI-воркер на&nbsp;GPT сам берёт задачи из&nbsp;этой колонки и&nbsp;доводит
           их до&nbsp;готового результата. Без&nbsp;тебя.
         </p>
       </div>
@@ -26,7 +26,7 @@ export function WorkerLockOffer({ onUpgrade }: { onUpgrade: () => void }): React
       {/* Стек ценности: ↓усилия, ↓время, ↑вероятность. */}
       <ul className="mx-auto space-y-1.5 text-left text-xs text-foreground/80">
         <Benefit>Работает 24/7 — бросил задачу, вернулся к&nbsp;готовому</Benefit>
-        <Benefit>Топ-модель Claude&nbsp;Opus — как нанять сеньора</Benefit>
+        <Benefit>Топ-модель GPT — как нанять сеньора</Benefit>
         <Benefit>Ты только проверяешь и&nbsp;принимаешь результат</Benefit>
       </ul>
 

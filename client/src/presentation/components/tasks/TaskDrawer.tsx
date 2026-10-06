@@ -3187,16 +3187,16 @@ function formatCommentTime(date: Date): string {
 function agentMeta(agentName: string | null): { name: string; sub: string } {
   switch (agentName) {
     case 'ralph-worker':
-      return { name: 'Воркер', sub: 'Claude Opus 4.7' };
+      return { name: 'Воркер', sub: 'GPT · codex' };
     case 'ralph-grillme':
-      return { name: 'Grillme-агент', sub: 'Claude Opus 4.7' };
+      return { name: 'Grillme-агент', sub: 'GPT · codex' };
     case 'ralph-verify':
-      return { name: 'Верификатор', sub: 'Claude Sonnet 4.6' };
+      return { name: 'Верификатор', sub: 'GPT · codex' };
     case 'telegram-composer':
       return { name: 'Конструктор задач', sub: 'Telegram' };
     case 'ralph-dispatcher':
     case null:
-      return { name: 'Диспетчер', sub: 'Claude Code/Opus' };
+      return { name: 'Диспетчер', sub: 'Ralph · GPT' };
     default:
       // Forward-compat: незнакомое имя — generic с показом raw-имени.
       return { name: 'Агент', sub: agentName };

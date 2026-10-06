@@ -238,13 +238,22 @@ Workflow: фича → ветка → merge в `main` → автодеплой (
   на auth.openai.com, транспорт к `chatgpt.com/backend-api/codex` — внутренний адрес Codex, весь
   доступ к нему только тут), `presentation/llm/*`.
 - **Короткие задания на сервере:** очереди из `llm_settings.server_queues` (`ai_prompt`,
-  `ai_conversation`, `monitoring`, `commit_sync`) сервер забирает сам; пока подписка недоступна —
-  они остаются диспетчеру. Исполнители `application/<очередь>/Run*WithLlm.ts`, промпты перенесены
-  из `C:\www\ralph\prompts` дословно (`application/<очередь>/prompts/*.ts`). Режим `assistant`
-  кнопок AI и `studio_edit` чатов остаются диспетчеру/продуктам.
+  `ai_conversation`, `monitoring`, `commit_sync`) сервер забирает сам, без отката на диспетчера:
+  при недоступной подписке задание сразу завершается ошибкой. Исполнители
+  `application/<очередь>/Run*WithLlm.ts`, промпты перенесены из `C:\www\ralph\prompts` дословно
+  (`application/<очередь>/prompts/*.ts`). Режим `assistant` кнопок AI остаётся воркерам продуктов,
+  `studio_edit` закрывает job визуального редактора (site-editor-worker Ralph).
 - **Шлюз для Ralph:** `POST /api/agent/projects/:id/llm/v1/responses` (и `/api/agent/llm/v1/…`)
   — Responses API для `codex exec` (свой model_provider, Bearer = токен воркера). Смонтирован ДО
-  общего `express.json`: codex шлёт всю историю сессии.
+  общего `express.json`: codex шлёт всю историю сессии. Заголовки от Ralph: `x-pf-model` —
+  настоящая модель (codex запускается с моделью классического формата, чтобы вызовы команд
+  приходили обычными функциями), `x-pf-workspace-root` — рабочая папка воркера (URL-кодировка).
+  Вызов `exec_command` с `workdir` вне папки или с чужой `shell` шлюз подменяет в потоке ответа
+  несуществующим инструментом `blocked_by_projectsflow__…` — codex его не исполняет
+  (`application/llm/workspaceToolCallPolicy.ts`, `infrastructure/llm/sse.ts`).
+- **Короткие задания Ralph:** `POST /api/agent[/projects/:id]/llm/v1/generate`
+  (`{ input, instructions?, tier?, reasoningEffort?, timeoutSec? }` → `{ text, model, usage, costUsd }`)
+  — триаж, готовность задачи, черновики правок сайта; клиент — `C:\www\ralph\llm-client.psm1`.
 - **Учёт:** «API-эквивалент» по ценам GPT из `domain/usage/pricing.ts`.
 - **Env:** `LLM_TOKEN_KEY` (шифрование токенов), `OPENAI_HTTP_PROXY` (иначе прокси Telegram),
   `LLM_SERVER_CONCURRENCY`.

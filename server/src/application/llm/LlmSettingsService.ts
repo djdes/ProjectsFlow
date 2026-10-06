@@ -2,13 +2,13 @@ import {
   DEFAULT_LLM_FAST_MODEL,
   DEFAULT_LLM_MODEL,
   isLlmServerQueue,
+  isValidLlmModelName,
   type LlmServerQueue,
   type LlmSettings,
 } from '../../domain/llm/LlmSettings.js';
 import { LlmInvalidSettingsError } from '../../domain/llm/errors.js';
 import type { LlmSettingsRepository } from './LlmSettingsRepository.js';
 
-const MODEL_RE = /^[a-z0-9][a-z0-9._-]{1,63}$/i;
 // Настройки читаются на каждом задании и каждом опросе очереди — кэшируем ненадолго.
 const CACHE_TTL_MS = 5_000;
 
@@ -76,7 +76,7 @@ function normalizeModel(next: string | null | undefined, current: string | null)
   if (next === null) return null;
   const trimmed = next.trim();
   if (trimmed.length === 0) return null;
-  if (!MODEL_RE.test(trimmed)) {
+  if (!isValidLlmModelName(trimmed)) {
     throw new LlmInvalidSettingsError(`Некорректное имя модели: ${trimmed}`);
   }
   return trimmed;

@@ -311,6 +311,7 @@ import type { CheckDispatchAllowed } from '../application/usage/CheckDispatchAll
 import type { LlmConnectionService } from '../application/llm/LlmConnectionService.js';
 import type { LlmSettingsService } from '../application/llm/LlmSettingsService.js';
 import type { LlmGateway } from '../application/llm/LlmGateway.js';
+import type { GenerateLlmText } from '../application/llm/LlmTextGenerator.js';
 import { llmAdminRouter } from './llm/adminRoutes.js';
 import { llmGatewayRouter } from './llm/gatewayRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
@@ -512,6 +513,7 @@ type AppDeps = {
     readonly connections: LlmConnectionService;
     readonly settings: LlmSettingsService;
     readonly gateway: LlmGateway;
+    readonly text: GenerateLlmText;
   };
   readonly admin: {
     readonly listAllProjects: ListAllProjects;
@@ -805,6 +807,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     llmGatewayRouter({
       authenticate: deps.agent.authenticateAgentToken,
       gateway: deps.llm.gateway,
+      text: deps.llm.text,
       tasks: deps.projects.tasks,
     }),
   );

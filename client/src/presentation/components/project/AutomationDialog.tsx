@@ -922,7 +922,7 @@ export function AutomationDialog({
                   />
                   <NestedSwitchRow
                     title="Проверка UltraCode перед прод-пушем"
-                    description="Перед push в прод — проверка совместимости от Claude Opus. При найденных проблемах задача блокируется, push и деплой не выполняются."
+                    description="Перед push в прод — проверка совместимости моделью GPT. При найденных проблемах задача блокируется, push и деплой не выполняются."
                     checked={draft.ultracodeReviewEnabled}
                     onCheckedChange={(v) => update({ ultracodeReviewEnabled: v })}
                   />

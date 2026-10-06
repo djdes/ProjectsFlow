@@ -905,6 +905,10 @@ const llmGateway = new LlmGateway({
   access: llmAccessService,
   transport: llmTransport,
   connections: llmConnectionRepo,
+  onToolCallBlocked: (event) =>
+    console.warn(
+      `[llm-gateway] вызов модели заблокирован: ${event.violation} (workspace=${event.workspaceRoot ?? '—'}, user=${event.billedUserId ?? '—'})`,
+    ),
 });
 const llmTextGenerator = new LlmTextGenerator({
   router: llmRouter,
@@ -914,8 +918,8 @@ const llmTextGenerator = new LlmTextGenerator({
   connections: llmConnectionRepo,
 });
 // Короткие задания, которые админ перевёл на сервер (llm_settings.server_queues), сервер
-// забирает сам; пока подписка недоступна, они остаются диспетчеру (Ralph).
-const llmServerPolicy = new ServerExecutionPolicy({ settings: llmSettingsService, router: llmRouter });
+// забирает сам; при недоступной подписке они завершаются ошибкой, а не уходят диспетчеру.
+const llmServerPolicy = new ServerExecutionPolicy({ settings: llmSettingsService });
 const llmQueueAdapters: ServerQueueAdapter[] = [];
 const llmQueueRunner = new ServerQueueRunner({
   policy: llmServerPolicy,
@@ -2463,6 +2467,7 @@ const { app, devProxyUpgrade } = createApp({
     connections: llmConnectionService,
     settings: llmSettingsService,
     gateway: llmGateway,
+    text: llmTextGenerator,
   },
   admin: {
     listAllProjects: new ListAllProjects(adminRepo),

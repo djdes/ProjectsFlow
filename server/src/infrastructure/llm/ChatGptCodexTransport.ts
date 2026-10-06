@@ -17,7 +17,7 @@ import {
   LlmUpstreamBlockedError,
   LlmUpstreamError,
 } from '../../domain/llm/errors.js';
-import { parseSseEvents, type SseEvent } from './sse.js';
+import { parseSseEvents, transformSseOutputItems, type SseEvent } from './sse.js';
 
 // Транспорт к бэкенду Codex в ChatGPT (тот же адрес, куда ходит официальный codex с входом
 // через ChatGPT). Это внутренний адрес OpenAI без публичной документации — весь доступ к
@@ -140,7 +140,11 @@ export class ChatGptCodexTransport implements LlmTransport {
     }
 
     if (response.ok) {
-      return { status: response.status, headers: forwarded, body: response.body as ReadableStream<Uint8Array> | null };
+      let body = response.body as ReadableStream<Uint8Array> | null;
+      if (body && request.transformOutputItem && /text\/event-stream/i.test(all['content-type'] ?? '')) {
+        body = transformSseOutputItems(body, request.transformOutputItem);
+      }
+      return { status: response.status, headers: forwarded, body };
     }
 
     // Тело ошибки маленькое: читаем, чтобы понять причину, и отдаём клиенту заново.

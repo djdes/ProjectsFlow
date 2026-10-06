@@ -26,6 +26,13 @@ export type LlmSettings = {
   readonly updatedAt: Date | null;
 };
 
+// Имя модели провайдера (gpt-6.1-sol, gpt-5.5 …): только безопасные символы.
+const LLM_MODEL_NAME_RE = /^[a-z0-9][a-z0-9._-]{1,63}$/i;
+
+export function isValidLlmModelName(value: string): boolean {
+  return LLM_MODEL_NAME_RE.test(value);
+}
+
 export function isLlmServerQueue(value: string): value is LlmServerQueue {
   return (LLM_SERVER_QUEUES as readonly string[]).includes(value);
 }
