@@ -141,7 +141,9 @@ export class ChatGptCodexTransport implements LlmTransport {
 
     if (response.ok) {
       let body = response.body as ReadableStream<Uint8Array> | null;
-      if (body && request.transformOutputItem && /text\/event-stream/i.test(all['content-type'] ?? '')) {
+      // Проверка вызовов — на любом успешном ответе: бэкенд Codex отдаёт поток SSE без
+      // content-type, а JSON (/compact) проходит через разбор SSE без изменений.
+      if (body && request.transformOutputItem) {
         body = transformSseOutputItems(body, request.transformOutputItem);
       }
       return { status: response.status, headers: forwarded, body };

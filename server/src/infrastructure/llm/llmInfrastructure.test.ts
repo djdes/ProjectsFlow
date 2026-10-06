@@ -90,3 +90,39 @@ test('toTransportError: 401/403/429 в доменные ошибки, время
   assert.deepEqual(rateLimitResetFrom('oops', { 'retry-after': '30' }, now), new Date(now.getTime() + 30_000));
   assert.equal(rateLimitResetFrom('oops', {}, now), null);
 });
+
+test('forward: вызов вне рабочей папки подменяется, даже если бэкенд не прислал content-type', async () => {
+  const { createServer } = await import('node:http');
+  const { ChatGptCodexTransport } = await import('./ChatGptCodexTransport.js');
+  const call = { type: 'function_call', id: 'fc_1', call_id: 'c1', name: 'exec_command', arguments: '{"cmd":"type x","workdir":"C:\\other"}' };
+  const sse =
+    `event: response.created\ndata: ${JSON.stringify({ type: 'response.created', response: { id: 'r1' } })}\n\n` +
+    `event: response.output_item.done\ndata: ${JSON.stringify({ type: 'response.output_item.done', output_index: 0, item: call })}\n\n`;
+  // Как у бэкенда Codex: поток SSE без заголовка content-type.
+  const server = createServer((_req, res) => {
+    res.writeHead(200);
+    res.end(sse);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const port = (server.address() as { port: number }).port;
+    const transport = new ChatGptCodexTransport({ baseUrl: `http://127.0.0.1:${port}` });
+    const response = await transport.forward(
+      { accessToken: 'a', accountId: 'acc' },
+      {
+        subpath: '',
+        body: Buffer.from('{}'),
+        headers: {},
+        transformOutputItem: (item) => {
+          const record = item as Record<string, unknown>;
+          return record['name'] === 'exec_command' ? { ...record, name: 'blocked_by_projectsflow__workdir_outside_workspace' } : null;
+        },
+      },
+    );
+    const text = await new Response(response.body).text();
+    assert.match(text, /"name":"blocked_by_projectsflow__workdir_outside_workspace"/);
+    assert.doesNotMatch(text, /"name":"exec_command"/);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
