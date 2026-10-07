@@ -266,6 +266,7 @@ async (page) => {
     if (path.endsWith('/templates')) return json({ templates: [] });
     if (path === '/me/stats/completed-today') return json({ count: 0 });
     if (path === '/auth/me') return json({ user });
+    if (path === '/agent/tokens') return json({ tokens: [] });
     if (path === '/me/shared-members')
       return json({ members: members.map((m) => ({ ...m, id: m.userId })) });
     if (path === '/auth/me/usage')

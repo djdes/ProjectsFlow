@@ -1,14 +1,14 @@
-import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, Sparkles, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { AnimatedInbox, AnimatedUser } from '@/presentation/components/nav/AnimatedNavIcons';
+import { MobileBottomNav } from './MobileBottomNav';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -35,7 +35,7 @@ import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
-import { UnreadTasksProvider, useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { UnreadTasksProvider } from '@/presentation/hooks/UnreadTasksProvider';
 import { FocusedInboxProvider } from '@/presentation/hooks/FocusedInboxProvider';
 import { OPEN_INBOX_TASK_EVENT } from '@/presentation/components/tasks/AssignedTaskToast';
 import { SPOTLIGHT_TASK_EVENT } from '@/presentation/hooks/useSpotlightTask';
@@ -513,159 +513,5 @@ function BurgerUnreadBadge(): React.ReactElement | null {
     >
       {total > 99 ? '99+' : total}
     </span>
-  );
-}
-
-type NavItem = {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  active: boolean;
-  run: () => void;
-  badge?: number;
-};
-
-// Нижний таб-бар (только mobile, <768px): Входящие / Проекты / Чат / ИИ / Профиль.
-// Парящая стеклянная панель (iOS-26 / Telegram glass). Жест: зажать и провести пальцем по
-// панели — стеклянный индикатор пружинисто едет за пальцем (motion layout), на отпускании
-// выбирается вкладка под ним. Обычный тап и клавиатура (Enter/Space) тоже работают.
-function MobileBottomNav(): React.ReactElement {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
-  // Новые (ни разу не открытые) задачи для меня — та же цифра, что на иконке в сайдбаре.
-  const { count: unreadTaskCount } = useUnreadTasks();
-
-  // Три вкладки: Входящие · ИИ · Профиль (все route-based).
-  const items: NavItem[] = [
-    { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/'), badge: unreadTaskCount },
-    { key: 'ai', label: 'ИИ', icon: <Sparkles className="size-5" />, active: pathname === '/ai' || pathname.startsWith('/ai/'), run: () => navigate('/ai') },
-    { key: 'profile', label: 'Профиль', icon: <AnimatedUser className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
-  ];
-  const activeIndex = items.findIndex((i) => i.active);
-
-  const innerRef = useRef<HTMLDivElement>(null);
-  const glassRef = useRef<HTMLSpanElement>(null);
-  const draggingRef = useRef(false);
-  const movedRef = useRef(false);
-
-  const metrics = (): { left: number; pad: number; innerW: number; gw: number } | null => {
-    const inner = innerRef.current;
-    if (!inner) return null;
-    const r = inner.getBoundingClientRect();
-    const pad = 6; // p-1.5 = 0.375rem
-    const innerW = r.width - pad * 2;
-    return { left: r.left, pad, innerW, gw: innerW / items.length };
-  };
-  // Стекло следует за пальцем (прямой DOM-transform, БЕЗ ре-рендера — плавно).
-  const followFinger = (clientX: number): void => {
-    const g = glassRef.current;
-    const m = metrics();
-    if (!g || !m) return;
-    const x = Math.max(0, Math.min(m.innerW - m.gw, clientX - m.left - m.pad - m.gw / 2));
-    g.style.transform = `translateX(${x}px)`;
-  };
-  const indexFromX = (clientX: number): number => {
-    const m = metrics();
-    if (!m) return activeIndex;
-    return Math.max(0, Math.min(items.length - 1, Math.floor((clientX - m.left - m.pad) / m.gw)));
-  };
-  const snapTo = (i: number): void => {
-    const g = glassRef.current;
-    if (g) g.style.transform = `translateX(${i * 100}%)`;
-  };
-
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
-    draggingRef.current = true;
-    movedRef.current = false;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    // Во время драга — БЕЗ перехода: стекло стоит строго под пальцем 1:1 (никакого «догоняния»).
-    if (glassRef.current) glassRef.current.style.transition = 'none';
-  };
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
-    if (!draggingRef.current) return;
-    movedRef.current = true;
-    followFinger(e.clientX);
-  };
-  const finishDrag = (clientX: number): void => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    // Возвращаем плавный переход из класса → snap до вкладки анимируется.
-    if (glassRef.current) glassRef.current.style.transition = '';
-    const idx = indexFromX(clientX);
-    snapTo(idx);
-    items[idx]?.run();
-  };
-
-  // Парящая панель (сплошной фон — без backdrop-blur ради iOS-перф). «Ликвид-стекло»
-  // индикатор двигается прямым CSS-transform: зажми и веди пальцем — облачко едет за пальцем,
-  // на отпускании доезжает до вкладки и переключает её. Класс pf-nav-glass выведен из-под
-  // html.pf-no-motion, чтобы движение оставалось шёлковым даже при выключенных на мобиле анимациях.
-  return (
-    <nav className="shrink-0 px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.15rem)]">
-      <div
-        ref={innerRef}
-        data-pf-no-edge-swipe
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={(e) => finishDrag(e.clientX)}
-        onPointerCancel={() => {
-          if (!draggingRef.current) return;
-          draggingRef.current = false;
-          if (glassRef.current) glassRef.current.style.transition = '';
-          snapTo(activeIndex);
-        }}
-        className="relative mx-auto flex max-w-md touch-none select-none items-stretch rounded-[1.55rem] border border-black/10 bg-background p-1.5 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-background dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.55)]"
-      >
-        {/* верхний блик стекла */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-white/20"
-        />
-        {/* Ликвид-стекло индикатор — ширина ровно в одну вкладку, едет translateX'ом. */}
-        {activeIndex >= 0 && (
-          <span
-            ref={glassRef}
-            aria-hidden
-            className="pf-nav-glass pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.15rem] bg-gradient-to-b from-white/90 via-white/70 to-white/45 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.9),inset_0_-1px_2px_rgba(0,0,0,0.05),0_4px_10px_-2px_rgba(0,0,0,0.18)] ring-1 ring-white/50 transition-transform duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:from-white/[0.2] dark:via-white/[0.1] dark:to-white/[0.04] dark:shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.25),inset_0_-1px_2px_rgba(0,0,0,0.3),0_4px_10px_-2px_rgba(0,0,0,0.45)] dark:ring-white/[0.14]"
-            style={{ width: 'calc((100% - 0.75rem) / 3)', transform: `translateX(${activeIndex * 100}%)` }}
-          />
-        )}
-        {items.map((item) => {
-          const isActive = item.active;
-          const icon = isValidElement(item.icon)
-            ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: isActive })
-            : item.icon;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              aria-label={item.label}
-              aria-current={isActive ? 'page' : undefined}
-              // Тап/драг ловит контейнер (pointer). Клавиатуре оставляем прямой вызов.
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  item.run();
-                }
-              }}
-              className={cn(
-                'relative z-10 flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] py-1.5 text-[10px] leading-none transition-colors duration-200',
-                isActive ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              <span className="relative inline-flex">
-                {icon}
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className="absolute -right-2 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
-                    {item.badge > 99 ? '99+' : item.badge}
-                  </span>
-                )}
-              </span>
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
   );
 }

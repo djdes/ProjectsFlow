@@ -558,7 +558,10 @@ export function KanbanBoard({
     const containers = args.droppableContainers;
     const col = containers.find((c) => {
       const r = c.rect.current;
-      return c.data.current?.type === 'column' && r != null && p.x >= r.left && p.x <= r.right;
+      // The manual shelf spans the entire board width. It only owns drops inside
+      // its vertical bounds; otherwise it steals every drop into a column below.
+      return c.data.current?.type === 'column' && r != null && p.x >= r.left && p.x <= r.right &&
+        (c.data.current?.status !== 'manual' || (p.y >= r.top && p.y <= r.bottom));
     });
     if (!col) return rectIntersection(args);
     const colStatus = col.data.current?.status as TaskStatus | undefined;

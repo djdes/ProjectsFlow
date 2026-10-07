@@ -134,38 +134,28 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
 
   return (
     <>
-      <div className="relative border-b border-violet-950/10 bg-[linear-gradient(105deg,#eef2ff_0%,#f5f3ff_48%,#ecfeff_100%)] px-4 pr-9 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#172036_0%,#261b3a_50%,#123039_100%)] sm:px-8 sm:pr-10">
-        <ProjectBannerDismissButton />
+      <div data-pf-project-setup className="relative border-b border-primary/10 bg-primary/[0.04] px-4 py-3 sm:px-8 sm:pr-24">
+        <ProjectBannerDismissButton className="right-1 top-1 size-11 rounded-lg sm:right-16 sm:top-2 sm:size-7" />
         <div
-          className="mx-auto flex max-w-[1180px] animate-in flex-col gap-3 fade-in slide-in-from-top-2 duration-500 transition-[margin] xl:flex-row xl:items-center xl:justify-between motion-reduce:animate-none"
+          className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-6 gap-y-2 pr-7 transition-[margin] duration-300"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="relative grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/20 ring-4 ring-white/70 dark:ring-white/10">
-              <Rocket className="size-5" />
-              <span className="absolute -right-1 -top-1 size-2.5 animate-pulse rounded-full bg-cyan-400 ring-2 ring-white dark:ring-slate-900" />
+          <div className="flex min-w-0 basis-full items-center gap-3 sm:flex-1 sm:basis-64">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Rocket className="size-4" />
             </span>
             <div className="min-w-0">
-              <div className="mb-0.5 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                  <CheckCircle2 className="size-3" />
-                  Код подключён
-                </span>
-                <span className="text-[10px] font-medium uppercase tracking-wide text-violet-600/70 dark:text-violet-300/70">
-                  Шаг 2 из 2
-                </span>
-              </div>
-              <div className="text-sm font-semibold text-foreground">Теперь запустите проект</div>
+              <div className="text-sm font-semibold text-foreground">Код подключён</div>
               <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                Репозиторий, делегация доступа и база знаний готовы. Воркер проверит код и опубликует результат.
+                Воркер проверит проект и опубликует результат.
               </p>
             </div>
           </div>
-          <button
-            type="button"
+          <Button
+            size="sm"
             disabled={loading || Boolean(activeLaunchTask)}
             onClick={() => setLaunchOpen(true)}
-            className="group inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-xs font-semibold text-white shadow-md shadow-violet-600/20 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-default disabled:opacity-75 disabled:hover:translate-y-0"
+            className="group ml-12 min-h-11 shrink-0 gap-2 rounded-lg px-3 text-xs sm:ml-0 sm:min-h-9"
           >
             {loading || activeLaunchTask?.status === 'in_progress' ? (
               <Loader2 className="size-4 animate-spin" />
@@ -178,7 +168,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
             {!loading && !activeLaunchTask && (
               <ArrowRight className="size-3.5 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
             )}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -186,7 +176,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-lg bg-violet-500/10 text-violet-600">
+              <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
                 <Rocket className="size-4" />
               </span>
               {isRetry ? 'Запустить проект повторно?' : 'Отправить проект на запуск?'}
@@ -310,8 +300,8 @@ export function ProjectGithubOnboardingBanner({
 
   return (
     <>
-      <div className="relative border-b border-indigo-950/10 bg-[linear-gradient(105deg,#f5f7ff_0%,#f7f3ff_45%,#f0f9ff_100%)] px-4 pr-9 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#171a2c_0%,#21192d_48%,#13232d_100%)] sm:px-8 sm:pr-10">
-        <ProjectBannerDismissButton />
+      <div className="relative border-b border-primary/10 bg-primary/[0.04] px-4 py-3 pr-12 sm:px-8 sm:pr-24">
+        <ProjectBannerDismissButton className="right-1 top-1 size-11 rounded-lg sm:right-16 sm:top-2 sm:size-7" />
         <div
           className="mx-auto flex max-w-[1180px] flex-col gap-3 transition-[margin] duration-300 xl:flex-row xl:items-center xl:justify-between"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
@@ -319,7 +309,7 @@ export function ProjectGithubOnboardingBanner({
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white shadow-sm ring-1 ring-black/5 dark:bg-white/10 dark:ring-white/10">
-                <Sparkles className="size-3.5 text-violet-600 dark:text-violet-300" />
+                <Sparkles className="size-3.5 text-primary" />
               </span>
               Подключите код проекта
             </div>
@@ -348,7 +338,7 @@ export function ProjectGithubOnboardingBanner({
             <button
               type="button"
               onClick={() => setIntro('import')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3.5 text-xs font-semibold text-white shadow-sm shadow-violet-600/20 transition hover:-translate-y-0.5 hover:bg-violet-700 hover:shadow-md"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-accent"
             >
               <Archive className="size-4" />
               Импортировать ZIP

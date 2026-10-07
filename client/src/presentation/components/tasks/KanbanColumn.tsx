@@ -635,7 +635,7 @@ export function KanbanColumn({
                 </>
               )}
               {headerBadge}
-              <span className="shrink-0 px-0.5 text-xs tabular-nums text-muted-foreground/70">
+              <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-md bg-background/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                 {tasks.length}
               </span>
             </div>
@@ -755,6 +755,12 @@ export function KanbanColumn({
             );
           })}
         </SortableContext>
+        {tasks.length === 0 && !inlineCard && !composing && (
+          <div className="pointer-events-none mx-0.5 rounded-xl border border-dashed border-foreground/10 px-3 py-5 text-center">
+            <p className="text-xs font-medium text-muted-foreground">Здесь пока нет задач</p>
+            {!readOnly && <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">Перенесите сюда задачу из другой колонки</p>}
+          </div>
+        )}
         {/* Пустая колонка (нет карточек) — тонкая статичная полоска как цель дропа. */}
         {listTasks.length === 0 && dropTarget && dropTarget.overId === `column-${status}` && (
           <div className="pointer-events-none mx-1 flex items-center gap-1">

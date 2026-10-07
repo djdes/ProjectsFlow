@@ -407,11 +407,11 @@ function KanbanCardImpl({
           // НЕ ставим touch-action:none — иначе палец не сможет скроллить колонку/доску
           // (любое касание карточки превращалось бы в drag). Long-press TouchSensor (~220мс)
           // сам отличает скролл от переноса.
-          // Notion-style компактная карточка: минимальный отступ (px-2 py-1.5), без
-          // лишнего «воздуха». При hover — только маленькая корзина (оверлей ниже).
+          // Компактная карточка на десктопе; на телефоне чуть больше отступы для чтения.
+          // При hover — только маленькая корзина (оверлей ниже).
           // Мобила — колонка (текст сверху, ряд мета/действий снизу); десктоп — как было
           // (строка: чекбокс + текст, действия/мета плавающими оверлеями).
-          'group relative flex select-none flex-col gap-1.5 rounded-[10px] border border-transparent bg-card px-2 py-1.5 outline-none sm:flex-row sm:items-start',
+          'group relative flex select-none flex-col gap-1.5 rounded-xl border border-transparent bg-card px-3 py-2.5 outline-none sm:flex-row sm:items-start sm:px-2.5 sm:py-2',
           // Ключ к «нотионовскому» виду доски: карточка НЕ залита цветом колонки, а белая
           // (bg-card) и приподнята над её слабой тонировкой. Отделяют её не бордер, а две
           // мягкие тени + третий слой — цветное кольцо в 1px. Цвет кольца отдаёт колонка
@@ -526,7 +526,7 @@ function KanbanCardImpl({
               // На мобиле показываем ВЕСЬ текст задачи (line-clamp-none): на телефоне карточка
               // и так почти во всю ширину, обрезать нечего — юзер хочет читать задачу целиком.
               // На десктопе оставляем компактный клэмп в 4 строки.
-              <div className="max-h-[4lh] overflow-hidden text-sm leading-snug max-sm:max-h-none">
+              <div className="max-h-[calc(4lh+0.25rem)] overflow-hidden text-sm leading-snug max-sm:max-h-none">
                 {/* Иконка задачи (эмодзи/lucide/картинка) — перед заголовком, как в Notion. */}
                 {task.icon && (
                   <span className="mr-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">
@@ -539,6 +539,7 @@ function KanbanCardImpl({
                   <Markdown
                     className={cn(
                       MARKDOWN_COMPACT,
+                      'mt-1 text-foreground/75',
                       '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
                       '[&_strong]:font-bold [&_b]:font-bold',
                     )}
@@ -576,7 +577,7 @@ function KanbanCardImpl({
             border-t мягко отделяет ряд от текста. */}
         {!selecting && !preview && (hasMeta || showActions) && (
           <div
-            className="mt-0.5 flex items-center justify-between gap-2 border-t border-black/[0.05] pt-1 text-[11px] text-muted-foreground sm:hidden dark:border-white/[0.06]"
+            className="mt-1 flex items-center justify-between gap-2 border-t border-border/60 pt-1.5 text-[11px] text-muted-foreground sm:hidden"
             {...stopDragProps}
           >
             <span className="flex min-w-0 flex-1 items-center overflow-hidden">{metaInner}</span>
