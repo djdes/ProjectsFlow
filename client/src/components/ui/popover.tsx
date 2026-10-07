@@ -18,6 +18,7 @@ export function PopoverContent({
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
+        data-pf-motion-surface="popover"
         align={align}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}

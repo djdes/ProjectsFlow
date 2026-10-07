@@ -107,8 +107,8 @@ export function MonitoringPage(): React.ReactElement {
 
           {loading && !servers ? (
             <div className="space-y-2">
-              <div className="h-16 animate-pulse rounded-lg bg-muted" />
-              <div className="h-16 animate-pulse rounded-lg bg-muted" />
+              <div className="h-16 pf-skeleton rounded-lg bg-muted" />
+              <div className="h-16 pf-skeleton rounded-lg bg-muted" />
             </div>
           ) : servers && servers.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 2xl:grid-cols-2">

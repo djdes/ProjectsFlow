@@ -1,3 +1,5 @@
+import { ProjectViewSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -386,6 +388,10 @@ export function ProjectBoardViews({
   );
   const activeType: BoardViewType = active?.type ?? 'kanban';
   const isKanban = activeId === DEFAULT_VIEW_ID || activeType === 'kanban';
+  useEffect(() => {
+    if (!views) return;
+    try { localStorage.setItem(`pf:view-layouts:${projectId}`, JSON.stringify(Object.fromEntries(views.map(view => [view.id, view.type])))); } catch { /* Optional layout hint for the next load. */ }
+  }, [views, projectId]);
 
   const state: PerViewState = perView[activeId] ?? EMPTY_PER_VIEW_STATE;
   useEffect(() => {
@@ -816,6 +822,8 @@ export function ProjectBoardViews({
         ] as MenuEntry[])
       : []),
   ];
+
+  if (views === null && activeId !== DEFAULT_VIEW_ID) return <div className="space-y-3"><Skeleton className="h-8 w-48 rounded-full" /><ProjectViewSkeleton projectId={projectId} viewId={activeId} /></div>;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">

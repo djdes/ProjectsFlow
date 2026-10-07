@@ -1,3 +1,4 @@
+import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -1219,7 +1220,7 @@ export function AssignedToMeBlock({
     setDragActive(false);
   };
 
-  if (loading || boardTasks === null) return null;
+  if (loading || boardTasks === null) return <BoardSkeleton shelf={false} />;
 
   // #2: единая кнопка «Фильтры» в шапке страницы. Сортировка (когда есть задачи) +
   // скрыть-выполненные (всегда) + фильтры ответственного/проекта (только вкладка «Другим»).

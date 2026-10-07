@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { TaskTitleEditor } from '../TaskTitleEditor';
 import { TaskTitleText } from '../TaskTitleText';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
@@ -316,13 +317,13 @@ export function ListView({
     setSelected(new Set());
   };
 
-  if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
+  if (loading) return <ListSkeleton />;
   if (error && tasks.length === 0) {
     return <ViewLoadFeedback error={error} hasData={false} onRetry={refetch} label="список" />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="pf-content-reveal flex min-h-0 flex-1 flex-col">
       <ViewLoadFeedback error={error} hasData={tasks.length > 0} onRetry={refetch} label="список" />
       <DndContext
         sensors={canEdit ? dndSensors : []}

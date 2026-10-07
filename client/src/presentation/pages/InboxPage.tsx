@@ -1,3 +1,4 @@
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useCallback, useEffect, useState } from 'react';
 import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -91,14 +92,7 @@ export function InboxPage(): React.ReactElement {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-3 p-3 pt-3.5 sm:p-6 sm:pt-4">
-        <div className="hidden h-3 w-40 animate-pulse rounded bg-muted sm:block" />
-        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton layout="inbox" />;
 
   if (error || !project) {
     return (

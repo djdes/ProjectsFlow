@@ -1,3 +1,5 @@
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Plus, Trash2, Wallet } from 'lucide-react';
@@ -30,7 +32,7 @@ const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
 export function FinancePage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const pid = projectId ?? '';
-  const { data: project } = useProject(pid);
+  const { data: project, error: projectError, notFound: projectNotFound } = useProject(pid);
   const { user } = useCurrentUser();
   const { projectFinanceRepository, employeeRepository } = useContainer();
 
@@ -105,14 +107,9 @@ export function FinancePage(): React.ReactElement {
     );
   }
 
-  if (!finance || !project) {
-    return (
-      <div className="space-y-4 p-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-24 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  if (projectError) return <PageLoadError />;
+  if (projectNotFound) return <div className="p-6">Проект не найден</div>;
+  if (!finance || !project) return <PageSkeleton layout="dashboard" />;
 
   const profitPositive = finance.profitKopecks >= 0;
   const activeEmployees = employees.filter((e) => e.active);

@@ -1,3 +1,5 @@
+import { RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Image as ImageIcon, Loader2, Text } from 'lucide-react';
@@ -42,7 +44,7 @@ function readDescriptionHidden(projectId: string | undefined): boolean {
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
-  const { data, loading, notFound } = useProject(projectId ?? '');
+  const { data, loading, notFound, error } = useProject(projectId ?? '');
   const { projectFinanceRepository, monitoringRepository, projectRepository } = useContainer();
   // Глобальный тумблер «Скрыть плашки» («⋯» в правом верхнем углу страницы).
   const bannersHidden = useProjectBannersHidden();
@@ -164,14 +166,8 @@ export function TasksPage(): React.ReactElement {
     return () => { cancelled = true; };
   }, [projectId, projectFinanceRepository, monitoringRepository]);
 
-  if (loading) {
-    return (
-      <div className="space-y-4 p-6">
-        <div className="h-3 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  if (loading) return <RouteSkeleton />;
+  if (error) return <PageLoadError />;
 
   if (notFound || !data) {
     return (

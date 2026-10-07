@@ -8,6 +8,7 @@
          font-size: 16px на input/textarea в @media (max-width: 639px) в globals.css. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ProjectsFlow</title>
+    <link rel="stylesheet" href="/src/styles/boot.css" />
 
     <!-- PWA: установка на экран «Домой». Минимальный набор (manifest + meta), без service worker. -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -37,22 +38,48 @@
       (function () {
         try {
           var m = localStorage.getItem('pf-motion');
-          // По умолчанию (нет сохранённого выбора) анимации выключены на тач-устройствах
-          // (pointer: coarse — телефон/PWA) и при OS reduce-motion. Синхронно с MotionProvider.
-          var off =
-            m === 'off' ||
-            (m === null &&
-              (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
-                window.matchMedia('(pointer: coarse)').matches));
+          // Defaults on, including touch devices; respect explicit and system opt-out.
+          var off = m === 'off' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
           if (off) document.documentElement.classList.add('pf-no-motion');
         } catch (_) {
           /* localStorage недоступен */
         }
       })();
+      (function () {
+        var path = location.pathname;
+        var auth = /^\/(login|register|forgot-password|reset-password|invite|device|duplicate)(\/|$)/.test(path);
+        document.documentElement.dataset.pfBoot = auth ? 'auth' : /\/(settings|profile)$/.test(path) ? 'settings' : /\/(overview|kb|tasks\/[^/]+)$/.test(path) ? 'narrow' : 'board';
+        try {
+          var projectMatch = /^\/projects\/([^/]+)\/?$/.exec(path);
+          if (projectMatch) {
+            var projectId = projectMatch[1];
+            var viewId = new URLSearchParams(location.search).get('view') || localStorage.getItem('pf:board-view:' + projectId);
+            var layouts = JSON.parse(localStorage.getItem('pf:view-layouts:' + projectId) || '{}');
+            if (layouts && /^(table|list|calendar)$/.test(layouts[viewId])) document.documentElement.dataset.pfBoot = layouts[viewId];
+          }
+        } catch (_) { /* No saved layout metadata. */ }
+        try {
+          var stored = Number(localStorage.getItem('pf_sidebar_width')) || 270;
+          var width = localStorage.getItem('pf_sidebar_collapsed') === '1' || /^\/p\//.test(path) ? 0 : Math.min(480, Math.max(176, stored));
+          document.documentElement.style.setProperty('--pf-boot-sidebar', width + 'px');
+        } catch (_) { /* Use the default sidebar geometry. */ }
+      })();
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="pf-boot" role="status" aria-label="Загружаем ProjectsFlow…" aria-busy="true">
+        <div class="pf-boot-shell" aria-hidden="true">
+          <aside><i class="pf-boot-user"></i><i class="pf-boot-nav"></i><i class="pf-boot-nav"></i><i class="pf-boot-section"></i><i class="pf-boot-project"></i><i class="pf-boot-project"></i><i class="pf-boot-project"></i><i class="pf-boot-section"></i><i class="pf-boot-project"></i></aside>
+          <main><header class="pf-boot-mobile-header"><i></i><i></i></header><header><i></i><i></i></header><div class="pf-boot-content"><i class="pf-boot-title"></i><i class="pf-boot-description"></i><i class="pf-boot-tabs"></i><div class="pf-boot-shelf"><i></i><div class="pf-boot-card"><i></i><i></i></div></div><div class="pf-boot-board">
+            <div class="pf-boot-column"><i></i><div class="pf-boot-card"><i></i><i></i><i></i></div><div class="pf-boot-card"><i></i><i></i><i></i></div><div class="pf-boot-card"><i></i><i></i><i></i></div></div>
+            <div class="pf-boot-column"><i></i><div class="pf-boot-card"><i></i><i></i><i></i></div><div class="pf-boot-card"><i></i><i></i><i></i></div></div>
+            <div class="pf-boot-column"><i></i><div class="pf-boot-card"><i></i><i></i><i></i></div><div class="pf-boot-card"><i></i><i></i><i></i></div></div>
+          </div></div></main>
+        </div>
+        <div class="pf-boot-auth" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

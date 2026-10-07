@@ -1,3 +1,4 @@
+import { CalendarSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
@@ -351,13 +352,13 @@ export function CalendarView({
     void update(task.id, { deadline: day }).catch(fail);
   };
 
-  if (loading) return <div className="h-72 animate-pulse rounded-xl bg-muted/60" />;
+  if (loading) return <CalendarSkeleton />;
   if (error && allTasks.length === 0) {
     return <ViewLoadFeedback error={error} hasData={false} onRetry={refetch} label="календарь" />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="pf-content-reveal flex min-h-0 flex-1 flex-col">
       <ViewLoadFeedback
         error={error}
         hasData={allTasks.length > 0}

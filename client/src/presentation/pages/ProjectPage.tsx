@@ -1,3 +1,5 @@
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LayoutGrid, Trash2 } from 'lucide-react';
@@ -19,19 +21,12 @@ import { hasOwnerRights } from '@/domain/project/ProjectMembership';
 export function ProjectPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { data, loading, notFound } = useProject(projectId ?? '');
+  const { data, loading, notFound, error } = useProject(projectId ?? '');
   const { refresh: refreshProjects, applyReplace } = useProjectsContext();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="space-y-4 p-6">
-        <div className="h-3 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-80 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton layout="overview" />;
+  if (error) return <PageLoadError />;
 
   if (notFound || !data) {
     return (

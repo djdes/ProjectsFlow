@@ -90,8 +90,8 @@ export function AlertCenterPage(): React.ReactElement {
 
       {data === null ? (
         <div className="space-y-2">
-          <div className="h-14 animate-pulse rounded-lg bg-muted" />
-          <div className="h-14 animate-pulse rounded-lg bg-muted" />
+          <div className="h-14 pf-skeleton rounded-lg bg-muted" />
+          <div className="h-14 pf-skeleton rounded-lg bg-muted" />
         </div>
       ) : (
         <>

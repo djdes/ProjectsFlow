@@ -1,6 +1,7 @@
+import { DocumentSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Copy, Flag, Loader2, Maximize2 } from 'lucide-react';
+import { Calendar, Copy, Flag, Maximize2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -128,9 +129,7 @@ export function PublicTaskPanel({
         </div>
 
         {status === 'loading' && (
-          <div className="grid flex-1 place-items-center py-24 text-muted-foreground">
-            <Loader2 className="size-5 animate-spin" />
-          </div>
+          <div className="flex-1 px-6 py-12"><DocumentSkeleton /></div>
         )}
 
         {status === 'notfound' && (

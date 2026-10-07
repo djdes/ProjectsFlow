@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
@@ -210,14 +211,7 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
 
   const content = useMemo(() => {
     if (loading) {
-      return (
-        <div className="grid h-full place-items-center" role="status">
-          <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
-            Открываем Project Studio…
-          </span>
-        </div>
-      );
+      return <PageSkeleton layout="studio" />;
     }
     if (error || !data) {
       return (

@@ -4,14 +4,14 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useProjectsContext } from './ProjectsProvider';
 import { PROJECT_CHANGED_EVENT } from './useNotificationStream';
 
-/**
- * Возвращает проект по id. Источник правды — общий список в ProjectsProvider:
- * это значит, что после useUpdateProject.submit() или useCreateProject.submit()
- * этот хук видит изменения мгновенно, без re-fetch.
- *
- * Если проект ещё не загружен (список пуст или редкий случай) — фоллбэк к
- * прямому getProject.execute(id).
- */
+type RequestState = {
+  id: string;
+  data: Project | null;
+  status: 'pending' | 'ready' | 'missing' | 'error';
+  error: Error | null;
+};
+
+/** Shared project data first; a scoped fallback for direct links and missing list entries. */
 export function useProject(id: string): {
   data: Project | null;
   loading: boolean;
@@ -20,53 +20,50 @@ export function useProject(id: string): {
 } {
   const { getProject } = useContainer();
   const { data: list, loading: listLoading } = useProjectsContext();
-
-  const fromList = list?.find((p) => p.id === id) ?? null;
-
-  const [fallback, setFallback] = useState<Project | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [fetching, setFetching] = useState(false);
+  const fromList = list?.find((project) => project.id === id) ?? null;
+  const [request, setRequest] = useState<RequestState>({
+    id: '',
+    data: null,
+    status: 'pending',
+    error: null,
+  });
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    const refresh = (): void => { setFallback(null); setRevision((value) => value + 1); };
+    const refresh = (): void => setRevision((value) => value + 1);
     window.addEventListener(PROJECT_CHANGED_EVENT, refresh);
     return () => window.removeEventListener(PROJECT_CHANGED_EVENT, refresh);
   }, []);
-
-  // Если в списке нет проекта (и список загружен), пробуем получить точечно.
-  // Это нужно для прямой ссылки на /projects/<id> когда юзер только что зашёл.
   useEffect(() => {
-    if (fromList || listLoading) return;
+    if (!id || fromList || listLoading) return;
     let cancelled = false;
-    setFallback(null);
-    setFetching(true);
-    setNotFound(false);
-    setError(null);
+    setRequest((previous) => ({
+      id,
+      data: previous.id === id ? previous.data : null,
+      status: 'pending',
+      error: null,
+    }));
     getProject
       .execute(id)
-      .then((p) => {
-        if (cancelled) return;
-        if (p === null) setNotFound(true);
-        else setFallback(p);
+      .then((data) => {
+        if (!cancelled)
+          setRequest({
+            id,
+            data,
+            status: data ? 'ready' : 'missing',
+            error: null,
+          });
       })
-      .catch((e: Error) => {
-        if (!cancelled) { setFallback(null); setError(e); }
-      })
-      .finally(() => {
-        if (!cancelled) setFetching(false);
+      .catch((error: Error) => {
+        if (!cancelled) setRequest({ id, data: null, status: 'error', error });
       });
     return () => {
       cancelled = true;
     };
   }, [getProject, id, fromList, listLoading, revision]);
-
-  const data = fromList ?? fallback;
-
-  return {
-    data,
-    loading: data === null && (listLoading || fetching) && !notFound && !error,
-    notFound,
-    error,
-  };
+  // Never render a previous project's fallback for even one frame after navigation.
+  const current = request.id === id ? request : null;
+  const data = fromList ?? current?.data ?? null;
+  const notFound = !id || (!fromList && current?.status === 'missing');
+  const error = fromList ? null : (current?.error ?? null);
+  return { data, loading: !data && !notFound && !error, notFound, error };
 }

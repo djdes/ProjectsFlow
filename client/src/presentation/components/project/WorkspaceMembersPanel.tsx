@@ -1,5 +1,6 @@
+import { MemberListSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, LockKeyhole, Trash2, Users, FolderOpen } from 'lucide-react';
+import { LockKeyhole, Trash2, Users, FolderOpen } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -107,7 +108,7 @@ export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = true
 
   if (!data) return error ? (
     <div role="alert" className="space-y-2 text-sm"><p>{error}</p><Button variant="outline" onClick={() => void reload()}>Повторить</Button></div>
-  ) : <div role="status" className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Загружаем участников…</div>;
+  ) : <MemberListSkeleton />;
 
   const hiddenFor = (memberId: string): string[] => data.access.members.find((member) => member.userId === memberId)?.hiddenProjectIds ?? [];
   const visibleCount = data.members.filter((member) => !projectId || !hiddenFor(member.userId).includes(projectId)).length;

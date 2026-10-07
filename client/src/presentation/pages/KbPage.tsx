@@ -1,3 +1,5 @@
+import { PageSkeleton, DocumentSkeleton, ListSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useState, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, PanelLeft } from 'lucide-react';
@@ -16,7 +18,7 @@ import { KbSearchBar } from '@/presentation/components/kb/KbSearchBar';
 
 export function KbPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
-  const { data: project, loading: projectLoading } = useProject(projectId ?? '');
+  const { data: project, loading: projectLoading, error: projectError } = useProject(projectId ?? '');
   const { documents, loading: treeLoading, error: treeError, reload: reloadTree } = useKbTree(projectId ?? '');
   const [activePath, setActivePath] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -43,7 +45,8 @@ export function KbPage(): React.ReactElement {
     });
   }, [documents, searchQuery]);
 
-  if (projectLoading) return <div className="p-6">Загрузка…</div>;
+  if (projectLoading) return <PageSkeleton layout="document" />;
+  if (projectError) return <PageLoadError />;
   if (!project) return <div className="p-6">Проект не найден</div>;
   if (project.kbKind === 'none') {
     return (
@@ -77,7 +80,7 @@ export function KbPage(): React.ReactElement {
         {project.name} / KB
       </p>
       <KbSearchBar value={searchQuery} onChange={setSearchQuery} />
-      {treeLoading && <p className="px-2 text-sm text-muted-foreground">Загрузка дерева…</p>}
+      {treeLoading && <ListSkeleton rows={5} />}
       {treeError && <p className="px-2 text-sm text-destructive">Не удалось загрузить дерево.</p>}
       {filtered !== null && (
         <KbFileTree
@@ -93,7 +96,7 @@ export function KbPage(): React.ReactElement {
 
   const mainContent = (
     <main className="overflow-y-auto p-4 md:p-6">
-      {activePath && docLoading && <p className="text-sm text-muted-foreground">Загрузка…</p>}
+      {activePath && docLoading && <DocumentSkeleton />}
       {activePath && document && (editing ? (
         <KbDocumentEditor
           projectId={projectId ?? ''}

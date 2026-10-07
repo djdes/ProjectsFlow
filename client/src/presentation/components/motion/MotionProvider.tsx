@@ -1,70 +1,84 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from 'react';
+import { MotionConfig } from 'motion/react';
+import { motionEnabled } from '@/lib/motionPreference';
 
 type MotionContextValue = {
   animations: boolean;
   setAnimations: (value: boolean) => void;
 };
-
 const MotionCtx = createContext<MotionContextValue | null>(null);
 
-const CLASS_NAME = 'pf-no-motion';
-
-function readInitial(storageKey: string): boolean {
+function readPreference(key: string): string | null {
   try {
-    const stored = localStorage.getItem(storageKey);
-    if (stored === 'on') return true;
-    if (stored === 'off') return false;
+    return localStorage.getItem(key);
   } catch {
-    /* localStorage недоступен */
-  }
-  try {
-    // OS-уровень reduce-motion → стартуем выключенными.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-    // Тач-устройства (телефон/планшет/PWA) по умолчанию БЕЗ анимаций: framer-motion
-    // (layout/spring) и CSS-переходы на мобиле — главный источник лагов и «глюков» при
-    // скролле. Пользователь может включить обратно тумблером в профиле. Десктоп (mouse) —
-    // с анимациями как раньше.
-    if (window.matchMedia('(pointer: coarse)').matches) return false;
-    return true;
-  } catch {
-    return true;
+    return null;
   }
 }
-
-type MotionProviderProps = {
-  children: ReactNode;
-  storageKey?: string;
-};
+function systemReduced(): boolean {
+  return (
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 export function MotionProvider({
   children,
   storageKey = 'pf-motion',
-}: MotionProviderProps): React.ReactElement {
-  const [animations, setAnimationsState] = useState<boolean>(() => readInitial(storageKey));
-
+}: {
+  children: ReactNode;
+  storageKey?: string;
+}): React.ReactElement {
+  const [preference, setPreference] = useState(() =>
+    readPreference(storageKey),
+  );
+  const [reduced, setReduced] = useState(systemReduced);
+  const animations = motionEnabled(preference, reduced);
   useEffect(() => {
-    const root = document.documentElement;
-    if (animations) {
-      root.classList.remove(CLASS_NAME);
-    } else {
-      root.classList.add(CLASS_NAME);
-    }
+    const query = matchMedia('(prefers-reduced-motion: reduce)');
+    const changed = (): void => setReduced(query.matches);
+    const stored = (event: StorageEvent): void => {
+      if (event.key === storageKey || event.key === null)
+        setPreference(readPreference(storageKey));
+    };
+    query.addEventListener('change', changed);
+    window.addEventListener('storage', stored);
+    return () => {
+      query.removeEventListener('change', changed);
+      window.removeEventListener('storage', stored);
+    };
+  }, [storageKey]);
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('pf-no-motion', !animations);
   }, [animations]);
-
   const setAnimations = (value: boolean): void => {
+    const next = value ? 'on' : 'off';
     try {
-      localStorage.setItem(storageKey, value ? 'on' : 'off');
+      localStorage.setItem(storageKey, next);
     } catch {
-      /* localStorage недоступен — состояние всё равно применится в DOM */
+      /* Preference still works in memory. */
     }
-    setAnimationsState(value);
+    setPreference(next);
   };
-
-  return <MotionCtx.Provider value={{ animations, setAnimations }}>{children}</MotionCtx.Provider>;
+  return (
+    <MotionCtx.Provider value={{ animations, setAnimations }}>
+      <MotionConfig reducedMotion={animations ? 'never' : 'always'}>
+        {children}
+      </MotionConfig>
+    </MotionCtx.Provider>
+  );
 }
 
 export function useMotion(): MotionContextValue {
-  const c = useContext(MotionCtx);
-  if (!c) throw new Error('useMotion must be used inside <MotionProvider>');
-  return c;
+  const context = useContext(MotionCtx);
+  if (!context)
+    throw new Error('useMotion must be used inside <MotionProvider>');
+  return context;
 }

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -318,7 +319,7 @@ export function TaskSearchDialog({
               </li>
             );
           })}
-          {loading && <li className="px-4 py-3 text-sm text-muted-foreground">Поиск задач…</li>}
+          {loading && <li className="px-3 py-2"><ListSkeleton rows={3} /></li>}
           {!loading && trimmed.length >= 2 && items.length === 0 && (
             <li className="px-4 py-3 text-sm text-muted-foreground">Ничего не найдено.</li>
           )}

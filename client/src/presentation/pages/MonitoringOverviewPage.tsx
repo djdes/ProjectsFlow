@@ -124,8 +124,8 @@ export function MonitoringOverviewPage(): React.ReactElement {
 
       {projects === null ? (
         <div className="space-y-3">
-          <div className="h-24 animate-pulse rounded-lg bg-muted" />
-          <div className="h-24 animate-pulse rounded-lg bg-muted" />
+          <div className="h-24 pf-skeleton rounded-lg bg-muted" />
+          <div className="h-24 pf-skeleton rounded-lg bg-muted" />
         </div>
       ) : projects.length === 0 ? (
         <Card>

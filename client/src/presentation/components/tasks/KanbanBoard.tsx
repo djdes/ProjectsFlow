@@ -1,4 +1,5 @@
-﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -215,7 +216,6 @@ function cnFilterTrigger(active: boolean): string {
 // собственных колонок — задачи в этих статусах визуально живут в TODO с badge'ом
 // статуса справа снизу. См. KanbanCard. 'manual' — собственная колонка между
 // backlog и todo: парковка для задач, которые делает человек руками.
-const VISIBLE_STATUSES: readonly TaskStatus[] = ['backlog', 'manual', 'todo', 'done'];
 
 // Маппинг реального статуса в визуальную колонку.
 function toVisibleStatus(status: TaskStatus): TaskStatus {
@@ -1058,23 +1058,7 @@ export function KanbanBoard({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-24 animate-pulse rounded-xl bg-muted" />
-        <div className="flex gap-3 overflow-x-auto">
-          {/* Геометрия скелета = геометрия настоящей колонки (276px / radius 10px,
-              замеры Notion) — иначе доска дёргается на месте в момент загрузки. */}
-          {VISIBLE_STATUSES.map((s) => (
-            <div
-              key={s}
-              className="h-64 w-[92vw] max-w-[24rem] shrink-0 animate-pulse rounded-[10px] bg-muted/60 sm:w-[276px] sm:max-w-none sm:bg-muted"
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <BoardSkeleton />;
 
   if (error && tasks.length === 0) {
     return (
@@ -1126,7 +1110,7 @@ export function KanbanBoard({
     {/* flex-[1_0_auto]: доска заполняет свободную высоту тела страницы при коротком контенте
         (тогда flex-1-спейсер ниже проталкивает закреплённый скролл к самому низу) И растёт по
         контенту при длинном (страница скроллится, sticky-скролл прилипает к низу вьюпорта). */}
-    <div className="flex flex-[1_0_auto] flex-col">
+    <div className="pf-content-reveal flex flex-[1_0_auto] flex-col">
       <ViewLoadFeedback error={error} hasData={tasks.length > 0} onRetry={refetch} label="доску" />
 
       {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ ответственный в совместных). */}

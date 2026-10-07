@@ -43,6 +43,7 @@ export function DialogContent({
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
+        data-pf-motion-surface="dialog"
         className={cn(
           // Mobile: прижат к низу экрана (bottom-sheet), безопасен для клавиатуры.
           // Desktop (sm+): классический центрированный диалог.

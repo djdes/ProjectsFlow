@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
 import '@/styles/globals.css';
+import '@/styles/motion.css';
 
 import { ContainerProvider } from '@/infrastructure/di/container';
 import { ThemeProvider } from '@/presentation/components/theme/ThemeProvider';

@@ -7,6 +7,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { HttpError } from '@/lib/HttpError';
 import type { InvitePreview } from '@/domain/invite/InvitePreview';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 
 const ROLE_LABEL: Record<'editor' | 'viewer', string> = {
   editor: 'редактор',
@@ -91,10 +92,7 @@ export function InvitePage(): React.ReactElement {
         <h1 className="text-2xl font-semibold tracking-tight">Приглашение</h1>
 
         {state.status === 'loading' && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Загружаем…
-          </div>
+          <LoadingRegion label="Загружаем приглашение…"><div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="mt-5 h-10 w-28" /></div></LoadingRegion>
         )}
 
         {state.status === 'error' && (

@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
+import { AppShellSkeleton, RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 
 type Props = {
   children: React.ReactNode;
@@ -10,8 +11,7 @@ export function ProtectedRoute({ children }: Props): React.ReactElement | null {
   const location = useLocation();
 
   if (status === 'loading') {
-    // Не светим скелетон сразу — auth-check обычно быстрый. Пустой контейнер.
-    return <div className="grid h-dvh place-items-center bg-background" />;
+    return location.pathname === '/device' ? <RouteSkeleton /> : <AppShellSkeleton />;
   }
 
   if (status === 'anonymous') {

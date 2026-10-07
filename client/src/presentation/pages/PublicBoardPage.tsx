@@ -1,3 +1,4 @@
+import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { splitTitleBody } from '@/lib/taskTitleBody';
@@ -499,7 +500,7 @@ export function PublicBoardPage(): React.ReactElement {
 
       {status === 'loading' && (
         <div className="mx-auto max-w-5xl px-8 py-16">
-          <div className="h-40 w-full animate-pulse rounded-xl bg-black/[0.05] dark:bg-white/[0.05]" />
+          <BoardSkeleton />
         </div>
       )}
 

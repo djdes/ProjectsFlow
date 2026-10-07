@@ -1347,7 +1347,7 @@ export function TableView({
               key={index}
               role="columnheader"
               className={cn(
-                'animate-pulse border-b bg-muted/55 motion-reduce:animate-none',
+                'pf-skeleton border-b bg-muted/55 motion-reduce:animate-none',
                 index > 1 && 'border-l',
               )}
             />
@@ -1366,7 +1366,7 @@ export function TableView({
                 key={cellIndex}
                 role="gridcell"
                 className={cn(
-                  'animate-pulse border-b bg-muted/30 motion-reduce:animate-none',
+                  'pf-skeleton border-b bg-muted/30 motion-reduce:animate-none',
                   cellIndex > 1 && 'border-l',
                 )}
               />
@@ -1417,7 +1417,7 @@ export function TableView({
       ref={tableRootRef}
       aria-busy={retrying}
       className={cn(
-        '-ml-2 flex min-h-0 flex-1 flex-col bg-background sm:-ml-8 lg:-ml-16',
+        'pf-content-reveal -ml-2 flex min-h-0 flex-1 flex-col bg-background sm:-ml-8 lg:-ml-16',
         '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
         sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
         !showVerticalLines &&

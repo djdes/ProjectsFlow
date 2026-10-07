@@ -176,7 +176,7 @@ export function AiConversationView({
   }, [state.messages]);
 
   if (state.loading && state.messages.length === 0) {
-    return <div className="grid h-full place-items-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>;
+    return <PageSkeleton layout="chat" />;
   }
 
   // Подсказки — свойство последнего ответа: новый ход заменяет предыдущий набор,
@@ -585,3 +585,4 @@ function AgentDetails({ conversationId, revision }: { conversationId: string; re
     </aside>
   );
 }
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';

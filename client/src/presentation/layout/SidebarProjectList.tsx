@@ -1,3 +1,4 @@
+import { SidebarSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -359,21 +360,6 @@ function SidebarProjectRow({
   );
 }
 
-function SidebarProjectListSkeleton(): React.ReactElement {
-  return (
-    <div className="space-y-1">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5">
-          <div className="size-4 shrink-0 animate-pulse rounded bg-muted" />
-          <div
-            className="h-3 animate-pulse rounded bg-muted"
-            style={{ width: `${60 + (i % 3) * 10}%` }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // Один проект в секции. Хелпер выносит общий рендер строк (skeleton иначе разрастается).
 function ProjectGroup({
@@ -449,7 +435,7 @@ export function SidebarProjectList(): React.ReactElement {
   // Поиск ищет И по проектам (по имени, мгновенно), И по задачам (по описанию, дебаунс).
   const taskSearch = useSidebarTaskSearch(query);
 
-  if (loading) return <SidebarProjectListSkeleton />;
+  if (loading) return <SidebarSkeleton />;
 
   if (error) {
     return (

@@ -67,7 +67,7 @@ export function Button({
   ...props
 }: ButtonProps): React.ReactElement {
   const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+  return <Comp className={cn('pf-button', buttonVariants({ variant, size, className }))} {...props} />;
 }
 
 export { buttonVariants };

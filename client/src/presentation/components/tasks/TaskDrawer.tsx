@@ -2851,8 +2851,8 @@ function TaskCommentsSection({
     <div className="space-y-4">
       {loading ? (
         <div className="space-y-2">
-          <div className="h-12 animate-pulse rounded-md bg-muted" />
-          <div className="h-12 animate-pulse rounded-md bg-muted" />
+          <div className="h-12 pf-skeleton rounded-md bg-muted" />
+          <div className="h-12 pf-skeleton rounded-md bg-muted" />
         </div>
       ) : discussionComments.length > 0 ? (
         <ul className="space-y-4">

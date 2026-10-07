@@ -93,7 +93,7 @@ function PersonalDataCard(): React.ReactElement {
           <CardTitle>Личные данные</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-24 animate-pulse rounded bg-muted" />
+          <div className="h-24 pf-skeleton rounded bg-muted" />
         </CardContent>
       </Card>
     );
@@ -285,10 +285,10 @@ function PreferencesCard(): React.ReactElement {
 
         <div className="flex items-start justify-between gap-4 sm:max-w-md">
           <div className="space-y-1">
-            <div className="text-sm font-medium leading-none">Анимация</div>
+            <div className="text-sm font-medium leading-none">Плавные анимации</div>
             <p className="text-sm text-muted-foreground">
-              Выключите, если интерфейс подтормаживает — например, при работе через RDP
-              или удалённый рабочий стол.
+              Переходы, вкладки и отклик на действия. Включены по умолчанию.
+              Учитываем настройку уменьшения движения на вашем устройстве.
             </p>
           </div>
           <Switch

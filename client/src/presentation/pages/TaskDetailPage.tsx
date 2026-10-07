@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
@@ -26,27 +28,39 @@ export function TaskDetailPage(): React.ReactElement {
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [resolvedKey, setResolvedKey] = useState('');
+  const loadSequence = useRef(0);
+  const taskKey = `${projectId}:${taskId}`;
 
   const load = useCallback(() => {
     if (!projectId || !taskId) return;
+    setLoadError(false);
+    const sequence = ++loadSequence.current;
     void taskRepository
       .list(projectId)
       .then((tasks) => {
+        if (sequence !== loadSequence.current) return;
         const found = tasks.find((t) => t.id === taskId) ?? null;
         setTask(found);
         setAllTasks(tasks);
         setNotFound(!found);
         setLoading(false);
+        setResolvedKey(`${projectId}:${taskId}`);
       })
       .catch(() => {
-        setNotFound(true);
+        if (sequence !== loadSequence.current) return;
+        setLoadError(true);
         setLoading(false);
+        setResolvedKey(`${projectId}:${taskId}`);
       });
   }, [projectId, taskId, taskRepository]);
 
+  const cancelLoads = useCallback(() => { loadSequence.current++; }, []);
   useEffect(() => {
     load();
-  }, [load]);
+    return cancelLoads;
+  }, [load, cancelLoads]);
 
   // Заголовок вкладки браузера = название задачи.
   useEffect(() => {
@@ -66,14 +80,8 @@ export function TaskDetailPage(): React.ReactElement {
     [allTasks],
   );
 
-  if (loading) {
-    return (
-      <div className="space-y-4 p-6">
-        <div className="h-3 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-8 w-72 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  if (loading || resolvedKey !== taskKey) return <PageSkeleton layout="task" />;
+  if (loadError) return <PageLoadError onRetry={() => { setLoading(true); load(); }} />;
 
   if (notFound || !task || !projectId) {
     return (

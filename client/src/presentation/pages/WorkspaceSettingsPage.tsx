@@ -1,3 +1,4 @@
+import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -81,13 +82,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
   // и его нельзя удалить. Поэтому ручное управление участниками и «опасная зона» скрыты.
   const isDefault = workspace?.kind === 'default';
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-2xl p-6">
-        <div className="h-40 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton layout="settings" />;
 
   if (!workspace) {
     return (
@@ -905,7 +900,7 @@ function AssigneeDigestCard({
       </CardHeader>
       <CardContent className="space-y-5">
         {loading || !draft ? (
-          <div className="h-32 animate-pulse rounded bg-muted" />
+          <div className="h-32 pf-skeleton rounded bg-muted" />
         ) : (
           <>
             <div className="space-y-2">
@@ -1405,7 +1400,7 @@ function ProjectsCard({ workspaceId }: { workspaceId: string }): React.ReactElem
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="h-16 animate-pulse rounded bg-muted" />
+          <div className="h-16 pf-skeleton rounded bg-muted" />
         ) : (projects?.length ?? 0) === 0 ? (
           <p className="text-sm text-muted-foreground">В&nbsp;пространстве пока нет проектов.</p>
         ) : (

@@ -5,6 +5,7 @@ import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 
 // Code-splitting (A4): каждая страница уезжает в свой chunk и грузится по требованию.
 // Раньше весь SPA (dnd-kit, motion, admin, monitoring, finance, tiptap) шёл одним
@@ -18,7 +19,7 @@ function page<M extends Record<string, unknown>>(
 }
 
 function RouteFallback(): ReactElement {
-  return <div className="grid h-dvh place-items-center bg-background" />;
+  return <RouteSkeleton />;
 }
 
 function el(node: ReactElement): ReactElement {
