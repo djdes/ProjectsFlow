@@ -59,10 +59,14 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
         // Дефолт-хаб агрегирует ВСЕ его проекты (любое пространство); команда — только
         // проекты этого пространства. Иначе счётчик врал (считал по workspace_id всех).
         projectCount: sql<number>`(
-          SELECT COUNT(*) FROM project_members pm
-          JOIN projects p ON p.id = pm.project_id
-          WHERE pm.user_id = ${userId}
+          SELECT COUNT(*) FROM workspace_members wm_projects
+          JOIN projects p ON p.workspace_id = wm_projects.workspace_id
+          WHERE wm_projects.user_id = ${userId}
             AND p.is_inbox = FALSE
+            AND (wm_projects.role IN ('owner', 'lead') OR NOT EXISTS (
+              SELECT 1 FROM workspace_project_exclusions x
+              WHERE x.workspace_id = p.workspace_id AND x.project_id = p.id AND x.user_id = ${userId}
+            ))
             AND (${workspaces.kind} = 'default' OR p.workspace_id = ${workspaces.id})
         )`,
         // Сколько всего участников в пространстве.

@@ -20,6 +20,7 @@ import type {
   WorkspaceAssigneeDigestSettings,
 } from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { httpClient } from './httpClient';
+import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
 
 type WorkspaceDto = {
   id: string;
@@ -111,6 +112,13 @@ function memberFromDto(dto: MemberDto): WorkspaceMember {
 }
 
 export class HttpWorkspaceRepository implements WorkspaceRepository {
+  getProjectAccess(workspaceId: string): Promise<WorkspaceProjectAccess> {
+    return httpClient.get(`/workspaces/${workspaceId}/project-access`);
+  }
+
+  async setProjectAccess(workspaceId: string, projectId: string, userId: string, visible: boolean): Promise<void> {
+    await httpClient.put(`/workspaces/${workspaceId}/project-access/${projectId}/${userId}`, { visible });
+  }
   async list(): Promise<Workspace[]> {
     const { workspaces } = await httpClient.get<{ workspaces: WorkspaceDto[] }>('/workspaces');
     return workspaces.map(fromDto);

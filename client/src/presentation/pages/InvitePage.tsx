@@ -116,7 +116,7 @@ export function InvitePage(): React.ReactElement {
               </p>
               {state.preview.kind === 'workspace' && (
                 <p className="text-muted-foreground">
-                  Доступ — ко всем проектам пространства, включая будущие.
+                  Вам будут доступны выбранные для вас проекты пространства. Доступ меняет владелец или руководитель.
                 </p>
               )}
               {state.preview.inviterDisplayName && (

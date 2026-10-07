@@ -114,7 +114,7 @@ export function ProjectsShareCard(): React.ReactElement {
       <CardHeader>
         <CardTitle>Пригласить в пространство</CardTitle>
         <CardDescription>
-          Участники получат доступ ко всем проектам пространства
+          Участники получат доступ к проектам пространства
           {workspace ? ` «${workspace.name}»` : ''}, включая будущие. Зарегистрированным
           придёт уведомление в системе, остальным — письмо со ссылкой.
         </CardDescription>

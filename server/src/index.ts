@@ -138,6 +138,8 @@ import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
 import { CreateWorkspaceInvite } from './application/workspace/CreateWorkspaceInvite.js';
 import { AcceptWorkspaceInvite } from './application/workspace/AcceptWorkspaceInvite.js';
+import { ManageWorkspaceProjectAccess } from './application/workspace/ManageWorkspaceProjectAccess.js';
+import { DrizzleWorkspaceProjectAccessRepository } from './infrastructure/repositories/DrizzleWorkspaceProjectAccessRepository.js';
 import { ListWorkspaceInvites } from './application/workspace/ListWorkspaceInvites.js';
 import { DeleteWorkspaceInvite } from './application/workspace/DeleteWorkspaceInvite.js';
 import { CheckGitCollision } from './application/project/CheckGitCollision.js';
@@ -425,8 +427,10 @@ const projectViewRepo = new DrizzleProjectViewRepository(db);
 
 // === Пространства (workspaces) ===
 const workspaceRepo = new DrizzleWorkspaceRepository(db);
+const workspaceProjectAccessRepo = new DrizzleWorkspaceProjectAccessRepository(db);
 const workspaceService = new WorkspaceService({
   repo: workspaceRepo,
+  members: projectMemberRepo,
   projects: projectRepo,
   users: userRepo,
   // Выключение воркера уводит задачи из его колонки в черновики (db/152). Ленивая
@@ -2258,6 +2262,15 @@ const { app, devProxyUpgrade } = createApp({
   },
   workspaces: {
     service: workspaceService,
+    projectAccess: new ManageWorkspaceProjectAccess({
+      workspaces: workspaceRepo,
+      access: workspaceProjectAccessRepo,
+      changed: async (workspaceId, projectId) => {
+        for (const member of await workspaceRepo.listMembers(workspaceId)) {
+          realtimeHub.publish(member.userId, { kind: 'project_changed', projectId });
+        }
+      },
+    }),
     assigneeDigest: manageWorkspaceAssigneeDigest,
     bulkCommitSync: bulkSetWorkspaceCommitSync,
     listCommitSyncProjects: listWorkspaceCommitSyncProjects,
@@ -2270,6 +2283,7 @@ const { app, devProxyUpgrade } = createApp({
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo,
+        projectAccess: workspaceProjectAccessRepo,
         invites: workspaceInviteRepo,
         users: userRepo,
         notifications: notificationRepo,

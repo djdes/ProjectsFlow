@@ -58,6 +58,8 @@ export function WorkspacesProvider({ children }: { children: ReactNode }): React
 
   useEffect(() => {
     refresh();
+    window.addEventListener(PROJECT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(PROJECT_CHANGED_EVENT, refresh);
   }, [refresh]);
 
   const switchTo = useCallback(

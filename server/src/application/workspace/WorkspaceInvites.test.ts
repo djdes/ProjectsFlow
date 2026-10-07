@@ -14,6 +14,7 @@ import {
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
   CannotInviteToDefaultWorkspaceError,
+  NotWorkspaceLeadError,
 } from '../../domain/workspace/errors.js';
 import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
 
@@ -21,6 +22,7 @@ const NOW = new Date('2026-07-13T12:00:00Z');
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Seed = {
+  excluded?: Array<{ projectId: string; userId: string }>;
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   users?: Array<{ id: string; email: string; displayName: string }>;
   invites?: WorkspaceInvite[];
@@ -33,6 +35,7 @@ type Seed = {
 };
 
 function makeFakes(seed: Seed = {}) {
+  const exclusions = [...(seed.excluded ?? [])];
   const members = (seed.members ?? []).map((m) => ({ ...m }));
   const users = seed.users ?? [];
   const invites = new Map<string, WorkspaceInvite>();
@@ -44,6 +47,17 @@ function makeFakes(seed: Seed = {}) {
   const idGen = (): string => `id-${++seq}`;
 
   const invitesRepo: WorkspaceInviteRepository = {
+    async acceptWithMembership({ inviteId, acceptedAt, acceptedByUserId }) {
+      const invite = invites.get(inviteId);
+      if (!invite) throw new WorkspaceInviteNotFoundError();
+      if (invite.acceptedAt) throw new WorkspaceInviteAlreadyUsedError();
+      if (invite.expiresAt <= acceptedAt) throw new WorkspaceInviteExpiredError();
+      if (!members.some((m) => m.workspaceId === invite.workspaceId && m.userId === acceptedByUserId)) {
+        members.push({ workspaceId: invite.workspaceId, userId: acceptedByUserId, role: invite.role });
+        exclusions.push(...(invite.excludedProjectIds ?? []).map((projectId) => ({ projectId, userId: acceptedByUserId })));
+      }
+      invites.set(invite.id, { ...invite, acceptedAt, acceptedByUserId });
+    },
     async create(input) {
       const invite: WorkspaceInvite = {
         ...input,
@@ -121,6 +135,10 @@ function makeFakes(seed: Seed = {}) {
   };
 
   const create = new CreateWorkspaceInvite({
+    projectAccess: {
+      listProjects: async () => [{ id: 'p1', name: 'One', icon: null }, { id: 'p2', name: 'Two', icon: null }],
+      listExclusions: async () => exclusions,
+    },
     workspaces,
     invites: invitesRepo,
     users: usersPort,
@@ -144,8 +162,27 @@ function makeFakes(seed: Seed = {}) {
   });
   const del = new DeleteWorkspaceInvite({ workspaces, invites: invitesRepo });
 
-  return { create, accept, list, del, invitesRepo, workspaces, members, sentEmails, notifications, absorbCalls };
+  return { create, accept, list, del, invitesRepo, workspaces, members, sentEmails, notifications, absorbCalls, exclusions };
 }
+
+test('lead can invite with selected projects; acceptance persists restrictions', async () => {
+  const { create, accept, exclusions } = makeFakes({ members: [{ workspaceId: 'w1', userId: 'lead', role: 'lead' }] });
+  const { invite } = await create.execute({ workspaceId: 'w1', actorUserId: 'lead', role: 'editor', email: null, excludedProjectIds: ['p2'] });
+  await accept.execute(invite.token, 'new');
+  assert.deepEqual(exclusions, [{ projectId: 'p2', userId: 'new' }]);
+});
+test('editor invitations inherit restrictions but cannot supply a project selection', async () => {
+  const { create } = makeFakes({ members: [{ workspaceId: 'w1', userId: 'ed', role: 'editor' }], excluded: [{ projectId: 'p2', userId: 'ed' }] });
+  await assert.rejects(create.execute({ workspaceId: 'w1', actorUserId: 'ed', role: 'editor', email: null, excludedProjectIds: ['p1'] }), NotWorkspaceLeadError);
+  const { invite } = await create.execute({ workspaceId: 'w1', actorUserId: 'ed', role: 'editor', email: null });
+  assert.deepEqual(invite.excludedProjectIds, ['p2']);
+});
+test('a second invitation does not overwrite an existing member visibility', async () => {
+  const { create, accept, exclusions } = makeFakes({ members: [{ workspaceId: 'w1', userId: 'owner', role: 'owner' }, { workspaceId: 'w1', userId: 'existing', role: 'editor' }], excluded: [{ projectId: 'p1', userId: 'existing' }] });
+  const { invite } = await create.execute({ workspaceId: 'w1', actorUserId: 'owner', role: 'viewer', email: null, excludedProjectIds: ['p2'] });
+  await accept.execute(invite.token, 'existing');
+  assert.deepEqual(exclusions, [{ projectId: 'p1', userId: 'existing' }]);
+});
 
 function pendingInvite(over: Partial<WorkspaceInvite> = {}): WorkspaceInvite {
   return {

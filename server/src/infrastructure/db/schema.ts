@@ -418,6 +418,7 @@ export const workspaceInvites = mysqlTable(
     role: mysqlEnum('role', ['editor', 'viewer']).notNull().default('editor'),
     token: char('token', { length: 64 }).notNull(),
     email: varchar('email', { length: 255 }),
+    excludedProjectIds: json('excluded_project_ids').$type<string[]>(),
     expiresAt: timestamp('expires_at').notNull(),
     acceptedAt: timestamp('accepted_at'),
     acceptedByUserId: char('accepted_by_user_id', { length: 36 }),
@@ -433,6 +434,17 @@ export const workspaceInvites = mysqlTable(
 
 export type WorkspaceInviteRow = typeof workspaceInvites.$inferSelect;
 export type NewWorkspaceInviteRow = typeof workspaceInvites.$inferInsert;
+
+export const workspaceProjectExclusions = mysqlTable('workspace_project_exclusions', {
+  workspaceId: char('workspace_id', { length: 36 }).notNull(),
+  projectId: char('project_id', { length: 36 }).notNull(),
+  userId: char('user_id', { length: 36 }).notNull(),
+  createdAt: createdAtCol(),
+}, (t) => [
+  primaryKey({ columns: [t.workspaceId, t.projectId, t.userId] }),
+  index('idx_wpe_member').on(t.workspaceId, t.userId),
+  index('idx_wpe_project').on(t.projectId),
+]);
 
 // Общий чат пространства (db/075). Один канал на пространство; seq — глобально-монотонный
 // AUTO_INCREMENT курсор (сортировка/пагинация/SSE-replay). Удаление мягкое (deleted_at).

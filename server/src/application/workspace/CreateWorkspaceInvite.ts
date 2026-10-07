@@ -11,7 +11,9 @@ import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js'
 import type { NotificationPayload } from '../../domain/notifications/Notification.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
 import { renderWorkspaceInviteEmail } from '../notifications/emails/workspaceInviteEmail.js';
-import { requireWorkspaceEditor } from './workspaceAccess.js';
+import { requireWorkspaceEditor, requireWorkspaceLead } from './workspaceAccess.js';
+import type { WorkspaceProjectAccessRepository } from './WorkspaceProjectAccessRepository.js';
+import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
 
 // Узкие структурные порты — реальные репозитории (DrizzleWorkspaceRepository,
@@ -39,6 +41,7 @@ type Deps = {
   readonly now: () => Date;
   readonly ttlMs: number;
   readonly appUrl: string;
+  readonly projectAccess?: Pick<WorkspaceProjectAccessRepository, 'listProjects' | 'listExclusions'>;
 };
 
 export type CreateWorkspaceInviteCommand = {
@@ -47,6 +50,7 @@ export type CreateWorkspaceInviteCommand = {
   readonly role: WorkspaceInviteRole;
   // Информационный email — mismatch при accept разрешён (как у project-инвайтов).
   readonly email: string | null;
+  readonly excludedProjectIds?: readonly string[];
 };
 
 export class CreateWorkspaceInvite {
@@ -54,12 +58,25 @@ export class CreateWorkspaceInvite {
 
   async execute(input: CreateWorkspaceInviteCommand): Promise<{ invite: WorkspaceInvite }> {
     // Приглашать могут owner и editor (зеркало project-права 'invite_member'); viewer — нет.
-    await requireWorkspaceEditor(this.deps.workspaces, input.workspaceId, input.actorUserId);
+    const actor = await requireWorkspaceEditor(this.deps.workspaces, input.workspaceId, input.actorUserId);
     const ws = await this.deps.workspaces.getById(input.workspaceId);
     if (!ws) throw new WorkspaceNotFoundError();
     // Личный дефолт-хаб — авто-управляемая агрегирующая вьюха, не контейнер с общими
     // участниками. Приглашать в него нельзя (см. CannotInviteToDefaultWorkspaceError).
     if (ws.kind === 'default') throw new CannotInviteToDefaultWorkspaceError();
+
+    const excludedProjectIds = [...new Set(input.excludedProjectIds ?? [])];
+    if (excludedProjectIds.length > 0) {
+      await requireWorkspaceLead(this.deps.workspaces, input.workspaceId, input.actorUserId);
+      const projects = await this.deps.projectAccess?.listProjects(input.workspaceId) ?? [];
+      if (excludedProjectIds.some((id) => !projects.some((p) => p.id === id))) throw new ProjectNotFoundError();
+    }
+    // An editor cannot use an invitation to regain access via a second account.
+    // Preserve their own restrictions without exposing hidden project names in the UI.
+    if (actor.role === 'editor' && this.deps.projectAccess) {
+      const exclusions = await this.deps.projectAccess.listExclusions(input.workspaceId);
+      excludedProjectIds.push(...exclusions.filter((e) => e.userId === input.actorUserId).map((e) => e.projectId));
+    }
 
     const expiresAt = new Date(this.deps.now().getTime() + this.deps.ttlMs);
     const invite = await this.deps.invites.create({
@@ -68,6 +85,7 @@ export class CreateWorkspaceInvite {
       role: input.role,
       token: this.deps.randomToken(),
       email: input.email,
+      excludedProjectIds,
       expiresAt,
       createdByUserId: input.actorUserId,
     });

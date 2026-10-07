@@ -117,6 +117,7 @@ export const resolveWorkspaceTelegramGroupSchema = z.object({
 });
 
 export const createWorkspaceInviteSchema = z.object({
+  excludedProjectIds: z.array(z.string().uuid()).max(1000).optional(),
   role: z.enum(['editor', 'viewer']),
   // Информационный email «для кого» — опционален; пустая строка → null.
   email: z

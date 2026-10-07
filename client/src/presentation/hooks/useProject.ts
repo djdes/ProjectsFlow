@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Project } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjectsContext } from './ProjectsProvider';
+import { PROJECT_CHANGED_EVENT } from './useNotificationStream';
 
 /**
  * Возвращает проект по id. Источник правды — общий список в ProjectsProvider:
@@ -26,12 +27,19 @@ export function useProject(id: string): {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = (): void => { setFallback(null); setRevision((value) => value + 1); };
+    window.addEventListener(PROJECT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(PROJECT_CHANGED_EVENT, refresh);
+  }, []);
 
   // Если в списке нет проекта (и список загружен), пробуем получить точечно.
   // Это нужно для прямой ссылки на /projects/<id> когда юзер только что зашёл.
   useEffect(() => {
     if (fromList || listLoading) return;
     let cancelled = false;
+    setFallback(null);
     setFetching(true);
     setNotFound(false);
     setError(null);
@@ -43,7 +51,7 @@ export function useProject(id: string): {
         else setFallback(p);
       })
       .catch((e: Error) => {
-        if (!cancelled) setError(e);
+        if (!cancelled) { setFallback(null); setError(e); }
       })
       .finally(() => {
         if (!cancelled) setFetching(false);
@@ -51,7 +59,7 @@ export function useProject(id: string): {
     return () => {
       cancelled = true;
     };
-  }, [getProject, id, fromList, listLoading]);
+  }, [getProject, id, fromList, listLoading, revision]);
 
   const data = fromList ?? fallback;
 

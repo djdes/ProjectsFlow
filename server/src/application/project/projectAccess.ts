@@ -54,6 +54,7 @@ export async function requireProjectAccess(
   // Admin-bypass: системный админ получает синтетическую owner-роль на любой проект —
   // полный доступ к чужим проектам/задачам через те же use-case'ы.
   if (await resolveIsAdmin(userId)) {
+    if (await deps.members.isProjectHidden?.(projectId, userId)) throw new ProjectNotFoundError();
     const project = await deps.projects.getById(projectId);
     if (!project) throw new ProjectNotFoundError();
     const synthetic: ProjectMembership = {

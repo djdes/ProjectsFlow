@@ -5,6 +5,7 @@ import {
   projects,
   users,
   workspaceMembers,
+  workspaceProjectExclusions,
   type ProjectRow,
   type UserRow,
 } from '../db/schema.js';
@@ -86,6 +87,15 @@ function toProject(row: ProjectRow): Project {
 export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   constructor(private readonly db: Database) {}
 
+  async isProjectHidden(projectId: string, userId: string): Promise<boolean> {
+    const rows = await this.db.select({ role: workspaceMembers.role })
+      .from(workspaceProjectExclusions)
+      .innerJoin(projects, and(eq(projects.id, workspaceProjectExclusions.projectId), eq(projects.workspaceId, workspaceProjectExclusions.workspaceId)))
+      .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, workspaceProjectExclusions.workspaceId), eq(workspaceMembers.userId, workspaceProjectExclusions.userId)))
+      .where(and(eq(projects.id, projectId), eq(projects.isInbox, false), eq(workspaceProjectExclusions.userId, userId))).limit(1);
+    return rows.length > 0 && rows[0]!.role !== 'owner' && rows[0]!.role !== 'lead';
+  }
+
   // Срез projects для резолва доступа (workspace_id/owner_id/is_inbox).
   private async getProjectAccessRow(projectId: string): Promise<ProjectAccessRow | null> {
     const rows = await this.db
@@ -112,6 +122,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         createdAt: projects.createdAt,
         wmRole: workspaceMembers.role,
         wmCreatedAt: workspaceMembers.createdAt,
+        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${projects.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
       })
       .from(projects)
       .leftJoin(
@@ -133,6 +144,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       { id: r.id, workspaceId: r.workspaceId, ownerId: r.ownerId, isInbox: r.isInbox, createdAt: r.createdAt },
       userId,
       wsMember,
+      Boolean(r.excluded),
     );
   }
 
@@ -172,6 +184,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         member: workspaceMembers,
         user: users,
         prefs: projectMembers.notificationPrefs,
+        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${project.workspaceId} AND x.project_id = ${projectId} AND x.user_id = ${workspaceMembers.userId})`,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
@@ -184,7 +197,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       )
       .where(eq(workspaceMembers.workspaceId, project.workspaceId))
       .orderBy(asc(workspaceMembers.createdAt));
-    return rows.map((r) => ({
+    return rows.filter((r) => projectRowVisibility(project, r.member.userId, r.member, Boolean(r.excluded))).map((r) => ({
       projectId,
       // Создатель проекта — owner своего проекта поверх ws-роли (тот же апгрейд, что в
       // projectRowVisibility/findForProject), чтобы «мой доступ» и «список участников»
@@ -230,7 +243,8 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .select({
         project: projects,
         wsRole: workspaceMembers.role,
-        memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${projects.workspaceId})`,
+        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${projects.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
+        memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${projects.workspaceId} AND (wm2.role IN ('owner', 'lead') OR NOT EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = wm2.workspace_id AND x.project_id = ${projects.id} AND x.user_id = wm2.user_id)))`,
         // deleted_at IS NULL (db/134): задачи из корзины не должны раздувать счётчик.
         taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
         // Избранное теперь ВЫЧИСЛЯЕМОЕ: проект в избранном, если у пользователя есть незавершённая
@@ -257,7 +271,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     // Роль/включение — через ту же чистую функцию (единый источник истины с findForProject).
     return rows.flatMap((r) => {
       const wsMember = r.wsRole !== null ? { role: r.wsRole as ProjectRole } : null;
-      const vis = projectRowVisibility(r.project, userId, wsMember);
+      const vis = projectRowVisibility(r.project, userId, wsMember, Boolean(r.excluded));
       if (!vis) return [];
       return [
         {
@@ -285,6 +299,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
           eq(workspaceMembers.userId, userId),
           eq(projects.ownerId, ownerUserId),
           eq(projects.isInbox, false),
+          sql`(${workspaceMembers.role} IN ('owner', 'lead') OR NOT EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${projects.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId}))`,
         ),
       )
       .limit(1);

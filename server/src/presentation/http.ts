@@ -217,6 +217,7 @@ import { projectsRouter } from './projects/routes.js';
 import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
+import type { ManageWorkspaceProjectAccess } from '../application/workspace/ManageWorkspaceProjectAccess.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
 import type { BulkSetWorkspaceCommitSync } from '../application/commit-sync/BulkSetWorkspaceCommitSync.js';
@@ -455,6 +456,7 @@ type AppDeps = {
   };
   readonly workspaces: {
     readonly service: WorkspaceService;
+    readonly projectAccess: ManageWorkspaceProjectAccess;
     readonly assigneeDigest: ManageWorkspaceAssigneeDigest;
     readonly bulkCommitSync: BulkSetWorkspaceCommitSync;
     readonly listCommitSyncProjects: ListWorkspaceCommitSyncProjects;

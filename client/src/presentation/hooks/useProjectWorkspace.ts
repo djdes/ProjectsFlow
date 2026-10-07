@@ -8,5 +8,5 @@ import { useWorkspacesContext } from './WorkspacesProvider';
 export function useProjectWorkspace(project: Pick<Project, 'workspaceId'>): Workspace | null {
   const { data, current } = useWorkspacesContext();
   const own = project.workspaceId ? data?.find((ws) => ws.id === project.workspaceId) : undefined;
-  return own ?? current;
+  return project.workspaceId ? own ?? null : current;
 }

@@ -9,6 +9,7 @@ import { WorkspaceService } from '../../application/workspace/WorkspaceService.j
 import { CreateWorkspaceInvite } from '../../application/workspace/CreateWorkspaceInvite.js';
 import { ListWorkspaceInvites } from '../../application/workspace/ListWorkspaceInvites.js';
 import { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
+import { ManageWorkspaceProjectAccess } from '../../application/workspace/ManageWorkspaceProjectAccess.js';
 import type { WorkspaceRepository } from '../../application/workspace/WorkspaceRepository.js';
 import type { WorkspaceInviteRepository } from '../../application/workspace/WorkspaceInviteRepository.js';
 import type { Workspace } from '../../domain/workspace/Workspace.js';
@@ -31,8 +32,8 @@ function makeWorkspaceRepo(seed: Seed): WorkspaceRepository {
   const members = (seed.members ?? []).map((m) => ({ ...m }));
 
   return {
-    async listForUser() {
-      return [];
+    async listForUser(userId) {
+      return members.filter((m) => m.userId === userId).map((m) => ({ ...workspaces.get(m.workspaceId)!, role: m.role, projectCount: 2, memberCount: members.filter((other) => other.workspaceId === m.workspaceId).length }));
     },
     async getById(id) {
       return workspaces.get(id) ?? null;
@@ -43,8 +44,12 @@ function makeWorkspaceRepo(seed: Seed): WorkspaceRepository {
     async createWithOwnerMembership() {
       throw new Error('not used');
     },
-    async update() {
-      return null;
+    async update(id, patch) {
+      const ws = workspaces.get(id);
+      if (!ws) return null;
+      const updated = { ...ws, ...patch };
+      workspaces.set(id, updated);
+      return updated;
     },
     async delete() {},
     async countForUser() {
@@ -100,6 +105,7 @@ function makeWorkspaceRepo(seed: Seed): WorkspaceRepository {
 function makeInviteRepo(): { repo: WorkspaceInviteRepository; store: Map<string, WorkspaceInvite> } {
   const store = new Map<string, WorkspaceInvite>();
   const repo: WorkspaceInviteRepository = {
+    async acceptWithMembership() { throw new Error('not used'); },
     async create(input) {
       const invite: WorkspaceInvite = {
         ...input,
@@ -193,7 +199,17 @@ function buildApp(seed: Seed) {
     }
     next();
   });
-  app.use('/api/workspaces', workspacesRouter({ service, invites, appUrl: 'https://app.test' }));
+  const exclusions: Array<{ projectId: string; userId: string }> = [];
+  const projectAccess = new ManageWorkspaceProjectAccess({ workspaces: repo, access: {
+    listProjects: async () => [{ id: 'p1', name: 'Project', icon: null }],
+    listExclusions: async () => exclusions,
+    setAccess: async (_ws, projectId, userId, visible) => {
+      const index = exclusions.findIndex((e) => e.projectId === projectId && e.userId === userId);
+      if (visible && index >= 0) exclusions.splice(index, 1);
+      else if (!visible && index < 0) exclusions.push({ projectId, userId });
+    },
+  } });
+  app.use('/api/workspaces', workspacesRouter({ service, invites, projectAccess, appUrl: 'https://app.test' }));
   app.use(errorHandler);
   return app;
 }
@@ -376,3 +392,44 @@ test('PATCH /:id/members/:userId — понижение одного из дву
     },
   );
 });
+
+
+const accessSeed: Seed = {
+  workspaces: [{ id: 'w1', ownerUserId: 'owner' }],
+  members: (['owner', 'lead', 'editor', 'viewer'] as const).map((role) => ({ workspaceId: 'w1', userId: role, role })),
+};
+test('workspace update preserves membership role and accurate counts', async () => {
+  await withServer(accessSeed, async (base) => {
+    const response = await fetch(`${base}/api/workspaces/w1`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-test-user': 'owner' }, body: JSON.stringify({ name: 'Renamed' }) });
+    assert.equal(response.status, 200);
+    const { workspace } = await response.json() as { workspace: { role: string; memberCount: number; projectCount: number; isCurrent: boolean } };
+    assert.equal(workspace.role, 'owner');
+    assert.equal(workspace.memberCount, 4);
+    assert.equal(workspace.projectCount, 2);
+    assert.equal(workspace.isCurrent, true);
+  });
+});
+test('project access API enforces role matrix, input validation and persistent readback', async () => {
+  await withServer(accessSeed, async (base) => {
+    const put = (actor: string, visible: unknown, project = 'p1') => fetch(`${base}/api/workspaces/w1/project-access/${project}/editor`, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-test-user': actor }, body: JSON.stringify({ visible }) });
+    assert.equal((await put('editor', false)).status, 403);
+    assert.equal((await put('viewer', false)).status, 403);
+    assert.equal((await put('owner', 'false')).status, 400);
+    assert.equal((await put('owner', false, 'foreign')).status, 404);
+    assert.equal((await put('lead', false)).status, 204);
+    const read = await fetch(`${base}/api/workspaces/w1/project-access`, { headers: { 'x-test-user': 'owner' } });
+    const data = await read.json() as { members: Array<{ userId: string; hiddenProjectIds: string[] }> };
+    assert.deepEqual(data.members.find((m) => m.userId === 'editor')?.hiddenProjectIds, ['p1']);
+    const restricted = await fetch(`${base}/api/workspaces/w1/project-access`, { headers: { 'x-test-user': 'editor' } });
+    assert.deepEqual((await restricted.json() as { projects: unknown[] }).projects, []);
+    assert.equal((await put('owner', true)).status, 204);
+  });
+});
+for (const role of ['owner', 'lead', 'editor']) {
+  test(`invitations API permits ${role}`, async () => {
+    await withServer(accessSeed, async (base) => {
+      const response = await fetch(`${base}/api/workspaces/w1/invites`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': role }, body: JSON.stringify({ role: 'editor', email: 'new@example.test' }) });
+      assert.equal(response.status, 201);
+    });
+  });
+}

@@ -56,6 +56,10 @@ type Deps = {
   readonly repo: WorkspaceRepository;
   readonly projects: ProjectsPort;
   readonly users: UsersPort;
+  readonly members?: {
+    listProjectsForUserInWorkspace(userId: string, workspaceId: string): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null; isInbox: boolean }>>;
+    findForProject(projectId: string, userId: string): Promise<unknown>;
+  };
   // Опционален: без него тумблер воркера просто не перекладывает задачи (старые сборки/тесты).
   readonly tasks?: TasksPort;
   readonly idGen: () => string;
@@ -78,6 +82,9 @@ export class WorkspaceService {
     userId: string,
   ): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>> {
     await requireWorkspaceMember(this.deps.repo, workspaceId, userId);
+    if (this.deps.members) {
+      return (await this.deps.members.listProjectsForUserInWorkspace(userId, workspaceId)).filter((p) => !p.isInbox);
+    }
     return this.deps.projects.listByWorkspace(workspaceId);
   }
 
@@ -265,6 +272,7 @@ export class WorkspaceService {
   ): Promise<void> {
     await requireWorkspaceMember(this.deps.repo, workspaceId, userId);
     await requireWorkspaceMember(this.deps.repo, targetWorkspaceId, userId);
+    if (this.deps.members && !(await this.deps.members.findForProject(projectId, userId))) throw new ProjectNotFoundError();
     const project = await this.deps.projects.getById(projectId);
     if (!project) throw new ProjectNotFoundError();
     // Проект должен реально лежать в исходном пространстве из URL (не доверяем path-сегменту).

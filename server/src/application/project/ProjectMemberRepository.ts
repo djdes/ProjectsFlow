@@ -27,6 +27,8 @@ export type AddMemberInput = {
 };
 
 export interface ProjectMemberRepository {
+  /** Explicit workspace restriction, including when platform admin bypass is configured. */
+  isProjectHidden?(projectId: string, userId: string): Promise<boolean>;
   // Главный метод доступа: «может ли userId смотреть/менять projectId, и с какой ролью».
   // Возвращает null если юзер не member — use-case обычно мапит в ProjectNotFoundError (404).
   findForProject(projectId: string, userId: string): Promise<ProjectMembership | null>;

@@ -9,6 +9,7 @@ export type CreateWorkspaceInviteInput = {
   readonly role: WorkspaceInviteRole;
   readonly token: string;
   readonly email: string | null;
+  readonly excludedProjectIds?: readonly string[];
   readonly expiresAt: Date;
   readonly createdByUserId: string;
 };
@@ -20,6 +21,8 @@ export type AcceptWorkspaceInviteInput = {
 };
 
 export interface WorkspaceInviteRepository {
+  /** Consume the token and add membership + visibility atomically. */
+  acceptWithMembership(input: AcceptWorkspaceInviteInput): Promise<void>;
   create(input: CreateWorkspaceInviteInput): Promise<WorkspaceInvite>;
   getById(inviteId: string): Promise<WorkspaceInvite | null>;
   // Look-up из accept-flow (/invite/:token).

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, like, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, taskComments, tasks } from '../db/schema.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
@@ -57,6 +57,15 @@ export class DrizzleTaskSearchRepository implements TaskSearchRepository {
     // project_members-строки получал 0 результатов). Без workspaceId — ВСЕ пространства
     // юзера, как и раньше (TaskSearchQuery не несёт workspaceId).
     let scopeCond: SQL | undefined;
+    if (q.includeAllProjects) {
+      // Explicit workspace restrictions also apply to platform-admin search.
+      scopeCond = sql`NOT EXISTS (
+        SELECT 1 FROM workspace_project_exclusions x
+        JOIN workspace_members wm ON wm.workspace_id = x.workspace_id AND wm.user_id = x.user_id
+        WHERE x.project_id = ${tasks.projectId} AND x.workspace_id = ${projects.workspaceId}
+          AND x.user_id = ${q.userId} AND wm.role NOT IN ('owner', 'lead') AND ${projects.isInbox} = FALSE
+      )`;
+    }
     if (!q.includeAllProjects) {
       const accessibleIds = (
         q.workspaceId

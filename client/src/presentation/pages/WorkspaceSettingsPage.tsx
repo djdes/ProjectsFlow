@@ -4,15 +4,12 @@ import {
   ArrowLeft,
   CalendarClock,
   ChevronDown,
-  Copy,
   History,
   Loader2,
   RefreshCw,
   Send,
   Trash2,
-  UserPlus,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -46,7 +43,6 @@ import { cn } from '@/lib/utils';
 import {
   WORKSPACE_ROLE_LABEL,
   type WorkspaceCommitSyncMode,
-  type WorkspaceRole,
 } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import type {
@@ -57,17 +53,14 @@ import type {
   WorkspaceDigestProjectMode,
 } from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { useContainer } from '@/infrastructure/di/container';
-import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { useRenameWorkspace } from '@/presentation/hooks/useRenameWorkspace';
 import { useDeleteWorkspace } from '@/presentation/hooks/useDeleteWorkspace';
-import { useWorkspaceMembers } from '@/presentation/hooks/useWorkspaceMembers';
 import { useWorkspaceProjects } from '@/presentation/hooks/useWorkspaceProjects';
 import { EmojiGrid } from '@/presentation/components/forms/EmojiGrid';
-import { InviteDialog } from '@/presentation/components/project/InviteDialog';
+import { WorkspaceMembersPanel } from '@/presentation/components/project/WorkspaceMembersPanel';
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
-import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
 import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPicker';
 
@@ -140,7 +133,10 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         initialIcon={workspace.icon}
         disabled={!canEditSharedSettings}
       />
-      <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
+      <Card>
+        <CardHeader><CardTitle>Участники</CardTitle><CardDescription>Приглашения и доступ к проектам пространства.</CardDescription></CardHeader>
+        <CardContent><WorkspaceMembersPanel key={workspace.id} workspace={workspace} manageRoles /></CardContent>
+      </Card>
       <AssigneeDigestCard
         workspaceId={workspace.id}
         canManage={canEditSharedSettings}
@@ -167,7 +163,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         workspaceId={workspace.id}
         canManage={isOwner || workspace.role === 'lead'}
       />
-      {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
+      {workspace.role !== 'viewer' && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
         <DangerZoneCard
@@ -1389,211 +1385,6 @@ function AssigneeDigestCard({
   );
 }
 
-function MembersCard({
-  workspaceId,
-  canManage,
-  autoManaged = false,
-}: {
-  workspaceId: string;
-  canManage: boolean;
-  // Дефолт-хаб: состав выводится автоматически, ручное управление скрыто.
-  autoManaged?: boolean;
-}): React.ReactElement {
-  const { members, loading, add, changeRole, remove } = useWorkspaceMembers(workspaceId);
-  const { user: currentUser } = useCurrentUser();
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<WorkspaceRole>('editor');
-  const [adding, setAdding] = useState(false);
-
-  const handleAdd = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
-    const trimmed = email.trim();
-    if (!trimmed) return;
-    setAdding(true);
-    try {
-      await add(trimmed, role);
-      setEmail('');
-      toast.success('Участник добавлен');
-    } catch (err) {
-      toast.error((err as Error).message || 'Не удалось добавить участника');
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const handleRole = async (userId: string, next: WorkspaceRole): Promise<void> => {
-    try {
-      await changeRole(userId, next);
-    } catch (err) {
-      toast.error((err as Error).message || 'Не удалось сменить роль');
-    }
-  };
-
-  // Подтверждение удаления участника (U7): раньше — удаление одним кликом по корзине.
-  const [pendingRemove, setPendingRemove] = useState<{ userId: string; label: string } | null>(
-    null,
-  );
-
-  const handleRemove = async (userId: string): Promise<void> => {
-    try {
-      await remove(userId);
-    } catch (err) {
-      toast.error((err as Error).message || 'Не удалось удалить участника');
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Участники</CardTitle>
-        <CardDescription>
-          {autoManaged
-            ? 'Это пространство по умолчанию. Состав формируется автоматически: вы и все, с кем у вас есть общие проекты.'
-            : 'Доступ к пространству и его проектам.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loading ? (
-          <div className="h-16 animate-pulse rounded bg-muted" />
-        ) : (
-          <ul className="divide-y">
-            {(members ?? []).map((m) => (
-              <li key={m.userId} className="flex items-center gap-3 py-2">
-                <Avatar className="size-8">
-                  <AvatarFallback className={avatarColor(m.displayName ?? m.email)}>
-                    {getInitials(m.displayName ?? m.email)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-sm font-medium">{m.displayName ?? '—'}</span>
-                    {m.role === 'lead' && (
-                      <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                        Руководитель
-                      </span>
-                    )}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">{m.email}</div>
-                </div>
-                {canManage ? (
-                  <>
-                    <select
-                      className={ROLE_SELECT_CLASS}
-                      value={m.role}
-                      onChange={(e) => void handleRole(m.userId, e.target.value as WorkspaceRole)}
-                      aria-label="Роль участника"
-                    >
-                      <option value="owner">Владелец</option>
-                      <option value="lead">Руководитель</option>
-                      <option value="editor">Редактор</option>
-                      <option value="viewer">Наблюдатель</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPendingRemove({
-                          userId: m.userId,
-                          label: m.displayName ?? m.email ?? 'участника',
-                        })
-                      }
-                      aria-label="Удалить участника"
-                      title="Удалить"
-                      className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[m.role]}</span>
-                    {currentUser?.id === m.userId && m.role !== 'owner' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground hover:text-destructive"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              'Выйти из пространства? Доступ вернёт только новое приглашение.',
-                            )
-                          ) {
-                            void handleRemove(m.userId);
-                          }
-                        }}
-                      >
-                        Выйти
-                      </Button>
-                    )}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {canManage && (
-          <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 border-t pt-4">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Label htmlFor="memberEmail">Добавить по&nbsp;email</Label>
-              <Input
-                id="memberEmail"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@example.com"
-              />
-            </div>
-            <select
-              className={ROLE_SELECT_CLASS}
-              value={role}
-              onChange={(e) => setRole(e.target.value as WorkspaceRole)}
-              aria-label="Роль нового участника"
-            >
-              <option value="editor">Редактор</option>
-              <option value="viewer">Наблюдатель</option>
-            </select>
-            <Button type="submit" disabled={adding || email.trim().length === 0}>
-              {adding ? 'Добавляем…' : 'Добавить'}
-            </Button>
-          </form>
-        )}
-      </CardContent>
-
-      <Dialog open={pendingRemove !== null} onOpenChange={(o) => !o && setPendingRemove(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Удалить участника?</DialogTitle>
-            <DialogDescription>
-              {pendingRemove ? (
-                <>
-                  <span className="font-medium text-foreground">{pendingRemove.label}</span> потеряет
-                  доступ к пространству и его проектам. Действие можно отменить, снова пригласив
-                  участника.
-                </>
-              ) : null}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingRemove(null)}>
-              Отмена
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                const id = pendingRemove?.userId;
-                setPendingRemove(null);
-                if (id) void handleRemove(id);
-              }}
-            >
-              Удалить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
-  );
-}
-
 function ProjectsCard({ workspaceId }: { workspaceId: string }): React.ReactElement {
   const { projects, loading, move } = useWorkspaceProjects(workspaceId);
   const { data: workspaces } = useWorkspaces();
@@ -1740,46 +1531,24 @@ function DangerZoneCard({
 function InvitesCard({ workspaceId }: { workspaceId: string }): React.ReactElement {
   const { workspaceRepository } = useContainer();
   const [invites, setInvites] = useState<WorkspaceInvite[] | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    workspaceRepository
+    const load = (): void => { workspaceRepository
       .listInvites(workspaceId)
       .then((list) => {
         if (!cancelled) setInvites(list);
       })
       .catch(() => {
         if (!cancelled) setInvites([]);
-      });
+      }); };
+    load();
+    window.addEventListener('pf:workspace-invites-changed', load);
     return () => {
       cancelled = true;
+      window.removeEventListener('pf:workspace-invites-changed', load);
     };
   }, [workspaceRepository, workspaceId]);
-
-  const handleCreated = (invite: WorkspaceInvite): void => {
-    setInvites((prev) => [...(prev ?? []), invite]);
-    if (invite.url) {
-      void navigator.clipboard.writeText(invite.url).then(
-        () => toast.success('Ссылка скопирована'),
-        () => toast.success('Приглашение создано'),
-      );
-    }
-  };
-
-  const copyUrl = async (invite: WorkspaceInvite): Promise<void> => {
-    if (!invite.url) {
-      // Для существующих pending-инвайтов сервер не отдаёт token/url — только в момент create.
-      toast.error('Ссылка доступна только в момент создания. Отзови и создай новое.');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(invite.url);
-      toast.success('Скопировано');
-    } catch {
-      toast.error('Не удалось скопировать.');
-    }
-  };
 
   const revoke = async (invite: WorkspaceInvite): Promise<void> => {
     if (!window.confirm('Отозвать приглашение?')) return;
@@ -1797,15 +1566,12 @@ function InvitesCard({ workspaceId }: { workspaceId: string }): React.ReactEleme
       <CardHeader>
         <CardTitle>Приглашения</CardTitle>
         <CardDescription>
-          Токен-ссылки в пространство: получатель открывает ссылку и получает доступ ко всем
-          проектам. Срок действия — 7 дней.
+          Приглашения в пространство. Выбранный доступ к проектам применяется после входа. Срок действия — 7 дней.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
-          <UserPlus className="size-4" />
-          Создать приглашение
-        </Button>
+        {invites === null && <p className="text-xs text-muted-foreground">Загружаем приглашения…</p>}
+        {invites?.length === 0 && <p className="text-xs text-muted-foreground">Нет ожидающих приглашений. Нового участника можно пригласить в блоке выше.</p>}
         {invites !== null && invites.length > 0 && (
           <ul className="divide-y">
             {invites.map((inv) => (
@@ -1815,19 +1581,10 @@ function InvitesCard({ workspaceId }: { workspaceId: string }): React.ReactEleme
                     {inv.email ?? <span className="italic text-muted-foreground">без email</span>}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {inv.role === 'editor' ? 'редактор' : 'наблюдатель'} · истекает{' '}
+                    {WORKSPACE_ROLE_LABEL[inv.role]} · истекает{' '}
                     {inv.expiresAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => void copyUrl(inv)}
-                  aria-label="Скопировать ссылку"
-                >
-                  <Copy className="size-3.5" />
-                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1842,12 +1599,6 @@ function InvitesCard({ workspaceId }: { workspaceId: string }): React.ReactEleme
           </ul>
         )}
       </CardContent>
-      <InviteDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        workspaceId={workspaceId}
-        onCreated={handleCreated}
-      />
     </Card>
   );
 }

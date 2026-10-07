@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
+import type { ManageWorkspaceProjectAccess } from '../../application/workspace/ManageWorkspaceProjectAccess.js';
 import type {
   Workspace,
   WorkspaceCommitSyncMode,
@@ -146,6 +147,7 @@ function inviteToDto(
 
 type Deps = {
   readonly service: WorkspaceService;
+  readonly projectAccess?: ManageWorkspaceProjectAccess;
   readonly invites: {
     readonly create: CreateWorkspaceInvite;
     readonly list: ListWorkspaceInvites;
@@ -163,6 +165,27 @@ type Deps = {
 export function workspacesRouter(deps: Deps): Router {
   const router = Router();
   router.use(requireAuth);
+
+  const fullDto = async (workspace: Workspace, userId: string): Promise<WorkspaceDto> => {
+    const [list, current] = await Promise.all([deps.service.listForUser(userId), deps.service.getCurrentWorkspaceId(userId)]);
+    const item = list.find((w) => w.id === workspace.id);
+    return item ? toDto(item, item.id === (current ?? list[0]?.id)) : toDto(workspace);
+  };
+
+  router.get('/:id/project-access', async (req, res, next) => {
+    try {
+      if (!deps.projectAccess) { res.sendStatus(503); return; }
+      res.json(await deps.projectAccess.list(req.params.id, req.user!.id));
+    } catch (error) { next(error); }
+  });
+  router.put('/:id/project-access/:projectId/:userId', async (req, res, next) => {
+    try {
+      if (!deps.projectAccess) { res.sendStatus(503); return; }
+      const { visible } = z.object({ visible: z.boolean() }).strict().parse(req.body);
+      await deps.projectAccess.set(req.params.id, req.user!.id, req.params.projectId, req.params.userId, visible);
+      res.status(204).end();
+    } catch (error) { next(error); }
+  });
 
   // GET /api/workspaces — мои пространства, активное помечено isCurrent.
   router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -185,7 +208,7 @@ export function workspacesRouter(deps: Deps): Router {
     try {
       const body = createWorkspaceSchema.parse(req.body);
       const ws = await deps.service.create(req.user!.id, { name: body.name, icon: body.icon ?? null });
-      res.status(201).json({ workspace: toDto(ws) });
+      res.status(201).json({ workspace: await fullDto(ws, req.user!.id) });
     } catch (e) {
       next(e);
     }
@@ -228,7 +251,7 @@ export function workspacesRouter(deps: Deps): Router {
         await deps.service.setCommitSyncMode(workspaceId, req.user!.id, body.commitSyncMode);
       }
       const ws = await deps.service.rename(workspaceId, req.user!.id, body);
-      res.json({ workspace: toDto(ws), movedTaskCount });
+      res.json({ workspace: await fullDto(ws, req.user!.id), movedTaskCount });
     } catch (e) {
       next(e);
     }
@@ -503,6 +526,7 @@ export function workspacesRouter(deps: Deps): Router {
         actorUserId: req.user!.id,
         role: body.role,
         email: body.email,
+        excludedProjectIds: body.excludedProjectIds,
       });
       res.status(201).json({
         invite: inviteToDto(invite, { includeToken: true, appUrl: deps.appUrl }),

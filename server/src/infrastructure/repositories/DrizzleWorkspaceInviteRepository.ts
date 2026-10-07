@@ -1,6 +1,8 @@
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { workspaceInvites, type WorkspaceInviteRow } from '../db/schema.js';
+import { projects, workspaceMembers, workspaceProjectExclusions, workspaceInvites, type WorkspaceInviteRow } from '../db/schema.js';
+import { parseJsonCol } from './jsonCol.js';
+import { WorkspaceInviteAlreadyUsedError, WorkspaceInviteExpiredError, WorkspaceInviteNotFoundError } from '../../domain/workspace/errors.js';
 import type {
   WorkspaceInvite,
   WorkspaceInviteRole,
@@ -18,6 +20,7 @@ function toInvite(row: WorkspaceInviteRow): WorkspaceInvite {
     role: row.role as WorkspaceInviteRole,
     token: row.token,
     email: row.email ?? null,
+    excludedProjectIds: parseJsonCol<string[]>(row.excludedProjectIds, []),
     expiresAt: row.expiresAt,
     acceptedAt: row.acceptedAt ?? null,
     acceptedByUserId: row.acceptedByUserId ?? null,
@@ -36,6 +39,7 @@ export class DrizzleWorkspaceInviteRepository implements WorkspaceInviteReposito
       role: input.role,
       token: input.token,
       email: input.email,
+      excludedProjectIds: [...(input.excludedProjectIds ?? [])],
       expiresAt: input.expiresAt,
       createdByUserId: input.createdByUserId,
     });
@@ -51,6 +55,32 @@ export class DrizzleWorkspaceInviteRepository implements WorkspaceInviteReposito
       .where(eq(workspaceInvites.id, inviteId))
       .limit(1);
     return rows[0] ? toInvite(rows[0]) : null;
+  }
+
+  async acceptWithMembership(input: AcceptWorkspaceInviteInput): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const rows = await tx.select().from(workspaceInvites)
+        .where(eq(workspaceInvites.id, input.inviteId)).for('update');
+      const invite = rows[0];
+      if (!invite) throw new WorkspaceInviteNotFoundError();
+      if (invite.acceptedAt) throw new WorkspaceInviteAlreadyUsedError();
+      if (invite.expiresAt <= input.acceptedAt) throw new WorkspaceInviteExpiredError();
+      // INSERT IGNORE is atomic for simultaneous invitations to the same workspace.
+      const [result] = await tx.insert(workspaceMembers).ignore().values({
+        workspaceId: invite.workspaceId, userId: input.acceptedByUserId, role: invite.role,
+      });
+      if (result.affectedRows > 0) {
+        const excluded = new Set(parseJsonCol<string[]>(invite.excludedProjectIds, []));
+        const currentProjects = await tx.select({ id: projects.id }).from(projects)
+          .where(and(eq(projects.workspaceId, invite.workspaceId), eq(projects.isInbox, false)));
+        const values = currentProjects.filter((p) => excluded.has(p.id)).map((p) => ({
+          workspaceId: invite.workspaceId, projectId: p.id, userId: input.acceptedByUserId,
+        }));
+        if (values.length) await tx.insert(workspaceProjectExclusions).values(values);
+      }
+      await tx.update(workspaceInvites).set({ acceptedAt: input.acceptedAt, acceptedByUserId: input.acceptedByUserId })
+        .where(eq(workspaceInvites.id, invite.id));
+    });
   }
 
   async findByToken(token: string): Promise<WorkspaceInvite | null> {

@@ -1,140 +1,17 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Settings2 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
 import type { Project } from '@/domain/project/Project';
-import type { WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
-import { useContainer } from '@/infrastructure/di/container';
-import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useProjectWorkspace } from '@/presentation/hooks/useProjectWorkspace';
-import { getInitials } from '@/presentation/layout/projectIcons';
-import { OverviewSection } from '@/presentation/components/project/OverviewSection';
+import { OverviewSection } from './OverviewSection';
+import { WorkspaceMembersPanel } from './WorkspaceMembersPanel';
 
-const ROLE_LABEL: Record<WorkspaceRole, string> = {
-  // «Владелец» — концепт пространства (показывается на настройках пространства), а не проекта:
-  // на уровне проекта роли — «редактор»/«наблюдатель», а создателя помечаем «создал» ниже.
-  owner: 'редактор',
-  lead: 'руководитель',
-  editor: 'редактор',
-  viewer: 'наблюдатель',
-};
-
-const ROLE_BADGE_CLASS: Record<WorkspaceRole, string> = {
-  owner: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  lead: 'bg-primary/15 text-primary',
-  editor: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  viewer: 'bg-muted text-muted-foreground',
-};
-
-// Бейдж создателя проекта (projects.owner_id) — нейтральное «создал», без роли «владелец».
-const CREATOR_BADGE_CLASS = 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
-
-// Секция «Команда» на странице проекта. После унификации доступа команда — это участники
-// ПРОСТРАНСТВА проекта (read-only список). Приглашения, роли и удаление — только на
-// странице настроек пространства: отдельного «пригласить в проект» нет. Общие настройки
-// открыты каждому участнику, а опасные действия внутри страницы по-прежнему показываются
-// только owner'у.
 export function TeamSection({ project }: { project: Project }): React.ReactElement | null {
-  const { workspaceRepository } = useContainer();
-  const { user: currentUser } = useCurrentUser();
   const workspace = useProjectWorkspace(project);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // В inbox команды не бывает — секцию не показываем.
-  const skip = project.isInbox;
-  const workspaceId = workspace?.id ?? null;
-
-  useEffect(() => {
-    if (skip || !workspaceId) return;
-    let cancelled = false;
-    setLoading(true);
-    workspaceRepository
-      .listMembers(workspaceId)
-      .then((list) => {
-        if (!cancelled) setMembers(list);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) toast.error(`Не удалось загрузить команду: ${(e as Error).message}`);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceRepository, workspaceId, skip]);
-
-  if (skip) return null;
-
-  return (
-    <OverviewSection
-      title="Команда"
-      actions={
-        workspaceId && (
-          <Button asChild size="sm" variant="outline">
-            <Link to={`/workspaces/${workspaceId}/settings`}>
-              <Settings2 className="size-4" />
-              Настройки пространства
-            </Link>
-          </Button>
-        )
-      }
-    >
-      <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Участники пространства{workspace ? ` «${workspace.name}»` : ''} — им доступны все его
-          проекты.
-          {/* В личном хабе (kind 'default') состав собирается автоматически и вручную
-              не пополняется — подсказка про добавление там неверна. */}
-          {workspace?.kind === 'team' && ' Чтобы пригласить участника, добавьте его в пространство.'}
-        </p>
-        {loading ? (
-          <div className="space-y-2">
-            <div className="h-10 animate-pulse rounded-md bg-muted" />
-            <div className="h-10 animate-pulse rounded-md bg-muted" />
-          </div>
-        ) : (
-          <ul className="space-y-1">
-            {members.map((m) => {
-              const isCreator = m.userId === project.ownerId;
-              return (
-              <li
-                key={m.userId}
-                className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
-              >
-                <Avatar className="size-8 shrink-0">
-                  {m.avatarUrl ? (
-                    <AvatarImage src={m.avatarUrl} alt={m.displayName ?? ''} />
-                  ) : null}
-                  <AvatarFallback>{getInitials(m.displayName ?? m.email ?? '?')}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {m.displayName ?? '—'}
-                    {currentUser?.id === m.userId && (
-                      <span className="ml-1 text-xs text-muted-foreground">(ты)</span>
-                    )}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">{m.email}</p>
-                </div>
-                <span
-                  className={cn(
-                    'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-                    isCreator ? CREATOR_BADGE_CLASS : ROLE_BADGE_CLASS[m.role],
-                  )}
-                >
-                  {isCreator ? 'создал' : ROLE_LABEL[m.role]}
-                </span>
-              </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </OverviewSection>
-  );
+  if (project.isInbox) return null;
+  return <OverviewSection title="Участники" actions={workspace && (
+    <Button asChild size="sm" variant="outline"><Link to={`/workspaces/${workspace.id}/settings`}><Settings2 className="size-4" />Настройки пространства</Link></Button>
+  )}>
+    {workspace ? <WorkspaceMembersPanel key={workspace.id} workspace={workspace} projectId={project.id} /> : <p className="text-sm text-muted-foreground">Загружаем пространство…</p>}
+  </OverviewSection>;
 }

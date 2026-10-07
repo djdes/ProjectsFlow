@@ -27,24 +27,21 @@ export class AcceptWorkspaceInvite {
     if (!invite) throw new WorkspaceInviteNotFoundError();
     if (invite.acceptedAt !== null) throw new WorkspaceInviteAlreadyUsedError();
     const now = this.deps.now();
-    if (invite.expiresAt.getTime() < now.getTime()) throw new WorkspaceInviteExpiredError();
+    if (invite.expiresAt.getTime() <= now.getTime()) throw new WorkspaceInviteExpiredError();
 
-    // Уже участник — не апгрейдим/даунгрейдим роль, просто потребляем токен.
-    const existing = await this.deps.workspaces.getMembership(invite.workspaceId, userId);
-    if (!existing) {
-      await this.deps.workspaces.addMember(invite.workspaceId, userId, invite.role);
-    }
+    await this.deps.invites.acceptWithMembership({
+      inviteId: invite.id, acceptedAt: now, acceptedByUserId: userId,
+    });
 
     // Мёржим личный дефолт-хаб юзера в команду при вступлении (durability, "слить, не
     // скрыть"). Вызываем БЕЗУСЛОВНО (идемпотентно, no-op если хаба нет) — чинит и тех, кто
     // вступил до появления этой фичи и всё ещё видит два «Пространства».
-    await this.deps.workspaces.absorbDefaultHubInto(userId, invite.workspaceId);
-
-    await this.deps.invites.markAccepted({
-      inviteId: invite.id,
-      acceptedAt: now,
-      acceptedByUserId: userId,
+    await this.deps.workspaces.absorbDefaultHubInto(userId, invite.workspaceId).catch((error: unknown) => {
+      // Membership is already durable; a housekeeping failure must not turn a used
+      // invitation into an apparent failure for the recipient.
+      console.error('[ws-invite] hub merge failed', error);
     });
+
     return { workspaceId: invite.workspaceId };
   }
 }

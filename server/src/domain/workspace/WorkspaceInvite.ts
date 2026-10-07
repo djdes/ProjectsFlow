@@ -9,6 +9,7 @@ export type WorkspaceInvite = {
   // 32-byte hex (64 char'а). Наружу отдаётся только в момент создания и владельцу.
   readonly token: string;
   readonly email: string | null;
+  readonly excludedProjectIds?: readonly string[];
   readonly expiresAt: Date;
   readonly acceptedAt: Date | null;
   readonly acceptedByUserId: string | null;

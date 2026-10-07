@@ -11,6 +11,20 @@ import {
 const PROJECT_CREATED = new Date('2026-01-01T00:00:00Z');
 const WM_CREATED = new Date('2026-02-02T00:00:00Z');
 
+test('exclusion hides an ordinary member project even when they created it', () => {
+  for (const role of ['editor', 'viewer'] as const) {
+    assert.equal(projectRowVisibility(proj(), 'u-owner', { role }, true), null);
+    assert.equal(deriveMembership(proj(), 'u2', wm('u2', role), true), null);
+  }
+});
+test('managers retain access; exclusion never changes inbox privacy', () => {
+  for (const role of ['owner', 'lead'] as const) {
+    assert.deepEqual(projectRowVisibility(proj(), 'manager', { role }, true), { role });
+    assert.equal(projectRowVisibility(proj({ isInbox: true }), 'manager', { role }, true), null);
+  }
+  assert.deepEqual(projectRowVisibility(proj({ isInbox: true }), 'u-owner', null, true), { role: 'owner' });
+});
+
 function proj(over: Partial<ProjectAccessRow> = {}): ProjectAccessRow {
   return {
     id: 'p1',

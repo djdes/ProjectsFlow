@@ -920,7 +920,7 @@ export function errorHandler(
     return;
   }
   if (err instanceof NotWorkspaceLeadError) {
-    res.status(403).json({ error: 'not_workspace_lead', message: 'Нужны права руководителя пространства' });
+    res.status(403).json({ error: 'not_workspace_lead', message: 'Нужны права владельца или руководителя пространства' });
     return;
   }
   if (err instanceof NotProjectOwnerError) {

@@ -36,11 +36,13 @@ export function projectRowVisibility(
   project: Pick<ProjectAccessRow, 'isInbox' | 'ownerId'>,
   userId: string,
   wsMember: Pick<WorkspaceMemberAccessRow, 'role'> | null,
+  excluded = false,
 ): { readonly role: ProjectRole } | null {
   if (project.isInbox) {
     return project.ownerId === userId ? { role: 'owner' } : null;
   }
   if (!wsMember) return null;
+  if (excluded && wsMember.role !== 'owner' && wsMember.role !== 'lead') return null;
   // Создатель = owner своего проекта поверх ws-роли (editor). Даёт danger zone создателю.
   if (project.ownerId === userId) return { role: 'owner' };
   return { role: wsMember.role };
@@ -55,8 +57,9 @@ export function deriveMembership(
   project: ProjectAccessRow,
   userId: string,
   wsMember: WorkspaceMemberAccessRow | null,
+  excluded = false,
 ): ProjectMembership | null {
-  const vis = projectRowVisibility(project, userId, wsMember);
+  const vis = projectRowVisibility(project, userId, wsMember, excluded);
   if (!vis) return null;
   const joinedAt = wsMember && !project.isInbox ? wsMember.createdAt : project.createdAt;
   return { projectId: project.id, userId, role: vis.role, joinedAt };

@@ -5,6 +5,7 @@ import type {
   WorkspaceRole,
 } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
+import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
 import type {
   SaveWorkspaceAssigneeDigestInput,
   WorkspaceAssigneeDigestGroup,
@@ -27,11 +28,14 @@ export type UpdateWorkspaceInput = {
 };
 
 export type CreateWorkspaceInviteInput = {
+  readonly excludedProjectIds?: readonly string[];
   readonly role: WorkspaceInviteRole;
   readonly email: string | null;
 };
 
 export interface WorkspaceRepository {
+  getProjectAccess(workspaceId: string): Promise<WorkspaceProjectAccess>;
+  setProjectAccess(workspaceId: string, projectId: string, userId: string, visible: boolean): Promise<void>;
   list(): Promise<Workspace[]>;
   create(input: CreateWorkspaceInput): Promise<Workspace>;
   rename(id: string, patch: UpdateWorkspaceInput): Promise<Workspace>;

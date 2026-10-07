@@ -21,7 +21,7 @@ export function renderWorkspaceInviteEmail(input: WorkspaceInviteEmailInput): Em
 
   const text = [
     `${input.actorDisplayName} приглашает вас в пространство «${input.workspaceName}» как ${roleLabel[input.role]}.`,
-    'Вы получите доступ ко всем проектам пространства, включая будущие.',
+    'Вы получите доступ к проектам, выбранным для вас в пространстве. Владелец или руководитель может изменить этот доступ.',
     '',
     `Принять приглашение: ${input.acceptUrl}`,
     '',
@@ -44,7 +44,7 @@ export function renderWorkspaceInviteEmail(input: WorkspaceInviteEmailInput): Em
             <strong style="color:#0f172a;">«${input.workspaceName}»</strong> как <strong>${roleLabel[input.role]}</strong>.
           </p>
           <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#64748b;">
-            Вы получите доступ ко всем проектам пространства, включая будущие.
+            Вы получите доступ к проектам, выбранным для вас в пространстве. Владелец или руководитель может изменить этот доступ.
           </p>
         </td></tr>
         <tr><td style="padding:20px 32px 28px;">
