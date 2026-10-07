@@ -39,7 +39,7 @@ export function ViewableAvatar({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-auto max-w-[92vw] border-0 bg-transparent p-0 shadow-none">
+        <DialogContent mobileSheet={false} className="w-auto max-w-[92vw] border-0 bg-transparent p-0 shadow-none">
           <DialogTitle className="sr-only">Аватар: {displayName}</DialogTitle>
           <DialogDescription className="sr-only">
             Полноразмерный аватар пользователя {displayName}

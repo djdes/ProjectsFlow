@@ -72,7 +72,7 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
     </div>
     {canManage ? <ProjectAccessChecklist projects={projects} hiddenIds={hiddenIds} label="Проекты для приглашённого" disabled={busy} onChange={(id, visible) => setHiddenIds(previous => visible ? previous.filter(item => item !== id) : [...previous, id])} /> : <p className="text-xs leading-relaxed text-muted-foreground">Приглашённому будут доступны те же проекты, что и вам. Изменить доступ может владелец или руководитель.</p>}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <p className="max-w-xs flex-1 text-xs leading-relaxed text-muted-foreground">Отправим письмо и уведомление на сайте. Если Telegram подключён — напишем и туда.</p>
       <Button type="submit" className="shrink-0" disabled={busy || !email.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{busy ? 'Приглашаем…' : 'Пригласить'}</Button>
     </div>

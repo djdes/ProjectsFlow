@@ -560,7 +560,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onUploadImage={uploadImageInline}
                 disabled={saving}
                 autoFocus={!isCoarsePointer}
-                placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — скриншот вставится в текст."
+                placeholder={isCoarsePointer ? 'Что нужно сделать?' : 'Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — скриншот вставится в текст.'}
                 // Симметричные отступы: текст и картинки равно отстоят слева и справа (px-3 у поля).
                 className="min-h-[6rem] text-sm leading-snug"
               />

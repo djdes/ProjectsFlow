@@ -101,6 +101,7 @@ export function ProjectSharePopover({ project, isOwner, compact = false }: Props
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        aria-label="Поделиться проектом"
         align="end"
         sideOffset={8}
         collisionPadding={8}

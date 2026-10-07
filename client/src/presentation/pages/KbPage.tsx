@@ -138,7 +138,7 @@ export function KbPage(): React.ReactElement {
           </div>
           {mainContent}
           <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-            <SheetContent side="left" className="w-72 p-0">
+            <SheetContent side="left" mobileSheet={false} className="w-72 p-0">
               {sidebarContent}
             </SheetContent>
           </Sheet>

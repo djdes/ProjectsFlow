@@ -97,6 +97,7 @@ import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL, ADVANCE_NEXT } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
+import { useMobileSheet } from '@/components/ui/mobile-sheet';
 import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
 import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
@@ -391,6 +392,8 @@ function DrawerShell({
   dragOverlay: React.ReactNode;
   children: React.ReactNode;
 }): React.ReactElement {
+  const mobile = useMobileSheet();
+  const returnFocus = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   if (asPage) {
     return (
       <div
@@ -434,7 +437,10 @@ function DrawerShell({
         // при disable редактора во время отправки коммента FocusScope иначе на миг
         // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
         onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          if (mobile && returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true });
+        }}
         // side-peek: немодально (как в Notion) — остальной сайт кликабелен. Закрываем ТОЛЬКО
         // по pointerdown в ПУСТУЮ область вне окна; клик по кликабельному (кнопка/задача/канбан/
         // открытое меню) — НЕ закрывает, действие срабатывает, окно остаётся. Уход фокуса
@@ -442,7 +448,7 @@ function DrawerShell({
         // фокус в портал меню, и без этого окно ложно закрывалось. center-peek: модально —
         // любой клик мимо закрывает (даём Radix обработать), поэтому фильтр только в side-режиме.
         onPointerDownOutside={
-          isCenter
+          isCenter || mobile
             ? undefined
             : (e) => {
                 if (isInteractiveOutsideTarget(e.detail.originalEvent.target)) e.preventDefault();

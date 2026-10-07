@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import '@/styles/globals.css';
 import '@/styles/motion.css';
+import '@/styles/mobile-sheets.css';
 
 import { ContainerProvider } from '@/infrastructure/di/container';
 import { ThemeProvider } from '@/presentation/components/theme/ThemeProvider';

@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import { HelpAiPanel } from './HelpAiPanel';
 import { HelpSupportPanel } from './HelpSupportPanel';
 import { helpAiContextKey, type HelpAiSession } from './helpAiSession';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { useMobileSheet } from '@/components/ui/mobile-sheet';
 
 type HelpTab = 'ai' | 'support';
 type OpenHelpDetail = {
@@ -50,6 +52,7 @@ export function HelpWidget({
   defaultTab?: HelpTab;
 } = {}): React.ReactElement | null {
   const { animations } = useMotion();
+  const mobile = useMobileSheet();
   const { aiConversationRepository } = useContainer();
   const { pathname } = useLocation();
   const { data: projects } = useProjects();
@@ -91,13 +94,13 @@ export function HelpWidget({
 
   // Esc закрывает панель.
   useEffect(() => {
-    if (!open) return;
+    if (!open || mobile) return;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, mobile]);
 
   const startSession = useCallback(
     async (projectId: string | null, projectName: string | null, fresh = false): Promise<void> => {
@@ -152,28 +155,23 @@ export function HelpWidget({
   const fabTransition = animations
     ? { type: 'spring' as const, stiffness: 420, damping: 28 }
     : { duration: 0 };
-  const panelTransition = animations
-    ? { type: 'spring' as const, stiffness: 320, damping: 34 }
-    : { duration: 0 };
 
   const isAi = tab === 'ai';
 
   return createPortal(
     <>
-      <AnimatePresence>
-        {open && (
-          <motion.aside
-            key="panel"
-            role="dialog"
-            aria-label="ИИ и поддержка"
-            initial={animations ? { x: '100%' } : false}
-            animate={{ x: 0 }}
-            exit={animations ? { x: '100%' } : { opacity: 0 }}
-            transition={panelTransition}
+      <Sheet open={open} onOpenChange={setOpen} modal={false}>
+          <SheetContent
+            side="right"
+            showClose={false}
+            onPointerDownOutside={mobile ? undefined : (event) => event.preventDefault()}
+            onFocusOutside={(event) => event.preventDefault()}
             // Панель немодальная: интерфейс слева остаётся кликабельным, страница не
             // сужается. Встык к краю окна — без скругления и тени, только разделитель.
-            className="fixed inset-y-0 right-0 z-40 flex w-full flex-col overflow-hidden border-l bg-card pt-[env(safe-area-inset-top)] sm:w-[360px]"
+            className="flex w-full flex-col overflow-hidden border-l bg-card p-0 shadow-none sm:max-w-[360px]"
           >
+            <SheetTitle className="sr-only">ИИ и поддержка</SheetTitle>
+            <SheetDescription className="sr-only">Помощник проекта и обращение в поддержку</SheetDescription>
             <header className="flex shrink-0 items-center gap-2 border-b px-2.5 py-2">
               <div role="tablist" className="flex min-w-0 flex-1 rounded-xl bg-muted p-1">
                 {TABS.map((t) => {
@@ -243,9 +241,8 @@ export function HelpWidget({
             ) : (
               <HelpSupportPanel initialMessage={supportPrefill} />
             )}
-          </motion.aside>
-        )}
-      </AnimatePresence>
+          </SheetContent>
+      </Sheet>
 
       {/* FAB — показываем, когда панель закрыта. На мобиле поднят над таб-баром. */}
       <AnimatePresence>

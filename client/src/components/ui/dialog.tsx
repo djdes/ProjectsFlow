@@ -2,6 +2,11 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  MobileSheetHandle,
+  useMobileSheet,
+  useMobileSheetSurface,
+} from './mobile-sheet';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -11,7 +16,9 @@ export const DialogClose = DialogPrimitive.Close;
 export function DialogOverlay({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Overlay
+>): React.ReactElement {
   return (
     <DialogPrimitive.Overlay
       className={cn(
@@ -30,6 +37,7 @@ export function DialogContent({
   children,
   overlayClassName,
   hideClose,
+  mobileSheet = true,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   // По умолчанию overlay прозрачный. Отдельные тяжёлые окна (например, история версий)
@@ -38,11 +46,19 @@ export function DialogContent({
   // Окна со своей шапкой (лайтбоксы превью) рисуют кнопку закрытия сами, в ряду заголовка.
   // Встроенная абсолютная «×» ложилась поверх неё — пользователь видел двойной крестик.
   hideClose?: boolean;
+  mobileSheet?: boolean;
 }): React.ReactElement {
+  const mobile = useMobileSheet(mobileSheet);
+  const { ref: surfaceRef, closeRef } = useMobileSheetSurface(mobile);
   return (
     <DialogPortal>
-      <DialogOverlay className={overlayClassName} />
+      <DialogOverlay
+        className={overlayClassName}
+        data-pf-mobile-backdrop={mobile || undefined}
+      />
       <DialogPrimitive.Content
+        ref={surfaceRef}
+        data-pf-mobile-sheet={mobile || undefined}
         data-pf-motion-surface="dialog"
         className={cn(
           // Mobile: прижат к низу экрана (bottom-sheet), безопасен для клавиатуры.
@@ -52,11 +68,19 @@ export function DialogContent({
         )}
         {...props}
       >
+        {mobile && (
+          <DialogPrimitive.Close asChild>
+            <MobileSheetHandle ref={closeRef} />
+          </DialogPrimitive.Close>
+        )}
         {children}
         {!hideClose && (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
+          <DialogPrimitive.Close
+            data-pf-window-close=""
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+          >
             <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Закрыть</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -70,7 +94,10 @@ export function DialogHeader({
 }: React.HTMLAttributes<HTMLDivElement>): React.ReactElement {
   return (
     <div
-      className={cn('flex flex-col space-y-1.5 text-center sm:text-left', className)}
+      className={cn(
+        'flex flex-col space-y-1.5 text-left max-md:pr-8',
+        className,
+      )}
       {...props}
     />
   );
@@ -94,10 +121,15 @@ export function DialogFooter({
 export function DialogTitle({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Title
+>): React.ReactElement {
   return (
     <DialogPrimitive.Title
-      className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+      className={cn(
+        'text-lg font-semibold leading-none tracking-tight',
+        className,
+      )}
       {...props}
     />
   );
@@ -106,7 +138,9 @@ export function DialogTitle({
 export function DialogDescription({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Description
+>): React.ReactElement {
   return (
     <DialogPrimitive.Description
       className={cn('text-sm text-muted-foreground', className)}

@@ -2,8 +2,43 @@ import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  MobileSheetHandle,
+  useMobileSheet,
+  useMobileSheetSurface,
+} from './mobile-sheet';
 
-export const DropdownMenu = DropdownMenuPrimitive.Root;
+const MobileMenuContext = React.createContext<{
+  mobile: boolean;
+  close: () => void;
+}>({ mobile: false, close: () => {} });
+export function DropdownMenu({
+  open,
+  defaultOpen = false,
+  onOpenChange,
+  mobileSheet = true,
+  modal = true,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root> & {
+  mobileSheet?: boolean;
+}): React.ReactElement {
+  const mobile = useMobileSheet(mobileSheet);
+  const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
+  const change = (next: boolean): void => {
+    if (open === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
+  return (
+    <MobileMenuContext.Provider value={{ mobile, close: () => change(false) }}>
+      <DropdownMenuPrimitive.Root
+        {...props}
+        modal={mobile || modal}
+        open={open ?? internalOpen}
+        onOpenChange={change}
+      />
+    </MobileMenuContext.Provider>
+  );
+}
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
@@ -38,7 +73,9 @@ export function DropdownMenuSubTrigger({
 export function DropdownMenuSubContent({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.SubContent
+>): React.ReactElement {
   return (
     <DropdownMenuPrimitive.SubContent
       data-pf-motion-surface="menu"
@@ -55,21 +92,53 @@ export function DropdownMenuContent({
   className,
   sideOffset = 8,
   collisionPadding = 12,
+  children,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.Content
+>): React.ReactElement {
+  const { mobile, close } = React.useContext(MobileMenuContext);
+  const { ref: surfaceRef, closeRef } = useMobileSheetSurface(mobile);
   return (
-    <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.Content
-        data-pf-motion-surface="menu"
-        sideOffset={sideOffset}
-        collisionPadding={collisionPadding}
-        className={cn(
-          'z-50 max-h-[calc(100dvh-1.5rem)] min-w-[8rem] overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 motion-reduce:animate-none',
-          className,
-        )}
-        {...props}
-      />
-    </DropdownMenuPrimitive.Portal>
+    <>
+      {mobile && (
+        <DropdownMenuPrimitive.Portal>
+          <div
+            aria-hidden="true"
+            data-pf-mobile-backdrop="true"
+            onClick={close}
+          />
+        </DropdownMenuPrimitive.Portal>
+      )}
+      <DropdownMenuPrimitive.Portal>
+        <DropdownMenuPrimitive.Content
+          ref={surfaceRef}
+          data-pf-mobile-sheet={mobile || undefined}
+          data-pf-motion-surface="menu"
+          sideOffset={sideOffset}
+          collisionPadding={collisionPadding}
+          className={cn(
+            'z-50 max-h-[calc(100dvh-1.5rem)] min-w-[8rem] overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 motion-reduce:animate-none',
+            className,
+          )}
+          {...props}
+        >
+          {mobile && (
+            <MobileSheetHandle
+              ref={closeRef}
+              onClick={close}
+              tabIndex={-1}
+              role="menuitem"
+            />
+          )}
+          {mobile ? (
+            <div className="pf-mobile-sheet-scroll">{children}</div>
+          ) : (
+            children
+          )}
+        </DropdownMenuPrimitive.Content>
+      </DropdownMenuPrimitive.Portal>
+    </>
   );
 }
 
@@ -96,7 +165,9 @@ export function DropdownMenuRadioItem({
   className,
   children,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.RadioItem
+>): React.ReactElement {
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
@@ -120,7 +191,9 @@ export function DropdownMenuCheckboxItem({
   children,
   checked,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.CheckboxItem
+>): React.ReactElement {
   return (
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
@@ -149,7 +222,11 @@ export function DropdownMenuLabel({
 }): React.ReactElement {
   return (
     <DropdownMenuPrimitive.Label
-      className={cn('px-2 py-1.5 text-sm font-semibold', inset && 'pl-8', className)}
+      className={cn(
+        'px-2 py-1.5 text-sm font-semibold',
+        inset && 'pl-8',
+        className,
+      )}
       {...props}
     />
   );
@@ -158,7 +235,9 @@ export function DropdownMenuLabel({
 export function DropdownMenuSeparator({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.Separator
+>): React.ReactElement {
   return (
     <DropdownMenuPrimitive.Separator
       className={cn('-mx-1 my-1 h-px bg-muted', className)}
@@ -172,6 +251,9 @@ export function DropdownMenuShortcut({
   ...props
 }: React.HTMLAttributes<HTMLSpanElement>): React.ReactElement {
   return (
-    <span className={cn('ml-auto text-xs tracking-widest opacity-60', className)} {...props} />
+    <span
+      className={cn('ml-auto text-xs tracking-widest opacity-60', className)}
+      {...props}
+    />
   );
 }

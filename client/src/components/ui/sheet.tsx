@@ -3,8 +3,21 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  MobileSheetHandle,
+  useMobileSheet,
+  useMobileSheetSurface,
+} from './mobile-sheet';
 
-export const Sheet = DialogPrimitive.Root;
+export function Sheet({
+  modal = true,
+  ...props
+}: React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Root
+>): React.ReactElement {
+  const mobile = useMobileSheet();
+  return <DialogPrimitive.Root {...props} modal={mobile || modal} />;
+}
 export const SheetTrigger = DialogPrimitive.Trigger;
 export const SheetClose = DialogPrimitive.Close;
 export const SheetPortal = DialogPrimitive.Portal;
@@ -56,31 +69,60 @@ const sheetVariants = cva(
 );
 
 export interface SheetContentProps
-  extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
+  extends
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   // По умолчанию рисуем встроенный крестик. Если у контента своя кнопка закрытия
   // (напр. в собственной шапке) — передай showClose={false}, чтобы не было двух крестиков.
   showClose?: boolean;
   // dimmed: затемняющий фон + клик мимо закрывает (модальный center-peek).
   dimmed?: boolean;
+  mobileSheet?: boolean;
 }
 
 export const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
 >(function SheetContent(
-  { side = 'right', className, children, showClose = true, dimmed = false, ...props },
+  {
+    side = 'right',
+    className,
+    children,
+    showClose = true,
+    dimmed = false,
+    mobileSheet = true,
+    ...props
+  },
   ref,
 ) {
+  const mobile = useMobileSheet(mobileSheet);
+  const { ref: surfaceRef, closeRef } = useMobileSheetSurface(mobile, ref);
   return (
     <SheetPortal>
-      <SheetOverlay dimmed={dimmed} />
-      <DialogPrimitive.Content data-pf-motion-surface="sheet" ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+      <SheetOverlay
+        dimmed={dimmed}
+        data-pf-mobile-backdrop={mobile || undefined}
+      />
+      <DialogPrimitive.Content
+        data-pf-motion-surface="sheet"
+        data-pf-mobile-sheet={mobile || undefined}
+        ref={surfaceRef}
+        className={cn(sheetVariants({ side }), className)}
+        {...props}
+      >
+        {mobile && (
+          <DialogPrimitive.Close asChild>
+            <MobileSheetHandle ref={closeRef} />
+          </DialogPrimitive.Close>
+        )}
         {children}
         {showClose && (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
+          <DialogPrimitive.Close
+            data-pf-window-close=""
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+          >
             <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Закрыть</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -93,14 +135,22 @@ export function SheetHeader({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>): React.ReactElement {
   return (
-    <div className={cn('flex flex-col space-y-2 text-center sm:text-left', className)} {...props} />
+    <div
+      className={cn(
+        'flex flex-col space-y-2 text-center sm:text-left',
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
 export function SheetTitle({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Title
+>): React.ReactElement {
   return (
     <DialogPrimitive.Title
       className={cn('text-lg font-semibold text-foreground', className)}
@@ -112,7 +162,9 @@ export function SheetTitle({
 export function SheetDescription({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Description
+>): React.ReactElement {
   return (
     <DialogPrimitive.Description
       className={cn('text-sm text-muted-foreground', className)}

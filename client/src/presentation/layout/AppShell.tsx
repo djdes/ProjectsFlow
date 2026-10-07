@@ -424,6 +424,7 @@ export function AppShell(): React.ReactElement {
             <MobileBottomNav />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent
+                mobileSheet={false}
                 side="left"
                 showClose={false}
                 data-pf-drawer-content

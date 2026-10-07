@@ -1,5 +1,7 @@
 import { ProjectViewSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { useMobileSheet } from '@/components/ui/mobile-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -1466,6 +1468,7 @@ function BoardSidePanel({
   onClose: () => void;
   children: React.ReactNode;
 }): React.ReactElement | null {
+  const mobile = useMobileSheet();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [panelScrolled, setPanelScrolled] = useState(false);
   const triggerRef = useRef<HTMLElement | null>(
@@ -1483,6 +1486,7 @@ function BoardSidePanel({
   // Escape закрывает верхний слой; на tablet/mobile Tab остаётся внутри полноэкранной панели.
   useEffect(() => {
     const trigger = triggerRef.current;
+    if (mobile) return;
     const focusTimer = window.setTimeout(() => {
       const panel = panelRef.current;
       const firstControl =
@@ -1524,7 +1528,16 @@ function BoardSidePanel({
       window.removeEventListener('keydown', onKey);
       requestAnimationFrame(() => trigger?.isConnected && trigger.focus());
     };
-  }, [onClose]);
+  }, [onClose, mobile]);
+  if (mobile) return (
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent showClose={false} className="flex h-[88dvh] flex-col overflow-hidden p-0" onCloseAutoFocus={(event) => { event.preventDefault(); triggerRef.current?.focus(); }}>
+        <SheetTitle className="sr-only">Настройки отображения</SheetTitle>
+        <SheetDescription className="sr-only">Вид, группировка и фильтры задач</SheetDescription>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+      </SheetContent>
+    </Sheet>
+  );
   if (typeof document === 'undefined' || !pos) return null;
   return (
     <div
