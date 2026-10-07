@@ -6,6 +6,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { workspacesRouter } from './routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
+import { ManageWorkspaceInvite } from '../../application/workspace/ManageWorkspaceInvite.js';
 import { CreateWorkspaceInvite } from '../../application/workspace/CreateWorkspaceInvite.js';
 import { ListWorkspaceInvites } from '../../application/workspace/ListWorkspaceInvites.js';
 import { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
@@ -106,9 +107,29 @@ function makeInviteRepo(): { repo: WorkspaceInviteRepository; store: Map<string,
   const store = new Map<string, WorkspaceInvite>();
   const repo: WorkspaceInviteRepository = {
     async acceptWithMembership() { throw new Error('not used'); },
+    async claimDelivery(now) {
+      const row = [...store.values()].find(i => i.deliveryNextAttemptAt && i.deliveryNextAttemptAt <= now && !i.deliveryLockedAt && !i.acceptedAt);
+      if (!row) return null;
+      const claimed = { ...row, deliveryLockedAt: now, lastSentAt: now, deliveryAttempts: (row.deliveryAttempts ?? 0) + 1 };
+      store.set(row.id, claimed); return claimed;
+    },
+    async finishDelivery(id, _claimedAt, delivery, nextAttemptAt) {
+      const row = store.get(id); if (row) store.set(id, { ...row, delivery, deliveryNextAttemptAt: nextAttemptAt, deliveryLockedAt: null });
+    },
+    async rescheduleDelivery(id, now, expiresAt) {
+      const row = store.get(id);
+      if (!row || row.acceptedAt || (row.lastSentAt && now.getTime() - row.lastSentAt.getTime() < 60_000)) return null;
+      const updated = { ...row, expiresAt, lastSentAt: now, delivery: { email: 'queued' as const, site: 'queued' as const, telegram: 'queued' as const }, deliveryAttempts: 0, deliveryNextAttemptAt: now, deliveryLockedAt: null };
+      store.set(id, updated); return updated;
+    },
     async create(input) {
+      const existing = input.email && [...store.values()].find(i => !i.acceptedAt && i.workspaceId === input.workspaceId && i.email?.toLowerCase() === input.email?.toLowerCase());
+      if (existing) return existing;
+
       const invite: WorkspaceInvite = {
         ...input,
+        delivery: input.email ? { email: 'queued', site: 'queued', telegram: 'queued' } : null,
+        deliveryNextAttemptAt: input.email ? input.queuedAt ?? NOW : null,
         acceptedAt: null,
         acceptedByUserId: null,
         createdAt: NOW,
@@ -125,7 +146,7 @@ function makeInviteRepo(): { repo: WorkspaceInviteRepository; store: Map<string,
     },
     async listPendingByWorkspace(workspaceId, now) {
       return [...store.values()].filter(
-        (i) => i.workspaceId === workspaceId && i.acceptedAt === null && i.expiresAt > now,
+        (i) => i.workspaceId === workspaceId && i.acceptedAt === null,
       );
     },
     async markAccepted(input) {
@@ -178,14 +199,12 @@ function buildApp(seed: Seed) {
       workspaces: repo,
       invites: inviteRepo,
       users: { async getById() { return { displayName: 'Актор' }; }, async getByEmail() { return null; } },
-      notifications: { async create() {} },
-      email: { async send() {} },
       idGen: () => `invite-${++inviteSeq}`,
       randomToken: () => `token-${inviteSeq}`,
       now: () => NOW,
       ttlMs: 7 * 24 * 60 * 60 * 1000,
-      appUrl: 'https://app.test',
     }),
+    manage: new ManageWorkspaceInvite({ workspaces: repo, invites: inviteRepo, now: () => NOW, ttlMs: 7 * 86400000, appUrl: 'https://app.test' }),
     list: new ListWorkspaceInvites({ workspaces: repo, invites: inviteRepo, now: () => NOW }),
     delete: new DeleteWorkspaceInvite({ workspaces: repo, invites: inviteRepo }),
   };
@@ -244,9 +263,14 @@ test('POST /:id/invites — полная форма DTO с token+url тольк�
         'acceptedByUserId',
         'createdAt',
         'createdByUserId',
+        'delivery',
+        'deliveryNextAttemptAt',
         'email',
+        'excludedProjectIds',
         'expiresAt',
         'id',
+        'lastSentAt',
+        'reused',
         'role',
         'token',
         'url',
@@ -433,3 +457,42 @@ for (const role of ['owner', 'lead', 'editor']) {
     });
   });
 }
+
+
+test('invitation list survives a second request; duplicates reuse the token and access', async () => {
+  await withServer({ workspaces: [{ id: 'w1', ownerUserId: 'owner1' }], members: [{ workspaceId: 'w1', userId: 'owner1', role: 'owner' }] }, async base => {
+    const headers = { 'content-type': 'application/json', 'x-test-user': 'owner1' };
+    const create = () => fetch(`${base}/api/workspaces/w1/invites`, { method: 'POST', headers, body: JSON.stringify({ email: 'friend@test.dev', role: 'editor' }) });
+    const first = await (await create()).json() as { invite: { id: string } };
+    const duplicate = await create(); assert.equal(duplicate.status, 200);
+    const repeated = await duplicate.json() as { invite: { id: string; reused: boolean } };
+    assert.equal(repeated.invite.id, first.invite.id); assert.equal(repeated.invite.reused, true);
+    const list = await (await fetch(`${base}/api/workspaces/w1/invites`, { headers })).json() as { invites: unknown[] };
+    assert.equal(list.invites.length, 1);
+    const link = await fetch(`${base}/api/workspaces/w1/invites/${first.invite.id}/link`, { headers });
+    assert.equal(link.status, 200); assert.match((await link.json() as { url: string }).url, /^https:\/\/app.test\/invite\//);
+    const resend = await fetch(`${base}/api/workspaces/w1/invites/${first.invite.id}/resend`, { method: 'POST', headers });
+    assert.equal(resend.status, 200);
+    const cooldown = await fetch(`${base}/api/workspaces/w1/invites/${first.invite.id}/resend`, { method: 'POST', headers });
+    assert.equal(cooldown.status, 429); assert.equal(cooldown.headers.get('retry-after'), '60');
+  });
+});
+
+test('invite token actions enforce creator/lead access and workspace scope', async () => {
+  await withServer({ workspaces: [{ id: 'w1', ownerUserId: 'owner1' }, { id: 'w2', ownerUserId: 'owner1' }], members: [
+    { workspaceId: 'w1', userId: 'owner1', role: 'owner' }, { workspaceId: 'w2', userId: 'owner1', role: 'owner' },
+    { workspaceId: 'w1', userId: 'editor1', role: 'editor' }, { workspaceId: 'w1', userId: 'lead1', role: 'lead' },
+  ] }, async base => {
+    const result = await fetch(`${base}/api/workspaces/w1/invites`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': 'owner1' }, body: JSON.stringify({ email: 'friend@test.dev', role: 'editor' }) });
+    const { invite } = await result.json() as { invite: { id: string } };
+    for (const action of ['link', 'resend']) {
+      const method = action === 'link' ? 'GET' : 'POST';
+      assert.equal((await fetch(`${base}/api/workspaces/w1/invites/${invite.id}/${action}`, { method, headers: { 'x-test-user': 'editor1' } })).status, 403);
+      assert.equal((await fetch(`${base}/api/workspaces/w2/invites/${invite.id}/${action}`, { method, headers: { 'x-test-user': 'owner1' } })).status, 404);
+    }
+    assert.equal((await fetch(`${base}/api/workspaces/w1/invites/${invite.id}/link`, { headers: { 'x-test-user': 'lead1' } })).status, 200);
+    const repeated = await fetch(`${base}/api/workspaces/w1/invites`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': 'editor1' }, body: JSON.stringify({ email: 'friend@test.dev', role: 'editor' }) });
+    const body = await repeated.json() as { invite: Record<string, unknown> };
+    assert.equal('token' in body.invite, false); assert.equal('url' in body.invite, false);
+  });
+});

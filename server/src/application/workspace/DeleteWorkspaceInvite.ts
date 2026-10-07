@@ -1,4 +1,4 @@
-import { WorkspaceInviteNotFoundError } from '../../domain/workspace/errors.js';
+import { WorkspaceInviteNotFoundError, NotWorkspaceLeadError } from '../../domain/workspace/errors.js';
 import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
 import { requireWorkspaceEditor } from './workspaceAccess.js';
 import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
@@ -17,10 +17,11 @@ export class DeleteWorkspaceInvite {
 
   // Idempotent cleanup: использованный invite тоже можно удалить.
   async execute(workspaceId: string, actorUserId: string, inviteId: string): Promise<void> {
-    await requireWorkspaceEditor(this.deps.workspaces, workspaceId, actorUserId);
+    const actor = await requireWorkspaceEditor(this.deps.workspaces, workspaceId, actorUserId);
 
     const invite = await this.deps.invites.getById(inviteId);
     if (!invite || invite.workspaceId !== workspaceId) throw new WorkspaceInviteNotFoundError();
+    if (actor.role === 'editor' && invite.createdByUserId !== actorUserId) throw new NotWorkspaceLeadError();
 
     await this.deps.invites.delete(inviteId);
   }

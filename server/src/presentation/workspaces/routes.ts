@@ -9,6 +9,7 @@ import type {
 import type { WorkspaceListItem } from '../../application/workspace/WorkspaceRepository.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import type { WorkspaceInvite } from '../../domain/workspace/WorkspaceInvite.js';
+import type { ManageWorkspaceInvite } from '../../application/workspace/ManageWorkspaceInvite.js';
 import type { CreateWorkspaceInvite } from '../../application/workspace/CreateWorkspaceInvite.js';
 import type { ListWorkspaceInvites } from '../../application/workspace/ListWorkspaceInvites.js';
 import type { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
@@ -121,6 +122,11 @@ type WorkspaceInviteDto = {
   createdAt: string;
   token?: string;
   url?: string;
+  excludedProjectIds: readonly string[];
+  delivery: WorkspaceInvite['delivery'];
+  deliveryNextAttemptAt: string | null;
+  lastSentAt: string | null;
+  reused?: boolean;
 };
 
 function inviteToDto(
@@ -137,6 +143,10 @@ function inviteToDto(
     acceptedByUserId: i.acceptedByUserId,
     createdByUserId: i.createdByUserId,
     createdAt: i.createdAt.toISOString(),
+    excludedProjectIds: i.excludedProjectIds ?? [],
+    delivery: i.delivery ?? null,
+    deliveryNextAttemptAt: i.deliveryNextAttemptAt?.toISOString() ?? null,
+    lastSentAt: i.lastSentAt?.toISOString() ?? null,
   };
   if (opts?.includeToken) {
     dto.token = i.token;
@@ -150,6 +160,7 @@ type Deps = {
   readonly projectAccess?: ManageWorkspaceProjectAccess;
   readonly invites: {
     readonly create: CreateWorkspaceInvite;
+    readonly manage: ManageWorkspaceInvite;
     readonly list: ListWorkspaceInvites;
     readonly delete: DeleteWorkspaceInvite;
   };
@@ -507,7 +518,7 @@ export function workspacesRouter(deps: Deps): Router {
     }
   });
 
-  // GET /api/workspaces/:id/invites — pending-инвайты (owner/editor). Token не отдаём.
+  // GET /api/workspaces/:id/invites — непринятые приглашения, включая истёкшие. Без token.
   router.get('/:id/invites', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const list = await deps.invites.list.execute(req.params.id as string, req.user!.id);
@@ -517,23 +528,37 @@ export function workspacesRouter(deps: Deps): Router {
     }
   });
 
-  // POST /api/workspaces/:id/invites — создать invite; token+url только в этом ответе.
+  // POST /api/workspaces/:id/invites — создать или вернуть существующее приглашение.
   router.post('/:id/invites', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = createWorkspaceInviteSchema.parse(req.body);
-      const { invite } = await deps.invites.create.execute({
+      const { invite, reused, canShare } = await deps.invites.create.execute({
         workspaceId: req.params.id as string,
         actorUserId: req.user!.id,
         role: body.role,
         email: body.email,
         excludedProjectIds: body.excludedProjectIds,
       });
-      res.status(201).json({
-        invite: inviteToDto(invite, { includeToken: true, appUrl: deps.appUrl }),
+      res.status(reused ? 200 : 201).json({
+        invite: { ...inviteToDto(invite, { includeToken: canShare, appUrl: deps.appUrl }), reused },
       });
     } catch (e) {
       next(e);
     }
+  });
+
+  // Token доступен только тем, кто вправе управлять этим приглашением.
+  router.get('/:id/invites/:inviteId/link', async (req, res, next) => {
+    try {
+      const url = await deps.invites.manage.link(req.params.id, req.user!.id, req.params.inviteId);
+      res.json({ url });
+    } catch (error) { next(error); }
+  });
+  router.post('/:id/invites/:inviteId/resend', async (req, res, next) => {
+    try {
+      const invite = await deps.invites.manage.resend(req.params.id, req.user!.id, req.params.inviteId);
+      res.json({ invite: inviteToDto(invite) });
+    } catch (error) { next(error); }
   });
 
   // DELETE /api/workspaces/:id/invites/:inviteId — отозвать invite.

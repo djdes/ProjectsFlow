@@ -56,6 +56,11 @@ function normalizeRole(role: string | undefined): WorkspaceRole {
 }
 
 type WorkspaceInviteDto = {
+  excludedProjectIds?: readonly string[];
+  delivery?: WorkspaceInvite['delivery'];
+  deliveryNextAttemptAt?: string | null;
+  lastSentAt?: string | null;
+  reused?: boolean;
   id: string;
   workspaceId: string;
   role: WorkspaceInviteRole;
@@ -75,6 +80,8 @@ function inviteFromDto(dto: WorkspaceInviteDto): WorkspaceInvite {
     expiresAt: new Date(dto.expiresAt),
     acceptedAt: dto.acceptedAt ? new Date(dto.acceptedAt) : null,
     createdAt: new Date(dto.createdAt),
+    deliveryNextAttemptAt: dto.deliveryNextAttemptAt ? new Date(dto.deliveryNextAttemptAt) : null,
+    lastSentAt: dto.lastSentAt ? new Date(dto.lastSentAt) : null,
   };
 }
 
@@ -193,6 +200,16 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
       `/workspaces/${workspaceId}/invites`,
     );
     return invites.map(inviteFromDto);
+  }
+
+  async resendInvite(workspaceId: string, inviteId: string): Promise<WorkspaceInvite> {
+    const { invite } = await httpClient.post<{ invite: WorkspaceInviteDto }>(`/workspaces/${workspaceId}/invites/${inviteId}/resend`, {});
+    return inviteFromDto(invite);
+  }
+
+  async getInviteLink(workspaceId: string, inviteId: string): Promise<string> {
+    const { url } = await httpClient.get<{ url: string }>(`/workspaces/${workspaceId}/invites/${inviteId}/link`);
+    return url;
   }
 
   async createInvite(

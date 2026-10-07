@@ -1,5 +1,7 @@
 import type { EmailMessage } from '../EmailSender.js';
 
+const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
 const roleLabel: Record<'editor' | 'viewer', string> = {
   editor: 'редактор',
   viewer: 'наблюдатель',
@@ -40,20 +42,20 @@ export function renderWorkspaceInviteEmail(input: WorkspaceInviteEmailInput): Em
         <tr><td style="padding:8px 32px 0;">
           <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#0f172a;">Приглашение в пространство</h1>
           <p style="margin:0 0 8px;font-size:15px;line-height:1.5;color:#334155;">
-            <strong style="color:#0f172a;">${input.actorDisplayName}</strong> приглашает вас присоединиться к пространству
-            <strong style="color:#0f172a;">«${input.workspaceName}»</strong> как <strong>${roleLabel[input.role]}</strong>.
+            <strong style="color:#0f172a;">${escapeHtml(input.actorDisplayName)}</strong> приглашает вас присоединиться к пространству
+            <strong style="color:#0f172a;">«${escapeHtml(input.workspaceName)}»</strong> как <strong>${roleLabel[input.role]}</strong>.
           </p>
           <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#64748b;">
             Вы получите доступ к проектам, выбранным для вас в пространстве. Владелец или руководитель может изменить этот доступ.
           </p>
         </td></tr>
         <tr><td style="padding:20px 32px 28px;">
-          <a href="${input.acceptUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 28px;border-radius:8px;">
+          <a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 28px;border-radius:8px;">
             Принять приглашение
           </a>
           <p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;">
             Кнопка не работает? Откройте ссылку вручную:<br/>
-            <a href="${input.acceptUrl}" style="color:#2563eb;word-break:break-all;">${input.acceptUrl}</a>
+            <a href="${escapeHtml(input.acceptUrl)}" style="color:#2563eb;word-break:break-all;">${escapeHtml(input.acceptUrl)}</a>
           </p>
         </td></tr>
         <tr><td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">

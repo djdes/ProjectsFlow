@@ -24,6 +24,9 @@ export class SmtpEmailSender implements EmailSender {
       host: config.host,
       port: config.port,
       secure: config.secure,
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 30_000,
       // Для 587 (secure=false) форсим STARTTLS — иначе письмо могло бы уйти в открытую.
       requireTLS: !config.secure,
       auth: { user: config.user, pass: config.password },

@@ -108,7 +108,7 @@ export function ProjectSharePopover({ project, isOwner, compact = false }: Props
       >
         {/* Табы: Участники (пригласить в пространство) · Публичная доска (показать без входа) ·
             Сайт проекта (результат). */}
-        <div className="flex items-center gap-3 overflow-x-auto border-b px-4 pt-2.5" role="tablist" aria-label="Поделиться проектом">
+        <div className="sticky top-0 z-10 flex items-center gap-3 overflow-x-auto overflow-y-hidden border-b bg-popover px-4 pt-2.5" role="tablist" aria-label="Поделиться проектом">
           {(['share', 'board', 'site'] as const).map((t) => (
             <button
               key={t}

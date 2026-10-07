@@ -81,6 +81,7 @@ import type { RequestProjectJoin } from '../application/project/RequestProjectJo
 import type { ResolveProjectJoinRequest } from '../application/project/ResolveProjectJoinRequest.js';
 import type { GetInviteByToken } from '../application/project/GetInviteByToken.js';
 import type { AcceptProjectInvite } from '../application/project/AcceptProjectInvite.js';
+import type { ManageWorkspaceInvite } from '../application/workspace/ManageWorkspaceInvite.js';
 import type { CreateWorkspaceInvite } from '../application/workspace/CreateWorkspaceInvite.js';
 import type { ListWorkspaceInvites } from '../application/workspace/ListWorkspaceInvites.js';
 import type { DeleteWorkspaceInvite } from '../application/workspace/DeleteWorkspaceInvite.js';
@@ -465,6 +466,7 @@ type AppDeps = {
     readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
     readonly invites: {
       readonly create: CreateWorkspaceInvite;
+    readonly manage: ManageWorkspaceInvite;
       readonly list: ListWorkspaceInvites;
       readonly delete: DeleteWorkspaceInvite;
     };

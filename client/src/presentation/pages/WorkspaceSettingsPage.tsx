@@ -41,10 +41,8 @@ import {
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import {
-  WORKSPACE_ROLE_LABEL,
   type WorkspaceCommitSyncMode,
 } from '@/domain/workspace/Workspace';
-import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import type {
   WorkspaceAssigneeDigestGroup,
   WorkspaceAssigneeDigestMember,
@@ -163,7 +161,6 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         workspaceId={workspace.id}
         canManage={isOwner || workspace.role === 'lead'}
       />
-      {workspace.role !== 'viewer' && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
         <DangerZoneCard
@@ -1524,81 +1521,6 @@ function DangerZoneCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
-  );
-}
-
-function InvitesCard({ workspaceId }: { workspaceId: string }): React.ReactElement {
-  const { workspaceRepository } = useContainer();
-  const [invites, setInvites] = useState<WorkspaceInvite[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = (): void => { workspaceRepository
-      .listInvites(workspaceId)
-      .then((list) => {
-        if (!cancelled) setInvites(list);
-      })
-      .catch(() => {
-        if (!cancelled) setInvites([]);
-      }); };
-    load();
-    window.addEventListener('pf:workspace-invites-changed', load);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('pf:workspace-invites-changed', load);
-    };
-  }, [workspaceRepository, workspaceId]);
-
-  const revoke = async (invite: WorkspaceInvite): Promise<void> => {
-    if (!window.confirm('Отозвать приглашение?')) return;
-    try {
-      await workspaceRepository.deleteInvite(workspaceId, invite.id);
-      setInvites((prev) => (prev ?? []).filter((i) => i.id !== invite.id));
-      toast.success('Приглашение отозвано');
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Приглашения</CardTitle>
-        <CardDescription>
-          Приглашения в пространство. Выбранный доступ к проектам применяется после входа. Срок действия — 7 дней.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {invites === null && <p className="text-xs text-muted-foreground">Загружаем приглашения…</p>}
-        {invites?.length === 0 && <p className="text-xs text-muted-foreground">Нет ожидающих приглашений. Нового участника можно пригласить в блоке выше.</p>}
-        {invites !== null && invites.length > 0 && (
-          <ul className="divide-y">
-            {invites.map((inv) => (
-              <li key={inv.id} className="flex items-center gap-3 py-2">
-                <div className="min-w-0 flex-1 text-sm">
-                  <p className="truncate">
-                    {inv.email ?? <span className="italic text-muted-foreground">без email</span>}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {WORKSPACE_ROLE_LABEL[inv.role]} · истекает{' '}
-                    {inv.expiresAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-destructive hover:text-destructive"
-                  onClick={() => void revoke(inv)}
-                  aria-label="Отозвать"
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
     </Card>
   );
 }

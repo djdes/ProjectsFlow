@@ -2,6 +2,7 @@
 // Mirrors server/src/domain/workspace/WorkspaceInvite.ts.
 
 export type WorkspaceInviteRole = 'editor' | 'viewer';
+export type InviteDeliveryStatus = 'queued' | 'sent' | 'failed' | 'not_registered' | 'not_connected' | 'unavailable';
 
 export type WorkspaceInvite = {
   readonly id: string;
@@ -14,6 +15,11 @@ export type WorkspaceInvite = {
   readonly acceptedByUserId: string | null;
   readonly createdByUserId: string;
   readonly createdAt: Date;
+  readonly excludedProjectIds?: readonly string[];
+  readonly delivery?: Partial<Record<'email' | 'site' | 'telegram', InviteDeliveryStatus>> | null;
+  readonly deliveryNextAttemptAt?: Date | null;
+  readonly lastSentAt?: Date | null;
+  readonly reused?: boolean;
   // token и url есть только в ответе на create, в листинге их нет.
   readonly token?: string;
   readonly url?: string;

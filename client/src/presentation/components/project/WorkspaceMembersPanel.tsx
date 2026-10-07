@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, LockKeyhole, Trash2 } from 'lucide-react';
+import { Loader2, LockKeyhole, Trash2, Users, FolderOpen } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/sonner';
 import { WORKSPACE_ROLE_LABEL, type Workspace, type WorkspaceMember, type WorkspaceRole } from '@/domain/workspace/Workspace';
 import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
@@ -12,9 +11,11 @@ import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { PROJECT_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { ProjectAccessChecklist } from './ProjectAccessChecklist';
+import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
+import { WorkspaceInvitationsList } from './WorkspaceInvitationsList';
 import { WorkspaceInviteForm } from './WorkspaceInviteForm';
 
-export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = false }: {
+export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = true }: {
   workspace: Workspace;
   projectId?: string;
   manageRoles?: boolean;
@@ -22,31 +23,54 @@ export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = fals
   const { workspaceRepository } = useContainer();
   const { user } = useCurrentUser();
   const { refresh } = useWorkspacesContext();
-  const [data, setData] = useState<{ members: WorkspaceMember[]; access: WorkspaceProjectAccess } | null>(null);
+  const [data, setData] = useState<{ members: WorkspaceMember[]; access: WorkspaceProjectAccess; invites: WorkspaceInvite[]; loadedAt: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const busy = useRef(false);
   const seq = useRef(0);
   const mounted = useRef(true);
+  const canInvite = workspace.kind !== 'default' && workspace.role !== 'viewer';
   const canManage = workspace.kind !== 'default' && (workspace.role === 'owner' || workspace.role === 'lead');
   const reload = useCallback(async () => {
     const current = ++seq.current;
     try {
-      const [members, access] = await Promise.all([
+      const [members, access, invites] = await Promise.all([
         workspaceRepository.listMembers(workspace.id), workspaceRepository.getProjectAccess(workspace.id),
+        canInvite ? workspaceRepository.listInvites(workspace.id) : Promise.resolve([]),
       ]);
-      if (mounted.current && current === seq.current) { setData({ members, access }); setError(null); }
+      if (mounted.current && current === seq.current) { setData({ members, access, invites, loadedAt: Date.now() }); setError(null); }
     } catch (failure) {
       if (mounted.current && current === seq.current) setError(failure instanceof Error ? failure.message : 'Не удалось загрузить участников');
     }
-  }, [workspace.id, workspaceRepository]);
+  }, [workspace.id, workspaceRepository, canInvite]);
   useEffect(() => {
     mounted.current = true;
     void reload();
     const changed = (): void => { void reload(); };
+    const storage = (event: StorageEvent): void => { if (event.key === 'pf:workspace-invites-changed') changed(); };
     window.addEventListener(PROJECT_CHANGED_EVENT, changed);
-    return () => { mounted.current = false; window.removeEventListener(PROJECT_CHANGED_EVENT, changed); };
+    window.addEventListener('pf:workspace-invites-changed', changed);
+    window.addEventListener('focus', changed);
+    window.addEventListener('storage', storage);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener(PROJECT_CHANGED_EVENT, changed);
+      window.removeEventListener('pf:workspace-invites-changed', changed);
+      window.removeEventListener('focus', changed);
+      window.removeEventListener('storage', storage);
+    };
   }, [reload]);
+  const waitingDelivery = data?.invites.some(invite => invite.deliveryNextAttemptAt && invite.expiresAt.getTime() > data.loadedAt);
+  const waitingAcceptance = Boolean(data?.invites.length);
+  useEffect(() => {
+    if (!waitingAcceptance) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void reload(); }, waitingDelivery ? 5000 : 30_000);
+    return () => window.clearInterval(timer);
+  }, [waitingDelivery, waitingAcceptance, reload]);
+  const invitesChanged = (): void => {
+    window.dispatchEvent(new Event('pf:workspace-invites-changed'));
+    try { localStorage.setItem('pf:workspace-invites-changed', String(Date.now())); } catch { /* Storage is optional. */ }
+  };
 
   const updateAccess = async (memberId: string, id: string, visible: boolean): Promise<void> => {
     if (busy.current) return;
@@ -87,50 +111,35 @@ export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = fals
 
   const hiddenFor = (memberId: string): string[] => data.access.members.find((member) => member.userId === memberId)?.hiddenProjectIds ?? [];
   const visibleCount = data.members.filter((member) => !projectId || !hiddenFor(member.userId).includes(projectId)).length;
-  return (
-    <div className="space-y-4">
-      <WorkspaceInviteForm key={workspace.id} workspace={workspace} projects={data.access.projects} onCreated={() => window.dispatchEvent(new Event('pf:workspace-invites-changed'))} />
-      <div className="border-t pt-4">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
-          <span>{projectId ? `Доступ к проекту: ${visibleCount} из ${data.members.length}` : `Участники пространства: ${data.members.length}`}</span>
-          {saving && <span role="status">Сохраняем…</span>}
-        </div>
-        {error && <div role="alert" className="mb-2 text-xs text-destructive">{error} <button type="button" className="underline" onClick={() => void reload()}>Повторить</button></div>}
-        <ul className="divide-y">
-          {data.members.map((member) => {
-            const hidden = hiddenFor(member.userId);
-            const protectedRole = member.role === 'owner' || member.role === 'lead';
-            const visible = !projectId || !hidden.includes(projectId);
-            return <li key={member.userId} className="space-y-2 py-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <Avatar className="size-8 shrink-0">
-                  {member.avatarUrl && <AvatarImage src={member.avatarUrl} alt="" />}
-                  <AvatarFallback className={avatarColor(member.displayName ?? member.email)}>{getInitials(member.displayName ?? member.email)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{member.displayName ?? member.email ?? 'Участник'}{member.userId === user?.id && <span className="font-normal text-muted-foreground"> (Вы)</span>}</p>
-                  {member.email && <p className="truncate text-xs text-muted-foreground">{member.email}</p>}
-                  {!visible && <p className="text-xs text-muted-foreground">Проект скрыт</p>}
-                </div>
-              {manageRoles && workspace.role === 'owner' && workspace.kind !== 'default' ? <div className="flex shrink-0 items-center gap-1">
-                <select aria-label={`Роль участника ${member.displayName ?? member.email}`} value={member.role} disabled={saving !== null} className="h-9 rounded-md border bg-background px-2 text-xs" onChange={(event) => void updateMember(member, event.target.value as WorkspaceRole)}>
-                  {Object.entries(WORKSPACE_ROLE_LABEL).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
-                </select>
-                <Button variant="ghost" size="icon" className="size-9 text-muted-foreground hover:text-destructive" disabled={saving !== null} aria-label={`Удалить участника ${member.displayName ?? member.email}`} onClick={() => void updateMember(member)}><Trash2 className="size-4" /></Button>
-              </div> : <span className="shrink-0 text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[member.role]}</span>}
-              {projectId && <label className="grid size-11 shrink-0 place-items-center sm:size-6"><Checkbox className="size-4" checked={visible} disabled={!canManage || protectedRole || saving !== null} aria-label={`Доступ к проекту: ${member.displayName ?? member.email}`} title={protectedRole ? 'Владелец и руководитель видят все проекты' : visible ? 'Скрыть проект от участника' : 'Открыть доступ к проекту'} onCheckedChange={(checked) => void updateAccess(member.userId, projectId, checked === true)} /></label>}
-              </div>
-              {!projectId && (protectedRole ? (
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><LockKeyhole className="size-3" />Доступ ко всем проектам</p>
-              ) : (
-                <ProjectAccessChecklist projects={data.access.projects} hiddenIds={hidden} disabled={!canManage || saving !== null} onChange={(id, checked) => void updateAccess(member.userId, id, checked)} />
-              ))}
-            </li>;
-          })}
-        </ul>
-        {data.members.length === 0 && <p className="py-3 text-sm text-muted-foreground">Участников пока нет.</p>}
-        {canManage ? <p className="mt-2 text-xs text-muted-foreground">Снимите флажок, чтобы скрыть проект и его задачи. Доступ владельца и руководителя сохраняется.</p> : <p className="mt-2 text-xs text-muted-foreground">Доступ к проектам меняет владелец или руководитель пространства.</p>}
-      </div>
-    </div>
-  );
+  const currentProject = data.access.projects.find(project => project.id === projectId);
+  return <div className="space-y-5" data-workspace-members={workspace.id}>
+    {currentProject && <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"><FolderOpen className="mt-0.5 size-4 shrink-0" /><p>Участники пространства <span className="font-medium text-foreground">«{workspace.name}»</span>. Проект <span className="font-medium text-foreground">«{currentProject.name}»</span> доступен {visibleCount} из {data.members.length}.</p></div>}
+    <WorkspaceInviteForm key={workspace.id} workspace={workspace} projects={data.access.projects} onCreated={invitesChanged} />
+    {canInvite && <WorkspaceInvitationsList workspace={workspace} invites={data.invites} projects={data.access.projects} onChanged={invitesChanged} />}
+    <section aria-label="Участники пространства" className="space-y-3">
+      <div className="flex items-center gap-2"><Users className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">Участники пространства</h3><span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{data.members.length}</span>{saving && <span role="status" className="ml-auto text-xs text-muted-foreground">Сохраняем…</span>}</div>
+      {error && <div role="alert" className="text-xs text-destructive">{error} <button type="button" className="underline" onClick={() => void reload()}>Повторить</button></div>}
+      <ul className="divide-y">
+        {data.members.map(member => {
+          const hidden = hiddenFor(member.userId);
+          const protectedRole = member.role === 'owner' || member.role === 'lead';
+          const name = member.displayName ?? member.email ?? 'Участник';
+          const selfOwner = member.userId === user?.id && member.role === 'owner';
+          return <li key={member.userId} className="space-y-2.5 py-3 first:pt-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              <Avatar className="size-9 shrink-0">{member.avatarUrl && <AvatarImage src={member.avatarUrl} alt="" />}<AvatarFallback className={avatarColor(name)}>{getInitials(name)}</AvatarFallback></Avatar>
+              <div className="min-w-0 flex-[1_1_8rem]"><p className="truncate text-sm font-medium">{name}{member.userId === user?.id && <span className="font-normal text-muted-foreground"> (Вы)</span>}</p>{member.email && <p className="truncate text-xs text-muted-foreground">{member.email}</p>}</div>
+              {manageRoles && workspace.role === 'owner' && workspace.kind !== 'default' && !selfOwner ? <div className="flex shrink-0 items-center gap-1">
+                <select aria-label={`Роль участника ${name}`} value={member.role} disabled={saving !== null} className="h-9 max-w-full rounded-md border bg-background px-2 text-xs" onChange={event => void updateMember(member, event.target.value as WorkspaceRole)}>{Object.entries(WORKSPACE_ROLE_LABEL).map(([role, label]) => <option key={role} value={role}>{label}</option>)}</select>
+                <Button variant="ghost" size="icon" className="size-9 text-muted-foreground hover:text-destructive" disabled={saving !== null} aria-label={`Удалить участника ${name}`} onClick={() => void updateMember(member)}><Trash2 className="size-4" /></Button>
+              </div> : <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[member.role]}</span>}
+            </div>
+            {protectedRole ? <p className="flex items-center gap-1.5 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground"><LockKeyhole className="size-3.5" />Все проекты доступны по роли</p> : <ProjectAccessChecklist projects={data.access.projects} hiddenIds={hidden} label={`Проекты: ${name}`} highlightProjectId={projectId} disabled={!canManage || saving !== null} onChange={(id, checked) => void updateAccess(member.userId, id, checked)} />}
+          </li>;
+        })}
+      </ul>
+      {data.members.length === 0 && <p className="text-sm text-muted-foreground">Участников пока нет.</p>}
+      <p className="text-xs leading-relaxed text-muted-foreground">{canManage ? 'Снимите отметку у проекта, чтобы скрыть его и задачи от выбранного участника. Владелец и руководитель всегда видят все проекты.' : 'Доступ к проектам меняет владелец или руководитель пространства.'}</p>
+    </section>
+  </div>;
 }

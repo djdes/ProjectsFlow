@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { DeliverWorkspaceInvites } from './DeliverWorkspaceInvites.js';
+import { ManageWorkspaceInvite } from './ManageWorkspaceInvite.js';
 import { CreateWorkspaceInvite } from './CreateWorkspaceInvite.js';
 import { AcceptWorkspaceInvite } from './AcceptWorkspaceInvite.js';
 import { ListWorkspaceInvites } from './ListWorkspaceInvites.js';
@@ -15,6 +17,8 @@ import {
   WorkspaceInviteAlreadyUsedError,
   CannotInviteToDefaultWorkspaceError,
   NotWorkspaceLeadError,
+  WorkspaceInviteMemberExistsError,
+  WorkspaceInviteCooldownError,
 } from '../../domain/workspace/errors.js';
 import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
 
@@ -58,9 +62,29 @@ function makeFakes(seed: Seed = {}) {
       }
       invites.set(invite.id, { ...invite, acceptedAt, acceptedByUserId });
     },
+    async claimDelivery(now) {
+      const row = [...invites.values()].find(i => i.deliveryNextAttemptAt && i.deliveryNextAttemptAt <= now && !i.deliveryLockedAt && !i.acceptedAt);
+      if (!row) return null;
+      const claimed = { ...row, deliveryLockedAt: now, lastSentAt: now, deliveryAttempts: (row.deliveryAttempts ?? 0) + 1 };
+      invites.set(row.id, claimed); return claimed;
+    },
+    async finishDelivery(id, _claimedAt, delivery, nextAttemptAt) {
+      const row = invites.get(id); if (row) invites.set(id, { ...row, delivery, deliveryNextAttemptAt: nextAttemptAt, deliveryLockedAt: null });
+    },
+    async rescheduleDelivery(id, now, expiresAt) {
+      const row = invites.get(id);
+      if (!row || row.acceptedAt || (row.lastSentAt && now.getTime() - row.lastSentAt.getTime() < 60_000)) return null;
+      const updated = { ...row, expiresAt, lastSentAt: now, delivery: { email: 'queued' as const, site: 'queued' as const, telegram: 'queued' as const }, deliveryAttempts: 0, deliveryNextAttemptAt: now, deliveryLockedAt: null };
+      invites.set(id, updated); return updated;
+    },
     async create(input) {
+      const existing = input.email && [...invites.values()].find(i => !i.acceptedAt && i.workspaceId === input.workspaceId && i.email?.toLowerCase() === input.email?.toLowerCase());
+      if (existing) return existing;
+
       const invite: WorkspaceInvite = {
         ...input,
+        delivery: input.email ? { email: 'queued', site: 'queued', telegram: 'queued' } : null,
+        deliveryNextAttemptAt: input.email ? input.queuedAt ?? NOW : null,
         acceptedAt: null,
         acceptedByUserId: null,
         createdAt: NOW,
@@ -77,7 +101,7 @@ function makeFakes(seed: Seed = {}) {
     },
     async listPendingByWorkspace(workspaceId, now) {
       return [...invites.values()].filter(
-        (i) => i.workspaceId === workspaceId && i.acceptedAt === null && i.expiresAt > now,
+        (i) => i.workspaceId === workspaceId && i.acceptedAt === null,
       );
     },
     async markAccepted({ inviteId, acceptedAt, acceptedByUserId }) {
@@ -142,14 +166,15 @@ function makeFakes(seed: Seed = {}) {
     workspaces,
     invites: invitesRepo,
     users: usersPort,
-    notifications: notificationsPort,
-    email: emailPort,
     idGen,
     randomToken: () => 'a'.repeat(64),
     now: () => NOW,
     ttlMs: TTL_MS,
-    appUrl: 'https://projectsflow.ru',
   });
+  const delivery = new DeliverWorkspaceInvites({ invites: invitesRepo, workspaces, users: usersPort,
+    notifications: notificationsPort, email: emailPort, emailConfigured: true,
+    telegram: { execute: async () => ({ status: 'not_connected' }) }, appUrl: 'https://projectsflow.ru', now: () => NOW });
+  const manage = new ManageWorkspaceInvite({ invites: invitesRepo, workspaces, appUrl: 'https://projectsflow.ru', now: () => NOW, ttlMs: TTL_MS });
   const accept = new AcceptWorkspaceInvite({
     invites: invitesRepo,
     workspaces,
@@ -162,7 +187,7 @@ function makeFakes(seed: Seed = {}) {
   });
   const del = new DeleteWorkspaceInvite({ workspaces, invites: invitesRepo });
 
-  return { create, accept, list, del, invitesRepo, workspaces, members, sentEmails, notifications, absorbCalls, exclusions };
+  return { create, delivery, manage, accept, list, del, invitesRepo, workspaces, members, sentEmails, notifications, absorbCalls, exclusions };
 }
 
 test('lead can invite with selected projects; acceptance persists restrictions', async () => {
@@ -252,7 +277,7 @@ test('create: в командное (kind=team) пространство при�
 });
 
 test('create с email: шлёт письмо + in-app workspace_invite зарегистрированному', async () => {
-  const { create, sentEmails, notifications } = makeFakes({
+  const { create, delivery, sentEmails, notifications } = makeFakes({
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     users: [
       { id: 'u1', email: 'u1@x', displayName: 'Ярослав' },
@@ -260,6 +285,7 @@ test('create с email: шлёт письмо + in-app workspace_invite заре�
     ],
   });
   await create.execute({ workspaceId: 'w1', actorUserId: 'u1', role: 'viewer', email: 'u2@x' });
+  await delivery.run();
   assert.equal(sentEmails.length, 1);
   assert.equal(sentEmails[0]?.to, 'u2@x');
   assert.equal(notifications.length, 1);
@@ -329,7 +355,7 @@ test('accept: использованный → WorkspaceInviteAlreadyUsedError',
   await assert.rejects(() => accept.execute('t'.repeat(64), 'u2'), WorkspaceInviteAlreadyUsedError);
 });
 
-test('list: owner видит только pending', async () => {
+test('list: expired invitations remain visible until accepted or revoked', async () => {
   const { list } = makeFakes({
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     invites: [
@@ -339,7 +365,7 @@ test('list: owner видит только pending', async () => {
     ],
   });
   const items = await list.execute('w1', 'u1');
-  assert.deepEqual(items.map((i) => i.id), ['inv-1']);
+  assert.deepEqual(items.map((i) => i.id), ['inv-1', 'inv-3']);
 });
 
 test('list: viewer не видит инвайты', async () => {
@@ -369,10 +395,10 @@ test('delete: owner отзывает invite; чужой inviteId → not found',
   await assert.rejects(() => del.execute('w1', 'u1', 'inv-other'), WorkspaceInviteNotFoundError);
 });
 
-test('delete: editor тоже может отзывать (не только owner)', async () => {
+test('delete: editor may revoke their own invitation', async () => {
   const { del, invitesRepo } = makeFakes({
     members: [{ workspaceId: 'w1', userId: 'u2', role: 'editor' }],
-    invites: [pendingInvite()],
+    invites: [pendingInvite({ createdByUserId: 'u2' })],
   });
   await del.execute('w1', 'u2', 'inv-1');
   assert.equal(await invitesRepo.getById('inv-1'), null);
@@ -384,4 +410,38 @@ test('delete: viewer не может отзывать', async () => {
     invites: [pendingInvite()],
   });
   await assert.rejects(() => del.execute('w1', 'u3', 'inv-1'), NotWorkspaceEditorError);
+});
+
+
+test('create reuses normalized email without changing role/access or sending twice', async () => {
+  const f = makeFakes({ members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }] });
+  const first = await f.create.execute({ workspaceId: 'w1', actorUserId: 'u1', email: 'Person@Example.Test', role: 'editor', excludedProjectIds: ['p2'] });
+  const second = await f.create.execute({ workspaceId: 'w1', actorUserId: 'u1', email: ' person@example.test ', role: 'viewer' });
+  assert.equal(second.reused, true); assert.equal(second.invite.id, first.invite.id);
+  assert.equal(second.invite.role, 'editor'); assert.deepEqual(second.invite.excludedProjectIds, ['p2']);
+  await f.delivery.run(); assert.equal(f.sentEmails.length, 1);
+});
+
+test('create does not invite an existing member', async () => {
+  const f = makeFakes({ members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w1', userId: 'u2', role: 'editor' }], users: [{ id: 'u2', email: 'member@example.test', displayName: 'Member' }] });
+  await assert.rejects(f.create.execute({ workspaceId: 'w1', actorUserId: 'u1', email: 'member@example.test', role: 'editor' }), WorkspaceInviteMemberExistsError);
+});
+
+test('resend renews expired invite without changing token/access; rate limited and tenant guarded', async () => {
+  const f = makeFakes({ members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w2', userId: 'u1', role: 'owner' }], invites: [pendingInvite({ expiresAt: new Date(NOW.getTime() - 1), excludedProjectIds: ['p2'], email: 'a@example.test' })] });
+  await assert.rejects(f.manage.link('w1', 'u1', 'inv-1'), WorkspaceInviteExpiredError);
+  const updated = await f.manage.resend('w1', 'u1', 'inv-1');
+  assert.equal(updated.token, 't'.repeat(64)); assert.deepEqual(updated.excludedProjectIds, ['p2']);
+  assert.equal(updated.expiresAt.getTime(), NOW.getTime() + TTL_MS);
+  await assert.rejects(f.manage.resend('w1', 'u1', 'inv-1'), WorkspaceInviteCooldownError);
+  await assert.rejects(f.manage.link('w2', 'u1', 'inv-1'), WorkspaceInviteNotFoundError);
+});
+
+test('editor cannot retrieve, resend or revoke another inviter token', async () => {
+  const f = makeFakes({ members: [{ workspaceId: 'w1', userId: 'u2', role: 'editor' }], invites: [pendingInvite({ email: 'person@example.test' })] });
+  await assert.rejects(f.manage.link('w1', 'u2', 'inv-1'), NotWorkspaceLeadError);
+  await assert.rejects(f.manage.resend('w1', 'u2', 'inv-1'), NotWorkspaceLeadError);
+  await assert.rejects(f.del.execute('w1', 'u2', 'inv-1'), NotWorkspaceLeadError);
+  const repeated = await f.create.execute({ workspaceId: 'w1', actorUserId: 'u2', email: 'person@example.test', role: 'editor' });
+  assert.equal(repeated.reused, true); assert.equal(repeated.canShare, false);
 });

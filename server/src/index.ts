@@ -136,6 +136,8 @@ import { ListProjectMembers } from './application/project/ListProjectMembers.js'
 import { ListSharedMembers } from './application/project/ListSharedMembers.js';
 import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
+import { DeliverWorkspaceInvites } from './application/workspace/DeliverWorkspaceInvites.js';
+import { ManageWorkspaceInvite } from './application/workspace/ManageWorkspaceInvite.js';
 import { CreateWorkspaceInvite } from './application/workspace/CreateWorkspaceInvite.js';
 import { AcceptWorkspaceInvite } from './application/workspace/AcceptWorkspaceInvite.js';
 import { ManageWorkspaceProjectAccess } from './application/workspace/ManageWorkspaceProjectAccess.js';
@@ -986,6 +988,13 @@ const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   idGen: idGenerator,
   kindToPref: TG_KIND_TO_PREF,
 });
+
+const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
+  invites: workspaceInviteRepo, workspaces: workspaceRepo, users: userRepo,
+  notifications: notificationRepo, email: emailSender, emailConfigured: Boolean(process.env['SMTP_HOST']),
+  telegram: sendAgentTelegramNotification, appUrl: appBaseUrl, now,
+});
+setInterval(deliverWorkspaceInvites.wake, 15_000).unref();
 
 // --- Чат-виджет: поддержка ---
 // Обращения сохраняются в support_tickets и доставляются админам/руту in-app уведомлением
@@ -2282,17 +2291,14 @@ const { app, devProxyUpgrade } = createApp({
     }),
     invites: {
       create: new CreateWorkspaceInvite({
-        workspaces: workspaceRepo,
-        projectAccess: workspaceProjectAccessRepo,
-        invites: workspaceInviteRepo,
-        users: userRepo,
-        notifications: notificationRepo,
-        email: emailSender,
-        idGen: idGenerator,
-        randomToken: () => randomBytes(32).toString('hex'),
-        now,
-        ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней — как у project-инвайтов
-        appUrl: appBaseUrl,
+        workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
+        invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
+        idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
+        ttlMs: 7 * 24 * 60 * 60 * 1000,
+      }),
+      manage: new ManageWorkspaceInvite({
+        workspaces: workspaceRepo, invites: workspaceInviteRepo, now,
+        ttlMs: 7 * 24 * 60 * 60 * 1000, appUrl: appBaseUrl, onQueued: deliverWorkspaceInvites.wake,
       }),
       list: new ListWorkspaceInvites({
         workspaces: workspaceRepo,

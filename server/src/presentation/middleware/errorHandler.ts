@@ -155,6 +155,8 @@ import {
   UserNotFoundByEmailError,
   NotProjectOwnerError,
   WorkspaceInviteNotFoundError,
+  WorkspaceInviteMemberExistsError,
+  WorkspaceInviteCooldownError,
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
   CannotInviteToDefaultWorkspaceError,
@@ -933,6 +935,15 @@ export function errorHandler(
   }
   if (err instanceof WorkspaceInviteNotFoundError) {
     res.status(404).json({ error: 'invite_not_found', message: 'Приглашение не найдено' });
+    return;
+  }
+  if (err instanceof WorkspaceInviteMemberExistsError) {
+    res.status(409).json({ error: 'already_workspace_member', message: 'Этот человек уже участвует в пространстве. Его доступ можно изменить в списке участников.' });
+    return;
+  }
+  if (err instanceof WorkspaceInviteCooldownError) {
+    res.setHeader('Retry-After', '60');
+    res.status(429).json({ error: 'invite_cooldown', message: 'Приглашение уже отправляется. Повторить можно через минуту.' });
     return;
   }
   if (err instanceof WorkspaceInviteExpiredError) {

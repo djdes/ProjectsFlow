@@ -419,6 +419,11 @@ export const workspaceInvites = mysqlTable(
     token: char('token', { length: 64 }).notNull(),
     email: varchar('email', { length: 255 }),
     excludedProjectIds: json('excluded_project_ids').$type<string[]>(),
+    delivery: json('delivery').$type<import('../../domain/workspace/WorkspaceInvite.js').InviteDelivery>(),
+    deliveryAttempts: int('delivery_attempts').notNull().default(0),
+    deliveryNextAttemptAt: timestamp('delivery_next_attempt_at'),
+    deliveryLockedAt: timestamp('delivery_locked_at'),
+    lastSentAt: timestamp('last_sent_at'),
     expiresAt: timestamp('expires_at').notNull(),
     acceptedAt: timestamp('accepted_at'),
     acceptedByUserId: char('accepted_by_user_id', { length: 36 }),
@@ -429,6 +434,7 @@ export const workspaceInvites = mysqlTable(
     uniqueIndex('uq_ws_invites_token').on(t.token),
     index('idx_ws_invites_workspace').on(t.workspaceId),
     index('idx_ws_invites_expires').on(t.expiresAt),
+    index('idx_ws_invites_delivery').on(t.deliveryNextAttemptAt, t.deliveryLockedAt),
   ],
 );
 

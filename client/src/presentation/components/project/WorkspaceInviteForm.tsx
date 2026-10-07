@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { Copy, Loader2, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/sonner';
 import { WORKSPACE_ROLE_LABEL, type Workspace } from '@/domain/workspace/Workspace';
-import type { WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
+import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type { WorkspaceAccessProject } from '@/domain/workspace/WorkspaceProjectAccess';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectAccessChecklist } from './ProjectAccessChecklist';
@@ -12,7 +12,7 @@ import { ProjectAccessChecklist } from './ProjectAccessChecklist';
 export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
   workspace: Workspace;
   projects: readonly WorkspaceAccessProject[];
-  onCreated?: () => void;
+  onCreated?: (invites: WorkspaceInvite[]) => void;
 }): React.ReactElement | null {
   const { workspaceRepository } = useContainer();
   const [email, setEmail] = useState('');
@@ -21,7 +21,6 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [links, setLinks] = useState<Array<{ email: string; url: string }>>([]);
   const canManage = workspace.role === 'owner' || workspace.role === 'lead';
   if (workspace.role === 'viewer' || workspace.kind === 'default') return null;
 
@@ -37,7 +36,7 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
     setBusy(true);
     setError(null);
     const failed: string[] = [];
-    const created: Array<{ email: string; url: string }> = [];
+    const created: WorkspaceInvite[] = [];
     try {
       const results = await Promise.allSettled(emails.map((address) => workspaceRepository.createInvite(workspace.id, {
         email: address, role, ...(canManage ? { excludedProjectIds: hiddenIds } : {}),
@@ -46,13 +45,13 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
         if (result.status === 'rejected') {
           failed.push(emails[index]);
           setError(result.reason instanceof Error ? result.reason.message : 'Не удалось создать приглашение. Попробуйте ещё раз.');
-        } else if (result.value.url) created.push({ email: emails[index], url: result.value.url });
+        } else created.push(result.value);
       });
       setEmail(failed.join(', '));
-      setLinks((previous) => [...previous, ...created]);
       if (results.length > failed.length) {
-        toast.success(`Приглашения созданы: ${results.length - failed.length}`);
-        onCreated?.();
+        const fresh = created.filter(invite => !invite.reused).length;
+        toast.success(fresh ? `Приглашения в очереди отправки: ${fresh}` : 'Приглашение уже есть в списке ожидающих');
+        onCreated?.(created);
       }
     } finally {
       lock.current = false;
@@ -60,34 +59,22 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
     }
   };
 
-  return (
-    <form onSubmit={(event) => void submit(event)} className="space-y-3">
-      <div>
-        <p className="text-sm font-medium">Пригласить в пространство</p>
-        <p className="mt-1 text-xs text-muted-foreground">«{workspace.name}» · Приглашение действует 7 дней.</p>
-      </div>
-      <Input value={email} onChange={(event) => setEmail(event.target.value)} disabled={busy} aria-label="Email для приглашения" aria-invalid={!!error} placeholder="Email, через запятую" autoComplete="email" />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <select className="h-10 rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Роль нового участника" value={role} disabled={busy} onChange={(event) => setRole(event.target.value as WorkspaceInviteRole)}>
-          <option value="editor">{WORKSPACE_ROLE_LABEL.editor}</option>
-          <option value="viewer">{WORKSPACE_ROLE_LABEL.viewer}</option>
-        </select>
-        <Button type="submit" disabled={busy || !email.trim()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-          {busy ? 'Приглашаем…' : 'Пригласить'}
-        </Button>
-      </div>
-      {canManage ? (
-        <ProjectAccessChecklist projects={projects} hiddenIds={hiddenIds} disabled={busy} onChange={(id, visible) => setHiddenIds((previous) => visible ? previous.filter((item) => item !== id) : [...previous, id])} />
-      ) : <p className="text-xs text-muted-foreground">Участнику будут доступны те же проекты, что и вам. Изменить доступ может владелец или руководитель.</p>}
-      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-      {links.length > 0 && <div className="space-y-1 rounded-md bg-muted/50 p-2" aria-live="polite">
-        <p className="text-xs text-muted-foreground">Если письмо не пришло, передайте ссылку лично.</p>
-        {links.map((link) => <div key={link.url} className="flex min-w-0 items-center justify-between gap-2">
-          <span className="truncate text-xs">{link.email}</span>
-          <Button type="button" variant="ghost" size="sm" aria-label={`Скопировать приглашение для ${link.email}`} onClick={() => void navigator.clipboard.writeText(link.url).then(() => toast.success('Ссылка скопирована')).catch(() => toast.error('Не удалось скопировать ссылку'))}><Copy className="size-3.5" />Ссылка</Button>
-        </div>)}
-      </div>}
-    </form>
-  );
+  return <form onSubmit={event => void submit(event)} className="space-y-3 rounded-xl border border-primary/15 bg-primary/[0.035] p-3 sm:p-4">
+    <div className="flex items-start gap-2.5">
+      <UserPlus className="mt-0.5 size-4 shrink-0 text-primary" />
+      <div className="min-w-0"><p className="text-sm font-semibold">Новое приглашение</p><p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
+    </div>
+    <div className="flex flex-wrap gap-2">
+      <label className="min-w-0 flex-[3_1_12rem] space-y-1.5"><span className="text-xs font-medium">Кого пригласить</span><Input value={email} onChange={event => setEmail(event.target.value)} disabled={busy} aria-label="Email для приглашения" aria-invalid={!!error} placeholder="Email, через запятую" autoComplete="email" /></label>
+      <label className="min-w-0 flex-[1_1_9rem] space-y-1.5"><span className="text-xs font-medium">Роль в пространстве</span><select className="h-10 w-full rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Роль нового участника" value={role} disabled={busy} onChange={event => setRole(event.target.value as WorkspaceInviteRole)}>
+        <option value="editor">{WORKSPACE_ROLE_LABEL.editor}</option><option value="viewer">{WORKSPACE_ROLE_LABEL.viewer}</option>
+      </select></label>
+    </div>
+    {canManage ? <ProjectAccessChecklist projects={projects} hiddenIds={hiddenIds} label="Проекты для приглашённого" disabled={busy} onChange={(id, visible) => setHiddenIds(previous => visible ? previous.filter(item => item !== id) : [...previous, id])} /> : <p className="text-xs leading-relaxed text-muted-foreground">Приглашённому будут доступны те же проекты, что и вам. Изменить доступ может владелец или руководитель.</p>}
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="max-w-xs flex-1 text-xs leading-relaxed text-muted-foreground">Отправим письмо и уведомление на сайте. Если Telegram подключён — напишем и туда.</p>
+      <Button type="submit" className="shrink-0" disabled={busy || !email.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{busy ? 'Приглашаем…' : 'Пригласить'}</Button>
+    </div>
+  </form>;
 }

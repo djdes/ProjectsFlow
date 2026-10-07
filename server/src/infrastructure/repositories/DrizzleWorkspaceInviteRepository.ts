@@ -1,11 +1,12 @@
-import { and, asc, eq, gt, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, isNotNull, lte, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projects, workspaceMembers, workspaceProjectExclusions, workspaceInvites, type WorkspaceInviteRow } from '../db/schema.js';
+import { projects, workspaces, workspaceMembers, workspaceProjectExclusions, workspaceInvites, type WorkspaceInviteRow } from '../db/schema.js';
 import { parseJsonCol } from './jsonCol.js';
 import { WorkspaceInviteAlreadyUsedError, WorkspaceInviteExpiredError, WorkspaceInviteNotFoundError } from '../../domain/workspace/errors.js';
 import type {
   WorkspaceInvite,
   WorkspaceInviteRole,
+  InviteDelivery,
 } from '../../domain/workspace/WorkspaceInvite.js';
 import type {
   AcceptWorkspaceInviteInput,
@@ -26,6 +27,11 @@ function toInvite(row: WorkspaceInviteRow): WorkspaceInvite {
     acceptedByUserId: row.acceptedByUserId ?? null,
     createdByUserId: row.createdByUserId,
     createdAt: row.createdAt,
+    delivery: parseJsonCol<InviteDelivery | null>(row.delivery, null),
+    deliveryAttempts: row.deliveryAttempts,
+    deliveryNextAttemptAt: row.deliveryNextAttemptAt,
+    deliveryLockedAt: row.deliveryLockedAt,
+    lastSentAt: row.lastSentAt,
   };
 }
 
@@ -33,19 +39,64 @@ export class DrizzleWorkspaceInviteRepository implements WorkspaceInviteReposito
   constructor(private readonly db: Database) {}
 
   async create(input: CreateWorkspaceInviteInput): Promise<WorkspaceInvite> {
-    await this.db.insert(workspaceInvites).values({
-      id: input.id,
-      workspaceId: input.workspaceId,
-      role: input.role,
-      token: input.token,
-      email: input.email,
-      excludedProjectIds: [...(input.excludedProjectIds ?? [])],
-      expiresAt: input.expiresAt,
-      createdByUserId: input.createdByUserId,
+    return this.db.transaction(async tx => {
+      // Serialize invitations within a workspace, including simultaneous duplicate clicks.
+      await tx.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, input.workspaceId)).for('update');
+      const email = input.email?.trim().toLowerCase() || null;
+      if (email) {
+        const existing = await tx.select().from(workspaceInvites).where(and(
+          eq(workspaceInvites.workspaceId, input.workspaceId), isNull(workspaceInvites.acceptedAt),
+          sql`LOWER(TRIM(${workspaceInvites.email})) = ${email}`,
+        )).orderBy(desc(workspaceInvites.createdAt)).limit(1);
+        if (existing[0]) return toInvite(existing[0]);
+      }
+      await tx.insert(workspaceInvites).values({
+        id: input.id,
+        workspaceId: input.workspaceId,
+        role: input.role,
+        token: input.token,
+        email,
+        excludedProjectIds: [...(input.excludedProjectIds ?? [])],
+        expiresAt: input.expiresAt,
+        createdByUserId: input.createdByUserId,
+        delivery: email ? { email: 'queued', site: 'queued', telegram: 'queued' } : null,
+        deliveryNextAttemptAt: email ? input.queuedAt ?? new Date() : null,
+      });
+      const [fresh] = await tx.select().from(workspaceInvites).where(eq(workspaceInvites.id, input.id));
+      if (!fresh) throw new Error('Failed to read back workspace invite after insert');
+      return toInvite(fresh);
     });
-    const fresh = await this.getById(input.id);
-    if (!fresh) throw new Error('Failed to read back workspace invite after insert');
-    return fresh;
+  }
+
+  async claimDelivery(now: Date): Promise<WorkspaceInvite | null> {
+    return this.db.transaction(async tx => {
+      const [row] = await tx.select().from(workspaceInvites).where(and(
+        isNull(workspaceInvites.acceptedAt), gt(workspaceInvites.expiresAt, now),
+        lte(workspaceInvites.deliveryNextAttemptAt, now),
+        or(lt(workspaceInvites.deliveryAttempts, 5), isNotNull(workspaceInvites.deliveryLockedAt)),
+        or(isNull(workspaceInvites.deliveryLockedAt), lte(workspaceInvites.deliveryLockedAt, new Date(now.getTime() - 300_000))),
+      )).orderBy(workspaceInvites.deliveryNextAttemptAt).limit(1).for('update');
+      if (!row) return null;
+      const claimedAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
+      await tx.update(workspaceInvites).set({ deliveryLockedAt: claimedAt, lastSentAt: claimedAt, deliveryAttempts: row.deliveryAttempts + 1 }).where(eq(workspaceInvites.id, row.id));
+      return toInvite({ ...row, deliveryLockedAt: claimedAt, lastSentAt: claimedAt, deliveryAttempts: row.deliveryAttempts + 1 });
+    });
+  }
+
+  async finishDelivery(inviteId: string, claimedAt: Date, delivery: InviteDelivery, nextAttemptAt: Date | null): Promise<void> {
+    await this.db.update(workspaceInvites).set({ delivery, deliveryNextAttemptAt: nextAttemptAt, deliveryLockedAt: null })
+      .where(and(eq(workspaceInvites.id, inviteId), eq(workspaceInvites.deliveryLockedAt, claimedAt), isNull(workspaceInvites.acceptedAt)));
+  }
+
+  async rescheduleDelivery(inviteId: string, now: Date, expiresAt: Date): Promise<WorkspaceInvite | null> {
+    const [result] = await this.db.update(workspaceInvites).set({
+      expiresAt, delivery: { email: 'queued', site: 'queued', telegram: 'queued' }, deliveryAttempts: 0,
+      deliveryNextAttemptAt: now, deliveryLockedAt: null, lastSentAt: now,
+    }).where(and(eq(workspaceInvites.id, inviteId), isNull(workspaceInvites.acceptedAt),
+      or(isNull(workspaceInvites.lastSentAt), lte(workspaceInvites.lastSentAt, new Date(now.getTime() - 60_000))),
+      or(isNull(workspaceInvites.deliveryLockedAt), lte(workspaceInvites.deliveryLockedAt, new Date(now.getTime() - 300_000))),
+    ));
+    return result.affectedRows ? this.getById(inviteId) : null;
   }
 
   async getById(inviteId: string): Promise<WorkspaceInvite | null> {
@@ -92,7 +143,7 @@ export class DrizzleWorkspaceInviteRepository implements WorkspaceInviteReposito
     return rows[0] ? toInvite(rows[0]) : null;
   }
 
-  async listPendingByWorkspace(workspaceId: string, now: Date): Promise<WorkspaceInvite[]> {
+  async listPendingByWorkspace(workspaceId: string, _now: Date): Promise<WorkspaceInvite[]> {
     const rows = await this.db
       .select()
       .from(workspaceInvites)
@@ -100,10 +151,9 @@ export class DrizzleWorkspaceInviteRepository implements WorkspaceInviteReposito
         and(
           eq(workspaceInvites.workspaceId, workspaceId),
           isNull(workspaceInvites.acceptedAt),
-          gt(workspaceInvites.expiresAt, now),
         ),
       )
-      .orderBy(asc(workspaceInvites.createdAt));
+      .orderBy(desc(workspaceInvites.createdAt));
     return rows.map(toInvite);
   }
 

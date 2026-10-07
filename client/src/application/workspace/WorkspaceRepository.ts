@@ -64,6 +64,8 @@ export interface WorkspaceRepository {
   // Токен-инвайты в пространство (аналог бывших project-инвайтов). token/url — только
   // в ответе на create; listInvites отдаёт pending без токена.
   listInvites(workspaceId: string): Promise<WorkspaceInvite[]>;
+  resendInvite(workspaceId: string, inviteId: string): Promise<WorkspaceInvite>;
+  getInviteLink(workspaceId: string, inviteId: string): Promise<string>;
   createInvite(workspaceId: string, input: CreateWorkspaceInviteInput): Promise<WorkspaceInvite>;
   deleteInvite(workspaceId: string, inviteId: string): Promise<void>;
 

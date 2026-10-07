@@ -92,6 +92,9 @@ export class WorkspaceInviteNotFoundError extends Error {
   }
 }
 
+export class WorkspaceInviteMemberExistsError extends Error {}
+export class WorkspaceInviteCooldownError extends Error {}
+
 export class WorkspaceInviteExpiredError extends Error {
   constructor() {
     super('Workspace invite expired');
