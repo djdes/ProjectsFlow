@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/presentation/auth/PasswordInput';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
 import { InvalidCredentialsError } from '@/domain/user/errors';
@@ -77,9 +78,8 @@ export function LoginPage(): React.ReactElement {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Пароль</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             required
             value={password}

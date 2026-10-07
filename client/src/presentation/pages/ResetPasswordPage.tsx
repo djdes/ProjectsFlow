@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/presentation/auth/PasswordInput';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
 import { useContainer } from '@/infrastructure/di/container';
 import { HttpError } from '@/lib/HttpError';
@@ -95,9 +95,8 @@ export function ResetPasswordPage(): React.ReactElement {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="password">Новый пароль</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="new-password"
             autoFocus
             required
@@ -109,9 +108,8 @@ export function ResetPasswordPage(): React.ReactElement {
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirm">Повторите пароль</Label>
-          <Input
+          <PasswordInput
             id="confirm"
-            type="password"
             autoComplete="new-password"
             required
             minLength={8}
