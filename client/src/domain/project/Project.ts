@@ -38,6 +38,9 @@ export type Project = {
   // True для phantom-проекта «Входящие». Из обычных списков (sidebar, HomePage) такие
   // проекты надо фильтровать — у них отдельная вкладка /inbox.
   readonly isInbox: boolean;
+  // Пространство, которому принадлежит проект. Может отличаться от активного: личный хаб
+  // показывает проекты всех пространств. undefined — в старых ответах сервера.
+  readonly workspaceId?: string | null;
   // Multi-tenancy: роль ТЕКУЩЕГО юзера в проекте (для owner = создатель, для editor/viewer
   // — пришёл через invite). UI рисует бейдж + блокирует кнопки на основе этого поля.
   readonly role: ProjectRole;

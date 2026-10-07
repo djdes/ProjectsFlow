@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Link2, Loader2, Share2, UserPlus, Users } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Link2, Loader2, Share2, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembers
 import type { WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
+import { useProjectWorkspace } from '@/presentation/hooks/useProjectWorkspace';
 import { ProjectPublishTab } from './ProjectPublishTab';
 import { ProjectSiteTab } from './ProjectSiteTab';
 import {
@@ -48,22 +48,32 @@ function Initial({ name }: { name: string }): React.ReactElement {
   );
 }
 
-function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): React.ReactElement {
+// Вкладка «Участники»: здесь ПРИГЛАШАЮТ людей, а не делятся ссылкой. Доступ к проекту даёт
+// только членство в его пространстве, поэтому и форма зовёт в пространство — и прямо об этом
+// говорит. Показать проект без входа — отдельная вкладка «Публичная доска» (onOpenPublic).
+function ShareTab({
+  project,
+  members,
+  canInvite,
+  onOpenPublic,
+}: Omit<Props, 'isOwner'> & { onOpenPublic: () => void }): React.ReactElement {
   const { workspaceRepository } = useContainer();
-  const { workspace } = useCurrentWorkspace();
+  const workspace = useProjectWorkspace(project);
   const { user } = useCurrentUser();
   const [draft, setDraft] = useState('');
   const [role, setRole] = useState<WorkspaceInviteRole>('editor');
   const [submitting, setSubmitting] = useState(false);
+  // В личное пространство приглашать нельзя (сервер отвечает CannotInviteToDefaultWorkspace).
+  const isPersonal = workspace?.kind === 'default';
+  const workspaceLabel = workspace ? `«${workspace.name}»` : '';
 
   const emails = draft
     .split(/[\s,;]+/)
     .map((s) => s.trim().toLowerCase())
     .filter((s) => s.length > 0 && EMAIL_RE.test(s));
 
-  // Инвайт теперь в ПРОСТРАНСТВО проекта: приглашённый увидит все проекты пространства.
   const invite = async (): Promise<void> => {
-    if (emails.length === 0 || !workspace) return;
+    if (emails.length === 0 || !workspace || isPersonal) return;
     setSubmitting(true);
     try {
       const settled = await Promise.allSettled(
@@ -71,7 +81,11 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
       );
       const ok = settled.filter((s) => s.status === 'fulfilled').length;
       if (ok === settled.length) {
-        toast.success(ok === 1 ? 'Приглашение отправлено' : `Отправлено приглашений: ${ok}`);
+        toast.success(
+          ok === 1
+            ? `Приглашение в пространство ${workspaceLabel} отправлено`
+            : `Отправлено приглашений в пространство: ${ok}`,
+        );
         setDraft('');
       } else {
         const firstError = settled.find((item) => item.status === 'rejected');
@@ -89,75 +103,96 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
   const copyLink = (): void => {
     void navigator.clipboard
       .writeText(`${window.location.origin}/projects/${project.id}`)
-      .then(() => toast.success('Ссылка скопирована'))
+      .then(() => toast.success('Ссылка скопирована — откроется у участников пространства'))
       .catch((error) => toast.error(actionErrorMessage(error, 'Не удалось скопировать ссылку')));
   };
 
   return (
     <div className="px-4 py-3">
-      {/* Email + Invite. */}
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void invite();
-            }
-          }}
-          placeholder="Email, через запятую"
-          className="h-9"
-          disabled={!canInvite}
-        />
-        <div className="flex shrink-0 items-center justify-end gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
+      {/* 1. Пригласить человека = добавить его в пространство проекта. */}
+      <p className="text-sm font-medium text-foreground">Пригласить в пространство {workspaceLabel}</p>
+      {isPersonal ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Проект лежит в вашем личном пространстве — в него пригласить нельзя. Чтобы работать вместе,
+          перенесите проект в командное пространство: «Перенести в…» в{' '}
+          {workspace && (
+            <Link to={`/workspaces/${workspace.id}/settings`} className="font-medium text-primary hover:underline">
+              настройках пространства
+            </Link>
+          )}
+          .
+        </p>
+      ) : (
+        <>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Приглашённый станет участником пространства и увидит все его проекты, включая этот.
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void invite();
+                }
+              }}
+              placeholder="Email, через запятую"
+              aria-label={`Email для приглашения в пространство ${workspaceLabel}`}
+              className="h-9"
+              disabled={!canInvite}
+            />
+            <div className="flex shrink-0 items-center justify-end gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={!canInvite}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+                  >
+                    {role === 'editor' ? 'Редактор' : 'Наблюдатель'}
+                    <ChevronDown className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem className="items-start gap-2 py-2" onClick={() => setRole('editor')}>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">Редактор</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Может создавать и изменять задачи во всех проектах пространства.
+                      </span>
+                    </span>
+                    {role === 'editor' && <Check className="mt-0.5 size-4 text-primary" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="items-start gap-2 py-2" onClick={() => setRole('viewer')}>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">Наблюдатель</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Может только просматривать проекты пространства и обсуждения.
+                      </span>
+                    </span>
+                    {role === 'viewer' && <Check className="mt-0.5 size-4 text-primary" />}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
                 type="button"
-                disabled={!canInvite}
-                className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+                size="sm"
+                className="h-9"
+                disabled={!canInvite || submitting || emails.length === 0 || !workspace}
+                onClick={() => void invite()}
               >
-                {role === 'editor' ? 'Редактор' : 'Наблюдатель'}
-                <ChevronDown className="size-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuItem className="items-start gap-2 py-2" onClick={() => setRole('editor')}>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">Редактор</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Может создавать и изменять задачи и представления.
-                  </span>
-                </span>
-                {role === 'editor' && <Check className="mt-0.5 size-4 text-primary" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem className="items-start gap-2 py-2" onClick={() => setRole('viewer')}>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">Наблюдатель</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Может только просматривать проект и обсуждение.
-                  </span>
-                </span>
-                {role === 'viewer' && <Check className="mt-0.5 size-4 text-primary" />}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            type="button"
-            size="sm"
-            className="h-9"
-            disabled={!canInvite || submitting || emails.length === 0}
-            onClick={() => void invite()}
-          >
-            {submitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-            Пригласить
-          </Button>
-        </div>
-      </div>
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
+                Пригласить
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* Список участников. */}
-      <ul className="mt-3 space-y-2">
+      {/* 2. У кого уже есть доступ: участники пространства, роль — статичная метка. */}
+      <p className="mb-1.5 mt-4 text-xs font-medium text-muted-foreground">Доступ к проекту</p>
+      <ul className="space-y-2">
         {members.map((m) => {
           const isYou = m.userId === user?.id;
           return (
@@ -170,42 +205,54 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{m.user.email}</p>
               </div>
-              {/* Управление ролью живёт в панели участников; здесь — статичная метка. */}
               <span className="shrink-0 text-xs text-muted-foreground">{ROLE_LABEL[m.role]}</span>
             </li>
           );
         })}
+        {!isPersonal && (
+          <li className="flex items-center gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+              <Users className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm">Все участники пространства {workspaceLabel}</p>
+              <p className="text-xs text-muted-foreground">
+                {workspace?.memberCount ?? members.length} участн. · роли и состав — в настройках пространства
+              </p>
+            </div>
+            {workspace && (
+              <Button asChild variant="ghost" size="sm" className="h-9 shrink-0 px-2">
+                <Link to={`/workspaces/${workspace.id}/settings`}>Настройки</Link>
+              </Button>
+            )}
+          </li>
+        )}
       </ul>
 
-      {/* Проекты принадлежат пространству: доступ наследуется от его участников. */}
-      <div className="mt-3 border-t pt-3">
-        <p className="mb-1.5 text-xs font-medium text-muted-foreground">Общий доступ</p>
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground">
-            <Users className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm">
-              Все участники пространства{workspace ? ` «${workspace.name}»` : ''}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Доступ наследуется · {workspace?.memberCount ?? members.length} участн.
-            </p>
+      {/* 3. Ссылка — это не приглашение: открывается только у участников. Показать без входа —
+          публичная доска. */}
+      <div className="mt-4 border-t pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-foreground">Ссылка на проект</p>
+            <p className="text-xs text-muted-foreground">Откроется только у участников пространства.</p>
           </div>
-          {workspace && (
-            <Button asChild variant="ghost" size="sm" className="h-9 px-2">
-              <Link to={`/workspaces/${workspace.id}/settings`}>Управлять</Link>
-            </Button>
-          )}
+          <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={copyLink}>
+            <Link2 className="size-3.5" />
+            Копировать
+          </Button>
         </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between border-t pt-2.5">
-        <span className="text-xs text-muted-foreground">Доступ управляется через пространство</span>
-        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={copyLink}>
-          <Link2 className="size-3.5" />
-          Копировать ссылку
-        </Button>
+        <button
+          type="button"
+          onClick={onOpenPublic}
+          className="mt-2 flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <span>
+            Показать проект без входа и приглашения —{' '}
+            <span className="font-medium text-primary">Публичная доска</span>
+          </span>
+          <ChevronRight className="size-3.5 shrink-0" />
+        </button>
       </div>
     </div>
   );
@@ -215,7 +262,7 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
 // в шапке проекта. См. spec 2026-07-05-project-public-link-and-share-design.md.
 type ShareTabId = 'share' | 'board' | 'site';
 const TAB_LABEL: Record<ShareTabId, string> = {
-  share: 'Доступ',
+  share: 'Участники',
   board: 'Публичная доска',
   site: 'Сайт проекта',
 };
@@ -278,7 +325,8 @@ export function ProjectSharePopover({ project, members, canInvite, isOwner, comp
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-[420px] max-w-[calc(100vw-1rem)] p-0"
       >
-        {/* Табы: Доступ · Публичная доска (канбан) · Сайт проекта (результат). */}
+        {/* Табы: Участники (пригласить в пространство) · Публичная доска (показать без входа) ·
+            Сайт проекта (результат). */}
         <div className="flex items-center gap-4 border-b px-4 pt-2.5" role="tablist" aria-label="Поделиться проектом">
           {(['share', 'board', 'site'] as const).map((t) => (
             <button
@@ -300,7 +348,7 @@ export function ProjectSharePopover({ project, members, canInvite, isOwner, comp
         </div>
 
         {tab === 'share' ? (
-          <ShareTab project={project} members={members} canInvite={canInvite} />
+          <ShareTab project={project} members={members} canInvite={canInvite} onOpenPublic={() => setTab('board')} />
         ) : tab === 'board' ? (
           <ProjectPublishTab project={project} isOwner={isOwner} />
         ) : (

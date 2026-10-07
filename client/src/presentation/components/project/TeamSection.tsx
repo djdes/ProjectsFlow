@@ -9,7 +9,7 @@ import type { Project } from '@/domain/project/Project';
 import type { WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
+import { useProjectWorkspace } from '@/presentation/hooks/useProjectWorkspace';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 
@@ -40,7 +40,7 @@ const CREATOR_BADGE_CLASS = 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
 export function TeamSection({ project }: { project: Project }): React.ReactElement | null {
   const { workspaceRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
-  const { workspace } = useCurrentWorkspace();
+  const workspace = useProjectWorkspace(project);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
 
