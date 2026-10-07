@@ -37,6 +37,7 @@ type HarnessOptions = {
   readonly assigneeUserId?: string;
   readonly memberships?: Readonly<Record<string, ProjectRole>>;
   readonly sharedUserIds?: readonly string[];
+  readonly createdBy?: string;
 };
 
 function makeProject(isInbox: boolean): Project {
@@ -65,11 +66,11 @@ function makeProject(isInbox: boolean): Project {
   };
 }
 
-function makeTask(assigneeUserId: string): Task {
+function makeTask(assigneeUserId: string, createdBy: string = OWNER_ID): Task {
   return {
     id: TASK_ID,
     projectId: PROJECT_ID,
-    createdBy: OWNER_ID,
+    createdBy,
     assignee: {
       userId: assigneeUserId,
       displayName: DISPLAY_NAMES[assigneeUserId] ?? assigneeUserId,
@@ -115,7 +116,7 @@ function makeHarness(options: HarnessOptions = {}) {
     [TARGET_ID]: 'viewer',
   };
   const sharedUserIds = options.sharedUserIds ?? [CURRENT_ASSIGNEE_ID, TARGET_ID];
-  let task = makeTask(options.assigneeUserId ?? CURRENT_ASSIGNEE_ID);
+  let task = makeTask(options.assigneeUserId ?? CURRENT_ASSIGNEE_ID, options.createdBy ?? OWNER_ID);
 
   const calls = {
     updates: [] as Array<{ taskId: string; patch: UpdateTaskPatch }>,
@@ -277,13 +278,12 @@ test('inbox: the current assignee can return the task to the owner', async () =>
   assert.equal(h.calls.updates.length, 1);
 });
 
-// Коллега по общему пространству ВИДИТ личные задачи владельца инбокса (см.
-// ListPersonalTasksOfColleagues → canModify: true) и может двигать/удалять их
-// (taskAuthorization.isInboxColleague). Смена ответственного обязана идти по той же
-// границе: иначе массовое «назначить ответственного» по выбранным карточкам падало
-// на личных задачах коллеги 404-й, а остальные задачи выборки проходили.
-test('inbox: a colleague from a shared workspace can reassign a personal task', async () => {
-  const h = makeHarness({ isInbox: true, sharedUserIds: [OWNER_ID, TARGET_ID] });
+// Коллега, поставивший личную задачу в чужие «Входящие», ВИДИТ её (ListPersonalTasksOfColleagues
+// → canModify: true) и может двигать/удалять (taskAuthorization.isDelegatingColleague). Смена
+// ответственного идёт по той же границе: иначе массовое «назначить ответственного» по
+// выбранным карточкам падало бы на таких задачах 404-й, а остальные задачи выборки проходили.
+test('inbox: a colleague who put the task can reassign it', async () => {
+  const h = makeHarness({ isInbox: true, sharedUserIds: [OWNER_ID, TARGET_ID], createdBy: VIEWER_ID });
 
   const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
 
@@ -301,9 +301,19 @@ test('inbox: a user with no shared workspace with the owner cannot reassign', as
     ProjectNotFoundError,
   );
 
-  // Единственный lookup — проверка «коллега ли актор владельцу инбокса»; она не прошла,
-  // до валидации нового ответственного дело не дошло.
-  assert.deepEqual(h.calls.sharedLookups, [OUTSIDER_ID]);
+  // Задачу ставил не он — отказ ещё до проверки круга коллег и нового ответственного.
+  assert.deepEqual(h.calls.sharedLookups, []);
+  assert.deepEqual(h.calls.updates, []);
+});
+
+// Личное приватно: коллега по общему пространству, который задачу НЕ ставил, её не трогает.
+test('inbox: a colleague who did not put the task cannot reassign it', async () => {
+  const h = makeHarness({ isInbox: true, sharedUserIds: [OWNER_ID, TARGET_ID] });
+
+  await assert.rejects(
+    h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID),
+    ProjectNotFoundError,
+  );
   assert.deepEqual(h.calls.updates, []);
 });
 

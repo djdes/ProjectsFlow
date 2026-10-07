@@ -9,11 +9,10 @@ import {
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
 
 /**
- * Личные задачи коллег: право на действие должно совпадать с правом на просмотр.
- *
- * Раньше карточка чужой личной задачи была видна во «Входящих», но статус не менялся и
- * удалить её было нельзя — действия молча упирались в 404. Здесь закреплена новая граница
- * и, что важнее, её ПРЕДЕЛ: посторонний (нет общего пространства) не должен получить ничего.
+ * Личные задачи приватны: чужую личную задачу кроме владельца и ответственного видит и меняет
+ * только коллега, который её поставил. Раньше любой участник общего пространства видел,
+ * двигал и удалял все личные задачи коллег. Здесь закреплены и новое правило, и его ПРЕДЕЛ:
+ * посторонний (нет общего пространства) не получает ничего, даже если когда-то ставил задачу.
  */
 
 const INBOX = {
@@ -26,9 +25,17 @@ const INBOX = {
 function makeDeps(options: {
   colleaguesOf?: Record<string, string[]>;
   assigneeUserId?: string;
+  createdBy?: string;
   project?: Record<string, unknown>;
 }): TaskAccessDeps {
   const colleaguesOf = options.colleaguesOf ?? {};
+  const task = (id: string) =>
+    ({
+      id,
+      projectId: INBOX.id,
+      createdBy: options.createdBy ?? 'bob',
+      assignee: { userId: options.assigneeUserId ?? 'bob' },
+    }) as never;
   return {
     projects: {
       async getById(id: string) {
@@ -46,39 +53,40 @@ function makeDeps(options: {
     } as never,
     tasks: {
       async getById(id: string) {
-        return {
-          id,
-          projectId: INBOX.id,
-          assignee: { userId: options.assigneeUserId ?? 'bob' },
-        } as never;
+        return task(id);
+      },
+      async getByIdIncludingDeleted(id: string) {
+        return task(id);
       },
     } as never,
   };
 }
 
-test('коллега по общему пространству меняет статус личной задачи владельца', async () => {
+test('коллега не видит, не двигает и не удаляет собственные личные задачи владельца', async () => {
   const deps = makeDeps({ colleaguesOf: { me: ['bob'] } });
+  await assert.rejects(() => requireTaskReadAccess(deps, INBOX.id, 't1', 'me'), ProjectNotFoundError);
+  await assert.rejects(
+    () => requireTaskModifyAccess(deps, INBOX.id, 't1', 'me', 'move_task'),
+    ProjectNotFoundError,
+  );
+  await assert.rejects(
+    () => requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task'),
+    ProjectNotFoundError,
+  );
+});
+
+test('коллега, поставивший задачу, открывает, двигает и удаляет её в чужих «Входящих»', async () => {
+  const deps = makeDeps({ colleaguesOf: { me: ['bob'] }, createdBy: 'me' });
+  assert.equal((await requireTaskReadAccess(deps, INBOX.id, 't1', 'me')).project.id, INBOX.id);
   const access = await requireTaskModifyAccess(deps, INBOX.id, 't1', 'me', 'move_task');
-  assert.equal(access.project.id, INBOX.id);
   assert.equal(access.isAssignee, false);
+  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task'));
+  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task', { includeDeleted: true }));
 });
 
-test('коллега удаляет личную задачу владельца', async () => {
-  const deps = makeDeps({ colleaguesOf: { me: ['bob'] } });
-  const access = await requireTaskDeleteAccess(deps, INBOX.id, 'me', 'delete_task');
-  assert.equal(access.project.id, INBOX.id);
-});
-
-// Раз статус меняется — карточку надо уметь открыть, иначе полуфункциональное состояние.
-test('коллега открывает карточку личной задачи владельца', async () => {
-  const deps = makeDeps({ colleaguesOf: { me: ['bob'] } });
-  const access = await requireTaskReadAccess(deps, INBOX.id, 't1', 'me');
-  assert.equal(access.project.id, INBOX.id);
-});
-
-// ГЛАВНОЕ: предел расширения. Без общего пространства доступа нет ни к чему.
+// ГЛАВНОЕ: предел. Без общего пространства доступа нет ни к чему, даже к своей постановке.
 test('посторонний без общего пространства не получает ни просмотра, ни правки, ни удаления', async () => {
-  const deps = makeDeps({ colleaguesOf: { stranger: ['someone-else'] } });
+  const deps = makeDeps({ colleaguesOf: { stranger: ['someone-else'] }, createdBy: 'stranger' });
   await assert.rejects(
     () => requireTaskModifyAccess(deps, INBOX.id, 't1', 'stranger', 'move_task'),
     ProjectNotFoundError,
@@ -88,7 +96,7 @@ test('посторонний без общего пространства не �
     ProjectNotFoundError,
   );
   await assert.rejects(
-    () => requireTaskDeleteAccess(deps, INBOX.id, 'stranger', 'delete_task'),
+    () => requireTaskDeleteAccess(deps, INBOX.id, 't1', 'stranger', 'delete_task'),
     ProjectNotFoundError,
   );
 });
@@ -96,17 +104,16 @@ test('посторонний без общего пространства не �
 test('владелец inbox сохраняет полный доступ', async () => {
   const deps = makeDeps({ colleaguesOf: {} });
   assert.equal((await requireTaskModifyAccess(deps, INBOX.id, 't1', 'bob', 'move_task')).isAssignee, true);
-  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 'bob', 'delete_task'));
+  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 't1', 'bob', 'delete_task'));
 });
 
-// Ответственный, которому задачу делегировали извне, править её может (так было и раньше),
-// а вот убирать из чужих «Входящих» — нет: он не коллега владельца.
-test('внешний ответственный правит задачу, но не удаляет её', async () => {
+// Ответственный правит поручённую ему задачу, а вот убирать её из чужих «Входящих» — нет.
+test('ответственный правит задачу, но не удаляет её', async () => {
   const deps = makeDeps({ colleaguesOf: { outsider: [] }, assigneeUserId: 'outsider' });
   const access = await requireTaskModifyAccess(deps, INBOX.id, 't1', 'outsider', 'move_task');
   assert.equal(access.isAssignee, true);
   await assert.rejects(
-    () => requireTaskDeleteAccess(deps, INBOX.id, 'outsider', 'delete_task'),
+    () => requireTaskDeleteAccess(deps, INBOX.id, 't1', 'outsider', 'delete_task'),
     ProjectNotFoundError,
   );
 });

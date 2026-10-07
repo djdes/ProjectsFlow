@@ -4,11 +4,12 @@ import type { Task } from '../../domain/task/Task.js';
 import type { SharedUser } from '../project/ProjectMemberRepository.js';
 import { ListPersonalTasksOfColleagues } from './ListPersonalTasksOfColleagues.js';
 
-function task(id: string, projectId: string, assigneeUserId: string): Task {
+// По умолчанию задачу поставил caller ('me') — это и есть видимое ему поручение коллеге.
+function task(id: string, projectId: string, assigneeUserId: string, createdBy = 'me'): Task {
   return {
     id,
     projectId,
-    createdBy: assigneeUserId,
+    createdBy,
     creator: null,
     assignee: { userId: assigneeUserId, displayName: assigneeUserId, avatarUrl: null },
     description: `Задача ${id}`,
@@ -74,7 +75,7 @@ function makeList(input: {
   return { list, askedOwners };
 }
 
-test('colleague personal inbox tasks are returned with inbox context', async () => {
+test('a task the caller put into a colleague inbox is returned with inbox context', async () => {
   const { list } = makeList({
     colleagues: ['bob'],
     inboxes: [{ id: 'bob-inbox', ownerId: 'bob', name: 'Входящие' }],
@@ -86,9 +87,7 @@ test('colleague personal inbox tasks are returned with inbox context', async () 
   assert.equal(items[0]!.projectId, 'bob-inbox');
   assert.equal(items[0]!.projectName, 'Входящие');
   assert.equal(items[0]!.isInbox, true);
-  // Право на действие совпадает с правом на просмотр: раз задача коллеги видна, её можно
-  // перевести в другую колонку и удалить. Раньше здесь стояло false, и карточка выглядела
-  // живой, а действия молча упирались в 404.
+  // Право на действие совпадает с правом на просмотр: поставил задачу — может двигать и удалять.
   assert.equal(items[0]!.canModify, true);
   assert.equal(items[0]!.commitCount, 2);
   assert.equal(items[0]!.attachmentCount, 3);
@@ -178,4 +177,21 @@ test("caller's own inbox is filtered out even if it leaks into the colleague cir
 
   const items = await list.execute('me');
   assert.deepEqual(items.map((i) => i.task.id), ['t1']);
+});
+
+// Главное правило: собственные личные задачи коллеги приватны — после приглашения в общее
+// пространство они не должны всплывать во «Входящих» у всех остальных.
+test("a colleague's own personal tasks are never visible", async () => {
+  const { list } = makeList({
+    colleagues: ['bob', 'carol'],
+    inboxes: [{ id: 'bob-inbox', ownerId: 'bob', name: 'Входящие' }],
+    tasks: [
+      task('own', 'bob-inbox', 'bob', 'bob'),
+      task('from-carol', 'bob-inbox', 'bob', 'carol'),
+      task('from-me', 'bob-inbox', 'bob', 'me'),
+    ],
+  });
+
+  const items = await list.execute('me');
+  assert.deepEqual(items.map((i) => i.task.id), ['from-me']);
 });

@@ -21,7 +21,9 @@ export class RestoreDeletedTask {
 
   async execute(projectId: string, actorUserId: string, taskId: string): Promise<Task> {
     // Право то же, что на удаление: кто мог отправить в корзину — тот может и вернуть.
-    await requireTaskDeleteAccess(this.deps, projectId, actorUserId, 'delete_task');
+    await requireTaskDeleteAccess(this.deps, projectId, taskId, actorUserId, 'delete_task', {
+      includeDeleted: true,
+    });
 
     // Именно IncludingDeleted: обычный getById удалённую задачу уже не видит.
     const trashed = await this.deps.tasks.getByIdIncludingDeleted(taskId);

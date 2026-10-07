@@ -38,22 +38,25 @@ export type TaskAccessResult = {
 };
 
 /**
- * Коллега по общему пространству — тот, кто и так ВИДИТ личные задачи этого владельца.
+ * Личные задачи приватны. Чужую личную задачу (во «Входящих» коллеги) кроме владельца и
+ * ответственного видит и меняет только тот, кто её поставил, — пока он остаётся коллегой
+ * владельца (участник общего пространства). Так поручение коллеге не теряется из виду, а
+ * собственные личные задачи коллеги остаются только его.
  *
- * Граница ровно та же, что у видимости (ListPersonalTasksOfColleagues → listSharedUsers):
- * участники общих с caller'ом пространств. Раньше личные задачи коллег было видно, но нельзя
- * было ни перевести в другую колонку, ни удалить — карточка выглядела живой, а действия
- * молча упирались в 404. Теперь право на действие совпадает с правом на просмотр.
+ * Раньше любой участник общего пространства видел, двигал и удалял ВСЕ личные задачи коллег:
+ * после приглашения в пространство чужие «на сегодня» оказывались у всех во «Входящих».
  *
- * Шире не открываем: посторонний (нет общего пространства) не увидит задачу и не тронет её —
- * список коллег формирует сервер, клиент не передаёт ни одного id.
+ * Граница совпадает с лентой ListPersonalTasksOfColleagues: право на действие = право на
+ * просмотр. Посторонний (нет общего пространства) не получает ничего — круг коллег формирует
+ * сервер, клиент не передаёт ни одного id.
  */
-async function isInboxColleague(
+async function isDelegatingColleague(
   deps: TaskAccessDeps,
   userId: string,
   inboxOwnerId: string,
+  task: Pick<Task, 'createdBy'>,
 ): Promise<boolean> {
-  if (userId === inboxOwnerId) return true;
+  if (task.createdBy !== userId) return false;
   const colleagues = await deps.members.listSharedUsers(userId);
   return colleagues.some((c) => c.id === inboxOwnerId);
 }
@@ -83,9 +86,9 @@ export async function requireTaskModifyAccess(
     if (task.assignee.userId === userId) {
       return { project, isAssignee: true };
     }
-    // Коллега по общему пространству: он эту задачу видит во «Входящих», значит может и
-    // перевести её в другую колонку.
-    if (await isInboxColleague(deps, userId, project.ownerId)) {
+    // Коллега, поставивший эту задачу: он видит её во «Входящих», значит может и перевести
+    // её в другую колонку.
+    if (await isDelegatingColleague(deps, userId, project.ownerId, task)) {
       return { project, isAssignee: false };
     }
     throw new ProjectNotFoundError();
@@ -122,7 +125,7 @@ export async function requireTaskReadAccess(
     if (task.assignee.userId === userId) return { project, isAssignee: true };
     // Тот же круг, что и для правки: раз задача видна в списке, карточку надо уметь открыть.
     // Иначе получилось бы полуфункциональное состояние — статус меняется, а по клику 404.
-    if (await isInboxColleague(deps, userId, project.ownerId)) {
+    if (await isDelegatingColleague(deps, userId, project.ownerId, task)) {
       return { project, isAssignee: false };
     }
     throw new ProjectNotFoundError();
@@ -132,21 +135,27 @@ export async function requireTaskReadAccess(
   return { project, isAssignee: task.assignee.userId === userId };
 }
 
-// Delete-операции для inbox-задач: владелец Inbox или коллега по общему пространству.
-// Текущий ответственный сам по себе права на удаление НЕ получает — если он не коллега
-// владельца, задача ему делегирована извне, и убирать её из чужих «Входящих» он не должен.
-// Удаление мягкое (deleted_at, db/134), поэтому ошибочное действие восстановимо.
+// Delete-операции для inbox-задач: владелец Inbox или коллега, поставивший эту задачу.
+// Текущий ответственный сам по себе права на удаление НЕ получает — задача ему поручена, и
+// убирать её из чужих «Входящих» он не должен. Удаление мягкое (deleted_at, db/134), поэтому
+// ошибочное действие восстановимо. includeDeleted — для корзины (восстановить, удалить навсегда).
 export async function requireTaskDeleteAccess(
   deps: TaskAccessDeps,
   projectId: string,
+  taskId: string,
   userId: string,
   action: ProjectAction,
+  options: { readonly includeDeleted?: boolean } = {},
 ): Promise<TaskAccessResult> {
   const project = await deps.projects.getById(projectId);
   if (!project) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
-    if (await isInboxColleague(deps, userId, project.ownerId)) {
+    if (project.ownerId === userId) return { project, isAssignee: false };
+    const task = options.includeDeleted
+      ? await deps.tasks.getByIdIncludingDeleted(taskId)
+      : await deps.tasks.getById(taskId);
+    if (task && task.projectId === projectId && (await isDelegatingColleague(deps, userId, project.ownerId, task))) {
       return { project, isAssignee: false };
     }
     throw new ProjectNotFoundError();

@@ -6,11 +6,19 @@ import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/Work
 import { WorkspaceNotFoundError, NotWorkspaceLeadError } from '../../domain/workspace/errors.js';
 import { ListMemberTasksForLead } from './ListMemberTasksForLead.js';
 
-function task(id: string, projectId: string, assigneeUserId: string, status: TaskStatus = 'todo'): Task {
+// По умолчанию задачу поставил руководитель ('lead'): личные задачи сотрудника он видит,
+// только если сам их поставил.
+function task(
+  id: string,
+  projectId: string,
+  assigneeUserId: string,
+  status: TaskStatus = 'todo',
+  createdBy = 'lead',
+): Task {
   return {
     id,
     projectId,
-    createdBy: assigneeUserId,
+    createdBy,
     creator: null,
     assignee: { userId: assigneeUserId, displayName: assigneeUserId, avatarUrl: null },
     description: `Задача ${id}`,
@@ -152,7 +160,7 @@ test('lead sees member tasks across the whole workspace, including projects they
   assert.deepEqual(items.map((i) => i.task.id).sort(), ['t1', 't2']);
   const byId = new Map(items.map((i) => [i.task.id, i]));
   assert.equal(byId.get('t1')!.isInbox, true);
-  assert.equal(byId.get('t1')!.canModify, true, 'личные задачи модерируемы любым со-участником пространства');
+  assert.equal(byId.get('t1')!.canModify, true, 'личную задачу, поставленную руководителем, он и меняет');
   assert.equal(byId.get('t2')!.isInbox, false);
   assert.equal(
     byId.get('t2')!.canModify,
@@ -270,4 +278,23 @@ test('other assignees in the same workspace are not leaked into the member board
 
   const items = await list.execute('lead', 'bob');
   assert.deepEqual(items.map((i) => i.task.id), ['t1']);
+});
+
+test("member's own personal tasks are hidden from the lead; project tasks stay visible", async () => {
+  const { list } = makeList({
+    callerRole: 'lead',
+    memberRole: 'editor',
+    projects: [
+      project({ id: 'bob-inbox', workspaceId: 'ws-team', ownerId: 'bob', name: 'Входящие', isInbox: true }),
+      project({ id: 'proj-a', workspaceId: 'ws-team', ownerId: 'someone-else', name: 'Проект А' }),
+    ],
+    tasks: [
+      task('own', 'bob-inbox', 'bob', 'todo', 'bob'),
+      task('from-lead', 'bob-inbox', 'bob', 'todo', 'lead'),
+      task('project', 'proj-a', 'bob', 'todo', 'bob'),
+    ],
+  });
+
+  const items = await list.execute('lead', 'bob');
+  assert.deepEqual(items.map((i) => i.task.id).sort(), ['from-lead', 'project']);
 });

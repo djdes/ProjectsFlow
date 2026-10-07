@@ -23,6 +23,7 @@ export class DeleteTask {
     const { project } = await requireTaskDeleteAccess(
       this.deps,
       projectId,
+      taskId,
       ownerUserId,
       'delete_task',
     );

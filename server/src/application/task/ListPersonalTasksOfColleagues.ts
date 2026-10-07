@@ -18,7 +18,11 @@ type Deps = {
 };
 
 /**
- * Личные (inbox) задачи коллег caller'а — колонки «Личные · <Имя>» во входящих.
+ * Личные (inbox) задачи коллег, которые поставил сам caller, — колонки «Личные · <Имя>» во
+ * входящих: поручил коллеге личную задачу (она переехала в его «Входящие») — видишь её дальше.
+ * Собственные личные задачи коллеги сюда НЕ попадают: личное видят только владелец,
+ * ответственный и тот, кто поставил задачу (граница прав — isDelegatingColleague в
+ * taskAuthorization).
  *
  * Граница видимости: круг коллег берётся ТОЛЬКО из members.listSharedUsers (тот же
  * источник, что у ListSharedMembers) — это участники общих с caller'ом ПРОСТРАНСТВ,
@@ -28,9 +32,7 @@ type Deps = {
  * (берём только projects.is_inbox = 1 владельца-коллеги).
  *
  * Право на действие совпадает с правом на просмотр: раз задача видна в этом списке, её можно
- * перевести в другую колонку и удалить (см. isInboxColleague в taskAuthorization — там та же
- * граница listSharedUsers). Раньше здесь стоял canModify=false, и карточка выглядела живой,
- * а действия молча упирались в 404.
+ * перевести в другую колонку и удалить (см. isDelegatingColleague в taskAuthorization).
  */
 export class ListPersonalTasksOfColleagues {
   constructor(private readonly deps: Deps) {}
@@ -59,9 +61,9 @@ export class ListPersonalTasksOfColleagues {
     const projectById = new Map(visibleInboxes.map((p) => [p.id, p]));
     // listByProjects отдаёт только живые задачи (deleted_at IS NULL, db/134).
     const taskList = await this.deps.tasks.listByProjects([...projectById.keys()]);
-    // Задачи, где ответственный — сам caller, уже показаны во вкладке «Мне».
+    // Только поставленные caller'ом; где ответственный — сам caller, уже показаны во вкладке «Мне».
     const visible = taskList.filter(
-      (t) => projectById.has(t.projectId) && t.assignee.userId !== userId,
+      (t) => projectById.has(t.projectId) && t.createdBy === userId && t.assignee.userId !== userId,
     );
 
     const ids = visible.map((t) => t.id);
@@ -85,7 +87,7 @@ export class ListPersonalTasksOfColleagues {
           userId: project.ownerId,
           displayName: colleagueNameById.get(project.ownerId) ?? '',
         },
-        // Коллега по общему пространству: видит задачу — значит может менять статус и удалять.
+        // Задача поставлена caller'ом: видит её — значит может менять статус и удалять.
         canModify: true,
         commitCount: commitCounts.get(task.id) ?? 0,
         attachmentCount: attachmentCounts.get(task.id) ?? 0,

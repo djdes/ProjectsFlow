@@ -19,7 +19,9 @@ export class PurgeDeletedTask {
 
   async execute(projectId: string, actorUserId: string, taskId: string): Promise<void> {
     // Право то же, что на удаление и восстановление.
-    await requireTaskDeleteAccess(this.deps, projectId, actorUserId, 'delete_task');
+    await requireTaskDeleteAccess(this.deps, projectId, taskId, actorUserId, 'delete_task', {
+      includeDeleted: true,
+    });
 
     const trashed = await this.deps.tasks.getByIdIncludingDeleted(taskId);
     if (!trashed || trashed.projectId !== projectId) throw new TaskNotFoundError(taskId);
