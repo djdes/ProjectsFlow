@@ -548,6 +548,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               <RichTextEditor
                 ref={editorRef}
                 variant="description"
+                toolbar
+                taskDocument
                 selectionMenu={false}
                 value={description}
                 onChange={setDescription}

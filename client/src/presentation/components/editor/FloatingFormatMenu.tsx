@@ -1,166 +1,85 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
-
-import { cn } from '@/lib/utils';
-import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { FormatMenu } from './FormatMenu';
 
-// Якорь меню в координатах вьюпорта (как от `view.coordsAtPos` / события мыши).
-export interface FloatingAnchor {
-  /** Левый край выделения / точка клика. */
-  x: number;
-  /** Верх выделения (предпочтительно ставим меню НАД ним). */
-  top: number;
-  /** Низ выделения (фолбэк — ставим ПОД ним, если сверху не помещается). */
-  bottom: number;
-}
+export interface FloatingAnchor { x: number; top: number; bottom: number }
 
-export const PAD = 8; // отступ от краёв вьюпорта
-
-// Прямоугольник якоря (основного окна меню) в координатах вьюпорта — для flyout-подменю.
-export interface BesideRect {
-  left: number;
-  right: number;
-  top: number;
-}
-
-// Самокорректирующееся позиционирование flyout-подменю СБОКУ от основного окна.
-// Тот же приём, что и place() ниже: меряем, где элемент реально оказался при текущем
-// style.left/top, и сдвигаем на дельту до желаемой viewport-позиции. Работает при любом
-// transform-предке (Sheet) без его поиска. Предпочтительно справа от окна; не влезает —
-// флип влево; верх — на высоте пункта (anchor.top); вертикальный кламп по вьюпорту.
-export function placeBeside(
-  el: HTMLElement,
-  anchor: BesideRect,
-  gap = 6,
-): { left: number; top: number } {
-  const styleLeft = parseFloat(el.style.left) || 0;
-  const styleTop = parseFloat(el.style.top) || 0;
-  const m = el.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  let vpLeft = anchor.right + gap; // справа от основного окна
-  if (vpLeft + m.width > vw - PAD) {
-    const flipped = anchor.left - gap - m.width; // не влезает справа — флип влево
-    vpLeft = flipped >= PAD ? flipped : Math.max(PAD, vw - PAD - m.width);
-  }
-  if (vpLeft < PAD) vpLeft = PAD;
-  let vpTop = anchor.top; // на высоте пункта-триггера
-  if (vpTop + m.height > vh - PAD) vpTop = Math.max(PAD, vh - PAD - m.height);
-  if (vpTop < PAD) vpTop = PAD;
-  return { left: styleLeft + (vpLeft - m.left), top: styleTop + (vpTop - m.top) };
-}
-
-// Плавающее меню форматирования (по выделению И по правому клику). В отличие от
-// Tiptap BubbleMenu / Radix Popover — полностью самоуправляемое: `position: fixed`,
-// клампится по вьюпорту (цвет/преобразование-панели НИКОГДА не уезжают в угол 0,0 —
-// это та же коробка), закрывается по Escape / уходу выделения.
-//
-// ВАЖНО: рендерим IN-TREE (без портала в body). Дровер — это Sheet (Radix Dialog) с
-// focus-trap'ом; меню-портал в body оказывался ВНЕ диалога, и Radix синхронно
-// возвращал фокус в диалог при первом же pointerdown по кнопке меню — выделение
-// схлопывалось, меню рушилось. Внутри поддерева диалога focus-trap не мешает, а
-// `position: fixed` всё равно выходит за overflow-обрезку.
-export function FloatingFormatMenu({
-  editor,
-  anchor,
-  onClose,
-  getRange,
-}: {
+// The overlay has a stable origin and stays inside the dialog's focus scope.
+export function FloatingFormatMenu({ editor, anchor, onClose, getRange, ownerId }: {
   editor: Editor;
   anchor: FloatingAnchor | null;
   onClose: () => void;
-  /** Снимок диапазона выделения на момент открытия (восстанавливается перед командой). */
   getRange?: () => { from: number; to: number } | null;
+  ownerId: string;
 }): React.ReactElement | null {
-  const { animations } = useMotion();
-  const ref = React.useRef<HTMLDivElement>(null);
-  const [pos, setPos] = React.useState<{ left: number; top: number; ready: boolean }>({
-    left: 0,
-    top: 0,
-    ready: false,
-  });
-
-  // Пересчёт позиции с клампом по вьюпорту. Зовём на смену якоря и на ресайз меню
-  // (панели «Цвет»/«Преобразовать» выше главной — высота меняется).
-  // Самокорректирующееся позиционирование: anchor в координатах ВЬЮПОРТА, но fixed
-  // внутри Sheet считается от его transform-border-box (а не от вьюпорта). Меряем, где
-  // меню реально оказалось при текущем style.left/top, и сдвигаем на дельту до желаемой
-  // viewport-позиции. Работает при любом containing-block без его поиска.
-  const place = React.useCallback(() => {
-    const el = ref.current;
-    if (!anchor || !el) return;
-    const styleLeft = parseFloat(el.style.left) || 0;
-    const styleTop = parseFloat(el.style.top) || 0;
-    const m = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let vpLeft = anchor.x;
-    if (vpLeft + m.width > vw - PAD) vpLeft = vw - PAD - m.width;
-    if (vpLeft < PAD) vpLeft = PAD;
-    // Предпочтительно НАД выделением; не влезает сверху — ПОД ним.
-    let vpTop = anchor.top - m.height - PAD;
-    if (vpTop < PAD) vpTop = anchor.bottom + PAD;
-    if (vpTop + m.height > vh - PAD) vpTop = Math.max(PAD, vh - PAD - m.height);
-    const nextLeft = styleLeft + (vpLeft - m.left);
-    const nextTop = styleTop + (vpTop - m.top);
-    if (Math.abs(nextLeft - styleLeft) < 0.5 && Math.abs(nextTop - styleTop) < 0.5) {
-      setPos((p) => ({ ...p, ready: true }));
-      return;
-    }
-    setPos({ left: nextLeft, top: nextTop, ready: true });
-  }, [anchor]);
+  const originRef = React.useRef<HTMLDivElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const container = editor.view.dom.closest<HTMLElement>('[role="dialog"]') ?? document.body;
 
   React.useLayoutEffect(() => {
-    setPos((p) => ({ ...p, ready: false }));
+    if (!anchor) return;
+    let frame = 0;
+    const place = (): void => {
+      const origin = originRef.current;
+      const menu = menuRef.current;
+      if (!origin || !menu) return;
+      const viewport = window.visualViewport;
+      const bounds = container === document.body
+        ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+        : container.getBoundingClientRect();
+      const left = Math.max(bounds.left, viewport?.offsetLeft ?? 0) + 8;
+      const top = Math.max(bounds.top, viewport?.offsetTop ?? 0) + 8;
+      const right = Math.min(bounds.right, (viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth)) - 8;
+      const bottom = Math.min(bounds.bottom, (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight)) - 8;
+      menu.style.maxWidth = `${Math.max(0, right - left)}px`;
+      menu.style.maxHeight = `${Math.max(0, bottom - top)}px`;
+      const rect = menu.getBoundingClientRect();
+      const base = origin.getBoundingClientRect();
+      const x = Math.max(left, Math.min(anchor.x, right - rect.width));
+      const preferredY = anchor.top - rect.height - 8;
+      const y = Math.max(top, Math.min(preferredY >= top ? preferredY : anchor.bottom + 8, bottom - rect.height));
+      menu.style.left = `${x - base.left}px`;
+      menu.style.top = `${y - base.top}px`;
+      menu.style.visibility = 'visible';
+      // Track dialog transforms and zoom only while the popup is open.
+      frame = requestAnimationFrame(place);
+    };
     place();
-  }, [place]);
+    return () => cancelAnimationFrame(frame);
+  }, [anchor, container]);
 
-  // Меню меняет высоту при переходе на панель «Цвет»/«Преобразовать» — переклампим.
-  React.useEffect(() => {
-    if (!anchor || !ref.current) return;
-    const ro = new ResizeObserver(() => place());
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [anchor, place]);
-
-  // Escape закрывает; уход выделения обрабатывается на стороне RichTextEditor.
   React.useEffect(() => {
     if (!anchor) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      if (!editor.isDestroyed) editor.view.focus();
     };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [anchor, onClose]);
+    const onScroll = (event: Event): void => {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
+      onClose();
+    };
+    // Capture before the dialog's document-level Escape handler.
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('scroll', onScroll, true);
+    };
+  }, [anchor, editor, onClose]);
 
   if (!anchor) return null;
-
-  return (
-    <div
-      ref={ref}
-      data-format-menu
-      // mousedown внутри меню не должен уводить фокус из редактора (иначе слетит
-      // выделение) — отдельные кнопки уже делают preventDefault, но подстрахуемся.
-      onMouseDown={(e) => e.preventDefault()}
-      style={{
-        position: 'fixed',
-        left: pos.left,
-        top: pos.top,
-        visibility: pos.ready ? 'visible' : 'hidden',
-        maxHeight: `calc(100vh - ${PAD * 2}px)`,
-      }}
-      className={cn(
-        'z-[70] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-md outline-none',
-        animations && 'animate-in fade-in-0 zoom-in-95',
-      )}
-    >
-      {/* onAction НЕ передаём: меню остаётся открытым после применения формата
-          (закрытие — Escape / клик вне / смена выделения). */}
-      <FormatMenu editor={editor} getRange={getRange} />
-    </div>
+  return createPortal(
+    <div ref={originRef} className="pointer-events-none fixed left-0 top-0 z-[70]">
+      <div ref={menuRef} data-format-menu data-editor-owner={ownerId}
+        style={{ position: 'absolute', visibility: 'hidden' }}
+        className="pointer-events-auto w-max overflow-y-auto rounded-xl border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-lg ring-1 ring-black/[0.03]"
+      >
+        <FormatMenu editor={editor} getRange={getRange} />
+      </div>
+    </div>, container,
   );
 }

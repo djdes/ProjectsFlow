@@ -25,6 +25,8 @@ function roundtrip(md: string): string {
 const CASES: Array<[name: string, md: string]> = [
   ['bold', '**жирный**'],
   ['italic', '*курсив*'],
+  ['underline', '++подчёркнутый++'],
+  ['underline and color', '<span style="color:#337ea9">**++важно++**</span>'],
   ['strike', '~~зачёркнуто~~'],
   ['inline code', '`код`'],
   ['highlight ==', '==выделено=='],

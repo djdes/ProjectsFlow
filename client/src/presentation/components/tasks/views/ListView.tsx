@@ -1,3 +1,5 @@
+import { TaskTitleEditor } from '../TaskTitleEditor';
+import { TaskTitleText } from '../TaskTitleText';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
@@ -207,13 +209,13 @@ export function ListView({
   const [editValue, setEditValue] = useState('');
   const startEdit = (task: Task): void => {
     setEditingId(task.id);
-    setEditValue(taskTitle(task));
+    setEditValue(splitTitleBody(task.description ?? '').title);
   };
   const commitEdit = (task: Task): void => {
     if (!canEdit) return;
     const title = editValue.trim();
     setEditingId(null);
-    if (!title || title === taskTitle(task)) return;
+    if (!title || title === splitTitleBody(task.description ?? '').title) return;
     const { body } = splitTitleBody(task.description ?? '');
     void update(task.id, { description: body ? `${title}\n${body}` : title }).catch((e: unknown) =>
       toast.error(`Не удалось: ${(e as Error).message}`),
@@ -645,23 +647,8 @@ function ListRow({
             <FileText className="size-4 shrink-0 text-muted-foreground/60" />
           )}
           {editing ? (
-            <input
-              autoFocus
-              value={editValue}
-              onChange={(e) => onEditValue(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onBlur={onCommitEdit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  onCommitEdit();
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  onCancelEdit();
-                }
-              }}
-              aria-label="Название задачи"
-              className="min-w-0 flex-1 rounded-md border bg-background px-1.5 py-0.5 text-sm font-medium outline-none ring-2 ring-primary/20"
+            <TaskTitleEditor value={editValue} onChange={onEditValue} onCommit={onCommitEdit} onCancel={onCancelEdit}
+              className="min-w-0 flex-1 rounded-md border bg-background px-1.5 py-0.5 text-sm font-medium ring-2 ring-primary/20"
             />
           ) : (
             <>
@@ -674,7 +661,7 @@ function ListRow({
                   isUntitledTask(task) && 'font-normal text-muted-foreground/60',
                 )}
               >
-                {taskTitle(task)}
+                <TaskTitleText title={splitTitleBody(task.description ?? '').title || 'Без названия'} inline />
               </span>
               {/* Карандаш при hover — переименовать прямо в списке (Notion). */}
               <button

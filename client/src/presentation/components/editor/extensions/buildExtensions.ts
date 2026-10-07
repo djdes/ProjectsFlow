@@ -9,7 +9,7 @@ import {
   Color,
   BackgroundColor,
 } from '@tiptap/extension-text-style';
-import type { Extensions, JSONContent } from '@tiptap/core';
+import { Extension, type Extensions, type JSONContent } from '@tiptap/core';
 
 import { HighlightMark } from './HighlightMark';
 import { FigureImage } from './FigureImage';
@@ -24,6 +24,39 @@ export type { MentionMember };
 // `<span style="color:…;background-color:…">текст</span>`. Read-вью (Markdown.tsx)
 // разрешает ровно эти style-свойства в SANITIZE_SCHEMA — связка симметрична.
 const TextStyle = BaseTextStyle.extend({
+  // Parse our own inline HTML wrapper before the generic HTML fallback. That fallback
+  // treats **bold**/++underline++ inside a colored span as literal text on reopening.
+  markdownTokenizer: {
+    name: 'textStyle',
+    level: 'inline',
+    start: src => src.indexOf('<span'),
+    tokenize: (src, _tokens, lexer) => {
+      const opening = /^<span\b[^>]*\bstyle="([^"]*)"[^>]*>/i.exec(src);
+      if (!opening) return undefined;
+      let depth = 1;
+      const tags = /<\/?span\b[^>]*>/gi;
+      tags.lastIndex = opening[0].length;
+      let closing: RegExpExecArray | null;
+      while ((closing = tags.exec(src))) {
+        depth += closing[0].startsWith('</') ? -1 : 1;
+        if (depth !== 0) continue;
+        const inner = src.slice(opening[0].length, closing.index);
+        return { type: 'textStyle', raw: src.slice(0, tags.lastIndex), styles: opening[1], tokens: lexer.inlineTokens(inner) };
+      }
+      return undefined;
+    },
+  },
+  parseMarkdown: (token, helpers) => {
+    const styles = String(token.styles ?? '');
+    const attrs: { color?: string; backgroundColor?: string } = {};
+    for (const entry of styles.split(';')) {
+      const match = /^\s*(color|background-color)\s*:\s*(.+?)\s*$/.exec(entry);
+      if (match && /^(#[0-9a-f]{3,8}|rgba?\([\d.,%\s]*\)|hsla?\([\d.,%\s]*\)|[a-z]+)$/i.test(match[2])) {
+        attrs[match[1] === 'color' ? 'color' : 'backgroundColor'] = match[2];
+      }
+    }
+    return helpers.applyMark('textStyle', helpers.parseInline(token.tokens ?? []), attrs);
+  },
   renderMarkdown(node: JSONContent, helpers: { renderChildren: (n: JSONContent[]) => string }) {
     const attrs = (node.attrs ?? {}) as { color?: string | null; backgroundColor?: string | null };
     const styles: string[] = [];
@@ -33,6 +66,23 @@ const TextStyle = BaseTextStyle.extend({
     if (styles.length === 0) return inner; // пустой textStyle — без обёртки
     return `<span style="${styles.join(';')}">${inner}</span>`;
   },
+});
+
+// A span at the start of a line otherwise becomes an opaque HTML block in marked.
+// Keep figure/image blocks on their existing HTML path; only our inline span format
+// is routed through the inline parser.
+const ColoredParagraph = Extension.create({
+  name: 'coloredParagraph',
+  markdownTokenizer: {
+    name: 'coloredParagraph', level: 'block',
+    start: src => /^<span\b[^\n]*style=/m.exec(src)?.index ?? -1,
+    tokenize: (src, _tokens, lexer) => {
+      const match = /^(<span\b[^\n]*style="[^\n]*<\/span>[^\n]*)(?:\n|$)/i.exec(src);
+      if (!match) return undefined;
+      return { type: 'coloredParagraph', raw: match[0], tokens: lexer.inlineTokens(match[1]) };
+    },
+  },
+  parseMarkdown: (token, helpers) => ({ type: 'paragraph', content: helpers.parseInline(token.tokens ?? []) }),
 });
 
 interface BuildExtensionsOptions {
@@ -64,6 +114,7 @@ export function buildExtensions({ placeholder, members }: BuildExtensionsOptions
     // глобальные атрибуты color/backgroundColor к textStyle и команды
     // setColor/setBackgroundColor (см. меню форматирования).
     TextStyle,
+    ColoredParagraph,
     Color,
     BackgroundColor,
     Placeholder.configure({ placeholder: placeholder ?? '' }),

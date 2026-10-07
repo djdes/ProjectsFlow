@@ -1,3 +1,5 @@
+import { TaskTitleEditor } from '../TaskTitleEditor';
+import { TaskTitleText } from '../TaskTitleText';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
@@ -759,7 +761,7 @@ export function TableView({
       setEditError('Название задачи не может быть пустым.');
       return;
     }
-    if (title === taskTitle(task)) {
+    if (title === splitTitleBody(task.description ?? '').title) {
       setEditingId(null);
       setEditError(null);
       if (moveDown) moveSelectionDown(task);
@@ -813,7 +815,7 @@ export function TableView({
       if (e.key === 'Enter') {
         e.preventDefault();
         setEditingId(task.id);
-        setEditValue(taskTitle(task));
+        setEditValue(splitTitleBody(task.description ?? '').title);
         return;
       }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -1821,7 +1823,7 @@ export function TableView({
                     return;
                   }
                   setEditingId(task.id);
-                  setEditValue(taskTitle(task));
+                  setEditValue(splitTitleBody(task.description ?? '').title);
                   setEditError(null);
                 }}
                 onCommitEdit={() => void commitEdit(task)}
@@ -2830,27 +2832,10 @@ function TableRow({
         {/* Редактирование (Notion): ТОЛЬКО текстовое поле — без иконки, стрелки
             подзадач и кнопки «Открыть». */}
         {editing ? (
-          <input
-            autoFocus
-            value={editValue}
-            onChange={(e) => onEditValue(e.target.value)}
-            onBlur={() => {
-              if (!editPending) onCommitEdit();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                onCommitEnter();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                onCancelEdit();
-              }
-            }}
-            aria-label="Название задачи"
-            aria-invalid={Boolean(editError)}
-            aria-errormessage={editError ? `table-title-error-${task.id}` : undefined}
-            readOnly={editPending}
-            className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none read-only:cursor-wait"
+          <TaskTitleEditor value={editValue} onChange={onEditValue}
+            onCommit={() => { if (!editPending) onCommitEdit(); }} onEnter={onCommitEnter} onCancel={onCancelEdit}
+            disabled={editPending} errorId={editError ? `table-title-error-${task.id}` : undefined}
+            className="min-w-0 flex-1 bg-transparent text-sm font-medium"
           />
         ) : (
           <>
@@ -2889,7 +2874,7 @@ function TableRow({
                 isUntitledTask(task) && 'font-normal text-muted-foreground/60',
               )}
             >
-              {taskTitle(task)}
+              <TaskTitleText title={splitTitleBody(task.description ?? '').title || 'Без названия'} inline className={wrapTitle ? 'break-words' : 'truncate'} />
             </button>
             <button
               type="button"

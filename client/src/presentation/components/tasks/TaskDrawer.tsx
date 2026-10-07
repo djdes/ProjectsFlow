@@ -90,6 +90,7 @@ import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskBodyEditor } from './TaskBodyEditor';
+import { useTaskDescriptionDraft } from './useTaskDescriptionDraft';
 import { TaskHeaderMedia, type TaskMediaPatch } from './TaskHeaderMedia';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
@@ -1007,66 +1008,10 @@ export function TaskDrawer({
     void taskRepository.listAttachments(projectId, id).then(setHeaderAttachments).catch(() => undefined);
   }, [state, taskRepository]);
 
-  // === EDIT-MODE: единое описание-источник правды для заголовка + тела ===
-  // Доменная модель хранит ОДНО поле `description` (markdown). Notion-style мы режем его
-  // на заголовок (1-я строка, plain) и тело (остаток, markdown) через splitTitleBody, а
-  // сохраняем склейкой joinTitleBody. Источник правды — здесь (а не внутри редакторов),
-  // чтобы смена заголовка не затирала тело и наоборот. Сеется из task.description и
-  // пере-сеется при смене задачи (родитель не обновляет task.description у открытого
-  // дровера — поэтому держим локально, как делал прежний TaskDescriptionEditor).
   const editTaskId = state?.mode === 'edit' ? state.task.id : null;
-  const [editDescription, setEditDescription] = useState('');
-  // Идёт ли сохранение описания — state (а не ref), т.к. дизейблит редакторы (render-relevant).
-  const [editSaving, setEditSaving] = useState(false);
-  // Исходное описание задачи на момент открытия — чтобы НЕ слать update (и не бампить
-  // updatedAt → не выталкивать задачу наверх) при простом открытии/переключении без правок.
-  const originalEditDescRef = useRef('');
-  useEffect(() => {
-    if (state?.mode === 'edit') {
-      setEditDescription(state.task.description ?? '');
-      originalEditDescRef.current = state.task.description ?? '';
-    } else setEditDescription('');
-    // Пере-сеем только при смене задачи (id) или режима — правки в открытом дровере
-    // не должны сбрасываться родительским refetch'ем (он не меняет task.description здесь).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTaskId, state?.mode]);
-
-  // Единый путь сохранения описания (title+body) → taskRepository.update. Возвращаемое
-  // описание становится новым источником правды (на случай нормализации сервером).
-  // No-op, если ничего не изменилось ОТНОСИТЕЛЬНО ПОСЛЕДНЕГО СОХРАНЁННОГО значения
-  // (originalEditDescRef), а не текущего editDescription — иначе commitDescription(editDescription)
-  // на blur был бы no-op и правки/вставленные картинки сохранялись бы только на закрытии окна
-  // (терялись на reload, аттач «осиротевал» в «Файлы»).
-  const commitDescription = useCallback(
-    async (nextDescription: string): Promise<void> => {
-      if (state?.mode !== 'edit') return;
-      const { projectId, id } = state.task;
-      const trimmed = nextDescription.trim();
-      // Пустое описание — не сохраняем (как прежде). Раньше здесь смотрели на
-      // splitTitleBody(trimmed).title — но это не то же самое, что «trimmed пуст»:
-      // описание-скриншот без единого слова текста (BUG E) даёт пустой title при непустом
-      // trimmed, и такая правка молча не сохранялась бы (та же болезнь, что и в баге).
-      if (trimmed.length === 0) return;
-      if (trimmed === originalEditDescRef.current.trim()) return;
-      setEditSaving(true);
-      try {
-        const updated = await taskRepository.update(projectId, id, { description: trimmed });
-        setEditDescription(updated.description ?? '');
-        originalEditDescRef.current = updated.description ?? '';
-        notifyChanged();
-      } catch (e) {
-        toast.error(`Не удалось сохранить: ${(e as Error).message}`);
-      } finally {
-        setEditSaving(false);
-      }
-    },
-    [state, taskRepository, notifyChanged],
+  const { description: editDescription, saving: editSaving, onChange: handleDescriptionChange, commit: commitDescription } = useTaskDescriptionDraft(
+    state?.mode === 'edit' ? state.task : null, taskRepository, notifyChanged,
   );
-
-  // Заголовок и описание — ОДНО поле: правим полное описание напрямую (1-я строка = заголовок).
-  const handleDescriptionChange = useCallback((next: string): void => {
-    setEditDescription(next);
-  }, []);
   const bodyContainerRef = useRef<HTMLDivElement>(null);
   // Task 3: при скролле вниз вверху закрепляем укороченный заголовок задачи; клик по нему
   // прокручивает обратно наверх. Sentinel у заголовка + IntersectionObserver: когда заголовок
@@ -1184,33 +1129,6 @@ export function TaskDrawer({
       window.removeEventListener('scroll', onScroll, true);
     };
   }, [state?.mode, editTaskId]);
-
-  // Unmount-save: дровер закрывают/переключают задачу, не сняв фокус с редактора. blur-save
-  // ловит клик мимо поля; этот хук — страховка. latest-ref обновляем в эффекте (включая
-  // projectId — в cleanup-замыкании `state` был бы уже null после закрытия).
-  const editProjectId = state?.mode === 'edit' ? state.task.projectId : null;
-  const editLiveRef = useRef({ description: editDescription, taskId: editTaskId, projectId: editProjectId, saving: editSaving });
-  useEffect(() => {
-    editLiveRef.current = { description: editDescription, taskId: editTaskId, projectId: editProjectId, saving: editSaving };
-  });
-  useEffect(
-    () => () => {
-      const s = editLiveRef.current;
-      if (!s.taskId || !s.projectId || s.saving) return;
-      const trimmed = s.description.trim();
-      if (trimmed.length === 0) return;
-      // Ничего не правили — НЕ шлём update: иначе сервер бампит updatedAt и задача
-      // всплывает наверх «как отредактированная» при простом открытии/переключении.
-      if (trimmed === originalEditDescRef.current.trim()) return;
-      // Fire-and-forget — компонент уже размонтируется.
-      void taskRepository
-        .update(s.projectId, s.taskId, { description: trimmed })
-        .catch(() => undefined);
-    },
-    // Зависимость только от taskId — хук-cleanup стреляет при размонтировании/смене задачи.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editTaskId],
-  );
 
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
   const isCoarsePointer =
@@ -2219,13 +2137,13 @@ export function TaskDrawer({
                   onImageRemoved={handleInlineImageRemoved}
                   body={editDescription}
                   onBodyChange={handleDescriptionChange}
-                  onCommit={() => void commitDescription(editDescription)}
+                  onCommit={() => void commitDescription()}
                   // Догрузилась инлайн-картинка → сохраняем СРАЗУ (переданный markdown уже
                   // содержит фигуру): переживает reload, аттач не «осиротеет» в «Файлы».
                   onImageUploaded={(md) => void commitDescription(md)}
                   onPasteFiles={(files) => void uploadFilesDirectly(files)}
                   // Заморожена приёмкой — тело только читаем: PATCH всё равно вернёт 409.
-                  disabled={editSaving || frozenByApproval}
+                  disabled={!canEdit || frozenByApproval}
                   placeholder="Название и описание…"
                 />
               </div>
@@ -2282,7 +2200,7 @@ export function TaskDrawer({
                       projectId={task.projectId}
                       editTask={{ projectId: task.projectId, taskId: task.id }}
                       onImproved={(next) => {
-                        setEditDescription(next);
+                        handleDescriptionChange(next);
                         void commitDescription(next);
                       }}
                       onDistributed={() => notifyChanged()}
@@ -2630,6 +2548,8 @@ export function TaskDrawer({
                     <RichTextEditor
                       ref={createEditorRef}
                       variant="description"
+                      toolbar
+                      taskDocument
                       selectionMenu={false}
                       value={description}
                       onChange={setDescription}

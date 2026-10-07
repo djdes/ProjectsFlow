@@ -195,7 +195,7 @@ function KanbanCardImpl({
   // Прогресс GFM-чеклиста из описания — бейдж «3/7» в мета-строке.
   const checklist = task.description ? checklistProgress(task.description) : null;
 
-  // Заголовок (первая строка) рендерим plain-текстом, тело — markdown (см. TaskTitleText).
+  // The first line uses safe inline Markdown; the body supports block Markdown.
   const { title, body } = splitTitleBody(task.description ?? '');
 
   // Есть ли что показывать в нижнем мета-оверлее. Если нет (простая однострочная задача) —
@@ -533,17 +533,14 @@ function KanbanCardImpl({
                     <ProjectIconView icon={task.icon} pixelSize={17} className="text-[1.05rem]" />
                   </span>
                 )}
-                {/* Заголовок — plain-текст (не markdown), чтобы `---`/`- `/`* `/`# ` в начале
-                    не превращались в hr/список/heading и не пропадали под COMPACT-пресетом.
-                    На доске заголовок держим полужирным (font-medium) — так карточка читается
-                    «названием сверху», как в Notion; в списке/панели вес обычный. */}
+                {/* Keep authored inline marks; list/rule-like title prefixes stay literal. */}
                 <TaskTitleText title={title} className="font-medium text-foreground" />
                 {body.trim() && (
                   <Markdown
                     className={cn(
                       MARKDOWN_COMPACT,
                       '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
-                      '[&_strong]:font-normal [&_b]:font-normal',
+                      '[&_strong]:font-bold [&_b]:font-bold',
                     )}
                   >
                     {body}

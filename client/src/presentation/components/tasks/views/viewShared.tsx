@@ -20,7 +20,7 @@ import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import type { UseTasks } from '@/presentation/hooks/useTasks';
 import { STATUS_LABEL } from '../statusLabels';
 import { TaskDrawer, type TaskDrawerState } from '../TaskDrawer';
-import { splitTitleBody } from '@/lib/taskTitleBody';
+import { splitTitleBody, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import type { MenuEntry } from './menuEntries';
 
@@ -90,7 +90,7 @@ export function sortBoardTasks(tasks: readonly Task[]): Task[] {
 // Заголовок — plain text (Notion): markdown-разметка первой строки описания
 // (**жирный**, `код`, # заголовок, [текст](url)) в названии не показывается.
 function stripMdInline(s: string): string {
-  return s
+  return stripInlineMarkdown(s)
     .replace(/^#{1,6}\s+/, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/(\*\*|__)(.*?)\1/g, '$2')

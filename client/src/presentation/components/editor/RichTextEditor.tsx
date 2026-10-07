@@ -9,6 +9,7 @@ import { buildExtensions, type MentionMember } from './extensions/buildExtension
 import { SlashCommand, SLASH_ITEMS, applyBlockType } from './extensions/slashCommand';
 import { SuggestionList, type SuggestionListHandle, type SuggestionItem } from './SuggestionList';
 import { FloatingFormatMenu, type FloatingAnchor } from './FloatingFormatMenu';
+import { FormatMenu } from './FormatMenu';
 import { extractClipboardFiles, isImageFile } from '@/presentation/components/attachments/files';
 
 export type { MentionMember };
@@ -125,6 +126,7 @@ export interface RichTextEditorProps {
   onChange: (markdown: string) => void;
   /** Comment-variant: Enter; description-variant: Ctrl/Cmd+Enter. */
   onSubmit?: () => void;
+  onEscape?: () => void;
   /**
    * Потеря фокуса полем редактора. НЕ срабатывает, когда фокус ушёл во
    * floating-UI самого редактора (bubble-меню / slash / @-упоминания —
@@ -135,12 +137,16 @@ export interface RichTextEditorProps {
   autoFocus?: boolean;
   disabled?: boolean;
   className?: string;
-  variant?: 'description' | 'comment';
+  variant?: 'description' | 'comment' | 'title';
   /**
    * Показывать меню форматирования при ВЫДЕЛЕНИИ текста. По умолчанию `true`. При `false`
    * меню открывается только по правой кнопке (contextmenu) — Notion-style для описаний задач.
    */
   selectionMenu?: boolean;
+  /** Visible formatting controls for task creation/editing. */
+  toolbar?: boolean;
+  /** Give the first paragraph the visual hierarchy of a task title. */
+  taskDocument?: boolean;
   /** Передать участников проекта, чтобы включить @-упоминания. */
   members?: MentionMember[];
   /** Вставка НЕ-картинок из буфера (файлы-вложения). Картинки идут через onUploadImage. */
@@ -195,6 +201,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       value,
       onChange,
       onSubmit,
+      onEscape,
       onBlur,
       placeholder,
       autoFocus = false,
@@ -202,6 +209,8 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       className,
       variant = 'description',
       selectionMenu = true,
+      toolbar = false,
+      taskDocument = false,
       members,
       onPasteFiles,
       onUploadImage,
@@ -210,9 +219,12 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     },
     ref,
   ): React.ReactElement {
+  const ownerId = React.useId();
+  const rootRef = React.useRef<HTMLDivElement>(null);
   // Колбэки через ref — чтобы не пересоздавать editor на каждом рендере.
   const onChangeRef = React.useRef(onChange);
   const onSubmitRef = React.useRef(onSubmit);
+  const onEscapeRef = React.useRef(onEscape);
   const onBlurRef = React.useRef(onBlur);
   const onPasteFilesRef = React.useRef(onPasteFiles);
   const onUploadImageRef = React.useRef(onUploadImage);
@@ -229,6 +241,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   React.useEffect(() => {
     onChangeRef.current = onChange;
     onSubmitRef.current = onSubmit;
+    onEscapeRef.current = onEscape;
     onBlurRef.current = onBlur;
     onPasteFilesRef.current = onPasteFiles;
     onUploadImageRef.current = onUploadImage;
@@ -432,13 +445,19 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     // destroy), и команда на разрушенном editor падала «commandManager is null».
     immediatelyRender: false,
     editorProps: {
-      attributes: { class: PROSE_CLASS },
+      attributes: {
+        class: PROSE_CLASS,
+        role: 'textbox',
+        'aria-label': variant === 'comment' ? 'Комментарий' : variant === 'title' ? 'Название задачи' : 'Текст задачи',
+        'aria-multiline': variant === 'title' ? 'false' : 'true',
+      },
       handleDOMEvents: {
         // Правый клик внутри редактора → своё меню форматирования вместо нативного.
         contextmenu: (_view, event) => {
           const e = editorRef.current;
           if (!e || e.isDestroyed || !e.isEditable) return false; // read-only/teardown — нативное меню
           event.preventDefault();
+          event.stopPropagation();
           // Нет выделения — выделяем слово под курсором, чтобы формат применился к нему.
           selectWordAt(e, event.clientX, event.clientY);
           // Якорим у курсора; снимок диапазона — для восстановления перед командой.
@@ -450,7 +469,18 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         },
       },
       handleKeyDown: (_view, event) => {
+        if (event.key === 'Escape' && onEscapeRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          onEscapeRef.current();
+          return true;
+        }
         if (event.key !== 'Enter') return false;
+        if (variant === 'title') {
+          event.preventDefault();
+          onSubmitRef.current?.();
+          return true;
+        }
         if (variant === 'comment') {
           if (event.shiftKey) return false; // Shift+Enter → перенос строки
           event.preventDefault();
@@ -483,22 +513,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       prevImageSrcsRef.current = cur;
       onChangeRef.current(e.getMarkdown());
     },
-    onBlur: ({ editor: e }) => {
-      if (!onBlurRef.current) return;
-      // Откладываем на тик: focus может уйти во floating-UI редактора (bubble-меню /
-      // slash / @-упоминания — портированы в body с классом `bg-popover`). В этом
-      // случае blur НЕ считаем настоящим уходом из поля.
-      window.setTimeout(() => {
-        if (e.isDestroyed) return;
-        // Плейсхолдер ещё не сериализуется в markdown. Blur-save в этот момент сохранил бы
-        // описание без картинки и мог бы гоняться с финальным save после upload.
-        if (pendingImageUploadsRef.current.size > 0) return;
-        if (e.isFocused) return;
-        const activeEl = document.activeElement;
-        if (activeEl && activeEl.closest('.bg-popover')) return;
-        onBlurRef.current?.();
-      }, 0);
-    },
+
   });
 
   // Держим ref на editor актуальным для handleDOMEvents (создаётся раньше editor).
@@ -644,7 +659,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   }, [value, editor]);
 
   React.useEffect(() => {
-    editor?.setEditable(!disabled);
+    editor?.setEditable(!disabled, false);
   }, [disabled, editor]);
 
   // Notion-style: непустое выделение → плавающее меню над ним. Дебаунс 150мс, чтобы
@@ -657,6 +672,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     const compute = (): void => {
       if (editor.isDestroyed) return;
       const { state, view } = editor;
+      if (!editor.isFocused && document.activeElement?.closest('[data-editor-owner]')?.getAttribute('data-editor-owner') !== ownerId) return;
       const { from, to, empty } = state.selection;
       // Блочное выделение (NodeSelection) создаёт drag-handle при захвате блока —
       // меню форматирования тут не нужно (иначе всплывает при перетаскивании).
@@ -700,7 +716,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       const t = ev.target as Node | null;
       if (!t) return;
       const el = t instanceof Element ? t : t.parentElement;
-      if (el && el.closest('[data-format-menu]')) return;
+      if (el?.closest('[data-editor-owner]')?.getAttribute('data-editor-owner') === ownerId) return;
       if (editor.view?.dom.contains(t)) {
         dismissedKeyRef.current = null;
         return;
@@ -714,15 +730,29 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       editor.off('selectionUpdate', onSel);
       document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [editor, closeMenu, selectionMenu]);
+  }, [editor, closeMenu, selectionMenu, ownerId]);
 
   return (
-    <div className={cn('relative', className)}>
-      {editor ? (
+    <div ref={rootRef} onBlurCapture={() => {
+      window.setTimeout(() => {
+        const ed = editorRef.current;
+        if (!ed || ed.isDestroyed || ed.isFocused || pendingImageUploadsRef.current.size > 0) return;
+        const active = document.activeElement;
+        if (rootRef.current?.contains(active) || active?.closest('[data-editor-owner]')?.getAttribute('data-editor-owner') === ownerId) return;
+        onBlurRef.current?.();
+      }, 0);
+    }} className={cn('relative', taskDocument && '[&_.tiptap]:leading-relaxed [&_.tiptap>p:first-child]:text-lg [&_.tiptap>p:first-child]:font-medium [&_.tiptap>p:first-child]:leading-7 [&_.tiptap>p:first-child]:text-foreground [&_.tiptap>p:first-child]:mb-3 [&_.tiptap_strong]:font-bold', className)}>
+      {editor && toolbar && !disabled ? (
+        <div data-editor-owner={ownerId} className="mb-3 border-b border-border/70 pb-1">
+          <FormatMenu editor={editor} inline />
+        </div>
+      ) : null}
+      {editor && !disabled ? (
         <FloatingFormatMenu
           editor={editor}
           anchor={menuAnchor}
           onClose={closeMenu}
+          ownerId={ownerId}
           getRange={() => savedRangeRef.current}
         />
       ) : null}

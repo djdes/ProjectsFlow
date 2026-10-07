@@ -123,6 +123,8 @@ export function formatTitleHeading(text: string, level: TitleHeadingLevel): stri
 // форматирования на экране быть не должно (см. таски редизайна).
 export function stripInlineMarkdown(input: string): string {
   let s = input ?? '';
+  // Formatting colors/underline can also be stored as inline HTML by the editor.
+  s = s.replace(/<\/?(?:span|u|mark|strong|b|em|i|s|del|code)\b[^>]*>/gi, '');
   // Картинки и ссылки — раскрываем в alt/текст (картинки до ссылок).
   s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
   s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
@@ -131,6 +133,7 @@ export function stripInlineMarkdown(input: string): string {
     /__([^_]+)__/g, // жирный __
     /~~([^~]+)~~/g, // зачёркнутый
     /==([^=]+)==/g, // выделение
+    /\+\+([^+]+)\+\+/g, // подчёркивание (Tiptap 3)
     /`([^`]+)`/g, // инлайн-код
     /\*([^*\n]+)\*/g, // курсив *
   ];

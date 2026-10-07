@@ -9,7 +9,7 @@ import {
   Code,
   Highlighter,
   Link2,
-  ChevronRight,
+  ChevronDown,
   Type,
   Heading1,
   Heading2,
@@ -33,18 +33,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { TEXT_COLORS, BG_COLORS, type ColorSwatch } from './extensions/colorPalette';
-import { placeBeside, type BesideRect } from './FloatingFormatMenu';
 
-// Notion-style меню форматирования. Переиспользуется в плавающем меню (по выделению И по
-// правому клику) — контейнер (border/bg/shadow) задаёт вызывающая сторона.
-//
-// Подменю «Преобразовать в…» и «Цвет» раскрываются КАСКАДОМ — отдельной flyout-панелью
-// СБОКУ от основного окна (а не заменяя его содержимое inline). Открываются и по наведению
-// (задержка ~120мс), и по клику; курсор свободно переходит между окном и подменю, не
-// схлопывая их (close-delay мостит зазор). У каждой кнопки — богатая подсказка (как в Notion):
-// стилизованный образец + описание.
+// Shared controls for the visible toolbar and selection/context popup.
+// Block, color and link panels expand inline; pointer and keyboard actions keep
+// the editor selection intact, with pressed/expanded states exposed to assistive tools.
 
 interface TurnIntoItem {
   id: string;
@@ -309,352 +302,138 @@ function MenuItemTooltip({
   );
 }
 
-type Sub = 'turn' | 'color';
+type Sub = 'turn' | 'color' | 'link';
 
-/**
- * Содержимое меню форматирования. `onAction` дёргается после применённого действия,
- * чтобы вызывающая сторона могла закрыть popover (в плавающем меню НЕ передаётся —
- * меню остаётся открытым).
- */
-export function FormatMenu({
-  editor,
-  onAction,
-  getRange,
-}: {
+/** The same controls work in the task toolbar and the selection popup. */
+export function FormatMenu({ editor, getRange, inline = false }: {
   editor: Editor;
-  onAction?: () => void;
-  /** Снимок диапазона выделения — восстанавливается перед командой (фокус мог уйти в меню). */
   getRange?: () => { from: number; to: number } | null;
+  inline?: boolean;
 }): React.ReactElement {
-  const { animations } = useMotion();
   const [openSub, setOpenSub] = React.useState<Sub | null>(null);
-  const mainRef = React.useRef<HTMLDivElement>(null);
-  const flyoutRef = React.useRef<HTMLDivElement>(null);
-  // Желаемый верх flyout-подменю в координатах вьюпорта — берётся с триггер-кнопки.
-  const subAnchorTopRef = React.useRef<number | null>(null);
-  const [flyoutPos, setFlyoutPos] = React.useState<{ left: number; top: number; ready: boolean }>({
-    left: 0,
-    top: 0,
-    ready: false,
-  });
-  // Таймеры hover-intent: открытие с задержкой, закрытие с задержкой (мост через зазор
-  // между основным окном и подменю — переход курсора их не схлопывает).
-  const openTimer = React.useRef<number | undefined>(undefined);
-  const closeTimer = React.useRef<number | undefined>(undefined);
-
+  const [linkUrl, setLinkUrl] = React.useState('');
+  const [linkError, setLinkError] = React.useState('');
+  const panelId = React.useId();
   const active = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
-      bold: e.isActive('bold'),
-      italic: e.isActive('italic'),
-      underline: e.isActive('underline'),
-      strike: e.isActive('strike'),
-      code: e.isActive('code'),
-      highlight: e.isActive('highlight'),
+      bold: e.isActive('bold'), italic: e.isActive('italic'), underline: e.isActive('underline'),
+      strike: e.isActive('strike'), code: e.isActive('code'), highlight: e.isActive('highlight'),
       link: e.isActive('link'),
-      blockLabel: (TURN_INTO.find((it) => it.id !== 'p' && it.id !== 'divider' && it.isActive(e))?.label) ?? 'Обычный текст',
+      blockLabel: TURN_INTO.find(it => it.id !== 'p' && it.id !== 'divider' && it.isActive(e))?.label ?? 'Текст',
       textColor: (e.getAttributes('textStyle').color as string | undefined) ?? null,
       bgColor: (e.getAttributes('textStyle').backgroundColor as string | undefined) ?? null,
     }),
   });
-
-  // Позиционирование flyout СБОКУ от основного окна (см. placeBeside). Один проход:
-  // дельта точно компенсирует transform-предка. ResizeObserver/смена подменю переклампят.
-  const place = React.useCallback(() => {
-    const el = flyoutRef.current;
-    const main = mainRef.current;
-    if (!el || !main) return;
-    const mr = main.getBoundingClientRect();
-    const anchor: BesideRect = {
-      left: mr.left,
-      right: mr.right,
-      top: subAnchorTopRef.current ?? mr.top,
-    };
-    const styleLeft = parseFloat(el.style.left) || 0;
-    const styleTop = parseFloat(el.style.top) || 0;
-    const next = placeBeside(el, anchor);
-    if (Math.abs(next.left - styleLeft) < 0.5 && Math.abs(next.top - styleTop) < 0.5) {
-      setFlyoutPos((p) => (p.ready ? p : { ...p, ready: true }));
-      return;
-    }
-    setFlyoutPos({ left: next.left, top: next.top, ready: true });
-  }, []);
-
-  React.useLayoutEffect(() => {
-    if (!openSub) return;
-    setFlyoutPos((p) => ({ ...p, ready: false }));
-    place();
-  }, [openSub, place]);
-
-  React.useEffect(() => {
-    if (!openSub || !flyoutRef.current) return;
-    const ro = new ResizeObserver(() => place());
-    ro.observe(flyoutRef.current);
-    return () => ro.disconnect();
-  }, [openSub, place]);
-
-  React.useEffect(
-    () => () => {
-      window.clearTimeout(openTimer.current);
-      window.clearTimeout(closeTimer.current);
-    },
-    [],
-  );
-
-  // fire применяет команду; меню НЕ закрываем (Notion-style: можно навесить несколько
-  // форматов подряд — выделение сохраняется). Перед командой восстанавливаем диапазон
-  // из снимка (клик по кнопке меню уводит фокус и схлопывает выделение редактора).
-  const fire = (fn: () => void): void => {
-    if (editor.isDestroyed) return;
+  const fire = (run: () => void): void => {
+    if (editor.isDestroyed || !editor.isEditable) return;
     const range = getRange?.();
-    if (range && range.from !== range.to) {
-      editor.commands.setTextSelection(range);
+    if (range) {
+      const max = editor.state.doc.content.size;
+      editor.commands.setTextSelection({ from: Math.min(range.from, max), to: Math.min(range.to, max) });
     }
-    fn();
-    onAction?.();
+    run();
   };
-
   const toggleFormat = (id: FormatBtn['id']): void => {
     if (id === 'link') {
-      if (active.link) {
-        fire(() => editor.chain().focus().unsetLink().run());
-        return;
-      }
-      const url = window.prompt('Ссылка (URL):');
-      if (url) fire(() => editor.chain().focus().setLink({ href: url }).run());
+      setLinkUrl((editor.getAttributes('link').href as string | undefined) ?? '');
+      setLinkError('');
+      setOpenSub(openSub === 'link' ? null : 'link');
       return;
     }
-    if (id === 'highlight') return fire(() => editor.chain().focus().toggleMark('highlight').run());
-    if (id === 'bold') return fire(() => editor.chain().focus().toggleBold().run());
-    if (id === 'italic') return fire(() => editor.chain().focus().toggleItalic().run());
-    if (id === 'underline') return fire(() => editor.chain().focus().toggleUnderline().run());
-    if (id === 'strike') return fire(() => editor.chain().focus().toggleStrike().run());
-    if (id === 'code') return fire(() => editor.chain().focus().toggleCode().run());
+    fire(() => editor.chain().focus().toggleMark(id).run());
   };
-
-  const setTextColor = (sw: ColorSwatch): void =>
-    sw.value === null
-      ? fire(() => editor.chain().focus().unsetColor().run())
-      : fire(() => editor.chain().focus().setColor(sw.value as string).run());
-  const setBgColor = (sw: ColorSwatch): void =>
-    sw.value === null
-      ? fire(() => editor.chain().focus().unsetBackgroundColor().run())
-      : fire(() => editor.chain().focus().setBackgroundColor(sw.value as string).run());
-
-  // === Управление каскадом подменю (hover-intent + клик) ===
-  const cancelClose = (): void => window.clearTimeout(closeTimer.current);
-  const scheduleClose = (): void => {
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setOpenSub(null), 220);
-  };
-  // Захват верха триггер-кнопки (для выравнивания подменю по высоте пункта).
-  const captureTop = (el: HTMLElement): void => {
-    subAnchorTopRef.current = el.getBoundingClientRect().top;
-  };
-  const hoverOpen = (sub: Sub, el: HTMLElement): void => {
-    cancelClose();
-    window.clearTimeout(openTimer.current);
-    captureTop(el);
-    openTimer.current = window.setTimeout(() => setOpenSub(sub), 120);
-  };
-  const hoverLeaveTrigger = (): void => {
-    window.clearTimeout(openTimer.current); // отменяем отложенное открытие
-  };
-  const clickToggle = (sub: Sub, el: HTMLElement): void => {
-    window.clearTimeout(openTimer.current);
-    cancelClose();
-    captureTop(el);
-    setOpenSub((cur) => (cur === sub ? null : sub));
-  };
-
-  // Содержимое активного подменю.
-  const renderSub = (): React.ReactNode => {
-    if (openSub === 'turn') {
-      return (
-        <>
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Преобразовать в</div>
-          {TURN_INTO.map((it) => (
-            <MenuItemTooltip key={it.id} example={it.example} description={it.hint}>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  fire(() => it.run(editor));
-                }}
-                className={ROW}
-              >
-                <it.icon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 truncate">{it.label}</span>
-                {it.isActive(editor) ? <Check className="size-4 text-foreground" /> : null}
-              </button>
-            </MenuItemTooltip>
-          ))}
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              fire(() => editor.chain().focus().unsetAllMarks().clearNodes().run());
-            }}
-            className={cn(ROW, 'text-muted-foreground')}
-          >
-            <Eraser className="size-4 shrink-0" />
-            <span className="flex-1 truncate">Очистить форматирование</span>
-          </button>
-        </>
-      );
+  const applyLink = (): void => {
+    const value = linkUrl.trim();
+    if (value && !/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(value)) {
+      setLinkError('Укажите ссылку с https://');
+      return;
     }
-    // openSub === 'color'
-    return (
-      <>
-        <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Цвет текста</div>
-        {TEXT_COLORS.map((sw) => (
-          <MenuItemTooltip
-            key={`t-${sw.id}`}
-            description={`Цвет текста: ${sw.label}`}
-            example={
-              <span className="text-base font-medium" style={{ color: sw.value ?? undefined }}>
-                Образец текста
-              </span>
-            }
-          >
-            <button type="button" onMouseDown={(e) => { e.preventDefault(); setTextColor(sw); }} className={ROW}>
-              <ColorDot swatch={sw} kind="text" />
-              <span className="flex-1 truncate">{sw.label}</span>
-              {active.textColor === sw.value || (sw.value === null && !active.textColor) ? (
-                <Check className="size-4 text-foreground" />
-              ) : null}
-            </button>
-          </MenuItemTooltip>
-        ))}
-        <div className="my-1 h-px bg-border" aria-hidden />
-        <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Цвет фона</div>
-        {BG_COLORS.map((sw) => (
-          <MenuItemTooltip
-            key={`b-${sw.id}`}
-            description={`Цвет фона: ${sw.label}`}
-            example={
-              <span className="rounded px-2 py-0.5 text-sm" style={{ backgroundColor: sw.value ?? undefined }}>
-                Образец фона
-              </span>
-            }
-          >
-            <button type="button" onMouseDown={(e) => { e.preventDefault(); setBgColor(sw); }} className={ROW}>
-              <ColorDot swatch={sw} kind="bg" />
-              <span className="flex-1 truncate">{sw.label}</span>
-              {active.bgColor === sw.value || (sw.value === null && !active.bgColor) ? (
-                <Check className="size-4 text-foreground" />
-              ) : null}
-            </button>
-          </MenuItemTooltip>
-        ))}
-      </>
-    );
+    fire(() => value ? editor.chain().focus().setLink({ href: value }).run() : editor.chain().focus().unsetLink().run());
+    setOpenSub(null);
   };
-
+  const selectBlock = (item: TurnIntoItem): void => {
+    fire(() => item.run(editor));
+    setOpenSub(null);
+  };
   return (
-    <TooltipProvider delayDuration={550} skipDelayDuration={120}>
-      {/* === Основное окно (всегда видно) === */}
-      <div
-        ref={mainRef}
-        className="flex w-60 max-w-[calc(100vw-1.5rem)] flex-col gap-1"
-        onMouseEnter={cancelClose}
-        onMouseLeave={scheduleClose}
-      >
-        {/* «Преобразовать в…» — открывает flyout-подменю сбоку */}
-        <button
-          type="button"
-          onMouseEnter={(e) => hoverOpen('turn', e.currentTarget)}
-          onMouseLeave={hoverLeaveTrigger}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            clickToggle('turn', e.currentTarget);
-          }}
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-hover',
-            openSub === 'turn' && 'bg-hover',
-          )}
-        >
-          <span className="flex-1 truncate text-left text-muted-foreground">{active.blockLabel}</span>
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        </button>
-
-        <div className="-mx-1 h-px bg-border" aria-hidden />
-
-        {/* Ряд иконок форматирования + цвет */}
-        <div className="flex items-center gap-0.5">
-          {/* «Цвет» — открывает flyout-подменю сбоку */}
-          <button
-            type="button"
-            aria-label="Цвет текста и фона"
-            onMouseEnter={(e) => hoverOpen('color', e.currentTarget)}
-            onMouseLeave={hoverLeaveTrigger}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              clickToggle('color', e.currentTarget);
-            }}
-            className={cn(
-              'flex h-7 items-center gap-0.5 rounded-md px-1.5 text-muted-foreground transition-colors',
-              'hover:bg-hover hover:text-foreground',
-              (active.textColor || active.bgColor) && 'text-foreground',
-              openSub === 'color' && 'bg-hover text-foreground',
-            )}
-          >
-            <span
-              className="text-[15px] font-medium leading-none"
-              style={{ color: active.textColor ?? undefined, backgroundColor: active.bgColor ?? undefined }}
-            >
-              A
-            </span>
-            <ChevronRight className="size-3" />
-          </button>
-
-          <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
-
-          {FORMAT_BTNS.map((b) => (
-            <MenuItemTooltip key={b.id} side="top" example={b.example} description={b.hint}>
-              <button
-                type="button"
-                aria-label={b.label}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  toggleFormat(b.id);
-                }}
-                className={cn(
-                  'flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors',
-                  'hover:bg-hover hover:text-foreground [&_svg]:size-4',
-                  active[b.id] && 'bg-active text-foreground',
-                )}
-              >
-                <b.icon />
-              </button>
-            </MenuItemTooltip>
-          ))}
-        </div>
-      </div>
-
-      {/* === Flyout-подменю СБОКУ (каскад) === */}
-      {openSub && (
+    <TooltipProvider delayDuration={650}>
+      <div className={cn(inline ? 'w-full' : 'w-[19rem] max-w-[calc(100vw-2rem)]')}>
         <div
-          ref={flyoutRef}
-          data-format-menu
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-          onMouseDown={(e) => e.preventDefault()}
-          style={{
-            position: 'fixed',
-            left: flyoutPos.left,
-            top: flyoutPos.top,
-            visibility: flyoutPos.ready ? 'visible' : 'hidden',
-            maxHeight: `calc(100vh - 16px)`,
+          role="toolbar"
+          aria-label="Форматирование текста"
+          className={cn('flex flex-wrap items-center gap-0.5', inline && 'py-1')}
+          onMouseDown={e => e.preventDefault()}
+          onKeyDown={e => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+            const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+            const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            if (index < 0) return;
+            e.preventDefault();
+            const next = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (index + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+            buttons[next]?.focus();
           }}
-          className={cn(
-            'z-[72] flex w-60 max-w-[calc(100vw-1.5rem)] flex-col overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md outline-none',
-            animations && 'animate-in fade-in-0 zoom-in-95',
-          )}
         >
-          {renderSub()}
+          <div className={cn('grid max-w-full grid-cols-7 gap-0.5', inline ? 'max-sm:w-full' : 'w-full')}>
+            {FORMAT_BTNS.map(b => (
+              <MenuItemTooltip key={b.id} side="top" description={b.label}>
+                <button type="button" aria-label={b.label} aria-pressed={active[b.id]}
+                  onClick={() => toggleFormat(b.id)}
+                  className={cn('grid shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:h-10 max-sm:w-full [&_svg]:size-4', inline ? 'size-8' : 'h-9 w-full', active[b.id] && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}
+                ><b.icon /></button>
+              </MenuItemTooltip>
+            ))}
+          </div>
+          <div className={cn('flex items-center gap-1', inline ? 'ml-auto' : 'w-full border-t pt-1')}>
+            <button type="button" aria-label="Тип блока" aria-expanded={openSub === 'turn'} aria-controls={panelId}
+              onClick={() => setOpenSub(openSub === 'turn' ? null : 'turn')}
+              className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10">
+              <Type className="size-4 shrink-0" /><span className="truncate">{active.blockLabel}</span><ChevronDown className="size-3.5" />
+            </button>
+            <button type="button" aria-label="Цвет текста и фона" aria-expanded={openSub === 'color'} aria-controls={panelId}
+              onClick={() => setOpenSub(openSub === 'color' ? null : 'color')}
+              className="flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10">
+              <Baseline className="size-4" style={{ color: active.textColor ?? undefined }} />{!inline && <span>Цвет</span>}<ChevronDown className="size-3.5" />
+            </button>
+          </div>
         </div>
-      )}
+        {openSub && <div id={panelId} className="mt-1 max-h-[min(22rem,45dvh)] overflow-y-auto border-t pt-2">
+          {openSub === 'turn' && <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
+            {TURN_INTO.map(item => <button key={item.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => selectBlock(item)}
+              aria-pressed={item.isActive(editor)} className={cn(ROW, 'min-h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', item.isActive(editor) && 'bg-primary/10 text-primary')}>
+              <item.icon className="size-4 shrink-0" /><span className="flex-1">{item.label}</span>
+            </button>)}
+            <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { fire(() => editor.chain().focus().unsetAllMarks().clearNodes().run()); setOpenSub(null); }} className={cn(ROW, 'min-h-10 sm:col-span-2')}>
+              <Eraser className="size-4" />Очистить форматирование
+            </button>
+          </div>}
+          {openSub === 'color' && <div className="space-y-3 px-1 pb-1">
+            {([{ kind: 'text', label: 'Цвет текста', colors: TEXT_COLORS }, { kind: 'bg', label: 'Цвет фона', colors: BG_COLORS }] as const).map(group => <div key={group.kind}>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">{group.label}</p>
+              <div className="grid grid-cols-5 gap-1">
+                {group.colors.map(sw => <button key={sw.id} type="button" aria-label={`${group.label}: ${sw.label}`} title={sw.label}
+                  aria-pressed={(group.kind === 'text' ? active.textColor : active.bgColor) === sw.value}
+                  onMouseDown={e => e.preventDefault()} onClick={() => { fire(() => { const chain = editor.chain().focus(); if (group.kind === 'text') (sw.value ? chain.setColor(sw.value) : chain.unsetColor()).run(); else (sw.value ? chain.setBackgroundColor(sw.value) : chain.unsetBackgroundColor()).run(); }); }}
+                  className="grid min-h-10 place-items-center rounded-md border border-transparent hover:bg-hover aria-pressed:border-primary/50 aria-pressed:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <ColorDot swatch={sw} kind={group.kind} />
+                </button>)}
+              </div>
+            </div>)}
+          </div>}
+          {openSub === 'link' && <div className="space-y-2 p-1">
+            <label className="block text-xs font-medium" htmlFor={`${panelId}-url`}>Ссылка</label>
+            <input id={`${panelId}-url`} value={linkUrl} onChange={e => { setLinkUrl(e.target.value); setLinkError(''); }} placeholder="https://" autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyLink(); } }}
+              aria-invalid={!!linkError} aria-describedby={linkError ? `${panelId}-error` : undefined}
+              className="h-10 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            {linkError && <p id={`${panelId}-error`} role="alert" className="text-xs text-destructive">{linkError}</p>}
+            <div className="flex justify-end gap-2">
+              {active.link && <button type="button" onClick={() => { fire(() => editor.chain().focus().unsetLink().run()); setOpenSub(null); }} className="rounded-md px-3 py-2 text-sm hover:bg-hover">Убрать ссылку</button>}
+              <button type="button" onClick={applyLink} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Применить</button>
+            </div>
+          </div>}
+        </div>}
+      </div>
     </TooltipProvider>
   );
 }

@@ -77,7 +77,9 @@ export function TaskBodyEditor({
         <RichTextEditor
           ref={editorRef}
           variant="description"
-          // Меню форматирования — только по правой кнопке (не по выделению).
+          toolbar
+          taskDocument
+          // The toolbar is always available; right-click opens controls by the selection.
           selectionMenu={false}
           value={body}
           onChange={onBodyChange}
@@ -92,7 +94,7 @@ export function TaskBodyEditor({
           placeholder={placeholder}
           // БЕЗ собственного max-h/scroll: тело всегда раскрыто на полную высоту, чтобы
           // скролл был ОДИН (колонка в split / окно в narrow), а не «2 поля» внутри задачи.
-          className="py-1.5 text-sm leading-snug"
+          className="py-1.5 text-sm leading-relaxed"
         />
       </Suspense>
     </div>
