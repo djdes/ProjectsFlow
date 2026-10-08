@@ -69,7 +69,7 @@ export class HttpAuthRepository implements AuthRepository {
 
   async getCurrentOrNull(): Promise<User | null> {
     try {
-      const { user } = await httpClient.get<{ user: UserDto }>('/auth/me');
+      const { user } = await httpClient.get<{ user: UserDto }>('/auth/me', { timeoutMs: 12000 });
       return fromDto(user);
     } catch (err) {
       if (err instanceof HttpError && err.status === 401) return null;

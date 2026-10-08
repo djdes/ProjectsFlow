@@ -41,22 +41,46 @@ for path in "${required[@]}"; do
 done
 [[ -d "$stage/db" ]] || { echo "Release is missing db/" >&2; exit 1; }
 
+# Keep content-addressed files for existing tabs. Publish index.html last, by rename,
+# so a reader never sees a new entry document before its assets are installed.
+install_frontend() {
+  local source="$1" destination="$2" asset_dir="$3" entry asset relative
+  mkdir -p -- "$destination/$asset_dir"
+  if [[ -d "$source/$asset_dir" ]]; then
+    cp -an -- "$source/$asset_dir/." "$destination/$asset_dir/"
+    while IFS= read -r -d '' asset; do
+      relative="${asset#"$source/$asset_dir/"}"
+      touch -r "$asset" -- "$destination/$asset_dir/$relative"
+    done < <(find "$source/$asset_dir" -type f -print0)
+  fi
+  while IFS= read -r -d '' entry; do
+    cp -a -- "$entry" "$destination/"
+  done < <(find "$source" -mindepth 1 -maxdepth 1 ! -name index.html ! -name "$asset_dir" -print0)
+  cp -- "$source/index.html" "$destination/.index-next.html"
+  mv -f -- "$destination/.index-next.html" "$destination/index.html"
+
+  # Only old, unreferenced build assets are eligible for bounded retention cleanup.
+  while IFS= read -r -d '' asset; do
+    relative="${asset#"$destination/$asset_dir/"}"
+    if [[ ! -e "$source/$asset_dir/$relative" ]]; then rm -f -- "$asset"; fi
+  done < <(find "$destination/$asset_dir" -type f -mtime +30 -print0)
+}
+
+install_frontend "$stage/client/dist" "$target/client/dist" assets
+install_frontend "$stage/landing/dist" "$target/landing/dist" _astro
+
 # Preserve .env, node_modules and runtime data. Replace only versioned release artifacts.
 rm -rf -- \
   "$target/db" \
   "$target/scripts" \
   "$target/docs" \
-  "$target/server/dist" \
-  "$target/client/dist" \
-  "$target/landing/dist"
+  "$target/server/dist"
 mkdir -p -- "$target/server" "$target/client" "$target/landing"
 
 mv -- "$stage/db" "$target/db"
 mv -- "$stage/scripts" "$target/scripts"
 mv -- "$stage/docs" "$target/docs"
 mv -- "$stage/server/dist" "$target/server/dist"
-mv -- "$stage/client/dist" "$target/client/dist"
-mv -- "$stage/landing/dist" "$target/landing/dist"
 mv -- "$stage/package.json" "$target/package.json"
 mv -- "$stage/package-lock.json" "$target/package-lock.json"
 mv -- "$stage/server/package.json" "$target/server/package.json"

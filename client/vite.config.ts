@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 
 export default defineConfig({
   // Маркер сборки: git sha из CI (GITHUB_SHA) — виден в консоли и в «⋯»-меню
@@ -8,7 +9,15 @@ export default defineConfig({
   define: {
     __PF_BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)),
   },
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'inline-boot-recovery',
+    transformIndexHtml() {
+      return [
+        { tag: 'script', children: readFileSync(new URL('./src/boot/recovery.js', import.meta.url), 'utf8'), injectTo: 'head-prepend' as const },
+        { tag: 'style', children: readFileSync(new URL('./src/boot/recovery.css', import.meta.url), 'utf8'), injectTo: 'head-prepend' as const },
+      ];
+    },
+  }],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

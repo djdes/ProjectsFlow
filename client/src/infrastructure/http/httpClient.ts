@@ -4,6 +4,7 @@
 
 import { HttpError, type HttpErrorBody } from '@/lib/HttpError';
 import { InFlightReads } from './InFlightReads';
+import { fetchWithDeadline } from './fetchWithDeadline';
 
 const reads = new InFlightReads();
 
@@ -14,6 +15,7 @@ export type { HttpErrorBody };
 type Options = {
   readonly method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   readonly body?: unknown;
+  readonly timeoutMs?: number;
 };
 
 async function request<T>(path: string, opts: Options = {}): Promise<T> {
@@ -28,11 +30,12 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
     init.body = JSON.stringify(opts.body);
   }
 
-  const res = await fetch(`/api${path}`, init);
+  const { response: res, text } = await fetchWithDeadline(
+    `/api${path}`, init, opts.timeoutMs ?? (init.method === 'GET' ? 45000 : 90000),
+  );
 
   if (res.status === 204) return undefined as T;
 
-  const text = await res.text();
   // JSON.parse под try/catch: nginx 502/504 отдаёт HTML, а не JSON — без гарда
   // наверх летел бы SyntaxError вместо HttpError, и все `instanceof HttpError`-ветки
   // не срабатывали. При провале парса на не-ok — HttpError с реальным статусом.
@@ -52,7 +55,8 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
   if (!res.ok) {
     // 401 в середине сессии — сообщаем всему приложению одним событием: AuthProvider
     // переведёт статус в anonymous, ProtectedRoute уведёт на /login с возвратом.
-    if (res.status === 401) {
+    // The session probe owns its result; a late probe must not undo a newer login.
+    if (res.status === 401 && !(path === '/auth/me' && init.method === 'GET')) {
       reads.invalidate();
       try {
         window.dispatchEvent(new CustomEvent('pf:session-expired'));
@@ -74,7 +78,8 @@ async function mutate<T>(path: string, opts: Options): Promise<T> {
 }
 
 export const httpClient = {
-  get: <T>(path: string) => reads.get(path, () => request<T>(path)),
+  get: <T>(path: string, options?: Pick<Options, 'timeoutMs'>) =>
+    reads.get(`${path}:${options?.timeoutMs ?? 45000}`, () => request<T>(path, options)),
   post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),

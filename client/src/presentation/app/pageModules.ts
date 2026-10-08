@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from 'react';
+import { loadModule } from '@/lib/loadModule';
 
 const modules = new Map<string, () => Promise<unknown>>();
 const listeners = new Set<() => void>();
@@ -23,7 +24,7 @@ export function lazyPage<M extends Record<string, unknown>>(
 ): ComponentType {
   let promise: Promise<{ default: ComponentType }> | undefined;
   const load = () =>
-    (promise ??= loader()
+    (promise ??= loadModule(loader)
       .then((module) => ({ default: module[key] as ComponentType }))
       .catch((error) => {
         promise = undefined;
@@ -33,10 +34,15 @@ export function lazyPage<M extends Record<string, unknown>>(
   return lazy(() => {
     pending += 1;
     notify();
-    return load().finally(() => {
-      pending -= 1;
-      notify();
-    });
+    return load()
+      .catch((error) => {
+        window.dispatchEvent(new Event('pf:page-load-error'));
+        throw error;
+      })
+      .finally(() => {
+        pending -= 1;
+        notify();
+      });
   });
 }
 

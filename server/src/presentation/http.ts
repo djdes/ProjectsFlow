@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request, type Response, type RequestHandler } from 'express';
+import { mountBuildAssets } from './staticAssets.js';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
@@ -1384,6 +1385,8 @@ export function createApp(deps: AppDeps): CreatedApp {
     });
   }
 
+  if (hasLanding) mountBuildAssets(app, '/_astro', resolve(landingDist, '_astro'));
+  if (!isDev && hasClient) mountBuildAssets(app, '/assets', resolve(clientDist, 'assets'));
   if (hasLanding) app.use(express.static(landingDist, { index: false }));
   // SPA static — только в prod (в dev статика приходит из Vite).
   if (!isDev && hasClient) app.use(express.static(clientDist, { index: false }));

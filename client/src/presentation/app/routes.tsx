@@ -1,7 +1,6 @@
 import { Suspense, type ReactElement } from 'react';
 import { lazyPage as page } from './pageModules';
 import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
-import { AppShell } from '@/presentation/layout/AppShell';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
@@ -29,6 +28,7 @@ function RedirectKeepingSearch({ to }: { to: string }): ReactElement {
   return <Navigate to={{ pathname: to, search, hash }} replace />;
 }
 
+const AppShell = page(() => import('@/presentation/layout/AppShell'), 'AppShell');
 const ProjectPage = page(() => import('@/presentation/pages/ProjectPage'), 'ProjectPage');
 const KbPage = page(() => import('@/presentation/pages/KbPage'), 'KbPage');
 const MonitoringPage = page(() => import('@/presentation/pages/MonitoringPage'), 'MonitoringPage');
@@ -124,7 +124,7 @@ export const router = createBrowserRouter(
     path: '/',
     element: (
       <ProtectedRoute>
-        <AppShell />
+        {el(<AppShell />)}
       </ProtectedRoute>
     ),
     children: [

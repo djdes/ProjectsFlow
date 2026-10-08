@@ -27,6 +27,13 @@ trackInputModality();
 const root = document.getElementById('root');
 if (!root) throw new Error('#root element not found in index.html');
 
+function BootReady(): null {
+  React.useEffect(() => {
+    window.dispatchEvent(new Event('pf:app-ready'));
+  }, []);
+  return null;
+}
+
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <ErrorBoundary>
@@ -42,6 +49,7 @@ ReactDOM.createRoot(root).render(
               <TooltipProvider delayDuration={550} skipDelayDuration={120}>
                 <RouterProvider router={router} />
                 <Toaster />
+                <BootReady />
               </TooltipProvider>
             </AuthProvider>
           </MotionProvider>
