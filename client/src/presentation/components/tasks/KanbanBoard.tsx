@@ -1258,7 +1258,7 @@ export function KanbanBoard({
           )}
           flashKey={workFlash.key}
           flashTaskId={workFlash.id}
-          className={cn(bleedNegClass, bleedPadClass, 'pb-3')}
+          className="min-w-0 pb-3"
         />
 
         <div

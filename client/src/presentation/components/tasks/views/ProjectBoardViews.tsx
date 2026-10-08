@@ -828,7 +828,7 @@ export function ProjectBoardViews({
   if (views === null && activeId !== DEFAULT_VIEW_ID) return <div className="space-y-3"><Skeleton className="h-8 w-48 rounded-full" /><ProjectViewSkeleton projectId={projectId} viewId={activeId} /></div>;
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Строка вкладок + тулбар вью (Notion-style). На узком экране ряд вкладок
           сворачивается в одну кнопку «Активная вью ⌄». Строка остаётся в обычном
           потоке страницы и уезжает вверх вместе с контентом — закрепляются только
@@ -839,7 +839,7 @@ export function ProjectBoardViews({
       <div
         id="pf-views-tabs-row"
         style={{ marginRight: rightPanelWidth }}
-        className="group/tabs relative z-30 flex items-center gap-0.5 bg-background pb-2 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
+        className="group/tabs relative z-30 flex min-w-0 items-center gap-2 bg-background pb-3 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none md:gap-0.5 md:pb-2"
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">
@@ -847,14 +847,14 @@ export function ProjectBoardViews({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex min-h-10 min-w-0 items-center gap-1.5 rounded-md bg-accent py-1 pl-2 pr-1.5 text-[13px] font-medium text-foreground sm:min-h-9"
+                className="inline-flex h-11 min-w-0 max-w-full items-center gap-1.5 rounded-lg bg-accent px-3 text-sm font-medium text-foreground sm:h-9 sm:rounded-md sm:px-2"
                 aria-haspopup="menu"
               >
                 {(() => {
                   const Icon = VIEW_TYPE_ICONS[activeType];
                   return <Icon className="size-3.5 shrink-0" />;
                 })()}
-                <span className="max-w-[10rem] truncate">
+                <span className="min-w-0 max-w-[10rem] truncate">
                   {activeId === DEFAULT_VIEW_ID ? boardName : (active?.name ?? boardName)}
                 </span>
                 <ChevronDown className="size-3 shrink-0 opacity-60" />
@@ -875,6 +875,10 @@ export function ProjectBoardViews({
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-2" onClick={() => navigate(`/projects/${projectId}/studio`)}>
+                <PanelsTopLeft className="size-4" />
+                Студия проекта
+              </DropdownMenuItem>
               <DropdownMenuItem className="gap-2" onClick={() => openSettings()}>
                 <Settings2 className="size-4" />
                 Настройки отображения
@@ -1067,8 +1071,8 @@ export function ProjectBoardViews({
         {/* Общий правый toolbar отображений. У канбана собственные фильтры и поиск
             находятся строкой ниже, но действия проекта/настройки/«Создать» должны
             оставаться справа так же, как в таблице. На узком экране остаются
-            настройки и «Создать». */}
-        <div className="flex shrink-0 items-center gap-0.5">
+            фильтр и «Создать»; настройки и Студия доступны в меню текущего вида. */}
+        <div className="flex shrink-0 items-center gap-1 md:gap-0.5">
           <div className="md:hidden">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
           </div>
@@ -1112,9 +1116,11 @@ export function ProjectBoardViews({
               )}
           </div>
           {(active || isKanban) && (
-            <ToolbarIcon label="Настройки отображения" onClick={() => openSettings()}>
-              <Settings2 className="size-4" />
-            </ToolbarIcon>
+            <div className="hidden md:block">
+              <ToolbarIcon label="Настройки отображения" onClick={() => openSettings()}>
+                <Settings2 className="size-4" />
+              </ToolbarIcon>
+            </div>
           )}
           {/* Студия проекта. Раньше жила в «трёх точках» — оттуда её не видно, хотя это
               вторая по значимости точка входа после создания задачи. Парная кнопка к
@@ -1124,7 +1130,7 @@ export function ProjectBoardViews({
             aria-label="Открыть Студию"
             title="Открыть Студию"
             onClick={() => navigate(`/projects/${projectId}/studio`)}
-            className="ml-1 size-10 rounded-md max-sm:size-10 sm:size-9 md:size-7"
+            className="ml-1 hidden size-7 rounded-md md:inline-flex"
           >
             <PanelsTopLeft className="size-4" />
           </Button>
@@ -1137,10 +1143,10 @@ export function ProjectBoardViews({
               Высота: 28px только с md — там начинается десктопная раскладка ряда. Между
               sm и md работает `sm:h-9` из самого варианта (36px), иначе primary-CTA на
               сенсорном планшете превращается в 28px-мишень. */}
-          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-md">
+          {canEdit && <div className="inline-flex shrink-0 overflow-hidden rounded-lg md:ml-1 md:rounded-md">
             <Button
               size="sm"
-              className="h-10 rounded-none px-3.5 text-sm font-medium sm:text-sm md:h-7"
+              className="h-11 rounded-none px-3 text-sm font-medium sm:h-9 sm:text-sm md:h-7"
               onClick={() => requestCreate('backlog')}
             >
               Создать
@@ -1150,7 +1156,7 @@ export function ProjectBoardViews({
                 <Button
                   size="sm"
                   aria-label="Создать в колонке…"
-                  className="h-10 rounded-none border-l border-primary-foreground/20 px-2 md:h-7"
+                  className="h-11 w-11 rounded-none border-l border-primary-foreground/20 px-0 sm:h-9 sm:w-9 sm:px-0 md:h-7 md:w-7"
                 >
                   <ChevronDown className="size-3.5" />
                 </Button>
@@ -2168,7 +2174,7 @@ function FilterMenu({
           aria-label="Фильтр"
           title="Фильтр"
           className={cn(
-            'inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent',
+            'inline-flex size-11 items-center justify-center rounded-lg transition-colors hover:bg-accent sm:size-9 sm:rounded-md md:size-7',
             active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >

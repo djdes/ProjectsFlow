@@ -309,10 +309,16 @@
   /* iOS Safari зумит страницу при фокусе на input/textarea с font-size < 16px.
      На мобильных принудительно ставим 16px; на desktop (sm+) размер из Tailwind. */
   @media (max-width: 639px) {
+    /* Project columns align with the same 16px gutters as the header and work shelf. */
+    [data-pf-project-page] [data-pf-kanban-column] {
+      width: calc(100vw - 2rem);
+      max-width: none;
+    }
+
     /* Покрываем `<input>` без type-атрибута (default = text), плюс все text-input
        типы. Селектор `input:not(...)` исключает checkbox/radio/file — у них
        font-size не влияет на zoom-trigger. */
-    input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='submit']):not([type='reset']):not([type='button']),
+    input:not([data-pf-project-title]):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='submit']):not([type='reset']):not([type='button']),
     textarea,
     select {
       font-size: 16px !important;

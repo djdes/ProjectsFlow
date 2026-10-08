@@ -440,6 +440,7 @@ export function KanbanColumn({
   return (
     <div
       ref={columnRef}
+      data-pf-kanban-column
       className={cn(
         // group/column — именованный, чтобы не конфликтовать с голым `group` карточек:
         // на hover колонки проявляем «тихие» иконки шапки (Notion-style).

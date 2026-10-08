@@ -2,7 +2,7 @@ import { RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts'
 import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Image as ImageIcon, Loader2, Text } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Paintbrush, Text } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -115,6 +115,8 @@ export function TasksPage(): React.ReactElement {
     }
   };
   const [coverBusy, setCoverBusy] = useState(false);
+  const [appearanceProject, setAppearanceProject] = useState<string | null>(null);
+  const appearanceOpen = appearanceProject === projectId;
   const { submit: submitProject } = useUpdateProject();
 
   // Заголовок вкладки браузера = имя проекта (помогает ориентироваться в табах).
@@ -238,8 +240,8 @@ export function TasksPage(): React.ReactElement {
   return (
     // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её родительский
     // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
-    <div className="flex min-h-full flex-col" data-pf-project-page>
-      <div id="pf-project-mobile-header" className="pf-sticky-surface sticky top-0 z-40 flex min-h-11 items-center justify-between gap-2 bg-background px-2 sm:hidden">
+    <div className="flex min-h-full min-w-0 flex-col" data-pf-project-page>
+      <div id="pf-project-mobile-header" className="pf-sticky-surface sticky top-0 z-40 flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
         <div className="min-w-0 truncate text-sm font-medium">
           {data.icon ? `${data.icon} ` : ''}
           {data.name}
@@ -335,7 +337,7 @@ export function TasksPage(): React.ReactElement {
 
       {/* Тело страницы: крупный заголовок с большими отступами по краям (Notion-style).
           flex-1 без min-h-0 — тело заполняет экран при коротком контенте и растёт при длинном. */}
-      <div className="flex flex-1 flex-col px-6 pb-10 sm:px-14 sm:pb-12 lg:px-24">
+      <div className="flex min-w-0 flex-1 flex-col px-4 pb-10 sm:px-14 sm:pb-12 lg:px-24">
       {/* #2: заголовок проекта — крупный, с большим отступом сверху и по бокам (как в Notion).
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
@@ -348,7 +350,7 @@ export function TasksPage(): React.ReactElement {
           // блок Notion — 66px: название 38 + описание 28, дальше 12px до вкладок).
           // Мы же ставили 40px ПОСЛЕ описания, и зазор выходил вдвое больше нотионовского.
           // Сам ряд вкладок верхнего отступа не имеет, так что зазор целиком задаётся здесь.
-          'group/head shrink-0 pb-4 pt-3 sm:pb-3',
+          'group/head flex shrink-0 flex-col pb-3 pt-2 sm:block sm:pb-3',
           // Верхний отступ зависит от того, что стоит ВЫШЕ блока.
           //  • Без обложки сверху строка крошек (h-11). Ряд «Добавить обложку/описание» в
           //    Notion живёт ВНУТРИ 36px-зазора, а не раздвигает контент: 4 (pt-1) + 28 (ряд)
@@ -364,30 +366,38 @@ export function TasksPage(): React.ReactElement {
         )}
       >
         {canEdit && (
-          // На тач-устройствах hover нет — на мобиле панель видна всегда, на sm+ по наведению.
+          // Mobile appearance tools expand on demand; desktop tools keep their hover behavior.
           // Высота ряда на десктопе — ровно 28px как в Notion (y=48, h=28); снизу зазор 4px
           // (sm:mb-1), сверху — отступ обёртки (4px над крошками, 16px под обложкой, см. выше).
           // Обе кнопки внутри (HeadToolButton и ProjectIconPicker variant="head") приведены к
           // той же 28px-высоте, иначе их ховер-подложки вылезали бы из ряда разной высотой.
-          // Мобильные размеры не трогаем: там ряд виден всегда и живёт по touch-метрикам.
+          // Mobile labels stay on one line in a row that grows with its touch targets.
           // Скрытие — по-прежнему через opacity, чтобы появление по ховеру не дёргало вёрстку.
-          <div className="mb-2 flex h-8 items-center gap-1 opacity-100 transition-opacity duration-150 sm:mb-1 sm:h-7 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
+          <div
+            id="pf-project-appearance"
+            className={cn(
+              'order-2 mt-1 min-w-0 flex-wrap items-center gap-1 transition-opacity duration-150 sm:mb-1 sm:mt-0 sm:flex sm:h-7 sm:flex-nowrap sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100',
+              appearanceOpen ? 'flex' : 'hidden',
+            )}
+          >
             {!data.icon && (
               <ProjectIconPicker projectId={data.id} icon={data.icon} variant="head" />
             )}
             {!data.coverUrl && (
-              <HeadToolButton onClick={() => void addRandomCover()} disabled={coverBusy}>
+              <HeadToolButton onClick={() => void addRandomCover()} disabled={coverBusy} aria-label="Добавить обложку">
                 {coverBusy ? (
                   <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
                 ) : (
                   <ImageIcon className="size-4" />
                 )}
-                {coverBusy ? 'Добавляем…' : 'Добавить обложку'}
+                <span className="sm:hidden">{coverBusy ? 'Добавляем…' : 'Обложка'}</span>
+                <span className="hidden sm:inline">{coverBusy ? 'Добавляем…' : 'Добавить обложку'}</span>
               </HeadToolButton>
             )}
-            <HeadToolButton onClick={() => setDescriptionHidden(!descriptionHidden)}>
+            <HeadToolButton onClick={() => setDescriptionHidden(!descriptionHidden)} aria-label={descriptionHidden ? 'Показать описание' : 'Скрыть описание'} aria-pressed={!descriptionHidden}>
               <Text className="size-4" />
-              {descriptionHidden ? 'Показать описание' : 'Скрыть описание'}
+              <span className="sm:hidden">Описание</span>
+              <span className="hidden sm:inline">{descriptionHidden ? 'Показать описание' : 'Скрыть описание'}</span>
             </HeadToolButton>
           </div>
         )}
@@ -399,6 +409,19 @@ export function TasksPage(): React.ReactElement {
         <div className="flex min-w-0 items-center gap-2">
           {data.icon && <ProjectIconPicker projectId={data.id} icon={data.icon} big titleRow />}
           <EditableProjectTitle projectId={data.id} name={data.name} />
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 rounded-lg text-muted-foreground sm:hidden"
+              aria-label="Оформление проекта"
+              aria-expanded={appearanceOpen}
+              aria-controls="pf-project-appearance"
+              onClick={() => setAppearanceProject(appearanceOpen ? null : data.id)}
+            >
+              <Paintbrush className="size-4" />
+            </Button>
+          )}
         </div>
         {descriptionVisible && (
           // #1: небольшой левый отступ (pl-3 ≈ 12px) — описание чуть отодвинуто от края (как в
@@ -409,7 +432,7 @@ export function TasksPage(): React.ReactElement {
           // вплотную (строка описания начинается ровно на нижней кромке названия, y=118),
           // а весь зазор до вкладок живёт в нижнем паддинге блока. На мобиле оставляем
           // mt-2.5: там название набрано мельче и слипание читается хуже.
-          <div className="mt-2.5 max-w-3xl pl-3 sm:mt-0">
+          <div className={cn('order-1 mt-1 max-w-3xl sm:mt-0 sm:pl-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}>
             <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
           </div>
         )}
@@ -429,10 +452,10 @@ export function TasksPage(): React.ReactElement {
         canEdit={canEdit}
         onOpenAutomation={() => setAutomationOpen(true)}
         // Full-bleed: доска и её нижний горизонтальный скролл во всю ширину окна (по краям
-        // обложки/плашки). Первая колонка отступает как тело страницы (px-6/14/24), последняя
+        // обложки/плашки). Первая колонка отступает как тело страницы (px-4/14/24), последняя
         // доходит до правого края; при скролле колонки уезжают влево до самого края.
-        bleedNegClass="-mx-6 sm:-mx-14 lg:-mx-24"
-        bleedPadClass="pl-6 sm:pl-14 lg:pl-24"
+        bleedNegClass="-mx-4 sm:-mx-14 lg:-mx-24"
+        bleedPadClass="pl-4 sm:pl-14 lg:pl-24"
       />
 
       <AutomationDialog
@@ -449,8 +472,7 @@ export function TasksPage(): React.ReactElement {
 
 // Мелкая ghost-кнопка панели над заголовком (добавить обложку / скрыть описание).
 // sm:min-h-7 + sm:py-0 — кнопка ровно 28px, как ряд-контейнер (sm:h-7) и как Notion.
-// С прежними min-h-9/py-1.5 она была выше контейнера и её ховер-подложка вылезала
-// в зазор до названия. Мобильные min-h-10/py-1.5 не трогаем: touch-target.
+// Mobile controls use 44px touch targets and short, single-line labels.
 function HeadToolButton({
   children,
   ...props
@@ -458,7 +480,7 @@ function HeadToolButton({
   return (
     <button
       type="button"
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60 sm:min-h-7 sm:py-0"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60 sm:min-h-7 sm:rounded-md sm:py-0 sm:text-[13px] [&>svg]:shrink-0"
       {...props}
     >
       {children}

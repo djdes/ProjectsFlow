@@ -47,9 +47,11 @@ function normalizeTab(tab: OpenHelpDetail['tab']): HelpTab | null {
 export function HelpWidget({
   defaultOpen = false,
   defaultTab = 'ai',
+  showLauncher = true,
 }: {
   defaultOpen?: boolean;
   defaultTab?: HelpTab;
+  showLauncher?: boolean;
 } = {}): React.ReactElement | null {
   const { animations } = useMotion();
   const mobile = useMobileSheet();
@@ -244,9 +246,9 @@ export function HelpWidget({
           </SheetContent>
       </Sheet>
 
-      {/* FAB — показываем, когда панель закрыта. На мобиле поднят над таб-баром. */}
+      {/* On mobile the same action lives in the app header, clear of task controls. */}
       <AnimatePresence>
-        {!open && (
+        {!open && showLauncher && (
           <motion.button
             key="fab"
             type="button"

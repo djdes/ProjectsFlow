@@ -154,10 +154,11 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
             type="button"
             disabled={saving || disabled}
             aria-label="Добавить иконку проекта"
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:min-h-7 sm:py-0"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:min-h-7 sm:rounded-md sm:py-0 sm:text-[13px] [&>svg]:shrink-0"
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : <FolderIcon className="size-4" />}
-            Добавить иконку
+            <span className="sm:hidden">Иконка</span>
+            <span className="hidden sm:inline">Добавить иконку</span>
           </button>
         ) : (
           <button

@@ -64,20 +64,21 @@ export function BoardWorkShelf({
     <div className={className}>
       <div
         ref={setNodeRef}
+        data-pf-work-shelf
         className={cn(
-          'relative rounded-xl border border-amber-300/50 bg-amber-100/45 px-2.5 py-2 transition-colors duration-150',
+          'relative min-w-0 rounded-xl border border-amber-300/50 bg-amber-100/45 px-3 py-2.5 transition-colors duration-150',
           'dark:border-amber-400/20 dark:bg-amber-400/[0.07]',
           isOver && 'border-amber-400/80 bg-amber-200/60 dark:border-amber-300/50 dark:bg-amber-400/[0.16]',
           flash && 'pf-shelf-flash',
         )}
       >
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
-          <span>{label}</span>
+        <div className="mb-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300/90">
+          <span className="min-w-0 truncate">{label}</span>
           {tasks.length > 0 && <span className="tabular-nums opacity-70">{tasks.length}</span>}
         </div>
         {tasks.length === 0 ? (
-          <p className="px-0.5 py-1 text-xs text-amber-800/60 dark:text-amber-200/45">
-            Перетащите сюда задачу, которой занимаетесь сейчас.
+          <p className="py-0.5 text-xs leading-5 text-amber-800/60 dark:text-amber-200/45">
+            Перетащите сюда задачу для работы.
           </p>
         ) : (
           <SortableContext items={tasks.map((t) => t.id)}>
@@ -130,10 +131,8 @@ function ShelfCard({
       // rounded-xl — чтобы вспышка (::after с border-radius: inherit) повторяла
       // скругление карточки. Фона и рамки у обёртки нет.
       className={cn(
-        // Явный размер вместо процентов: flex-базис в 100% с max-width
-        // раскладка трактует неоднозначно, а фиксированный не даёт
-        // карточкам ни растекаться, ни наезжать друг на друга.
-        'relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl',
+        // Mobile cards fit the bounded shelf; desktop keeps the compact card width.
+        'relative w-full min-w-0 max-w-full shrink-0 grow-0 rounded-xl sm:w-[17rem]',
         flashing && 'pf-card-flash',
       )}
       // Document-level жест сайдбара не должен перехватывать свайп карточки.

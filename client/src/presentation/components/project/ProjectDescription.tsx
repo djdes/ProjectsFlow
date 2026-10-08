@@ -82,7 +82,7 @@ export function ProjectDescription({ projectId, description, canEdit }: Props): 
       placeholder="Добавьте описание проекта…"
       rows={1}
       className={cn(
-        'block w-full resize-none overflow-hidden bg-transparent p-0 text-[15px] leading-relaxed text-foreground/90 outline-none',
+        'block min-h-6 w-full resize-none overflow-hidden bg-transparent p-0 text-[15px] leading-relaxed text-foreground/90 outline-none',
         'placeholder:text-muted-foreground/50',
       )}
       aria-label="Описание проекта"

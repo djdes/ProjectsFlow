@@ -3,7 +3,7 @@ import { useAppNavigation } from '@/presentation/components/experience/useAppNav
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, X } from 'lucide-react';
+import { Menu, Sparkles, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -404,7 +404,7 @@ export function AppShell(): React.ReactElement {
           </div>
         ) : (
           <div className="flex h-dvh flex-col bg-background text-foreground">
-            <header className="flex min-h-11 shrink-0 items-center gap-2 border-b px-2">
+            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3">
               <Button
                 variant="ghost"
                 size="icon"
@@ -417,6 +417,16 @@ export function AppShell(): React.ReactElement {
                 <Menu className="size-5" />
               </Button>
               <MobileWorkspaceTitle />
+              <CompletedTodayPill inline />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 rounded-lg text-muted-foreground"
+                aria-label="Открыть ИИ и поддержку"
+                onClick={() => window.dispatchEvent(new CustomEvent('pf:open-help'))}
+              >
+                <Sparkles className="size-5" />
+              </Button>
             </header>
             <InstallAppPrompt variant="banner" />
             <main
@@ -459,12 +469,12 @@ export function AppShell(): React.ReactElement {
           </div>
         )}
         {/* Мотивационный счётчик закрытых сегодня задач — правый верхний угол, поверх страниц. */}
-        <CompletedTodayPill />
+        {isDesktop && <CompletedTodayPill />}
         {/* Конфетти на закрытие задачи из ЛЮБОЙ точки (чекбокс, ховер-кнопка, drag) — один
             праздник на приложение, запускается ключом из CompletedTodayProvider. */}
         <CompletionCelebration />
         {/* Плавающий виджет помощи/поддержки — снизу справа, портал в body, над таб-баром. */}
-        <HelpWidget />
+        <HelpWidget showLauncher={isDesktop} />
         {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
         <UsageBanner />
         </RightPanelWidthProvider>
@@ -489,9 +499,9 @@ export function AppShell(): React.ReactElement {
 // Заголовок мобильной шапки — название активного пространства вместо статичного лого.
 function MobileWorkspaceTitle(): React.ReactElement {
   const { workspace } = useCurrentWorkspace();
-  if (!workspace) return <span className="text-sm font-semibold">ProjectsFlow</span>;
+  if (!workspace) return <span className="min-w-0 flex-1 truncate text-sm font-semibold">ProjectsFlow</span>;
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 flex-1 items-center gap-1.5">
       <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-5 text-[10px]" />
       <span className="truncate text-sm font-semibold">{workspace.name}</span>
     </span>

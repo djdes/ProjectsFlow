@@ -309,8 +309,8 @@ export function ProjectActionsMenu({
           }}
         >
           {/* Поиск действий (Notion Search actions…). */}
-          <div className="relative px-0.5 pb-1.5">
-            <Search className="pointer-events-none absolute left-2.5 top-[9px] size-3.5 text-muted-foreground/60" />
+          <div className="relative px-0.5 pb-2 md:pb-1.5">
+            <Search className="pointer-events-none absolute left-3 top-[22px] size-4 -translate-y-1/2 text-muted-foreground/60 md:left-2.5 md:top-3.5 md:size-3.5" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -323,7 +323,7 @@ export function ProjectActionsMenu({
               }}
               placeholder="Поиск действий…"
               aria-label="Поиск действий"
-              className="h-7 w-full rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+              className="h-11 w-full rounded-lg border border-border/70 bg-accent/60 pl-9 pr-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:pl-7 md:pr-2 md:text-xs"
             />
           </div>
           {/* Тумблер «Скрыть плашки» — только на странице задач (только там живёт
@@ -336,7 +336,7 @@ export function ProjectActionsMenu({
               showGithubPreview={showGithubBanner}
             />
           )}
-          <div className="max-h-96 overflow-y-auto">
+          <div className="md:max-h-96 md:overflow-y-auto">
             {filtered.map((a, i) => {
               const prev = filtered[i - 1];
               const Icon = a.icon;
@@ -350,7 +350,7 @@ export function ProjectActionsMenu({
                       a.onSelect();
                     }}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
+                      'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left text-sm transition-colors hover:bg-accent/60 md:min-h-0 md:rounded-md md:py-1.5',
                       a.destructive && 'text-destructive hover:text-destructive',
                     )}
                   >
