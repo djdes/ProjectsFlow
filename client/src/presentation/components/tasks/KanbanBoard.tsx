@@ -53,6 +53,7 @@ import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { SidebarResizingContext, useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { stashComposerDraft } from './composerDraft';
 import { useTasks } from '@/presentation/hooks/useTasks';
+import { useTaskMoveUndo } from '@/presentation/hooks/useTaskMoveUndo';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
 import { useCollapsingPresence } from '@/presentation/hooks/useCollapsingPresence';
@@ -291,6 +292,7 @@ export function KanbanBoard({
   canEdit = true,
 }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
+  const moveWithUndo = useTaskMoveUndo(projectId, tasks, move);
   const { user } = useCurrentUser();
   // isInbox = это inbox-board (задаётся через showCommits=false — у inbox нет git-репо).
   // Чекбокс «выполнено» показываем на ВСЕХ досках (inbox и проекты): клик → done,
@@ -962,7 +964,7 @@ export function KanbanBoard({
 
     const movedId = activeTask.id;
     try {
-      await move(movedId, {
+      await moveWithUndo(activeTask, {
         targetStatus,
         beforeTaskId: beforeTask?.id ?? null,
         afterTaskId: afterTask?.id ?? null,
@@ -1013,7 +1015,7 @@ export function KanbanBoard({
     const next = quickPromoteNext(task.status, workerEnabled);
     if (!next) return;
     try {
-      await move(task.id, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
+      await moveWithUndo(task, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
     } catch (err) {
       toast.error(`Не удалось перенести: ${(err as Error).message}`);
     }
@@ -1025,7 +1027,7 @@ export function KanbanBoard({
   // в пространстве включено утверждение.
   const handleQuickComplete = async (task: Task): Promise<void> => {
     try {
-      await move(task.id, {
+      await moveWithUndo(task, {
         targetStatus: 'done',
         beforeTaskId: null,
         afterTaskId: topAnchorFor('done'),

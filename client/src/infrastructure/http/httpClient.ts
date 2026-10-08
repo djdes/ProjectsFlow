@@ -3,6 +3,9 @@
 // `credentials: 'include'` — обязательно для cookie-сессий.
 
 import { HttpError, type HttpErrorBody } from '@/lib/HttpError';
+import { InFlightReads } from './InFlightReads';
+
+const reads = new InFlightReads();
 
 // Re-export для удобства infrastructure-слоя; presentation должен импортировать из '@/lib/HttpError'.
 export { HttpError };
@@ -50,6 +53,7 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
     // 401 в середине сессии — сообщаем всему приложению одним событием: AuthProvider
     // переведёт статус в anonymous, ProtectedRoute уведёт на /login с возвратом.
     if (res.status === 401) {
+      reads.invalidate();
       try {
         window.dispatchEvent(new CustomEvent('pf:session-expired'));
       } catch {
@@ -63,10 +67,16 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
   return data as T;
 }
 
+async function mutate<T>(path: string, opts: Options): Promise<T> {
+  reads.invalidate();
+  try { return await request<T>(path, opts); }
+  finally { reads.invalidate(); }
+}
+
 export const httpClient = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
-  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
-  put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  get: <T>(path: string) => reads.get(path, () => request<T>(path)),
+  post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body }),
+  patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body }),
+  put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),
+  delete: <T>(path: string) => mutate<T>(path, { method: 'DELETE' }),
 };

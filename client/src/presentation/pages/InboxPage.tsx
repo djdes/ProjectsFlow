@@ -1,4 +1,5 @@
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useState } from 'react';
 import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,17 +46,19 @@ export function InboxPage(): React.ReactElement {
   // null = ещё грузится, отличается от честного пустого инбокса.
   const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(null);
   const reloadInboxTasks = useCallback(
-    async (projectId: string): Promise<void> => {
+    async (projectId: string, propagateError = false): Promise<void> => {
       try {
         setBoardTasks(await taskRepository.list(projectId));
-      } catch {
+      } catch (error) {
+        if (propagateError) throw error;
         // Блок не должен «залипнуть» в пустом рендере из-за сетевой ошибки: сам он
         // грузит задачи отдельно и покажет их, а личное зеркало просто будет пустым.
-        setBoardTasks([]);
+        setBoardTasks(current => current ?? []);
       }
     },
     [taskRepository],
   );
+  usePageRefresh(() => project ? reloadInboxTasks(project.id, true) : Promise.resolve(), Boolean(project));
 
   useEffect(() => {
     let cancelled = false;

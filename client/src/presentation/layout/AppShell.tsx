@@ -1,3 +1,5 @@
+import { NavigationProgress } from '@/presentation/components/experience/NavigationProgress';
+import { useAppNavigation } from '@/presentation/components/experience/useAppNavigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
@@ -10,7 +12,7 @@ import {
 } from '@/components/ui/tooltip';
 import { MobileBottomNav } from './MobileBottomNav';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { cn } from '@/lib/utils';
 import { NewProjectDialogProvider } from '@/presentation/components/forms/NewProjectDialogProvider';
@@ -24,6 +26,7 @@ import { UpgradeDialogProvider } from '@/presentation/usage/UpgradeDialogProvide
 import { UsageBanner } from '@/presentation/usage/UsageBanner';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { PageTransition } from '@/presentation/components/motion/PageTransition';
+import { AppExperience } from '@/presentation/components/experience/AppExperience';
 import { WorkspaceIcon } from './WorkspaceIcon';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
@@ -62,6 +65,7 @@ export function AppShell(): React.ReactElement {
   // только элементы, которым разрешено сужаться под панелью (плашка и строка отображений).
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const { pathname } = useLocation();
+  useAppNavigation(isDesktop);
   const studioRoute = /\/projects\/[^/]+\/studio(?:\/|$)/.test(pathname);
   const immersiveRoute = pathname === '/ai' || pathname.startsWith('/ai/') || studioRoute;
   const [studioChatHidden, setStudioChatHidden] = useState(false);
@@ -265,6 +269,7 @@ export function AppShell(): React.ReactElement {
         <GlobalSearchProvider>
         <RightPanelProvider value={setRightPanelWidth}>
         <RightPanelWidthProvider value={rightPanelWidth}>
+          <AppExperience desktop={isDesktop} />
         {isDesktop ? (
           <div
             className={cn(
@@ -386,10 +391,12 @@ export function AppShell(): React.ReactElement {
               </>
             )}
             <main
+              data-pf-main
               className={cn('relative min-h-0', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden')}
               data-pf-scrolled={mainScrolled ? 'true' : 'false'}
               onScroll={handleMainScroll}
             >
+              <NavigationProgress />
               <PageTransition>
                 <Outlet />
               </PageTransition>
@@ -413,10 +420,12 @@ export function AppShell(): React.ReactElement {
             </header>
             <InstallAppPrompt variant="banner" />
             <main
+              data-pf-main
               className={cn('min-h-0 flex-1', immersiveRoute ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden')}
               data-pf-scrolled={mainScrolled ? 'true' : 'false'}
               onScroll={handleMainScroll}
             >
+              <NavigationProgress />
               <PageTransition>
                 <Outlet />
               </PageTransition>
@@ -425,11 +434,13 @@ export function AppShell(): React.ReactElement {
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent
                 mobileSheet={false}
+                aria-describedby={undefined}
                 side="left"
                 showClose={false}
                 data-pf-drawer-content
                 className="w-[88vw] max-w-sm p-0 ease-out data-[state=closed]:duration-200 data-[state=open]:duration-200"
               >
+                <SheetTitle className="sr-only">Навигация</SheetTitle>
                 <div className="h-full">
                   <Sidebar onNavigate={() => setDrawerOpen(false)} />
                 </div>

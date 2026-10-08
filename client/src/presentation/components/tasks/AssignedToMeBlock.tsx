@@ -1,4 +1,5 @@
 import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -387,7 +388,7 @@ export function AssignedToMeBlock({
     focusedMemberIdRef.current = focusedMemberId;
   }, [focusedMemberId]);
 
-  const refresh = useCallback(async (): Promise<void> => {
+  const refresh = useCallback(async (propagateError = false): Promise<void> => {
     lastRefreshAtRef.current = Date.now();
     // Снимок на момент старта запроса — сверяем с актуальным ПОСЛЕ await (см. ниже), а не
     // просто читаем ref второй раз: доска могла закрыться и открыться на ДРУГОГО сотрудника
@@ -412,6 +413,7 @@ export function AssignedToMeBlock({
         setFocusedMemberTasks(focused);
       }
     } catch (e) {
+      if (propagateError) throw e;
       toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     } finally {
       // Штампуем ещё раз ПОСЛЕ применения ответа, не только в начале запроса: на медленной
@@ -422,6 +424,7 @@ export function AssignedToMeBlock({
       lastRefreshAtRef.current = Date.now();
     }
   }, [taskAssigneeRepository]);
+  usePageRefresh(() => refresh(true));
 
   // Открыли доску сотрудника (клик по кубику) — подтягиваем его задачи сразу, не дожидаясь
   // следующей SSE-волны/фокуса. Закрыли доску — сбрасываем, чтобы старые карточки не мелькали

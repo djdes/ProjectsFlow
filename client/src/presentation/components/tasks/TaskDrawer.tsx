@@ -3411,7 +3411,7 @@ function CommentItem({
           </div>
         )}
       </div>
-      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
+      <AttachmentLightbox attachment={preview} attachments={comment.attachments} onClose={() => setPreview(null)} />
     </li>
   );
 }

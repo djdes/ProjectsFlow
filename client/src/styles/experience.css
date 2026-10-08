@@ -1,0 +1,152 @@
+.pf-navigation-progress {
+  position: fixed;
+  z-index: 120;
+  inset: 0 0 auto;
+  height: 2px;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  animation: pf-progress-reveal 1ms 160ms forwards;
+}
+.pf-navigation-progress::after {
+  content: '';
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: hsl(var(--primary));
+  animation: pf-progress-travel 1.1s ease-in-out infinite;
+}
+@keyframes pf-progress-reveal {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pf-progress-travel {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(385%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-navigation-progress::after {
+    animation: none;
+    width: 100%;
+  }
+}
+html.pf-no-motion .pf-navigation-progress {
+  opacity: 1;
+}
+html.pf-no-motion .pf-navigation-progress::after {
+  animation: none;
+  width: 100%;
+}
+/* Surfaces stay in the page's scroll coordinate system, without moving content. */
+main[data-pf-main] {
+  position: relative;
+  overscroll-behavior-y: contain;
+  overflow-anchor: none;
+}
+.pf-refresh-anchor {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.pf-pull-refresh {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.625rem 1rem;
+  border-radius: 999px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 18px #00000014;
+  font-size: 0.75rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(var(--pf-pull-distance, 0px));
+  transition: opacity 150ms ease;
+}
+.pf-pull-refresh.is-visible,
+.pf-pull-refresh:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pf-pull-refresh:focus-visible {
+  transform: translateY(12px);
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 3px;
+}
+.pf-connection-notice {
+  position: fixed;
+  z-index: 110;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  box-shadow: 0 6px 24px #00000014;
+  font-size: 0.75rem;
+}
+@media (max-width: 767px) {
+  .pf-connection-notice {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-pull-refresh {
+    transition: none;
+  }
+}
+html.pf-no-motion .pf-pull-refresh {
+  transition: none;
+}
+.pf-gallery-stage {
+  position: relative;
+  min-height: 120px;
+  height: min(60dvh, 640px);
+  max-height: calc(92dvh - 175px);
+  flex-shrink: 1;
+  overflow: hidden;
+  background: hsl(var(--muted) / 0.5);
+}
+.pf-gallery-image {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pf-gallery-image[data-zoomed='false'] {
+  overflow: hidden;
+}
+.pf-gallery-image-canvas img {
+  transition: opacity 180ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-gallery-image-canvas img {
+    transition: none;
+  }
+}
+html.pf-no-motion .pf-gallery-image-canvas img {
+  transition: none;
+}
+@media (max-width: 767px) {
+  body:has(.pf-connection-notice) [data-sonner-toaster] {
+    --mobile-offset-bottom: calc(9rem + env(safe-area-inset-bottom)) !important;
+  }
+}

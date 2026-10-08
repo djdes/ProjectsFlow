@@ -1,4 +1,5 @@
-import { lazy, Suspense, type ComponentType, type ReactElement } from 'react';
+import { Suspense, type ReactElement } from 'react';
+import { lazyPage as page } from './pageModules';
 import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AppShell } from '@/presentation/layout/AppShell';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
@@ -11,12 +12,6 @@ import { RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts'
 // Раньше весь SPA (dnd-kit, motion, admin, monitoring, finance, tiptap) шёл одним
 // бандлом ~1.9 MB — в т.ч. анониму на публичной доске. `page()` разворачивает named-export
 // в default для React.lazy; `el()` оборачивает элемент в Suspense с общим фолбэком.
-function page<M extends Record<string, unknown>>(
-  loader: () => Promise<M>,
-  key: keyof M,
-): ComponentType {
-  return lazy(() => loader().then((m) => ({ default: m[key] as ComponentType })));
-}
 
 function RouteFallback(): ReactElement {
   return <RouteSkeleton />;

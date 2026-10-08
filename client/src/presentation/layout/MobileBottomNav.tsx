@@ -1,3 +1,5 @@
+import { scrollMainToTop } from '@/presentation/components/experience/useAppNavigation';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
@@ -13,6 +15,7 @@ type Gesture = { id: number; x: number; y: number; dragged: boolean };
 /** Native buttons for taps/keyboard; a deliberate horizontal drag previews a destination. */
 export function MobileBottomNav(): React.ReactElement {
   const navigate = useNavigate();
+  const { animations } = useMotion();
   const { pathname } = useLocation();
   const { count } = useUnreadTasks();
   const items = [
@@ -167,9 +170,10 @@ export function MobileBottomNav(): React.ReactElement {
           <button
             key={item.path}
             type="button"
+            data-pf-route={item.path}
             aria-label={item.label}
             aria-current={item.active ? 'page' : undefined}
-            onClick={() => navigate(item.path)}
+            onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path)}
             className={cn(
               'relative z-10 flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[1.125rem] px-2 py-1.5 text-[11px] font-medium leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
               item.active

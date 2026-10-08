@@ -243,7 +243,7 @@ export function TaskDrawerAttachmentRow({
         </div>
       )}
 
-      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
+      <AttachmentLightbox attachment={preview} attachments={items} onClose={() => setPreview(null)} />
     </div>
   );
 }

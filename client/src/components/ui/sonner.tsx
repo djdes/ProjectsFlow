@@ -10,6 +10,8 @@ export function Toaster(props: ToasterProps): React.ReactElement {
       // success — зелёный + ✓, error — красный + ✕, warning — янтарный, info — синий.
       richColors
       closeButton
+      mobileOffset={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom))', left: 12, right: 12 }}
+      visibleToasts={3}
       className="toaster group"
       toastOptions={{
         classNames: {
