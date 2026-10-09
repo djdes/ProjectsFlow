@@ -4,6 +4,7 @@ import {
   buildAssigneeMenu,
   buildAssigneeTaskCards,
   resolveAssigneeByName,
+  collectAssigneeProjectTasks,
   ASSIGNEE_CARDS_LIMIT,
   type AssigneeBrowseDeps,
 } from './assigneeBrowse.js';
@@ -250,4 +251,51 @@ test('resolve: пустой query (@ без имени) → ambiguous со вс�
   const res = await resolveAssigneeByName(makeDeps(resolveSeed), 'viewer', '');
   assert.equal(res.kind, 'ambiguous');
   if (res.kind === 'ambiguous') assert.equal(res.options.length, 2);
+});
+
+// Личные «Входящие» в сводке по человеку: подпись «Личные» вместо служебного «inbox:<id>»,
+// а в общем чате — без личных заметок владельца, если спросил не он сам.
+const inboxSeed = (): AssigneeBrowseDeps => {
+  const deps = makeDeps({
+    projects: [
+      { id: 'p1', name: 'Сайт' },
+      { id: 'inbox-d', name: 'inbox:u-denis', isInbox: true, ownerId: 'u-denis' } as never,
+    ],
+    tasksByProject: {
+      p1: [{ id: 't1', description: 'Задача по сайту', assigneeUserId: 'u-denis', assigneeDisplayName: 'Денис' }],
+      'inbox-d': [
+        { id: 't2', description: 'Личная заметка', assigneeUserId: 'u-denis', assigneeDisplayName: 'Денис', createdBy: 'u-denis' } as never,
+        { id: 't3', description: 'Поручение от Олега', assigneeUserId: 'u-denis', assigneeDisplayName: 'Денис', createdBy: 'u-oleg' } as never,
+      ],
+    },
+  });
+  return deps;
+};
+
+test('digest: личные «Входящие» подписаны «Личные» и ведут на /inbox', async () => {
+  const res = await collectAssigneeProjectTasks(inboxSeed(), 'u-denis', 'u-denis');
+  assert.deepEqual(
+    res.projects.map((g) => [g.project.name, g.isInbox === true, g.tasks.map((t) => t.id)]),
+    [
+      ['Сайт', false, ['t1']],
+      ['Личные', true, ['t2', 't3']],
+    ],
+  );
+});
+
+test('digest в группе: личные заметки видит только их владелец, поручения — все', async () => {
+  const asked = await collectAssigneeProjectTasks(inboxSeed(), 'u-denis', 'u-denis', {
+    requesterUserId: 'u-oleg',
+  });
+  assert.deepEqual(asked.projects.flatMap((g) => g.tasks.map((t) => t.id)), ['t1', 't3']);
+
+  const self = await collectAssigneeProjectTasks(inboxSeed(), 'u-denis', 'u-denis', {
+    requesterUserId: 'u-denis',
+  });
+  assert.deepEqual(self.projects.flatMap((g) => g.tasks.map((t) => t.id)), ['t1', 't2', 't3']);
+
+  const anonymous = await collectAssigneeProjectTasks(inboxSeed(), 'u-denis', 'u-denis', {
+    requesterUserId: null,
+  });
+  assert.deepEqual(anonymous.projects.flatMap((g) => g.tasks.map((t) => t.id)), ['t1', 't3']);
 });

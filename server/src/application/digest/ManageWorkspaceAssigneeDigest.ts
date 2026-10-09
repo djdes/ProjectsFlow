@@ -4,6 +4,7 @@ import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 import { requireWorkspaceMember } from '../workspace/workspaceAccess.js';
 import type { DigestGroupHistory } from './DigestSettingsRepository.js';
 import type { SendWorkspaceAssigneeDigest } from './SendWorkspaceAssigneeDigest.js';
+import type { SendWorkspacePersonalDigest } from './SendWorkspacePersonalDigest.js';
 import type {
   SaveWorkspaceAssigneeDigestSettingsInput,
   WorkspaceAssigneeDigestRepository,
@@ -16,6 +17,7 @@ type Deps = {
   readonly users: UserRepository;
   readonly telegram: TelegramClient;
   readonly send: SendWorkspaceAssigneeDigest;
+  readonly sendPersonal: Pick<SendWorkspacePersonalDigest, 'execute'>;
   readonly projects: import('../project/ProjectRepository.js').ProjectRepository;
 };
 
@@ -85,9 +87,19 @@ export class ManageWorkspaceAssigneeDigest {
     });
   }
 
+  // Тест из настроек: таблица — в группу, личная сводка — только нажавшему, а не всей команде.
   async sendNow(workspaceId: string, actorUserId: string) {
     await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
-    return this.deps.send.execute(workspaceId, { force: true });
+    const settings = await this.deps.repo.get(workspaceId);
+    // Выключенную таблицу не тестируем в группе, если проверяют только личную сводку.
+    const group =
+      settings.enabled || !settings.personalEnabled
+        ? await this.deps.send.execute(workspaceId, { force: true })
+        : { taskCount: 0, sentCount: 0, skippedRecipientUserIds: [], projectCount: 0, approvalTaskCount: 0 };
+    const personal = settings.personalEnabled
+      ? await this.deps.sendPersonal.execute(workspaceId, { force: true, onlyUserId: actorUserId })
+      : null;
+    return { ...group, personal };
   }
 
   async listGroups(

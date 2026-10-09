@@ -12,6 +12,7 @@ import type { ScheduleDay } from '../../domain/digest/ScheduleDays.js';
 
 export type SaveWorkspaceAssigneeDigestSettingsInput = {
   readonly enabled: boolean;
+  readonly personalEnabled: boolean;
   readonly hour: number;
   readonly minute: number;
   readonly daysOfWeek: ScheduleDay[];

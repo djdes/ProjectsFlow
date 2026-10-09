@@ -32,6 +32,7 @@ function rowToSettings(
   return {
     workspaceId: row.workspaceId,
     enabled: row.enabled,
+    personalEnabled: row.personalEnabled,
     hour: row.sendHour,
     minute: row.sendMinute,
     daysOfWeek: normalizeScheduleDays(
@@ -94,6 +95,7 @@ export class DrizzleWorkspaceAssigneeDigestRepository
   ): Promise<WorkspaceAssigneeDigestSettings> {
     const set = {
       enabled: input.enabled,
+      personalEnabled: input.personalEnabled,
       sendHour: input.hour,
       sendMinute: input.minute,
       weekdaysOnly: isWeekdaysOnly(input.daysOfWeek),
@@ -134,6 +136,7 @@ export class DrizzleWorkspaceAssigneeDigestRepository
       .where(
         or(
           eq(workspaceAssigneeDigestSettings.enabled, true),
+          eq(workspaceAssigneeDigestSettings.personalEnabled, true),
           eq(workspaceAssigneeDigestSettings.commitSyncEnabled, true),
           eq(workspaceAssigneeDigestSettings.eodReminderEnabled, true),
         ),

@@ -4,6 +4,10 @@
 // (заголовок + ссылки), чтобы сборщику не пришлось повторно ходить в БД/создавать токены.
 
 export type CommitReviewRow = {
+  // Задача строки — чтобы reply на сводку стал комментарием к ней (db/160). Нет у payload'ов,
+  // записанных до этого поля: такие строки просто не комментируются ответом.
+  readonly taskId?: string;
+  readonly projectId?: string;
   readonly title: string;
   readonly openUrl: string;
   // Ссылка на email-action «закрыть» (только режим propose и незакрытая задача). null иначе.
@@ -48,6 +52,9 @@ export function parseCommitReviewResult(json: string | null): CommitReviewResult
     const r = row as Record<string, unknown>;
     if (typeof r['title'] !== 'string' || typeof r['openUrl'] !== 'string') continue;
     parsedRows.push({
+      ...(typeof r['taskId'] === 'string' && typeof r['projectId'] === 'string'
+        ? { taskId: r['taskId'], projectId: r['projectId'] }
+        : {}),
       title: r['title'],
       openUrl: r['openUrl'],
       completeUrl: typeof r['completeUrl'] === 'string' ? r['completeUrl'] : null,

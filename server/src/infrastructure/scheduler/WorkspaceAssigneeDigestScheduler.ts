@@ -1,5 +1,6 @@
 import type { WorkspaceAssigneeDigestRepository } from '../../application/digest/WorkspaceAssigneeDigestRepository.js';
 import type { SendWorkspaceAssigneeDigest } from '../../application/digest/SendWorkspaceAssigneeDigest.js';
+import type { SendWorkspacePersonalDigest } from '../../application/digest/SendWorkspacePersonalDigest.js';
 import type { SendWorkspaceEodReminder } from '../../application/eod/SendWorkspaceEodReminder.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import { mskNow } from './mskClock.js';
@@ -12,6 +13,7 @@ export class WorkspaceAssigneeDigestScheduler {
     private readonly deps: {
       readonly settings: WorkspaceAssigneeDigestRepository;
       readonly send: SendWorkspaceAssigneeDigest;
+      readonly sendPersonal: Pick<SendWorkspacePersonalDigest, 'execute'>;
       readonly projects: ProjectRepository;
       readonly sendEodReminder: SendWorkspaceEodReminder;
       // Пауза плановых рассылок (broadcastPause.ts). Отсутствие — без паузы (тесты).
@@ -48,11 +50,23 @@ export class WorkspaceAssigneeDigestScheduler {
       for (const item of settings) {
         if (!item.daysOfWeek.includes(now.dayOfWeek)) continue;
         const digestMinutes = item.hour * 60 + item.minute;
-        if (item.enabled && nowMinutes >= digestMinutes && item.lastSentOn !== now.date) {
+        // Групповая таблица и личная сводка в бота делят время, дни и отметку отправки.
+        if (
+          (item.enabled || item.personalEnabled) &&
+          nowMinutes >= digestMinutes &&
+          item.lastSentOn !== now.date
+        ) {
           try {
-            await this.deps.send.execute(item.workspaceId);
-          } catch (error) {
-            console.warn('[workspace-assignee-digest] send failed', item.workspaceId, error);
+            if (item.enabled) {
+              await this.deps.send.execute(item.workspaceId).catch((error) =>
+                console.warn('[workspace-assignee-digest] send failed', item.workspaceId, error),
+              );
+            }
+            if (item.personalEnabled) {
+              await this.deps.sendPersonal.execute(item.workspaceId).catch((error) =>
+                console.warn('[workspace-personal-digest] send failed', item.workspaceId, error),
+              );
+            }
           } finally {
             await this.deps.settings.markSent(item.workspaceId, now.date).catch(() => undefined);
           }

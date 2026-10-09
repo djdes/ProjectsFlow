@@ -14,6 +14,7 @@ import type {
 } from './DigestSettingsRepository.js';
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import type { TelegramDigestActionDeliveryRepository } from './TelegramDigestActionDeliveryRepository.js';
+import type { TelegramMessageTaskRepository } from '../telegram/TelegramMessageTaskRepository.js';
 import { extractTelegramDigestActionTokens } from './TelegramDigestActionService.js';
 import {
   buildDigestModel,
@@ -55,6 +56,8 @@ type Deps = {
   readonly telegramDigestActions: TelegramDigestActionDeliveryRepository;
   // Секрет для подписи URL картинок-вложений (письмо: <img>, Telegram: альбом).
   readonly signingSecret: string;
+  // Задачи групповой сводки (db/160): reply на неё становится комментарием к задаче.
+  readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'attach'>;
 };
 
 // Отправка ежедневной сводки по проекту (вызывается планировщиком). Полностью
@@ -302,6 +305,13 @@ export class SendDailyDigest {
               .catch((e) =>
                 console.warn('[daily-digest] remember rich actions failed', e),
               );
+            await this.deps.messageTasks
+              ?.attach({
+                chatId: groupChatId,
+                messageId: r.messageId,
+                tasks: selected.map((task) => ({ taskId: task.id, projectId })),
+              })
+              .catch((e) => console.warn('[daily-digest] remember message tasks failed', e));
           }
         } catch (e) {
           console.warn('[daily-digest] tg group rich failed', e);

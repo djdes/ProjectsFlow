@@ -47,7 +47,12 @@ type OpenTaskRow = {
   readonly task: Task;
   readonly projectId: string;
   readonly projectName: string;
+  // Владелец личных «Входящих», где лежит задача (null — обычный проект).
+  readonly inboxOwnerId: string | null;
 };
+
+// Подпись личных «Входящих» вместо служебного имени inbox-проекта («inbox:<uuid>»).
+export const INBOX_PROJECT_LABEL = 'Личные';
 
 // Все открытые (status !== 'done') задачи по всем проектам пользователя.
 async function collectOpenTasks(
@@ -62,7 +67,13 @@ async function collectOpenTasks(
   for (const p of projects) {
     const tasks = await deps.tasks.listByProject(p.id);
     for (const t of tasks) {
-      if (t.status !== 'done') rows.push({ task: t, projectId: p.id, projectName: p.name });
+      if (t.status === 'done') continue;
+      rows.push({
+        task: t,
+        projectId: p.id,
+        projectName: p.isInbox ? INBOX_PROJECT_LABEL : p.name,
+        inboxOwnerId: p.isInbox ? p.ownerId : null,
+      });
     }
   }
   return { hasProjects: true, rows };
@@ -109,7 +120,12 @@ export async function buildAssigneeMenu(
 
 // Открытые задачи ОДНОГО ответственного, сгруппированные по проекту — форма, которую ест
 // сводка по ответственным (buildWorkspaceAssigneeDigest*). Охват — проекты viewer'а.
-export type AssigneeProjectGroup = { readonly project: { id: string; name: string }; readonly tasks: Task[] };
+export type AssigneeProjectGroup = {
+  readonly project: { id: string; name: string };
+  // Личные «Входящие»: ссылки ведут на /inbox, а не на страницу проекта.
+  readonly isInbox?: boolean;
+  readonly tasks: Task[];
+};
 export type AssigneeProjectTasks = {
   readonly displayName: string | null;
   readonly totalCount: number;
@@ -120,15 +136,31 @@ export async function collectAssigneeProjectTasks(
   deps: AssigneeBrowseDeps,
   viewerUserId: string,
   assigneeUserId: string,
+  // Общий чат (группа): личные заметки — задачи, которые владелец «Входящих» поставил сам
+  // себе, — видны только ему самому (requesterUserId). Поручения от других видны всем,
+  // как в ежедневной сводке. undefined — личный чат с ботом: показываем всё, что видит viewer.
+  opts: { readonly requesterUserId?: string | null } = {},
 ): Promise<AssigneeProjectTasks> {
   const { rows } = await collectOpenTasks(deps, viewerUserId);
-  const matching = rows.filter((r) => r.task.assignee.userId === assigneeUserId);
+  const isPrivateForRequester = (r: OpenTaskRow): boolean =>
+    r.inboxOwnerId !== null &&
+    r.task.createdBy === r.inboxOwnerId &&
+    opts.requesterUserId !== r.inboxOwnerId;
+  const matching = rows.filter(
+    (r) =>
+      r.task.assignee.userId === assigneeUserId &&
+      !('requesterUserId' in opts && isPrivateForRequester(r)),
+  );
   const displayName = matching[0]?.task.assignee.displayName ?? null;
-  const byProject = new Map<string, { project: { id: string; name: string }; tasks: Task[] }>();
+  const byProject = new Map<string, AssigneeProjectGroup>();
   for (const r of matching) {
     let bucket = byProject.get(r.projectId);
     if (!bucket) {
-      bucket = { project: { id: r.projectId, name: r.projectName }, tasks: [] };
+      bucket = {
+        project: { id: r.projectId, name: r.projectName },
+        ...(r.inboxOwnerId !== null ? { isInbox: true } : {}),
+        tasks: [],
+      };
       byProject.set(r.projectId, bucket);
     }
     bucket.tasks.push(r.task);
@@ -211,7 +243,10 @@ export async function buildAssigneeTaskCards(
       const overdue = isOverdue(r.task.deadline, now);
       lines.push(`⏰ ${formatDeadlineRu(r.task.deadline, now)}${overdue ? ' · ❗️ просрочено' : ''}`);
     }
-    const url = `${base}/projects/${r.projectId}?task=${r.task.id}`;
+    const url =
+      r.inboxOwnerId !== null
+        ? `${base}/inbox?task=${r.task.id}`
+        : `${base}/projects/${r.projectId}?task=${r.task.id}`;
     return {
       taskId: r.task.id,
       projectId: r.projectId,

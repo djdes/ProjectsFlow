@@ -53,6 +53,8 @@ export const moveProjectSchema = z.object({
 export const saveWorkspaceAssigneeDigestSchema = z
   .object({
     enabled: z.boolean(),
+    // Личная сводка в бота (db/161) — без Telegram-группы.
+    personalEnabled: z.boolean().default(false),
     hour: z.number().int().min(0).max(23),
     minute: z.number().int().min(0).max(59),
     daysOfWeek: z.array(scheduleDaySchema).min(1).max(7).optional(),
@@ -86,7 +88,10 @@ export const saveWorkspaceAssigneeDigestSchema = z
   )
   .refine(
     (value) =>
-      (!value.enabled && !value.commitSyncEnabled && !value.eodReminderEnabled) ||
+      (!value.enabled &&
+        !value.personalEnabled &&
+        !value.commitSyncEnabled &&
+        !value.eodReminderEnabled) ||
       value.projectMode === 'all' ||
       value.projectIds.length > 0,
     {
@@ -96,7 +101,7 @@ export const saveWorkspaceAssigneeDigestSchema = z
   )
   .refine(
     (value) =>
-      !value.enabled ||
+      (!value.enabled && !value.personalEnabled) ||
       value.recipientMode === 'all' ||
       value.recipientUserIds.length > 0,
     {

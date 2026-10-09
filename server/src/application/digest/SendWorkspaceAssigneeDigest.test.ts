@@ -6,6 +6,7 @@ import {
   buildWorkspaceAssigneeDigestMessage,
   buildWorkspaceAssigneeDigestRichMessage,
 } from './SendWorkspaceAssigneeDigest.js';
+import { buildApprovalDigestFallback, buildApprovalDigestRich } from './approvalDigestMessage.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 
@@ -235,4 +236,153 @@ test('workspace assignee digest adds a delegated column from personal inboxes', 
   assert.match(rich[0]!.html, /<h3>🤝 Делегированные<\/h3>/);
   assert.match(rich[0]!.html, /Позвонить подрядчику/);
   assert.doesNotMatch(rich[0]!.html, /Купить кофе|Старое поручение/);
+});
+
+// Пространство с руководителем: личные сводки без задач «на утверждении», затем одно
+// сообщение «На утверждении» — утверждает руководитель, владелец наблюдает.
+function approvalHarness() {
+  const rich: Array<{ chatId: number; html: string }> = [];
+  const attached: Array<{ messageId: number; tasks: Array<{ taskId: string; projectId: string }> }> = [];
+  let messageId = 100;
+  const person = (userId: string, name: string) => ({ userId, displayName: name, avatarUrl: null });
+  const projectTask = (id: string, projectId: string, title: string, assignee: ReturnType<typeof person>, status: string, createdBy = 'u-owner') => ({
+    ...task(id, projectId, title, null),
+    createdBy,
+    status,
+    assignee,
+  });
+  const benzin = person('u-benzin', 'benzin');
+  const test1 = person('u-test', 'Тест');
+  const send = new SendWorkspaceAssigneeDigest({
+    settings: {
+      async get() {
+        return { ...defaultWorkspaceAssigneeDigestSettings('w1'), enabled: true, telegramGroupChatId: -1009 };
+      },
+      async replaceLastTestDeliveries() {},
+      async getLastTestDeliveries() {
+        return [];
+      },
+    } as never,
+    workspaces: {
+      async listMembers() {
+        return [
+          { workspaceId: 'w1', userId: 'u-owner', role: 'owner', displayName: 'Денис' },
+          { workspaceId: 'w1', userId: 'u-lead', role: 'lead', displayName: 'Олег' },
+          { workspaceId: 'w1', userId: 'u-benzin', role: 'editor', displayName: 'benzin' },
+          { workspaceId: 'w1', userId: 'u-test', role: 'editor', displayName: 'Тест' },
+        ];
+      },
+    } as never,
+    projects: {
+      async listByWorkspace() {
+        return [{ id: 'p-yes', name: 'Yesbeat', icon: null }];
+      },
+      async listInboxesByOwners() {
+        return [{ id: 'inbox-benzin', name: 'inbox:u-benzin', ownerId: 'u-benzin', isInbox: true }];
+      },
+    } as never,
+    tasks: {
+      async listByProject(projectId: string) {
+        if (projectId === 'p-yes') {
+          return [
+            projectTask('t-open', 'p-yes', 'Починить корзину', benzin, 'todo'),
+            projectTask('t-wait', 'p-yes', 'Hermes контроль', benzin, 'pending_approval'),
+            projectTask('t-test', 'p-yes', 'Проверить оплату', test1, 'todo'),
+          ];
+        }
+        return [
+          // Поручение владельца — попадает в общий чат.
+          projectTask('t-deleg', 'inbox-benzin', 'Настроить Гермес', benzin, 'pending_approval', 'u-owner'),
+          // Личная заметка самого benzin — в общий чат не выносится.
+          projectTask('t-own', 'inbox-benzin', 'Личное дело', benzin, 'pending_approval', 'u-benzin'),
+        ];
+      },
+    } as never,
+    users: {
+      async getTelegramLink(userId: string) {
+        const usernames: Record<string, string> = { 'u-owner': 'djdes', 'u-lead': 'mrlinux0', 'u-benzin': 'hotspotping' };
+        return usernames[userId] ? { telegramUserId: 1, telegramUsername: usernames[userId] } : null;
+      },
+    } as never,
+    createEmailActionToken: {
+      async execute() {
+        return 'd'.repeat(64);
+      },
+    } as never,
+    telegramDigestActions: { async attach() {} } as never,
+    messageTasks: {
+      async attach(input: { messageId: number; tasks: Array<{ taskId: string; projectId: string }> }) {
+        attached.push({ messageId: input.messageId, tasks: [...input.tasks] });
+      },
+    },
+    telegram: {
+      async sendRichMessage(input: { chatId: number; html: string }) {
+        rich.push(input);
+        messageId += 1;
+        return { kind: 'ok' as const, messageId };
+      },
+      async sendMessage() {
+        throw new Error('fallback must not be used');
+      },
+    } as never,
+    appUrl: 'https://projectsflow.ru',
+  });
+  return { send, rich, attached };
+}
+
+test('сводка по людям: задачи «на утверждении» уходят отдельным сообщением руководителям', async () => {
+  const h = approvalHarness();
+  const result = await h.send.execute('w1');
+
+  // Личные сводки: benzin (без сданной работы) и Тест без Telegram — с именем вместо упоминания.
+  assert.equal(result.sentCount, 2);
+  assert.equal(result.taskCount, 2);
+  assert.equal(result.approvalTaskCount, 2);
+  const messages = h.rich.map((m) => m.html);
+  const benzinDigest = messages.find((html) => html.includes('@hotspotping'));
+  const testDigest = messages.find((html) => html.includes('для Тест'));
+  // «На утверждении» — последним, после всех личных сводок.
+  const approvals = messages.at(-1);
+  assert.match(benzinDigest!, /Ежедневные задачи для @hotspotping/);
+  assert.match(benzinDigest!, /Починить корзину/);
+  assert.doesNotMatch(benzinDigest!, /Hermes контроль|Настроить Гермес/);
+  assert.match(testDigest!, /Ежедневные задачи для Тест/);
+
+  assert.match(approvals!, /<h2>✅ На утверждении: 2 задачи<\/h2>/);
+  assert.match(approvals!, /<p>Утверждают: @mrlinux0<\/p>/);
+  assert.match(approvals!, /<p>Наблюдают: @djdes<\/p>/);
+  assert.match(approvals!, /📁 Yesbeat[\s\S]*Hermes контроль/);
+  assert.match(approvals!, /🤝 Поручения[\s\S]*Настроить Гермес/);
+  assert.match(approvals!, /inbox\?task=t-deleg/);
+  assert.doesNotMatch(approvals!, /Личное дело/);
+  // Без кнопки «✓»: в общем чате ссылка-действие сработала бы от имени утверждающего.
+  assert.doesNotMatch(approvals!, /telegram-digest-actions/);
+
+  // Reply на каждое сообщение можно связать с задачей.
+  assert.deepEqual(
+    h.attached.map((a) => a.tasks.map((t) => t.taskId)).sort(),
+    [['t-open'], ['t-test'], ['t-wait', 't-deleg']].sort(),
+  );
+  assert.deepEqual(h.attached.at(-1)!.tasks.map((t) => t.taskId), ['t-wait', 't-deleg']);
+});
+
+test('сводка «На утверждении»: без руководителей утверждают владельцы, наблюдателей нет', () => {
+  const html = buildApprovalDigestRich({
+    approvers: [{ displayName: 'Денис', telegramLink: null }],
+    observers: [],
+    groups: [{ project: { id: 'p', name: 'DocsFlow' }, tasks: [task('t', 'p', 'Счёт на оплату', null)] }],
+    appUrl: 'https://projectsflow.ru/',
+  });
+  assert.match(html, /На утверждении: 1 задача/);
+  assert.match(html, /Утверждают: Денис/);
+  assert.doesNotMatch(html, /Наблюдают/);
+  assert.match(html, /https:\/\/projectsflow\.ru\/projects\/p\?task=t/);
+
+  const fallback = buildApprovalDigestFallback({
+    approvers: [{ displayName: 'Денис', telegramLink: null }],
+    observers: [],
+    groups: [{ project: { id: 'p', name: 'DocsFlow' }, tasks: [task('t', 'p', 'Счёт на оплату', null)] }],
+    appUrl: 'https://projectsflow.ru',
+  });
+  assert.match(fallback, /^<b>✅ На утверждении: 1 задача<\/b>\nУтверждают: Денис\n\n<b>📁 DocsFlow<\/b>\n• <a href="https:\/\/projectsflow\.ru\/projects\/p\?task=t"><b>Счёт на оплату<\/b><\/a> — Денис$/);
 });

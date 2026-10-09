@@ -9,15 +9,17 @@ import type { TelegramClient } from '../telegram/TelegramClient.js';
 import { WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
 import {
   defaultWorkspaceAssigneeDigestSettings,
+  type WorkspaceAssigneeDigestSettings,
 } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 
 const WORKSPACE_ID = 'workspace-1';
 const MEMBER_ID = 'member-1';
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 
-function makeManager() {
+function makeManager(current: Partial<WorkspaceAssigneeDigestSettings> = {}) {
   let savedRecipientUserIds: string[] = [];
   let sendCalls = 0;
+  const personalCalls: Array<{ force?: boolean; onlyUserId?: string }> = [];
 
   const workspaces = {
     async getMembership(workspaceId: string, userId: string) {
@@ -33,7 +35,7 @@ function makeManager() {
 
   const settings = {
     async get() {
-      return defaultWorkspaceAssigneeDigestSettings(WORKSPACE_ID);
+      return { ...defaultWorkspaceAssigneeDigestSettings(WORKSPACE_ID), ...current };
     },
     async save(workspaceId, input) {
       savedRecipientUserIds = input.recipientUserIds;
@@ -60,6 +62,13 @@ function makeManager() {
     },
   } as unknown as SendWorkspaceAssigneeDigest;
 
+  const sendPersonal = {
+    async execute(_workspaceId: string, opts: { force?: boolean; onlyUserId?: string } = {}) {
+      personalCalls.push(opts);
+      return { sentCount: 1, taskCount: 3, skippedRecipientUserIds: [] };
+    },
+  };
+
   const telegram = {
     async getChat(chatId: number) {
       return { id: chatId, title: 'Рабочая группа', type: 'supergroup' };
@@ -84,10 +93,12 @@ function makeManager() {
       users,
       telegram,
       send,
+      sendPersonal,
       projects,
     }),
     getSavedRecipientUserIds: () => savedRecipientUserIds,
     getSendCalls: () => sendCalls,
+    personalCalls,
   };
 }
 
@@ -96,6 +107,7 @@ test('workspace assignee digest shared settings are editable by any member', asy
 
   const saved = await manager.save(WORKSPACE_ID, MEMBER_ID, {
     enabled: true,
+    personalEnabled: false,
     hour: 10,
     minute: 30,
     daysOfWeek: [1, 2, 3, 4, 5, 6, 0],
@@ -130,6 +142,7 @@ test('workspace assignee digest shared settings remain closed to outsiders', asy
     () =>
       manager.save(WORKSPACE_ID, 'outsider', {
         enabled: true,
+        personalEnabled: false,
         hour: 9,
         minute: 0,
         daysOfWeek: [1, 2, 3, 4, 5],
@@ -149,4 +162,23 @@ test('workspace assignee digest shared settings remain closed to outsiders', asy
       }),
     WorkspaceNotFoundError,
   );
+});
+
+test('test send of the personal digest goes only to the member who pressed the button', async () => {
+  const { manager, getSendCalls, personalCalls } = makeManager({ personalEnabled: true });
+  const result = await manager.sendNow(WORKSPACE_ID, MEMBER_ID);
+  // Таблица в группе выключена — тест личной сводки не публикует её в группу.
+  assert.equal(getSendCalls(), 0);
+  assert.deepEqual(personalCalls, [{ force: true, onlyUserId: MEMBER_ID }]);
+  assert.equal(result.personal?.taskCount, 3);
+});
+
+test('test send keeps the group table when it is enabled alongside the personal digest', async () => {
+  const { manager, getSendCalls, personalCalls } = makeManager({
+    enabled: true,
+    personalEnabled: true,
+  });
+  await manager.sendNow(WORKSPACE_ID, MEMBER_ID);
+  assert.equal(getSendCalls(), 1);
+  assert.equal(personalCalls.length, 1);
 });

@@ -81,6 +81,8 @@ export class PrepareCommitReviewResult {
         completeUrl = `${base}/api/telegram-digest-actions/${token}`;
       }
       rows.push({
+        taskId: task.id,
+        projectId: input.projectId,
         title: telegramDigestTaskTitle((task.description ?? '').split('\n')[0] ?? ''),
         openUrl,
         completeUrl,

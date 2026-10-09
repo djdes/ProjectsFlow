@@ -4,14 +4,16 @@ import type { InlineKeyboardMarkup } from './TelegramClient.js';
 // «Завершить/Комментировать» и регистрируем reply→комментарий. НЕ включаем:
 //  - task_done (завершать нечего), ralph_* (свой reply-поток), server_alert (не задача).
 //  Карточка назначения ответственного шлётся композером с этой же клавиатурой явно.
-//  task_digest_item намеренно не включён: в ежедневной сводке действия — компактные ссылки
-//  внутри самого сообщения, а не большая inline-клавиатура под ним.
+//  task_digest_item намеренно не включён: в ежедневной сводке проекта действия — компактные
+//  ссылки внутри самого сообщения, а не большая inline-клавиатура под ним. task_digest_card —
+//  карточка личной сводки пространства (db/161): кнопки и reply→комментарий как у уведомлений.
 export const TASK_ACTION_KINDS: ReadonlySet<string> = new Set([
   'comment',
   'comment_on_my_task',
   'mention',
   'status_change',
   'task_assignee_changed',
+  'task_digest_card',
 ]);
 
 // callback_data ≤ 64 байт: 'nd:'/'nc:'/'nu:' (3) + UUID(36) = 39 байт. Префиксы nd/nc/nu

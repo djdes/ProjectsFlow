@@ -278,6 +278,7 @@ import { SendDailyDigest } from './application/digest/SendDailyDigest.js';
 import { TriggerDailyDigestNow } from './application/digest/TriggerDailyDigestNow.js';
 import { DailyDigestScheduler } from './infrastructure/scheduler/DailyDigestScheduler.js';
 import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceAssigneeDigest.js';
+import { SendWorkspacePersonalDigest } from './application/digest/SendWorkspacePersonalDigest.js';
 import { TelegramDigestActionService } from './application/digest/TelegramDigestActionService.js';
 import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
 import { BulkSetWorkspaceCommitSync } from './application/commit-sync/BulkSetWorkspaceCommitSync.js';
@@ -333,6 +334,7 @@ import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories
 import { DrizzleTelegramRalphQuestionRepository } from './infrastructure/repositories/DrizzleTelegramRalphQuestionRepository.js';
 import { DrizzleTelegramTaskDraftRepository } from './infrastructure/repositories/DrizzleTelegramTaskDraftRepository.js';
 import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
+import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositories/DrizzleTelegramMessageTaskRepository.js';
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
@@ -976,6 +978,14 @@ const TG_KIND_TO_PREF = {
 // Маппинг task-сообщений бота → задача (db/049). Общий экземпляр: сендеру нужен для
 // reply→комментарий на задачных уведомлениях, конструктору/вебхуку — для тех же reply'ев.
 const telegramTaskMessageRepo = new DrizzleTelegramTaskMessageRepository(db);
+// Задачи сообщений бота со списком (db/160): reply на сводку → комментарий к задаче.
+const telegramMessageTaskRepo = new DrizzleTelegramMessageTaskRepository(db);
+// Хвост старше 30 дней: на месячной давности сводку уже не комментируют.
+setInterval(() => {
+  void telegramMessageTaskRepo
+    .deleteOlderThan(new Date(Date.now() - 30 * 24 * 3600 * 1000))
+    .catch((e) => console.warn('[telegram-message-tasks] cleanup failed', e));
+}, 6 * 3600 * 1000).unref();
 // Привязка групповых чатов к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
 const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
@@ -1262,6 +1272,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   botUsername: telegramBotUsername,
   ralphQuestionMessages: telegramRalphQuestionRepo,
   taskMessages: telegramTaskMessageRepo,
+  messageTasks: telegramMessageTaskRepo,
   groupOwners: telegramGroupOwnerRepo,
   createComment: createTaskCommentUseCase,
   // Инлайн «Завершить/Отменить» на задачных уведомлениях (nd:/nu: callback).
@@ -1734,6 +1745,7 @@ const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJo
 const sendWorkspaceCommitReview = new SendWorkspaceCommitReview({
   telegram: telegramClient,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
+  messageTasks: telegramMessageTaskRepo,
 });
 const prepareCommitReviewResult = new PrepareCommitReviewResult({
   settings: workspaceAssigneeDigestRepo,
@@ -1940,6 +1952,7 @@ const sendDailyDigest = new SendDailyDigest({
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
   signingSecret: repoAccessSecret,
+  messageTasks: telegramMessageTaskRepo,
 });
 const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   settings: workspaceAssigneeDigestRepo,
@@ -1951,6 +1964,17 @@ const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   appUrl: appBaseUrl,
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
+  messageTasks: telegramMessageTaskRepo,
+});
+// Личная сводка в бота (db/161): каждому участнику его задачи карточками с кнопками.
+const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
+  settings: workspaceAssigneeDigestRepo,
+  workspaces: workspaceRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  comments: taskCommentRepo,
+  telegram: sendAgentTelegramNotification,
+  appUrl: appBaseUrl,
 });
 const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   repo: workspaceAssigneeDigestRepo,
@@ -1958,6 +1982,7 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   users: userRepo,
   telegram: telegramClient,
   send: sendWorkspaceAssigneeDigest,
+  sendPersonal: sendWorkspacePersonalDigest,
   projects: projectRepo,
 });
 // Применить общее расписание сверки коммитов ко всем проектам пространства (db/141).
@@ -3273,10 +3298,12 @@ const sendWorkspaceEodReminder = new SendWorkspaceEodReminder({
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
   appUrl: appBaseUrl,
+  messageTasks: telegramMessageTaskRepo,
 });
 const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   settings: workspaceAssigneeDigestRepo,
   send: sendWorkspaceAssigneeDigest,
+  sendPersonal: sendWorkspacePersonalDigest,
   projects: projectRepo,
   sendEodReminder: sendWorkspaceEodReminder,
   isPaused: scheduledBroadcastsPaused,

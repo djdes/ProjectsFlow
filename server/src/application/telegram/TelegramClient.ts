@@ -30,6 +30,9 @@ export type SendMessageInput = {
   readonly disableWebPagePreview?: boolean;
   // Произвольный inline_keyboard / reply_keyboard. Структура — как в TG Bot API.
   readonly replyMarkup?: unknown;
+  // Ответ на сообщение (в группе ответ бота виден рядом с репликой человека). Если исходное
+  // сообщение удалили, Telegram отправит без привязки (allow_sending_without_reply).
+  readonly replyToMessageId?: number;
 };
 
 // Bot API 10.2 rich message. Declared media can be referenced from the HTML with

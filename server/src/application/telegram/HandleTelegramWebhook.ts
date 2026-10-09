@@ -5,6 +5,12 @@ import type {
 } from './TelegramClient.js';
 import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
 import type { TelegramTaskMessageRepository } from './TelegramTaskMessageRepository.js';
+import type { TelegramMessageTaskRepository } from './TelegramMessageTaskRepository.js';
+import {
+  PendingReplyComments,
+  resolveReplyCommentTarget,
+  type ReplyCommentCandidate,
+} from './replyCommentTarget.js';
 import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -55,6 +61,9 @@ import {
   buildTaskTelegramFallbackContent,
   buildTaskTelegramRichContent,
 } from './taskTelegramContent.js';
+
+// Сколько задач сводки предлагать кнопками, когда reply не указал задачу цитатой.
+const REPLY_COMMENT_PICKER_LIMIT = 8;
 
 // Signed task attachment URLs stay valid long enough for Telegram to fetch and cache media.
 const TG_ATTACHMENT_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
@@ -139,6 +148,9 @@ export type TelegramUpdate = {
       readonly message_id: number;
       readonly from?: { readonly id: number; readonly is_bot?: boolean };
     };
+    // Ответ с цитатой: выделенный фрагмент сообщения, на которое отвечают (Bot API 7.0).
+    // По нему reply на сводку находит задачу, к которой относится комментарий.
+    readonly quote?: { readonly text: string };
   };
   // Нажатие inline-кнопки (конструктор задач, Принять/Отказать, /tasks-навигация).
   readonly callback_query?: TelegramCallbackQuery;
@@ -313,6 +325,9 @@ type Deps = {
   readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
   // Reply→обычный комментарий: маппинг task-сообщений бота → задача (db/049).
   readonly taskMessages: TelegramTaskMessageRepository;
+  // Reply на сообщение со списком задач (сводки, «На утверждении», db/160) → комментарий к
+  // задаче из него. Отсутствие — reply на сводку отвечает подсказкой, как раньше.
+  readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'listByMessage' | 'attach'>;
   // Привязка группового чата к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
   readonly groupOwners: TelegramGroupOwnerRepository;
   readonly createComment: CreateTaskComment;
@@ -365,6 +380,8 @@ export class HandleTelegramWebhook {
     }
   >();
   private readonly processedVoiceSources = new Map<string, number>();
+  // Комментарии к сводке, ждущие выбора задачи кнопкой (rc:<id>:<n>).
+  private readonly pendingReplyComments = new PendingReplyComments();
 
   constructor(private readonly deps: Deps) {}
 
@@ -378,6 +395,7 @@ export class HandleTelegramWebhook {
       if (data.startsWith('nd:')) return this.handleTaskDone(cq, data.slice(3));
       if (data.startsWith('dg:')) return this.handleDigestTaskDone(cq, data.slice(3));
       if (data.startsWith('nc:')) return this.handleTaskCommentPrompt(cq, data.slice(3));
+      if (data.startsWith('rc:')) return this.handleReplyCommentChoice(cq, data.slice(3));
       if (data.startsWith('nu:')) return this.handleTaskUndo(cq, data.slice(3));
       // Предложения закрыть (db/101): pd: подтвердить, px: отклонить.
       if (data.startsWith('pd:')) return this.handleCloseProposalConfirm(cq, data.slice(3));
@@ -456,7 +474,10 @@ export class HandleTelegramWebhook {
     // Reply→ralph-answer / комментарий ловим ДО командного роутинга — юзер может reply'нуть
     // просто текстом, без слэш-префикса (типичный TG UX).
     if (msg.reply_to_message?.message_id) {
-      return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text);
+      return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text, {
+        quote: msg.quote?.text ?? null,
+        messageId: msg.message_id,
+      });
     }
 
     // «Пустое» @упоминание в группе (только @bot, без другого текста) → меню задач
@@ -656,12 +677,13 @@ export class HandleTelegramWebhook {
     chatId: number,
     replyToMessageId: number,
     text: string,
+    reply: { readonly quote: string | null; readonly messageId: number } = { quote: null, messageId: 0 },
   ): Promise<void> {
     const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
     if (!mapping) {
       // Не ralph-question → пробуем как обычный комментарий к задаче (reply на карточку
-      // конструктора / назначения ответственного / /tasks). См. handleTaskReplyComment.
-      return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text);
+      // конструктора / назначения ответственного / /tasks / сводку). См. handleTaskReplyComment.
+      return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text, reply);
     }
 
     const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
@@ -1186,7 +1208,8 @@ export class HandleTelegramWebhook {
         `   <code>+DocsFlow обновить шаблон @Олег</code>\n` +
         `   <i>задача сразу появится у коллеги; он сможет выполнить её или сменить ответственного</i>\n\n` +
         `⚡ <b>Из любого чата</b> — набери <code>${bot} текст задачи</code> и выбери проект из списка.\n\n` +
-        `💬 <b>Комментарий</b> — ответь (reply) на карточку задачи от бота. Участники получат уведомление.\n\n` +
+        `💬 <b>Комментарий</b> — ответь (reply) на карточку задачи от бота. Участники получат уведомление.\n` +
+        `   <i>В сводке выдели название задачи и ответь с цитатой — комментарий попадёт к ней; без цитаты бот спросит, к какой задаче.</i>\n\n` +
         `<b>Команды:</b>\n` +
         `/tasks — задачи по ответственным\n` +
         `/pending — задачи «На уточнении»\n` +
@@ -1203,12 +1226,16 @@ export class HandleTelegramWebhook {
     chatId: number,
     replyToMessageId: number,
     text: string,
+    reply: { readonly quote: string | null; readonly messageId: number },
   ): Promise<void> {
     const map = await this.deps.taskMessages.findByMessage(chatId, replyToMessageId);
-    if (!map) {
+    const listed = map
+      ? []
+      : ((await this.deps.messageTasks?.listByMessage(chatId, replyToMessageId).catch(() => [])) ?? []);
+    if (!map && listed.length === 0) {
       await this.reply(
         chatId,
-        '↩️ Это сообщение не привязано к задаче. Reply работает на карточки задач, назначения ответственного и уточнения бота.',
+        '↩️ Это сообщение не привязано к задаче. Ответом можно прокомментировать карточку задачи, сводку, назначение ответственного и уточнение бота.',
       );
       return;
     }
@@ -1222,52 +1249,170 @@ export class HandleTelegramWebhook {
       return;
     }
 
+    if (map) {
+      const added = await this.addTelegramComment({
+        senderUserId,
+        projectId: map.projectId,
+        taskId: map.taskId,
+        text,
+      });
+      await this.reply(chatId, added.ok ? '💬 Комментарий добавлен.' : added.message);
+      return;
+    }
+
+    // Сообщение со списком задач (сводка, «На утверждении», напоминание): цитата названия →
+    // эта задача; одна задача в сообщении → она; иначе автор выбирает кнопкой.
+    const candidates = await this.loadReplyCandidates(listed);
+    if (candidates.length === 0) {
+      await this.reply(chatId, '⚠️ Задач из этого сообщения больше нет.');
+      return;
+    }
+    const target = resolveReplyCommentTarget(candidates, reply.quote);
+    if (target.kind === 'one') {
+      const added = await this.addTelegramComment({
+        senderUserId,
+        projectId: target.task.projectId,
+        taskId: target.task.taskId,
+        text,
+      });
+      await this.replyTo(
+        chatId,
+        reply.messageId,
+        added.ok
+          ? `💬 Комментарий добавлен к «${escapeHtml(excerptShort(target.task.title, 80))}».`
+          : added.message,
+      );
+      return;
+    }
+
+    const options = target.options.slice(0, REPLY_COMMENT_PICKER_LIMIT);
+    const pendingId = this.pendingReplyComments.add({
+      tgUserId,
+      senderUserId,
+      chatId,
+      text,
+      options,
+    });
+    const rows = options.map((option, index) => [
+      { text: excerptShort(option.title, 48), callback_data: `rc:${pendingId}:${index}` },
+    ]);
+    rows.push([{ text: 'Не добавлять', callback_data: `rc:${pendingId}:x` }]);
+    const lines = ['💬 К какой задаче добавить комментарий?'];
+    if (target.options.length > options.length) {
+      lines.push('Нужной нет среди кнопок — ответьте на сводку ещё раз, выделив её название.');
+    } else if (!reply.quote) {
+      lines.push('<i>В следующий раз выделите название задачи в сводке и ответьте — комментарий сразу попадёт к ней.</i>');
+    }
+    await this.replyTo(chatId, reply.messageId, lines.join('\n'), { inline_keyboard: rows });
+  }
+
+  // Выбор задачи кнопкой под вопросом «К какой задаче…» (rc:<id>:<n> / rc:<id>:x).
+  private async handleReplyCommentChoice(cq: TelegramCallbackQuery, payload: string): Promise<void> {
+    const [pendingId = '', choice = ''] = payload.split(':');
+    const pending = this.pendingReplyComments.get(pendingId);
+    const chatId = cq.message?.chat.id;
+    const promptId = cq.message?.message_id;
+    const closePrompt = async (text: string): Promise<void> => {
+      if (chatId === undefined || promptId === undefined) return;
+      await this.deps.client
+        .editMessageText({ chatId, messageId: promptId, text, parseMode: 'HTML', disableWebPagePreview: true })
+        .catch(() => undefined);
+    };
+    if (!pending) {
+      await this.deps.client
+        .answerCallbackQuery(cq.id, { text: 'Время на выбор вышло — ответьте на сводку ещё раз.' })
+        .catch(() => undefined);
+      await closePrompt('⏳ Время на выбор вышло — ответьте на сводку ещё раз.');
+      return;
+    }
+    if (cq.from.id !== pending.tgUserId) {
+      await this.deps.client
+        .answerCallbackQuery(cq.id, { text: 'Задачу выбирает автор комментария.' })
+        .catch(() => undefined);
+      return;
+    }
+    // Снимаем ожидание до записи: повторное нажатие не создаст второй комментарий.
+    this.pendingReplyComments.delete(pendingId);
+    await this.deps.client.answerCallbackQuery(cq.id).catch(() => undefined);
+    const option = choice === 'x' ? undefined : pending.options[Number(choice)];
+    if (!option) {
+      await closePrompt('✖️ Комментарий не добавлен.');
+      return;
+    }
+    const added = await this.addTelegramComment({
+      senderUserId: pending.senderUserId,
+      projectId: option.projectId,
+      taskId: option.taskId,
+      text: pending.text,
+    });
+    await closePrompt(
+      added.ok
+        ? `💬 Комментарий добавлен к «${escapeHtml(excerptShort(option.title, 80))}».`
+        : added.message,
+    );
+  }
+
+  // Задачи сообщения-списка с актуальными заголовками; удалённые отбрасываем.
+  private async loadReplyCandidates(
+    listed: ReadonlyArray<{ readonly taskId: string }>,
+  ): Promise<ReplyCommentCandidate[]> {
+    const tasks = await Promise.all(
+      listed.map((item) => this.deps.tasks.getById(item.taskId).catch(() => null)),
+    );
+    return tasks.flatMap((task) =>
+      task
+        ? [{ taskId: task.id, projectId: task.projectId, title: splitDescription(task.description).name }]
+        : [],
+    );
+  }
+
+  // Комментарий из Telegram — тем же путём, что HTTP-роут: права проверяет CreateTaskComment,
+  // затем SSE всем открытым вкладкам и рассылка участникам (best-effort).
+  private async addTelegramComment(input: {
+    readonly senderUserId: string;
+    readonly projectId: string;
+    readonly taskId: string;
+    readonly text: string;
+  }): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> {
     let comment;
     try {
       comment = await this.deps.createComment.execute({
-        projectId: map.projectId,
-        ownerUserId: senderUserId,
-        taskId: map.taskId,
-        body: text,
+        projectId: input.projectId,
+        ownerUserId: input.senderUserId,
+        taskId: input.taskId,
+        body: input.text,
         actorKind: 'user',
         notifyMode: 'all',
       });
     } catch (err) {
       const name = err instanceof Error ? err.constructor.name : '';
-      if (name === 'ProjectNotFoundError') {
-        await this.reply(chatId, '🚫 Нет доступа к этой задаче.');
-      } else if (name === 'TaskNotFoundError') {
-        await this.reply(chatId, '⚠️ Задача удалена.');
-      } else if (name === 'TaskCommentBodyEmptyError') {
-        await this.reply(chatId, '✍️ Пустой комментарий.');
-      } else {
-        console.warn('[tg-webhook] createComment (reply) failed:', err);
-        await this.reply(chatId, '❌ Не удалось сохранить комментарий.');
-      }
-      return;
+      if (name === 'ProjectNotFoundError') return { ok: false, message: '🚫 Нет доступа к этой задаче.' };
+      if (name === 'TaskNotFoundError') return { ok: false, message: '⚠️ Задача удалена.' };
+      if (name === 'TaskCommentBodyEmptyError') return { ok: false, message: '✍️ Пустой комментарий.' };
+      console.warn('[tg-webhook] createComment (reply) failed:', err);
+      return { ok: false, message: '❌ Не удалось сохранить комментарий.' };
     }
 
     // SSE: коммент мгновенно у всех участников.
-    this.deps.notifyCommentAdded(map.projectId, map.taskId, comment.id, senderUserId, 'user', null);
+    this.deps.notifyCommentAdded(input.projectId, input.taskId, comment.id, input.senderUserId, 'user', null);
     // Email + Telegram участникам — как HTTP-роут (tasks/routes.ts). Best-effort.
     void this.deps.dispatchCommentNotifications
       .execute({
-        projectId: map.projectId,
-        actorUserId: senderUserId,
+        projectId: input.projectId,
+        actorUserId: input.senderUserId,
         source: 'team',
         audience: { mode: 'all' },
         comment: {
           id: comment.id,
-          taskId: map.taskId,
-          body: text,
+          taskId: input.taskId,
+          body: input.text,
           actorKind: 'user',
           agentName: null,
           replyToCommentId: comment.replyToCommentId,
         },
       })
       .catch((e: unknown) => console.warn('[tg-webhook] dispatchCommentNotifications failed:', e));
-
-    await this.reply(chatId, '💬 Комментарий добавлен.');
+    return { ok: true };
   }
 
   // --- /tasks: экран 1 «по ответственным» → карточки задач; «📁 По проектам» (bt:root)
@@ -1401,28 +1546,20 @@ export class HandleTelegramWebhook {
     chatId: number,
     viewerUserId: string,
     assigneeUserId: string,
+    // Группа: личные заметки показываем только самому их владельцу (requester — кто спросил).
+    // undefined — личный чат с ботом, ограничений нет.
+    group?: { readonly requesterUserId: string | null },
   ): Promise<boolean> {
     const { displayName, projects } = await collectAssigneeProjectTasks(
       this.assigneeDeps(),
       viewerUserId,
       assigneeUserId,
+      group ? { requesterUserId: group.requesterUserId } : {},
     );
     if (projects.length === 0) return false;
 
-    // Ссылка нужна билдеру только для @mention в заголовке. Если привязки TG нет (нашёлся по
-    // имени) — синтетическая заглушка: имя покажется как есть.
-    const link =
-      (await this.deps.users.getTelegramLink(assigneeUserId).catch(() => null)) ?? {
-        telegramUserId: 0,
-        telegramUsername: null,
-        telegramFirstName: null,
-        telegramPhotoUrl: null,
-        telegramAuthDate: null,
-        tgChatId: null,
-        tgStartedAt: null,
-        tgPairedAt: null,
-        prefs: null,
-      };
+    // Привязки TG нет (нашёлся по имени) — в заголовке просто имя.
+    const link = await this.deps.users.getTelegramLink(assigneeUserId).catch(() => null);
     const name = displayName ?? 'Участник';
     const richHtml = buildWorkspaceAssigneeDigestRichMessage({
       displayName: name,
@@ -1437,25 +1574,36 @@ export class HandleTelegramWebhook {
       appUrl: this.deps.appUrl,
     });
 
-    let ok = false;
+    let messageId: number | null = null;
     let allowFallback = !this.deps.client.sendRichMessage;
     if (this.deps.client.sendRichMessage) {
       try {
         const res = await this.deps.client.sendRichMessage({ chatId, html: richHtml });
-        if (res.kind === 'ok') ok = true;
+        if (res.kind === 'ok') messageId = res.messageId;
         else allowFallback = res.kind === 'error' && res.deliveryUnknown !== true;
       } catch (err) {
         console.warn('[tg-webhook] assignee digest rich failed:', err);
         allowFallback = false;
       }
     }
-    if (!ok && allowFallback) {
+    if (messageId === null && allowFallback) {
       const res = await this.deps.client
         .sendMessage({ chatId, text: fallbackHtml, parseMode: 'HTML', disableWebPagePreview: true })
         .catch(() => null);
-      ok = res?.kind === 'ok';
+      if (res?.kind === 'ok') messageId = res.messageId;
     }
-    return ok;
+    if (messageId === null) return false;
+    // Reply на эту сводку — комментарий к задаче из неё (по цитате названия или кнопкой).
+    await this.deps.messageTasks
+      ?.attach({
+        chatId,
+        messageId,
+        tasks: projects.flatMap((group) =>
+          group.tasks.map((task) => ({ taskId: task.id, projectId: group.project.id })),
+        ),
+      })
+      .catch((err: unknown) => console.warn('[tg-webhook] assignee digest message tasks failed:', err));
+    return true;
   }
 
   // «@Bot @Человек» (в группе) / «@Человек» (в личке) без текста задачи → открытые задачи
@@ -1480,6 +1628,11 @@ export class HandleTelegramWebhook {
       return;
     }
 
+    // В группе сводку видят все: чужие личные заметки в неё не попадают (см. sendAssigneeDigest).
+    const groupScope = isGroup
+      ? { requesterUserId: await this.deps.users.findUserIdByTelegramUserId(tgUserId) }
+      : undefined;
+
     // Случайно просочившееся упоминание САМОГО бота (@Bot) — не «человек», показываем меню.
     const bu = this.deps.botUsername;
     if (bu && assigneeQuery.toLowerCase() === bu.toLowerCase()) {
@@ -1491,7 +1644,7 @@ export class HandleTelegramWebhook {
     if (assigneeQuery.length > 0) {
       const byUsername = await this.deps.users.findUserIdByTelegramUsername(assigneeQuery);
       if (byUsername) {
-        const sent = await this.sendAssigneeDigest(chatId, ownerUserId, byUsername);
+        const sent = await this.sendAssigneeDigest(chatId, ownerUserId, byUsername, groupScope);
         if (!sent) {
           await this.reply(chatId, `✨ У @${escapeHtml(assigneeQuery)} нет открытых задач в проектах.`);
         }
@@ -1522,7 +1675,7 @@ export class HandleTelegramWebhook {
       await this.reply(chatId, '🔎 Уточни, кто именно:', { inline_keyboard: rows });
       return;
     }
-    const sent = await this.sendAssigneeDigest(chatId, ownerUserId, res.assigneeUserId);
+    const sent = await this.sendAssigneeDigest(chatId, ownerUserId, res.assigneeUserId, groupScope);
     if (!sent) {
       await this.reply(chatId, `✨ У «${escapeHtml(res.assigneeName)}» нет открытых задач.`);
     }
@@ -1738,6 +1891,27 @@ export class HandleTelegramWebhook {
         parseMode: 'HTML',
         disableWebPagePreview: true,
         replyMarkup,
+      });
+    } catch (err) {
+      console.warn('[tg-webhook] reply failed', err);
+    }
+  }
+
+  // Как reply, но ответом на конкретное сообщение (в группе ответ виден рядом с репликой).
+  private async replyTo(
+    chatId: number,
+    replyToMessageId: number,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup,
+  ): Promise<void> {
+    try {
+      await this.deps.client.sendMessage({
+        chatId,
+        text,
+        parseMode: 'HTML',
+        disableWebPagePreview: true,
+        replyMarkup,
+        ...(replyToMessageId > 0 ? { replyToMessageId } : {}),
       });
     } catch (err) {
       console.warn('[tg-webhook] reply failed', err);

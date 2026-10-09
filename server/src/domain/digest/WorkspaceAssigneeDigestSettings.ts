@@ -8,6 +8,9 @@ export type WorkspaceCommitSyncAction = 'propose' | 'auto';
 export type WorkspaceAssigneeDigestSettings = {
   readonly workspaceId: string;
   readonly enabled: boolean;
+  // Личная сводка в бота (db/161): каждому участнику его задачи карточками с кнопками.
+  // Время, дни, проекты и получатели — общие с групповой таблицей (enabled).
+  readonly personalEnabled: boolean;
   readonly hour: number;
   readonly minute: number;
   readonly daysOfWeek: ScheduleDay[];
@@ -35,6 +38,7 @@ export function defaultWorkspaceAssigneeDigestSettings(
   return {
     workspaceId,
     enabled: false,
+    personalEnabled: false,
     hour: 9,
     minute: 0,
     daysOfWeek: [...ALL_SCHEDULE_DAYS],

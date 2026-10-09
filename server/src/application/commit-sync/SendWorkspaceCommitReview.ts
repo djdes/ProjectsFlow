@@ -3,15 +3,18 @@ import {
   COMMIT_SYNC_TIMEOUT,
   COMMIT_SYNC_USAGE_BLOCKED,
 } from '../../domain/commit-sync/CommitSyncJob.js';
-import { escapeHtml } from '../../domain/task/digestFormat.js';
+import { escapeHtml, pluralTasksRu } from '../../domain/task/digestFormat.js';
 import type { SendMessageResult, TelegramClient } from '../telegram/TelegramClient.js';
 import type { TelegramDigestActionDeliveryRepository } from '../digest/TelegramDigestActionDeliveryRepository.js';
 import { extractTelegramDigestActionTokens } from '../digest/TelegramDigestActionService.js';
 import type { CommitReviewResult, CommitReviewRow } from './CommitReviewResult.js';
+import type { TelegramMessageTaskRepository } from '../telegram/TelegramMessageTaskRepository.js';
 
 type Deps = {
   readonly telegram: TelegramClient;
   readonly telegramDigestActions: TelegramDigestActionDeliveryRepository;
+  // Задачи отправленной сводки (db/160): reply на неё становится комментарием к задаче.
+  readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'attach'>;
 };
 
 export type SendWorkspaceCommitReviewInput = {
@@ -89,6 +92,17 @@ export class SendWorkspaceCommitReview {
         messageKind: deliveredKind,
       })
       .catch((error) => console.warn('[commit-sync-digest] remember actions failed', error));
+    await this.deps.messageTasks
+      ?.attach({
+        chatId: input.chatId,
+        messageId: result.messageId,
+        tasks: input.results.flatMap((project) =>
+          project.rows.flatMap((row) =>
+            row.taskId && row.projectId ? [{ taskId: row.taskId, projectId: row.projectId }] : [],
+          ),
+        ),
+      })
+      .catch((error) => console.warn('[commit-sync-digest] remember message tasks failed', error));
     return true;
   }
 
@@ -147,16 +161,6 @@ function modeLabel(mode: 'auto' | 'propose'): string {
   return mode === 'auto' ? 'закрыто' : 'предложено закрыть';
 }
 
-// «N задача/задачи/задач» — русская форма множественного числа.
-function pluralTasks(n: number): string {
-  const mod100 = n % 100;
-  const mod10 = n % 10;
-  if (mod100 >= 11 && mod100 <= 14) return `${n} задач`;
-  if (mod10 === 1) return `${n} задача`;
-  if (mod10 >= 2 && mod10 <= 4) return `${n} задачи`;
-  return `${n} задач`;
-}
-
 function digestTitle(now: Date): string {
   const date = new Intl.DateTimeFormat('ru-RU', {
     timeZone: 'Europe/Moscow',
@@ -175,7 +179,7 @@ function buildDigestRich(
 ): string {
   const body: string[] = [`<h2>${escapeHtml(digestTitle(now))}</h2>`];
   for (const result of results) {
-    const summary = `${escapeHtml(result.projectName)} · ${pluralTasks(result.rows.length)} · ${modeLabel(result.mode)}`;
+    const summary = `${escapeHtml(result.projectName)} · ${pluralTasksRu(result.rows.length)} · ${modeLabel(result.mode)}`;
     body.push(`<details><summary>${summary}</summary>`);
     body.push('<table bordered striped>');
     body.push('<tr><th>Задача</th></tr>');

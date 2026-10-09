@@ -125,6 +125,9 @@ export class HttpTelegramClient implements TelegramClient {
           parse_mode: input.parseMode,
           disable_web_page_preview: input.disableWebPagePreview,
           reply_markup: input.replyMarkup,
+          reply_parameters: input.replyToMessageId
+            ? { message_id: input.replyToMessageId, allow_sending_without_reply: true }
+            : undefined,
         }),
       });
     } catch (err) {

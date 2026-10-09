@@ -98,6 +98,16 @@ export function formatDeadlineRemainingRu(iso: string, now: Date = new Date()): 
   return `просрочено на ${overdueDays} ${dayWordRu(overdueDays)}`;
 }
 
+// «N задача/задачи/задач» — русская форма множественного числа.
+export function pluralTasksRu(n: number): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${n} задач`;
+  if (mod10 === 1) return `${n} задача`;
+  if (mod10 >= 2 && mod10 <= 4) return `${n} задачи`;
+  return `${n} задач`;
+}
+
 function dayWordRu(value: number): 'день' | 'дня' | 'дней' {
   const n = Math.abs(value) % 100;
   if (n >= 11 && n <= 14) return 'дней';

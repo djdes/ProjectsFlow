@@ -212,6 +212,24 @@ export const telegramTaskMessages = mysqlTable(
 
 export type TelegramTaskMessageRow = typeof telegramTaskMessages.$inferSelect;
 
+// Задачи, перечисленные в сообщении бота со списком (db/160): reply на сводку становится
+// комментарием к одной из них. Одна строка на задачу сообщения.
+export const telegramMessageTasks = mysqlTable(
+  'telegram_message_tasks',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgMessageId: bigint('tg_message_id', { mode: 'number' }).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    position: smallint('position').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tgChatId, t.tgMessageId, t.taskId] }),
+    index('idx_tmt_created').on(t.createdAt),
+  ],
+);
+
 // Привязка группового TG-чата к аккаунту-владельцу (см. db/099). Fallback-задачи от участников
 // без своего проекта падают в «Входящие» этого владельца.
 export const telegramGroupOwners = mysqlTable(
@@ -1833,6 +1851,8 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
   {
     workspaceId: char('workspace_id', { length: 36 }).primaryKey(),
     enabled: boolean('enabled').notNull().default(false),
+    // Личная сводка в бота каждому участнику (db/161).
+    personalEnabled: boolean('personal_enabled').notNull().default(false),
     sendHour: tinyint('send_hour').notNull().default(9),
     sendMinute: tinyint('send_minute').notNull().default(0),
     weekdaysOnly: boolean('weekdays_only').notNull().default(true),

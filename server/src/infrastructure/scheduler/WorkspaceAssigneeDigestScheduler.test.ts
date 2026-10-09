@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
+import {
+  defaultWorkspaceAssigneeDigestSettings,
+  type WorkspaceAssigneeDigestSettings,
+} from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { WorkspaceAssigneeDigestScheduler } from './WorkspaceAssigneeDigestScheduler.js';
 
-function harness(daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5]) {
+function harness(
+  daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5],
+  overrides: Partial<WorkspaceAssigneeDigestSettings> = {},
+) {
   const calls: string[] = [];
   const settings = {
     async listScheduled() {
@@ -15,6 +21,7 @@ function harness(daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5])
         telegramGroupChatId: -1007,
         commitSyncEnabled: true,
         eodReminderEnabled: true,
+        ...overrides,
       }];
     },
     async markSent() { calls.push('mark:digest'); },
@@ -25,6 +32,7 @@ function harness(daysOfWeek: Array<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5])
   const scheduler = new WorkspaceAssigneeDigestScheduler({
     settings: settings as never,
     send: { async execute() { calls.push('digest'); } } as never,
+    sendPersonal: { async execute() { calls.push('personal'); } } as never,
     projects: {
       async listByWorkspace() { return [{ id: 'p1', name: 'DocsFlow', icon: null }]; },
     } as never,
@@ -55,4 +63,23 @@ test('workspace Telegram schedule runs all due weekday automations once', async 
     'digest', 'mark:digest',
     'eod', 'mark:eod',
   ]);
+});
+
+test('personal digest runs at the digest time even when the group table is off', async () => {
+  const { scheduler, calls } = harness([1, 2, 3, 4, 5], {
+    enabled: false,
+    personalEnabled: true,
+    eodReminderEnabled: false,
+  });
+  await scheduler.tick(new Date('2026-07-17T14:21:00.000Z')); // Friday 17:21 MSK
+  assert.deepEqual(calls, ['personal', 'mark:digest']);
+});
+
+test('group table and personal digest go out together and are marked once', async () => {
+  const { scheduler, calls } = harness([1, 2, 3, 4, 5], {
+    personalEnabled: true,
+    eodReminderEnabled: false,
+  });
+  await scheduler.tick(new Date('2026-07-17T14:21:00.000Z')); // Friday 17:21 MSK
+  assert.deepEqual(calls, ['digest', 'personal', 'mark:digest']);
 });

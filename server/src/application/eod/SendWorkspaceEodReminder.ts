@@ -6,6 +6,8 @@ import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import type { TelegramDigestActionDeliveryRepository } from '../digest/TelegramDigestActionDeliveryRepository.js';
+import type { TelegramMessageTaskRepository } from '../telegram/TelegramMessageTaskRepository.js';
+import { telegramPersonMention } from '../telegram/telegramMention.js';
 import { extractTelegramDigestActionTokens } from '../digest/TelegramDigestActionService.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { Task } from '../../domain/task/Task.js';
@@ -31,6 +33,8 @@ type Deps = {
   readonly createEmailActionToken: CreateEmailActionToken;
   readonly telegramDigestActions: TelegramDigestActionDeliveryRepository;
   readonly appUrl: string;
+  // Задачи отправленного напоминания (db/160): reply на него становится комментарием.
+  readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'attach'>;
 };
 
 type PersonSection = {
@@ -178,6 +182,15 @@ export class SendWorkspaceEodReminder {
           messageKind: deliveredKind,
         })
         .catch((error) => console.warn('[workspace-eod-reminder] remember actions failed', error));
+      await this.deps.messageTasks
+        ?.attach({
+          chatId: settings.telegramGroupChatId,
+          messageId: result.messageId,
+          tasks: sections.flatMap((section) =>
+            section.tasks.map((row) => ({ taskId: row.task.id, projectId: row.project.id })),
+          ),
+        })
+        .catch((error) => console.warn('[workspace-eod-reminder] remember message tasks failed', error));
     }
     return { projectCount: projects.length, taskCount: total };
   }
@@ -195,7 +208,7 @@ export function buildEodRichMessage(
     `<details><summary>Показать по ответственным (${sections.length})</summary>`,
   ];
   for (const section of sections) {
-    const mention = personMention(section.displayName, section.telegramLink);
+    const mention = telegramPersonMention(section.displayName, section.telegramLink);
     if (section.tasks.length === 0) {
       html.push(`<p>✅ ${mention} — молодец, всё сделано.</p>`);
       continue;
@@ -230,7 +243,7 @@ export function buildEodFallbackMessage(
   ];
   const hidden: string[] = [];
   for (const section of sections) {
-    const mention = personMention(section.displayName, section.telegramLink);
+    const mention = telegramPersonMention(section.displayName, section.telegramLink);
     if (section.tasks.length === 0) {
       hidden.push(`✅ ${mention} — молодец, всё сделано.`);
       continue;
@@ -249,9 +262,3 @@ export function buildEodFallbackMessage(
   return `${lines.join('\n')}\n<blockquote expandable>${hidden.join('\n\n')}</blockquote>`;
 }
 
-function personMention(displayName: string, link: TelegramLink | null): string {
-  if (!link) return escapeHtml(displayName);
-  const username = link.telegramUsername?.replace(/^@/, '').trim();
-  if (username && /^[A-Za-z0-9_]{5,32}$/.test(username)) return `@${escapeHtml(username)}`;
-  return `@<a href="tg://user?id=${link.telegramUserId}">${escapeHtml(displayName)}</a>`;
-}
