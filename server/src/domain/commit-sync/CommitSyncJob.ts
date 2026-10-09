@@ -17,6 +17,15 @@ export const COMMIT_SYNC_STATUSES: readonly CommitSyncStatus[] = [
 //   'auto'    — прежнее поведение (двигать по порогу возраста коммита).
 export type CommitSyncAction = 'propose' | 'auto';
 
+// Коды error job'ов, которые не были проверены не по вине модели: по ним итог сверки в группе
+// объясняет, почему проект не проверен, а не сваливает всё в «диспетчер не ответил».
+//   plan_required      — у плательщика (владельца пространства) нет активного тарифа;
+//   usage_blocked      — плательщик исчерпал лимит окна тарифа;
+//   dispatcher_timeout — job никто не взял, его сняла очистка по застою.
+export const COMMIT_SYNC_PLAN_REQUIRED = 'plan_required';
+export const COMMIT_SYNC_USAGE_BLOCKED = 'usage_blocked';
+export const COMMIT_SYNC_TIMEOUT = 'dispatcher_timeout';
+
 // Одно совпадение от воркера: коммит commitSha по смыслу относится к задаче taskId.
 // reason — короткое обоснование (для лога/сводки). Без решения о статусе — это серверное.
 export type CommitSyncMatch = {

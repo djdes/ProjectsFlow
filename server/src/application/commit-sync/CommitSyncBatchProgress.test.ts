@@ -224,7 +224,7 @@ test('failed-проект в прогрессе показывается как 
 function flushHarness() {
   const h = progressHarness();
   const sent: unknown[] = [];
-  const conclusions: Array<{ chatId: number; checked: number; failed: number }> = [];
+  const conclusions: Array<{ chatId: number; checked: number; unchecked: unknown[] }> = [];
   const flush = new FlushCommitSyncBatch({
     commitSyncJobs: h.jobs as never,
     sendReview: {
@@ -232,7 +232,7 @@ function flushHarness() {
         sent.push(input);
         return true;
       },
-      async sendConclusion(input: { chatId: number; checked: number; failed: number }) {
+      async sendConclusion(input: { chatId: number; checked: number; unchecked: unknown[] }) {
         conclusions.push(input);
         return true;
       },
@@ -274,7 +274,7 @@ test('(г) пустой итог → прогресс удалён, но при�
   // Но раз прогресс показывали — закрываем петлю коротким итогом с честным счётчиком.
   assert.equal(h.conclusions.length, 1);
   assert.equal(h.conclusions[0]!.checked, 1);
-  assert.equal(h.conclusions[0]!.failed, 1);
+  assert.deepEqual(h.conclusions[0]!.unchecked, [{ projectName: 'DocsFlow', error: null }]);
 });
 
 test('(е) sweep осиротевшего батча удаляет прогресс и шлёт итог', async () => {

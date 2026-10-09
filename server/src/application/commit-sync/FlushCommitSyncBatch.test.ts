@@ -16,6 +16,9 @@ type MutableJob = {
   status: CommitSyncStatus;
   reviewJson: string | null;
   batchFlushedAt: Date | null;
+  // Для итога о непроверенных проектах: имя проекта и код ошибки job'а.
+  projectName?: string;
+  error?: string | null;
 };
 
 // In-memory репозиторий, воспроизводящий семантику батч-election из Drizzle-реализации:
@@ -41,7 +44,15 @@ class FakeRepo {
   }
 
   async listByBatchKey(batchKey: string): Promise<CommitSyncJob[]> {
-    return this.all().filter((j) => j.batchKey === batchKey) as unknown as CommitSyncJob[];
+    return this.all()
+      .filter((j) => j.batchKey === batchKey)
+      .map((j) => ({ ...j, projectId: `p-${j.id}`, error: j.error ?? null })) as unknown as CommitSyncJob[];
+  }
+
+  async listBatchStatuses(batchKey: string) {
+    return this.all()
+      .filter((j) => j.batchKey === batchKey)
+      .map((j) => ({ projectId: `p-${j.id}`, projectName: j.projectName ?? null, status: j.status }));
   }
 
   async tryMarkBatchFlushed(batchKey: string): Promise<boolean> {
@@ -162,17 +173,56 @@ test('(г) многопроектный батч без результатов �
   const repo = new FakeRepo();
   const key = '-100:2026-07-24:19:28';
   repo.add({ id: 'a', batchKey: key, status: 'succeeded', reviewJson: null, batchFlushedAt: null });
-  repo.add({ id: 'b', batchKey: key, status: 'cancelled', reviewJson: null, batchFlushedAt: null });
+  repo.add({ id: 'b', batchKey: key, status: 'cancelled', reviewJson: null, batchFlushedAt: null, projectName: 'DocsFlow', error: 'dispatcher_timeout' });
   const { flush, rich, plain } = harness(repo);
 
   await flush.flushForJob((await repo.findById('b'))!);
-  // Дайджеста нет (закрывать нечего), но прогресс показывали → закрываем петлю коротким итогом
-  // с честным счётчиком «проверено / не обработано».
+  // Дайджеста нет (закрывать нечего), но прогресс показывали → закрываем петлю коротким итогом:
+  // сколько проверено и какие проекты не проверены — с причиной.
   assert.equal(rich.length, 0);
   assert.equal(plain.length, 1);
   assert.equal(plain[0]!.chatId, -100);
-  assert.match(plain[0]!.text, /Проверено проектов: 1/);
-  assert.match(plain[0]!.text, /Не обработано: 1/);
+  assert.match(plain[0]!.text, /Проверено проектов: 1 · закрывать нечего/);
+  assert.match(plain[0]!.text, /Не проверено проектов: 1/);
+  assert.match(plain[0]!.text, /сверку никто не взял в работу: DocsFlow/);
+});
+
+test('ни один проект не проверен из-за тарифа → итог называет причину и не пишет «закрывать нечего»', async () => {
+  const repo = new FakeRepo();
+  const key = '-100:2026-07-24:16:40';
+  repo.add({ id: 'a', batchKey: key, status: 'failed', reviewJson: null, batchFlushedAt: null, projectName: 'OrdersFlow', error: 'plan_required' });
+  repo.add({ id: 'b', batchKey: key, status: 'failed', reviewJson: null, batchFlushedAt: null, projectName: 'DocsFlow', error: 'plan_required' });
+  const { flush, plain } = harness(repo);
+
+  await flush.flushBatch(key);
+  assert.equal(plain.length, 1);
+  assert.doesNotMatch(plain[0]!.text, /закрывать нечего/i);
+  assert.match(plain[0]!.text, /Не проверено проектов: 2/);
+  assert.match(plain[0]!.text, /нет активного тарифа у владельца пространства: DocsFlow, OrdersFlow/);
+});
+
+test('одиночный плановый батч с непроверенным проектом не молчит', async () => {
+  const repo = new FakeRepo();
+  const key = '-100:2026-07-24:16:40';
+  repo.add({ id: 'a', batchKey: key, status: 'failed', reviewJson: null, batchFlushedAt: null, projectName: 'OrdersFlow', error: 'llm_failed: timeout' });
+  const { flush, plain } = harness(repo);
+
+  await flush.flushBatch(key);
+  assert.equal(plain.length, 1);
+  assert.match(plain[0]!.text, /сбой при проверке: OrdersFlow/);
+});
+
+test('сводка с задачами перечисляет и непроверенные проекты', async () => {
+  const repo = new FakeRepo();
+  repo.add({ id: 'a', batchKey: 'B', status: 'succeeded', reviewJson: result('OrdersFlow', 'auto'), batchFlushedAt: null });
+  repo.add({ id: 'b', batchKey: 'B', status: 'failed', reviewJson: null, batchFlushedAt: null, projectName: 'DocsFlow', error: 'usage_blocked' });
+  const { flush, rich, plain } = harness(repo);
+
+  await flush.flushBatch('B');
+  assert.equal(plain.length, 0);
+  assert.equal(rich.length, 1);
+  assert.match(rich[0]!.html, /<p>⚠️ Не проверено проектов: 1<\/p>/);
+  assert.match(rich[0]!.html, /исчерпан лимит тарифа владельца пространства: DocsFlow/);
 });
 
 test('одиночный (ручной) чистый прогон молчит — прогресса не было', async () => {

@@ -20,9 +20,18 @@ function harness(
 ) {
   const claims: Array<{ userId: string; jobId: string }> = [];
   const executed: string[] = [];
-  let clock = 0;
+  // Забранные мимо гейта (отказ тарифа) и завершённые ошибкой job'ы.
+  const forced: string[] = [];
+  const completed: Array<{ userId: string; jobId: string; ok: boolean; error: string | null }> = [];
   const adapter = commitSyncServerQueue({
-    commitSyncJobs: { listQueued: async () => jobs },
+    commitSyncJobs: {
+      listQueued: async () => jobs,
+      async claimById(jobId) {
+        if (forced.includes(jobId)) return null;
+        forced.push(jobId);
+        return { id: jobId } as CommitSyncJob;
+      },
+    },
     claim: {
       async execute(input) {
         claims.push(input);
@@ -32,9 +41,13 @@ function harness(
       },
     },
     run: { execute: async (job) => void executed.push(job.id) },
-    now: () => clock,
+    complete: {
+      async execute(input) {
+        completed.push({ userId: input.userId, jobId: input.jobId, ok: input.ok, error: input.error });
+      },
+    },
   });
-  return { adapter, claims, executed, advance: (ms: number) => (clock += ms) };
+  return { adapter, claims, executed, forced, completed };
 }
 
 test('claim: job’ы всех диспетчеров забираются от имени их диспетчера, не больше limit', async () => {
@@ -51,30 +64,31 @@ test('claim: job’ы всех диспетчеров забираются от 
   assert.deepEqual(await h.adapter.claim(0), []);
 });
 
-test('гейт тарифа: job остаётся в очереди, не загораживает остальные; отказ перепроверяется раз в минуту', async () => {
+test('гейт тарифа: job завершается сразу с причиной, а не висит до отмены по застою', async () => {
   const h = harness(
-    [queued('j1', 'disp', 'free-owner'), queued('j2', 'disp', 'free-owner'), queued('j3', 'disp', 'paid-owner'), queued('j4', 'disp', 'blocked-owner')],
+    [queued('j1', 'disp', 'free-owner'), queued('j2', 'disp', 'paid-owner'), queued('j3', 'disp', 'blocked-owner')],
     (jobId) =>
-      jobId === 'j1' || jobId === 'j2'
-        ? new PlanRequiredError()
-        : jobId === 'j4'
-          ? new UsageBlockedError('5h', null)
-          : null,
+      jobId === 'j1' ? new PlanRequiredError() : jobId === 'j3' ? new UsageBlockedError('5h', null) : null,
   );
-  const first = await h.adapter.claim(3);
-  // j2 того же плательщика уже не проверяем — отказ запомнен.
-  assert.deepEqual(h.claims.map((c) => c.jobId), ['j1', 'j3', 'j4']);
-  assert.equal(first.length, 1);
+  const tasks = await h.adapter.claim(5);
+  assert.deepEqual(h.claims.map((c) => c.jobId), ['j1', 'j2', 'j3']);
+  // Отказанные job'ы забраны мимо гейта — их исполнитель только завершает их ошибкой.
+  assert.deepEqual(h.forced, ['j1', 'j3']);
+  assert.equal(tasks.length, 3);
+  for (const task of tasks) await task();
+  assert.deepEqual(h.executed, ['j2']);
+  assert.deepEqual(h.completed, [
+    { userId: 'disp', jobId: 'j1', ok: false, error: 'plan_required' },
+    { userId: 'disp', jobId: 'j3', ok: false, error: 'usage_blocked' },
+  ]);
+});
 
-  h.claims.length = 0;
-  h.advance(30_000);
-  await h.adapter.claim(3);
-  assert.deepEqual(h.claims.map((c) => c.jobId), ['j3']);
-
-  h.claims.length = 0;
-  h.advance(31_000);
-  await h.adapter.claim(3);
-  assert.deepEqual(h.claims.map((c) => c.jobId), ['j1', 'j3', 'j4']);
+test('гейт тарифа: job, который успел забрать диспетчер, не завершается повторно', async () => {
+  const h = harness([queued('j1', 'disp', 'free-owner')], () => new PlanRequiredError());
+  h.forced.push('j1'); // claimById вернёт null — job уже не queued
+  const tasks = await h.adapter.claim(3);
+  assert.equal(tasks.length, 0);
+  assert.deepEqual(h.completed, []);
 });
 
 test('гонка: job, забранный диспетчером или удалённый очисткой, пропускается', async () => {

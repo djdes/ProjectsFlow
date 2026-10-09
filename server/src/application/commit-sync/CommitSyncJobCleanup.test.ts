@@ -117,7 +117,15 @@ class FakeRepo {
   }
 
   async listByBatchKey(batchKey: string): Promise<CommitSyncJob[]> {
-    return this.all().filter((j) => j.batchKey === batchKey) as unknown as CommitSyncJob[];
+    return this.all()
+      .filter((j) => j.batchKey === batchKey)
+      .map((j) => ({ ...j, projectId: `p-${j.id}` })) as unknown as CommitSyncJob[];
+  }
+
+  async listBatchStatuses(batchKey: string) {
+    return this.all()
+      .filter((j) => j.batchKey === batchKey)
+      .map((j) => ({ projectId: `p-${j.id}`, projectName: `Проект ${j.id}`, status: j.status }));
   }
 
   async tryMarkBatchFlushed(batchKey: string): Promise<boolean> {
@@ -226,7 +234,8 @@ test('(б) batch with no activity > STALL is cancelled and then flushed', async 
   // Sweep closed the batch: no results to digest → short conclusion instead of silence.
   assert.equal(res.flushed, 1);
   assert.equal(plain.length, 1);
-  assert.match(plain[0]!.text, /Не обработано: 2/);
+  assert.match(plain[0]!.text, /Не проверено проектов: 2/);
+  assert.match(plain[0]!.text, /сверку никто не взял в работу: Проект a, Проект b/);
 });
 
 test('(в) a runner finishing a job every few minutes is never cut off, even over an hour', async () => {

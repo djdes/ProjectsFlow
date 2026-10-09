@@ -1786,6 +1786,7 @@ llmQueueAdapters.push(
     commitSyncJobs: commitSyncJobRepo,
     claim: claimCommitSyncJob,
     run: new RunCommitSyncJobWithLlm({ complete: completeCommitSyncJob, llm: llmTextGenerator }),
+    complete: completeCommitSyncJob,
   }),
 );
 const commitSyncJobCleanup = new CommitSyncJobCleanup({
