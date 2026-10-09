@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TaskTitleText } from './TaskTitleText';
 import { Markdown } from '../markdown/Markdown';
+import { taskCardTitleClass } from './taskCardText';
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 const render = (title: string) => renderToStaticMarkup(React.createElement(TaskTitleText, { title, inline: true }));
@@ -46,4 +47,28 @@ test('description previews preserve combined color/bold/underline', () => {
   assert.match(html, /<strong><u>важно<\/u><\/strong>/);
   assert.match(html, /color:#337ea9/);
   assert.doesNotMatch(html, /\+\+|\*\*/);
+});
+
+const classOf = (html: string) =>
+  /class="([^"]*)"/.exec(html)?.[1]?.replace(/&amp;/g, '&').split(/\s+/) ?? [];
+
+test('card title is regular by default; only authored bold and headings are semibold', () => {
+  const card = (title: string) =>
+    classOf(renderToStaticMarkup(React.createElement(TaskTitleText, {
+      title,
+      className: taskCardTitleClass(title),
+      authoredBold: true,
+    })));
+  // A task written as one long paragraph used to render as a solid semibold block.
+  const plain = card('TG Bot, который запускает регистрацию, ведёт заказ и отвечает на вопросы');
+  assert.ok(plain.includes('font-normal'), plain.join(' '));
+  assert.ok(!plain.includes('font-semibold'), plain.join(' '));
+  // `**…**` (how the Telegram composer writes titles) stays semibold.
+  assert.ok(plain.includes('[&_strong]:font-semibold'), plain.join(' '));
+  assert.ok(!plain.includes('[&_strong]:[font-weight:inherit]'), plain.join(' '));
+  assert.ok(card('## Заголовок задачи').includes('font-semibold'));
+  // Lists and tables keep bold at the title's own weight.
+  const list = classOf(render('**Готово**'));
+  assert.ok(list.includes('[&_strong]:[font-weight:inherit]'), list.join(' '));
+  assert.ok(!list.includes('[&_strong]:font-semibold'), list.join(' '));
 });

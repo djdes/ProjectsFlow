@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
-import { TASK_CARD_BODY_CLASS, TASK_CARD_TITLE_CLASS } from './taskCardText';
+import { TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -535,7 +535,7 @@ function KanbanCardImpl({
                   </span>
                 )}
                 {/* Keep authored inline marks; list/rule-like title prefixes stay literal. */}
-                <TaskTitleText title={title} className={TASK_CARD_TITLE_CLASS} />
+                <TaskTitleText title={title} className={taskCardTitleClass(title)} authoredBold />
                 {body.trim() && <Markdown className={TASK_CARD_BODY_CLASS}>{body}</Markdown>}
               </div>
             ) : (

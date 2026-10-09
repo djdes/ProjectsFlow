@@ -1,12 +1,20 @@
 import { cn } from '@/lib/utils';
+import { parseTitleHeading } from '@/lib/taskTitleBody';
 import { MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 
 // Типографика текста задачи на карточках (доска проекта и «Входящие») — одна на обе
 // поверхности, чтобы карточка выглядела одинаково, где бы её ни увидели.
 //
-// Заголовок — всегда полужирный и одной жирности: `**…**` в первой строке (так пишет
-// композер из Telegram) больше не делает его жирнее заголовков без разметки.
-export const TASK_CARD_TITLE_CLASS = 'font-semibold text-foreground';
+// Первая строка по умолчанию обычной жирности: задача, написанная одним абзацем, иначе
+// превращалась в сплошной жирный блок. Полужирным остаётся то, что выделил автор: `**…**`
+// (так композер из Telegram оформляет заголовок; рендерится через TaskTitleText authoredBold)
+// и markdown-заголовок `# …`.
+export function taskCardTitleClass(rawTitle: string): string {
+  return cn(
+    parseTitleHeading(rawTitle).level > 0 ? 'font-semibold' : 'font-normal',
+    'text-foreground',
+  );
+}
 
 // Тело — обычный приглушённый текст. Выделенные слова (`**…**`) — средней жирности и
 // основного цвета: раньше они были жирнее самого заголовка и спорили с ним за внимание.

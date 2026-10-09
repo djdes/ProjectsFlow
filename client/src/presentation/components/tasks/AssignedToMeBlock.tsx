@@ -109,7 +109,7 @@ import {
 import { useDragSelect } from './selection/useDragSelect';
 import { useCrossProjectBulkActions } from '@/presentation/hooks/useCrossProjectBulkActions';
 import { TaskTitleText } from './TaskTitleText';
-import { TASK_CARD_BODY_CLASS, TASK_CARD_TITLE_CLASS } from './taskCardText';
+import { TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
@@ -3630,9 +3630,9 @@ function AcceptedCard({
         )}
         <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
-          // Моб: весь текст задачи (line-clamp-none). Заголовок полужирный, как на доске.
+          // Моб: весь текст задачи (line-clamp-none). Жирность заголовка — как на доске.
           <div className="max-h-[4lh] overflow-hidden text-sm leading-snug max-sm:max-h-none">
-            <TaskTitleText title={title} className={TASK_CARD_TITLE_CLASS} />
+            <TaskTitleText title={title} className={taskCardTitleClass(title)} authoredBold />
             {body.trim() && <Markdown className={TASK_CARD_BODY_CLASS}>{body}</Markdown>}
           </div>
         ) : (
