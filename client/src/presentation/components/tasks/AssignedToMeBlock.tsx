@@ -1394,6 +1394,10 @@ export function AssignedToMeBlock({
         )}
       </div>
 
+      {/* Полки «На утверждении» и «Вручную» — в ширину страницы, с теми же отступами слева
+          и справа, что у шапки. Full-bleed (bleedNeg/bleedPad) — только у ряда колонок: он
+          листается вбок до края экрана, а полка переносится по строкам, и с bleed её рамка
+          упиралась в правый край, оставляя отступ лишь слева. */}
       {/* Полка «В работе» — над колонками, всегда видима: это ответ на вопрос «чем я занят
           прямо сейчас». Принимает дроп карточки (статус → manual), карточки внутри
           можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
@@ -1421,7 +1425,6 @@ export function AssignedToMeBlock({
                 emptyHint: `Задач на утверждении от ${focusedMember.displayName} сейчас нет.`,
               }
             : {})}
-          className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
 
@@ -1439,7 +1442,6 @@ export function AssignedToMeBlock({
           selecting={selectionActive}
           selectedIds={selectedIds}
           onSelectToggle={handleSelectToggle}
-          className={cn(bleedNegClass, bleedPadClass)}
         />
       )}
 
