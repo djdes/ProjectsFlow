@@ -83,7 +83,10 @@ export async function assertPublicWebhookTarget(url: string): Promise<readonly s
   }
   if (parsed.protocol !== 'https:') throw new Error('blocked_scheme');
   if (parsed.username || parsed.password) throw new Error('blocked_credentials');
-  const addresses = await lookup(parsed.hostname, { all: true, verbatim: true });
+  // IPv6-литерал URL отдаёт в квадратных скобках («[::1]»). Резолвер Linux такой хост не
+  // знает (ENOTFOUND) — проверке нужен голый адрес, иначе она падает не той ошибкой.
+  const host = parsed.hostname.replace(/^\[(.*)\]$/, '$1');
+  const addresses = await lookup(host, { all: true, verbatim: true });
   if (addresses.length === 0) throw new Error('blocked_no_dns');
   if (addresses.some(({ address }) => isPrivateAddress(address))) throw new Error('blocked_private_ip');
   return addresses.map(({ address }) => address);

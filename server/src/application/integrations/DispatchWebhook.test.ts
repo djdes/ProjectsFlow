@@ -95,6 +95,7 @@ test('assertPublicWebhookTarget отклоняет https loopback и прива�
   await assert.rejects(() => assertPublicWebhookTarget('https://127.0.0.1/hook'), /blocked_private_ip/);
   await assert.rejects(() => assertPublicWebhookTarget('https://10.0.0.9/hook'), /blocked_private_ip/);
   await assert.rejects(() => assertPublicWebhookTarget('https://[::1]/hook'), /blocked_private_ip/);
+  await assert.rejects(() => assertPublicWebhookTarget('https://[fd00::1]/hook'), /blocked_private_ip/);
 });
 
 test('assertPublicWebhookTarget отклоняет не-https и креды в URL', async () => {
@@ -108,6 +109,9 @@ test('assertPublicWebhookTarget пропускает публичный лите
   // проверял бы один адрес, а undici соединялся бы с другим (приватным).
   const ips = await assertPublicWebhookTarget(PUBLIC_URL);
   assert.deepEqual([...ips], ['93.184.216.34']);
+  // IPv6-литерал приходит из URL в скобках — проверяется и возвращается голый адрес.
+  const v6 = await assertPublicWebhookTarget('https://[2606:2800:220:1:248:1893:25c8:1946]/hook');
+  assert.deepEqual([...v6], ['2606:2800:220:1:248:1893:25c8:1946']);
 });
 
 // --- Доставка ------------------------------------------------------------------------------
