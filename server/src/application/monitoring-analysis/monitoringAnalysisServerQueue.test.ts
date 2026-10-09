@@ -228,16 +228,19 @@ test('листинг диспетчера пуст, пока очередь ис
     },
   }).asRepo();
 
-  await new ListPendingMonitoringAnalysisJobs({
+  // serverOwned подсказывает диспетчеру, что эту очередь можно опрашивать редко.
+  const owned = await new ListPendingMonitoringAnalysisJobs({
     monitoringAnalysisJobs: repoWithPending,
     serverHandles: async () => true,
   }).execute({ userId: 'disp-1' });
+  assert.deepEqual(owned, { jobs: [], serverOwned: true });
   assert.equal(listed, 0);
 
-  await new ListPendingMonitoringAnalysisJobs({
+  const forDispatcher = await new ListPendingMonitoringAnalysisJobs({
     monitoringAnalysisJobs: repoWithPending,
     serverHandles: async () => false,
   }).execute({ userId: 'disp-1' });
+  assert.equal(forDispatcher.serverOwned, false);
   await new ListPendingMonitoringAnalysisJobs({
     monitoringAnalysisJobs: repoWithPending,
     serverHandles: async () => {

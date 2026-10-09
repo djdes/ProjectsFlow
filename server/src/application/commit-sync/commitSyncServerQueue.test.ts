@@ -128,11 +128,14 @@ test('ListPendingCommitSyncJobs: пока очередь у сервера, ди
   } as unknown as CommitSyncJobRepository;
 
   const serverOwned = new ListPendingCommitSyncJobs({ commitSyncJobs: repo, serverHandles: async () => true });
-  assert.deepEqual(await serverOwned.execute({ userId: 'disp' }), []);
+  // serverOwned подсказывает диспетчеру, что эту очередь можно опрашивать редко.
+  assert.deepEqual(await serverOwned.execute({ userId: 'disp' }), { jobs: [], serverOwned: true });
   assert.equal(listed.length, 0);
 
   const dispatcherOwned = new ListPendingCommitSyncJobs({ commitSyncJobs: repo, serverHandles: async () => false });
-  assert.equal((await dispatcherOwned.execute({ userId: 'disp', limit: 500 })).length, 1);
+  const forDispatcher = await dispatcherOwned.execute({ userId: 'disp', limit: 500 });
+  assert.equal(forDispatcher.jobs.length, 1);
+  assert.equal(forDispatcher.serverOwned, false);
   // Политику не удалось прочитать — job'ы остаются диспетчеру.
   const unknown = new ListPendingCommitSyncJobs({
     commitSyncJobs: repo,
@@ -140,9 +143,12 @@ test('ListPendingCommitSyncJobs: пока очередь у сервера, ди
       throw new Error('settings unavailable');
     },
   });
-  assert.equal((await unknown.execute({ userId: 'disp' })).length, 1);
+  assert.equal((await unknown.execute({ userId: 'disp' })).jobs.length, 1);
   // Без зависимости — прежнее поведение.
-  assert.equal((await new ListPendingCommitSyncJobs({ commitSyncJobs: repo }).execute({ userId: 'disp' })).length, 1);
+  assert.equal(
+    (await new ListPendingCommitSyncJobs({ commitSyncJobs: repo }).execute({ userId: 'disp' })).jobs.length,
+    1,
+  );
   assert.deepEqual(listed, [
     { userId: 'disp', limit: 50 },
     { userId: 'disp', limit: 10 },

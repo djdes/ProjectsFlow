@@ -250,7 +250,9 @@ Workflow: фича → ветка → merge в `main` → автодеплой (
   при недоступной подписке задание сразу завершается ошибкой. Исполнители
   `application/<очередь>/Run*WithLlm.ts`, промпты перенесены из `C:\www\ralph\prompts` дословно
   (`application/<очередь>/prompts/*.ts`). Режим `assistant` кнопок AI остаётся воркерам продуктов,
-  `studio_edit` закрывает job визуального редактора (site-editor-worker Ralph).
+  `studio_edit` закрывает job визуального редактора (site-editor-worker Ralph). Очереди
+  `monitoring` и `commit_sync` сервер берёт целиком: их списки для диспетчера отвечают
+  `serverOwned: true`, и Ralph опрашивает их раз в 5 минут вместо каждых нескольких секунд.
 - **Шлюз для Ralph:** `POST /api/agent/projects/:id/llm/v1/responses` (и `/api/agent/llm/v1/…`)
   — Responses API для `codex exec` (свой model_provider, Bearer = токен воркера). Смонтирован ДО
   общего `express.json`: codex шлёт всю историю сессии. Заголовки от Ralph: `x-pf-model` —

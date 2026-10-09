@@ -1466,11 +1466,11 @@ export function agentApiRouter(deps: Deps): Router {
     try {
       const limitParam = req.query['limit'];
       const limit = typeof limitParam === 'string' ? parseInt(limitParam, 10) : undefined;
-      const jobs = await deps.listPendingMonitoringAnalysisJobs.execute({
+      const { jobs, serverOwned } = await deps.listPendingMonitoringAnalysisJobs.execute({
         userId: req.user!.id,
         limit: Number.isFinite(limit) ? limit : undefined,
       });
-      res.json({ jobs: jobs.map(pendingMonitoringAnalysisToDto) });
+      res.json({ jobs: jobs.map(pendingMonitoringAnalysisToDto), serverOwned });
     } catch (e) {
       next(e);
     }
@@ -1563,11 +1563,11 @@ export function agentApiRouter(deps: Deps): Router {
     try {
       const limitParam = req.query['limit'];
       const limit = typeof limitParam === 'string' ? parseInt(limitParam, 10) : undefined;
-      const jobs = await deps.listPendingCommitSyncJobs.execute({
+      const { jobs, serverOwned } = await deps.listPendingCommitSyncJobs.execute({
         userId: req.user!.id,
         limit: Number.isFinite(limit) ? limit : undefined,
       });
-      res.json({ jobs: jobs.map(pendingCommitSyncToDto) });
+      res.json({ jobs: jobs.map(pendingCommitSyncToDto), serverOwned });
     } catch (e) {
       next(e);
     }
