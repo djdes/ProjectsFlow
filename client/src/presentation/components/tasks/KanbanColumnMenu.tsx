@@ -114,7 +114,7 @@ export function KanbanColumnMenu({
         <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
           Цвет
         </DropdownMenuLabel>
-        <div className="px-2 pb-1.5 pt-1">
+        <div className="px-2 pbe-1.5 pbs-1">
           <KanbanColorPicker value={currentColor} onChange={onColor} />
         </div>
         {onTypeFilter && (

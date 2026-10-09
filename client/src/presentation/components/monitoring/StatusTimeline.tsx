@@ -52,16 +52,16 @@ export function StatusTimeline({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center justify-between text-2xs uppercase tracking-wide text-muted-foreground">
         <span>Здоровье · 24ч</span>
         {loading && <span>загрузка…</span>}
       </div>
-      <div className="flex h-2.5 gap-px overflow-hidden rounded">
+      <div className="flex h-2.5 gap-px overflow-clip rounded">
         {cells.map((c, i) => (
           <div key={i} className={cn('flex-1', c.cls)} title={c.title} />
         ))}
       </div>
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+      <div className="flex items-center justify-between text-2xs text-muted-foreground">
         <span>24ч назад</span>
         <span>сейчас</span>
       </div>

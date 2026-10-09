@@ -73,7 +73,7 @@ export function FloatingFormatMenu({ editor, anchor, onClose, getRange, ownerId 
 
   if (!anchor) return null;
   return createPortal(
-    <div ref={originRef} className="pointer-events-none fixed left-0 top-0 z-[70]">
+    <div ref={originRef} className="pointer-events-none fixed start-0 inset-bs-0 z-[70]">
       <div ref={menuRef} data-format-menu data-editor-owner={ownerId}
         style={{ position: 'absolute', visibility: 'hidden' }}
         className="pointer-events-auto w-max overflow-y-auto rounded-xl border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-lg ring-1 ring-black/[0.03]"

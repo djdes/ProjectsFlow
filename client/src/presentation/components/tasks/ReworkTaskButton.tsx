@@ -52,7 +52,7 @@ export function ReworkTaskButton({
         className,
       )}
     >
-      {submitting ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+      {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <RefreshCw className="size-4" />}
     </button>
   );
 }

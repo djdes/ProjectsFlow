@@ -4,9 +4,9 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 // Base-classes:
-//   - `transition-all duration-150` + `active:scale-[0.97]` — tactile-feedback при
-//     тапе/клике. Subtle (-3%) — заметно но без overkill. Cancels с focus-ring'ом
-//     (focus-ring остаётся прозрачным во время press).
+//   - Отклик на нажатие и переходы живут в `.pf-button` (styles/motion.css): сжатие на
+//     :active у всех, плавность — только без prefers-reduced-motion, свойства перечислены
+//     явно (good-css: никаких `transition: all`).
 //   - `[&_svg]:size-[1.05em]` — иконки чуть крупнее, чем `size-4`-фикс. Растут
 //     вместе с font-size кнопки (em-based), визуально балансируют padding.
 //   - Sizes responsive: на mobile ≥44px (Apple HIG / Material touch-target),
@@ -17,7 +17,7 @@ const buttonVariants = cva(
   // `.button svg` (0,1,1) специфичнее `.size-3` (0,1,0) и раньше перебивал ЛЮБОЙ
   // явный размер иконки во всех кнопках сайта (иконки выходили ~15px вместо 12px).
   // `:not([class*="size-"])` исключает иконки, у которых размер задан явно.
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 motion-reduce:transform-none motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg:not([class*=size-])]:size-[1.05em] [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=size-])]:size-[1.05em] [&_svg]:shrink-0',
   {
     variants: {
       variant: {

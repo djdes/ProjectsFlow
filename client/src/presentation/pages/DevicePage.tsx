@@ -145,7 +145,7 @@ function DeviceFlow({
   if (!info) {
     return (
       <CenteredCard
-        icon={<Loader2 className="size-6 animate-spin text-muted-foreground" />}
+        icon={<Loader2 className="size-6 motion-safe:animate-spin text-muted-foreground" />}
         title="Проверяем код…"
         description={userCode}
       >
@@ -250,7 +250,7 @@ function DeviceFlow({
             Отмена
           </Button>
           <Button type="submit" className="flex-1" disabled={submitting || tokenName.trim().length === 0}>
-            {submitting && <Loader2 className="size-4 animate-spin" />}
+            {submitting && <Loader2 className="size-4 motion-safe:animate-spin" />}
             Подключить
           </Button>
         </div>
@@ -281,7 +281,7 @@ function CenteredCard({
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>{children}</CardContent>
-        {footer && <div className="border-t px-6 py-3">{footer}</div>}
+        {footer && <div className="border-bs px-6 py-3">{footer}</div>}
       </Card>
     </div>
   );

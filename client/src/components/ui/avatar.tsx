@@ -8,7 +8,7 @@ export function Avatar({
 }: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>): React.ReactElement {
   return (
     <AvatarPrimitive.Root
-      className={cn('relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full', className)}
+      className={cn('relative flex h-8 w-8 shrink-0 overflow-clip rounded-full', className)}
       {...props}
     />
   );

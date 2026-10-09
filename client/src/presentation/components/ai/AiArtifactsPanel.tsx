@@ -27,25 +27,25 @@ export function AiArtifactsPanel({
       defaultOpen
       trigger={<span className="text-sm font-normal leading-5 text-muted-foreground">Результаты</span>}
       triggerClassName="px-2 py-1.5 hover:bg-hover"
-      contentClassName="px-2 pb-3 pt-1.5"
+      contentClassName="px-2 pbe-3 pbs-1.5"
     >
       <span className="inline-flex h-6 items-center rounded-full bg-hover px-2.5 text-xs tabular-nums text-muted-foreground">
         {loading && artifacts.length === 0 ? '…' : `Объектов: ${artifacts.length}`}
       </span>
       {artifacts.length === 0 ? (
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        <p className="mbs-2 text-xs leading-5 text-muted-foreground">
           {loading ? 'Загружаю результаты…' : 'Здесь появятся проекты и задачи, которые создаст или изменит агент.'}
         </p>
       ) : (
         <>
-          <ul className="mt-2 flex flex-col gap-1.5">
+          <ul className="mbs-2 flex flex-col gap-1.5">
             {visible.map((artifact) => <ArtifactCard key={artifact.id} artifact={artifact} />)}
           </ul>
           {artifacts.length > PREVIEW_LIMIT && (
             <button
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              className="mt-1 rounded-md px-1 py-1 text-xs text-muted-foreground hover:text-foreground"
+              className="mbs-1 rounded-md px-1 py-1 text-xs text-muted-foreground hover:text-foreground"
             >
               {expanded ? 'Свернуть' : `Показать ещё ${artifacts.length - PREVIEW_LIMIT}`}
             </button>
@@ -61,12 +61,12 @@ function ArtifactCard({ artifact }: { artifact: AiActionArtifact }): React.React
   const href = artifactHref(artifact);
   const content = (
     <>
-      <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <Icon aria-hidden="true" className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0">
         <span className={cn('block truncate text-xs font-medium', artifact.undone && 'line-through opacity-70')}>
           {artifact.title}
         </span>
-        <span className="block text-[11px] text-muted-foreground">
+        <span className="block text-2xs text-muted-foreground">
           {artifactActionLabel(artifact)} · ProjectsFlow
         </span>
       </span>

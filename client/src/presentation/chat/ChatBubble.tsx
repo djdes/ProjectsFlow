@@ -102,7 +102,7 @@ export function ChatBubble({
             ) : (
               <span
                 className={cn(
-                  'grid size-7 place-items-center rounded-full text-[11px] font-semibold',
+                  'grid size-7 place-items-center rounded-full text-2xs font-semibold',
                   avatarColor(message.authorDisplayName),
                 )}
               >
@@ -114,7 +114,7 @@ export function ChatBubble({
 
       <div className={cn('relative min-w-0 max-w-[85%]', isOwn ? 'items-end' : 'items-start')}>
         {showAuthor && !isOwn && (
-          <div className="mb-0.5 px-1 text-xs font-medium text-primary/90">
+          <div className="mbe-0.5 px-1 text-xs font-medium text-primary/90">
             {message.authorDisplayName}
           </div>
         )}
@@ -146,7 +146,7 @@ export function ChatBubble({
             <button
               type="button"
               onClick={() => onJumpTo(message.replyTo!.id)}
-              className="mb-1 flex w-full flex-col items-start rounded-md border-l-2 border-primary/40 bg-primary/5 px-2 py-0.5 text-left text-xs"
+              className="mbe-1 flex w-full flex-col items-start rounded-md border-s-2 border-primary/40 bg-primary/5 px-2 py-0.5 text-start text-xs"
             >
               <span className="font-medium text-primary/90">{message.replyTo.authorDisplayName}</span>
               <span className="line-clamp-1 text-muted-foreground">{message.replyTo.excerpt}</span>
@@ -159,14 +159,14 @@ export function ChatBubble({
 
           {/* вложения */}
           {message.attachments.length > 0 && (
-            <div className="mt-1 flex flex-col gap-1">
+            <div className="mbs-1 flex flex-col gap-1">
               {message.attachments.map((a) =>
                 a.mimeType.startsWith('image/') ? (
                   <button
                     key={a.id}
                     type="button"
                     onClick={() => setPreview({ url: a.url, filename: a.filename })}
-                    className="block overflow-hidden rounded-lg transition-transform hover:scale-[1.01]"
+                    className="block overflow-clip rounded-lg motion-safe:transition-transform hover:scale-[1.01]"
                   >
                     <img
                       src={a.url}
@@ -191,7 +191,7 @@ export function ChatBubble({
             </div>
           )}
 
-          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+          <div className="mbs-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
             <span>{formatTime(message.createdAt)}</span>
             {message.editedAt && <span>· изм.</span>}
           </div>
@@ -199,7 +199,7 @@ export function ChatBubble({
 
         {/* реакции */}
         {message.reactions.length > 0 && (
-          <div className={cn('mt-0.5 flex flex-wrap gap-1', isOwn ? 'justify-end' : 'justify-start')}>
+          <div className={cn('mbs-0.5 flex flex-wrap gap-1', isOwn ? 'justify-end' : 'justify-start')}>
             {message.reactions.map((r) => {
               const mine = r.userIds.includes(currentUserId);
               return (
@@ -233,8 +233,8 @@ export function ChatBubble({
             openMenu(r.left, r.bottom + 4);
           }}
           className={cn(
-            'absolute top-0.5 z-20 grid size-6 place-items-center rounded-full border bg-background/95 text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
-            isOwn ? 'left-0.5' : 'right-0.5',
+            'absolute inset-bs-0.5 z-20 grid size-6 place-items-center rounded-full border bg-background/95 text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
+            isOwn ? 'start-0.5' : 'end-0.5',
           )}
         >
           <SmilePlus className="size-3.5" />
@@ -245,7 +245,7 @@ export function ChatBubble({
       <Dialog open={preview !== null} onOpenChange={(o) => !o && setPreview(null)}>
         {/* hideClose: свой крестик в шапке — встроенный лёг бы поверх кнопки «Скачать». */}
         <DialogContent hideClose className="grid max-h-[90dvh] max-w-3xl gap-0 overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b px-4 py-2.5">
+          <div className="flex items-center justify-between border-be px-4 py-2.5">
             <p className="truncate text-sm font-medium">{preview?.filename ?? ''}</p>
             <div className="flex items-center gap-1">
               <a

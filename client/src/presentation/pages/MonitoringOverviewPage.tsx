@@ -69,7 +69,7 @@ export function MonitoringOverviewPage(): React.ReactElement {
   }, [projects, onlyProblems]);
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
+    <div className="flex h-full flex-col gap-5 p-4 pbs-3.5 sm:p-6 sm:pbs-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* pf-burger-gap на группе с заголовком, а не на всей строке: кнопка «Алерты»
             прижата вправо (justify-between) и под бургер не попадает. */}
@@ -82,7 +82,7 @@ export function MonitoringOverviewPage(): React.ReactElement {
             <BellRing className="size-4" />
             Алерты
             {totalAlerts > 0 && (
-              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+              <span className="ms-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
                 {totalAlerts}
               </span>
             )}
@@ -91,7 +91,7 @@ export function MonitoringOverviewPage(): React.ReactElement {
       </div>
 
       {projects && projects.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b pb-3 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-be pbe-3 text-sm">
           <span className="font-medium">{projects.length} проект(ов)</span>
           {problemCount > 0 ? (
             <span className="text-red-600 dark:text-red-400">⚠ {problemCount} с проблемами</span>
@@ -105,7 +105,7 @@ export function MonitoringOverviewPage(): React.ReactElement {
             type="button"
             onClick={() => setOnlyProblems((v) => !v)}
             className={cn(
-              'ml-auto rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+              'ms-auto rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
               onlyProblems ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
             )}
           >

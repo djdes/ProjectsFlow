@@ -56,7 +56,7 @@ const previewTodo = ce(
 );
 const previewQuote = ce(
   'div',
-  { className: 'border-l-2 border-neutral-400 pl-2.5 text-sm italic text-neutral-300' },
+  { className: 'border-s-2 border-neutral-400 ps-2.5 text-sm italic text-neutral-300' },
   'Выделенная цитата.',
 );
 const previewCode = ce(

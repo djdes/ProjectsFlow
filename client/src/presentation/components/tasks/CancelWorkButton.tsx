@@ -81,11 +81,11 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
     const when = task.ralphCancelRequestedAt!;
     const who = task.ralphCancelRequestedByDisplayName;
     return (
-      <div className="space-y-2 border-t bg-background/95 px-3 py-3 backdrop-blur-md">
+      <div className="space-y-2 border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           <p className="font-medium">🛑 Отмена запрошена ({formatRelativeMinutes(when)})</p>
-          {who && <p className="mt-0.5 opacity-80">{who}</p>}
-          <p className="mt-1 text-[11px] opacity-70">
+          {who && <p className="mbs-0.5 opacity-80">{who}</p>}
+          <p className="mbs-1 text-2xs opacity-70">
             Ralph дисдетчер обработает в ближайшие ~5 секунд.
           </p>
         </div>
@@ -97,7 +97,7 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
           onClick={() => void handleRevoke()}
           disabled={busy}
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+          {busy ? <Loader2 className="size-3.5 motion-safe:animate-spin" /> : <X className="size-3.5" />}
           Отозвать запрос
         </Button>
       </div>
@@ -105,7 +105,7 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
   }
 
   return (
-    <div className="border-t bg-background/95 px-3 py-3 backdrop-blur-md">
+    <div className="border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
       <Button
         type="button"
         variant="destructive"
@@ -114,7 +114,7 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
         disabled={busy}
         title="Прервать работу Ralph-агента над этой задачей"
       >
-        {busy ? <Loader2 className="size-4 animate-spin" /> : <Octagon className="size-4" />}
+        {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Octagon className="size-4" />}
         Отменить работу
       </Button>
     </div>

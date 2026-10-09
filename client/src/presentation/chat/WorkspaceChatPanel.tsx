@@ -59,7 +59,7 @@ export function WorkspaceChatPanel(): React.ReactElement {
     <div className="flex h-full min-h-0 flex-col">
       {selectedIds.size > 0 ? (
         // Бар массового действия: «N выбрано · Удалить · Отмена».
-        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-2 text-sm">
+        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pbe-2 text-sm">
           <span className="font-medium">{selectedIds.size} выбрано</span>
           <div className="flex items-center gap-1">
             <button
@@ -81,7 +81,7 @@ export function WorkspaceChatPanel(): React.ReactElement {
           </div>
         </div>
       ) : (
-        <div className="flex shrink-0 items-center gap-2 px-2 pb-2 text-sm font-medium">
+        <div className="flex shrink-0 items-center gap-2 px-2 pbe-2 text-sm font-medium">
           <MessagesSquare className="size-4 text-muted-foreground" />
           <span className="truncate">Чат</span>
           {selectedRoom && selectedRoom.memberCount > 1 && selectedId && (

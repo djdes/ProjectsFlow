@@ -404,7 +404,7 @@ function DrawerShell({
         <div className="flex h-11 shrink-0 items-center gap-2 px-3 sm:px-6">
           {breadcrumbs}
           {topActions && (
-            <div className="ml-auto flex shrink-0 items-center gap-0.5">{topActions}</div>
+            <div className="ms-auto flex shrink-0 items-center gap-0.5">{topActions}</div>
           )}
         </div>
         <div
@@ -635,7 +635,7 @@ function TaskStatusChip({
     // (шеврон) — выпадашка с любым статусом. Одна цельная «таблетка» в тон колонке.
     <div
       className={cn(
-        'inline-flex shrink-0 items-center overflow-hidden rounded-full text-xs font-medium',
+        'inline-flex shrink-0 items-center overflow-clip rounded-full text-xs font-medium',
         STATUS_BADGE_COLOR[status],
         saving && 'opacity-50',
       )}
@@ -646,13 +646,13 @@ function TaskStatusChip({
           disabled={saving}
           onClick={() => void change(next)}
           title={`Передать в «${STATUS_LABEL[next]}»`}
-          className="inline-flex items-center gap-1 py-1 pl-2.5 pr-1.5 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex items-center gap-1 py-1 ps-2.5 pe-1.5 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
         >
           {STATUS_LABEL[status]}
           <ArrowRight className="size-3 opacity-60" />
         </button>
       ) : (
-        <span className="py-1 pl-2.5 pr-1.5">{STATUS_LABEL[status]}</span>
+        <span className="py-1 ps-2.5 pe-1.5">{STATUS_LABEL[status]}</span>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -660,7 +660,7 @@ function TaskStatusChip({
             type="button"
             disabled={saving}
             aria-label="Сменить статус"
-            className="inline-flex items-center border-l border-black/10 py-1 pl-1 pr-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 dark:border-white/15"
+            className="inline-flex items-center border-s border-black/10 py-1 ps-1 pe-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 dark:border-white/15"
           >
             <ChevronDown className="size-3.5 opacity-50" />
           </button>
@@ -671,7 +671,7 @@ function TaskStatusChip({
             <DropdownMenuRadioItem key={s} value={s} className="py-1.5">
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium',
                   STATUS_BADGE_COLOR[s],
                 )}
               >
@@ -737,7 +737,7 @@ function MoveToProjectSubmenu({
           projects.map((p) => (
             <DropdownMenuItem key={p.id} disabled={p.id === task.projectId || saving} onClick={() => void move(p)}>
               <span className="truncate">{p.name}</span>
-              {p.id === task.projectId && <Check className="ml-auto size-3.5 shrink-0 opacity-60" />}
+              {p.id === task.projectId && <Check className="ms-auto size-3.5 shrink-0 opacity-60" />}
             </DropdownMenuItem>
           ))
         )}
@@ -1590,7 +1590,7 @@ export function TaskDrawer({
       aria-label="Закрыть"
       title="Закрыть"
     >
-      <ChevronsRight className="size-3.5 transition-transform duration-200 group-hover/x:translate-x-0.5" />
+      <ChevronsRight className="size-3.5 motion-safe:transition-transform duration-200 group-hover/x:translate-x-0.5" />
     </Button>
   );
 
@@ -1863,9 +1863,9 @@ export function TaskDrawer({
         // Непрозрачный фон (без /95 и backdrop-blur) — иначе сквозь «фрост» просвечивал
         // скроллящийся контент и на hover казалось, что фон пропадает. Hover — мягкий
         // СПЛОШНОЙ серый (bg-muted), а не полупрозрачный оверлей.
-        'sticky top-0 z-20 block w-full shrink-0 border-b bg-background px-[var(--pf-drawer-px)] py-2 text-left',
+        'sticky inset-bs-0 z-20 block w-full shrink-0 border-be bg-background px-[var(--pf-drawer-px)] py-2 text-start',
         'cursor-pointer transition-colors hover:bg-muted',
-        animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
+        animations && 'duration-150 animate-in fade-in-0 motion-safe:slide-in-from-top-1',
       )}
     >
       <span className="line-clamp-4 text-sm font-medium leading-snug text-foreground">
@@ -1892,7 +1892,7 @@ export function TaskDrawer({
       ) : (
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium',
             STATUS_BADGE_COLOR[task.status],
           )}
         >
@@ -2013,8 +2013,8 @@ export function TaskDrawer({
               aria-label="Изменить ширину окна или закрыть"
               onPointerDown={onHandlePointerDown}
               className={cn(
-                'group/resize absolute inset-y-0 left-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
-                'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors',
+                'group/resize absolute inset-y-0 start-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
+                'before:absolute before:inset-y-0 before:start-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors',
                 'hover:before:bg-primary/40',
                 dragging && 'before:bg-primary/60',
               )}
@@ -2047,7 +2047,7 @@ export function TaskDrawer({
                 НЕТ — весь кластер кнопок живёт в строке хлебных крошек (см. pageTopActions). */}
             {!asPage && (
               <div
-                className="flex h-11 shrink-0 items-center gap-1 bg-background/95 pr-3"
+                className="flex h-11 shrink-0 items-center gap-1 bg-background/95 pe-3"
                 onMouseEnter={enterTopZone}
                 onMouseLeave={leaveTopZone}
               >
@@ -2087,7 +2087,7 @@ export function TaskDrawer({
                   'bg-background/95',
                   isSplit
                     ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
-                    : 'shrink-0 border-b',
+                    : 'shrink-0 border-be',
                 )}
               >
                 {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
@@ -2110,8 +2110,8 @@ export function TaskDrawer({
               {/* Заморозка приёмкой: объясняем, ПОЧЕМУ ничего не правится. Без плашки окно
                   выглядит просто сломанным — контролы есть, но ничего не меняется. */}
               {frozenByApproval && (
-                <div className="mx-[var(--pf-drawer-px)] mb-2 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
-                  <Lock className="mt-0.5 size-3.5 shrink-0" />
+                <div className="mx-[var(--pf-drawer-px)] mbe-2 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
+                  <Lock className="mbs-0.5 size-3.5 shrink-0" />
                   <span className="min-w-0 flex-1">
                     Задача на утверждении — до решения руководителя её нельзя ни изменить, ни
                     комментировать. Задачу можно читать.
@@ -2123,7 +2123,7 @@ export function TaskDrawer({
                       type="button"
                       disabled={withdrawing}
                       onClick={() => void withdrawApproval()}
-                      className="shrink-0 self-center rounded-md border border-violet-500/40 px-2 py-1 text-[11px] font-medium transition-colors hover:bg-violet-500/15 disabled:opacity-60"
+                      className="shrink-0 self-center rounded-md border border-violet-500/40 px-2 py-1 text-2xs font-medium transition-colors hover:bg-violet-500/15 disabled:opacity-60"
                       title="Забрать задачу с утверждения и продолжить работу"
                     >
                       {withdrawing ? 'Возвращаю…' : 'Забрать обратно'}
@@ -2135,7 +2135,7 @@ export function TaskDrawer({
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
-              <div ref={bodyContainerRef} className="px-[var(--pf-drawer-px)] pb-1 pt-0">
+              <div ref={bodyContainerRef} className="px-[var(--pf-drawer-px)] pbe-1 pbs-0">
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
@@ -2166,7 +2166,7 @@ export function TaskDrawer({
                   (открывает скрытый file-picker → uploadFilesDirectly). Переносятся
                   на узких экранах (flex-wrap, вплоть до 320px). */}
               {canEdit && (
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-[var(--pf-drawer-px)] pb-1 pt-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-[var(--pf-drawer-px)] pbe-1 pbs-0.5">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button
                       type="button"
@@ -2225,7 +2225,7 @@ export function TaskDrawer({
               {/* Task 11: строки свойств можно перетаскивать (ручка-grip на hover), порядок
                   сохраняется в профиль (ui_prefs) для всех проектов. Значения и видимость
                   собираем в map по ключу, рендерим в сохранённом порядке. */}
-              <div className="px-[var(--pf-drawer-px)] pb-2.5 pt-1">
+              <div className="px-[var(--pf-drawer-px)] pbe-2.5 pbs-1">
                 {(() => {
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     assignee: (
@@ -2366,23 +2366,23 @@ export function TaskDrawer({
               >
               {/* Лёгкие вкладки на разделителе: без вложенных «капсул», в том же стиле,
                   что вкладки «Активность / Аналитика» в окне проекта. */}
-              <div className="px-4 pt-2.5">
-                <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0">
+              <div className="px-4 pbs-2.5">
+                <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-be border-border bg-transparent p-0">
                   <TabsTrigger
                     value="discussion"
-                    className="relative -mb-px h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="relative -mbe-px h-10 gap-1.5 rounded-none border-be-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     <MessageSquare aria-hidden className="size-3.5" />
                     Обсуждение
                     {commentCount > 0 && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-2xs leading-none tabular-nums text-muted-foreground">
                         {commentCount}
                       </span>
                     )}
                   </TabsTrigger>
                   <TabsTrigger
                     value="live"
-                    className="relative -mb-px h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="relative -mbe-px h-10 gap-1.5 rounded-none border-be-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     <Activity aria-hidden className="size-3.5" />
                     LIVE
@@ -2390,7 +2390,7 @@ export function TaskDrawer({
                       <>
                         <span
                           aria-hidden
-                          className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
+                          className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_oklch(64.5%_0.215_16.44/0.7)]"
                         />
                         <span className="sr-only">LIVE-сессия запущена</span>
                       </>
@@ -2461,8 +2461,8 @@ export function TaskDrawer({
                   // под рукой; в split — обычный футер колонки.
                   <div
                     className={cn(
-                      'shrink-0 pb-[env(safe-area-inset-bottom)] sm:pb-0',
-                      !isSplit && 'sticky bottom-0 z-10 bg-background',
+                      'shrink-0 pbe-[env(safe-area-inset-bottom,0px)] sm:pbe-0',
+                      !isSplit && 'sticky inset-be-0 z-10 bg-background',
                     )}
                   >
                     {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
@@ -2473,7 +2473,7 @@ export function TaskDrawer({
                       // Композер убран целиком, а не задизейблен: сервер отклоняет и сам
                       // комментарий (409), и «В черновики/Воркеру» после него — раньше
                       // коммент успевал создаться, а тост говорил «не удалось отправить».
-                      <div className="flex items-center justify-center gap-2 border-t px-3 py-3 text-xs text-muted-foreground">
+                      <div className="flex items-center justify-center gap-2 border-bs px-3 py-3 text-xs text-muted-foreground">
                         <Lock className="size-3.5 shrink-0" />
                         Задача на утверждении — обсуждение закрыто до решения руководителя
                       </div>
@@ -2505,7 +2505,7 @@ export function TaskDrawer({
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ (над обоими столбцами
                 в split), поэтому плашка идёт через оба столбца. */}
-            <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-3">
+            <div className="flex h-11 shrink-0 items-center gap-2 border-be bg-background/95 px-3">
               {renderCloseButton()}
               {renderMaximizeButton()}
               <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -2522,7 +2522,7 @@ export function TaskDrawer({
                   // БЕЗ backdrop-blur — см. коммент у edit-колонки (иначе плавающее меню
                   // форматирования зажимается stacking-context'ом колонки в split).
                   'flex min-h-0 flex-col bg-background/95',
-                  isSplit ? 'min-w-0 flex-1' : 'min-h-0 flex-[1.3] border-b',
+                  isSplit ? 'min-w-0 flex-1' : 'min-h-0 flex-[1.3] border-be',
                 )}
               >
                 <form
@@ -2535,11 +2535,11 @@ export function TaskDrawer({
                 {/* «Восстановить» — если осталась незавершённая задача с прошлого закрытия
                     (текст, дедлайн, приоритет, режим, ответственный). Пропадает после создания. */}
                 {showRestore && (
-                  <div className="px-3 pt-1">
+                  <div className="px-3 pbs-1">
                     <button
                       type="button"
                       onClick={handleRestoreCreateDraft}
-                      className="flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                      className="flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-start text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                       title="Вернуть прошлую незавершённую задачу со всеми параметрами"
                     >
                       <RotateCcw className="size-3.5 shrink-0" />
@@ -2549,7 +2549,7 @@ export function TaskDrawer({
                 )}
 
                 {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
-                <div ref={createBodyContainerRef} className="px-3 pb-1 pt-0">
+                <div ref={createBodyContainerRef} className="px-3 pbe-1 pbs-0">
                   <Suspense fallback={<div className="min-h-[6rem]" />}>
                     <RichTextEditor
                       ref={createEditorRef}
@@ -2577,7 +2577,7 @@ export function TaskDrawer({
 
                 {/* Плюсики: + Подзадача / + Файл. Справа — Копировать / AI (как в edit-mode;
                     Переработка/План тут нет — они требуют уже сохранённой задачи). */}
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 pb-1 pt-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 pbe-1 pbs-0.5">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button
                       type="button"
@@ -2624,7 +2624,7 @@ export function TaskDrawer({
 
                 {/* Ряд свойств (как в edit): Ответственный / Дедлайн / Приоритет / Режим /
                     Файлы. Без «Создано» и статуса — их нет до создания. */}
-                <div className="px-3 pb-2.5 pt-1">
+                <div className="px-3 pbe-2.5 pbs-1">
                   <PropertyRow icon={UserPlus} label="Ответственный">
                     <div className="flex min-h-7 flex-wrap items-center gap-1.5">
                       <AssigneeSelect
@@ -2692,11 +2692,11 @@ export function TaskDrawer({
                   </PropertyRow>
                 </div>
 
-                {error && <p className="px-3 pb-2 text-xs text-destructive">{error}</p>}
+                {error && <p className="px-3 pbe-2 text-xs text-destructive">{error}</p>}
               </form>
 
               {/* Футер: AI слева, Отмена/Создать справа. */}
-              <div className="flex flex-col gap-2 border-t bg-background px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:justify-between sm:pb-3">
+              <div className="flex flex-col gap-2 border-bs bg-background px-3 pbe-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pbs-3 sm:flex-row sm:items-center sm:justify-between sm:pbe-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <AiImproveButton
                     text={description}
@@ -2711,7 +2711,7 @@ export function TaskDrawer({
                     Отмена
                   </Button>
                   <Button type="submit" form="task-drawer-form" size="sm" className="h-8" disabled={saving}>
-                    {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {saving ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
                     Создать
                   </Button>
                 </div>
@@ -3002,7 +3002,7 @@ function CommentComposer({
           />
         </Suspense>
       )}
-      <div className="absolute right-1.5 top-1.5 flex gap-0.5">
+      <div className="absolute end-1.5 inset-bs-1.5 flex gap-0.5">
         <Button
           type="button"
           variant="ghost"
@@ -3012,7 +3012,7 @@ function CommentComposer({
           disabled={submitting}
           aria-label="Прикрепить файл"
         >
-          <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
+          <Paperclip className="size-4 motion-safe:transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
         </Button>
         <Button
           type="button"
@@ -3024,9 +3024,9 @@ function CommentComposer({
           aria-label="Отправить"
         >
           {submitting ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 motion-safe:animate-spin" />
           ) : (
-            <Send className="size-4 transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5 group-active/send:scale-90" />
+            <Send className="size-4 motion-safe:transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5 group-active/send:scale-90" />
           )}
         </Button>
       </div>
@@ -3041,11 +3041,11 @@ function CommentComposer({
         }}
       />
       {pending.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 pb-1.5">
+        <div className="flex flex-wrap gap-1.5 px-3 pbe-1.5">
           {pending.map((pf) => (
             <span
               key={pf.id}
-              className="inline-flex items-center gap-1 rounded border bg-muted/60 py-0.5 pl-1.5 pr-1 text-[11px]"
+              className="inline-flex items-center gap-1 rounded border bg-muted/60 py-0.5 ps-1.5 pe-1 text-2xs"
             >
               {pf.previewUrl ? (
                 <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
@@ -3066,7 +3066,7 @@ function CommentComposer({
         </div>
       )}
 
-      <div className="flex items-center gap-3 px-3 pb-1.5 text-[11px]">
+      <div className="flex items-center gap-3 px-3 pbe-1.5 text-2xs">
         <button
           type="button"
           onClick={() => setPreview(false)}
@@ -3081,7 +3081,7 @@ function CommentComposer({
         >
           Превью
         </button>
-        <div className="ml-auto">
+        <div className="ms-auto">
           <NotifyAudienceControl
             projectId={projectId}
             excludeUserId={currentUser?.id ?? null}
@@ -3254,7 +3254,7 @@ function CommentItem({
   return (
     <li
       id={`comment-${comment.id}`}
-      className="group relative flex scroll-mt-4 items-start gap-3 after:absolute after:left-[14px] after:top-7 after:bottom-[-1rem] after:w-px after:-translate-x-1/2 after:bg-border/70 after:content-[''] last:after:hidden"
+      className="group relative flex scroll-mbs-4 items-start gap-3 after:absolute after:start-[14px] after:inset-bs-7 after:inset-be-[-1rem] after:w-px after:-translate-x-1/2 after:bg-border/70 after:content-[''] last:after:hidden"
     >
       {isAgent ? (
         // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
@@ -3282,27 +3282,27 @@ function CommentItem({
               <span className="pf-claude-agent-title truncate">
                 {agentMeta(comment.agentName).name}
               </span>
-              <span className="truncate text-[11px] text-muted-foreground/70">
+              <span className="truncate text-2xs text-muted-foreground/70">
                 {agentMeta(comment.agentName).sub}
               </span>
             </span>
           ) : isSystem ? (
-            <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <span className="truncate rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
               ⚙ Система
             </span>
           ) : (
-            <span className="truncate text-[13px] font-medium">{displayName}</span>
+            <span className="truncate text-sm font-medium">{displayName}</span>
           )}
-          <span className="text-[11px] text-muted-foreground/70">
+          <span className="text-2xs text-muted-foreground/70">
             {formatCommentTime(comment.createdAt)}
-            {isEdited && <span className="ml-1 opacity-70">· изменён</span>}
+            {isEdited && <span className="ms-1 opacity-70">· изменён</span>}
           </span>
           {/* Действия — ровный ряд size-6 кнопок (карандаш + три точки). Удаление
               переехало в меню три-точки. Native title — подпись при наведении.
               На задаче в очереди приёмки ряда нет: тред заморожен. */}
           <div
             className={cn(
-              'ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+              'ms-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
               frozen && 'hidden',
             )}
           >
@@ -3348,7 +3348,7 @@ function CommentItem({
           <button
             type="button"
             onClick={() => onNavigateToComment?.(comment.replyToCommentId as string, comment.quotedText)}
-            className="mt-1 flex max-w-full items-center gap-1.5 rounded-md border-l-2 border-primary/40 bg-primary/[0.06] px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-primary/10"
+            className="mbs-1 flex max-w-full items-center gap-1.5 rounded-md border-s-2 border-primary/40 bg-primary/[0.06] px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-primary/10"
             title="Перейти к исходному комментарию"
           >
             <CornerDownRight className="size-3 shrink-0 text-primary/70" />
@@ -3361,7 +3361,7 @@ function CommentItem({
         {editing ? (
           // WYSIWYG-правка комментария. Enter — сохранить, Shift+Enter — перенос,
           // Esc — отмена (capture). blur-save с no-op-guard внутри save() (если не менялось).
-          <div className="mt-0.5" onKeyDownCapture={handleWrapperKeyDownCapture}>
+          <div className="mbs-0.5" onKeyDownCapture={handleWrapperKeyDownCapture}>
             <Suspense fallback={<div className="text-sm leading-snug">{draft}</div>}>
               <RichTextEditor
                 variant="comment"
@@ -3377,19 +3377,19 @@ function CommentItem({
             </Suspense>
           </div>
         ) : (
-          <div className="mt-0.5" ref={bodyRef}>
+          <div className="mbs-0.5" ref={bodyRef}>
             <CommentBody body={comment.body} />
           </div>
         )}
         {comment.attachments.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <div className="mbs-1.5 flex flex-wrap gap-1.5">
             {comment.attachments.map((att) =>
               isImageFile(att.mimeType, att.filename) ? (
                 <button
                   key={att.id}
                   type="button"
                   onClick={() => setPreview(att)}
-                  className="size-14 overflow-hidden rounded border bg-muted"
+                  className="size-14 overflow-clip rounded border bg-muted"
                   aria-label={`Открыть ${att.filename}`}
                 >
                   <img src={att.url} alt={att.filename} loading="lazy" className="size-full object-cover" />
@@ -3399,7 +3399,7 @@ function CommentItem({
                   key={att.id}
                   href={att.url}
                   download={att.filename}
-                  className="inline-flex items-center gap-1.5 rounded border bg-muted/50 px-2 py-1 text-[11px] hover:bg-muted"
+                  className="inline-flex items-center gap-1.5 rounded border bg-muted/50 px-2 py-1 text-2xs hover:bg-muted"
                 >
                   <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="max-w-[140px] truncate">{att.filename}</span>

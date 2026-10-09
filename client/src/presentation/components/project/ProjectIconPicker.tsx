@@ -156,7 +156,7 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
             aria-label="Добавить иконку проекта"
             className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:min-h-7 sm:rounded-md sm:py-0 sm:text-[13px] [&>svg]:shrink-0"
           >
-            {saving ? <Loader2 className="size-4 animate-spin" /> : <FolderIcon className="size-4" />}
+            {saving ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <FolderIcon className="size-4" />}
             <span className="sm:hidden">Иконка</span>
             <span className="hidden sm:inline">Добавить иконку</span>
           </button>
@@ -169,12 +169,12 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
             className={cn(
               'shrink-0 cursor-pointer select-none leading-none disabled:opacity-50',
               icon || saving
-                ? cn('grid place-items-center overflow-hidden rounded-md', big ? bigBoxClass : 'size-9')
+                ? cn('grid place-items-center overflow-clip rounded-md', big ? bigBoxClass : 'size-9')
                 : cn('grid place-items-center rounded-md', 'size-9'),
             )}
           >
             {saving ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <Loader2 className="size-5 motion-safe:animate-spin text-muted-foreground" />
             ) : icon ? (
               <ProjectIconView
                 icon={icon}
@@ -194,13 +194,13 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
       >
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
           {/* Шапка: вкладки + «случайная» + «убрать». */}
-          <div className="flex items-center gap-1 border-b px-2 py-1.5">
+          <div className="flex items-center gap-1 border-be px-2 py-1.5">
             <TabsList className="h-7 gap-0.5 bg-transparent p-0">
               <TabsTrigger value="emoji" className="h-7 px-2 text-xs">Эмодзи</TabsTrigger>
               <TabsTrigger value="icons" className="h-7 px-2 text-xs">Иконки</TabsTrigger>
               <TabsTrigger value="upload" className="h-7 px-2 text-xs">Загрузить</TabsTrigger>
             </TabsList>
-            <div className="ml-auto flex items-center gap-0.5">
+            <div className="ms-auto flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => void choose(randomEmoji())}
@@ -226,15 +226,15 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
 
           {/* Фильтр — для «Эмодзи» и «Иконки». */}
           {tab !== 'upload' && (
-            <div className="border-b px-2 py-1.5">
+            <div className="border-be px-2 py-1.5">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Фильтр…"
                   aria-label="Фильтр иконок"
-                  className="h-7 w-full rounded-md border bg-transparent pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-foreground/30"
+                  className="h-7 w-full rounded-md border bg-transparent ps-7 pe-2 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-foreground/30"
                 />
               </div>
             </div>
@@ -319,7 +319,7 @@ export function IconsPane({
   return (
     <div className="pf-scroll-visible max-h-[46vh] min-h-[12rem]">
       {/* Палитра цветов (Notion-style) — закреплена сверху. */}
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1.5 border-b bg-popover px-2 py-2">
+      <div className="sticky inset-bs-0 z-10 flex flex-wrap items-center gap-1.5 border-be bg-popover px-2 py-2">
         {LUCIDE_COLORS.map((c) => (
           <button
             key={c.key}
@@ -393,7 +393,7 @@ export function UploadPane({ onPick }: { onPick: (url: string) => void }): React
         onClick={() => fileRef.current?.click()}
         className="flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed py-8 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/50 disabled:opacity-60"
       >
-        {busy ? <Loader2 className="size-5 animate-spin" /> : <ImageUp className="size-5" />}
+        {busy ? <Loader2 className="size-5 motion-safe:animate-spin" /> : <ImageUp className="size-5" />}
         {busy ? 'Загрузка…' : 'Выбрать файл'}
         <span className="text-xs text-muted-foreground/70">PNG, JPG, WEBP, GIF — квадрат 128×128</span>
       </button>
@@ -410,12 +410,12 @@ export function UploadPane({ onPick }: { onPick: (url: string) => void }): React
         <label className="text-xs text-muted-foreground">Или вставьте ссылку на картинку</label>
         <div className="flex items-center gap-1.5">
           <div className="relative flex-1">
-            <Link2 className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Link2 className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               value={link}
               onChange={(e) => setLink(e.target.value)}
               placeholder="https://…"
-              className="h-8 w-full rounded-md border bg-transparent pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-foreground/30"
+              className="h-8 w-full rounded-md border bg-transparent ps-7 pe-2 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-foreground/30"
             />
           </div>
           <button
@@ -445,8 +445,8 @@ function EmojiSection({
   onPick: (emoji: string) => void;
 }): React.ReactElement {
   return (
-    <div className="mb-2 last:mb-0">
-      <p className="mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+    <div className="mbe-2 last:mbe-0">
+      <p className="mbe-1 px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
         {label}
       </p>
       <EmojiGridInner emojis={emojis} current={current} onPick={onPick} />

@@ -27,28 +27,28 @@ export function AiActionResultCard({
   const rejected = outcome === 'rejected';
   const undone = outcome === 'undone';
   return (
-    <section className="not-prose mt-3 overflow-hidden rounded-xl border bg-card" aria-label={title}>
+    <section className="not-prose mbs-3 overflow-clip rounded-xl border bg-card" aria-label={title}>
       <div className="flex items-start gap-2 px-3 py-2.5">
         {rejected ? (
-          <XCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <XCircle className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
         ) : undone ? (
-          <Undo2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <Undo2 className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
         ) : (
-          <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+          <Check className="mbs-0.5 size-4 shrink-0 text-emerald-600" />
         )}
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-normal leading-5">{rejected ? 'Отклонено' : undone ? 'Отменено' : 'Готово'}</h3>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{title}</p>
+          <p className="mbs-0.5 text-xs leading-5 text-muted-foreground">{title}</p>
         </div>
         {canUndo && (
           <Button type="button" size="sm" variant="secondary" className="sm:h-7 sm:px-2" disabled={undoing} onClick={onUndo}>
-            {undoing ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+            {undoing ? <Loader2 className="motion-safe:animate-spin" /> : <RotateCcw />}
             Отменить
           </Button>
         )}
       </div>
       {entities.length > 0 && (
-        <div className="max-h-48 overflow-y-auto border-t px-1.5 py-1.5">
+        <div className="max-h-48 overflow-y-auto border-bs px-1.5 py-1.5">
           {entities.map((entity) => (
             <div key={`${entity.actionId}:${entity.entityId}`} className="flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground">
               <FileText className="size-3.5 shrink-0" />

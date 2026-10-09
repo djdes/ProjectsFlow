@@ -40,12 +40,12 @@ export function UserAvatarHover({
         className="flex items-center gap-3 rounded-xl border-border/60 p-3 shadow-lg"
       >
         <UserAvatar displayName={displayName} avatarUrl={avatarUrl} className="size-11 text-base" />
-        <span className="pr-1 text-left">
+        <span className="pe-1 text-start">
           <span className="block text-sm font-semibold text-foreground">
             {displayName}
             {you && <span className="font-normal text-muted-foreground"> (вы)</span>}
           </span>
-          {subtitle && <span className="mt-0.5 block text-xs text-muted-foreground">{subtitle}</span>}
+          {subtitle && <span className="mbs-0.5 block text-xs text-muted-foreground">{subtitle}</span>}
         </span>
       </TooltipContent>
     </Tooltip>

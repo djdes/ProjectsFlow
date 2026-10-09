@@ -268,15 +268,15 @@ export function TaskDrawerComposer({
   // для position:fixed и зажимал бы плавающее меню форматирования внутри overflow-hidden
   // карточки композера.
   return (
-    <div className="bg-background/95 px-3 pb-3 pt-2">
-      <div className="overflow-hidden rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
+    <div className="bg-background/95 px-3 pbe-3 pbs-2">
+      <div className="overflow-clip rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
         {replyDraft && (
-          <div className="flex items-center gap-1.5 border-b bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 border-be bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">
             <CornerDownRight className="size-3 shrink-0 text-primary/70" />
             <button
               type="button"
               onClick={() => onNavigateToComment?.(replyDraft.commentId, replyDraft.quotedText)}
-              className="min-w-0 flex-1 truncate text-left hover:text-foreground"
+              className="min-w-0 flex-1 truncate text-start hover:text-foreground"
               title="Перейти к исходному комментарию"
             >
               В ответ <span className="font-medium text-foreground/80">{replyDraft.authorName}</span>
@@ -296,11 +296,11 @@ export function TaskDrawerComposer({
           </div>
         )}
         {pending.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-3 py-1.5">
+          <div className="flex flex-wrap gap-1.5 border-be bg-muted/30 px-3 py-1.5">
             {pending.map((pf) => (
               <span
                 key={pf.id}
-                className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 ps-1.5 pe-1 text-2xs"
                 title={pf.file.name}
               >
                 {/* Картинку можно рассмотреть ДО отправки — клик открывает лайтбокс на
@@ -357,7 +357,7 @@ export function TaskDrawerComposer({
 
         {/* nowrap: кнопка отправки НЕ переносится на отдельную строку на узких экранах —
             левая группа (скрепка + «кому уведомить») сжимается, send всегда справа. */}
-        <div className="flex items-center gap-2 px-2 pb-2 pt-0.5">
+        <div className="flex items-center gap-2 px-2 pbe-2 pbs-0.5">
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
             <Button
               type="button"
@@ -369,7 +369,7 @@ export function TaskDrawerComposer({
               aria-label="Прикрепить файл"
               title="Прикрепить файл (или Ctrl+V)"
             >
-              <Paperclip className="size-4 transition-transform duration-200 ease-out group-hover/at:-rotate-12 group-hover/at:scale-110" />
+              <Paperclip className="size-4 motion-safe:transition-transform duration-200 ease-out group-hover/at:-rotate-12 group-hover/at:scale-110" />
             </Button>
             <NotifyAudienceControl
               projectId={task.projectId}

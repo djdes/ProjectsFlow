@@ -93,7 +93,7 @@ function AttachmentGallery({
         }
       }}
     >
-      <header className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+      <header className="flex shrink-0 items-center gap-3 border-be px-4 py-2">
         <div className="min-w-0 flex-1">
           <DialogTitle
             className="truncate text-sm leading-5"
@@ -170,7 +170,7 @@ function AttachmentGallery({
           </div>
         )}
       </div>
-      <footer className="flex shrink-0 items-center justify-between gap-2 border-t px-3 py-2">
+      <footer className="flex shrink-0 items-center justify-between gap-2 border-bs px-3 py-2">
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"

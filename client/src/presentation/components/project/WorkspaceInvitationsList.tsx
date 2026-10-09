@@ -54,8 +54,8 @@ export function WorkspaceInvitationsList({ workspace, invites, projects, onChang
         return <li key={invite.id} className="space-y-2.5 p-3">
           <div className="flex min-w-0 items-start gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"><Mail className="size-4" /></span><div className="min-w-0 flex-1">
             <p className="break-all text-sm font-medium">{invite.email ?? 'Приглашение по ссылке'}</p>
-            <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">{expired ? 'Приглашение не принято · срок истёк' : 'Приглашение ещё не принято'}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[invite.role]} · {expired ? 'Отправьте повторно, чтобы продлить срок' : `Действует до ${date(invite.expiresAt)}`}</p>
+            <p className="mbs-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">{expired ? 'Приглашение не принято · срок истёк' : 'Приглашение ещё не принято'}</p>
+            <p className="mbs-1 text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[invite.role]} · {expired ? 'Отправьте повторно, чтобы продлить срок' : `Действует до ${date(invite.expiresAt)}`}</p>
           </div></div>
           {invite.email && <div className="space-y-1 text-xs leading-relaxed text-muted-foreground">
             {invite.delivery ? <div className="flex flex-wrap gap-x-3 gap-y-1">{(['email', 'site', 'telegram'] as const).map(channel => <span key={channel} className={invite.delivery?.[channel] === 'failed' || invite.delivery?.[channel] === 'unavailable' ? 'text-destructive' : ''}>{({ email: 'Почта', site: 'Сайт', telegram: 'Telegram' })[channel]}: {DELIVERY_LABELS[invite.delivery?.[channel] ?? 'queued']}</span>)}</div> : <p>Для этого приглашения нет данных об отправке. Можно отправить повторно.</p>}
@@ -65,7 +65,7 @@ export function WorkspaceInvitationsList({ workspace, invites, projects, onChang
           {canManage && <div className="flex flex-wrap items-center gap-1">
             <Button variant="ghost" size="sm" disabled={busy !== null || cooling} onClick={() => void act(invite, 'resend')} title={cooling ? 'Повторить можно через минуту' : undefined}><RotateCw className="size-3.5" />{cooling ? `Повтор через ${Math.max(1, Math.ceil((60_000 - (now - invite.lastSentAt!.getTime())) / 1000))} с` : invite.email ? 'Отправить повторно' : 'Продлить ссылку'}</Button>
             <Button variant="ghost" size="sm" disabled={busy !== null || expired} onClick={() => void act(invite, 'copy')} aria-label={`Скопировать приглашение для ${invite.email ?? 'участника'}`}><Copy className="size-3.5" />Ссылка</Button>
-            <Button variant="ghost" size="icon" className="ml-auto size-9 text-muted-foreground hover:text-destructive" disabled={busy !== null} onClick={() => void act(invite, 'revoke')} aria-label={`Отозвать приглашение для ${invite.email ?? 'участника'}`}><Trash2 className="size-4" /></Button>
+            <Button variant="ghost" size="icon" className="ms-auto size-9 text-muted-foreground hover:text-destructive" disabled={busy !== null} onClick={() => void act(invite, 'revoke')} aria-label={`Отозвать приглашение для ${invite.email ?? 'участника'}`}><Trash2 className="size-4" /></Button>
           </div>}
         </li>;
       })}

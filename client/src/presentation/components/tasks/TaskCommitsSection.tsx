@@ -127,7 +127,7 @@ export function TaskCommitsSection({ task, onChange }: Props): React.ReactElemen
         <ul className="divide-y rounded-md border">
           {linked.map((c) => (
             <li key={c.sha} className="flex items-start gap-3 px-3 py-2">
-              <GitCommit className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <GitCommit className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm">{firstLine(c.message)}</p>
                 <p className="text-xs text-muted-foreground">
@@ -167,7 +167,7 @@ export function TaskCommitsSection({ task, onChange }: Props): React.ReactElemen
         </Button>
       ) : candidates === null ? (
         <div className="flex items-center justify-center gap-2 rounded-md border p-3 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
+          <Loader2 className="size-4 motion-safe:animate-spin" />
           Загружаем коммиты…
         </div>
       ) : (
@@ -198,7 +198,7 @@ export function TaskCommitsSection({ task, onChange }: Props): React.ReactElemen
                     key={c.sha}
                     className="flex items-start gap-3 px-3 py-2 hover:bg-muted/40"
                   >
-                    <GitCommit className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <GitCommit className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm">{firstLine(c.message)}</p>
                       <p className="text-xs text-muted-foreground">
@@ -215,7 +215,7 @@ export function TaskCommitsSection({ task, onChange }: Props): React.ReactElemen
                       onClick={() => linkSha(c.sha)}
                     >
                       {linkingSha === c.sha ? (
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <Loader2 className="size-3.5 motion-safe:animate-spin" />
                       ) : already ? (
                         'привязан'
                       ) : (

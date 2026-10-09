@@ -30,25 +30,25 @@ export function AiKnowledgePanel({
       defaultOpen
       trigger={<span className="text-sm font-normal leading-5 text-muted-foreground">Знания</span>}
       triggerClassName="px-2 py-1.5 hover:bg-hover"
-      contentClassName="px-2 pb-3 pt-1.5"
+      contentClassName="px-2 pbe-3 pbs-1.5"
     >
       <span className="inline-flex h-6 items-center rounded-full bg-hover px-2.5 text-xs tabular-nums text-muted-foreground">
         {loading && sources.length === 0 ? '…' : `Результатов: ${sources.length}`}
       </span>
       {sources.length === 0 ? (
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        <p className="mbs-2 text-xs leading-5 text-muted-foreground">
           {loading ? 'Загружаю источники…' : 'Источники появятся, когда агент обратится к данным пространства.'}
         </p>
       ) : (
         <>
-          <ul className="mt-2 flex flex-col">
+          <ul className="mbs-2 flex flex-col">
             {visible.map((source) => <KnowledgeRow key={`${source.kind}:${source.id}`} source={source} />)}
           </ul>
           {sources.length > PREVIEW_LIMIT && (
             <button
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              className="mt-1 rounded-md px-1 py-1 text-xs text-muted-foreground hover:text-foreground"
+              className="mbs-1 rounded-md px-1 py-1 text-xs text-muted-foreground hover:text-foreground"
             >
               {expanded ? 'Свернуть' : `Показать ещё ${sources.length - PREVIEW_LIMIT}`}
             </button>
@@ -63,10 +63,10 @@ function KnowledgeRow({ source }: { source: AiKnowledgeSource }): React.ReactEle
   const Icon = KIND_ICONS[source.kind];
   const content = (
     <>
-      <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <Icon aria-hidden="true" className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0">
         <span className="block truncate text-xs font-medium">{source.title}</span>
-        <span className="block truncate text-[11px] text-muted-foreground">{knowledgeSourceSubtitle(source)}</span>
+        <span className="block truncate text-2xs text-muted-foreground">{knowledgeSourceSubtitle(source)}</span>
       </span>
     </>
   );

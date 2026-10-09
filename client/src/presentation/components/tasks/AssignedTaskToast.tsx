@@ -62,7 +62,7 @@ function AssignedTaskToastCard({
   return (
     <div className="flex w-[min(22rem,90vw)] flex-col gap-2 rounded-xl border border-primary/30 bg-card p-3 shadow-lg">
       <div className="flex items-start gap-2">
-        <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+        <span className="mbs-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
           <InboxIcon className="size-3.5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -70,7 +70,7 @@ function AssignedTaskToastCard({
             {data.actorDisplayName} назначил вам задачу · {data.projectName}
           </p>
           {excerpt.length > 0 && (
-            <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug">{excerpt}</p>
+            <p className="mbs-0.5 line-clamp-2 text-sm font-medium leading-snug">{excerpt}</p>
           )}
         </div>
       </div>
@@ -88,7 +88,7 @@ function AssignedTaskToastCard({
           disabled={taking}
           className="flex flex-1 items-center justify-center gap-1 rounded-md bg-primary px-2 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
         >
-          {taking ? <Loader2 className="size-3 animate-spin" /> : <PlayCircle className="size-3" />}
+          {taking ? <Loader2 className="size-3 motion-safe:animate-spin" /> : <PlayCircle className="size-3" />}
           Взять в работу
         </button>
       </div>

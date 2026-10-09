@@ -8,14 +8,14 @@ export function NotificationPrefsCard({ projectId }: { projectId: string }): Rea
   const { prefs, loading, toggle } = useNotificationPrefs(projectId);
 
   return (
-    <div className="space-y-2 pt-2">
+    <div className="space-y-2 pbs-2">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">Мои уведомления</p>
       <p className="text-xs text-muted-foreground">
         Письма на почту при действиях в проекте. «От MCP» — действия агента (по умолчанию выкл).
       </p>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 border-b px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:gap-x-4">
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 border-be px-3 py-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground sm:gap-x-4">
           <span>Событие</span>
           <span className="w-12 text-center">Команда</span>
           <span className="w-12 text-center">MCP</span>

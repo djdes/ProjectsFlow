@@ -47,7 +47,7 @@ export function SidebarNavRail({
 
   const badge = (item: RailItem): React.ReactNode =>
     item.badge !== undefined && item.badge > 0 ? (
-      <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+      <span className="absolute -end-1.5 -inset-bs-1 inline-flex tabular-nums min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
         {item.badge > 99 ? '99+' : item.badge}
       </span>
     ) : null;
@@ -108,7 +108,7 @@ export function SidebarNavRail({
             обнуляет автоминимум флекс-айтема, иначе width:0 не схлопнул бы подпись.
             Многоточия намеренно нет: во время раскрытия оно висело бы на каждом кадре. */}
         <motion.span
-          className="overflow-hidden whitespace-nowrap"
+          className="overflow-clip whitespace-nowrap"
           initial={false}
           animate={{
             width: showLabel ? 'auto' : 0,

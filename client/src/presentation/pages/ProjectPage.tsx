@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LayoutGrid, Trash2 } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
@@ -48,18 +49,19 @@ export function ProjectPage(): React.ReactElement {
     <>
       {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="sticky top-0 z-20 flex h-11 items-center bg-background px-2.5">
+      <div className="sticky inset-bs-0 z-20 flex h-11 items-center justify-between gap-2 bg-background px-2.5">
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}
           projectIcon={data.icon}
           view="overview"
         />
+        <HeaderCompletedTodayPill />
       </div>
 
       {/* Тело: отступы как у Входящих/доски (px-6/14/24), контент — центрированная
           колонка max-w-4xl (Notion): на широких мониторах воздух по бокам симметричен. */}
-      <div className="px-6 pb-12 pt-1 sm:px-14 lg:px-24">
+      <div className="px-6 pbe-12 pbs-1 sm:px-14 lg:px-24">
         <div className="mx-auto w-full max-w-4xl space-y-6">
           <div className="space-y-3">
             <EditableProjectTitle projectId={data.id} name={data.name} />
@@ -91,7 +93,7 @@ export function ProjectPage(): React.ReactElement {
 
           {/* Личная настройка юзера — отдельным блоком, не внутри «Команды». */}
           {!data.isInbox && (
-            <section className="border-t pt-5">
+            <section className="border-bs pbs-5">
               <NotificationPrefsCard projectId={data.id} />
             </section>
           )}
@@ -99,7 +101,7 @@ export function ProjectPage(): React.ReactElement {
           {/* Опасная зона — только владелец, не для inbox. Тихая строка вместо красной карточки. */}
           {hasOwnerRights(data.role) && !data.isInbox && (
             <>
-              <section className="border-t pt-5">
+              <section className="border-bs pbs-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm">
                     <p className="font-medium">Удалить проект</p>

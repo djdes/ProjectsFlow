@@ -114,11 +114,11 @@ export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = true
   const visibleCount = data.members.filter((member) => !projectId || !hiddenFor(member.userId).includes(projectId)).length;
   const currentProject = data.access.projects.find(project => project.id === projectId);
   return <div className="space-y-5" data-workspace-members={workspace.id}>
-    {currentProject && <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"><FolderOpen className="mt-0.5 size-4 shrink-0" /><p>Участники пространства <span className="font-medium text-foreground">«{workspace.name}»</span>. Проект <span className="font-medium text-foreground">«{currentProject.name}»</span> доступен {visibleCount} из {data.members.length}.</p></div>}
+    {currentProject && <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"><FolderOpen className="mbs-0.5 size-4 shrink-0" /><p>Участники пространства <span className="font-medium text-foreground">«{workspace.name}»</span>. Проект <span className="font-medium text-foreground">«{currentProject.name}»</span> доступен {visibleCount} из {data.members.length}.</p></div>}
     <WorkspaceInviteForm key={workspace.id} workspace={workspace} projects={data.access.projects} onCreated={invitesChanged} />
     {canInvite && <WorkspaceInvitationsList workspace={workspace} invites={data.invites} projects={data.access.projects} onChanged={invitesChanged} />}
     <section aria-label="Участники пространства" className="space-y-3">
-      <div className="flex items-center gap-2"><Users className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">Участники пространства</h3><span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{data.members.length}</span>{saving && <span role="status" className="ml-auto text-xs text-muted-foreground">Сохраняем…</span>}</div>
+      <div className="flex items-center gap-2"><Users className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">Участники пространства</h3><span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{data.members.length}</span>{saving && <span role="status" className="ms-auto text-xs text-muted-foreground">Сохраняем…</span>}</div>
       {error && <div role="alert" className="text-xs text-destructive">{error} <button type="button" className="underline" onClick={() => void reload()}>Повторить</button></div>}
       <ul className="divide-y">
         {data.members.map(member => {
@@ -126,7 +126,7 @@ export function WorkspaceMembersPanel({ workspace, projectId, manageRoles = true
           const protectedRole = member.role === 'owner' || member.role === 'lead';
           const name = member.displayName ?? member.email ?? 'Участник';
           const selfOwner = member.userId === user?.id && member.role === 'owner';
-          return <li key={member.userId} className="space-y-2.5 py-3 first:pt-0">
+          return <li key={member.userId} className="space-y-2.5 py-3 first:pbs-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2.5">
               <Avatar className="size-9 shrink-0">{member.avatarUrl && <AvatarImage src={member.avatarUrl} alt="" />}<AvatarFallback className={avatarColor(name)}>{getInitials(name)}</AvatarFallback></Avatar>
               <div className="min-w-0 flex-[1_1_8rem]"><p className="truncate text-sm font-medium">{name}{member.userId === user?.id && <span className="font-normal text-muted-foreground"> (Вы)</span>}</p>{member.email && <p className="truncate text-xs text-muted-foreground">{member.email}</p>}</div>

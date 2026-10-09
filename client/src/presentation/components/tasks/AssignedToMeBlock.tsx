@@ -109,8 +109,9 @@ import {
 import { useDragSelect } from './selection/useDragSelect';
 import { useCrossProjectBulkActions } from '@/presentation/hooks/useCrossProjectBulkActions';
 import { TaskTitleText } from './TaskTitleText';
+import { TASK_CARD_BODY_CLASS, TASK_CARD_TITLE_CLASS } from './taskCardText';
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
-import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
+import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { AssigneeBadge } from './AssigneeBadge';
 import { PriorityBadge } from './PriorityBadge';
@@ -1306,7 +1307,7 @@ export function AssignedToMeBlock({
             {user ? (
               <SelfDropAvatar user={user} dragging={dragActive} />
             ) : (
-              <UserAvatar displayName="" className="size-8 text-[11px]" />
+              <UserAvatar displayName="" className="size-8 text-2xs" />
             )}
             <div className="min-w-0">
               {/* Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для
@@ -1316,7 +1317,7 @@ export function AssignedToMeBlock({
                   <h2 className="min-w-0 truncate text-lg font-semibold tracking-tight">
                     Задачи · {focusedMember.displayName}
                   </h2>
-                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-primary">
+                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-2xs font-medium tabular-nums text-primary">
                     {focusedVisible.length}
                   </span>
                   <button
@@ -1342,7 +1343,7 @@ export function AssignedToMeBlock({
                   byMeCount={byMeVisible.length}
                 />
               )}
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
+              <p className="mbs-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
             </div>
           </div>
           {/* Единая кнопка «Фильтры» порталится в шапку страницы (toolbarSlot). Фолбэк (нет
@@ -1455,7 +1456,7 @@ export function AssignedToMeBlock({
           className={cn(
             // Как у основной доски: каждая колонка заканчивается под своей последней
             // задачей, а не растягивается до высоты самой длинной соседней колонки.
-            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pb-2',
+            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pbe-2',
             // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
             // SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
             '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
@@ -1522,7 +1523,7 @@ export function AssignedToMeBlock({
           ref={setRowRef}
           onScroll={onHScroll}
           className={cn(
-            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pb-2',
+            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pbe-2',
             // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
             // SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
             '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
@@ -1583,7 +1584,7 @@ export function AssignedToMeBlock({
             <div
               key={group.key}
               data-pf-collapse
-              className="grid shrink-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+              className="grid shrink-0 motion-safe:transition-[grid-template-columns] motion-safe:duration-300 motion-safe:ease-out"
               style={{ gridTemplateColumns: exiting ? '0fr' : '1fr' }}
             >
             <div className={cn('min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
@@ -1593,18 +1594,18 @@ export function AssignedToMeBlock({
               highlight={boardDragActive}
               exiting={exiting}
               className={cn(
-                'group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none',
+                'group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-clip rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none',
                 exiting && 'pointer-events-none opacity-0 transition-opacity duration-200 motion-reduce:transition-none',
               )}
             >
-              <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
+              <div className="flex items-center gap-1.5 border-be border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
                 {isProjectColumn ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/projects/${group.key}`)}
                     title="Открыть проект"
-                    className="min-w-0 truncate text-left underline-offset-2 transition-colors hover:text-primary hover:underline"
+                    className="min-w-0 truncate text-start underline-offset-2 transition-colors hover:text-primary hover:underline"
                   >
                     {group.label}
                   </button>
@@ -1618,7 +1619,7 @@ export function AssignedToMeBlock({
                     onNone={handleSelectNoneIn}
                   />
                 ) : (
-                  <span className="ml-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                  <span className="ms-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
                     {group.items.length}
                   </span>
                 )}
@@ -1709,7 +1710,7 @@ export function AssignedToMeBlock({
       <div
         aria-hidden
         className={cn(
-          '!mt-5 mb-1 border-t border-border sm:!mt-6 sm:mb-2',
+          '!mbs-5 mbe-1 border-bs border-border sm:!mbs-6 sm:mbe-2',
           // Ряд колонок (при любой сортировке) full-bleed'ится за паддинг — линия тоже.
           bleedNegClass,
         )}
@@ -1879,14 +1880,14 @@ function ColumnSelectionControls({
   onNone: (ids: readonly string[]) => void;
 }): React.ReactElement {
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-0.5">
-      <span className="tabular-nums text-[10px] text-muted-foreground">
+    <span className="ms-auto flex shrink-0 items-center gap-0.5">
+      <span className="tabular-nums text-2xs text-muted-foreground">
         Выбрано {selection.count}
       </span>
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 px-1.5 text-[11px] max-sm:h-9"
+        className="h-6 px-1.5 text-2xs max-sm:h-9"
         disabled={selection.ids.length === 0}
         onClick={() => onAll(selection.ids)}
       >
@@ -1895,7 +1896,7 @@ function ColumnSelectionControls({
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 px-1.5 text-[11px] max-sm:h-9"
+        className="h-6 px-1.5 text-2xs max-sm:h-9"
         disabled={selection.count === 0}
         onClick={() => onNone(selection.ids)}
       >
@@ -1936,11 +1937,11 @@ function TimeBucketColumn({
       // серых колонок доски ниже. На мобиле альфа выше, в dark ещё выше. Не поднимать выше
       // /[0.09]//[0.11] — начинает «светиться».
       className={cn(
-        'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
+        'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-clip rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
         isOver && 'ring-2 ring-inset ring-primary',
       )}
     >
-      <div className="flex items-center gap-1.5 border-b border-black/[0.06] px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground dark:border-white/[0.06]">
+      <div className="flex items-center gap-1.5 border-be border-black/[0.06] px-3 pbe-1.5 pbs-2.5 text-xs font-medium text-muted-foreground dark:border-white/[0.06]">
         <TimeBucketIcon bucket={bucket} />
         <span className="min-w-0 truncate">{label}</span>
         {selection && onSelectAll && onSelectNone ? (
@@ -1956,7 +1957,7 @@ function TimeBucketColumn({
       <div
         // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
         onPointerDown={selection ? onCardsPointerDown : undefined}
-        className={cn('flex min-h-[3rem] flex-col gap-2 px-2 pb-2', COLUMN_SCROLL_CLASS)}
+        className={cn('flex min-h-[3rem] flex-col gap-2 px-2 pbe-2', COLUMN_SCROLL_CLASS)}
       >
         {children}
       </div>
@@ -1977,7 +1978,7 @@ function GroupDropColumn({
   // проседает в 0.01ms под pf-no-motion отдельно от grid-схлопывания враппера снаружи
   // (то же рассинхрон-ревью, что было у InProgressShelf: коробка едет, карточка гаснет
   // рывком). Не ставим атрибут БЕЗУСЛОВНО — иначе он заодно форсировал бы duration и у
-  // соседнего drag-highlight ring'а (transition-all выше), которого сейчас это не касается.
+  // соседнего drag-highlight ring'а (transition выше), которого сейчас это не касается.
   exiting = false,
   children,
 }: {
@@ -1998,7 +1999,7 @@ function GroupDropColumn({
         // Пока тащат карточку с доски: все колонки-цели получают тихий ринг-намёк, а та, что
         // под курсором, — сплошной ринг + лёгкий тинт. Одно из двух (не оба разом — конфликт
         // ring-1/ring-2 в CSS решался бы порядком в стайлшите, а не в className).
-        data !== null && highlight && 'transition-all duration-200',
+        data !== null && highlight && 'transition-[color,background-color,border-color,box-shadow] duration-200',
         data !== null &&
           highlight &&
           (isOver
@@ -2032,13 +2033,13 @@ function PhantomDropColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-40 shrink-0 snap-center snap-always flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-all duration-200 sm:w-44',
+        'flex w-40 shrink-0 snap-center snap-always flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-[color,background-color,border-color,box-shadow] duration-200 sm:w-44',
         isOver && 'scale-[1.02] border-primary bg-primary/[0.08]',
       )}
     >
       <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
       <span className="text-xs font-medium text-foreground/80">{label}</span>
-      <span className="text-[10px] leading-tight text-muted-foreground/70">{hint}</span>
+      <span className="text-2xs leading-tight text-muted-foreground/70">{hint}</span>
     </div>
   );
 }
@@ -2148,7 +2149,7 @@ function RejectApprovalDialog({
                   type="button"
                   onClick={() => removeFile(f.id)}
                   aria-label={`Убрать ${f.file.name}`}
-                  className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-opacity hover:text-foreground"
+                  className="absolute -end-1.5 -inset-bs-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-opacity hover:text-foreground"
                 >
                   <X className="size-3" />
                 </button>
@@ -2271,7 +2272,7 @@ function ApprovalShelf({
             'border-violet-400/80 bg-violet-200/60 dark:border-violet-300/50 dark:bg-violet-400/[0.16]',
         )}
       >
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-violet-800 dark:text-violet-300/90">
+        <div className="mbe-1.5 flex items-center gap-1.5 text-2xs font-medium text-violet-800 dark:text-violet-300/90">
           <ShieldCheck className="size-3 shrink-0" />
           <span>На утверждении</span>
           {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
@@ -2378,7 +2379,7 @@ function ApprovalItemCard({
     <div
       data-pf-collapse
       className={cn(
-        'grid transition-all duration-300 ease-out motion-reduce:transition-none',
+        'grid transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-columns,grid-template-rows,opacity]',
         phase === 'exit' && 'opacity-0',
       )}
       style={{
@@ -2389,7 +2390,7 @@ function ApprovalItemCard({
       <div className={cn('min-h-0 min-w-0', phase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
         <div
           className={cn(
-            'w-[17rem] max-w-full shrink-0 grow-0 space-y-1 rounded-lg transition-all duration-200 motion-reduce:transition-none',
+            'w-[17rem] max-w-full shrink-0 grow-0 space-y-1 rounded-lg transition-[box-shadow] duration-200 motion-safe:transition-[transform,box-shadow]',
             phase === 'flash' && 'scale-[1.02] ring-2 ring-emerald-500/50',
             phase === 'exit' && 'scale-[0.96]',
           )}
@@ -2412,16 +2413,16 @@ function ApprovalItemCard({
                 type="button"
                 onClick={startAccept}
                 disabled={accepting}
-                className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-70 dark:text-emerald-400"
+                className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-2xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-70 dark:text-emerald-400"
               >
-                {accepting && <Loader2 className="size-3 animate-spin" />}
+                {accepting && <Loader2 className="size-3 motion-safe:animate-spin" />}
                 Принять
               </button>
               <button
                 type="button"
                 onClick={onReject}
                 disabled={accepting}
-                className="flex-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-md bg-muted px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Вернуть в работу
               </button>
@@ -2432,7 +2433,7 @@ function ApprovalItemCard({
               type="button"
               onClick={onWithdraw}
               disabled={accepting}
-              className="w-full rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-md bg-muted px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               title="Забрать задачу с утверждения и продолжить работу"
             >
               Забрать обратно
@@ -2515,7 +2516,7 @@ function InProgressShelf({
       >
         {/* Без спиннера: крутящийся лоадер в заголовке читался как «идёт загрузка»,
             хотя это просто зона. Заголовок и жёлтый фон говорят всё сами. */}
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300/90">
+        <div className="mbe-1.5 flex items-center gap-1.5 text-2xs font-medium text-amber-800 dark:text-amber-300/90">
           {/* Полка — это статус 'manual', и называться должна так же. «В работе» здесь
               было бы вторым смыслом того же слова: в сводках/TG/EOD «В работе» — это
               статус 'in_progress' (задача у воркера), а не «делаю руками». */}
@@ -2537,7 +2538,7 @@ function InProgressShelf({
               <div
                 key={item.id}
                 data-pf-collapse
-                className="grid shrink-0 grow-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+                className="grid shrink-0 grow-0 motion-safe:transition-[grid-template-columns,grid-template-rows] motion-safe:duration-300 motion-safe:ease-out"
                 style={{
                   gridTemplateColumns: exiting ? '0fr' : '1fr',
                   gridTemplateRows: exiting ? '0fr' : '1fr',
@@ -2589,7 +2590,7 @@ function InProgressShelf({
                         }}
                         onPointerDown={(e) => e.stopPropagation()}
                         title="Убрать из работы (вернуть в «Черновики»)"
-                        className="absolute -right-1.5 -top-1.5 z-20 grid size-5 place-items-center rounded-full border border-amber-300/70 bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 dark:border-amber-400/30"
+                        className="absolute -end-1.5 -inset-bs-1.5 z-20 grid size-5 place-items-center rounded-full border border-amber-300/70 bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 dark:border-amber-400/30"
                         aria-label="Убрать из работы"
                       >
                         <X className="size-3" />
@@ -2702,7 +2703,7 @@ function UserCube({
       onClick={clickable ? onToggleFilter : undefined}
       className={cn(
         // Крупный блок-плитка (задача 3a36e7e8): больше площадь → легче попасть при drag.
-        'relative flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out',
+        'relative flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-[color,background-color,border-color,box-shadow] duration-200 ease-out motion-safe:transition-[color,background-color,border-color,box-shadow,transform]',
         clickable && 'cursor-pointer',
         dragging
           ? isOver
@@ -2718,7 +2719,7 @@ function UserCube({
         <UserAvatar
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
-          className="size-7 shrink-0 text-[11px]"
+          className="size-7 shrink-0 text-2xs"
         />
       ) : (
         <UserAvatarHover
@@ -2727,7 +2728,7 @@ function UserCube({
           subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
             hint ? ` · ${hint}` : ''
           }`}
-          triggerClassName="size-7 text-[11px]"
+          triggerClassName="size-7 text-2xs"
         />
       )}
       <span className="max-w-[8rem] truncate font-medium">
@@ -2745,7 +2746,7 @@ function UserCube({
           }}
           aria-label={clearLabel}
           title={clearLabel}
-          className="-mr-1 ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-full text-primary/70 transition-colors hover:bg-primary/15 hover:text-primary"
+          className="-me-1 ms-0.5 flex size-4 shrink-0 items-center justify-center rounded-full text-primary/70 transition-colors hover:bg-primary/15 hover:text-primary"
         >
           <X className="size-3" />
         </button>
@@ -2775,18 +2776,18 @@ function SelfDropAvatar({
   return (
     <div ref={setNodeRef} className="relative shrink-0">
       {dragging && isOver && (
-        <span className="pointer-events-none absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground shadow-md">
+        <span className="pointer-events-none absolute -inset-bs-7 start-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-primary px-1.5 py-0.5 text-2xs font-medium text-primary-foreground shadow-md">
           Забрать себе
         </span>
       )}
       <div
         className={cn(
-          'rounded-full transition-all duration-200 ease-out',
+          'rounded-full transition-[box-shadow] duration-200 ease-out motion-safe:transition-[box-shadow,transform]',
           dragging && !isOver && 'ring-2 ring-primary/25 ring-offset-2 ring-offset-background',
           dragging && isOver && 'scale-110 ring-2 ring-primary ring-offset-2 ring-offset-background',
         )}
       >
-        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-8 text-[11px]" />
+        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-8 text-2xs" />
       </div>
     </div>
   );
@@ -2877,7 +2878,7 @@ function AssigneePerson({
 }): React.ReactElement {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+      <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
         {label}
       </span>
       <UserAvatarHover
@@ -2980,7 +2981,7 @@ function AssigneeTabs({
   return (
     // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
     // стрелочной навигации — вместо ложной семантики честные toggle-кнопки (aria-pressed).
-    <div className="-ml-2 flex items-center gap-0.5">
+    <div className="-ms-2 flex items-center gap-0.5">
       <TabButton
         active={tab === 'toMe'}
         label="Мои"
@@ -3015,7 +3016,7 @@ function TabButton({
       onClick={onClick}
       className={cn(
         // min-w-0 — на 320px лейбл таба ужимается truncate'ом, а не вылезает из бокса.
-        'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-[15px] leading-tight tracking-tight transition-colors',
+        'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-sm leading-tight tracking-tight transition-colors',
         active
           ? 'font-semibold text-foreground'
           : 'font-medium text-muted-foreground hover:bg-hover hover:text-foreground',
@@ -3024,7 +3025,7 @@ function TabButton({
       <span className="truncate">{label}</span>
       <span
         className={cn(
-          'inline-flex h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-medium leading-none tabular-nums',
+          'inline-flex h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full px-1.5 text-2xs font-medium leading-none tabular-nums',
           active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
         )}
       >
@@ -3112,8 +3113,8 @@ function InboxFiltersPopover({
 
           {/* Сортировка верхнего личного блока — когда есть задачи (иначе вкладок нет). */}
           {showSort && (
-            <div className="mt-1 border-t px-2 pb-1 pt-2">
-              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <div className="mbs-1 border-bs px-2 pbe-1 pbs-2">
+              <div className="mbe-1.5 flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
                 <ListFilter className="size-3 shrink-0" />
                 Сортировка
               </div>
@@ -3130,15 +3131,15 @@ function InboxFiltersPopover({
           {/* Фильтры по ответственному и проекту — только вкладка «Другим». */}
           {showFilters && (
             <>
-              <div className="mt-1 flex items-center justify-between border-t px-3 pb-1 pt-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+              <div className="mbs-1 flex items-center justify-between border-bs px-3 pbe-1 pbs-2">
+                <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70">
                   Фильтры
                 </span>
                 {activeFilterCount > 0 && (
                   <button
                     type="button"
                     onClick={onResetFilters}
-                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                   >
                     <X className="size-3" />
                     Сбросить
@@ -3184,10 +3185,10 @@ function HidePersonalRow({
       className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
     >
       <InboxIcon className="size-3.5 shrink-0" />
-      <span className="flex-1 text-left">Скрыть личные</span>
+      <span className="flex-1 text-start">Скрыть личные</span>
       <span
         className={cn(
-          'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+          'rounded-full px-1.5 py-0.5 text-2xs font-medium',
           value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
         )}
       >
@@ -3217,10 +3218,10 @@ function HideDoneRow({
       ) : (
         <Eye className="size-3.5 shrink-0" />
       )}
-      <span className="flex-1 text-left">Скрыть выполненные</span>
+      <span className="flex-1 text-start">Скрыть выполненные</span>
       <span
         className={cn(
-          'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+          'rounded-full px-1.5 py-0.5 text-2xs font-medium',
           value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
         )}
       >
@@ -3246,7 +3247,7 @@ function InboxFilterSection({
 }): React.ReactElement {
   return (
     <div className="px-2 py-1.5">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+      <div className="mbe-1.5 flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
         <Icon className="size-3 shrink-0" />
         {label}
       </div>
@@ -3279,7 +3280,7 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'max-w-[12rem] truncate rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+        'max-w-[12rem] truncate rounded-full border px-2 py-0.5 text-2xs transition-colors',
         active
           ? 'border-primary/30 bg-primary/10 font-medium text-primary'
           : 'border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -3512,7 +3513,7 @@ function AcceptedCard({
         // куском шире колонки (длинное имя проекта в шапке, ряд nowrap-бейджей на узком
         // экране) раздвигала трек, вылезала за свои 17rem в полках и наезжала на соседнюю.
         // Замер: 400px вместо 272px; minmax(0,1fr) и min-w-0 ниже дают ровно 272px.
-        'grid grid-cols-[minmax(0,1fr)] transition-all duration-300 ease-out motion-reduce:transition-none',
+        'grid grid-cols-[minmax(0,1fr)] transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-rows,opacity]',
         completePhase === 'exit' && 'opacity-0',
       )}
       style={{ gridTemplateRows: completePhase === 'exit' ? '0fr' : '1fr' }}
@@ -3531,7 +3532,7 @@ function AcceptedCard({
       aria-pressed={selectable ? selected : undefined}
       onContextMenu={completeByContextMenu}
       className={cn(
-        'group relative flex cursor-pointer select-none flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-all duration-200 dark:border-white/[0.08]',
+        'group relative flex cursor-pointer select-none flex-col overflow-clip rounded-lg border border-black/[0.06] bg-card transition-[color,background-color,border-color,box-shadow] duration-200 dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
         // Непрочитанная: синий неон по контуру. До состояний выбора/вспышки — те
         // временные и должны перебивать подсветку.
@@ -3589,7 +3590,7 @@ function AcceptedCard({
         >
           <span
             className={cn(
-              'flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 transition-transform duration-200 ring-white/70 dark:ring-black/30',
+              'flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 motion-safe:transition-transform duration-200 ring-white/70 dark:ring-black/30',
               // Галочка на вспышке слегка «подпрыгивает», на уходе — сжимается вместе с карточкой.
               completePhase === 'flash' && 'scale-110',
               completePhase === 'exit' && 'scale-90',
@@ -3601,7 +3602,7 @@ function AcceptedCard({
       )}
       {/* Название проекта — полоса-заголовок. Скрываем при сортировке по проекту (колонка = проект). */}
       {!hideProjectLabel && (
-        <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
+        <div className="flex items-center justify-center gap-1 border-be border-black/[0.05] bg-muted/40 px-2 py-1 text-2xs font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
           {item.isInbox ? (
             <InboxIcon className="size-2.5 shrink-0" />
           ) : (
@@ -3619,7 +3620,7 @@ function AcceptedCard({
             скрыт (hidden) — действия в статичном нижнем ряду (ниже), текст виден целиком. */}
         {!selecting && (
           <div
-            className="pointer-events-none absolute right-1 top-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
+            className="pointer-events-none absolute end-1 inset-bs-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
@@ -3631,31 +3632,22 @@ function AcceptedCard({
         {item.description?.trim() ? (
           // Моб: весь текст задачи (line-clamp-none). Заголовок полужирный, как на доске.
           <div className="max-h-[4lh] overflow-hidden text-sm leading-snug max-sm:max-h-none">
-            <TaskTitleText title={title} className="font-medium text-foreground" />
-            {body.trim() && (
-              <Markdown
-                className={cn(
-                  MARKDOWN_COMPACT,
-                  '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_strong]:font-normal [&_b]:font-normal',
-                )}
-              >
-                {body}
-              </Markdown>
-            )}
+            <TaskTitleText title={title} className={TASK_CARD_TITLE_CLASS} />
+            {body.trim() && <Markdown className={TASK_CARD_BODY_CLASS}>{body}</Markdown>}
           </div>
         ) : (
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}
       </div>
         {/* Параметры — ДЕСКТОП: нижний левый оверлей по hover. На мобиле скрыт (hidden). */}
-        <div className="pointer-events-none absolute bottom-1 left-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]">
+        <div className="pointer-events-none absolute inset-be-1 start-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-clip rounded-md bg-card px-1.5 py-0.5 text-2xs text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]">
           {metaInner}
         </div>
         {/* Параметры/действия — МОБИЛА: статичный ряд под текстом (всегда виден, крупные кнопки).
             В режиме выделения ряд не перехватывает клики — тап по нему тогает выбор карточки,
             как и по остальной её площади (тач-протяжки нет, клик обязан работать везде). */}
         <div
-          className="mt-0.5 flex items-center justify-between gap-2 border-t border-black/[0.05] pt-1 text-[11px] text-muted-foreground sm:hidden dark:border-white/[0.06]"
+          className="mbs-0.5 flex items-center justify-between gap-2 border-bs border-black/[0.05] pbs-1 text-2xs text-muted-foreground sm:hidden dark:border-white/[0.06]"
           {...(selecting
             ? {}
             : {

@@ -177,7 +177,7 @@ export interface RichTextEditorProps {
 // Прозрачно заменяет textarea (контракт value/onChange зеркалит textarea).
 const PROSE_CLASS =
   'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-w-0 [overflow-wrap:anywhere] ' +
-  'prose-p:my-1.5 prose-headings:mb-1 prose-headings:mt-3 prose-pre:my-2 ' +
+  'prose-p:my-1.5 prose-headings:mbe-1 prose-headings:mbs-3 prose-pre:my-2 ' +
   'prose-ul:my-1.5 prose-ol:my-1.5 prose-blockquote:my-2';
 
 // Высота ручки блока (кнопки size-7 = 28px). Нужна, чтобы центрировать ручку по первой
@@ -741,9 +741,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         if (rootRef.current?.contains(active) || active?.closest('[data-editor-owner]')?.getAttribute('data-editor-owner') === ownerId) return;
         onBlurRef.current?.();
       }, 0);
-    }} className={cn('relative', taskDocument && '[&_.tiptap]:leading-relaxed [&_.tiptap>p:first-child]:text-lg [&_.tiptap>p:first-child]:font-medium [&_.tiptap>p:first-child]:leading-7 [&_.tiptap>p:first-child]:text-foreground [&_.tiptap>p:first-child]:mb-3 [&_.tiptap_strong]:font-bold', className)}>
+    }} className={cn('relative', taskDocument && '[&_.tiptap]:leading-relaxed [&_.tiptap>p:first-child]:text-lg [&_.tiptap>p:first-child]:font-medium [&_.tiptap>p:first-child]:leading-7 [&_.tiptap>p:first-child]:text-foreground [&_.tiptap>p:first-child]:mbe-3 [&_.tiptap_strong]:font-bold', className)}>
       {editor && toolbar && !disabled ? (
-        <div data-editor-owner={ownerId} className="mb-3 border-b border-border/70 pb-1">
+        <div data-editor-owner={ownerId} className="mbe-3 border-be border-border/70 pbe-1">
           <FormatMenu editor={editor} inline />
         </div>
       ) : null}
@@ -777,7 +777,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
           {/* pr-1.5 — чуть больший зазор между кнопками и абзацем (ручка позиционируется правым
               краем к блоку, паддинг отодвигает кнопки левее). marginTop центрирует ручку по
               первой строке блока (issue 1). */}
-          <div className="flex items-center pr-1.5" style={{ marginTop: `${handleShift}px` }}>
+          <div className="flex items-center pe-1.5" style={{ marginTop: `${handleShift}px` }}>
             <button
               type="button"
               aria-label="Добавить блок"

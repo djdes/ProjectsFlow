@@ -95,10 +95,10 @@ export function ChatComposer({
   };
 
   return (
-    <div className="shrink-0 border-t bg-sidebar px-2 py-2">
+    <div className="shrink-0 border-bs bg-sidebar px-2 py-2">
       {/* контекст: ответ / редактирование */}
       {(replyTo || editing) && (
-        <div className="mb-1 flex items-center gap-2 rounded-md border-l-2 border-primary/60 bg-primary/5 px-2 py-1 text-xs">
+        <div className="mbe-1 flex items-center gap-2 rounded-md border-s-2 border-primary/60 bg-primary/5 px-2 py-1 text-xs">
           <div className="min-w-0 flex-1">
             <div className="font-medium text-primary/90">
               {editing ? 'Редактирование' : `Ответ ${replyTo?.authorDisplayName}`}
@@ -120,7 +120,7 @@ export function ChatComposer({
 
       {/* выбранные файлы: картинки — миниатюрой, остальное — 📎 имя */}
       {files.length > 0 && (
-        <div className="mb-1 flex flex-wrap gap-1">
+        <div className="mbe-1 flex flex-wrap gap-1">
           {files.map((f, i) => (
             <FilePreviewChip
               key={`${f.name}-${f.size}-${i}`}
@@ -173,7 +173,7 @@ export function ChatComposer({
           disabled={busy || (!text.trim() && files.length === 0)}
           onClick={() => void submit()}
           className={cn(
-            'grid size-8 shrink-0 place-items-center rounded-md transition-all',
+            'grid size-8 shrink-0 place-items-center rounded-md transition-[color,background-color,opacity]',
             busy || (!text.trim() && files.length === 0)
               ? 'cursor-not-allowed bg-foreground/[0.06] text-muted-foreground'
               : 'bg-primary text-primary-foreground hover:opacity-90 active:scale-95',
@@ -211,8 +211,8 @@ function FilePreviewChip({ file, onRemove }: { file: File; onRemove: () => void 
         className={cn(
           'text-muted-foreground hover:text-foreground',
           url
-            ? 'absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-background/90 shadow-sm ring-1 ring-border'
-            : 'pr-1.5',
+            ? 'absolute -end-1 -inset-bs-1 grid size-4 place-items-center rounded-full bg-background/90 shadow-sm ring-1 ring-border'
+            : 'pe-1.5',
         )}
       >
         <X className="size-3" />

@@ -14,7 +14,7 @@ import { boardSlugFromHost, publicBoardUrl } from '@/lib/publicBoardUrl';
 import type { PublicComment, PublicTaskDetail } from '@/domain/public/PublicBoard';
 
 const PRIORITY_COLOR: Record<1 | 2 | 3 | 4, string> = {
-  1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8',
+  1: 'oklch(63.68% 0.208 25.33)', 2: 'oklch(76.86% 0.1647 70.08)', 3: 'oklch(62.31% 0.188 259.81)', 4: 'oklch(71.07% 0.035 256.79)',
 };
 const PRIORITY_LABEL: Record<1 | 2 | 3 | 4, string> = {
   1: 'Срочно', 2: 'Высокий', 3: 'Средний', 4: 'Низкий',
@@ -33,7 +33,7 @@ function fmtDate(iso: string): string {
 function CommentRow({ c }: { c: PublicComment }): React.ReactElement {
   return (
     <li className="flex gap-2.5">
-      <span className="mt-0.5 grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-medium text-muted-foreground">
+      <span className="mbs-0.5 grid size-7 shrink-0 place-items-center overflow-clip rounded-full bg-muted text-xs font-medium text-muted-foreground">
         {c.authorAvatarUrl ? (
           <img src={c.authorAvatarUrl} alt="" className="size-full object-cover" />
         ) : (
@@ -45,7 +45,7 @@ function CommentRow({ c }: { c: PublicComment }): React.ReactElement {
           <span className="text-[13px] font-medium text-foreground">{c.authorDisplayName}</span>
           <span className="text-xs text-muted-foreground">{fmtDate(c.createdAt)}</span>
         </div>
-        <Markdown className="mt-0.5 text-[13px]">{c.body}</Markdown>
+        <Markdown className="mbs-0.5 text-[13px]">{c.body}</Markdown>
       </div>
     </li>
   );
@@ -109,7 +109,7 @@ export function PublicTaskPanel({
         className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
       >
         {/* Верхняя панель действий (read-only: только развернуть + копировать). */}
-        <div className="sticky top-0 z-10 flex items-center justify-end gap-1 border-b bg-background/80 px-2 py-1.5 backdrop-blur">
+        <div className="sticky inset-bs-0 z-10 flex items-center justify-end gap-1 border-be bg-background/80 px-2 py-1.5 backdrop-blur">
           <button
             type="button"
             onClick={() => navigate(expandPath)}
@@ -156,7 +156,7 @@ export function PublicTaskPanel({
               </div>
 
               {/* Чипы: статус / приоритет / дедлайн (read-only). */}
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <div className="mbs-3 flex flex-wrap items-center gap-2 text-xs">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 text-muted-foreground">
                   {STATUS_LABEL[detail.status]}
                 </span>
@@ -175,12 +175,12 @@ export function PublicTaskPanel({
               </div>
 
               {/* Тело задачи (абзацы + фото), read-only. */}
-              {body.trim() && <Markdown className="mt-4">{body}</Markdown>}
+              {body.trim() && <Markdown className="mbs-4">{body}</Markdown>}
 
               {/* Комментарии (только чтение). */}
               {detail.comments.length > 0 && (
-                <div className="mt-6 border-t pt-4">
-                  <h3 className="mb-3 text-sm font-medium text-foreground">
+                <div className="mbs-6 border-bs pbs-4">
+                  <h3 className="mbe-3 text-sm font-medium text-foreground">
                     Комментарии{' '}
                     <span className="text-muted-foreground">{detail.comments.length}</span>
                   </h3>

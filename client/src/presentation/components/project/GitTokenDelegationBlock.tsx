@@ -108,7 +108,7 @@ export function GitTokenDelegationBlock({
   if (status === null) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
+        <Loader2 className="size-4 motion-safe:animate-spin" />
         Загрузка состояния делегации…
       </div>
     );
@@ -131,7 +131,7 @@ export function GitTokenDelegationBlock({
   const selectedGrantorId = computeSelected(status.all, currentDispatcherDisplayName);
 
   return (
-    <div className="space-y-3 border-t pt-3">
+    <div className="space-y-3 border-bs pbs-3">
       {/* Заголовок секции */}
       <div className="flex items-center gap-2">
         <Github className="size-4 text-muted-foreground" />
@@ -168,7 +168,7 @@ export function GitTokenDelegationBlock({
               )}
             </p>
             {mineDisabledReason && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <p className="mbs-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                 <ShieldAlert className="size-3" />
                 {mineDisabledReason}
               </p>
@@ -182,7 +182,7 @@ export function GitTokenDelegationBlock({
               disabled={!canToggleMine}
               title={mineDisabledReason ?? undefined}
             >
-              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              {saving && <Loader2 className="size-3.5 motion-safe:animate-spin" />}
               {mine.enabled ? 'Выключить' : 'Включить'}
             </Button>
           )}
@@ -196,7 +196,7 @@ export function GitTokenDelegationBlock({
             <Bot className="size-3.5 text-muted-foreground" />
             Грантеры этого проекта
           </p>
-          <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+          <p className="mbe-2 mbs-0.5 text-xs text-muted-foreground">
             Порядок выбора сервером сверху вниз. Owner идёт первым, дальше — по
             алфавиту. Диспетчер сам исключается из кандидатов.
           </p>
@@ -212,7 +212,7 @@ export function GitTokenDelegationBlock({
             ))}
           </ul>
           {selectedGrantorId === null && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            <p className="mbs-2 text-xs text-amber-600 dark:text-amber-400">
               ⚠ Сейчас никто не будет выбран — все включённые грантеры либо без GH,
               либо являются текущим диспетчером.
             </p>
@@ -244,7 +244,7 @@ export function GitTokenDelegationBlock({
               </button>
               {logLoading ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" />
+                  <Loader2 className="size-3 motion-safe:animate-spin" />
                   Загрузка…
                 </div>
               ) : log === null || log.length === 0 ? (
@@ -301,12 +301,12 @@ function GrantorRow({
       <span className="flex-1 truncate font-medium">
         {m.displayName}
         {m.isOwner && (
-          <span className="ml-1.5 rounded bg-primary/15 px-1 text-[10px] font-medium uppercase tracking-wide text-primary">
+          <span className="ms-1.5 rounded bg-primary/15 px-1 text-2xs font-medium uppercase tracking-wide text-primary">
             owner
           </span>
         )}
         {isCurrentDispatcher && (
-          <span className="ml-1.5 rounded bg-muted px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="ms-1.5 rounded bg-muted px-1 text-2xs uppercase tracking-wide text-muted-foreground">
             dispatcher
           </span>
         )}
@@ -320,12 +320,12 @@ function GrantorRow({
         )}
       </span>
       {isSelected ? (
-        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-700 dark:text-emerald-400">
+        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-2xs text-emerald-700 dark:text-emerald-400">
           ✓ выбран
         </span>
       ) : (
         <span
-          className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+          className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-2xs ${
             m.enabled
               ? 'bg-muted text-muted-foreground'
               : 'bg-muted/40 text-muted-foreground'
@@ -372,7 +372,7 @@ function ContextBadge({
   };
   return (
     <span
-      className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+      className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground"
       title={`context: ${context}`}
     >
       {labels[context]}
@@ -406,7 +406,7 @@ function OutcomeBadge({ outcome }: { outcome: GitTokenAccessOutcome }): React.Re
   };
   const c = cfg[outcome];
   return (
-    <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${c.cls}`}>
+    <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-2xs ${c.cls}`}>
       {c.label}
     </span>
   );

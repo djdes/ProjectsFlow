@@ -118,7 +118,7 @@ function AddRow({
   };
 
   return (
-    <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+    <div className="flex flex-wrap items-end gap-2 border-bs pbs-3">
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="emp-name">Имя</Label>
         <Input id="emp-name" className="w-44" value={name} onChange={(e) => setName(e.target.value)} placeholder="Иван Программист" />

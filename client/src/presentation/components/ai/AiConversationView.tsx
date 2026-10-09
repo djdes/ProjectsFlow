@@ -195,13 +195,13 @@ export function AiConversationView({
           onConversationUpdated={state.setConversation}
         />
       ) : (
-        <header className={cn('flex shrink-0 items-center gap-2 border-b px-4', compact ? 'h-12' : 'h-[52px]')}>
+        <header className={cn('flex shrink-0 items-center gap-2 border-be px-4', compact ? 'h-12' : 'h-[52px]')}>
           <div className="grid size-7 place-items-center rounded-lg bg-foreground text-background"><Sparkles className="size-4" /></div>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold">{state.conversation?.title ?? projectName ?? 'ИИ'}</h1>
-            {projectName && <p className="truncate text-[10px] text-muted-foreground">Чат проекта · {projectName}</p>}
+            {projectName && <p className="truncate text-2xs text-muted-foreground">Чат проекта · {projectName}</p>}
           </div>
-          {state.sending && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Loader2 className="size-3 animate-spin" /> Думаю</span>}
+          {state.sending && <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground"><Loader2 className="size-3 motion-safe:animate-spin" /> Думаю</span>}
         </header>
       ))}
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -223,12 +223,12 @@ export function AiConversationView({
               <div className={cn('mx-auto flex min-h-full min-w-0 w-full flex-col gap-2.5 px-4 py-6', compact ? 'max-w-3xl' : 'max-w-4xl')}>
                 {state.messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-foreground text-background shadow-lg"><Sparkles className="size-7" /></div>
+                    <div className="mbe-4 grid size-14 place-items-center rounded-2xl bg-foreground text-background shadow-lg"><Sparkles className="size-7" /></div>
                     <h2 className="text-xl font-semibold">{projectName ? `Работаем над «${projectName}»` : 'Чем помочь?'}</h2>
-                    <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+                    <p className="mbs-2 max-w-md text-sm leading-6 text-muted-foreground">
                       {projectName ? 'Обсуждайте код, интерфейс и данные проекта. Любое изменение сайта будет предложением и потребует явного подтверждения.' : 'Задайте вопрос, продумайте идею или разберите задачу. История сохранится здесь автоматически.'}
                     </p>
-                    {!compact && <AiComposerPresets className="mt-6 w-full max-w-2xl" disabled={state.sending} onPick={(prompt) => fillComposer(prompt, true)} />}
+                    {!compact && <AiComposerPresets className="mbs-6 w-full max-w-2xl" disabled={state.sending} onPick={(prompt) => fillComposer(prompt, true)} />}
                   </div>
                 ) : state.messages.map((message, index) => {
                   const previousUser = [...state.messages.slice(0, index)].reverse().find((item) => item.role === 'user');
@@ -259,7 +259,7 @@ export function AiConversationView({
               aria-hidden={!showJumpToLatest}
               tabIndex={showJumpToLatest ? 0 : -1}
               className={cn(
-                'absolute bottom-4 left-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background/95 text-muted-foreground shadow-lg backdrop-blur',
+                'absolute inset-be-4 start-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background/95 text-muted-foreground shadow-lg backdrop-blur',
                 'transition-opacity duration-300 hover:text-foreground',
                 showJumpToLatest ? 'opacity-100' : 'pointer-events-none opacity-0',
               )}
@@ -267,7 +267,7 @@ export function AiConversationView({
               <ArrowDown className="size-4" />
             </button>
           </div>
-          <div className="shrink-0 border-t bg-background/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+          <div className="shrink-0 border-bs bg-background/95 px-3 pbe-[max(12px,env(safe-area-inset-bottom,0px))] pbs-3 backdrop-blur">
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
               {/* Подсказки живут НАД композером и приезжают из metadata последнего ответа.
                   Своего генератора у нас нет: сервер не прислал — блок не рендерится. */}
@@ -284,7 +284,7 @@ export function AiConversationView({
                 onOpenSelection={onOpenSelection}
                 modeSwitch={onBuild ? { mode: composerMode, onChange: setComposerMode } : undefined}
               />
-              {!compact && <p className="pt-1.5 text-center text-[10px] text-muted-foreground">ИИ может ошибаться. Проверяйте важные ответы.</p>}
+              {!compact && <p className="pbs-1.5 text-center text-2xs text-muted-foreground">ИИ может ошибаться. Проверяйте важные ответы.</p>}
             </div>
           </div>
         </div>
@@ -388,7 +388,7 @@ function AiConversationHeader({
           вставала ровно под плавающий бургер свёрнутой панели. Отступ (и условие, при
           котором он нужен) живёт в globals.css — здесь только маркер; левый паддинг
           строки правило перекрывает собой. */}
-      <header className="pf-burger-gap flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
+      <header className="pf-burger-gap flex h-11 shrink-0 items-center gap-1.5 border-be bg-background px-2 sm:px-3">
         <button type="button" onClick={() => navigate('/ai')} className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background" aria-label="Открыть главную ProjectsFlow ИИ"><Sparkles className="size-4" /></button>
         <button type="button" onClick={() => navigate('/ai')} className="hidden rounded-md px-1.5 py-1 text-sm font-semibold hover:bg-hover sm:inline-flex">ProjectsFlow ИИ</button>
         <span className="text-muted-foreground">/</span>
@@ -408,7 +408,7 @@ function AiConversationHeader({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="flex-1" />
-        {sending && <span className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:inline-flex"><Loader2 className="size-3 animate-spin" /> Думаю</span>}
+        {sending && <span className="hidden items-center gap-1 text-2xs text-muted-foreground sm:inline-flex"><Loader2 className="size-3 motion-safe:animate-spin" /> Думаю</span>}
         <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Поделиться чатом" onClick={() => void copyLink()}><Share2 className="size-4" /></Button>
         <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Начать новый чат" disabled={busy} onClick={() => void create()}><Plus className="size-4" /></Button>
         <Button type="button" variant="ghost" size="icon" className="hidden size-8 xl:inline-flex" aria-label={detailsOpen ? 'Скрыть детали агента' : 'Показать детали агента'} onClick={() => onDetailsChange(!detailsOpen)}>{detailsOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
@@ -419,7 +419,7 @@ function AiConversationHeader({
             <DropdownMenuItem onSelect={() => void archive()} disabled={busy}><Archive />В архив</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteOpen(true)}><Trash2 />Удалить</DropdownMenuItem>
-            {conversation && <p className="px-2 py-1.5 text-[10px] text-muted-foreground">Обновлён {new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(conversation.updatedAt))}</p>}
+            {conversation && <p className="px-2 py-1.5 text-2xs text-muted-foreground">Обновлён {new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(conversation.updatedAt))}</p>}
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
@@ -479,7 +479,7 @@ function ConversationMessage({ message, previousUser, sending, onRetry, projectI
     // пользователя, причём аватар стоит НАД пузырём, а не сбоку.
     <article
       data-message-role={message.role}
-      className={cn('group/chat-bubble flex w-full min-w-0 flex-col gap-1.5', user ? 'items-end pl-4' : 'items-start')}
+      className={cn('group/chat-bubble flex w-full min-w-0 flex-col gap-1.5', user ? 'items-end ps-4' : 'items-start')}
     >
       {user && (
         <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-primary" aria-hidden>
@@ -493,7 +493,7 @@ function ConversationMessage({ message, previousUser, sending, onRetry, projectI
         {!user && <AiAgentStepsBlock steps={steps} needsReview={batchStatus === 'pending_review'} />}
         {/* Как в референсе: бейдж зоны — первый ребёнок внутри пузыря, над текстом
             промпта. Контейнер с переносом — зон в одном сообщении может стать больше. */}
-        {selection && <div className="mb-1.5 flex flex-wrap items-center gap-1"><AiSelectionChip selection={selection} onOpen={onOpenSelection} /></div>}
+        {selection && <div className="mbe-1.5 flex flex-wrap items-center gap-1"><AiSelectionChip selection={selection} onOpen={onOpenSelection} /></div>}
         {message.body ? (
           <>
             {actionResult.text && <div className="prose prose-sm max-w-none overflow-x-auto break-words dark:prose-invert prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted prose-pre:text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{actionResult.text}</ReactMarkdown></div>}
@@ -501,10 +501,10 @@ function ConversationMessage({ message, previousUser, sending, onRetry, projectI
             {actionResult.plan && <AiActionPlanCard plan={actionResult.plan} defaultProjectId={projectId} messageId={message.id} conversationId={message.conversationId} onBatchStatusChange={setBatchStatus} />}
           </>
         ) : (
-          <div className="flex items-center gap-2 py-1 text-muted-foreground"><span className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.3s]" /><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-.15s]" /><i className="size-1.5 animate-bounce rounded-full bg-current" /></span><span className="text-xs">Формирую ответ</span></div>
+          <div className="flex items-center gap-2 py-1 text-muted-foreground"><span className="flex gap-1"><i className="size-1.5 motion-safe:animate-bounce rounded-full bg-current [animation-delay:-.3s]" /><i className="size-1.5 motion-safe:animate-bounce rounded-full bg-current [animation-delay:-.15s]" /><i className="size-1.5 motion-safe:animate-bounce rounded-full bg-current" /></span><span className="text-xs">Формирую ответ</span></div>
         )}
         {message.role === 'assistant' && message.status === 'failed' && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-destructive"><AlertCircle className="size-3.5" /> {retryZone ? 'Правка не выполнена.' : 'Ответ не сформирован.'}{retryBody && <button type="button" disabled={sending} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-destructive/10 disabled:opacity-50" onClick={() => void onRetry(retryBody, retryZone).catch(() => undefined)}><RefreshCw className="size-3" />{retryZone ? 'Повторить правку' : 'Повторить'}</button>}</div>
+          <div className="mbs-2 flex flex-wrap items-center gap-1.5 text-xs text-destructive"><AlertCircle className="size-3.5" /> {retryZone ? 'Правка не выполнена.' : 'Ответ не сформирован.'}{retryBody && <button type="button" disabled={sending} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-destructive/10 disabled:opacity-50" onClick={() => void onRetry(retryBody, retryZone).catch(() => undefined)}><RefreshCw className="size-3" />{retryZone ? 'Повторить правку' : 'Повторить'}</button>}</div>
         )}
       </div>
       {showActions && (
@@ -566,10 +566,10 @@ function MessageActions({
 }
 
 function MessageAttachments({ attachments }: { attachments: ReturnType<typeof extractAiAttachments>['attachments'] }): React.ReactElement {
-  return <div className="not-prose mt-2 flex flex-wrap gap-2">{attachments.map((attachment) => attachment.kind === 'image' && attachment.previewUrl ? (
-    <button key={attachment.id} type="button" className="group relative overflow-hidden rounded-xl border bg-muted" onClick={() => window.open(attachment.previewUrl, '_blank', 'noopener,noreferrer')}><img src={attachment.previewUrl} alt={attachment.name} className="max-h-48 max-w-[280px] object-contain" /><span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-2 py-1 text-left text-[10px] text-white opacity-0 transition group-hover:opacity-100"><Image className="mr-1 inline size-3" />{attachment.name}</span></button>
+  return <div className="not-prose mbs-2 flex flex-wrap gap-2">{attachments.map((attachment) => attachment.kind === 'image' && attachment.previewUrl ? (
+    <button key={attachment.id} type="button" className="group relative overflow-clip rounded-xl border bg-muted" onClick={() => window.open(attachment.previewUrl, '_blank', 'noopener,noreferrer')}><img src={attachment.previewUrl} alt={attachment.name} className="max-h-48 max-w-[280px] object-contain" /><span className="absolute inset-x-0 inset-be-0 truncate bg-black/55 px-2 py-1 text-start text-2xs text-white opacity-0 transition group-hover:opacity-100"><Image className="me-1 inline size-3" />{attachment.name}</span></button>
   ) : (
-    <div key={attachment.id} className="flex max-w-[280px] items-center gap-2 rounded-xl border bg-muted/30 px-2.5 py-2">{attachment.kind === 'text' ? <FileText className="size-4 shrink-0" /> : <Paperclip className="size-4 shrink-0" />}<span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-[10px] text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span></div>
+    <div key={attachment.id} className="flex max-w-[280px] items-center gap-2 rounded-xl border bg-muted/30 px-2.5 py-2">{attachment.kind === 'text' ? <FileText className="size-4 shrink-0" /> : <Paperclip className="size-4 shrink-0" />}<span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-2xs text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span></div>
   ))}</div>;
 }
 
@@ -578,9 +578,9 @@ function MessageAttachments({ attachments }: { attachments: ReturnType<typeof ex
 function AgentDetails({ conversationId, revision }: { conversationId: string; revision: number }): React.ReactElement {
   const { knowledge, artifacts, loading } = useAiChatPanels(conversationId, revision);
   return (
-    <aside className="hidden w-[318px] shrink-0 flex-col gap-1 overflow-y-auto border-l bg-muted/10 p-3 xl:flex" aria-label="Детали агента">
+    <aside className="hidden w-[318px] shrink-0 flex-col gap-1 overflow-y-auto border-s bg-muted/10 p-3 xl:flex" aria-label="Детали агента">
       <AiKnowledgePanel sources={knowledge} loading={loading} />
-      <div className="border-t" />
+      <div className="border-bs" />
       <AiArtifactsPanel artifacts={artifacts} loading={loading} />
     </aside>
   );

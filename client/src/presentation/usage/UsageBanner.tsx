@@ -57,9 +57,9 @@ export function UsageBanner(): React.ReactElement | null {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: animations ? 0.35 : 0, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
-        'fixed left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2',
+        'fixed start-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2',
         // Над мобильным таб-баром (safe-area), на десктопе — у нижнего края по центру.
-        'bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-4',
+        'inset-be-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:inset-be-4',
       )}
     >
       <button
@@ -67,7 +67,7 @@ export function UsageBanner(): React.ReactElement | null {
         onClick={() => usageDialog.open()}
         className={cn(
           // Сплошной bg-card без backdrop-blur (iOS-перф): баннер плавающий над скроллом.
-          'flex w-full items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-left text-sm shadow-lg',
+          'flex w-full items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-start text-sm shadow-lg',
           blocked
             ? 'border-destructive/40 text-destructive'
             : 'border-amber-500/40 text-amber-700 dark:text-amber-300',

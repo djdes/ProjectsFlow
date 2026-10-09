@@ -366,11 +366,11 @@ export function CalendarView({
         label="календарь"
       />
       {/* Шапка: месяц + «Без срока (N)» + навигация ‹ Сегодня ›. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 pbe-2">
         <p className="text-sm font-semibold capitalize">{monthLabel}</p>
         <div className="flex items-center gap-1">
           {/* Переключатель Месяц/Неделя (Notion Week view). */}
-          <div className="mr-1 inline-flex overflow-hidden rounded-md border">
+          <div className="me-1 inline-flex overflow-clip rounded-md border">
             {(
               [
                 ['month', 'Месяц'],
@@ -402,7 +402,7 @@ export function CalendarView({
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" className="max-h-80 w-72 overflow-y-auto p-1.5">
-                <p className="px-1.5 pb-1.5 text-[11px] text-muted-foreground">
+                <p className="px-1.5 pbe-1.5 text-2xs text-muted-foreground">
                   Перетащите на день календаря, чтобы назначить срок
                 </p>
                 <div className="flex flex-col gap-0.5">
@@ -467,7 +467,7 @@ export function CalendarView({
         onDragCancel={() => setActiveDrag(null)}
       >
         {/* Дни недели. */}
-        <div className="grid grid-cols-7 border-b text-center text-[11px] text-muted-foreground">
+        <div className="grid grid-cols-7 border-be text-center text-2xs text-muted-foreground">
           {WEEKDAYS.map((d) => (
             <div key={d} className="py-1">
               {d}
@@ -621,7 +621,7 @@ function DayCell({
       ref={setNodeRef}
       data-month-anchor={monthAnchor}
       className={cn(
-        'group/cell relative border-b border-r p-1 first:border-l [&:nth-child(7n+1)]:border-l',
+        'group/cell relative border-be border-e p-1 first:border-s [&:nth-child(7n+1)]:border-s',
         tall ? 'min-h-[24rem]' : 'min-h-24',
         !inMonth && 'bg-muted/20',
         dragging && isOver && 'bg-primary/10 ring-2 ring-inset ring-primary/40',
@@ -640,7 +640,7 @@ function DayCell({
         </button>
         <span
           className={cn(
-            'inline-flex h-5 items-center justify-center rounded-full text-[11px]',
+            'inline-flex h-5 items-center justify-center rounded-full text-2xs',
             isToday ? 'size-5 bg-red-500 font-semibold text-white' : 'text-muted-foreground',
             monthAnchor && !isToday && 'px-1 font-medium text-foreground',
           )}
@@ -650,7 +650,7 @@ function DayCell({
             : day.getDate()}
         </span>
       </div>
-      <div className="mt-0.5 flex flex-col gap-0.5">
+      <div className="mbs-0.5 flex flex-col gap-0.5">
         {tasks.slice(0, MAX_CHIPS).map(({ task: t, seg }) => (
           <TaskChip
             key={t.id}
@@ -667,7 +667,7 @@ function DayCell({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="rounded px-1 text-left text-[10px] text-muted-foreground hover:bg-accent"
+                className="rounded px-1 text-start text-2xs text-muted-foreground hover:bg-accent"
               >
                 ещё {hidden}
               </button>
@@ -707,8 +707,8 @@ function EdgeHandle({
       aria-label={side === 'resize-start' ? 'Изменить дату начала' : 'Изменить срок'}
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        'absolute top-0 z-10 h-full w-1.5 cursor-ew-resize rounded opacity-0 transition-opacity group-hover/chip:opacity-100 hover:bg-primary/50',
-        side === 'resize-start' ? 'left-0' : 'right-0',
+        'absolute inset-bs-0 z-10 h-full w-1.5 cursor-ew-resize rounded opacity-0 transition-opacity group-hover/chip:opacity-100 hover:bg-primary/50',
+        side === 'resize-start' ? 'start-0' : 'end-0',
       )}
     />
   );
@@ -746,9 +746,9 @@ function TaskChip({
           'flex cursor-pointer items-center gap-1 border bg-card px-1.5 py-0.5 text-xs transition-colors hover:bg-accent',
           // Сегменты полосы (Notion date range): скругление только на краях диапазона.
           seg === 'single' && 'rounded-md',
-          seg === 'start' && '-mr-1 rounded-l-md rounded-r-none border-r-0',
+          seg === 'start' && '-me-1 rounded-s-md rounded-e-none border-e-0',
           seg === 'mid' && '-mx-1 rounded-none border-x-0',
-          seg === 'end' && '-ml-1 rounded-l-none rounded-r-md border-l-0',
+          seg === 'end' && '-ms-1 rounded-s-none rounded-e-md border-s-0',
           isDragging && 'opacity-30',
           task.status === 'done' && 'text-muted-foreground line-through decoration-muted-foreground/40',
         )}
@@ -758,7 +758,7 @@ function TaskChip({
             <span className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
             {task.icon ? (
               <span className="grid size-3.5 shrink-0 place-items-center overflow-hidden">
-                <ProjectIconView icon={task.icon} pixelSize={12} className="text-[11px]" />
+                <ProjectIconView icon={task.icon} pixelSize={12} className="text-2xs" />
               </span>
             ) : (
               <FileText className="size-3 shrink-0 text-muted-foreground/50" />

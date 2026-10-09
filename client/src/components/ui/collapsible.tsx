@@ -7,9 +7,8 @@ import { cn } from '@/lib/utils';
  * поведение здесь исчерпывается «кнопка показывает/прячет область», и новая
  * зависимость ради этого не окупается.
  *
- * Анимация раскрытия намеренно оставлена CSS-переходом высоты у самого контента:
- * в globals.css html.pf-no-motion и prefers-reduced-motion глушат transition
- * глобально, поэтому отдельного гейта здесь не требуется.
+ * Область показывается и прячется сразу (hidden); поворачивается только шеврон —
+ * под motion-safe, поэтому при prefers-reduced-motion он просто меняет положение.
  */
 export function Collapsible({
   open: controlledOpen,
@@ -48,14 +47,14 @@ export function Collapsible({
         aria-controls={contentId}
         onClick={toggle}
         className={cn(
-          'flex w-full items-center gap-1.5 rounded-md text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40',
+          'flex w-full items-center gap-1.5 rounded-md text-start outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40',
           triggerClassName,
         )}
       >
         {chevron && (
           <ChevronRight
             aria-hidden="true"
-            className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')}
+            className={cn('size-3.5 shrink-0 text-muted-foreground motion-safe:transition-transform', open && 'rotate-90')}
           />
         )}
         {trigger}

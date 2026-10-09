@@ -33,7 +33,7 @@ export function ConfirmDeleteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="overflow-hidden p-0 sm:max-w-sm">
 
-        <div className="flex flex-col items-center gap-3 px-6 pb-3 pt-7 text-center">
+        <div className="flex flex-col items-center gap-3 px-6 pbe-3 pbs-7 text-center">
           <span className="grid size-12 place-items-center rounded-full bg-destructive/10 text-destructive ring-8 ring-destructive/[0.06]">
             <Trash2 className="size-5" />
           </span>
@@ -51,7 +51,7 @@ export function ConfirmDeleteDialog({
             )}
           </DialogDescription>
         </div>
-        <div className="flex gap-2 border-t bg-muted/30 px-4 py-3">
+        <div className="flex gap-2 border-bs bg-muted/30 px-4 py-3">
           <Button
             type="button"
             variant="outline"
@@ -69,7 +69,7 @@ export function ConfirmDeleteDialog({
             disabled={busy}
             autoFocus
           >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Trash2 className="size-4" />}
             Удалить
           </Button>
         </div>

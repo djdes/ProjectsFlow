@@ -81,7 +81,7 @@ export function ProjectCoverPicker({
   return (
     <div className="w-[min(28rem,90vw)]">
       <Tabs defaultValue="gallery" className="flex flex-col">
-        <div className="flex items-center justify-between gap-2 border-b px-2 pt-1.5">
+        <div className="flex items-center justify-between gap-2 border-be px-2 pbs-1.5">
           <TabsList className="h-8 bg-transparent p-0">
             <TabsTrigger value="gallery" className="h-7 px-2 text-xs">Галерея</TabsTrigger>
             <TabsTrigger value="upload" className="h-7 px-2 text-xs">Загрузить</TabsTrigger>
@@ -102,7 +102,7 @@ export function ProjectCoverPicker({
 
         {/* Прогресс аплоада (файл или ctrl+v) — виден на любой вкладке, появляется моментально. */}
         {uploading && (
-          <div className="space-y-1.5 border-b px-3 py-2.5">
+          <div className="space-y-1.5 border-be px-3 py-2.5">
             <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
               <span>Загрузка обложки…</span>
               <span className="tabular-nums">{uploadPct}%</span>
@@ -114,7 +114,7 @@ export function ProjectCoverPicker({
         {/* Галерея: арт-обложки + одноцветные градиенты (всё — чистый CSS) */}
         <TabsContent value="gallery" className="max-h-[50vh] space-y-3 overflow-y-auto p-3">
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mbe-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Обложки
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -124,14 +124,14 @@ export function ProjectCoverPicker({
                   type="button"
                   onClick={() => pick(gradientToken(s.id))}
                   style={presetTileStyle(s.css)}
-                  className="h-14 rounded-md bg-cover bg-center ring-1 ring-black/5 transition-transform hover:scale-[1.03] dark:ring-white/10"
+                  className="h-14 rounded-md bg-cover bg-center ring-1 ring-black/5 motion-safe:transition-transform hover:scale-[1.03] dark:ring-white/10"
                   aria-label={`Обложка ${s.id}`}
                 />
               ))}
             </div>
           </div>
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mbe-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Цвета и градиенты
             </p>
             <div className="grid grid-cols-4 gap-2">
@@ -141,7 +141,7 @@ export function ProjectCoverPicker({
                   type="button"
                   onClick={() => pick(gradientToken(g.id))}
                   style={presetTileStyle(g.css)}
-                  className="h-10 rounded-md ring-1 ring-black/5 transition-transform hover:scale-[1.04] dark:ring-white/10"
+                  className="h-10 rounded-md ring-1 ring-black/5 motion-safe:transition-transform hover:scale-[1.04] dark:ring-white/10"
                   aria-label={`Градиент ${g.id}`}
                 />
               ))}

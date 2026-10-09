@@ -36,7 +36,7 @@ export function MembersHoverPanel({
       <div className="px-3 py-2 text-xs font-medium text-muted-foreground">
         Участники · {members.length}
       </div>
-      <div className="max-h-[60vh] overflow-y-auto pb-1">
+      <div className="max-h-[60vh] overflow-y-auto pbe-1">
         {head.map((m) => (
           <MemberRow key={m.userId} member={m} onZoom={() => setZoom(m)} />
         ))}
@@ -53,7 +53,7 @@ export function MembersHoverPanel({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mx-1 mb-1 rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          className="mx-1 mbe-1 rounded-md px-2 py-1.5 text-start text-xs font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
         >
           Показать всех (+{rest.length})
         </button>
@@ -78,7 +78,7 @@ function MemberRow({
       <button
         type="button"
         onClick={onZoom}
-        className="shrink-0 rounded-full outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 rounded-full outline-none motion-safe:transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`Увеличить аватар: ${member.user.displayName}`}
       >
         <Avatar className="size-8">
@@ -93,7 +93,7 @@ function MemberRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium">{member.user.displayName}</span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
+          <span className="shrink-0 text-2xs text-muted-foreground">
             {WORKSPACE_ROLE_LABEL[member.role]}
           </span>
         </div>
@@ -114,7 +114,7 @@ function AvatarZoom({
   return (
     <Dialog open={member !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xs gap-4 sm:max-w-xs">
-        <DialogTitle className="truncate pr-6 text-base">
+        <DialogTitle className="truncate pe-6 text-base">
           {member?.user.displayName ?? ''}
         </DialogTitle>
         <div className="flex flex-col items-center gap-3">

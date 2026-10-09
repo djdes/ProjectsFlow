@@ -38,7 +38,7 @@ type Props = {
 
 // Вкладка-«текст с подчёркиванием» (Notion): без пилюли-фона, у активной — чёрная линия снизу.
 const UNDERLINE_TAB =
-  'relative -mb-px rounded-none border-b-2 border-transparent bg-transparent px-0 pb-2 pt-1 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
+  'relative -mbe-px rounded-none border-be-2 border-transparent bg-transparent px-0 pbe-2 pbs-1 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 
 const DEFAULT_WINDOW_DAYS = 28;
 const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
@@ -326,8 +326,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
             aria-label="Изменить ширину окна или закрыть"
             onPointerDown={onHandlePointerDown}
             className={cn(
-              'absolute inset-y-0 left-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
-              'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:transition-colors hover:before:bg-primary/40',
+              'absolute inset-y-0 start-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
+              'before:absolute before:inset-y-0 before:start-1/2 before:w-px before:-translate-x-1/2 before:transition-colors hover:before:bg-primary/40',
               dragging && 'before:bg-primary/60',
             )}
           />
@@ -350,26 +350,26 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
         </div>
 
         <Tabs defaultValue="activity" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-2 h-auto shrink-0 justify-start gap-4 rounded-none border-b border-border bg-transparent p-0">
+          <TabsList className="mx-4 mbs-2 h-auto shrink-0 justify-start gap-4 rounded-none border-be border-border bg-transparent p-0">
             <TabsTrigger value="activity" className={UNDERLINE_TAB}>Активность</TabsTrigger>
             <TabsTrigger value="analytics" className={UNDERLINE_TAB}>Аналитика</TabsTrigger>
           </TabsList>
 
           {/* Активность — лента во всю высоту окна (flex-1 + собственный скролл). */}
-          <TabsContent value="activity" className="pf-scroll-visible mt-0 min-h-0 flex-1 p-0">
+          <TabsContent value="activity" className="pf-scroll-visible mbs-0 min-h-0 flex-1 p-0">
             {loadingActivity ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Загрузка…
+                <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка…
               </div>
             ) : activityError && (!activity || activity.length === 0) ? (
               <div className="grid min-h-48 place-items-center px-6 text-center">
                 <div>
                   <p className="text-sm font-medium">История не загрузилась</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{activityError}</p>
+                  <p className="mbs-1 text-xs text-muted-foreground">{activityError}</p>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="mt-3 h-10"
+                    className="mbs-3 h-10"
                     onClick={() => setActivityReload((value) => value + 1)}
                   >
                     Повторить
@@ -381,7 +381,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
             ) : (
               <>
                 {activityError ? (
-                  <div className="flex items-center justify-between gap-3 border-b border-destructive/20 bg-destructive/5 px-5 py-2">
+                  <div className="flex items-center justify-between gap-3 border-be border-destructive/20 bg-destructive/5 px-5 py-2">
                     <p className="text-xs text-destructive">{activityError}</p>
                     <button
                       type="button"
@@ -392,12 +392,12 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                     </button>
                   </div>
                 ) : loadingHistory ? (
-                  <div className="flex items-center gap-2 border-b px-5 py-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
+                  <div className="flex items-center gap-2 border-be px-5 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 motion-safe:animate-spin" />
                     Загружаем старые изменения…
                   </div>
                 ) : null}
-                <ul className="pb-4">
+                <ul className="pbe-4">
                   {activity.map((item, index) => {
                     const showDay =
                       index === 0 ||
@@ -407,7 +407,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                         {showDay ? (
                           <li
                             role="presentation"
-                            className="sticky top-0 z-20 border-b bg-background/95 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
+                            className="sticky inset-bs-0 z-20 border-be bg-background/95 px-5 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
                           >
                             {activityDayLabel(item.createdAt)}
                           </li>
@@ -442,7 +442,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                 onRetry={() => setActivityReload((value) => value + 1)}
               />
 
-              <div className="border-t" />
+              <div className="border-bs" />
 
               {/* Аналитика просмотров остаётся отдельным блоком и использует тот же период. */}
               <section className="space-y-3">
@@ -454,7 +454,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                 </div>
                 {loadingAnalytics ? (
                   <div className="flex h-44 items-center justify-center gap-2 rounded-2xl border text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> Загрузка просмотров…
+                    <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка просмотров…
                   </div>
                 ) : !analytics ? (
                   <div className="grid h-32 place-items-center rounded-2xl border px-6 text-center">
@@ -512,11 +512,11 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                       <DropdownMenuContent align="end" className="min-w-[180px]">
                         <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
                           Разрешить
-                          {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
+                          {viewHistory === 'allow' && <Check className="ms-auto size-4" />}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
                           Запретить
-                          {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
+                          {viewHistory === 'deny' && <Check className="ms-auto size-4" />}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -528,7 +528,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                     <ul className="space-y-0.5">
                       {analytics.viewers.map((viewer) => (
                         <li key={viewer.userId} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted/40">
-                          <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                          <span className="grid size-7 shrink-0 place-items-center overflow-clip rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                             {viewer.avatarUrl ? (
                               <img src={viewer.avatarUrl} alt="" className="size-full object-cover" />
                             ) : (
@@ -583,7 +583,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               )}
             </div>
 
-            <div className="flex shrink-0 items-center justify-between border-t px-4 py-2">
+            <div className="flex shrink-0 items-center justify-between border-bs px-4 py-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -601,11 +601,11 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                   </div>
                   <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
                     Разрешить
-                    {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
+                    {viewHistory === 'allow' && <Check className="ms-auto size-4" />}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
                     Запретить
-                    {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
+                    {viewHistory === 'deny' && <Check className="ms-auto size-4" />}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

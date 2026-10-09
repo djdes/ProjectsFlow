@@ -52,19 +52,19 @@ export function ProjectModeMenu({ projectId, mode }: { projectId: string; mode: 
         aria-expanded={open}
         aria-label="Переключить режим проекта"
         className={cn(
-          'group inline-flex size-8 items-center justify-center gap-0.5 rounded-lg border border-transparent text-muted-foreground transition-all hover:border-border hover:bg-background hover:text-foreground hover:shadow-sm',
+          'group inline-flex size-8 items-center justify-center gap-0.5 rounded-lg border border-transparent text-muted-foreground transition-[color,background-color,border-color,box-shadow] hover:border-border hover:bg-background hover:text-foreground hover:shadow-sm',
           mode === 'studio' && 'bg-gradient-to-br from-violet-500/10 to-cyan-500/10 text-violet-600 dark:text-violet-300',
           open && 'border-border bg-background text-foreground shadow-sm',
         )}
       >
         {mode === 'tasks' ? <LayoutGrid className="size-4" /> : <PanelsTopLeft className="size-4" />}
-        <ChevronDown className={cn('size-2.5 transition-transform', open && 'rotate-180')} />
+        <ChevronDown className={cn('size-2.5 motion-safe:transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div role="menu" aria-label="Режим проекта" className="absolute right-0 top-10 z-[90] w-[292px] origin-top-right animate-in fade-in-0 zoom-in-95 rounded-2xl border bg-popover p-2 shadow-2xl" onFocus={show} onBlur={hide}>
-          <div className="px-2 pb-2 pt-1">
+        <div role="menu" aria-label="Режим проекта" className="absolute end-0 inset-bs-10 z-[90] w-[292px] origin-top-right animate-in fade-in-0 motion-safe:zoom-in-95 rounded-2xl border bg-popover p-2 shadow-2xl" onFocus={show} onBlur={hide}>
+          <div className="px-2 pbe-2 pbs-1">
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Режим проекта</p>
-            <p className="mt-1 text-xs leading-4 text-muted-foreground">Задачи и создание результата живут рядом и сохраняют общий контекст.</p>
+            <p className="mbs-1 text-xs leading-4 text-muted-foreground">Задачи и создание результата живут рядом и сохраняют общий контекст.</p>
           </div>
           {([
             { id: 'tasks' as const, label: 'Задачи', description: 'Доска, таблица, список и календарь', icon: LayoutGrid, iconClass: 'bg-muted text-foreground' },
@@ -80,16 +80,16 @@ export function ProjectModeMenu({ projectId, mode }: { projectId: string; mode: 
                 aria-checked={active}
                 onClick={() => selectMode(item.id)}
                 className={cn(
-                  'group flex w-full items-start gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-all hover:bg-hover',
+                  'group flex w-full items-start gap-3 rounded-xl border border-transparent px-3 py-3 text-start transition-colors hover:bg-hover',
                   active && 'border-border bg-muted/55 shadow-sm',
                 )}
               >
-                <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', item.iconClass)}><Icon className="size-4" /></span>
+                <span className={cn('mbs-0.5 grid size-9 shrink-0 place-items-center rounded-xl', item.iconClass)}><Icon className="size-4" /></span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold">{item.label}{active && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">Сейчас</span>}</span>
-                  <span className="mt-1 block text-xs leading-4 text-muted-foreground">{item.description}</span>
+                  <span className="flex items-center gap-1.5 text-sm font-semibold">{item.label}{active && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-2xs font-medium text-primary">Сейчас</span>}</span>
+                  <span className="mbs-1 block text-xs leading-4 text-muted-foreground">{item.description}</span>
                 </span>
-                {active ? <Check className="mt-1 size-4 shrink-0 text-primary" /> : <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />}
+                {active ? <Check className="mbs-1 size-4 shrink-0 text-primary" /> : <ArrowRight className="mbs-1 size-4 shrink-0 text-muted-foreground opacity-0 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition group-hover:translate-x-0.5 group-hover:opacity-100" />}
               </button>
             );
           })}

@@ -80,7 +80,7 @@ export function SyncedStickyScrollbar({
         // Прилипает к низу вертикального скролл-порта. z над колонками, но под плавающим
         // композером/таб-баром (у тех z-30+). Отрицательный top-margin убирает лишний зазор.
         // Только десктоп: на мобиле колонки листаются свайпом (snap) + внизу фикс. таб-бар.
-        'pointer-events-none sticky bottom-0 z-20 -mt-2 hidden sm:block',
+        'pointer-events-none sticky inset-be-0 z-20 -mbs-2 hidden sm:block',
         className,
       )}
       aria-hidden

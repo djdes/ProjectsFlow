@@ -5,6 +5,7 @@ import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
+import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
@@ -16,7 +17,7 @@ const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 // Full-bleed канбана — те же значения, что и на доске проекта (px-6/14/24): ряд колонок
 // выносится за паддинг страницы, отступы от краёв совпадают с проектами.
 const KANBAN_BLEED_NEG = '-mx-6 sm:-mx-14 lg:-mx-24';
-const KANBAN_BLEED_PAD = 'pl-6 sm:pl-14 lg:pl-24';
+const KANBAN_BLEED_PAD = 'ps-6 sm:ps-14 lg:ps-24';
 
 function loadHideDone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -118,12 +119,13 @@ export function InboxPage(): React.ReactElement {
     // прилипает к низу вьюпорта так же, как на проектах, — а не к внутреннему скролл-порту.
     <div className="flex min-h-full flex-col">
       {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие». Прячем на мобиле. */}
-      <div className="hidden h-11 items-center px-2.5 sm:flex">
+      <div className="hidden h-11 items-center justify-between gap-2 px-2.5 sm:flex">
         <InboxBreadcrumbs />
+        <HeaderCompletedTodayPill />
       </div>
 
       {/* Тело страницы: отступы по краям — как на доске проекта (px-6/14/24). Только канбан. */}
-      <div className="flex flex-1 flex-col gap-1.5 px-6 pb-3 pt-2 sm:gap-4 sm:px-14 sm:pb-6 sm:pt-1 lg:px-24">
+      <div className="flex flex-1 flex-col gap-1.5 px-6 pbe-3 pbs-2 sm:gap-4 sm:px-14 sm:pbe-6 sm:pbs-1 lg:px-24">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="flex items-center gap-3">
             <AnimatedInbox active className="size-5 text-primary" />

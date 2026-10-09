@@ -92,7 +92,7 @@ export function InvitePage(): React.ReactElement {
         <h1 className="text-2xl font-semibold tracking-tight">Приглашение</h1>
 
         {state.status === 'loading' && (
-          <LoadingRegion label="Загружаем приглашение…"><div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="mt-5 h-10 w-28" /></div></LoadingRegion>
+          <LoadingRegion label="Загружаем приглашение…"><div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="mbs-5 h-10 w-28" /></div></LoadingRegion>
         )}
 
         {state.status === 'error' && (
@@ -135,7 +135,7 @@ export function InvitePage(): React.ReactElement {
             {status === 'authenticated' ? (
               <div className="flex gap-2">
                 <Button onClick={() => void accept()} disabled={accepting}>
-                  {accepting ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {accepting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
                   Принять
                 </Button>
                 <Button variant="ghost" asChild>

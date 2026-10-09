@@ -61,7 +61,7 @@ function ChangesChart({
   const visibleLabels = days.length <= 14 ? 4 : 5;
   const labelStep = Math.max(1, Math.floor((days.length - 1) / Math.max(1, visibleLabels - 1)));
   return (
-    <div className="rounded-2xl border border-border/70 px-3 pb-2 pt-4">
+    <div className="rounded-2xl border border-border/70 px-3 pbe-2 pbs-4">
       <div className="flex h-32 items-end gap-1" aria-label="График изменений по дням">
         {days.map((day, index) => {
           const height = day.count === 0 ? 3 : Math.max(8, Math.round((day.count / max) * 112));
@@ -77,19 +77,19 @@ function ChangesChart({
               aria-label={`${dateLabel}: ${day.count} изменений`}
             >
               <span
-                className="w-full rounded-t-[3px] bg-primary/75 transition-colors group-hover:bg-primary"
+                className="w-full rounded-bs-[3px] bg-primary/75 transition-colors group-hover:bg-primary"
                 style={{ height }}
               />
               {day.count > 0 ? (
                 <span
-                  className="pointer-events-none absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-[11px] text-white group-hover:block"
+                  className="pointer-events-none absolute start-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-2xs text-white group-hover:block"
                   style={{ bottom: height + 6 }}
                 >
                   {day.count} · {dateLabel}
                 </span>
               ) : null}
               {(index % labelStep === 0 || index === days.length - 1) && (
-                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground">
+                <span className="absolute -inset-be-5 start-1/2 -translate-x-1/2 whitespace-nowrap text-2xs text-muted-foreground">
                   {day.date
                     .toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
                     .replace('.', '')}
@@ -121,8 +121,8 @@ function MetricCard({
         <span className="truncate text-xs text-muted-foreground">{label}</span>
         <Icon className="size-4 shrink-0 text-muted-foreground" />
       </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
-      <p className="mt-1 truncate text-[11px] text-muted-foreground">{hint}</p>
+      <p className="mbs-2 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mbs-1 truncate text-2xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
@@ -232,7 +232,7 @@ export function ProjectChangesAnalytics({
             {WINDOW_OPTIONS.map((days) => (
               <DropdownMenuItem key={days} onClick={() => onWindowDaysChange(days)}>
                 {windowLabel(days)}
-                {windowDays === days && <Check className="ml-auto size-4" />}
+                {windowDays === days && <Check className="ms-auto size-4" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -289,27 +289,27 @@ export function ProjectChangesAnalytics({
 
           <ChangesChart days={analytics.perDay} />
           {windowDays >= 365 ? (
-            <p className="-mt-2 text-[11px] text-muted-foreground">
+            <p className="-mbs-2 text-2xs text-muted-foreground">
               График — последние 30 дней; показатели и список — за всё время.
             </p>
           ) : null}
 
           {breakdown.length > 0 ? (
             <div className="rounded-2xl border border-border/70 p-4">
-              <p className="mb-3 text-xs font-medium text-muted-foreground">Что меняли</p>
+              <p className="mbe-3 text-xs font-medium text-muted-foreground">Что меняли</p>
               <div className="space-y-2.5">
                 {breakdown.slice(0, 6).map((item) => (
                   <button
                     key={item.category}
                     type="button"
                     onClick={() => setCategory(item.category)}
-                    className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 text-left"
+                    className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 text-start"
                   >
                     <span className="truncate text-xs group-hover:text-primary">
                       {PROJECT_CHANGE_CATEGORY_LABEL[item.category]}
                     </span>
                     <span className="text-xs tabular-nums text-muted-foreground">{item.count}</span>
-                    <span className="col-span-2 mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <span className="col-span-2 mbs-1 h-1.5 overflow-clip rounded-full bg-muted">
                       <span
                         className="block h-full rounded-full bg-primary/70 transition-[width]"
                         style={{ width: `${Math.max(4, (item.count / maxBreakdown) * 100)}%` }}
@@ -323,13 +323,13 @@ export function ProjectChangesAnalytics({
 
           <div className="space-y-2">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute start-3 inset-bs-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Поиск по задаче, человеку или изменению…"
                 aria-label="Поиск по изменениям"
-                className="h-10 rounded-xl pl-9"
+                className="h-10 rounded-xl ps-9"
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -345,7 +345,7 @@ export function ProjectChangesAnalytics({
                   {CATEGORY_OPTIONS.map((value) => (
                     <DropdownMenuItem key={value} onClick={() => setCategory(value)}>
                       {PROJECT_CHANGE_CATEGORY_LABEL[value]}
-                      {category === value && <Check className="ml-auto size-4" />}
+                      {category === value && <Check className="ms-auto size-4" />}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -362,14 +362,14 @@ export function ProjectChangesAnalytics({
                 <DropdownMenuContent align="start" className="max-h-80 min-w-56 overflow-y-auto">
                   <DropdownMenuItem onClick={() => setActorKey('all')}>
                     Все участники
-                    {actorKey === 'all' && <Check className="ml-auto size-4" />}
+                    {actorKey === 'all' && <Check className="ms-auto size-4" />}
                   </DropdownMenuItem>
                   {actorOptions.map((actor) => (
                     <DropdownMenuItem key={actor.key} onClick={() => setActorKey(actor.key)}>
                       <UserAvatar
                         displayName={actor.name}
                         avatarUrl={actor.avatarUrl}
-                        className="mr-1 size-5 rounded-full text-[9px]"
+                        className="me-1 size-5 rounded-full text-[9px]"
                       />
                       <span className="min-w-0 flex-1 truncate">{actor.name}</span>
                       <span className="text-xs text-muted-foreground">{actor.count}</span>
@@ -381,7 +381,7 @@ export function ProjectChangesAnalytics({
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="ml-auto h-10 gap-1.5 rounded-xl px-3 text-xs font-normal">
+                  <Button variant="outline" size="sm" className="ms-auto h-10 gap-1.5 rounded-xl px-3 text-xs font-normal">
                     {sort === 'newest' ? 'Сначала новые' : 'Сначала старые'}
                     <ChevronDown className="size-3.5 opacity-60" />
                   </Button>
@@ -389,21 +389,21 @@ export function ProjectChangesAnalytics({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => setSort('newest')}>
                     Сначала новые
-                    {sort === 'newest' && <Check className="ml-auto size-4" />}
+                    {sort === 'newest' && <Check className="ms-auto size-4" />}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSort('oldest')}>
                     Сначала старые
-                    {sort === 'oldest' && <Check className="ml-auto size-4" />}
+                    {sort === 'oldest' && <Check className="ms-auto size-4" />}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
 
-          <div role="table" aria-label="Изменения проекта" className="overflow-hidden rounded-2xl border border-border/70">
+          <div role="table" aria-label="Изменения проекта" className="overflow-clip rounded-2xl border border-border/70">
             <div
               role="row"
-              className="sticky top-0 z-10 grid h-12 grid-cols-[minmax(0,1fr)_8.5rem] items-center border-b bg-background/95 px-4 text-xs font-medium text-muted-foreground backdrop-blur"
+              className="sticky inset-bs-0 z-10 grid h-12 grid-cols-[minmax(0,1fr)_8.5rem] items-center border-be bg-background/95 px-4 text-xs font-medium text-muted-foreground backdrop-blur"
             >
               <span role="columnheader">Изменение</span>
               <span role="columnheader">Кто и когда</span>
@@ -414,13 +414,13 @@ export function ProjectChangesAnalytics({
                   <p className="text-sm font-medium">
                     {activity.length === 0 ? 'Изменений пока нет' : 'Ничего не найдено'}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mbs-1 text-xs text-muted-foreground">
                     {activity.length === 0
                       ? 'Новые действия появятся здесь автоматически.'
                       : 'Измените фильтры или поисковый запрос.'}
                   </p>
                   {filtersActive ? (
-                    <Button variant="ghost" size="sm" className="mt-2 h-10" onClick={resetFilters}>
+                    <Button variant="ghost" size="sm" className="mbs-2 h-10" onClick={resetFilters}>
                       Сбросить фильтры
                     </Button>
                   ) : null}
@@ -440,7 +440,7 @@ export function ProjectChangesAnalytics({
                       event.preventDefault();
                       navigate(`/projects/${projectId}/tasks/${taskId}`);
                     }}
-                    className={`grid min-h-[52px] grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-3 border-b px-4 py-2.5 last:border-b-0 ${
+                    className={`grid min-h-[52px] grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-3 border-be px-4 py-2.5 last:border-be-0 ${
                       taskId
                         ? 'cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
                         : ''
@@ -464,7 +464,7 @@ export function ProjectChangesAnalytics({
                         </span>
                       </span>
                       <span
-                        className="mt-0.5 block truncate pl-6 text-[11px] text-muted-foreground"
+                        className="mbs-0.5 block truncate ps-6 text-2xs text-muted-foreground"
                         title={formatExactDateTime(item.createdAt)}
                       >
                         {relativeTime(item.createdAt)}

@@ -105,7 +105,7 @@ export function MembersInviteForm(): React.ReactElement {
   const hasShared = shared !== null && shared.length > 0;
 
   return (
-    <div className="space-y-2 border-t p-3">
+    <div className="space-y-2 border-bs p-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">Пригласить в пространство</span>
         {hasShared && (
@@ -135,7 +135,7 @@ export function MembersInviteForm(): React.ReactElement {
           {emails.map((e) => (
             <li
               key={e}
-              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2 pr-1 text-xs"
+              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 ps-2 pe-1 text-xs"
             >
               <span className="max-w-[140px] truncate">{e}</span>
               <button
@@ -194,7 +194,7 @@ export function MembersInviteForm(): React.ReactElement {
         disabled={submitting || previewEmails.length === 0 || !workspace}
         onClick={() => void handleSubmit()}
       >
-        {submitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
+        {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <UserPlus className="size-4" />}
         Пригласить{previewEmails.length > 0 ? ` (${previewEmails.length})` : ''}
       </Button>
     </div>

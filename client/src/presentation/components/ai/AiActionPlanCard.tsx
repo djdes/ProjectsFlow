@@ -300,8 +300,8 @@ export function AiActionPlanCard({
 
   if (!batch || (preparing && batch.status !== 'pending_review')) {
     return (
-      <section className="not-prose mt-3 flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-xs text-muted-foreground" aria-label={plan.title}>
-        {error ? error : <><Loader2 className="size-3.5 animate-spin" />Применяю действия…</>}
+      <section className="not-prose mbs-3 flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5 text-xs text-muted-foreground" aria-label={plan.title}>
+        {error ? error : <><Loader2 className="size-3.5 motion-safe:animate-spin" />Применяю действия…</>}
       </section>
     );
   }

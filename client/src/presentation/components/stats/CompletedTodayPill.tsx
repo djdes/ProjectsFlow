@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { rankFor } from './ranks';
 import { cn } from '@/lib/utils';
 
@@ -9,32 +10,38 @@ import { cn } from '@/lib/utils';
 //
 // Цвет ранга сохранён: он ничего не стоит, не двигается и показывает, что счёт растёт.
 // Понадобится один нейтральный цвет — достаточно убрать style ниже.
-export function CompletedTodayPill({ inline = false }: { inline?: boolean }): React.ReactElement | null {
+//
+// Плашка всегда стоит в потоке строки, где её показывают: на мобиле — в шапке приложения,
+// на десктопе — в строке крошек страницы (HeaderCompletedTodayPill). Раньше на десктопе она
+// висела fixed в правом верхнем углу поверх страниц и закрывала их кнопки (обложку проекта,
+// плашку «Код подключён»).
+export function CompletedTodayPill({ className }: { className?: string }): React.ReactElement | null {
   const { count } = useCompletedToday();
   if (count === null) return null;
 
   const rank = rankFor(count);
 
   return (
-    <div
-      // Ниже строки верхнего хрома (44px): там у страниц свои кнопки справа — хлебные крошки,
-      // «Поделиться», ⋯ — и плашка легла бы прямо на них. safe-area: в PWA на iPhone инсеты
-      // иначе уводят её под вырез. z-40 — ПОД диалогами (z-50).
+    <span
       className={cn(
-        'pointer-events-none shrink-0',
-        !inline && 'fixed right-[calc(1rem+env(safe-area-inset-right))] top-[calc(3.25rem+env(safe-area-inset-top))] z-40',
+        'inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-sm font-semibold tabular-nums',
+        className,
       )}
+      style={{ backgroundColor: rank.c1, color: rank.ink }}
+      title={`Сегодня выполнено задач: ${count}`}
+      aria-label={`Сегодня выполнено задач: ${count}`}
       data-pf-completed-today
     >
-      <span
-        className="pointer-events-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold tabular-nums shadow-sm"
-        style={{ backgroundColor: rank.c1, color: rank.ink }}
-        title={`Сегодня выполнено задач: ${count}`}
-        aria-label={`Сегодня выполнено задач: ${count}`}
-      >
-        <Check className="size-3.5 shrink-0" strokeWidth={3} aria-hidden />
-        {count}
-      </span>
-    </div>
+      <Check className="size-3.5 shrink-0" strokeWidth={3} aria-hidden />
+      {count}
+    </span>
   );
+}
+
+// Счётчик в строке крошек страницы — только на десктопе: на мобиле он уже есть в шапке
+// приложения (AppShell), второй экземпляр рядом был бы дублем.
+export function HeaderCompletedTodayPill({ className }: { className?: string }): React.ReactElement | null {
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  if (!isDesktop) return null;
+  return <CompletedTodayPill className={className} />;
 }

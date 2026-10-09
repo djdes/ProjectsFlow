@@ -226,7 +226,7 @@ export function TaskSearchDialog({
         labelNode: inComment ? label : <Highlight text={label} query={q} />,
         subNode: inComment ? (
           <>
-            <span className="mr-1 opacity-70">в комментарии:</span>
+            <span className="me-1 opacity-70">в комментарии:</span>
             <Highlight text={r.commentExcerpt ?? ''} query={q} />
           </>
         ) : undefined,
@@ -269,9 +269,9 @@ export function TaskSearchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="top-[15%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0">
+      <DialogContent className="inset-bs-[15%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">Поиск и команды</DialogTitle>
-        <div className="flex items-center gap-2 border-b px-4">
+        <div className="flex items-center gap-2 border-be px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
@@ -291,7 +291,7 @@ export function TaskSearchDialog({
             return (
               <li key={item.key}>
                 {sectionStart && (
-                  <p className="px-4 pb-1 pt-2 text-xs font-medium text-muted-foreground/70">
+                  <p className="px-4 pbe-1 pbs-2 text-xs font-medium text-muted-foreground/70">
                     {SECTION_TITLE[item.section]}
                   </p>
                 )}
@@ -300,7 +300,7 @@ export function TaskSearchDialog({
                   onClick={item.run}
                   onMouseEnter={() => setActiveIndex(i)}
                   className={cn(
-                    'flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors',
+                    'flex w-full items-center gap-2.5 px-4 py-2 text-start transition-colors',
                     i === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted',
                   )}
                 >

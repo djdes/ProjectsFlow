@@ -163,7 +163,7 @@ export function ProjectDashboard({
         role="status"
       >
         <span>
-          <Loader2 className="mr-2 inline size-4 animate-spin motion-reduce:animate-none" />
+          <Loader2 className="me-2 inline size-4 motion-safe:animate-spin motion-reduce:animate-none" />
           Загружаем Dashboard…
         </span>
       </div>
@@ -173,12 +173,12 @@ export function ProjectDashboard({
       <div className="grid min-h-[480px] place-items-center px-4 text-center">
         <div>
           <p className="font-medium">Dashboard не загрузился</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mbs-1 text-sm text-muted-foreground">
             Данные проекта остались в безопасности. Попробуйте ещё раз.
           </p>
           <Button
             variant="outline"
-            className="mt-4"
+            className="mbs-4"
             onClick={() => setReload((value) => value + 1)}
           >
             Повторить
@@ -214,15 +214,15 @@ export function ProjectDashboard({
   return (
     <div className={cn('overflow-hidden bg-muted/10', fillAvailable ? 'h-full' : 'rounded-xl border')}>
       <div className={cn('flex min-h-0 flex-col md:flex-row', fillAvailable ? 'h-full' : 'h-[clamp(620px,74vh,840px)]')}>
-        <aside className="hidden w-60 shrink-0 overflow-y-auto overscroll-contain border-r bg-background p-3 md:flex md:flex-col">
-          <label className="relative mb-3 block">
+        <aside className="hidden w-60 shrink-0 overflow-y-auto overscroll-contain border-e bg-background p-3 md:flex md:flex-col">
+          <label className="relative mbe-3 block">
             <span className="sr-only">Найти раздел Dashboard</span>
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute start-2.5 inset-bs-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={sectionQuery}
               onChange={(event) => setSectionQuery(event.target.value)}
               placeholder="Поиск…"
-              className="h-9 w-full rounded-lg border-0 bg-muted/60 pl-8 pr-3 text-sm outline-none transition focus:bg-muted focus:ring-2 focus:ring-ring/25"
+              className="h-9 w-full rounded-lg border-0 bg-muted/60 ps-8 pe-3 text-sm outline-none transition focus:bg-muted focus:ring-2 focus:ring-ring/25"
             />
           </label>
           <nav className="space-y-0.5" aria-label="Разделы Dashboard">
@@ -235,7 +235,7 @@ export function ProjectDashboard({
                   aria-current={section === id ? "page" : undefined}
                   onClick={() => selectSection(id)}
                   className={cn(
-                    "flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors motion-reduce:transition-none",
+                    "flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-start text-sm transition-colors motion-reduce:transition-none",
                     section === id
                       ? "bg-muted font-medium text-foreground"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -250,8 +250,8 @@ export function ProjectDashboard({
               <p className="px-2 py-4 text-center text-xs text-muted-foreground">Разделы не найдены</p>
             )}
           </nav>
-          <div className="mt-auto border-t px-2 pt-3 text-xs text-muted-foreground">
-            <p className="mt-1">
+          <div className="mbs-auto border-bs px-2 pbs-3 text-xs text-muted-foreground">
+            <p className="mbs-1">
               {dashboard.status === "active"
                 ? `${dashboard.schema?.tables.length ?? 0} таблиц`
                 : "Без базы"}
@@ -260,7 +260,7 @@ export function ProjectDashboard({
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-          <div className="flex shrink-0 items-center gap-2 border-b p-2 md:hidden">
+          <div className="flex shrink-0 items-center gap-2 border-be p-2 md:hidden">
             <label className="min-w-0 flex-1">
               <span className="sr-only">Раздел Dashboard</span>
               <select

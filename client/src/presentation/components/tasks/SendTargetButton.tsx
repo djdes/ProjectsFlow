@@ -62,10 +62,10 @@ export function SendTargetButton<V extends string>({
       aria-label={current ? `Отправить — ${current.label}` : 'Отправить'}
       className={cn(
         dim,
-        'grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-all duration-150 hover:bg-primary/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100',
+        'grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-150 hover:bg-primary/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100',
       )}
     >
-      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+      {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Send className="size-4" />}
     </button>
   );
 
@@ -78,7 +78,7 @@ export function SendTargetButton<V extends string>({
   return (
     <div className="inline-flex items-center gap-1">
       {showLabel && current && (
-        <span className="hidden text-[11px] text-muted-foreground sm:inline">{current.label}</span>
+        <span className="hidden text-2xs text-muted-foreground sm:inline">{current.label}</span>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -59,8 +59,8 @@ const STATUS_LABEL_RU: Record<LiveSession['status'], string> = {
 // жирные акценты — в духе Notion/Cursor. Перебивает мелкий prose-sm у CommentBody
 // (селекторы `.class h1` сильнее, чем prose-sm-овский `:where(h1)`).
 const RICH_MD =
-  '[&_h1]:mb-1.5 [&_h1]:mt-3 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:leading-tight ' +
-  '[&_h2]:mb-1 [&_h2]:mt-2.5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-0.5 [&_h3]:mt-2 ' +
+  '[&_h1]:mbe-1.5 [&_h1]:mbs-3 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:leading-tight ' +
+  '[&_h2]:mbe-1 [&_h2]:mbs-2.5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mbe-0.5 [&_h3]:mbs-2 ' +
   '[&_h3]:text-sm [&_h3]:font-semibold [&_strong]:font-semibold [&_ul]:my-1.5 [&_ol]:my-1.5 ' +
   '[&_li]:my-0.5 [&_p]:my-1.5';
 
@@ -324,18 +324,18 @@ export function LiveTab({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#f6f6f7] text-zinc-700 dark:bg-[#1e1e1e] dark:text-[#d4d4d4]">
+    <div className="flex h-full min-h-0 flex-col bg-[oklch(97.34%_0.001_286.38)] text-zinc-700 dark:bg-[oklch(23.5%_0_none)] dark:text-[oklch(86.99%_0_none)]">
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
 
       {/* Селектор попыток. */}
       {sessions.length > 0 && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200 bg-zinc-100 px-3 py-1.5 dark:border-white/10 dark:bg-[#181818]">
+        <div className="flex shrink-0 items-center gap-2 border-be border-zinc-200 bg-zinc-100 px-3 py-1.5 dark:border-white/10 dark:bg-[oklch(20.9%_0_none)]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="Выбрать попытку"
-                className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:bg-[#252526] dark:text-[#d4d4d4] dark:hover:bg-white/5"
+                className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 text-start text-xs text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:bg-[oklch(26.49%_0.002_286.27)] dark:text-[oklch(86.99%_0_none)] dark:hover:bg-white/5"
               >
                 <span className="min-w-0 flex-1 truncate">
                   {selected ? sessionLabel(selected) : 'Сессия'}
@@ -362,8 +362,8 @@ export function LiveTab({
             </DropdownMenuContent>
           </DropdownMenu>
           {running && (
-            <span className="flex shrink-0 items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-300">
-              <span className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)]" />
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-300">
+              <span className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_oklch(64.5%_0.215_16.44/0.6)]" />
               LIVE
             </span>
           )}
@@ -377,14 +377,14 @@ export function LiveTab({
         className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3"
       >
         {sessionsLoading && sessions.length === 0 ? (
-          <div className="flex items-center justify-center py-10 text-sm text-zinc-500 dark:text-[#8b949e]">
-            <Loader2 className="mr-2 size-4 animate-spin" /> Загрузка…
+          <div className="flex items-center justify-center py-10 text-sm text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
+            <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…
           </div>
         ) : sessions.length === 0 ? (
           dispatcherQuestions.length === 0 && !questionsLoading ? <EmptyState working={isWorking} /> : null
         ) : loading && events.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-sm text-zinc-500 dark:text-[#8b949e]">
-            <Loader2 className="mr-2 size-4 animate-spin" /> Загрузка ленты…
+          <div className="flex items-center justify-center py-8 text-sm text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
+            <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка ленты…
           </div>
         ) : (
           <>
@@ -392,7 +392,7 @@ export function LiveTab({
               <button
                 type="button"
                 onClick={() => setVisibleCount((c) => c + DOM_CAP)}
-                className="mx-auto block rounded-md border border-zinc-200 px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-white/10 dark:text-[#8b949e] dark:hover:bg-white/5"
+                className="mx-auto block rounded-md border border-zinc-200 px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-white/10 dark:text-[oklch(66.25%_0.018_250.92)] dark:hover:bg-white/5"
               >
                 Загрузить ранее ({hiddenCount})
               </button>
@@ -402,7 +402,7 @@ export function LiveTab({
             ))}
             {running && <ClaudeSpinner startedAt={session?.startedAt} />}
             {events.length === 0 && !running && (
-              <p className="py-6 text-center text-xs text-zinc-500 dark:text-[#8b949e]">
+              <p className="py-6 text-center text-xs text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
                 Нет событий в этой сессии.
               </p>
             )}
@@ -412,8 +412,8 @@ export function LiveTab({
           </>
         )}
         {questionsLoading && sessions.length === 0 && dispatcherQuestions.length === 0 && (
-          <div className="flex items-center justify-center py-8 text-sm text-zinc-500 dark:text-[#8b949e]">
-            <Loader2 className="mr-2 size-4 animate-spin" /> Загрузка вопросов…
+          <div className="flex items-center justify-center py-8 text-sm text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
+            <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка вопросов…
           </div>
         )}
         {dispatcherQuestions.map(({ comment, question }) => (
@@ -483,10 +483,10 @@ function DispatcherQuestionCard({
   const answerText = Array.isArray(answer?.value) ? answer.value.join(', ') : answer?.value;
   return (
     <section
-      className="rounded-lg border border-violet-300/70 bg-white p-3 shadow-sm dark:border-violet-400/25 dark:bg-[#252526]"
+      className="rounded-lg border border-violet-300/70 bg-white p-3 shadow-sm dark:border-violet-400/25 dark:bg-[oklch(26.49%_0.002_286.27)]"
       aria-label="Вопрос диспетчера"
     >
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mbe-2 flex items-center gap-2">
         <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-400/15 dark:text-violet-300">
           <MessageCircleQuestion className="size-4" aria-hidden />
         </span>
@@ -494,15 +494,15 @@ function DispatcherQuestionCard({
           <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">
             Вопрос диспетчера
           </p>
-          <p className="text-[10px] text-zinc-500 dark:text-[#8b949e]">
+          <p className="text-2xs text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
             {QUESTION_TIME_FMT.format(comment.createdAt)}
           </p>
         </div>
       </div>
       <CommentBody body={comment.body} className={cn(RICH_MD, 'text-sm')} />
       {answer ? (
-        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300">
-          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <div className="mbs-2 flex items-start gap-1.5 rounded-md bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300">
+          <CheckCircle2 className="mbs-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
             <span className="font-medium">Ответ принят</span>
             {answerText ? `: ${answerText}` : ''}
@@ -523,11 +523,11 @@ function DispatcherQuestionCard({
 function EmptyState({ working }: { working: boolean }): React.ReactElement {
   return (
     <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
-      <span className="text-2xl text-violet-400 dark:text-[#c8a2ff]">✻</span>
-      <span className="text-sm text-zinc-600 dark:text-[#cccccc]">
+      <span className="text-2xl text-violet-400 dark:text-[oklch(78.09%_0.135_302.19)]">✻</span>
+      <span className="text-sm text-zinc-600 dark:text-[oklch(84.52%_0_none)]">
         Воркер ещё не запускался по этой задаче.
       </span>
-      <span className="max-w-xs text-xs text-zinc-500 dark:text-[#8b949e]">
+      <span className="max-w-xs text-xs text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
         {working
           ? 'Воркер вот-вот начнёт — здесь появится живая лента действий.'
           : 'Отправь задачу воркеру (поле ниже) — и здесь в реальном времени пойдёт лента действий, как в IDE.'}
@@ -577,9 +577,9 @@ function ClaudeSpinner({ startedAt }: { startedAt?: Date }): React.ReactElement 
   }, [startedAt]);
 
   return (
-    <div className="flex items-center gap-2 px-1 py-1.5 font-mono text-[12px] text-zinc-500 dark:text-[#8b949e]">
-      <span className="text-violet-500 dark:text-[#c8a2ff]">{SPINNER_FRAMES[frame]}</span>
-      <span className="text-zinc-600 dark:text-[#cdd6e3]">{SPINNER_WORDS[word]}…</span>
+    <div className="flex items-center gap-2 px-1 py-1.5 font-mono text-xs text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
+      <span className="text-violet-500 dark:text-[oklch(78.09%_0.135_302.19)]">{SPINNER_FRAMES[frame]}</span>
+      <span className="text-zinc-600 dark:text-[oklch(87.31%_0.02_257.48)]">{SPINNER_WORDS[word]}…</span>
       <span className="opacity-60">({secs}s)</span>
     </div>
   );
@@ -587,7 +587,7 @@ function ClaudeSpinner({ startedAt }: { startedAt?: Date }): React.ReactElement 
 
 // Маленький круглый маркер слева (вместо иконок) — таймлайн в духе Claude Code «⏺».
 function Dot({ tone }: { tone: string }): React.ReactElement {
-  return <span className={cn('mt-[7px] size-1.5 shrink-0 rounded-full', tone)} aria-hidden />;
+  return <span className={cn('mbs-[7px] size-1.5 shrink-0 rounded-full', tone)} aria-hidden />;
 }
 
 // === Ряд ленты — рендер по kind ===
@@ -598,7 +598,7 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       if (text.trim().length === 0) return null;
       return (
         <div className="flex gap-2">
-          <Dot tone="bg-violet-500 dark:bg-[#c8a2ff]" />
+          <Dot tone="bg-violet-500 dark:bg-[oklch(78.09%_0.135_302.19)]" />
           <div className="min-w-0 flex-1 leading-relaxed">
             <CommentBody body={text} className={RICH_MD} />
           </div>
@@ -611,12 +611,12 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       return (
         <div className="flex gap-2">
           <Dot tone="bg-blue-500" />
-          <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-300 bg-zinc-900 dark:border-white/10 dark:bg-[#0d0d0d]">
-            <div className="border-b border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-zinc-400">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-300 bg-zinc-900 dark:border-white/10 dark:bg-[oklch(15.91%_0_none)]">
+            <div className="border-be border-white/10 px-2.5 py-1 text-2xs uppercase tracking-wider text-zinc-400">
               терминал
             </div>
-            <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-[#cdd6e3]">
-              <span className="select-none text-[#5a9bff]">$ </span>
+            <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-2xs leading-relaxed text-[oklch(87.31%_0.02_257.48)]">
+              <span className="select-none text-[oklch(69.27%_0.162_258.76)]">$ </span>
               {command}
             </pre>
           </div>
@@ -627,11 +627,11 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       return (
         <div className="flex gap-2">
           <Dot tone="bg-rose-500" />
-          <div className="min-w-0 flex-1 overflow-hidden rounded-md border-l-2 border-rose-400 bg-rose-50 dark:border-[#f48771] dark:bg-[#f48771]/[0.07]">
-            <div className="px-2.5 py-1 text-[10px] uppercase tracking-wider text-rose-600 dark:text-[#f48771]">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-md border-s-2 border-rose-400 bg-rose-50 dark:border-[oklch(73.77%_0.138_32.5)] dark:bg-[oklch(73.77%_0.138_32.5/0.07)]">
+            <div className="px-2.5 py-1 text-2xs uppercase tracking-wider text-rose-600 dark:text-[oklch(73.77%_0.138_32.5)]">
               ошибка инструмента
             </div>
-            <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-rose-700 dark:text-[#f0a39a]">
+            <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-1.5 font-mono text-2xs leading-relaxed text-rose-700 dark:text-[oklch(78.82%_0.093_26.73)]">
               {event.text ?? ''}
             </pre>
           </div>
@@ -645,11 +645,11 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       return (
         <div className="flex items-center gap-2 text-xs">
           <Dot tone="bg-sky-500" />
-          <span className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-sky-700 dark:border-white/10 dark:bg-white/5 dark:text-[#9cdcfe]">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-mono text-2xs font-medium text-sky-700 dark:border-white/10 dark:bg-white/5 dark:text-[oklch(86.32%_0.08_232.08)]">
             {name}
           </span>
           {brief && (
-            <span className="min-w-0 truncate font-mono text-[11px] text-zinc-500 dark:text-[#8b949e]">
+            <span className="min-w-0 truncate font-mono text-2xs text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
               {brief}
             </span>
           )}
@@ -693,7 +693,7 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       return (
         <div className="flex gap-2">
           <Dot tone="bg-zinc-400" />
-          <pre className="m-0 min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-[11px] leading-relaxed text-zinc-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-[#c9d1d9]">
+          <pre className="m-0 min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-2xs leading-relaxed text-zinc-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-[oklch(85.69%_0.014_247.99)]">
             {event.text}
           </pre>
         </div>
@@ -714,9 +714,9 @@ function FileCard({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-200 bg-white dark:border-white/10 dark:bg-[#181818]">
-      <div className="flex items-center gap-1.5 border-b border-zinc-200 bg-zinc-100 px-2.5 py-1 font-mono text-[11px] text-zinc-600 dark:border-white/10 dark:bg-[#252526] dark:text-[#cccccc]">
-        <span className={cn(tone === 'add' ? 'text-emerald-600 dark:text-[#7ee787]' : 'text-amber-600 dark:text-[#e2c08d]')}>
+    <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-200 bg-white dark:border-white/10 dark:bg-[oklch(20.9%_0_none)]">
+      <div className="flex items-center gap-1.5 border-be border-zinc-200 bg-zinc-100 px-2.5 py-1 font-mono text-2xs text-zinc-600 dark:border-white/10 dark:bg-[oklch(26.49%_0.002_286.27)] dark:text-[oklch(84.52%_0_none)]">
+        <span className={cn(tone === 'add' ? 'text-emerald-600 dark:text-[oklch(84.16%_0.164_145.75)]' : 'text-amber-600 dark:text-[oklch(82.52%_0.077_77.46)]')}>
           {icon}
         </span>
         <span className="min-w-0 truncate">{path}</span>
@@ -739,8 +739,8 @@ function FinalDiffs({
   const totalDel = files.reduce((s, f) => s + f.deletions, 0);
 
   return (
-    <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-white/10">
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500 dark:text-[#8b949e]">
+    <div className="mbs-3 border-bs border-zinc-200 pbs-3 dark:border-white/10">
+      <div className="mbe-2 flex flex-wrap items-center gap-2 text-2xs text-zinc-500 dark:text-[oklch(66.25%_0.018_250.92)]">
         <span
           className={cn(
             'rounded px-1.5 py-0.5 font-medium uppercase tracking-wider',
@@ -764,18 +764,18 @@ function FinalDiffs({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-800 dark:text-[#8b949e] dark:hover:text-[#d4d4d4]"
+        className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-800 dark:text-[oklch(66.25%_0.018_250.92)] dark:hover:text-[oklch(86.99%_0_none)]"
         aria-expanded={open}
       >
-        <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')} />
+        <ChevronRight className={cn('size-3.5 shrink-0 motion-safe:transition-transform', open && 'rotate-90')} />
         <span>Изменения · {files.length} файл(ов)</span>
-        <span className="ml-1 normal-case tracking-normal text-emerald-600 dark:text-[#7ee787]">
+        <span className="ms-1 normal-case tracking-normal text-emerald-600 dark:text-[oklch(84.16%_0.164_145.75)]">
           +{totalAdd}
         </span>
-        <span className="normal-case tracking-normal text-rose-600 dark:text-[#f48771]">−{totalDel}</span>
+        <span className="normal-case tracking-normal text-rose-600 dark:text-[oklch(73.77%_0.138_32.5)]">−{totalDel}</span>
       </button>
       {open && (
-        <div className="mt-2 space-y-2">
+        <div className="mbs-2 space-y-2">
           {files.map((f) => (
             <FinalFileDiff key={f.path} file={f} />
           ))}
@@ -788,35 +788,35 @@ function FinalDiffs({
 function FinalFileDiff({ file }: { file: LiveFileDiff }): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
-    <div className="overflow-hidden rounded-md border border-zinc-200 bg-white dark:border-white/10 dark:bg-[#181818]">
+    <div className="overflow-clip rounded-md border border-zinc-200 bg-white dark:border-white/10 dark:bg-[oklch(20.9%_0_none)]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 bg-zinc-100 px-2.5 py-1 text-left font-mono text-[11px] text-zinc-600 hover:bg-zinc-200/60 dark:bg-[#252526] dark:text-[#cccccc] dark:hover:bg-white/5"
+        className="flex w-full items-center gap-1.5 bg-zinc-100 px-2.5 py-1 text-start font-mono text-2xs text-zinc-600 hover:bg-zinc-200/60 dark:bg-[oklch(26.49%_0.002_286.27)] dark:text-[oklch(84.52%_0_none)] dark:hover:bg-white/5"
         aria-expanded={open}
       >
-        <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
+        <ChevronRight className={cn('size-3 shrink-0 motion-safe:transition-transform', open && 'rotate-90')} />
         <span className="min-w-0 truncate">{file.path}</span>
-        <span className="ml-auto shrink-0 text-emerald-600 dark:text-[#7ee787]">+{file.additions}</span>
-        <span className="shrink-0 text-rose-600 dark:text-[#f48771]">−{file.deletions}</span>
+        <span className="ms-auto shrink-0 text-emerald-600 dark:text-[oklch(84.16%_0.164_145.75)]">+{file.additions}</span>
+        <span className="shrink-0 text-rose-600 dark:text-[oklch(73.77%_0.138_32.5)]">−{file.deletions}</span>
       </button>
       {open && (
         <div className="p-1.5">
           {file.isBinary ? (
-            <p className="px-2 py-1 text-[11px] italic text-zinc-400 dark:text-[#8b949e]">
+            <p className="px-2 py-1 text-2xs italic text-zinc-400 dark:text-[oklch(66.25%_0.018_250.92)]">
               Бинарный файл
             </p>
           ) : file.unifiedDiff ? (
             <>
               <DiffView mode="unified" unifiedDiff={file.unifiedDiff} />
               {file.truncated && (
-                <p className="px-2 pt-1 text-[10px] italic text-zinc-400 dark:text-[#8b949e]">
+                <p className="px-2 pbs-1 text-2xs italic text-zinc-400 dark:text-[oklch(66.25%_0.018_250.92)]">
                   дифф обрезан по размеру
                 </p>
               )}
             </>
           ) : (
-            <p className="px-2 py-1 text-[11px] italic text-zinc-400 dark:text-[#8b949e]">
+            <p className="px-2 py-1 text-2xs italic text-zinc-400 dark:text-[oklch(66.25%_0.018_250.92)]">
               Нет diff-данных
             </p>
           )}

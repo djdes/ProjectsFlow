@@ -232,7 +232,7 @@ function CreateTokenDialog({
               Отмена
             </Button>
             <Button type="submit" disabled={submitting || name.trim().length === 0}>
-              {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+              {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
               Создать
             </Button>
           </DialogFooter>
@@ -320,7 +320,7 @@ function NewTokenRevealDialog({
                 Скопировать промпт
               </Button>
             </div>
-            <pre className="max-h-48 overflow-y-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-[11px] leading-relaxed">
+            <pre className="max-h-48 overflow-y-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-2xs leading-relaxed">
               {claudePrompt}
             </pre>
             <p className="text-xs text-muted-foreground">
@@ -343,7 +343,7 @@ function NewTokenRevealDialog({
                 Скопировать команду
               </Button>
             </div>
-            <pre className="overflow-x-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-[11px] leading-relaxed">
+            <pre className="overflow-x-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-2xs leading-relaxed">
               {installCommand}
             </pre>
             <p className="text-xs text-muted-foreground">
@@ -356,14 +356,14 @@ function NewTokenRevealDialog({
             <summary className="cursor-pointer select-none font-medium text-muted-foreground">
               Показать токен отдельно
             </summary>
-            <div className="relative mt-2">
-              <div className="break-all rounded bg-background px-2.5 py-1.5 pr-9 font-mono text-[11px]">
+            <div className="relative mbs-2">
+              <div className="break-all rounded bg-background px-2.5 py-1.5 pe-9 font-mono text-2xs">
                 {plaintext}
               </div>
               <Button
                 size="icon"
                 variant="ghost"
-                className="absolute right-0.5 top-0.5 size-7"
+                className="absolute end-0.5 inset-bs-0.5 size-7"
                 onClick={() => handleCopy('token', plaintext ?? '', 'Токен скопирован')}
                 aria-label="Скопировать"
               >

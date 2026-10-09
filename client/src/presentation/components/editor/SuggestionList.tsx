@@ -82,7 +82,7 @@ export const SuggestionList = React.forwardRef<SuggestionListHandle, SuggestionL
               key={it.id}
               type="button"
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors',
                 i === index ? 'bg-active text-foreground' : 'hover:bg-hover',
               )}
               onMouseEnter={() => setIndex(i)}
@@ -106,7 +106,7 @@ export const SuggestionList = React.forwardRef<SuggestionListHandle, SuggestionL
         {/* Превью активного пункта — тёмная карточка справа: сверху пример рендера блока,
             снизу подпись (что делает пункт). Показываем только если у пункта есть preview. */}
         {active?.preview ? (
-          <div className="pointer-events-none ml-2 hidden w-56 shrink-0 overflow-hidden rounded-lg bg-neutral-900 shadow-xl ring-1 ring-black/20 sm:block">
+          <div className="pointer-events-none ms-2 hidden w-56 shrink-0 overflow-clip rounded-lg bg-neutral-900 shadow-xl ring-1 ring-black/20 sm:block">
             <div className="min-h-[4.5rem] bg-neutral-800/60 px-3.5 py-3 text-neutral-100">
               {active.preview}
             </div>

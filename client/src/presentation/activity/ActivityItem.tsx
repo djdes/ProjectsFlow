@@ -84,7 +84,7 @@ function ChangesDiff({
     <div
       onClick={onOpen ? () => onOpen() : undefined}
       className={cn(
-        'mt-2.5 overflow-hidden rounded-xl border border-border/70 bg-muted/20 transition-colors',
+        'mbs-2.5 overflow-clip rounded-xl border border-border/70 bg-muted/20 transition-colors',
         onOpen && 'cursor-pointer hover:border-border hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       )}
       role={onOpen ? 'button' : undefined}
@@ -98,7 +98,7 @@ function ChangesDiff({
       {changes.map((c, i) => (
         <div
           key={`${c.field}-${i}`}
-          className="grid gap-1.5 border-b border-border/50 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start"
+          className="grid gap-1.5 border-be border-border/50 px-3 py-2.5 text-xs last:border-be-0 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start"
         >
           <span className="font-medium text-muted-foreground">{FIELD_LABEL[c.field] ?? c.field}</span>
           {c.field === 'description' ? (
@@ -286,11 +286,11 @@ export function ActivityItem({
         {/* Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion). */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="relative z-10 mt-0.5 shrink-0">
+            <span className="relative z-10 mbs-0.5 shrink-0">
               <UserAvatar
                 displayName={actor}
                 avatarUrl={item.actorAvatarUrl}
-                className="size-7 rounded-full text-[11px]"
+                className="size-7 rounded-full text-2xs"
               />
             </span>
           </TooltipTrigger>
@@ -302,12 +302,12 @@ export function ActivityItem({
             className="flex items-center gap-3 rounded-xl border-border/60 p-3 shadow-lg"
           >
             <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-11 rounded-full text-base" />
-            <span className="pr-2 text-left">
+            <span className="pe-2 text-start">
               <span className="block text-sm font-semibold text-foreground">
                 {actor}
                 {isYou && <span className="font-normal text-muted-foreground"> (вы)</span>}
               </span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
+              <span className="mbs-0.5 block text-xs text-muted-foreground">
                 {new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} — местное время
               </span>
             </span>
@@ -316,7 +316,7 @@ export function ActivityItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex min-h-8 items-start gap-2">
-            <p className="min-w-0 flex-1 select-text pt-0.5 text-sm leading-relaxed">
+            <p className="min-w-0 flex-1 select-text pbs-0.5 text-sm leading-relaxed">
               {renderText(item, { openTask: () => openTask(), openProject })}
             </p>
             {/* Правый слот ФИКСИРОВАННОЙ ширины под кнопку версии — резервируется всегда, чтобы
@@ -348,7 +348,7 @@ export function ActivityItem({
           {/* Время — серым, чуть ниже; hover: точная дата/время до секунды (Notion-style). */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="mt-0.5 inline-block w-fit text-xs text-muted-foreground hover:text-foreground">
+              <span className="mbs-0.5 inline-block w-fit text-xs text-muted-foreground hover:text-foreground">
                 {relativeTime(item.createdAt)}
               </span>
             </TooltipTrigger>

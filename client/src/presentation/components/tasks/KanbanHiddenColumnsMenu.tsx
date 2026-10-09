@@ -26,7 +26,7 @@ export function KanbanHiddenColumnsMenu({ hidden, onShow }: Props): React.ReactE
   if (hidden.length === 0) return null;
 
   return (
-    <div className="flex shrink-0 items-start pt-2">
+    <div className="flex shrink-0 items-start pbs-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -36,7 +36,7 @@ export function KanbanHiddenColumnsMenu({ hidden, onShow }: Props): React.ReactE
           >
             <EyeOff className="size-4" />
             Скрытые колонки
-            <span className="px-0.5 text-[11px] tabular-nums">{hidden.length}</span>
+            <span className="px-0.5 text-2xs tabular-nums">{hidden.length}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">

@@ -61,7 +61,7 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
             aria-label={value ? 'Сменить иконку' : 'Добавить иконку'}
             title="Иконка"
             className={cn(
-              'grid shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-md leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              'grid shrink-0 cursor-pointer select-none place-items-center overflow-clip rounded-md leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
               big ? 'size-9' : 'size-7',
               triggerClassName,
             )}
@@ -84,13 +84,13 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-          <div className="flex items-center gap-1 border-b px-2 py-1.5">
+          <div className="flex items-center gap-1 border-be px-2 py-1.5">
             <TabsList className="h-7 gap-0.5 bg-transparent p-0">
               <TabsTrigger value="emoji" className="h-7 px-2 text-xs">Эмодзи</TabsTrigger>
               <TabsTrigger value="icons" className="h-7 px-2 text-xs">Иконки</TabsTrigger>
               <TabsTrigger value="upload" className="h-7 px-2 text-xs">Загрузить</TabsTrigger>
             </TabsList>
-            <div className="ml-auto flex items-center gap-0.5">
+            <div className="ms-auto flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => pick(randomEmoji())}
@@ -115,15 +115,15 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
           </div>
 
           {tab !== 'upload' && (
-            <div className="border-b px-2 py-1.5">
+            <div className="border-be px-2 py-1.5">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Фильтр…"
                   aria-label="Фильтр иконок"
-                  className="h-7 w-full rounded-md border bg-transparent pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-foreground/30"
+                  className="h-7 w-full rounded-md border bg-transparent ps-7 pe-2 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-foreground/30"
                 />
               </div>
             </div>

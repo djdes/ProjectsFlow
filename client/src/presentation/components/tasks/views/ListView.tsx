@@ -332,12 +332,12 @@ export function ListView({
         onDragEnd={handleRowDragEnd}
         onDragCancel={() => setDragTask(null)}
       >
-      <div className="flex flex-col pl-12">
+      <div className="flex flex-col ps-12">
         {(grouping && groups
           ? (groups.flatMap((g) => {
               const sample = g.tasks[0];
               return [
-                <div key={`__group-${g.key}`} className="flex items-center gap-1.5 px-1 pb-1 pt-3">
+                <div key={`__group-${g.key}`} className="flex items-center gap-1.5 px-1 pbe-1 pbs-3">
                   <button
                     type="button"
                     aria-label={collapsedGroups.has(g.key) ? 'Развернуть группу' : 'Свернуть группу'}
@@ -345,7 +345,7 @@ export function ListView({
                     className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
                   >
                     <ChevronDown
-                      className={cn('size-3.5 transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
+                      className={cn('size-3.5 motion-safe:transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
                     />
                   </button>
                   <span className="text-sm font-medium">
@@ -443,7 +443,7 @@ export function ListView({
         <div className="py-1">
           <NewTaskRow create={create} />
         </div>
-        <p className="px-2 pt-1 text-[11px] text-muted-foreground/60">Всего: {rows.length}</p>
+        <p className="px-2 pbs-1 text-2xs text-muted-foreground/60">Всего: {rows.length}</p>
       </div>
 
       <DragOverlay dropAnimation={null}>
@@ -561,7 +561,7 @@ function ListRow({
             rowColor,
             selected && 'bg-primary/5',
             isDragging && 'opacity-40',
-            isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',
+            isOver && 'shadow-[inset_0_2px_0_0_oklch(var(--primary))]',
             recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
           style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
@@ -585,7 +585,7 @@ function ListRow({
               }}
               className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
             >
-              <ChevronDown className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')} />
+              <ChevronDown className={cn('size-3.5 motion-safe:transition-transform', !expanded && '-rotate-90')} />
             </button>
           ) : (
             depth > 0 && <span className="size-4 shrink-0" aria-hidden />
@@ -593,7 +593,7 @@ function ListRow({
           {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (клик-меню/drag) и чекбокс. */}
           <div
             className={cn(
-              'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
+              'absolute -start-14 inset-bs-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
               anySelected || selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             )}
             onClick={(e) => e.stopPropagation()}
@@ -637,7 +637,7 @@ function ListRow({
               checked={selected}
               onChange={onToggleSelected}
               aria-label="Выбрать задачу"
-              className="ml-0.5 size-3.5 cursor-pointer accent-primary"
+              className="ms-0.5 size-3.5 cursor-pointer accent-primary"
             />
           </div>
           {task.icon ? (
@@ -681,7 +681,7 @@ function ListRow({
             </>
           )}
           {/* Тихие свойства справа: срок / приоритет / статус / ответственный. */}
-          <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
             {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
             {task.priority !== null &&
               task.priority !== undefined &&

@@ -35,9 +35,9 @@ export function NotificationItem({
         isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40',
       )}
     >
-      <span className="relative float-left mr-2.5">
+      <span className="relative float-start me-2.5">
         <Avatar className="size-7 ring-1 ring-border">
-          <AvatarFallback className="text-[11px]">
+          <AvatarFallback className="text-2xs">
             {getInitials(
               payload.type === 'server_alert'
                 ? payload.serverName
@@ -52,7 +52,7 @@ export function NotificationItem({
         {/* Непрочитанное — точка на углу аватара (выделяет иконку). */}
         {isUnread && (
           <span
-            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-primary ring-2 ring-background"
+            className="absolute -end-0.5 -inset-bs-0.5 size-2.5 rounded-full bg-primary ring-2 ring-background"
             aria-hidden
           />
         )}
@@ -95,13 +95,13 @@ export function NotificationItem({
               <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
             </p>
             {actionUi === 'accepted' ? (
-              <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <p className="clear-start pbs-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Принято
               </p>
             ) : actionUi === 'resolved' ? (
-              <p className="clear-left pt-1 text-xs text-muted-foreground">Уже обработано</p>
+              <p className="clear-start pbs-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
-              <div className="clear-left pt-1">
+              <div className="clear-start pbs-1">
                 <Button
                   size="sm"
                   disabled={actionUi === 'busy'}
@@ -125,13 +125,13 @@ export function NotificationItem({
               {roleLabel[payload.role]}
             </p>
             {actionUi === 'accepted' ? (
-              <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <p className="clear-start pbs-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Принято
               </p>
             ) : actionUi === 'resolved' ? (
-              <p className="clear-left pt-1 text-xs text-muted-foreground">Уже обработано</p>
+              <p className="clear-start pbs-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
-              <div className="clear-left pt-1">
+              <div className="clear-start pbs-1">
                 <Button
                   size="sm"
                   disabled={actionUi === 'busy'}
@@ -271,13 +271,13 @@ export function NotificationItem({
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>
             {actionUi === 'accepted' ? (
-              <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <p className="clear-start pbs-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Доступ предоставлен
               </p>
             ) : actionUi === 'declined' ? (
-              <p className="clear-left pt-1 text-xs text-muted-foreground">Запрос отклонён</p>
+              <p className="clear-start pbs-1 text-xs text-muted-foreground">Запрос отклонён</p>
             ) : (
-              <div className="flex clear-left gap-2 pt-1">
+              <div className="flex clear-start gap-2 pbs-1">
                 <Button
                   size="sm"
                   disabled={actionUi === 'busy'}

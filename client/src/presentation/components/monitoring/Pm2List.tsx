@@ -15,7 +15,7 @@ export function Pm2List({ pm2 }: { pm2: ReadonlyArray<Pm2ProcessSnapshot> }): Re
         const recent = p.uptimeMs !== null && p.uptimeMs < RECENT_RESTART_MS;
         return (
           <div key={p.name} className="rounded-md border border-border/60 p-2.5">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="mbe-1.5 flex items-center justify-between gap-2">
               <span className="truncate text-sm font-medium">{p.name}</span>
               <PmStatusBadge status={p.status} />
             </div>

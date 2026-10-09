@@ -7,7 +7,8 @@ import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2, Undo2 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
-import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
+import { Markdown } from '@/presentation/components/markdown/Markdown';
+import { TASK_CARD_BODY_CLASS, TASK_CARD_TITLE_CLASS } from './taskCardText';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -262,7 +263,7 @@ function KanbanCardImpl({
           >
             <ArrowRight
               className={cn(
-                'transition-transform duration-150 group-hover/promote:translate-x-0.5',
+                'motion-safe:transition-transform duration-150 group-hover/promote:translate-x-0.5',
                 big ? 'size-4' : 'size-3',
               )}
             />
@@ -419,10 +420,10 @@ function KanbanCardImpl({
           // отрисовать и вне доски. Бордер оставлен ПРОЗРАЧНЫМ намеренно — хайрлайн теперь
           // рисует кольцо, но модификаторы ниже (done / open / selected / приоритет)
           // продолжают красить бордер ровно как раньше.
-          'shadow-[0_4px_12px_rgba(25,25,25,0.027),0_1px_2px_rgba(25,25,25,0.02),0_0_0_1px_var(--pf-card-ring,rgba(42,28,0,0.07))]',
+          'shadow-[0_4px_12px_oklch(21.34%_0_none/0.027),0_1px_2px_oklch(21.34%_0_none/0.02),0_0_0_1px_var(--pf-card-ring,oklch(23.78%_0.049_82.45/0.07))]',
           // На графите мягкая светлая тень не читается — в тёмной теме тени плотнее,
           // а кольцо, наоборот, светлое.
-          'dark:shadow-[0_4px_12px_rgba(0,0,0,0.28),0_1px_2px_rgba(0,0,0,0.2),0_0_0_1px_var(--pf-card-ring,rgba(255,255,255,0.09))]',
+          'dark:shadow-[0_4px_12px_oklch(0%_0_none/0.28),0_1px_2px_oklch(0%_0_none/0.2),0_0_0_1px_var(--pf-card-ring,oklch(100%_0_none/0.09))]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[border-color,opacity,background-color] duration-150 ease-out',
@@ -433,7 +434,7 @@ function KanbanCardImpl({
           doneCard && 'border-success/25 hover:border-success/45',
           // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
           // спокойный индикатор важности в стиле Todoist (меняется в дравере).
-          task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
+          task.priority && cn('border-s-2', PRIORITY_META[task.priority].border),
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
           // Status-акцент: TODO — статичный тонкий янтарный ring «задача ждёт воркера».
           // Стоит ДО selection-ring ниже, чтобы при выделении twMerge оставил ring выбора.
@@ -475,11 +476,11 @@ function KanbanCardImpl({
             aria-hidden
             className={cn(
               'pointer-events-none absolute inset-x-1 z-30 flex items-center gap-1',
-              dropLine === 'before' ? '-top-[5px]' : '-bottom-[5px]',
+              dropLine === 'before' ? '-inset-bs-[5px]' : '-inset-be-[5px]',
             )}
           >
             <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-            <span className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_rgba(59,130,246,0.5)]" />
+            <span className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_oklch(62.31%_0.188_259.81/0.5)]" />
             <span className="size-1.5 shrink-0 rounded-full bg-primary" />
           </span>
         )}
@@ -489,7 +490,7 @@ function KanbanCardImpl({
           <span
             aria-label="Воркер работает над задачей"
             title="Воркер работает над задачей"
-            className="absolute right-1.5 top-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"
+            className="absolute end-1.5 inset-bs-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_oklch(64.5%_0.215_16.44/0.7)] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"
           />
         )}
 
@@ -499,7 +500,7 @@ function KanbanCardImpl({
             top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки. */}
         {showActions && (
           <div
-            className="pointer-events-none absolute right-2 top-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
+            className="pointer-events-none absolute end-2 inset-bs-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
             {...stopDragProps}
           >
             {renderActions(false)}
@@ -509,7 +510,7 @@ function KanbanCardImpl({
           <span
             aria-hidden
             className={cn(
-              'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
+              'mbs-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
               selected
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-muted-foreground/40',
@@ -529,24 +530,13 @@ function KanbanCardImpl({
               <div className="max-h-[calc(4lh+0.25rem)] overflow-hidden text-sm leading-snug max-sm:max-h-none">
                 {/* Иконка задачи (эмодзи/lucide/картинка) — перед заголовком, как в Notion. */}
                 {task.icon && (
-                  <span className="mr-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">
+                  <span className="me-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">
                     <ProjectIconView icon={task.icon} pixelSize={17} className="text-[1.05rem]" />
                   </span>
                 )}
                 {/* Keep authored inline marks; list/rule-like title prefixes stay literal. */}
-                <TaskTitleText title={title} className="font-medium text-foreground" />
-                {body.trim() && (
-                  <Markdown
-                    className={cn(
-                      MARKDOWN_COMPACT,
-                      'mt-1 text-foreground/75',
-                      '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
-                      '[&_strong]:font-bold [&_b]:font-bold',
-                    )}
-                  >
-                    {body}
-                  </Markdown>
-                )}
+                <TaskTitleText title={title} className={TASK_CARD_TITLE_CLASS} />
+                {body.trim() && <Markdown className={TASK_CARD_BODY_CLASS}>{body}</Markdown>}
               </div>
             ) : (
               <p className="text-sm leading-snug text-muted-foreground">—</p>
@@ -565,7 +555,7 @@ function KanbanCardImpl({
             className={cn(
               // Нейтральный bg-card + ring — один в один как плашка действий сверху-справа
               // (она нормально смотрится на любой карточке, включая зелёную done).
-              'pointer-events-none absolute bottom-1 left-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]',
+              'pointer-events-none absolute inset-be-1 start-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-clip rounded-md bg-card px-1.5 py-0.5 text-2xs text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]',
             )}
           >
             {metaInner}
@@ -577,7 +567,7 @@ function KanbanCardImpl({
             border-t мягко отделяет ряд от текста. */}
         {!selecting && !preview && (hasMeta || showActions) && (
           <div
-            className="mt-1 flex items-center justify-between gap-2 border-t border-border/60 pt-1.5 text-[11px] text-muted-foreground sm:hidden"
+            className="mbs-1 flex items-center justify-between gap-2 border-bs border-border/60 pbs-1.5 text-2xs text-muted-foreground sm:hidden"
             {...stopDragProps}
           >
             <span className="flex min-w-0 flex-1 items-center overflow-hidden">{metaInner}</span>

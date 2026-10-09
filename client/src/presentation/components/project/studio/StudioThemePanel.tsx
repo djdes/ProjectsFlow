@@ -65,10 +65,10 @@ export function StudioThemePanel({
 
   return (
     <section className="flex max-h-[min(720px,calc(100dvh-88px))] w-[min(390px,calc(100vw-24px))] min-h-0 flex-col bg-background" aria-label="Тема проекта">
-      <header className="flex h-[70px] shrink-0 items-start justify-between border-b px-5 py-3.5">
+      <header className="flex h-[70px] shrink-0 items-start justify-between border-be px-5 py-3.5">
         <div>
           <h2 className="text-lg font-semibold">Тема</h2>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Цвета и шрифт будут переданы ИИ как точное изменение проекта.</p>
+          <p className="mbs-0.5 text-xs leading-5 text-muted-foreground">Цвета и шрифт будут переданы ИИ как точное изменение проекта.</p>
         </div>
         <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onClose} aria-label="Закрыть тему"><X className="size-4" /></Button>
       </header>
@@ -78,42 +78,42 @@ export function StudioThemePanel({
           <Sparkles className="size-4" /> Создать свою тему
         </Button>
 
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mbs-6 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Готовые темы</h3>
           <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Обновить темы" onClick={() => choosePreset(PRESETS[(PRESETS.findIndex((item) => item.id === selectedId) + 1) % PRESETS.length]!)}><RefreshCw className="size-4" /></Button>
         </div>
-        <div className="mt-2 space-y-2">
+        <div className="mbs-2 space-y-2">
           {PRESETS.map((preset) => (
             <button
               key={preset.id}
               type="button"
               onClick={() => choosePreset(preset)}
               aria-pressed={selectedId === preset.id}
-              className={cn('group relative flex w-full overflow-hidden rounded-xl border text-left transition hover:border-foreground/30', selectedId === preset.id && 'border-primary ring-2 ring-primary/15')}
+              className={cn('group relative flex w-full overflow-clip rounded-xl border text-start transition hover:border-foreground/30', selectedId === preset.id && 'border-primary ring-2 ring-primary/15')}
             >
               <span className="grid w-24 shrink-0 place-items-center text-3xl font-medium text-white" style={{ background: preset.colors[0], fontFamily: preset.font }}>Aa</span>
               <span className="flex min-w-0 flex-1">
                 {preset.colors.slice(1).map((color) => <span key={color} className="h-16 flex-1" style={{ background: color }} />)}
               </span>
-              {selectedId === preset.id && <span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground"><Check className="size-3" /></span>}
+              {selectedId === preset.id && <span className="absolute end-2 inset-bs-2 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground"><Check className="size-3" /></span>}
               <span className="sr-only">{preset.label}</span>
             </button>
           ))}
         </div>
 
-        <div id="pf-custom-theme" className="mt-6 rounded-xl border bg-muted/15 p-4">
+        <div id="pf-custom-theme" className="mbs-6 rounded-xl border bg-muted/15 p-4">
           <h3 className="text-sm font-semibold">Своя тема</h3>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs text-muted-foreground">Основной цвет<Input type="color" value={primary} onChange={(event) => setPrimary(event.target.value)} className="mt-1 h-10 w-full p-1" /></label>
-            <label className="text-xs text-muted-foreground">Фон<Input type="color" value={background} onChange={(event) => setBackground(event.target.value)} className="mt-1 h-10 w-full p-1" /></label>
+          <div className="mbs-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs text-muted-foreground">Основной цвет<Input type="color" value={primary} onChange={(event) => setPrimary(event.target.value)} className="mbs-1 h-10 w-full p-1" /></label>
+            <label className="text-xs text-muted-foreground">Фон<Input type="color" value={background} onChange={(event) => setBackground(event.target.value)} className="mbs-1 h-10 w-full p-1" /></label>
           </div>
-          <label className="mt-3 block text-xs text-muted-foreground">Шрифт<Input value={font} onChange={(event) => setFont(event.target.value)} className="mt-1" placeholder="Inter" /></label>
+          <label className="mbs-3 block text-xs text-muted-foreground">Шрифт<Input value={font} onChange={(event) => setFont(event.target.value)} className="mbs-1" placeholder="Inter" /></label>
         </div>
       </div>
 
-      <footer className="flex shrink-0 justify-end gap-2 border-t bg-background p-4">
+      <footer className="flex shrink-0 justify-end gap-2 border-bs bg-background p-4">
         <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
-        <Button type="button" disabled={sending} onClick={() => void sendToChat()}>{sending && <Loader2 className="mr-2 size-4 animate-spin" />}Передать в чат</Button>
+        <Button type="button" disabled={sending} onClick={() => void sendToChat()}>{sending && <Loader2 className="me-2 size-4 motion-safe:animate-spin" />}Передать в чат</Button>
       </footer>
     </section>
   );

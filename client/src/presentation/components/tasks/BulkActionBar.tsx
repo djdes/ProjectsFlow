@@ -250,7 +250,7 @@ export function BulkActionBar({
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] z-50 flex justify-center px-3 md:bottom-4">
+      <div className="pointer-events-none fixed inset-x-0 inset-be-[calc(4.5rem_+_env(safe-area-inset-bottom,0px))] z-50 flex justify-center px-3 md:inset-be-4">
         <motion.div
           initial={animations ? { y: 18, scale: 0.95, opacity: 0 } : false}
           animate={{ y: 0, scale: 1, opacity: 1 }}
@@ -258,7 +258,7 @@ export function BulkActionBar({
           className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80"
         >
         <span className="px-2 text-xs font-medium tabular-nums">
-          {disabled ? <Loader2 className="inline size-3.5 animate-spin" /> : `Выбрано ${count}`}
+          {disabled ? <Loader2 className="inline size-3.5 motion-safe:animate-spin" /> : `Выбрано ${count}`}
         </span>
         <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
 
@@ -274,7 +274,7 @@ export function BulkActionBar({
           <DropdownMenuContent align="start" className="min-w-[240px]">
             {(members ?? []).length > 0 ? (
               <>
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <DropdownMenuLabel className="text-2xs uppercase tracking-wide text-muted-foreground">
                   Назначить ответственного
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -287,7 +287,7 @@ export function BulkActionBar({
                     }
                   >
                     <span className="truncate">{m.displayName}</span>
-                    <span className="ml-auto truncate text-[10px] text-muted-foreground">
+                    <span className="ms-auto truncate text-2xs text-muted-foreground">
                       {m.email}
                     </span>
                   </DropdownMenuItem>
@@ -434,7 +434,7 @@ export function BulkActionBar({
                   <span aria-hidden>{m.icon}</span>
                   <div className="flex min-w-0 flex-col">
                     <span className="text-sm font-medium">{m.label}</span>
-                    <span className="text-[11px] leading-snug text-muted-foreground">
+                    <span className="text-2xs leading-snug text-muted-foreground">
                       {m.description}
                     </span>
                   </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Plus, Trash2, Wallet } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -118,16 +119,17 @@ export function FinancePage(): React.ReactElement {
     <>
       {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="flex h-11 items-center px-2.5">
+      <div className="flex h-11 items-center justify-between gap-2 px-2.5">
         <ProjectBreadcrumbs
           projectId={pid ?? ''}
           projectName={project.name}
           projectIcon={project.icon}
           view="finance"
         />
+        <HeaderCompletedTodayPill />
       </div>
 
-      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-1 sm:px-6">
+      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pbe-12 pbs-1 sm:px-6">
       <div className="flex items-center gap-3">
         <Wallet className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Финансы</h1>
@@ -300,9 +302,9 @@ function Stat({
   return (
     <Card>
       <CardContent className="py-3">
-        <p className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="truncate text-2xs uppercase tracking-wide text-muted-foreground">{label}</p>
         <p className={cn('truncate font-mono text-lg font-semibold tabular-nums', valueClass)}>{value}</p>
-        {hint && <p className="truncate text-[10px] text-muted-foreground">{hint}</p>}
+        {hint && <p className="truncate text-2xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
   );
@@ -347,7 +349,7 @@ function AssignForm({
 
   if (employees.length === 0) {
     return (
-      <p className="border-t pt-3 text-xs text-muted-foreground">
+      <p className="border-bs pbs-3 text-xs text-muted-foreground">
         Нет активных сотрудников. Добавьте их в{' '}
         <Link to="/profile" className="text-primary hover:underline">профиле</Link>.
       </p>
@@ -355,7 +357,7 @@ function AssignForm({
   }
 
   return (
-    <div className="grid grid-cols-1 items-end gap-2 border-t pt-3 sm:flex sm:flex-wrap">
+    <div className="grid grid-cols-1 items-end gap-2 border-bs pbs-3 sm:flex sm:flex-wrap">
       <div className="space-y-1">
         <Label className="text-xs">Сотрудник</Label>
         <DropdownMenu>
@@ -446,7 +448,7 @@ function LedgerCard({
           </ul>
         )}
         {addForm}
-        {footnote && <p className="text-[11px] text-muted-foreground/70">{footnote}</p>}
+        {footnote && <p className="text-2xs text-muted-foreground/70">{footnote}</p>}
       </CardContent>
     </Card>
   );
@@ -482,7 +484,7 @@ function ExpenseForm({
   };
 
   return (
-    <div className="grid grid-cols-2 items-end gap-2 border-t pt-3 sm:flex sm:flex-wrap">
+    <div className="grid grid-cols-2 items-end gap-2 border-bs pbs-3 sm:flex sm:flex-wrap">
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-amount">Сумма ₽</Label>
         <Input id="exp-amount" className="sm:w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
@@ -535,7 +537,7 @@ function IncomeForm({
   };
 
   return (
-    <div className="grid grid-cols-2 items-end gap-2 border-t pt-3 sm:flex sm:flex-wrap">
+    <div className="grid grid-cols-2 items-end gap-2 border-bs pbs-3 sm:flex sm:flex-wrap">
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="inc-amount">Сумма ₽</Label>
         <Input id="inc-amount" className="sm:w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />

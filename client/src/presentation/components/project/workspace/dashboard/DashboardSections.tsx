@@ -113,7 +113,7 @@ function SectionHeader({
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+        <p className="mbs-1 max-w-3xl text-sm leading-6 text-muted-foreground">
           {description}
         </p>
       </div>
@@ -154,10 +154,10 @@ function NotConnected({
   return (
     <div className="rounded-xl border border-dashed bg-muted/10 p-5">
       <div className="flex items-start gap-3">
-        <CircleDashed className="mt-0.5 size-5 text-muted-foreground" />
+        <CircleDashed className="mbs-0.5 size-5 text-muted-foreground" />
         <div>
           <p className="text-sm font-medium">{title}</p>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          <p className="mbs-1 text-sm leading-6 text-muted-foreground">
             {description}
           </p>
         </div>
@@ -305,7 +305,7 @@ export function OverviewSection({
             )}
           </div>
           {editingDescription ? (
-            <div className="mt-2 flex max-w-2xl items-start gap-2">
+            <div className="mbs-2 flex max-w-2xl items-start gap-2">
               <textarea
                 value={descriptionDraft}
                 onChange={(event) => setDescriptionDraft(event.target.value.slice(0, 500))}
@@ -316,7 +316,7 @@ export function OverviewSection({
               />
               <div className="flex shrink-0 flex-col gap-1">
                 <Button type="button" size="icon" className="size-8" aria-label="Сохранить описание" disabled={profileBusy} onClick={() => void saveDescription()}>
-                  {profileBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                  {profileBusy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Check className="size-4" />}
                 </Button>
                 <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Отменить" disabled={profileBusy} onClick={() => { setDescriptionDraft(project.description ?? ""); setEditingDescription(false); }}>
                   <X className="size-4" />
@@ -324,18 +324,18 @@ export function OverviewSection({
               </div>
             </div>
           ) : (
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <p className="mbs-1 max-w-2xl text-sm leading-6 text-muted-foreground">
               {project.description || "Результат проекта, пользователи и данные приложения в одном месте."}
             </p>
           )}
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mbs-1 text-xs text-muted-foreground">
             Создан{" "}
             {new Intl.DateTimeFormat("ru-RU", { dateStyle: "long" }).format(
               project.createdAt,
             )}
           </p>
           {project.isPublic && project.publicSlug && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="mbs-2 flex flex-wrap items-center gap-2">
               <StatusPill tone="ok">Опубликован</StatusPill>
               <a
                 href={publicBoardUrl(project.publicSlug)}
@@ -369,7 +369,7 @@ export function OverviewSection({
                 onClick={() => void unpublish()}
               >
                 {publishBusy && (
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />
                 )}
                 Снять с публикации
               </Button>
@@ -380,9 +380,9 @@ export function OverviewSection({
                 onClick={() => void publish()}
               >
                 {publishBusy ? (
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />
                 ) : (
-                  <Globe2 className="mr-1.5 size-4" />
+                  <Globe2 className="me-1.5 size-4" />
                 )}
                 Опубликовать
               </Button>
@@ -404,7 +404,7 @@ export function OverviewSection({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Результат проекта</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mbs-0.5 text-xs text-muted-foreground">
                 Опубликованный сайт воркера
               </p>
             </div>
@@ -413,7 +413,7 @@ export function OverviewSection({
             </StatusPill>
           </div>
           {url ? (
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mbs-5 flex flex-wrap items-center gap-2">
               <span className="min-w-0 flex-1 truncate rounded-lg bg-muted/45 px-3 py-2 text-sm">
                 {siteResultDisplayUrl(site!.siteSlug!)}
               </span>
@@ -442,11 +442,11 @@ export function OverviewSection({
               </Button>
             </div>
           ) : (
-            <p className="mt-5 text-sm text-muted-foreground">
+            <p className="mbs-5 text-sm text-muted-foreground">
               Адрес появится после настройки проекта.
             </p>
           )}
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+          <div className="mbs-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
             <span>{site?.fileCount ?? 0} файлов</span>
             <span>{site?.routes.length ?? 0} маршрутов</span>
             <span>
@@ -461,11 +461,11 @@ export function OverviewSection({
             <Users className="size-4 text-muted-foreground" />
             <p className="text-sm font-semibold">Доступ</p>
           </div>
-          <p className="mt-4 text-2xl font-semibold">{members.length}</p>
+          <p className="mbs-4 text-2xl font-semibold">{members.length}</p>
           <p className="text-xs text-muted-foreground">участников проекта</p>
           <button
             type="button"
-            className="mt-4 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mbs-4 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() =>
               window.dispatchEvent(
                 new CustomEvent("pf:open-project-share", {
@@ -486,7 +486,7 @@ export function OverviewSection({
                 <Database className="size-4 text-muted-foreground" />
                 <p className="text-sm font-semibold">База приложения</p>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 {dashboard.status === "active"
                   ? `${dashboard.schema?.tables.length ?? 0} таблиц`
                   : "Не подключена"}
@@ -498,7 +498,7 @@ export function OverviewSection({
             </span>
           </div>
           <div
-            className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"
+            className="mbs-4 h-1.5 overflow-clip rounded-full bg-muted"
             role="progressbar"
             aria-label="Использование хранилища"
             aria-valuemin={0}
@@ -511,7 +511,7 @@ export function OverviewSection({
             />
           </div>
           {dashboard.schema && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="mbs-4 flex flex-wrap gap-1.5">
               {dashboard.schema.tables.slice(0, 8).map((table) => (
                 <span
                   key={table.name}
@@ -528,7 +528,7 @@ export function OverviewSection({
             <ShieldCheck className="size-4 text-muted-foreground" />
             <p className="text-sm font-semibold">Автоматические проверки</p>
           </div>
-          <div className="mt-4 space-y-2.5">
+          <div className="mbs-4 space-y-2.5">
             <HealthRow
               ok={Boolean(url?.startsWith("https://"))}
               label="HTTPS-адрес результата"
@@ -579,13 +579,13 @@ function HealthRow({
       />
       <span className={ok ? "" : "text-muted-foreground"}>{label}</span>
       {hint ? (
-        <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
+        <span className="ms-auto whitespace-nowrap text-xs text-muted-foreground">
           {hint}
         </span>
       ) : (
         optional &&
         !ok && (
-          <span className="ml-auto text-xs text-muted-foreground">
+          <span className="ms-auto text-xs text-muted-foreground">
             необязательно
           </span>
         )
@@ -711,8 +711,8 @@ export function UsersSection({
             >
               <RefreshCw
                 className={cn(
-                  "mr-1.5 size-3.5",
-                  runtimeLoading && "animate-spin",
+                  "me-1.5 size-3.5",
+                  runtimeLoading && "motion-safe:animate-spin",
                 )}
               />
               Обновить
@@ -735,8 +735,8 @@ export function UsersSection({
           )
         }
       />
-      <div className="overflow-hidden rounded-xl border">
-        <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-3 py-2">
+      <div className="overflow-clip rounded-xl border">
+        <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
           <div
             className="inline-flex rounded-lg bg-muted/50 p-0.5"
             role="tablist"
@@ -770,7 +770,7 @@ export function UsersSection({
               Команда ({members.length})
             </button>
           </div>
-          <label className="ml-auto flex h-9 min-w-[220px] items-center gap-2 rounded-md border px-2.5">
+          <label className="ms-auto flex h-9 min-w-[220px] items-center gap-2 rounded-md border px-2.5">
             <Search className="size-3.5 text-muted-foreground" />
             <input
               value={search}
@@ -803,17 +803,17 @@ export function UsersSection({
             runtimeLoading ? (
               <div className="grid min-h-64 place-items-center text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-2">
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-4 motion-safe:animate-spin" />
                   Загружаем пользователей приложения…
                 </span>
               </div>
             ) : runtimeError ? (
               <div className="grid min-h-64 place-items-center gap-3 px-5 text-center text-sm text-muted-foreground">
                 <div>
-                  <AlertTriangle className="mx-auto mb-2 size-5 text-amber-500" />
+                  <AlertTriangle className="mx-auto mbe-2 size-5 text-amber-500" />
                   <p>{runtimeError}</p>
                   <Button
-                    className="mt-3"
+                    className="mbs-3"
                     variant="outline"
                     size="sm"
                     onClick={() => void loadRuntimeUsers()}
@@ -825,7 +825,7 @@ export function UsersSection({
             ) : filteredRuntimeUsers.length === 0 ? (
               <div className="grid min-h-64 place-items-center px-5 text-center text-sm text-muted-foreground">
                 <div>
-                  <Users className="mx-auto mb-2 size-6 opacity-50" />
+                  <Users className="mx-auto mbe-2 size-6 opacity-50" />
                   <p>
                     {runtimeUsers.length
                       ? "Пользователи не найдены."
@@ -884,7 +884,7 @@ export function UsersSection({
                       onClick={() => void deleteRuntimeUser(user)}
                     >
                       {busyUserId === user.id ? (
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <Loader2 className="size-3.5 motion-safe:animate-spin" />
                       ) : deleteConfirmation === user.id ? (
                         "Подтвердить"
                       ) : (
@@ -905,7 +905,7 @@ export function UsersSection({
                 key={member.userId}
                 className="grid min-h-16 grid-cols-[40px_minmax(130px,1fr)_minmax(130px,1fr)_110px] items-center gap-3 px-3 text-sm max-sm:grid-cols-[40px_1fr_auto]"
               >
-                <span className="grid size-8 place-items-center overflow-hidden rounded-full bg-muted font-medium">
+                <span className="grid size-8 place-items-center overflow-clip rounded-full bg-muted font-medium">
                   {member.user.avatarUrl ? (
                     <img
                       src={member.user.avatarUrl}
@@ -1057,9 +1057,9 @@ function AppTrafficView({
     return (
       <div className="grid min-h-64 place-items-center rounded-xl border border-dashed bg-muted/10 px-6 text-center">
         <div>
-          <Globe2 className="mx-auto mb-3 size-7 text-muted-foreground opacity-60" />
+          <Globe2 className="mx-auto mbe-3 size-7 text-muted-foreground opacity-60" />
           <p className="text-sm font-medium">Приложение ещё не опубликовано</p>
-          <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
+          <p className="mx-auto mbs-1 max-w-sm text-xs text-muted-foreground">
             Как только вы опубликуете сайт, здесь появится обезличенный трафик:
             визиты, уникальные сессии и типы устройств. Мы не храним IP и
             User-Agent.
@@ -1071,7 +1071,7 @@ function AppTrafficView({
   if (state === "loading" && !traffic) {
     return (
       <div className="grid min-h-64 place-items-center rounded-xl border text-sm text-muted-foreground">
-        <Loader2 className="size-5 animate-spin" />
+        <Loader2 className="size-5 motion-safe:animate-spin" />
       </div>
     );
   }
@@ -1105,7 +1105,7 @@ function AppTrafficView({
             <p className="text-xs font-medium text-muted-foreground">
               {metric.label}
             </p>
-            <p className="mt-3 text-2xl font-semibold">{metric.value}</p>
+            <p className="mbs-3 text-2xl font-semibold">{metric.value}</p>
           </section>
         ))}
       </div>
@@ -1116,7 +1116,7 @@ function AppTrafficView({
         </div>
         {perDay.length ? (
           <div
-            className="mt-5 flex h-44 items-end gap-1 overflow-x-auto"
+            className="mbs-5 flex h-44 items-end gap-1 overflow-x-auto"
             aria-label="График визитов приложения"
           >
             {perDay.map((day) => (
@@ -1126,7 +1126,7 @@ function AppTrafficView({
                 title={`${day.date}: ${day.visits} визитов, ${day.sessions} сессий`}
               >
                 <span
-                  className="w-full rounded-t bg-primary/75 transition-colors group-hover:bg-primary"
+                  className="w-full rounded-bs bg-primary/75 transition-colors group-hover:bg-primary"
                   style={{
                     height: `${Math.max(day.visits ? 6 : 2, (day.visits / dailyMax) * 132)}px`,
                   }}
@@ -1138,24 +1138,24 @@ function AppTrafficView({
             ))}
           </div>
         ) : (
-          <div className="mt-5 grid min-h-28 place-items-center text-sm text-muted-foreground">
+          <div className="mbs-5 grid min-h-28 place-items-center text-sm text-muted-foreground">
             За выбранный период визитов не было.
           </div>
         )}
       </section>
       <section className="rounded-xl border p-4">
         <h3 className="text-sm font-semibold">Типы клиентов</h3>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mbs-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {classes.map((item) => (
             <div key={item.cls} className="rounded-lg bg-muted/40 px-3 py-2">
               <p className="text-xs text-muted-foreground">{item.label}</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">
+              <p className="mbs-1 text-lg font-semibold tabular-nums">
                 {item.value}
               </p>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mbs-3 text-xs text-muted-foreground">
           Обезличенная статистика: без IP и User-Agent, сессии считаются по
           посуточно ротируемому ключу.
         </p>
@@ -1197,7 +1197,7 @@ function ProjectCardAnalyticsView({
             <p className="text-xs font-medium text-muted-foreground">
               {metric.label}
             </p>
-            <p className="mt-3 text-2xl font-semibold">{metric.value}</p>
+            <p className="mbs-3 text-2xl font-semibold">{metric.value}</p>
           </section>
         ))}
       </div>
@@ -1207,7 +1207,7 @@ function ProjectCardAnalyticsView({
           <h3 className="text-sm font-semibold">Просмотры по дням</h3>
         </div>
         <div
-          className="mt-5 flex h-44 items-end gap-1 overflow-x-auto"
+          className="mbs-5 flex h-44 items-end gap-1 overflow-x-auto"
           aria-label="График просмотров"
         >
           {analytics?.perDay.map((day) => (
@@ -1217,7 +1217,7 @@ function ProjectCardAnalyticsView({
               title={`${day.date}: ${day.count} просмотров, ${day.unique} зрителей`}
             >
               <span
-                className="w-full rounded-t bg-primary/75 transition-colors group-hover:bg-primary"
+                className="w-full rounded-bs bg-primary/75 transition-colors group-hover:bg-primary"
                 style={{
                   height: `${Math.max(day.count ? 6 : 2, (day.count / dailyMax) * 132)}px`,
                 }}
@@ -1229,8 +1229,8 @@ function ProjectCardAnalyticsView({
           ))}
         </div>
       </section>
-      <section className="overflow-hidden rounded-xl border">
-        <div className="border-b px-4 py-3 text-sm font-semibold">
+      <section className="overflow-clip rounded-xl border">
+        <div className="border-be px-4 py-3 text-sm font-semibold">
           Последние зрители
         </div>
         {analytics?.viewers.length ? (
@@ -1240,7 +1240,7 @@ function ProjectCardAnalyticsView({
                 key={viewer.userId}
                 className="flex items-center gap-3 px-4 py-3"
               >
-                <span className="grid size-8 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold">
+                <span className="grid size-8 place-items-center overflow-clip rounded-full bg-muted text-xs font-semibold">
                   {viewer.avatarUrl ? (
                     <img
                       src={viewer.avatarUrl}
@@ -1400,7 +1400,7 @@ export function MarketingSection({
             disabled={!canEdit || saving || !title.trim()}
             onClick={() => void save()}
           >
-            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+            {saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}
             Сохранить
           </Button>
         }
@@ -1437,8 +1437,8 @@ export function MarketingSection({
         <div className="grid gap-3 lg:grid-cols-2">
           <section className="rounded-xl border p-4">
             <Sparkles className="size-5 text-primary" />
-            <h3 className="mt-4 font-medium">Поисковое представление</h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            <h3 className="mbs-4 font-medium">Поисковое представление</h3>
+            <p className="mbs-1 text-sm leading-6 text-muted-foreground">
               Отдельные метаданные приложения, канонический адрес, JSON-LD и
               управление индексацией.
             </p>
@@ -1447,11 +1447,11 @@ export function MarketingSection({
             <p className="truncate text-lg text-blue-700 dark:text-blue-300">
               {title || project.name}
             </p>
-            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+            <p className="mbs-1 text-xs text-emerald-700 dark:text-emerald-300">
               {canonicalUrl ||
                 `projectsflow.ru › p › ${project.publicSlug ?? "preview"}`}
             </p>
-            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+            <p className="mbs-2 line-clamp-2 text-sm text-muted-foreground">
               {description || "Описание пока не задано."}
             </p>
           </section>
@@ -1495,11 +1495,11 @@ export function MarketingSection({
               <span className="block text-sm font-medium">
                 Разрешить индексацию
               </span>
-              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+              <span className="mbs-1 block text-xs leading-5 text-muted-foreground">
                 Поисковики увидят настройку после публикации проекта.
               </span>
               {!project.isPublic && (
-                <span className="mt-1 block text-xs text-amber-600">
+                <span className="mbs-1 block text-xs text-amber-600">
                   Проект пока не опубликован.
                 </span>
               )}
@@ -1509,7 +1509,7 @@ export function MarketingSection({
               checked={robotsIndex}
               onChange={(event) => setRobotsIndex(event.target.checked)}
               disabled={!canEdit}
-              className="mt-1 size-4"
+              className="mbs-1 size-4"
             />
           </label>
           <label className="block space-y-1.5">
@@ -1554,7 +1554,7 @@ export function MarketingSection({
             </label>
             <fieldset>
               <legend className="text-sm font-medium">Каналы</legend>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mbs-2 flex flex-wrap gap-2">
                 {["Telegram", "VK", "LinkedIn"].map((channel) => (
                   <label
                     key={channel}
@@ -1581,7 +1581,7 @@ export function MarketingSection({
               onClick={() => void generateSocial()}
               disabled={!canEdit || saving}
             >
-              <Sparkles className="mr-1.5 size-4" />
+              <Sparkles className="me-1.5 size-4" />
               Создать контент-план
             </Button>
           </section>
@@ -1610,7 +1610,7 @@ export function MarketingSection({
                       <Copy className="size-3.5" />
                     </Button>
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+                  <p className="mbs-3 whitespace-pre-wrap text-sm leading-6">
                     {post}
                   </p>
                 </article>
@@ -1697,10 +1697,10 @@ export function DomainsSection({
             </span>
             <div>
               <p className="text-sm font-medium">Встроенный URL</p>
-              <p className="mt-1 break-all text-sm text-muted-foreground">
+              <p className="mbs-1 break-all text-sm text-muted-foreground">
                 {builtIn ?? "Появится после подготовки результата"}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 HTTPS и поддомен выдаются автоматически.
               </p>
             </div>
@@ -1708,7 +1708,7 @@ export function DomainsSection({
           {builtIn && (
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => void copy()}>
-                <Copy className="mr-1.5 size-3.5" />
+                <Copy className="me-1.5 size-3.5" />
                 Копировать
               </Button>
               <Button asChild size="sm">
@@ -1717,7 +1717,7 @@ export function DomainsSection({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <ExternalLink className="mr-1.5 size-3.5" />
+                  <ExternalLink className="me-1.5 size-3.5" />
                   Открыть
                 </a>
               </Button>
@@ -1729,7 +1729,7 @@ export function DomainsSection({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">Пользовательский домен</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mbs-1 text-xs text-muted-foreground">
               Добавьте CNAME на{" "}
               <code className="rounded bg-muted px-1">
                 {site?.siteSlug ?? "project"}.projectsflow.ru
@@ -1747,7 +1747,7 @@ export function DomainsSection({
             </StatusPill>
           )}
         </div>
-        <label className="mt-4 block">
+        <label className="mbs-4 block">
           <span className="sr-only">Пользовательский домен</span>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -1761,7 +1761,7 @@ export function DomainsSection({
               onClick={() => void saveCustomDomain()}
               disabled={!canEdit || saving}
             >
-              {saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+              {saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}
               Сохранить
             </Button>
             {dashboardSettings.customDomain.hostname && (
@@ -1770,19 +1770,19 @@ export function DomainsSection({
                 onClick={() => void verify()}
                 disabled={!canEdit || saving}
               >
-                <RefreshCw className="mr-1.5 size-4" />
+                <RefreshCw className="me-1.5 size-4" />
                 Проверить DNS
               </Button>
             )}
           </div>
         </label>
         {dashboardSettings.customDomain.error && (
-          <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+          <p className="mbs-3 text-sm text-amber-700 dark:text-amber-300">
             {dashboardSettings.customDomain.error}
           </p>
         )}
         {dashboardSettings.customDomain.lastCheckedAt && (
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mbs-2 text-xs text-muted-foreground">
             Последняя проверка:{" "}
             {new Intl.DateTimeFormat("ru-RU", {
               dateStyle: "short",
@@ -1976,7 +1976,7 @@ export function IntegrationsSection({
                     {integration.connected ? "Подключено" : "Не настроено"}
                   </StatusPill>
                 </span>
-                <span className="mt-1 block break-all text-sm leading-6 text-muted-foreground">
+                <span className="mbs-1 block break-all text-sm leading-6 text-muted-foreground">
                   {integration.description}
                 </span>
               </span>
@@ -1997,7 +1997,7 @@ export function IntegrationsSection({
               {content}
               {integration.id === "site" && integration.connected && (
                 <Button
-                  className="mt-3"
+                  className="mbs-3"
                   size="sm"
                   variant="outline"
                   onClick={onOpenPreview}
@@ -2009,10 +2009,10 @@ export function IntegrationsSection({
           );
         })}
       </div>
-      <section className="overflow-hidden rounded-xl border">
-        <div className="border-b bg-muted/15 px-4 py-3">
+      <section className="overflow-clip rounded-xl border">
+        <div className="border-be bg-muted/15 px-4 py-3">
           <p className="text-sm font-semibold">Внешние подключения</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mbs-1 text-xs text-muted-foreground">
             Статус «Ожидает настройки» означает сохранённый запрос, а не
             завершённое подключение.
           </p>
@@ -2057,7 +2057,7 @@ export function IntegrationsSection({
                   onClick={() => void requestIntegration(item.id)}
                 >
                   {saving === item.id && (
-                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    <Loader2 className="me-1.5 size-3.5 motion-safe:animate-spin" />
                   )}
                   {pending ? "Отменить" : "Запросить"}
                 </Button>
@@ -2069,7 +2069,7 @@ export function IntegrationsSection({
       <section className="max-w-3xl space-y-4 rounded-xl border p-4">
         <div>
           <p className="text-sm font-semibold">Параметры подключений</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="mbs-1 text-xs leading-5 text-muted-foreground">
             Секреты здесь не отображаются. Webhook проверяется реальным тестовым
             POST-запросом; локальные и приватные адреса сервер блокирует.
           </p>
@@ -2091,7 +2091,7 @@ export function IntegrationsSection({
               onClick={() => void testWebhook()}
             >
               {saving === "webhook-test" && (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />
               )}
               Проверить
             </Button>
@@ -2122,7 +2122,7 @@ export function IntegrationsSection({
           onClick={() => void saveConnections()}
         >
           {saving === "config" && (
-            <Loader2 className="mr-1.5 size-4 animate-spin" />
+            <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />
           )}
           Сохранить подключения
         </Button>
@@ -2170,9 +2170,9 @@ export function SecuritySection({
         action={
           <Button size="sm" disabled={scanning} onClick={() => void runScan()}>
             {scanning ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />
             ) : (
-              <ShieldCheck className="mr-1.5 size-4" />
+              <ShieldCheck className="me-1.5 size-4" />
             )}
             Проверить
           </Button>
@@ -2193,7 +2193,7 @@ export function SecuritySection({
               ? `Найдено замечаний: ${scan.findings.length}`
               : "Проверка пройдена без замечаний"}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mbs-1 text-sm text-muted-foreground">
             Выполнено{" "}
             {new Intl.DateTimeFormat("ru-RU", {
               dateStyle: "short",
@@ -2203,8 +2203,8 @@ export function SecuritySection({
         </div>
       )}
       {scan && scan.findings.length > 0 && (
-        <section className="overflow-hidden rounded-xl border">
-          <div className="border-b px-4 py-3 text-sm font-semibold">
+        <section className="overflow-clip rounded-xl border">
+          <div className="border-be px-4 py-3 text-sm font-semibold">
             Результаты серверной проверки
           </div>
           <div className="divide-y">
@@ -2215,7 +2215,7 @@ export function SecuritySection({
               >
                 <AlertTriangle
                   className={cn(
-                    "mt-0.5 size-4 shrink-0",
+                    "mbs-0.5 size-4 shrink-0",
                     finding.severity === "critical"
                       ? "text-red-500"
                       : finding.severity === "warning"
@@ -2225,7 +2225,7 @@ export function SecuritySection({
                 />
                 <div>
                   <p className="text-sm font-medium">{finding.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  <p className="mbs-1 text-xs leading-5 text-muted-foreground">
                     {finding.remediation}
                   </p>
                 </div>
@@ -2234,8 +2234,8 @@ export function SecuritySection({
           </div>
         </section>
       )}
-      <section className="overflow-hidden rounded-xl border">
-        <div className="border-b px-4 py-3 text-sm font-semibold">
+      <section className="overflow-clip rounded-xl border">
+        <div className="border-be px-4 py-3 text-sm font-semibold">
           Контрольный список
         </div>
         <div className="divide-y">
@@ -2319,7 +2319,7 @@ function WorkerRunRow({
           {run.agentName ?? "Воркер"}
           {run.attempt > 1 ? ` · попытка ${run.attempt}` : ""}
         </p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+        <p className="mbs-0.5 truncate text-xs text-muted-foreground">
           {formatWorkerTime(run.startedAt)}
           {run.model ? ` · ${run.model}` : ""}
           {run.costUsd != null ? ` · $${run.costUsd.toFixed(4)}` : ""}
@@ -2433,8 +2433,8 @@ export function AgentsSection({
           >
             <RefreshCw
               className={cn(
-                "mr-1.5 size-4",
-                overviewLoading && "animate-spin",
+                "me-1.5 size-4",
+                overviewLoading && "motion-safe:animate-spin",
               )}
             />
             Обновить
@@ -2462,7 +2462,7 @@ export function AgentsSection({
           </label>
           {loading && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 className="size-3.5 motion-safe:animate-spin" />
               Проверяем активные agent tokens…
             </p>
           )}{" "}
@@ -2481,7 +2481,7 @@ export function AgentsSection({
             }
             onClick={() => void saveDispatcher()}
           >
-            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+            {saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}
             Сохранить диспетчера
           </Button>
         </section>
@@ -2490,7 +2490,7 @@ export function AgentsSection({
             <Bot className="size-4 text-primary" />
             <h3 className="text-sm font-semibold">Режим выполнения</h3>
           </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          <p className="mbs-2 text-sm leading-6 text-muted-foreground">
             {project.dispatcherUserId
               ? "Диспетчер назначен и может получать задачи проекта."
               : "Задачи выполняются вручную, пока диспетчер не назначен."}
@@ -2504,7 +2504,7 @@ export function AgentsSection({
             }
             onClick={() => void toggleParallel()}
             className={cn(
-              "mt-4 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm",
+              "mbs-4 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-start text-sm",
               !project.dispatcherUserId && "cursor-not-allowed opacity-50",
             )}
           >
@@ -2519,7 +2519,7 @@ export function AgentsSection({
             >
               <span
                 className={cn(
-                  "block size-4 rounded-full bg-white shadow transition-transform",
+                  "block size-4 rounded-full bg-white shadow motion-safe:transition-transform",
                   project.multiTaskWorker && "translate-x-4",
                 )}
               />
@@ -2528,7 +2528,7 @@ export function AgentsSection({
         </aside>
       </div>
       <section className="rounded-xl border">
-        <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-center justify-between border-be px-4 py-3">
           <div className="flex items-center gap-2">
             <Activity className="size-4 text-primary" />
             <h3 className="text-sm font-semibold">Состояние воркера</h3>
@@ -2544,7 +2544,7 @@ export function AgentsSection({
         </div>
         {overviewLoading && !overview ? (
           <p className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 motion-safe:animate-spin" />
             Загружаем состояние воркера…
           </p>
         ) : !overview ? (
@@ -2559,12 +2559,12 @@ export function AgentsSection({
                 Права доступа (capabilities)
               </div>
               {overview.capabilities.active === 0 ? (
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                <p className="mbs-2 text-xs leading-5 text-muted-foreground">
                   Сейчас у воркера нет активных прав. Они выдаются автоматически
                   на время выполнения задачи и истекают сами.
                 </p>
               ) : (
-                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <ul className="mbs-2 space-y-1 text-xs text-muted-foreground">
                   <li>
                     Активных прав:{" "}
                     <span className="font-medium text-foreground">
@@ -2590,7 +2590,7 @@ export function AgentsSection({
                 <Bot className="size-4 text-muted-foreground" />
                 Режим
               </div>
-              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+              <ul className="mbs-2 space-y-1 text-xs text-muted-foreground">
                 <li>
                   Диспетчер:{" "}
                   <span className="font-medium text-foreground">
@@ -2608,13 +2608,13 @@ export function AgentsSection({
           </div>
         )}
       </section>
-      <section className="overflow-hidden rounded-xl border">
-        <div className="border-b px-4 py-3 text-sm font-semibold">
+      <section className="overflow-clip rounded-xl border">
+        <div className="border-be px-4 py-3 text-sm font-semibold">
           История запусков
         </div>
         {overviewLoading && !overview ? (
           <p className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 motion-safe:animate-spin" />
             Загружаем историю…
           </p>
         ) : overview && overview.recentRuns.length > 0 ? (
@@ -2824,10 +2824,10 @@ function WorkflowRulesPanel({
     members.find((m) => m.userId === userId)?.user.displayName ?? userId;
 
   return (
-    <section className="overflow-hidden rounded-xl border">
-      <div className="border-b bg-muted/15 px-4 py-3">
+    <section className="overflow-clip rounded-xl border">
+      <div className="border-be bg-muted/15 px-4 py-3">
         <p className="text-sm font-semibold">Правила «событие → действие»</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mbs-1 text-xs text-muted-foreground">
           Конструктор поверх автономного цикла: замкнутый набор триггеров и действий над
           задачами, дедлайнами и вебхуками. Правило, зациклившее само себя, сервер отключает
           автоматически.
@@ -2836,7 +2836,7 @@ function WorkflowRulesPanel({
 
       {loading ? (
         <p className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="size-3.5 motion-safe:animate-spin" />
           Загружаем правила…
         </p>
       ) : loadError ? (
@@ -2869,7 +2869,7 @@ function WorkflowRulesPanel({
                 {rule.lastStatus ? (
                   <p
                     className={cn(
-                      "mt-0.5 truncate text-[11px]",
+                      "mbs-0.5 truncate text-2xs",
                       rule.lastStatus.startsWith("error") ||
                         rule.lastStatus.startsWith("disabled")
                         ? "text-amber-600 dark:text-amber-400"
@@ -2903,7 +2903,7 @@ function WorkflowRulesPanel({
       )}
 
       {canEdit && (
-        <div className="space-y-3 border-t bg-muted/10 p-4">
+        <div className="space-y-3 border-bs bg-muted/10 p-4">
           <p className="text-xs font-semibold text-muted-foreground">Новое правило</p>
           <Input
             value={name}
@@ -3026,9 +3026,9 @@ function WorkflowRulesPanel({
           <div className="flex justify-end">
             <Button size="sm" onClick={() => void handleCreate()} disabled={creating}>
               {creating ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />
               ) : (
-                <Workflow className="mr-1.5 size-4" />
+                <Workflow className="me-1.5 size-4" />
               )}
               Добавить правило
             </Button>
@@ -3115,7 +3115,7 @@ export function WorkflowsSection({
         description="Единое окно существующего планировщика ProjectsFlow: лимиты, публикация, сводки и проверка коммитов."
         action={
           <Button size="sm" onClick={onOpenAutomation} disabled={!canEdit}>
-            <Workflow className="mr-1.5 size-4" />
+            <Workflow className="me-1.5 size-4" />
             Открыть настройки
           </Button>
         }
@@ -3124,7 +3124,7 @@ export function WorkflowsSection({
       {loading ? (
         <div className="grid min-h-44 place-items-center rounded-xl border text-sm text-muted-foreground">
           <span>
-            <Loader2 className="mr-2 inline size-4 animate-spin" />
+            <Loader2 className="me-2 inline size-4 motion-safe:animate-spin" />
             Загружаем конфигурацию…
           </span>
         </div>
@@ -3140,10 +3140,10 @@ export function WorkflowsSection({
               <p className="text-xs font-medium text-muted-foreground">
                 Прогресс цикла
               </p>
-              <p className="mt-2 text-lg font-semibold">
+              <p className="mbs-2 text-lg font-semibold">
                 {automation.tasksCreated} задач
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 {automation.runStatus === "running"
                   ? "Сейчас выполняется"
                   : automation.lastTaskAt
@@ -3155,12 +3155,12 @@ export function WorkflowsSection({
               <p className="text-xs font-medium text-muted-foreground">
                 Лимит запуска
               </p>
-              <p className="mt-2 text-lg font-semibold">
+              <p className="mbs-2 text-lg font-semibold">
                 {automation.limitKind === "count"
                   ? `${automation.limitCount ?? 0} задач`
                   : `${automation.limitMinutes ?? 0} минут`}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 Пауза {automation.pauseMinSeconds}–{automation.pauseMaxSeconds}{" "}
                 сек.
               </p>
@@ -3169,7 +3169,7 @@ export function WorkflowsSection({
               <p className="text-xs font-medium text-muted-foreground">
                 Публикация
               </p>
-              <p className="mt-2 text-lg font-semibold">
+              <p className="mbs-2 text-lg font-semibold">
                 {automation.deployMethod === "github_auto"
                   ? "GitHub Actions"
                   : automation.deployMethod === "ssh_manual"
@@ -3178,7 +3178,7 @@ export function WorkflowsSection({
                       ? "По инструкции"
                       : "Без деплоя"}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 Review:{" "}
                 {automation.ultracodeReviewEnabled ? "включён" : "выключен"}
               </p>
@@ -3187,24 +3187,24 @@ export function WorkflowsSection({
               <p className="text-xs font-medium text-muted-foreground">
                 Активные критерии
               </p>
-              <p className="mt-2 text-lg font-semibold">
+              <p className="mbs-2 text-lg font-semibold">
                 {
                   automation.criteria.filter((criterion) => criterion.enabled)
                     .length
                 }{" "}
                 из {automation.criteria.length}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 Режим: {automation.ralphMode || "по умолчанию"}
               </p>
             </section>
           </div>
         )
       )}
-      <section className="overflow-hidden rounded-xl border">
-        <div className="border-b bg-muted/15 px-4 py-3">
+      <section className="overflow-clip rounded-xl border">
+        <div className="border-be bg-muted/15 px-4 py-3">
           <p className="text-sm font-semibold">Готовность проекта</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mbs-1 text-xs text-muted-foreground">
             Перед запуском планировщик проверит эти реальные настройки.
           </p>
         </div>
@@ -3390,11 +3390,11 @@ export async function appRequest(path, options = {}) {
             tableNames.map((table) => (
               <section
                 key={table}
-                className="overflow-hidden rounded-xl border"
+                className="overflow-clip rounded-xl border"
               >
-                <div className="border-b bg-muted/15 px-3 py-2">
+                <div className="border-be bg-muted/15 px-3 py-2">
                   <p className="font-mono text-xs font-semibold">{table}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mbs-1 text-xs text-muted-foreground">
                     {runtimeUrl
                       ? siteResultDisplayUrl(site!.siteSlug!)
                       : "Полный адрес появится после публикации результата"}
@@ -3408,7 +3408,7 @@ export async function appRequest(path, options = {}) {
                     >
                       <span
                         className={cn(
-                          "w-fit rounded px-2 py-1 font-mono text-[11px] font-semibold",
+                          "w-fit rounded px-2 py-1 font-mono text-2xs font-semibold",
                           endpoint.tone,
                         )}
                       >
@@ -3419,7 +3419,7 @@ export async function appRequest(path, options = {}) {
                           /api/data/{table}
                           {endpoint.suffix}
                         </code>
-                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                        <span className="mbs-0.5 block text-xs text-muted-foreground">
                           {endpoint.label}
                         </span>
                       </span>
@@ -3450,8 +3450,8 @@ export async function appRequest(path, options = {}) {
           )}
         </div>
       ) : tab === "sdk" ? (
-        <div className="overflow-hidden rounded-xl border bg-zinc-950">
-          <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2 text-xs text-zinc-400">
+        <div className="overflow-clip rounded-xl border bg-zinc-950">
+          <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-be border-white/10 px-3 py-2 text-xs text-zinc-400">
             <span>projectsflow-app.js</span>
             <Button
               variant="ghost"
@@ -3459,7 +3459,7 @@ export async function appRequest(path, options = {}) {
               className="text-zinc-200 hover:bg-white/10 hover:text-white"
               onClick={() => void copy(sdkSnippet)}
             >
-              <Copy className="mr-1.5 size-3.5" />
+              <Copy className="me-1.5 size-3.5" />
               Копировать SDK
             </Button>
           </div>
@@ -3468,8 +3468,8 @@ export async function appRequest(path, options = {}) {
           </pre>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-zinc-950">
-          <div className="flex h-11 items-center justify-between border-b border-white/10 px-3 text-xs text-zinc-400">
+        <div className="overflow-clip rounded-xl border bg-zinc-950">
+          <div className="flex h-11 items-center justify-between border-be border-white/10 px-3 text-xs text-zinc-400">
             <span>openapi.json</span>
             <div className="flex gap-1">
               <Button
@@ -3478,7 +3478,7 @@ export async function appRequest(path, options = {}) {
                 className="text-zinc-200 hover:bg-white/10 hover:text-white"
                 onClick={downloadOpenApi}
               >
-                <Download className="mr-1.5 size-3.5" />
+                <Download className="me-1.5 size-3.5" />
                 Скачать
               </Button>
               <Button
@@ -3487,7 +3487,7 @@ export async function appRequest(path, options = {}) {
                 className="text-zinc-200 hover:bg-white/10 hover:text-white"
                 onClick={() => void copy(openApi)}
               >
-                <Copy className="mr-1.5 size-3.5" />
+                <Copy className="me-1.5 size-3.5" />
                 Копировать
               </Button>
             </div>
@@ -3503,7 +3503,7 @@ export async function appRequest(path, options = {}) {
           size="sm"
           onClick={() => void copy(llmContext)}
         >
-          <Sparkles className="mr-1.5 size-3.5" />
+          <Sparkles className="me-1.5 size-3.5" />
           Скопировать для LLM
         </Button>
         {runtimeUrl && (
@@ -3513,7 +3513,7 @@ export async function appRequest(path, options = {}) {
               target="_blank"
               rel="noreferrer"
             >
-              <ExternalLink className="mr-1.5 size-3.5" />
+              <ExternalLink className="me-1.5 size-3.5" />
               Проверить runtime
             </a>
           </Button>
@@ -3521,7 +3521,7 @@ export async function appRequest(path, options = {}) {
       </div>
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm">
         <p className="font-medium">Аутентификация</p>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mbs-1 text-muted-foreground">
           Runtime API использует сессию опубликованного приложения и правила
           доступа таблицы; приватные ключи здесь не показываются.
         </p>
@@ -3867,7 +3867,7 @@ export function SettingsSection({
               disabled={!canEdit || saving || !mainRoute.startsWith("/")}
               onClick={() => void saveProfile()}
             >
-              {saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+              {saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}
               Сохранить профиль
             </Button>
             <button
@@ -3876,13 +3876,13 @@ export function SettingsSection({
               aria-checked={showPlatformBadge}
               disabled={!canEdit || saving}
               onClick={() => setShowPlatformBadge((value) => !value)}
-              className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm"
+              className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-start text-sm"
             >
               <span>
                 <span className="block font-medium">
                   Badge «Создано в ProjectsFlow»
                 </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
+                <span className="mbs-0.5 block text-xs text-muted-foreground">
                   Настройка сохраняется вместе с профилем и доступна
                   публикатору.
                 </span>
@@ -3895,7 +3895,7 @@ export function SettingsSection({
               >
                 <span
                   className={cn(
-                    "block size-4 rounded-full bg-white shadow transition-transform",
+                    "block size-4 rounded-full bg-white shadow motion-safe:transition-transform",
                     showPlatformBadge && "translate-x-4",
                   )}
                 />
@@ -3908,7 +3908,7 @@ export function SettingsSection({
                 <p className="text-sm font-semibold">
                   Публичная страница проекта
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mbs-1 text-xs text-muted-foreground">
                   {project.isPublic
                     ? `Опубликована${project.publicSlug ? ` · /p/${project.publicSlug}` : ""}`
                     : "Доступна только участникам проекта"}
@@ -3930,13 +3930,13 @@ export function SettingsSection({
                 aria-checked={project.publicIndexing}
                 disabled={saving || project.role !== "owner"}
                 onClick={() => void toggleIndexing()}
-                className="mt-4 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm"
+                className="mbs-4 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-start text-sm"
               >
                 <span>
                   <span className="block font-medium">
                     Индексация поисковиками
                   </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                  <span className="mbs-0.5 block text-xs text-muted-foreground">
                     Управляет реальным publicIndexing проекта.
                   </span>
                 </span>
@@ -3950,7 +3950,7 @@ export function SettingsSection({
                 >
                   <span
                     className={cn(
-                      "block size-4 rounded-full bg-white shadow transition-transform",
+                      "block size-4 rounded-full bg-white shadow motion-safe:transition-transform",
                       project.publicIndexing && "translate-x-4",
                     )}
                   />
@@ -3958,10 +3958,10 @@ export function SettingsSection({
               </button>
             )}
           </section>
-          <section className="max-w-3xl overflow-hidden rounded-xl border">
-            <div className="border-b bg-muted/15 px-4 py-3">
+          <section className="max-w-3xl overflow-clip rounded-xl border">
+            <div className="border-be bg-muted/15 px-4 py-3">
               <p className="text-sm font-semibold">Копирование и шаблоны</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mbs-1 text-xs text-muted-foreground">
                 Копия переносит профиль и конфигурацию Dashboard в новый проект.
                 Репозиторий и рабочие данные не дублируются скрытно.
               </p>
@@ -3972,11 +3972,11 @@ export function SettingsSection({
                 disabled={!canEdit || saving}
                 onClick={() => void createCopy()}
               >
-                <Copy className="mr-1.5 size-4" />
+                <Copy className="me-1.5 size-4" />
                 Создать копию
               </Button>
               <Button variant="outline" onClick={downloadTemplate}>
-                <Download className="mr-1.5 size-4" />
+                <Download className="me-1.5 size-4" />
                 Скачать шаблон
               </Button>
             </div>
@@ -3988,7 +3988,7 @@ export function SettingsSection({
                   <p className="text-sm font-semibold text-destructive">
                     Опасная зона
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mbs-1 text-xs text-muted-foreground">
                     Удаление проекта необратимо; GitHub-репозиторий останется на
                     GitHub.
                   </p>
@@ -3997,7 +3997,7 @@ export function SettingsSection({
                   variant="destructive"
                   onClick={() => setDeleteOpen(true)}
                 >
-                  <Trash2 className="mr-1.5 size-4" />
+                  <Trash2 className="me-1.5 size-4" />
                   Удалить приложение
                 </Button>
               </div>
@@ -4006,14 +4006,14 @@ export function SettingsSection({
         </div>
       )}
       {tab === "access" && (
-        <section className="max-w-3xl overflow-hidden rounded-xl border">
+        <section className="max-w-3xl overflow-clip rounded-xl border">
           <div className="divide-y">
             <div className="flex items-center justify-between gap-4 px-4 py-4">
               <span>
                 <span className="block text-sm font-medium">
                   Участники ProjectsFlow
                 </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mbs-1 block text-xs text-muted-foreground">
                   Доступ к Dashboard проверяется сервером по роли проекта.
                 </span>
               </span>
@@ -4024,7 +4024,7 @@ export function SettingsSection({
                 <span className="block text-sm font-medium">
                   Runtime-сессии приложения
                 </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mbs-1 block text-xs text-muted-foreground">
                   {dashboard.status === "active"
                     ? "App Database активна; правила CRUD применяются к каждой таблице."
                     : "Статический результат не использует runtime-базу и пользовательские сессии."}
@@ -4039,7 +4039,7 @@ export function SettingsSection({
                 <span className="block text-sm font-medium">
                   GitHub-доступ воркера
                 </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mbs-1 block text-xs text-muted-foreground">
                   Токен выдаётся через project-scoped delegation и не
                   показывается в Dashboard.
                 </span>
@@ -4052,10 +4052,10 @@ export function SettingsSection({
         </section>
       )}
       {tab === "auth" && (
-        <section className="max-w-3xl overflow-hidden rounded-xl border">
-          <div className="border-b bg-muted/15 px-4 py-3">
+        <section className="max-w-3xl overflow-clip rounded-xl border">
+          <div className="border-be bg-muted/15 px-4 py-3">
             <p className="text-sm font-semibold">Способы входа</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mbs-1 text-xs text-muted-foreground">
               Email применяется к runtime API сразу. Внешние провайдеры
               переходят в настройку и не считаются включёнными без ключей и
               callback.
@@ -4137,7 +4137,7 @@ function AuthRow({
       >
         <span
           className={cn(
-            "block size-5 rounded-full bg-white shadow transition-transform",
+            "block size-5 rounded-full bg-white shadow motion-safe:transition-transform",
             active && "translate-x-5",
           )}
         />
@@ -4271,7 +4271,7 @@ function GoogleAuthProviderRow({
         </Button>
       </div>
       {expanded && (
-        <div className="mt-4 space-y-4 rounded-lg border bg-muted/10 p-4">
+        <div className="mbs-4 space-y-4 rounded-lg border bg-muted/10 p-4">
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <p>
               Создайте OAuth-клиент в{" "}
@@ -4344,7 +4344,7 @@ function GoogleAuthProviderRow({
               disabled={!canEdit || busy}
               onClick={() => void save(true)}
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
               {status?.enabled ? "Сохранить" : "Сохранить и включить"}
             </Button>
             {status?.enabled && (

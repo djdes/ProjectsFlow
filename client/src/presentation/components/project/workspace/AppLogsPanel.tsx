@@ -164,8 +164,8 @@ export function AppLogsPanel({
   }, [load, reload]);
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-background">
-      <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-3 py-2">
+    <div className="overflow-clip rounded-xl border bg-background">
+      <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
         <div className="inline-flex rounded-lg bg-muted/50 p-0.5">
           <button
             type="button"
@@ -248,7 +248,7 @@ export function AppLogsPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="ml-auto size-9"
+          className="ms-auto size-9"
           aria-label="Обновить логи"
           onClick={() => setReload((value) => value + 1)}
         >
@@ -260,21 +260,21 @@ export function AppLogsPanel({
         {loading ? (
           <div className="grid min-h-[430px] place-items-center text-sm text-muted-foreground">
             <span>
-              <Loader2 className="mr-2 inline size-4 animate-spin" />
+              <Loader2 className="me-2 inline size-4 motion-safe:animate-spin" />
               Загружаем события…
             </span>
           </div>
         ) : error ? (
           <div className="grid min-h-[430px] place-items-center text-center">
             <div>
-              <AlertTriangle className="mx-auto mb-2 size-5 text-destructive" />
+              <AlertTriangle className="mx-auto mbe-2 size-5 text-destructive" />
               <p className="text-sm text-muted-foreground">
                 Не удалось загрузить журнал.
               </p>
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-3"
+                className="mbs-3"
                 onClick={() => setReload((value) => value + 1)}
               >
                 Повторить
@@ -319,7 +319,7 @@ export function AppLogsPanel({
                   <button
                     type="button"
                     onClick={() => setExpanded(isExpanded ? null : entry.id)}
-                    className="grid min-h-14 w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[22px_minmax(140px,1fr)_minmax(96px,0.5fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] sm:py-0"
+                    className="grid min-h-14 w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-start text-sm hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[22px_minmax(140px,1fr)_minmax(96px,0.5fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] sm:py-0"
                   >
                     {isExpanded ? (
                       <ChevronDown className="size-3.5 text-muted-foreground" />
@@ -330,14 +330,14 @@ export function AppLogsPanel({
                       <span className="block truncate font-medium">
                         {OPERATION_LABEL[entry.operation] ?? entry.operation}
                       </span>
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground sm:hidden">
+                      <span className="mbs-0.5 block truncate text-xs text-muted-foreground sm:hidden">
                         {CATEGORY_LABEL[entry.category]} · {actorLabel}
                       </span>
                     </span>
                     <span className="hidden sm:block">
                       <span
                         className={cn(
-                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
+                          "inline-flex rounded-full px-2 py-0.5 text-2xs font-medium",
                           CATEGORY_BADGE[entry.category],
                         )}
                       >
@@ -352,7 +352,7 @@ export function AppLogsPanel({
                     </span>
                     <time
                       dateTime={entry.createdAt}
-                      className="whitespace-nowrap text-[10px] text-muted-foreground sm:text-xs"
+                      className="whitespace-nowrap text-2xs text-muted-foreground sm:text-xs"
                     >
                       <span className="sm:hidden">
                         {formatCompactDate(entry.createdAt)}
@@ -363,24 +363,24 @@ export function AppLogsPanel({
                     </time>
                   </button>
                   {isExpanded && (
-                    <div className="grid gap-3 border-t bg-muted/15 px-3 py-3 text-xs sm:grid-cols-2 sm:px-10">
+                    <div className="grid gap-3 border-bs bg-muted/15 px-3 py-3 text-xs sm:grid-cols-2 sm:px-10">
                       <div>
                         <p className="font-medium text-muted-foreground">
                           ID записи
                         </p>
-                        <p className="mt-1 break-all">{entry.rowId ?? "—"}</p>
+                        <p className="mbs-1 break-all">{entry.rowId ?? "—"}</p>
                       </div>
                       <div>
                         <p className="font-medium text-muted-foreground">
                           Источник
                         </p>
-                        <p className="mt-1">{entry.actorType}</p>
+                        <p className="mbs-1">{entry.actorType}</p>
                       </div>
                       <div className="sm:col-span-2">
                         <p className="font-medium text-muted-foreground">
                           Детали
                         </p>
-                        <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-background p-2 font-mono text-[11px]">
+                        <pre className="mbs-1 max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-background p-2 font-mono text-2xs">
                           {entry.detail
                             ? JSON.stringify(entry.detail, null, 2)
                             : "—"}
@@ -392,7 +392,7 @@ export function AppLogsPanel({
               );
             })}
             {nextCursor && (
-              <div className="flex items-center justify-center border-t p-3">
+              <div className="flex items-center justify-center border-bs p-3">
                 <Button
                   variant="outline"
                   size="sm"
@@ -400,7 +400,7 @@ export function AppLogsPanel({
                   onClick={() => load(true, nextCursor)}
                 >
                   {loadingMore && (
-                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    <Loader2 className="me-1.5 size-3.5 motion-safe:animate-spin" />
                   )}
                   Показать ещё
                 </Button>
@@ -417,9 +417,9 @@ function EmptyLogs(): React.ReactElement {
   return (
     <div className="grid min-h-[430px] place-items-center text-center">
       <div>
-        <Search className="mx-auto mb-2 size-5 text-muted-foreground" />
+        <Search className="mx-auto mbe-2 size-5 text-muted-foreground" />
         <p className="text-sm font-medium">Событий пока нет</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mbs-1 text-xs text-muted-foreground">
           Новые действия появятся здесь автоматически.
         </p>
       </div>

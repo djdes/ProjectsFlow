@@ -14,7 +14,7 @@ export function PriorityBadge({ priority, className }: Props): React.ReactElemen
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full bg-card/60 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal',
+        'inline-flex items-center gap-1 rounded-full bg-card/60 px-1.5 py-0.5 text-2xs font-medium normal-case tracking-normal',
         meta.textColor,
         className,
       )}

@@ -11,7 +11,7 @@ import type { PublicTaskAccess } from '@/domain/public/PublicBoard';
 function Shell({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
     <div className="min-h-dvh bg-background">
-      <div className="flex h-11 items-center justify-end border-b border-black/[0.06] px-4 dark:border-white/[0.06]">
+      <div className="flex h-11 items-center justify-end border-be border-black/[0.06] px-4 dark:border-white/[0.06]">
         <a
           href="/"
           className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -65,7 +65,7 @@ export function PublicTaskGatePage(): React.ReactElement {
   if (status === 'loading') {
     return (
       <Shell>
-        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        <Loader2 className="mx-auto size-5 motion-safe:animate-spin text-muted-foreground" />
       </Shell>
     );
   }
@@ -80,12 +80,12 @@ export function PublicTaskGatePage(): React.ReactElement {
     const registerUrl = `${appOrigin()}/register?next=${back}`;
     return (
       <Shell>
-        <UserPlus className="mx-auto mb-3 size-8 text-muted-foreground" />
+        <UserPlus className="mx-auto mbe-3 size-8 text-muted-foreground" />
         <h1 className="text-xl font-semibold text-foreground">Войдите, чтобы открыть задачу</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mbs-2 text-sm text-muted-foreground">
           Отдельная страница задачи доступна участникам проекта. Зарегистрируйтесь или войдите.
         </p>
-        <div className="mt-5 flex items-center justify-center gap-2">
+        <div className="mbs-5 flex items-center justify-center gap-2">
           <Button asChild>
             <a href={registerUrl}>Зарегистрироваться</a>
           </Button>
@@ -101,7 +101,7 @@ export function PublicTaskGatePage(): React.ReactElement {
   if (access === 'loading') {
     return (
       <Shell>
-        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        <Loader2 className="mx-auto size-5 motion-safe:animate-spin text-muted-foreground" />
       </Shell>
     );
   }
@@ -110,7 +110,7 @@ export function PublicTaskGatePage(): React.ReactElement {
     return (
       <Shell>
         <h1 className="text-xl font-semibold text-foreground">Задача не найдена</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mbs-2 text-sm text-muted-foreground">
           Ссылка недействительна или проект больше не опубликован.
         </p>
       </Shell>
@@ -121,10 +121,10 @@ export function PublicTaskGatePage(): React.ReactElement {
     return (
       <Shell>
         <h1 className="text-xl font-semibold text-foreground">Не удалось загрузить</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mbs-2 text-sm text-muted-foreground">
           Проверьте соединение и попробуйте ещё раз.
         </p>
-        <div className="mt-5 flex justify-center">
+        <div className="mbs-5 flex justify-center">
           <Button variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
             Повторить
           </Button>
@@ -141,9 +141,9 @@ export function PublicTaskGatePage(): React.ReactElement {
   // Залогинен, но не участник → отказ доступа.
   return (
     <Shell>
-      <Lock className="mx-auto mb-3 size-8 text-muted-foreground" />
+      <Lock className="mx-auto mbe-3 size-8 text-muted-foreground" />
       <h1 className="text-xl font-semibold text-foreground">Вы не участник этого проекта</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="mbs-2 text-sm text-muted-foreground">
         Открыть задачу отдельной страницей могут только участники проекта. Просмотреть её можно на
         публичной доске.
       </p>

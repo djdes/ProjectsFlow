@@ -5,7 +5,7 @@ import { fmtBytes, fmtDuration } from './format';
 export function DbHealthCard({ db }: { db: DbHealth }): React.ReactElement {
   return (
     <div className="rounded-md border border-border/60 p-3">
-      <h4 className="mb-2 text-sm font-medium">База данных{db.version ? ` · ${db.version}` : ''}</h4>
+      <h4 className="mbe-2 text-sm font-medium">База данных{db.version ? ` · ${db.version}` : ''}</h4>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
         <div>
           <div className="text-muted-foreground">Соединения</div>

@@ -148,7 +148,7 @@ function PersonalDataCard(): React.ReactElement {
               type="button"
               variant="outline"
               size="sm"
-              className="transition-transform active:scale-95"
+              className="motion-safe:transition-transform active:scale-95"
               onClick={() => fileRef.current?.click()}
             >
               Загрузить аватар
@@ -330,12 +330,12 @@ export function ProfilePage(): React.ReactElement {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pbe-12 pbs-3.5 sm:px-6">
       {/* pf-burger-gap на ОБЁРТКЕ, а не на кнопке: правило даёт padding-left, и на ghost-кнопке
           он раздул бы её ховер-подложку на всю ширину отступа и перебил -ml-3, которым кнопка
           выровнена по тексту ниже. flex — чтобы не заводить строчный бокс со strut'ом. */}
       <div className="pf-burger-gap flex">
-        <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
+        <Button asChild variant="ghost" size="sm" className="-ms-3 gap-1">
           <Link to="/">
             <ArrowLeft />
             Назад к&nbsp;проектам
@@ -353,11 +353,11 @@ export function ProfilePage(): React.ReactElement {
           <TabsTrigger value="stats">Статистика</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="stats" className="mt-6 space-y-6">
+        <TabsContent value="stats" className="mbs-6 space-y-6">
           <CompletedStatsCard />
         </TabsContent>
 
-        <TabsContent value="settings" className="mt-6 space-y-6">
+        <TabsContent value="settings" className="mbs-6 space-y-6">
       <PersonalDataCard />
       <PlanAndUsageCard />
       <ProjectsShareCard />

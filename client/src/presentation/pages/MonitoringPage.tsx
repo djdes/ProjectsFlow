@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Activity, ChevronRight, Plus } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProject } from '@/presentation/hooks/useProject';
@@ -49,17 +50,18 @@ export function MonitoringPage(): React.ReactElement {
     <div className="flex h-full flex-col">
       {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="flex h-11 items-center px-2.5">
+      <div className="flex h-11 items-center justify-between gap-2 px-2.5">
         <ProjectBreadcrumbs
           projectId={pid ?? ''}
           projectName={data?.name ?? 'Проект'}
           projectIcon={data?.icon}
           view="monitoring"
         />
+        <HeaderCompletedTodayPill />
       </div>
 
       {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 pt-1 sm:p-6 sm:pt-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 pbs-1 sm:p-6 sm:pbs-1">
       <div className="flex items-center gap-2">
         <Activity className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Мониторинг</h1>
@@ -150,10 +152,10 @@ export function MonitoringPage(): React.ReactElement {
                 <button
                   type="button"
                   onClick={() => setHistoryOpen((v) => !v)}
-                  className="flex items-center gap-1 text-left text-base font-semibold hover:text-foreground"
+                  className="flex items-center gap-1 text-start text-base font-semibold hover:text-foreground"
                 >
                   <ChevronRight
-                    className={historyOpen ? 'size-4 rotate-90 transition-transform' : 'size-4 transition-transform'}
+                    className={historyOpen ? 'size-4 rotate-90 motion-safe:transition-transform' : 'size-4 motion-safe:transition-transform'}
                   />
                   История инцидентов
                 </button>

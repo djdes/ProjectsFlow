@@ -115,11 +115,11 @@ export function ServerDetailSheet({
             isDesktop ? 'w-full sm:max-w-2xl lg:max-w-3xl' : 'h-[88vh]',
           )}
         >
-          <SheetHeader className="space-y-2 border-b p-4 text-left">
-            <div className="flex items-center gap-2 pr-8">
+          <SheetHeader className="space-y-2 border-be p-4 text-start">
+            <div className="flex items-center gap-2 pe-8">
               <Server className="size-4 shrink-0 text-muted-foreground" />
               <SheetTitle className="truncate text-base">{server.name}</SheetTitle>
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
                 {server.kind}
               </span>
               <StatusBadge status={latest?.status ?? server.lastStatus ?? 'unknown'} />
@@ -128,17 +128,17 @@ export function ServerDetailSheet({
               {latest ? `обновлено ${relativeTime(latest.collectedAt)}` : 'нет данных'}
               {server.host ? ` · ${server.host}` : ''}
               {isMuted && server.mutedUntil && (
-                <span className="ml-1 text-amber-600 dark:text-amber-400">
+                <span className="ms-1 text-amber-600 dark:text-amber-400">
                   · 🔕 тихо до{' '}
                   {server.mutedUntil.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
             </SheetDescription>
             {canManage && (
-              <div className="flex flex-wrap items-center gap-1 pt-1">
+              <div className="flex flex-wrap items-center gap-1 pbs-1">
                 {server.kind === 'local' && (
                   <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={busy}>
-                    <RefreshCw className={busy ? 'size-4 animate-spin' : 'size-4'} />
+                    <RefreshCw className={busy ? 'size-4 motion-safe:animate-spin' : 'size-4'} />
                     Обновить
                   </Button>
                 )}
@@ -165,7 +165,7 @@ export function ServerDetailSheet({
           </SheetHeader>
 
           <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
-            <TabsList className="mx-4 mt-3 flex h-auto w-auto flex-wrap justify-start gap-1 self-start">
+            <TabsList className="mx-4 mbs-3 flex h-auto w-auto flex-wrap justify-start gap-1 self-start">
               <TabsTrigger value="overview">Обзор</TabsTrigger>
               <TabsTrigger value="processes">Процессы</TabsTrigger>
               <TabsTrigger value="metrics">Метрики</TabsTrigger>
@@ -178,7 +178,7 @@ export function ServerDetailSheet({
             </TabsList>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <TabsContent value="overview" className="mt-0 space-y-4">
+              <TabsContent value="overview" className="mbs-0 space-y-4">
                 <StatusTimeline projectId={projectId} serverId={server.id} nowMs={nowMs} />
                 <SlaSummary projectId={projectId} serverId={server.id} nowMs={nowMs} />
                 {(http || (ssl && ssl.daysLeft !== null)) && (
@@ -225,7 +225,7 @@ export function ServerDetailSheet({
                 )}
 
                 <div>
-                  <h4 className="mb-2 text-sm font-medium">Активные алерты</h4>
+                  <h4 className="mbe-2 text-sm font-medium">Активные алерты</h4>
                   <AlertList alerts={alerts} />
                 </div>
 
@@ -236,7 +236,7 @@ export function ServerDetailSheet({
                 )}
               </TabsContent>
 
-              <TabsContent value="processes" className="mt-0">
+              <TabsContent value="processes" className="mbs-0">
                 <div className="hidden md:block">
                   <Pm2Table pm2={metrics?.pm2 ?? []} />
                 </div>
@@ -245,21 +245,21 @@ export function ServerDetailSheet({
                 </div>
               </TabsContent>
 
-              <TabsContent value="metrics" className="mt-0 space-y-4">
+              <TabsContent value="metrics" className="mbs-0 space-y-4">
                 {system ? <SystemGrid system={system} /> : <p className="text-sm text-muted-foreground">Нет данных.</p>}
                 {latest?.dbHealth?.reachable && <DbHealthCard db={latest.dbHealth} />}
                 <CapacityForecast projectId={projectId} serverId={server.id} />
               </TabsContent>
 
-              <TabsContent value="logs" className="mt-0">
+              <TabsContent value="logs" className="mbs-0">
                 <LogTailViewer projectId={projectId} serverId={server.id} />
               </TabsContent>
 
-              <TabsContent value="trends" className="mt-0">
+              <TabsContent value="trends" className="mbs-0">
                 <ServerTrends projectId={projectId} serverId={server.id} />
               </TabsContent>
 
-              <TabsContent value="ai" className="mt-0">
+              <TabsContent value="ai" className="mbs-0">
                 <AnalyzeServerPanel projectId={projectId} serverId={server.id} canManage={canManage} />
               </TabsContent>
             </div>

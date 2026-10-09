@@ -1,15 +1,26 @@
 /* First paint before the application bundle. No account data is cached here. */
+/* Схема цвета холста и нативных контролов — до загрузки бандла (good-css «One set of color
+   tokens»): тему выбирает пользователь, класс .dark ставит FOUC-скрипт в index.html. */
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
 body {
   margin: 0;
 }
 #pf-boot {
-  color: #37352f;
-  background: #fff;
-  font-family: system-ui, sans-serif;
+  color: oklch(32.89% 0.011 91.66);
+  background: oklch(100% 0 none);
+  /* Тот же системный стек, что у приложения (tailwind.config fontFamily.sans), — иначе
+     первый кадр загрузки рисуется другим шрифтом и «прыгает» при подмене. */
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI',
+    Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
 }
 .dark #pf-boot {
-  color: #eee;
-  background: #191919;
+  color: oklch(94.91% 0 none);
+  background: oklch(21.34% 0 none);
 }
 #pf-boot .pf-boot-shell {
   display: grid;
@@ -18,52 +29,57 @@ body {
   overflow: hidden;
 }
 #pf-boot aside {
-  background: #f7f6f4;
+  background: oklch(97.34% 0.003 84.56);
   padding: 14px 12px;
   overflow: hidden;
 }
 .dark #pf-boot aside {
-  background: #202020;
+  background: oklch(24.35% 0 none);
 }
 #pf-boot i {
   position: relative;
   display: block;
   overflow: hidden;
   border-radius: 6px;
-  background: #eeedeb;
+  background: oklch(94.63% 0.003 84.56);
   height: 12px;
 }
 .dark #pf-boot i {
-  background: #303030;
+  background: oklch(30.92% 0 none);
 }
 #pf-boot i::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, transparent, #ffffff90, transparent);
+  background: linear-gradient(100deg, transparent, oklch(100% 0 none / 0.565), transparent);
   transform: translateX(-100%);
-  animation: pf-boot-sweep 1.8s linear infinite;
+}
+/* Бегущий блик — движение: только без prefers-reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  #pf-boot i::after {
+    animation: pf-boot-sweep 1.8s linear infinite;
+  }
 }
 .dark #pf-boot i::after {
-  background: linear-gradient(100deg, transparent, #ffffff12, transparent);
+  background: linear-gradient(100deg, transparent, oklch(100% 0 none / 0.071), transparent);
 }
 #pf-boot .pf-boot-user {
   height: 28px;
   width: 65%;
-  margin-bottom: 22px;
+  margin-block-end: 22px;
 }
 #pf-boot .pf-boot-nav {
   height: 28px;
-  margin-bottom: 14px;
+  margin-block-end: 14px;
 }
 #pf-boot .pf-boot-project {
   height: 24px;
-  margin-top: 20px;
+  margin-block-start: 20px;
   width: 85%;
 }
 #pf-boot .pf-boot-section {
   width: 40%;
-  margin-top: 32px;
+  margin-block-start: 32px;
 }
 #pf-boot main {
   min-width: 0;
@@ -89,17 +105,17 @@ body {
 #pf-boot .pf-boot-title {
   width: min(66%, 384px);
   height: 36px;
-  margin-bottom: 16px;
+  margin-block-end: 16px;
 }
 #pf-boot .pf-boot-description {
   width: min(50%, 320px);
   height: 14px;
-  margin-bottom: 24px;
+  margin-block-end: 24px;
 }
 #pf-boot .pf-boot-tabs {
   width: 190px;
   height: 32px;
-  margin-bottom: 24px;
+  margin-block-end: 24px;
   border-radius: 20px;
 }
 #pf-boot .pf-boot-board {
@@ -111,13 +127,13 @@ body {
   height: 108px;
   box-sizing: border-box;
   padding: 12px;
-  margin-bottom: 16px;
+  margin-block-end: 16px;
   border-radius: 12px;
-  background: #f8f7f6;
+  background: oklch(97.66% 0.002 67.8);
 }
 #pf-boot .pf-boot-shelf > i {
   width: 80px;
-  margin-bottom: 12px;
+  margin-block-end: 12px;
 }
 #pf-boot .pf-boot-shelf .pf-boot-card {
   max-width: 260px;
@@ -126,10 +142,10 @@ body {
 #pf-boot .pf-boot-shelf .pf-boot-card i:last-child {
   width: 65%;
   height: 12px;
-  margin-top: 8px;
+  margin-block-start: 8px;
 }
 .dark #pf-boot .pf-boot-shelf {
-  background: #222;
+  background: oklch(25.2% 0 none);
 }
 html[data-pf-boot="narrow"] #pf-boot .pf-boot-shelf {
   display: none;
@@ -140,34 +156,34 @@ html[data-pf-boot="narrow"] #pf-boot .pf-boot-shelf {
   border-radius: 12px;
   padding: 12px;
   box-sizing: border-box;
-  background: #f8f7f6;
+  background: oklch(97.66% 0.002 67.8);
 }
 .dark #pf-boot .pf-boot-column {
-  background: #222;
+  background: oklch(25.2% 0 none);
 }
 #pf-boot .pf-boot-column > i {
   width: 96px;
   height: 20px;
   border-radius: 20px;
-  margin-bottom: 18px;
+  margin-block-end: 18px;
 }
 #pf-boot .pf-boot-card {
-  border: 1px solid #eae9e7;
+  border: 1px solid oklch(93.42% 0.003 84.56);
   border-radius: 8px;
   padding: 14px;
-  background: #fff;
-  margin-bottom: 8px;
+  background: oklch(100% 0 none);
+  margin-block-end: 8px;
 }
 .dark #pf-boot .pf-boot-card {
-  border-color: #363636;
-  background: #191919;
+  border-color: oklch(33.29% 0 none);
+  background: oklch(21.34% 0 none);
 }
 #pf-boot .pf-boot-card i + i {
   width: 65%;
-  margin-top: 12px;
+  margin-block-start: 12px;
 }
 #pf-boot .pf-boot-card i:last-child {
-  margin-top: 22px;
+  margin-block-start: 22px;
   width: 25%;
   height: 16px;
 }
@@ -211,7 +227,7 @@ html[data-pf-boot="settings"] #pf-boot .pf-boot-content {
 }
 html[data-pf-boot="settings"] #pf-boot .pf-boot-title {
   height: 36px;
-  margin-bottom: 24px;
+  margin-block-end: 24px;
 }
 html[data-pf-boot="settings"] #pf-boot .pf-boot-description,
 html[data-pf-boot="settings"] #pf-boot .pf-boot-tabs,
@@ -224,7 +240,7 @@ html[data-pf-boot="settings"] #pf-boot .pf-boot-column {
   padding: 24px;
 }
 html[data-pf-boot="settings"] #pf-boot .pf-boot-card {
-  margin-top: 20px;
+  margin-block-start: 20px;
   height: 72px;
 }
 html[data-pf-boot="table"] #pf-boot .pf-boot-shelf,
@@ -235,7 +251,7 @@ html[data-pf-boot="calendar"] #pf-boot .pf-boot-shelf {
 html[data-pf-boot="table"] #pf-boot .pf-boot-board,
 html[data-pf-boot="list"] #pf-boot .pf-boot-board {
   display: block;
-  border: 1px solid #eeedeb;
+  border: 1px solid oklch(94.63% 0.003 84.56);
   border-radius: 8px;
 }
 html[data-pf-boot="table"] #pf-boot .pf-boot-column,
@@ -257,7 +273,7 @@ html[data-pf-boot="list"] #pf-boot .pf-boot-card {
   box-sizing: border-box;
   margin: 0;
   border: 0;
-  border-bottom: 1px solid #eeedeb;
+  border-block-end: 1px solid oklch(94.63% 0.003 84.56);
   border-radius: 0;
 }
 html[data-pf-boot="table"] #pf-boot .pf-boot-card i,
@@ -272,24 +288,24 @@ html[data-pf-boot="list"] #pf-boot .pf-boot-card i:first-child {
 }
 html[data-pf-boot="calendar"] #pf-boot .pf-boot-board {
   height: 440px;
-  border: 1px solid #eeedeb;
+  border: 1px solid oklch(94.63% 0.003 84.56);
   border-radius: 8px;
   background-size: calc(100% / 7) 20%;
   background-image:
-    linear-gradient(to right, #eeedeb 1px, transparent 1px),
-    linear-gradient(to bottom, #eeedeb 1px, transparent 1px);
+    linear-gradient(to right, oklch(94.63% 0.003 84.56) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(94.63% 0.003 84.56) 1px, transparent 1px);
 }
 html[data-pf-boot="calendar"] #pf-boot .pf-boot-column {
   display: none;
 }
 .dark #pf-boot .pf-boot-board,
 .dark #pf-boot .pf-boot-card {
-  border-color: #363636;
+  border-color: oklch(33.29% 0 none);
 }
 .dark[data-pf-boot="calendar"] #pf-boot .pf-boot-board {
   background-image:
-    linear-gradient(to right, #363636 1px, transparent 1px),
-    linear-gradient(to bottom, #363636 1px, transparent 1px);
+    linear-gradient(to right, oklch(33.29% 0 none) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(33.29% 0 none) 1px, transparent 1px);
 }
 @keyframes pf-boot-sweep {
   to {
@@ -318,12 +334,6 @@ html[data-pf-boot="calendar"] #pf-boot .pf-boot-column {
   }
   #pf-boot .pf-boot-column {
     width: calc(100vw - 48px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  #pf-boot i::after {
-    animation: none;
-    display: none;
   }
 }
 html.pf-no-motion #pf-boot i::after {

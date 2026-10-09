@@ -181,7 +181,7 @@ function FilterDropdown({
                 {active && (
                   <span
                     aria-hidden
-                    className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-primary ring-2 ring-background"
+                    className="absolute end-0.5 inset-bs-0.5 size-1.5 rounded-full bg-primary ring-2 ring-background"
                   />
                 )}
               </button>
@@ -1119,15 +1119,15 @@ export function KanbanBoard({
       <ViewLoadFeedback error={error} hasData={tasks.length > 0} onRetry={refetch} label="доску" />
 
       {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ ответственный в совместных). */}
-      {!viewFilters && <div className="flex flex-wrap items-center gap-1 pb-2">
+      {!viewFilters && <div className="flex flex-wrap items-center gap-1 pbe-2">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+          <Search className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
           <input
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Фильтр по тексту…"
             aria-label="Фильтр задач по тексту"
-            className="h-7 w-32 rounded-md bg-transparent pl-7 pr-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60 sm:w-44"
+            className="h-7 w-32 rounded-md bg-transparent ps-7 pe-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60 sm:w-44"
           />
         </div>
         <FilterDropdown
@@ -1195,7 +1195,7 @@ export function KanbanBoard({
 
       {/* Пустой проект: дружелюбный старт вместо четырёх голых колонок. */}
       {!loading && boardTasks.length === 0 && !filterActive && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
+        <div className="mbe-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
           <p className="text-sm text-muted-foreground">
             {canEdit
               ? `Проект пуст — создайте первую задачу${onOpenAutomation ? ' или включите автоматизацию' : ''}.`
@@ -1258,7 +1258,7 @@ export function KanbanBoard({
           )}
           flashKey={workFlash.key}
           flashTaskId={workFlash.id}
-          className="min-w-0 pb-3"
+          className="min-w-0 pbe-3"
         />
 
         <div
@@ -1267,7 +1267,7 @@ export function KanbanBoard({
           className={cn(
             // items-start + full-bleed: ряд колонок во всю ширину окна; первая колонка
             // отступает на bleedPadClass (уезжает при скролле), последняя доходит до края.
-            'flex items-start snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-none pb-20 sm:snap-none sm:pb-28',
+            'flex items-start snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-none pbe-20 sm:snap-none sm:pbe-28',
             // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
             // SyncedStickyScrollbar (иначе внизу доски появляется второй «раздвоенный» бар).
             '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
@@ -1312,7 +1312,7 @@ export function KanbanBoard({
                       title="Показаны не все задачи. Нажмите, чтобы снять фильтр"
                       aria-label={`Фильтр: показаны только «${TYPE_FILTER_LABEL_PLURAL[typeFilter]}». Нажмите, чтобы снять фильтр и показать все задачи`}
                       className={cn(
-                        'inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] font-medium leading-4',
+                        'inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-2xs font-medium leading-4',
                         TASK_TYPE_META[typeFilter].badge,
                       )}
                     >
@@ -1442,7 +1442,7 @@ export function KanbanBoard({
               <div
                 key={status}
                 data-pf-collapse
-                className="grid shrink-0 transition-all duration-300 ease-out motion-reduce:transition-none"
+                className="grid shrink-0 motion-safe:transition-[grid-template-columns] motion-safe:duration-300 motion-safe:ease-out"
                 style={{ gridTemplateColumns: approvalColumnCollapsing ? '0fr' : '1fr' }}
               >
                 <div className={cn('min-w-0', approvalColumnCollapsing ? 'overflow-hidden' : 'overflow-visible')}>

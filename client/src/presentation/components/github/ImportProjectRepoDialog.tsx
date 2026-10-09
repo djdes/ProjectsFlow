@@ -217,60 +217,60 @@ export function ImportProjectRepoDialog({
 
           {analyzing && (
             <div className="flex items-center gap-2 rounded-xl border bg-muted/35 px-3 py-3 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin text-violet-600" />
+              <Loader2 className="size-4 motion-safe:animate-spin text-violet-600" />
               Проверяем структуру, runtime, базу данных и секреты…
             </div>
           )}
 
           {analysis && !analyzing && (
             <div className={cn(
-              'overflow-hidden rounded-xl border',
+              'overflow-clip rounded-xl border',
               analysis.status === 'supported' && 'border-emerald-500/30 bg-emerald-500/[0.06]',
               analysis.status === 'needs_config' && 'border-amber-500/35 bg-amber-500/[0.07]',
               analysis.status === 'unsupported' && 'border-destructive/30 bg-destructive/[0.05]',
             )}>
               <div className="flex gap-3 px-3.5 py-3">
                 {analysis.status === 'supported' ? (
-                  <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                  <CheckCircle2 className="mbs-0.5 size-5 shrink-0 text-emerald-600" />
                 ) : analysis.status === 'needs_config' ? (
-                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+                  <AlertTriangle className="mbs-0.5 size-5 shrink-0 text-amber-600" />
                 ) : (
-                  <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
+                  <XCircle className="mbs-0.5 size-5 shrink-0 text-destructive" />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{IMPORT_STATUS_COPY[analysis.status].title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">
                     {IMPORT_STATUS_COPY[analysis.status].description}
                   </p>
-                  <p className="mt-1.5 truncate font-mono text-[11px] text-muted-foreground">
+                  <p className="mbs-1.5 truncate font-mono text-2xs text-muted-foreground">
                     {projectImportTechnology(analysis)} · {analysis.fileCount} файлов
                   </p>
                 </div>
               </div>
               {analysis.diagnostics.filter((item) => item.severity !== 'info').length > 0 && (
-                <div className="space-y-2 border-t px-3.5 py-3">
+                <div className="space-y-2 border-bs px-3.5 py-3">
                   {analysis.diagnostics.filter((item) => item.severity !== 'info').map((item) => (
                     <div key={item.code} className="flex gap-2 text-xs leading-relaxed">
                       <ShieldAlert className={cn(
-                        'mt-0.5 size-3.5 shrink-0',
+                        'mbs-0.5 size-3.5 shrink-0',
                         item.severity === 'error' ? 'text-destructive' : 'text-amber-600',
                       )} />
                       <div>
                         <p className="text-foreground">{item.message}</p>
-                        {item.remediation && <p className="mt-0.5 text-muted-foreground">{item.remediation}</p>}
+                        {item.remediation && <p className="mbs-0.5 text-muted-foreground">{item.remediation}</p>}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
               {analysis.dataHints.length > 0 && (
-                <div className="flex gap-2 border-t px-3.5 py-2.5 text-xs text-muted-foreground">
-                  <Database className="mt-0.5 size-3.5 shrink-0" />
+                <div className="flex gap-2 border-bs px-3.5 py-2.5 text-xs text-muted-foreground">
+                  <Database className="mbs-0.5 size-3.5 shrink-0" />
                   <span>{analysis.dataHints.map((hint) => hint.path ?? hint.kind).join(', ')}</span>
                 </div>
               )}
               {analysis.secretFindings.length > 0 && (
-                <div className="border-t px-3.5 py-2.5 text-xs text-destructive">
+                <div className="border-bs px-3.5 py-2.5 text-xs text-destructive">
                   Файлы с секретами: {analysis.secretFindings.map((finding) => finding.path).join(', ')}
                 </div>
               )}
@@ -326,7 +326,7 @@ export function ImportProjectRepoDialog({
               <Button
                 type="button"
                 variant="outline"
-                className="h-auto min-h-12 w-full justify-start gap-3 px-3 py-2.5 text-left"
+                className="h-auto min-h-12 w-full justify-start gap-3 px-3 py-2.5 text-start"
                 onClick={() => setPickerOpen(true)}
               >
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted">
@@ -350,10 +350,10 @@ export function ImportProjectRepoDialog({
 
           {reusedExisting && selectedRepo && (
             <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+              <ShieldCheck className="mbs-0.5 size-4 shrink-0 text-emerald-600" />
               <div>
                 <p className="font-medium text-foreground">Нашли твой пустой репозиторий</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                <p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">
                   Переключили импорт на <span className="font-mono text-foreground">{selectedRepo.fullName}</span>. Подтверди загрузку кнопкой ниже.
                 </p>
               </div>
@@ -361,7 +361,7 @@ export function ImportProjectRepoDialog({
           )}
           {saving && (
             <div className="space-y-1.5">
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-1.5 overflow-clip rounded-full bg-muted">
                 <div className="h-full rounded-full bg-violet-600 transition-[width]" style={{ width: `${Math.max(8, progress)}%` }} />
               </div>
               <p className="text-xs text-muted-foreground">
@@ -379,7 +379,7 @@ export function ImportProjectRepoDialog({
         <DialogFooter>
           <Button variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>Отмена</Button>
           <Button disabled={saving || analyzing || !archive || !canCommitProjectImport(analysis) || targetMissing || (targetMode === 'new' && invalidName)} onClick={() => void submit()}>
-            {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
+            {saving && <Loader2 className="me-2 size-4 motion-safe:animate-spin" />}
             {targetMode === 'existing' && selectedRepo
               ? `Импортировать в ${selectedRepo.fullName.split('/').at(-1)}`
               : 'Импортировать'}

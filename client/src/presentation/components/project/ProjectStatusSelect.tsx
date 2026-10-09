@@ -56,7 +56,7 @@ export function ProjectStatusSelect({ project }: { project: Project }): React.Re
         <DropdownMenuRadioGroup value={project.status} onValueChange={(v) => void handleChange(v)}>
           {(Object.keys(STATUS_LABEL) as ProjectStatus[]).map((s) => (
             <DropdownMenuRadioItem key={s} value={s}>
-              <span className={`mr-2 size-1.5 rounded-full ${STATUS_DOT[s]}`} />
+              <span className={`me-2 size-1.5 rounded-full ${STATUS_DOT[s]}`} />
               {STATUS_LABEL[s]}
             </DropdownMenuRadioItem>
           ))}

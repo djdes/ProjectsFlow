@@ -48,14 +48,14 @@ export function DuplicatePage(): React.ReactElement {
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="mbs-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             На главную
           </button>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="size-6 animate-spin" />
+          <Loader2 className="size-6 motion-safe:animate-spin" />
           <p className="text-sm">Копируем доску в ваш ProjectsFlow…</p>
         </div>
       )}

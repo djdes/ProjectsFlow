@@ -22,6 +22,7 @@ import { ProjectSharePopover } from '@/presentation/components/project/ProjectSh
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectGithubOnboardingBanner } from '@/presentation/components/project/ProjectGithubOnboardingBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
+import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { useProjectBannersHidden } from '@/presentation/components/project/projectBannersSetting';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
@@ -241,7 +242,7 @@ export function TasksPage(): React.ReactElement {
     // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её родительский
     // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
     <div className="flex min-h-full min-w-0 flex-col" data-pf-project-page>
-      <div id="pf-project-mobile-header" className="pf-sticky-surface sticky top-0 z-40 flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
+      <div id="pf-project-mobile-header" className="pf-sticky-surface sticky inset-bs-0 z-40 flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
         <div className="min-w-0 truncate text-sm font-medium">
           {data.icon ? `${data.icon} ` : ''}
           {data.name}
@@ -265,7 +266,7 @@ export function TasksPage(): React.ReactElement {
           вертикальном скролле строки рисуются ПОВЕРХ крошек/плашек. */}
       <div
         id="pf-project-crumbs"
-        className="pf-sticky-surface sticky top-0 z-40 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
+        className="pf-sticky-surface sticky inset-bs-0 z-40 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
       >
         <ProjectBreadcrumbs
           projectId={data.id}
@@ -284,6 +285,9 @@ export function TasksPage(): React.ReactElement {
               !activityOpen && taskDrawerOpen && 'pointer-events-none opacity-0',
             )}
           >
+            {/* Счётчик «выполнено сегодня» — первым в правой группе строки крошек: в потоке,
+                а не поверх страницы (раньше висел fixed и закрывал кнопки обложки). */}
+            <HeaderCompletedTodayPill className="me-1.5" />
             {/* Активность/аналитика проекта. */}
             {/* Кнопка «Изменено …» открывает окно активности; ему же отдаём действия,
                 чтобы они были в правом верхнем углу окна (Notion-style). Пока окно открыто —
@@ -308,7 +312,7 @@ export function TasksPage(): React.ReactElement {
       <div
         id="pf-sticky-banners"
         className={cn(
-          'sticky top-11 z-[35] isolate',
+          'sticky inset-bs-11 z-[35] isolate',
           // pf-sticky-surface рисует тень при скролле — у пустого (0px) контейнера она
           // выродилась бы в лишнюю линию под крошками, поэтому класс только когда есть контент.
           !bannersHidden && 'pf-sticky-surface',
@@ -337,7 +341,7 @@ export function TasksPage(): React.ReactElement {
 
       {/* Тело страницы: крупный заголовок с большими отступами по краям (Notion-style).
           flex-1 без min-h-0 — тело заполняет экран при коротком контенте и растёт при длинном. */}
-      <div className="flex min-w-0 flex-1 flex-col px-4 pb-10 sm:px-14 sm:pb-12 lg:px-24">
+      <div className="flex min-w-0 flex-1 flex-col px-4 pbe-10 sm:px-14 sm:pbe-12 lg:px-24">
       {/* #2: заголовок проекта — крупный, с большим отступом сверху и по бокам (как в Notion).
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
@@ -350,7 +354,7 @@ export function TasksPage(): React.ReactElement {
           // блок Notion — 66px: название 38 + описание 28, дальше 12px до вкладок).
           // Мы же ставили 40px ПОСЛЕ описания, и зазор выходил вдвое больше нотионовского.
           // Сам ряд вкладок верхнего отступа не имеет, так что зазор целиком задаётся здесь.
-          'group/head flex shrink-0 flex-col pb-3 pt-2 sm:block sm:pb-3',
+          'group/head flex shrink-0 flex-col pbe-3 pbs-2 sm:block sm:pbe-3',
           // Верхний отступ зависит от того, что стоит ВЫШЕ блока.
           //  • Без обложки сверху строка крошек (h-11). Ряд «Добавить обложку/описание» в
           //    Notion живёт ВНУТРИ 36px-зазора, а не раздвигает контент: 4 (pt-1) + 28 (ряд)
@@ -361,8 +365,8 @@ export function TasksPage(): React.ReactElement {
           //    ряда (pt-4, значение до перехода на нотионовский ритм) и держим название на
           //    той же горизонтали, когда ряда нет: 16 + 28 + 4 = 48 (pt-12).
           data.coverUrl
-            ? (canEdit ? 'sm:pt-4' : 'sm:pt-12')
-            : (canEdit ? 'sm:pt-1' : 'sm:pt-9'),
+            ? (canEdit ? 'sm:pbs-4' : 'sm:pbs-12')
+            : (canEdit ? 'sm:pbs-1' : 'sm:pbs-9'),
         )}
       >
         {canEdit && (
@@ -376,7 +380,7 @@ export function TasksPage(): React.ReactElement {
           <div
             id="pf-project-appearance"
             className={cn(
-              'order-2 mt-1 min-w-0 flex-wrap items-center gap-1 transition-opacity duration-150 sm:mb-1 sm:mt-0 sm:flex sm:h-7 sm:flex-nowrap sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100',
+              'order-2 mbs-1 min-w-0 flex-wrap items-center gap-1 transition-opacity duration-150 sm:mbe-1 sm:mbs-0 sm:flex sm:h-7 sm:flex-nowrap sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100',
               appearanceOpen ? 'flex' : 'hidden',
             )}
           >
@@ -386,7 +390,7 @@ export function TasksPage(): React.ReactElement {
             {!data.coverUrl && (
               <HeadToolButton onClick={() => void addRandomCover()} disabled={coverBusy} aria-label="Добавить обложку">
                 {coverBusy ? (
-                  <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+                  <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" />
                 ) : (
                   <ImageIcon className="size-4" />
                 )}
@@ -432,7 +436,7 @@ export function TasksPage(): React.ReactElement {
           // вплотную (строка описания начинается ровно на нижней кромке названия, y=118),
           // а весь зазор до вкладок живёт в нижнем паддинге блока. На мобиле оставляем
           // mt-2.5: там название набрано мельче и слипание читается хуже.
-          <div className={cn('order-1 mt-1 max-w-3xl sm:mt-0 sm:pl-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}>
+          <div className={cn('order-1 mbs-1 max-w-3xl sm:mbs-0 sm:ps-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}>
             <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
           </div>
         )}
@@ -455,7 +459,7 @@ export function TasksPage(): React.ReactElement {
         // обложки/плашки). Первая колонка отступает как тело страницы (px-4/14/24), последняя
         // доходит до правого края; при скролле колонки уезжают влево до самого края.
         bleedNegClass="-mx-4 sm:-mx-14 lg:-mx-24"
-        bleedPadClass="pl-4 sm:pl-14 lg:pl-24"
+        bleedPadClass="ps-4 sm:ps-14 lg:ps-24"
       />
 
       <AutomationDialog

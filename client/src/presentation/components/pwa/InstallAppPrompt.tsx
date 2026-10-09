@@ -73,7 +73,7 @@ function InstructionsDialog({
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                 {i + 1}
               </span>
-              <span className="pt-0.5 text-foreground">{step}</span>
+              <span className="pbs-0.5 text-foreground">{step}</span>
             </li>
           ))}
         </ol>
@@ -105,7 +105,7 @@ export function InstallAppPrompt({
     if (dismissed) return null;
     return (
       <>
-        <div className="flex shrink-0 items-center gap-2 border-b bg-primary/5 px-3 py-2 text-sm">
+        <div className="flex shrink-0 items-center gap-2 border-be bg-primary/5 px-3 py-2 text-sm">
           <span
             aria-hidden
             className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground"

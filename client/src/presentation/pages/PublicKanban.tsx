@@ -8,10 +8,10 @@ import type { PublicColumn, PublicTask } from '@/domain/public/PublicBoard';
 
 // Цвет-точка приоритета (Todoist-style): 1=urgent…4=low. null = без точки.
 const PRIORITY_COLOR: Record<1 | 2 | 3 | 4, string> = {
-  1: '#ef4444',
-  2: '#f59e0b',
-  3: '#3b82f6',
-  4: '#94a3b8',
+  1: 'oklch(63.68% 0.208 25.33)',
+  2: 'oklch(76.86% 0.1647 70.08)',
+  3: 'oklch(62.31% 0.188 259.81)',
+  4: 'oklch(71.07% 0.035 256.79)',
 };
 
 function fmtDeadline(iso: string): string {
@@ -36,30 +36,30 @@ function PublicCard({
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className="w-full overflow-hidden rounded-lg border border-black/[0.06] bg-white text-left transition-colors hover:border-[var(--pf-public-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pf-public-accent)] dark:border-white/[0.08] dark:bg-white/[0.04]"
+      className="w-full overflow-clip rounded-lg border border-black/[0.06] bg-white text-start transition-colors hover:border-[var(--pf-public-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pf-public-accent)] dark:border-white/[0.08] dark:bg-white/[0.04]"
     >
       {task.cover && (
         <div className="h-16 w-full" style={coverStyle(task.cover, task.coverPosition)} aria-hidden />
       )}
       <div className="flex items-start gap-2 px-3 py-2.5">
         {task.icon && (
-          <span className="mt-[1px] grid size-4 shrink-0 place-items-center text-[15px] leading-none">
+          <span className="mbs-[1px] grid size-4 shrink-0 place-items-center text-[15px] leading-none">
             <ProjectIconView icon={task.icon} pixelSize={15} />
           </span>
         )}
-        <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-[#37352f] dark:text-blue-50">
+        <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50">
           {title || 'Без названия'}
         </span>
         {showMeta && task.priority && (
           <span
-            className="mt-[5px] size-2 shrink-0 rounded-full"
+            className="mbs-[5px] size-2 shrink-0 rounded-full"
             style={{ backgroundColor: PRIORITY_COLOR[task.priority] }}
             aria-hidden
           />
         )}
       </div>
       {showMeta && task.deadline && (
-        <div className="flex items-center gap-1 px-3 pb-2.5 text-[11px] text-[#37352f]/50 dark:text-blue-100/50">
+        <div className="flex items-center gap-1 px-3 pbe-2.5 text-[11px] text-[oklch(32.89%_0.011_91.66/0.5)] dark:text-blue-100/50">
           <Calendar className="size-3" />
           {fmtDeadline(task.deadline)}
         </div>
@@ -88,12 +88,12 @@ export function PublicKanban({
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
+    <div className="flex gap-3 overflow-x-auto pbe-4">
       {visible.map((col) => (
         <section key={col.status} className="flex w-64 shrink-0 flex-col gap-2">
-          <header className="flex items-center gap-2 px-1 text-[13px] font-medium text-[#37352f]/70 dark:text-blue-100/70">
+          <header className="flex items-center gap-2 px-1 text-[13px] font-medium text-[oklch(32.89%_0.011_91.66/0.7)] dark:text-blue-100/70">
             <span>{STATUS_LABEL[col.status]}</span>
-            <span className="text-[#37352f]/40 dark:text-blue-100/40">{col.tasks.length}</span>
+            <span className="text-[oklch(32.89%_0.011_91.66/0.4)] dark:text-blue-100/40">{col.tasks.length}</span>
           </header>
           <div className="flex flex-col gap-2">
             {/* Порциями по 4 + «Показать ещё» — как на внутренних досках. */}

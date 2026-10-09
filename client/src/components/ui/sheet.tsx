@@ -50,16 +50,16 @@ const sheetVariants = cva(
   {
     variants: {
       side: {
-        top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
+        top: 'inset-x-0 inset-bs-0 border-be motion-safe:data-[state=closed]:slide-out-to-top motion-safe:data-[state=open]:slide-in-from-top',
         bottom:
-          'inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
-        left: 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
+          'inset-x-0 inset-be-0 border-bs motion-safe:data-[state=closed]:slide-out-to-bottom motion-safe:data-[state=open]:slide-in-from-bottom',
+        left: 'inset-y-0 start-0 h-full w-3/4 border-e motion-safe:data-[state=closed]:slide-out-to-left motion-safe:data-[state=open]:slide-in-from-left sm:max-w-sm',
         right:
-          'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
+          'inset-y-0 end-0 h-full w-3/4 border-s motion-safe:data-[state=closed]:slide-out-to-right motion-safe:data-[state=open]:slide-in-from-right sm:max-w-sm',
         // center: модальное окно по центру (Notion «center peek»). Центрирование +
         // zoom-анимация. Скругление/рамка/высота задаются через className вызывающего.
         center:
-          'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-bottom-2 data-[state=open]:slide-in-from-bottom-2',
+          'start-1/2 inset-bs-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[state=closed]:slide-out-to-bottom-2 motion-safe:data-[state=open]:slide-in-from-bottom-2',
       },
     },
     defaultVariants: {
@@ -119,7 +119,7 @@ export const SheetContent = React.forwardRef<
         {showClose && (
           <DialogPrimitive.Close
             data-pf-window-close=""
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+            className="absolute end-4 inset-bs-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Закрыть</span>
@@ -137,7 +137,7 @@ export function SheetHeader({
   return (
     <div
       className={cn(
-        'flex flex-col space-y-2 text-center sm:text-left',
+        'flex flex-col space-y-2 text-center sm:text-start',
         className,
       )}
       {...props}

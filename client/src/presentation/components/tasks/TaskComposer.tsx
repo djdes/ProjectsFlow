@@ -63,9 +63,9 @@ const ICON_GLYPH = 'size-3.5';
 // size-7, rounded-md, тот же нейтральный hover-фон (bg-hover), чтобы нижний ряд был ровным.
 // Цвет иконки НЕ форсим (у пикеров он свой — приоритет/дедлайн бывают цветными).
 const ICON_BTN_ANIM =
-  'rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
+  'rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
 const ICON_BTN_PICKER =
-  'size-7 shrink-0 rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
+  'size-7 shrink-0 rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
 
 type Props = {
   // Колбэк создания задачи. Передаёт выбранный/форсированный status.
@@ -350,7 +350,7 @@ export function TaskComposer({
       aria-label="Отправить"
       className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100"
     >
-      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+      {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Send className="size-4" />}
     </button>
   );
 
@@ -379,7 +379,7 @@ export function TaskComposer({
         <button
           type="button"
           onClick={restoreDraft}
-          className="flex w-full items-center gap-1.5 border-b px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          className="flex w-full items-center gap-1.5 border-be px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           title="Вернуть прошлый незавершённый черновик"
         >
           <RotateCcw className="size-3.5 shrink-0" />
@@ -387,11 +387,11 @@ export function TaskComposer({
         </button>
       )}
       {pending.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-2.5 py-1.5">
+        <div className="flex flex-wrap gap-1.5 border-be bg-muted/30 px-2.5 py-1.5">
           {pending.map((pf) => (
             <span
               key={pf.id}
-              className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+              className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 ps-1.5 pe-1 text-2xs"
               title={pf.file.name}
             >
               {pf.previewUrl ? (
@@ -423,7 +423,7 @@ export function TaskComposer({
         <Dialog open onOpenChange={() => setPreviewFile(null)}>
           {/* hideClose: крестик уже есть в шапке — иначе два крестика друг на друге. */}
           <DialogContent hideClose className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
-            <div className="flex items-center justify-between border-b px-4 py-2.5">
+            <div className="flex items-center justify-between border-be px-4 py-2.5">
               <p className="truncate text-sm font-medium">{previewFile.file.name}</p>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => setPreviewFile(null)} aria-label="Закрыть">
                 <X className="size-4" />
@@ -443,7 +443,7 @@ export function TaskComposer({
       {/* Поле ввода. В inline — на всю ширину (отправка переехала в нижний ряд кнопок,
           чтобы все контролы были одного размера в одну ровную строку). В floating —
           справа SendTargetButton с выбором цели (Воркеру/Черновик). */}
-      <div className="flex items-center gap-1 pr-2 pt-2">
+      <div className="flex items-center gap-1 pe-2 pbs-2">
         <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
           <ContextMenuTrigger asChild>
             <textarea
@@ -495,7 +495,7 @@ export function TaskComposer({
       {/* Ряд доп-действий. На телефоне в свёрнутом состоянии скрыт, выезжает по фокусу; на sm+ виден всегда. */}
       <div
         className={cn(
-          'flex items-center gap-1 px-1.5 pb-2',
+          'flex items-center gap-1 px-1.5 pbe-2',
           isInline && 'flex-wrap',
           !expanded && 'hidden sm:flex',
         )}
@@ -508,7 +508,7 @@ export function TaskComposer({
           aria-label="Прикрепить файл"
           title="Прикрепить файл (или Ctrl+V / перетащи)"
         >
-          <Paperclip className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110')} />
+          <Paperclip className={cn(ICON_GLYPH, 'motion-safe:transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110')} />
         </button>
         {/* Ответственный обязателен для каждой задачи. */}
         <AssigneeSelect
@@ -540,7 +540,7 @@ export function TaskComposer({
           iconOnly
           className={cn('h-7', ICON_BTN_ANIM, deadline === null ? 'w-7 px-0' : 'px-2')}
         />
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ms-auto flex items-center gap-1">
           {/* В floating AI живёт здесь (в inline — рядом с отправкой сверху). */}
           {!isInline && aiButton}
           {isInline && onClose && (
@@ -552,7 +552,7 @@ export function TaskComposer({
               aria-label="Закрыть"
               title="Закрыть (Esc)"
             >
-              <X className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/x:rotate-90')} />
+              <X className={cn(ICON_GLYPH, 'motion-safe:transition-transform duration-150 group-hover/x:rotate-90')} />
             </button>
           )}
         </div>
@@ -578,7 +578,7 @@ export function TaskComposer({
   // над нижним таб-баром (h-14, см. AppShell MobileBottomNav).
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] z-40 flex justify-center px-3 md:bottom-4 md:px-4"
+      className="pointer-events-none fixed inset-x-0 inset-be-[calc(4.5rem_+_env(safe-area-inset-bottom,0px))] z-40 flex justify-center px-3 md:inset-be-4 md:px-4"
     >
       {card}
     </div>

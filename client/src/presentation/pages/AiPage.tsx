@@ -67,14 +67,14 @@ export function AiPage(): React.ReactElement {
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-5 py-8 md:px-10 md:py-12">
         <div className="flex flex-1 flex-col items-center justify-center py-8 text-center md:py-10">
-          <div className="mb-6 grid size-16 place-items-center rounded-[22px] bg-foreground text-background shadow-[0_18px_60px_rgba(15,23,42,0.2)]"><Sparkles className="size-8" /></div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">ProjectsFlow ИИ</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
-          <div className="mt-7 w-full max-w-2xl text-left">
+          <div className="mbe-6 grid size-16 place-items-center rounded-[22px] bg-foreground text-background shadow-[0_18px_60px_oklch(20.77%_0.04_265.75/0.2)]"><Sparkles className="size-8" /></div>
+          <h1 className="text-display font-semibold tracking-tight">ProjectsFlow ИИ</h1>
+          <p className="mbs-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
+          <div className="mbs-7 w-full max-w-2xl text-start">
             <AiComposer conversationId={null} sending={busy} onSend={createAndSend} autoFocus />
-            <AiComposerPresets className="mt-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
+            <AiComposerPresets className="mbs-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
           </div>
-          <button type="button" onClick={() => void create()} disabled={busy} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition hover:bg-hover hover:text-foreground disabled:opacity-50"><Plus className="size-4" />Открыть пустой чат</button>
+          <button type="button" onClick={() => void create()} disabled={busy} className="mbs-3 inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition hover:bg-hover hover:text-foreground disabled:opacity-50"><Plus className="size-4" />Открыть пустой чат</button>
         </div>
       </div>
       </div>

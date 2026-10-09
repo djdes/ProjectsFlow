@@ -138,7 +138,7 @@ export function AssigneeTaskButton({
           title="Ответственный за задачу. Нажмите, чтобы изменить."
         >
           {submitting ? (
-            <Loader2 className="size-3.5 shrink-0 animate-spin" />
+            <Loader2 className="size-3.5 shrink-0 motion-safe:animate-spin" />
           ) : (
             <MiniAvatar name={assignee.displayName} avatarUrl={assignee.avatarUrl} />
           )}
@@ -161,9 +161,9 @@ export function AssigneeTaskButton({
                 <MiniAvatar name={member.displayName} avatarUrl={member.avatarUrl} />
                 <span className="min-w-0 truncate">{member.displayName}</span>
                 {member.id === user?.id && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground">вы</span>
+                  <span className="shrink-0 text-2xs text-muted-foreground">вы</span>
                 )}
-                {active && <Check className="ml-auto size-3.5 shrink-0 text-primary" />}
+                {active && <Check className="ms-auto size-3.5 shrink-0 text-primary" />}
               </DropdownMenuItem>
             );
           })

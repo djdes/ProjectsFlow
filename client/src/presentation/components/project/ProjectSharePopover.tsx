@@ -27,12 +27,12 @@ function ShareTab({ project, onOpenPublic }: { project: Project; onOpenPublic: (
       <WorkspaceMembersPanel key={workspace.id} workspace={workspace} projectId={project.id} />
       <Button asChild variant="outline" size="sm" className="w-full"><Link to={`/workspaces/${workspace.id}/settings`}><Settings2 className="size-4" />Настройки пространства</Link></Button>
     </> : <p className="text-sm text-muted-foreground">Загружаем пространство…</p>}
-    <div className="border-t pt-3">
+    <div className="border-bs pbs-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0"><p className="text-sm">Ссылка на проект</p><p className="text-xs text-muted-foreground">Только для участников с доступом к этому проекту.</p></div>
         <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copyLink}><Link2 className="size-3.5" />Копировать</Button>
       </div>
-      <button type="button" onClick={onOpenPublic} className="mt-2 flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground hover:bg-muted">
+      <button type="button" onClick={onOpenPublic} className="mbs-2 flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-muted">
         <span>Показать без входа — <span className="font-medium text-primary">Публичная доска</span></span><ChevronRight className="size-3.5 shrink-0" />
       </button>
     </div>
@@ -109,7 +109,7 @@ export function ProjectSharePopover({ project, isOwner, compact = false }: Props
       >
         {/* Табы: Участники (пригласить в пространство) · Публичная доска (показать без входа) ·
             Сайт проекта (результат). */}
-        <div className="sticky top-0 z-10 flex items-center gap-3 overflow-x-auto overflow-y-hidden border-b bg-popover px-4 pt-2.5" role="tablist" aria-label="Поделиться проектом">
+        <div className="sticky inset-bs-0 z-10 flex items-center gap-3 overflow-x-auto overflow-y-hidden border-be bg-popover px-4 pbs-2.5" role="tablist" aria-label="Поделиться проектом">
           {(['share', 'board', 'site'] as const).map((t) => (
             <button
               key={t}
@@ -130,12 +130,12 @@ export function ProjectSharePopover({ project, isOwner, compact = false }: Props
               aria-selected={tab === t}
               tabIndex={tab === t ? 0 : -1}
               className={cn(
-                'relative whitespace-nowrap pb-2 text-sm transition-colors',
+                'relative whitespace-nowrap pbe-2 text-sm transition-colors',
                 tab === t ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {TAB_LABEL[t]}
-              {tab === t && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-foreground" />}
+              {tab === t && <span className="absolute inset-x-0 -inset-be-px h-0.5 rounded-full bg-foreground" />}
             </button>
           ))}
         </div>

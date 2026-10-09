@@ -105,7 +105,7 @@ export function RecipientPickerDialog({
             Отмена
           </Button>
           <Button onClick={() => onSend(recipients)} disabled={busy || recipients.length === 0}>
-            {busy && <Loader2 className="size-4 animate-spin" />}
+            {busy && <Loader2 className="size-4 motion-safe:animate-spin" />}
             Отправить
           </Button>
         </DialogFooter>
@@ -129,7 +129,7 @@ function Row({
     <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
       <Checkbox checked={checked} onCheckedChange={onToggle} />
       <span className="truncate text-sm">{label}</span>
-      <span className="ml-auto truncate text-[11px] text-muted-foreground">{hint}</span>
+      <span className="ms-auto truncate text-2xs text-muted-foreground">{hint}</span>
     </label>
   );
 }

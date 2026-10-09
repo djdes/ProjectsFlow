@@ -751,13 +751,13 @@ export function ViewSearchInput({
 }): React.ReactElement {
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+      <Search className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Фильтр по тексту…"
         aria-label="Фильтр задач по тексту"
-        className="h-7 w-32 rounded-md bg-transparent pl-7 pr-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60 sm:w-44"
+        className="h-7 w-32 rounded-md bg-transparent ps-7 pe-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60 sm:w-44"
       />
     </div>
   );

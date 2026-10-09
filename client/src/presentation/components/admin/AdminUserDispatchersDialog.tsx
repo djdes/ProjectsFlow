@@ -66,7 +66,7 @@ export function AdminUserDispatchersDialog({ user, onClose }: Props): React.Reac
         {error && <p className="text-sm text-destructive">{error}</p>}
         {projects === null && !error && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 motion-safe:animate-spin" />
             Загрузка проектов…
           </div>
         )}
@@ -86,7 +86,7 @@ export function AdminUserDispatchersDialog({ user, onClose }: Props): React.Reac
                     <p className="truncate text-sm font-medium">
                       {p.projectName}
                       {p.isInbox && (
-                        <span className="ml-2 text-xs text-muted-foreground">
+                        <span className="ms-2 text-xs text-muted-foreground">
                           (Входящие)
                         </span>
                       )}
@@ -193,7 +193,7 @@ function DispatcherPicker({
   if (candidates === null) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-3 animate-spin" />
+        <Loader2 className="size-3 motion-safe:animate-spin" />
         Загрузка кандидатов…
       </div>
     );
@@ -232,7 +232,7 @@ function DispatcherPicker({
         onClick={() => void save()}
         disabled={saving || draft === currentDispatcherUserId}
       >
-        {saving && <Loader2 className="size-3.5 animate-spin" />}
+        {saving && <Loader2 className="size-3.5 motion-safe:animate-spin" />}
         Сохранить
       </Button>
       <Button size="sm" variant="ghost" onClick={() => setPicking(false)} disabled={saving}>
@@ -284,7 +284,7 @@ function GitTokenDelegationToggle({
   };
 
   return (
-    <div className="flex items-center gap-2 pt-1">
+    <div className="flex items-center gap-2 pbs-1">
       <Github className="size-3.5 text-muted-foreground" />
       <span className="flex-1 text-xs text-muted-foreground">
         Делегация GitHub-токена:{' '}
@@ -305,7 +305,7 @@ function GitTokenDelegationToggle({
         disabled={saving}
         title={`Переключить за владельца (${ownerDisplayName}). Granter останется owner — admin технически просто жмёт.`}
       >
-        {saving && <Loader2 className="size-3.5 animate-spin" />}
+        {saving && <Loader2 className="size-3.5 motion-safe:animate-spin" />}
         {enabled ? 'Выключить' : 'Включить'}
       </Button>
     </div>

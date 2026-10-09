@@ -40,7 +40,7 @@ export function StudioMobileChatSheet({
           type="button"
           variant="ghost"
           size="icon"
-          className="absolute right-2 top-2 z-10 size-8 bg-background/90 backdrop-blur"
+          className="absolute end-2 inset-bs-2 z-10 size-8 bg-background/90 backdrop-blur"
           aria-label="Закрыть AI-чат"
           onClick={() => onOpenChange(false)}
         >

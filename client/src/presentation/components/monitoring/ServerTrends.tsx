@@ -45,10 +45,10 @@ export function ServerTrends({
         )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <TrendChart label="Память %" values={series((p) => p.memUsedPct)} max={100} suffix="%" color="#0ea5e9" />
-        <TrendChart label="Диск %" values={series((p) => p.diskUsedPct)} max={100} suffix="%" color="#f59e0b" />
-        <TrendChart label="Load (1m)" values={series((p) => p.cpuLoad1)} color="#8b5cf6" />
-        <TrendChart label="Рестарты pm2" values={series((p) => p.pm2RestartTotal)} color="#ef4444" />
+        <TrendChart label="Память %" values={series((p) => p.memUsedPct)} max={100} suffix="%" color="oklch(68.47% 0.1479 237.32)" />
+        <TrendChart label="Диск %" values={series((p) => p.diskUsedPct)} max={100} suffix="%" color="oklch(76.86% 0.1647 70.08)" />
+        <TrendChart label="Load (1m)" values={series((p) => p.cpuLoad1)} color="oklch(60.56% 0.219 292.72)" />
+        <TrendChart label="Рестарты pm2" values={series((p) => p.pm2RestartTotal)} color="oklch(63.68% 0.208 25.33)" />
       </div>
     </div>
   );

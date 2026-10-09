@@ -133,7 +133,7 @@ export function InboxCheckbox({
       )}
     >
       {pending ? (
-        <Loader2 className="size-3 animate-spin" />
+        <Loader2 className="size-3 motion-safe:animate-spin" />
       ) : variant === 'toolbar' && isDone ? (
         <Undo2 className="size-3.5" strokeWidth={2.25} />
       ) : isDone || variant === 'toolbar' ? (

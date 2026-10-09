@@ -54,7 +54,7 @@ function TopIconButton({
 // Мини-превью доски в поповере «Поделиться» (обложка + иконка + имя) — как карточка в Notion.
 function SharePreview({ board }: { board: PublicBoard | null }): React.ReactElement {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="overflow-clip rounded-lg border bg-card">
       <div
         className="h-12 w-full bg-muted"
         style={board?.coverUrl ? coverStyle(board.coverUrl, board.coverPosition) : undefined}
@@ -99,9 +99,9 @@ function SharePopover({ board, url }: { board: PublicBoard | null; url: string }
         </TopIconButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[22rem] max-w-[92vw] p-4">
-        <p className="mb-3 text-center text-sm font-semibold">Поделиться доской</p>
+        <p className="mbe-3 text-center text-sm font-semibold">Поделиться доской</p>
         <SharePreview board={board} />
-        <div className="mt-3 flex items-center gap-1.5">
+        <div className="mbs-3 flex items-center gap-1.5">
           <input
             readOnly
             value={url}
@@ -113,7 +113,7 @@ function SharePopover({ board, url }: { board: PublicBoard | null; url: string }
             {copied ? 'Готово' : 'Копировать'}
           </Button>
         </div>
-        <div className="mt-3 flex items-center justify-center gap-2.5">
+        <div className="mbs-3 flex items-center justify-center gap-2.5">
           {socials.map((s) => (
             <a
               key={s.label}
@@ -175,7 +175,7 @@ function ReportDialog({
               type="button"
               onClick={() => setReason(r)}
               className={cn(
-                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent',
+                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-accent',
                 reason === r && 'bg-accent',
               )}
             >
@@ -191,7 +191,7 @@ function ReportDialog({
             </button>
           ))}
         </div>
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex justify-end gap-2 pbs-1">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Отмена
           </Button>
@@ -270,7 +270,7 @@ function SearchModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
-        <div className="flex items-center gap-2.5 border-b px-4 py-3">
+        <div className="flex items-center gap-2.5 border-be px-4 py-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             autoFocus
@@ -281,8 +281,8 @@ function SearchModal({
           />
         </div>
         <div className="flex h-[min(60vh,26rem)]">
-          <div className="w-full overflow-y-auto border-r p-2 sm:w-1/2">
-            <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <div className="w-full overflow-y-auto border-e p-2 sm:w-1/2">
+            <p className="px-2 pbe-1 pbs-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
               Задачи
             </p>
             {results.length === 0 ? (
@@ -297,7 +297,7 @@ function SearchModal({
                     onMouseEnter={() => setHoverId(t.id)}
                     onClick={() => pick(t.id)}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors',
                       active?.id === t.id ? 'bg-accent' : 'hover:bg-accent/60',
                     )}
                   >
@@ -317,7 +317,7 @@ function SearchModal({
               <button
                 type="button"
                 onClick={() => pick(active.id)}
-                className="block w-full overflow-hidden rounded-lg border text-left transition-shadow hover:shadow-md"
+                className="block w-full overflow-clip rounded-lg border text-start transition-shadow hover:shadow-md"
               >
                 <div
                   className="h-16 w-full bg-muted"
@@ -326,12 +326,12 @@ function SearchModal({
                 />
                 <div className="p-3">
                   {active.icon && (
-                    <ProjectIconView icon={active.icon} pixelSize={22} className="mb-1 text-xl leading-none" />
+                    <ProjectIconView icon={active.icon} pixelSize={22} className="mbe-1 text-xl leading-none" />
                   )}
                   <p className="font-semibold leading-snug">
                     {splitTitleBody(active.description ?? '').title || 'Без названия'}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{STATUS_LABEL[active.status]}</p>
+                  <p className="mbs-1 text-xs text-muted-foreground">{STATUS_LABEL[active.status]}</p>
                 </div>
               </button>
             ) : (
@@ -361,12 +361,12 @@ function PublicTopBar({
   const registerHref = `${appOrigin()}/register`;
 
   return (
-    <div className="flex h-11 items-center justify-between gap-2 border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
+    <div className="flex h-11 items-center justify-between gap-2 border-be border-black/[0.06] px-3 dark:border-white/[0.06]">
       <div className="flex min-w-0 items-center gap-1.5">
         {board?.icon && (
           <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
         )}
-        <span className="truncate text-sm font-medium text-[#37352f]/80 dark:text-blue-100/80">
+        <span className="truncate text-sm font-medium text-[oklch(32.89%_0.011_91.66/0.8)] dark:text-blue-100/80">
           {board?.name ?? ''}
         </span>
       </div>
@@ -387,8 +387,8 @@ function PublicTopBar({
         <MoreMenu onReport={() => setReportOpen(true)} />
         <a
           href={registerHref}
-          className="ml-1 rounded-md px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: board?.appearance.accentColor ?? '#2383e2' }}
+          className="ms-1 rounded-md px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: board?.appearance.accentColor ?? 'oklch(60.58% 0.167 252.7)' }}
         >
           Попробовать ProjectsFlow
         </a>
@@ -442,24 +442,24 @@ function BoardView({
 
       <div className="mx-auto w-full max-w-5xl px-4 sm:px-8">
         {/* Шапка: иконка + имя + описание. */}
-        <header className={board.appearance.showCover && board.coverUrl ? '-mt-8' : 'mt-8'}>
+        <header className={board.appearance.showCover && board.coverUrl ? '-mbs-8' : 'mbs-8'}>
           {board.appearance.showIcon && board.icon && (
-            <div className="mb-2 grid size-16 place-items-center rounded-xl bg-white text-[44px] leading-none shadow-[0_1px_3px_rgba(15,23,42,0.12)] dark:bg-[#202020]">
+            <div className="mbe-2 grid size-16 place-items-center rounded-xl bg-white text-[44px] leading-none shadow-[0_1px_3px_oklch(20.77%_0.04_265.75/0.12)] dark:bg-[oklch(24.35%_0_none)]">
               <ProjectIconView icon={board.icon} pixelSize={40} className="text-[40px]" />
             </div>
           )}
-          <h1 className="text-3xl font-bold tracking-tight text-[#37352f] dark:text-blue-50">
+          <h1 className="text-3xl font-bold tracking-tight text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50">
             {board.name}
           </h1>
           {board.appearance.showDescription && board.description && (
-            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[#37352f]/80 dark:text-blue-100/80">
+            <p className="mbs-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[oklch(32.89%_0.011_91.66/0.8)] dark:text-blue-100/80">
               {board.description}
             </p>
           )}
         </header>
 
         {/* Канбан. */}
-        <div className="mt-8">
+        <div className="mbs-8">
           <PublicKanban
             columns={board.columns}
             onOpenTask={onOpenTask}
@@ -492,8 +492,8 @@ export function PublicBoardPage(): React.ReactElement {
 
   return (
     <div
-      className="min-h-dvh bg-background pb-[calc(4rem+env(safe-area-inset-bottom))]"
-      style={{ '--pf-public-accent': board?.appearance.accentColor ?? '#2383e2' } as React.CSSProperties}
+      className="min-h-dvh bg-background pbe-[calc(4rem+env(safe-area-inset-bottom,0px))]"
+      style={{ '--pf-public-accent': board?.appearance.accentColor ?? 'oklch(60.58% 0.167 252.7)' } as React.CSSProperties}
     >
       {/* Верхняя полоса — реплика публичной страницы Notion. */}
       <PublicTopBar board={board} slug={slug} onOpenTask={openTask} />
@@ -507,7 +507,7 @@ export function PublicBoardPage(): React.ReactElement {
       {status === 'notfound' && (
         <div className="mx-auto max-w-md px-8 py-24 text-center">
           <h1 className="text-xl font-semibold text-foreground">Доска не найдена</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mbs-2 text-sm text-muted-foreground">
             Ссылка недействительна или проект больше не опубликован.
           </p>
         </div>
@@ -516,7 +516,7 @@ export function PublicBoardPage(): React.ReactElement {
       {status === 'error' && (
         <div className="mx-auto max-w-md px-8 py-24 text-center">
           <h1 className="text-xl font-semibold text-foreground">Не удалось загрузить</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Попробуйте обновить страницу позже.</p>
+          <p className="mbs-2 text-sm text-muted-foreground">Попробуйте обновить страницу позже.</p>
         </div>
       )}
 

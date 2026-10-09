@@ -80,7 +80,7 @@ export function ChatMessageMenu({
     target.reactions.find((r) => r.emoji === emoji)?.userIds.includes(target.currentUserId) ?? false;
 
   const item =
-    'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-foreground/[0.06] dark:hover:bg-white/[0.06]';
+    'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-foreground/[0.06] dark:hover:bg-white/[0.06]';
 
   return createPortal(
     <motion.div
@@ -93,7 +93,7 @@ export function ChatMessageMenu({
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* быстрые реакции */}
-      <div className="flex justify-between gap-0.5 px-1 pb-1">
+      <div className="flex justify-between gap-0.5 px-1 pbe-1">
         {QUICK_EMOJIS.map((e) => {
           const mine = reactedByMe(e);
           return (
@@ -105,7 +105,7 @@ export function ChatMessageMenu({
                 onClose();
               }}
               className={cn(
-                'grid size-8 place-items-center rounded-md text-lg transition-transform hover:scale-110',
+                'grid size-8 place-items-center rounded-md text-lg motion-safe:transition-transform hover:scale-110',
                 mine && 'bg-primary/10',
               )}
             >

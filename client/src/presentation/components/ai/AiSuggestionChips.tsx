@@ -95,18 +95,18 @@ export function AiSuggestionChips({
               {/* Кнопка нарисована ПОВЕРХ затухающих чипов (референс), поэтому сама она
                   прозрачная, а край ряда гасит узкий градиент — иначе последний чип
                   обрывался бы посреди буквы. */}
-              <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-background via-background to-transparent" />
+              <span aria-hidden className="pointer-events-none absolute inset-y-0 end-0 w-14 bg-gradient-to-l from-background via-background to-transparent" />
               <button
                 type="button"
                 onClick={page}
                 aria-label={atEnd ? 'Прокрутить подсказки влево' : 'Прокрутить подсказки вправо'}
                 title={atEnd ? 'Прокрутить подсказки влево' : 'Прокрутить подсказки вправо'}
                 className={cn(
-                  'absolute right-0 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded border border-transparent',
+                  'absolute end-0 inset-bs-1/2 grid size-6 -translate-y-1/2 place-items-center rounded border border-transparent',
                   'text-muted-foreground transition hover:text-foreground',
                 )}
               >
-                <ChevronRight className={cn('size-4 transition-transform', atEnd && 'rotate-180')} />
+                <ChevronRight className={cn('size-4 motion-safe:transition-transform', atEnd && 'rotate-180')} />
               </button>
             </>
           )}

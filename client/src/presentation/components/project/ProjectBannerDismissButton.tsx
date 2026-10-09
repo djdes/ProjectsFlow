@@ -30,7 +30,7 @@ export function ProjectBannerDismissButton({ className }: Props): React.ReactEle
       aria-label="Скрыть плашки"
       title="Скрыть плашки"
       className={cn(
-        'absolute right-2 top-2 z-10 grid size-5 place-items-center rounded text-muted-foreground/50 transition-colors hover:bg-foreground/[0.06] hover:text-foreground',
+        'absolute end-2 inset-bs-2 z-10 grid size-5 place-items-center rounded text-muted-foreground/50 transition-colors hover:bg-foreground/[0.06] hover:text-foreground',
         className,
       )}
     >

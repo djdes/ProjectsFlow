@@ -68,15 +68,15 @@ export function KbPage(): React.ReactElement {
           раздул бы её ghost-подложку на ширину отступа, а заодно перекрыл бы -ml-2,
           которым она выровнена по тексту дерева ниже. flex — чтобы обёртка не заводила
           строчный бокс и не добавляла лишних пикселей под кнопкой. */}
-      <div className="pf-burger-gap mb-3 flex">
-        <Button asChild variant="ghost" size="sm" className="-ml-2 gap-1">
+      <div className="pf-burger-gap mbe-3 flex">
+        <Button asChild variant="ghost" size="sm" className="-ms-2 gap-1">
           <Link to={`/projects/${project.id}`}>
             <ArrowLeft className="size-3.5" />
             К проекту
           </Link>
         </Button>
       </div>
-      <p className="px-2 pb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+      <p className="px-2 pbe-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
         {project.name} / KB
       </p>
       <KbSearchBar value={searchQuery} onChange={setSearchQuery} />
@@ -125,12 +125,12 @@ export function KbPage(): React.ReactElement {
     <>
       {isDesktop ? (
         <div className="grid h-full grid-cols-[280px_1fr] gap-0">
-          <div className="border-r">{sidebarContent}</div>
+          <div className="border-e">{sidebarContent}</div>
           {mainContent}
         </div>
       ) : (
         <div className="flex h-full flex-col">
-          <div className="flex items-center gap-2 border-b px-2 py-1.5">
+          <div className="flex items-center gap-2 border-be px-2 py-1.5">
             <Button variant="ghost" size="icon" className="size-8" onClick={() => setDrawerOpen(true)} aria-label="Открыть дерево файлов">
               <PanelLeft className="size-4" />
             </Button>

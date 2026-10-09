@@ -53,7 +53,7 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
   if (loading) {
     return (
       <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Загрузка…
+        <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка…
       </div>
     );
   }
@@ -74,7 +74,7 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
         <h3 className="text-base font-semibold text-foreground">Сайт проекта</h3>
         <span
           className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            'shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium',
             state.deployed
               ? 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
               : 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
@@ -83,13 +83,13 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
           {state.deployed ? 'Опубликован' : 'В разработке'}
         </span>
       </div>
-      <p className="mt-0.5 text-[13px] text-muted-foreground">
+      <p className="mbs-0.5 text-sm text-muted-foreground">
         Собранный воркером результат вашего проекта.
       </p>
 
       {/* URL-строка + копирование. */}
-      <div className="mt-3 flex items-center gap-1.5 rounded-md border border-black/[0.08] bg-black/[0.02] px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.03]">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-blue-600 dark:text-blue-400">{display}</span>
+      <div className="mbs-3 flex items-center gap-1.5 rounded-md border border-black/[0.08] bg-black/[0.02] px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.03]">
+        <span className="min-w-0 flex-1 truncate text-sm text-blue-600 dark:text-blue-400">{display}</span>
         <button
           type="button"
           onClick={copyLink}
@@ -100,7 +100,7 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
         </button>
       </div>
 
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mbs-2 text-xs text-muted-foreground">
         {state.deployed
           ? 'Любой, у кого есть ссылка, увидит результат.'
           : 'Пока воркер ничего не собрал — по ссылке страница-заглушка. Поставьте задачу воркеру в проекте.'}
@@ -108,30 +108,30 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
 
       {/* Бэкенд приложения (db/102): показываем только когда воркер его завёл. */}
       {appBackend?.status === 'active' && (
-        <div className="mt-3 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 dark:bg-emerald-500/[0.08]">
+        <div className="mbs-3 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 dark:bg-emerald-500/[0.08]">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[13px] font-medium text-foreground">Бэкенд приложения</span>
-            <span className="shrink-0 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+            <span className="text-sm font-medium text-foreground">Бэкенд приложения</span>
+            <span className="shrink-0 text-2xs font-medium text-emerald-700 dark:text-emerald-400">
               {formatMb(appBackend.usageBytes)} / {formatMb(appBackend.storageLimitBytes)}
             </span>
           </div>
           {/* Полоса заполнения квоты. */}
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
+          <div className="mbs-1.5 h-1.5 w-full overflow-clip rounded-full bg-black/[0.06] dark:bg-white/10">
             <div
-              className="h-full rounded-full bg-emerald-500 transition-all"
+              className="h-full rounded-full bg-emerald-500 motion-safe:transition-[width]"
               style={{
                 width: `${Math.min(100, appBackend.storageLimitBytes > 0 ? (appBackend.usageBytes / appBackend.storageLimitBytes) * 100 : 0)}%`,
               }}
             />
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
+          <p className="mbs-1.5 text-xs text-muted-foreground">
             Вход, пользователи и база данных.
             {appBackend.tables.length > 0 && ` Таблицы: ${appBackend.tables.join(', ')}.`}
           </p>
         </div>
       )}
 
-      <Button type="button" className="mt-3 h-9 w-full gap-1.5" asChild>
+      <Button type="button" className="mbs-3 h-9 w-full gap-1.5" asChild>
         <a href={url} target="_blank" rel="noopener noreferrer">
           <ExternalLink className="size-4" />
           Открыть сайт

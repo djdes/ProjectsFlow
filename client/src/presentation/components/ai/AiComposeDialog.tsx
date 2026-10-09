@@ -96,7 +96,7 @@ function RoundCheck({
   return (
     <Checkbox
       className={cn(
-        'size-5 rounded-full border-2 border-muted-foreground/35 bg-background shadow-none transition-all duration-200',
+        'size-5 rounded-full border-2 border-muted-foreground/35 bg-background shadow-none transition-[color,background-color,border-color,box-shadow] duration-200',
         'data-[state=checked]:border-primary data-[state=checked]:bg-primary',
         'data-[state=unchecked]:hover:border-primary/60',
         '[&_svg]:size-3',
@@ -135,7 +135,7 @@ function RowAssigneeSelect({
 
   return (
     <div
-      className={cn('flex items-center gap-1.5 rounded-md border bg-background pl-2', className)}
+      className={cn('flex items-center gap-1.5 rounded-md border bg-background ps-2', className)}
       title="Ответственный"
     >
       <UserRound className="size-3.5 shrink-0 text-muted-foreground" />
@@ -143,7 +143,7 @@ function RowAssigneeSelect({
         value={value ?? ''}
         disabled={disabled || options === undefined}
         onChange={(e) => onChange(e.target.value || null)}
-        className="min-w-0 flex-1 cursor-pointer rounded-md bg-transparent py-1 pr-1.5 text-xs focus:outline-none disabled:opacity-60"
+        className="min-w-0 flex-1 cursor-pointer rounded-md bg-transparent py-1 pe-1.5 text-xs focus:outline-none disabled:opacity-60"
       >
         <option value="">
           {showHint ? `Вы — AI предлагал «${hintName}»` : 'Вы (по умолчанию)'}
@@ -516,7 +516,7 @@ export function AiComposeDialog({
           )}
         >
           {phase === 'loading' ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 motion-safe:animate-spin" />
           ) : (
             <Sparkles className="size-4" />
           )}
@@ -532,7 +532,7 @@ export function AiComposeDialog({
           className={cn('gap-1.5', compact ? 'h-8 px-2.5 text-xs' : 'h-8')}
         >
           {phase === 'loading' ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 motion-safe:animate-spin" />
           ) : (
             <Sparkles className="size-3.5" />
           )}
@@ -546,27 +546,27 @@ export function AiComposeDialog({
           if (!open && phase !== 'creating') dismiss();
         }}
       >
-        <DialogContent className="flex flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:inset-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none sm:max-h-[88dvh] sm:max-w-3xl sm:rounded-lg">
+        <DialogContent className="flex flex-col gap-0 overflow-clip rounded-none p-0 max-sm:inset-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none sm:max-h-[88dvh] sm:max-w-3xl sm:rounded-lg">
           {/* HEADER — компактная sticky-шапка в одну смысловую строку */}
-          <div className="flex shrink-0 items-start gap-2.5 border-b px-4 py-3 pr-12">
-            <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-primary/10">
+          <div className="flex shrink-0 items-start gap-2.5 border-be px-4 py-3 pe-12">
+            <span className="mbs-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-primary/10">
               <Sparkles className="size-3.5 text-primary" />
             </span>
             <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate text-[15px] font-semibold leading-tight">
+              <DialogTitle className="truncate text-base font-semibold leading-tight">
                 {headerTitle}
               </DialogTitle>
-              <DialogDescription className="mt-0.5 line-clamp-2 text-xs leading-snug">
+              <DialogDescription className="mbs-0.5 line-clamp-2 text-xs leading-snug">
                 {headerHint}
               </DialogDescription>
             </div>
             {phase === 'creating' && progress && (
-              <span className="mt-0.5 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary">
+              <span className="mbs-0.5 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary">
                 {progress.done}/{progress.total}
               </span>
             )}
             {phase === 'loading' && (
-              <Loader2 className="mt-1 size-4 shrink-0 animate-spin text-primary" />
+              <Loader2 className="mbs-1 size-4 shrink-0 motion-safe:animate-spin text-primary" />
             )}
           </div>
 
@@ -575,7 +575,7 @@ export function AiComposeDialog({
             {phase === 'loading' || (phase === 'creating' && !result) ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center text-muted-foreground">
                 <div className="relative">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                  <span className="absolute inset-0 motion-safe:animate-ping rounded-full bg-primary/20" />
                   <span className="relative grid size-14 place-items-center rounded-full bg-primary/10">
                     <Sparkles className="size-7 animate-pulse text-primary" />
                   </span>
@@ -610,7 +610,7 @@ export function AiComposeDialog({
                       </TabsTrigger>
                       <TabsTrigger value="advanced" className="gap-1.5">
                         {advancedPhase === 'loading' ? (
-                          <Loader2 className="size-3.5 animate-spin" />
+                          <Loader2 className="size-3.5 motion-safe:animate-spin" />
                         ) : (
                           <BrainCircuit className="size-3.5" />
                         )}
@@ -621,7 +621,7 @@ export function AiComposeDialog({
                   <p className="px-0.5 text-xs text-muted-foreground">{TAB_HINT[activeTab]}</p>
                   {activeTab === 'advanced' && advancedPhase === 'loading' && (
                     <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-                      <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
+                      <Loader2 className="size-3.5 shrink-0 motion-safe:animate-spin text-primary" />
                       Готовим «Продвинутый» вариант по базе знаний… (~1 минута, пока показан
                       «Простой»)
                     </div>
@@ -650,7 +650,7 @@ export function AiComposeDialog({
                       type="button"
                       onClick={() => setDistribute(false)}
                       className={cn(
-                        'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-all',
+                        'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]',
                         !distribute
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground',
@@ -663,7 +663,7 @@ export function AiComposeDialog({
                       type="button"
                       onClick={() => setDistribute(true)}
                       className={cn(
-                        'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-all',
+                        'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]',
                         distribute
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground',
@@ -673,7 +673,7 @@ export function AiComposeDialog({
                       Распределить
                       <span
                         className={cn(
-                          'rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
+                          'rounded-full px-1.5 text-2xs font-semibold tabular-nums',
                           distribute ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15',
                         )}
                       >
@@ -700,7 +700,7 @@ export function AiComposeDialog({
                         <div
                           key={row.id}
                           className={cn(
-                            'rounded-xl border p-2.5 transition-all duration-200',
+                            'rounded-xl border p-2.5 transition-[color,background-color,border-color,box-shadow] duration-200',
                             row.include
                               ? 'border-primary/40 bg-primary/[0.04] shadow-sm'
                               : 'border-border bg-background opacity-60 hover:opacity-100',
@@ -710,7 +710,7 @@ export function AiComposeDialog({
                             <RoundCheck
                               checked={row.include}
                               onCheckedChange={(c) => setInclude(row.id, c === true)}
-                              className="mt-1.5"
+                              className="mbs-1.5"
                               aria-label="Создавать эту задачу"
                             />
                             <div className="min-w-0 flex-1 space-y-2">
@@ -726,7 +726,7 @@ export function AiComposeDialog({
                               />
 
                               <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-                                <div className="flex items-center gap-1.5 rounded-md border bg-background pl-2 sm:min-w-0 sm:flex-1">
+                                <div className="flex items-center gap-1.5 rounded-md border bg-background ps-2 sm:min-w-0 sm:flex-1">
                                   <FolderInput className="size-3.5 shrink-0 text-muted-foreground" />
                                   <select
                                     value={row.projectId ?? INBOX_VALUE}
@@ -747,7 +747,7 @@ export function AiComposeDialog({
                                         ),
                                       )
                                     }
-                                    className="min-w-0 flex-1 cursor-pointer rounded-md bg-transparent py-1 pr-1.5 text-xs focus:outline-none"
+                                    className="min-w-0 flex-1 cursor-pointer rounded-md bg-transparent py-1 pe-1.5 text-xs focus:outline-none"
                                     title="Проект назначения"
                                   >
                                     <option value={INBOX_VALUE}>Без проекта (Входящие)</option>
@@ -803,10 +803,10 @@ export function AiComposeDialog({
                                   <button
                                     type="button"
                                     onClick={() => toggleExpand(row.id)}
-                                    className="ml-1.5 mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                    className="ms-1.5 mbs-1 inline-flex items-center gap-1 text-2xs font-medium text-primary hover:underline"
                                   >
                                     <ChevronDown
-                                      className={cn('size-3 transition-transform', isOpen && 'rotate-180')}
+                                      className={cn('size-3 motion-safe:transition-transform', isOpen && 'rotate-180')}
                                     />
                                     {isOpen ? 'Свернуть' : 'Показать полностью'}
                                   </button>
@@ -826,7 +826,7 @@ export function AiComposeDialog({
           {/* FOOTER — sticky, действия зависят от фазы */}
           <div
             className={cn(
-              'flex shrink-0 items-center gap-2 border-t px-4 py-3',
+              'flex shrink-0 items-center gap-2 border-bs px-4 py-3',
               phase === 'preview' || phase === 'error' ? 'justify-between' : 'justify-end',
             )}
           >
@@ -838,7 +838,7 @@ export function AiComposeDialog({
             )}
             {phase === 'creating' && (
               <Button type="button" variant="ghost" disabled className="gap-1.5">
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 className="size-4 motion-safe:animate-spin" />
                 {progress ? `Создаём ${progress.done}/${progress.total}…` : 'Создаём…'}
               </Button>
             )}

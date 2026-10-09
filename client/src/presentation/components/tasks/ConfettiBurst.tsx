@@ -2,11 +2,11 @@ import { useEffect } from 'react';
 
 // Детерминированный набор частиц (без Math.random — анимация и так выглядит живой
 // за счёт разброса позиций/задержек, а рендер остаётся воспроизводимым).
-const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'];
+const COLORS = ['oklch(62.31% 0.188 259.81)', 'oklch(72.27% 0.192 149.58)', 'oklch(76.86% 0.1647 70.08)', 'oklch(65.59% 0.212 354.31)', 'oklch(60.56% 0.219 292.72)', 'oklch(63.68% 0.208 25.33)'];
 const PIECES = Array.from({ length: 18 }, (_, i) => ({
   left: (i * 53 + 11) % 100,
   delay: (i % 6) * 70,
-  color: COLORS[i % COLORS.length] ?? '#3b82f6',
+  color: COLORS[i % COLORS.length] ?? 'oklch(62.31% 0.188 259.81)',
   width: 6 + (i % 3) * 3,
   height: 5 + ((i + 1) % 3) * 2,
 }));
@@ -26,11 +26,11 @@ export function ConfettiBurst({ onDone }: { onDone: () => void }): React.ReactEl
   if (reduceMotion) return null;
 
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-0">
+    <div aria-hidden className="pointer-events-none fixed inset-x-0 inset-bs-0 z-[60] h-0">
       {PIECES.map((p, i) => (
         <span
           key={i}
-          className="absolute top-0 rounded-[1px] animate-[pf-confetti-fall_1.15s_ease-in_forwards]"
+          className="absolute inset-bs-0 rounded-[1px] animate-[pf-confetti-fall_1.15s_ease-in_forwards]"
           style={{
             left: `${p.left}%`,
             width: p.width,

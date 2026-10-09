@@ -1127,7 +1127,7 @@ export function TableView({
     if (row < r1 || row > r2 || c < c1 || c > c2) return null;
     const single = r1 === r2 && c1 === c2;
     if (single)
-      return 'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary';
+      return 'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-inset-be-[3px] after:-end-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary';
     return cn(
       'bg-primary/[0.07]',
       row === selRange.a.row && c === selRange.a.col && 'ring-2 ring-inset ring-primary/70',
@@ -1335,9 +1335,9 @@ export function TableView({
         aria-rowcount={7}
         aria-colcount={orderedKeys.length + 3}
         className={cn(
-          '-ml-2 overflow-hidden bg-background sm:-ml-8 lg:-ml-16',
+          '-ms-2 overflow-hidden bg-background sm:-ms-8 lg:-ms-16',
           '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
-          sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
+          sidePanelOpen ? 'me-0' : '-me-2 sm:-me-8 lg:-me-16',
         )}
       >
         <span className="sr-only">Загружаем таблицу задач…</span>
@@ -1347,8 +1347,8 @@ export function TableView({
               key={index}
               role="columnheader"
               className={cn(
-                'pf-skeleton border-b bg-muted/55 motion-reduce:animate-none',
-                index > 1 && 'border-l',
+                'pf-skeleton border-be bg-muted/55 motion-reduce:animate-none',
+                index > 1 && 'border-s',
               )}
             />
           ))}
@@ -1366,8 +1366,8 @@ export function TableView({
                 key={cellIndex}
                 role="gridcell"
                 className={cn(
-                  'pf-skeleton border-b bg-muted/30 motion-reduce:animate-none',
-                  cellIndex > 1 && 'border-l',
+                  'pf-skeleton border-be bg-muted/30 motion-reduce:animate-none',
+                  cellIndex > 1 && 'border-s',
                 )}
               />
             ))}
@@ -1380,22 +1380,22 @@ export function TableView({
     return (
       <div
         className={cn(
-          '-ml-2 overflow-hidden bg-background sm:-ml-8 lg:-ml-16',
+          '-ms-2 overflow-hidden bg-background sm:-ms-8 lg:-ms-16',
           '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
-          sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
+          sidePanelOpen ? 'me-0' : '-me-2 sm:-me-8 lg:-me-16',
         )}
       >
         <div className="grid h-9" style={gridStyle} aria-hidden>
           {Array.from({ length: orderedKeys.length + 3 }, (_, index) => (
             <div
               key={index}
-              className={cn('border-b bg-muted/25', index > 1 && 'border-l')}
+              className={cn('border-be bg-muted/25', index > 1 && 'border-s')}
             />
           ))}
         </div>
         <div
           role="alert"
-          className="flex min-h-44 flex-col items-center justify-center gap-3 border-b border-destructive/30 bg-destructive/5 px-6 py-8 text-center"
+          className="flex min-h-44 flex-col items-center justify-center gap-3 border-be border-destructive/30 bg-destructive/5 px-6 py-8 text-center"
         >
           <p className="text-sm text-destructive">Не удалось загрузить таблицу: {error}</p>
           <button
@@ -1404,7 +1404,7 @@ export function TableView({
             disabled={retrying}
             className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
           >
-            {retrying ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
+            {retrying ? <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
             Повторить
           </button>
         </div>
@@ -1417,24 +1417,24 @@ export function TableView({
       ref={tableRootRef}
       aria-busy={retrying}
       className={cn(
-        'pf-content-reveal -ml-2 flex min-h-0 flex-1 flex-col bg-background sm:-ml-8 lg:-ml-16',
+        'pf-content-reveal -ms-2 flex min-h-0 flex-1 flex-col bg-background sm:-ms-8 lg:-ms-16',
         '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
-        sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
+        sidePanelOpen ? 'me-0' : '-me-2 sm:-me-8 lg:-me-16',
         !showVerticalLines &&
-          '[&_[role=columnheader]]:border-l-transparent [&_[role=gridcell]]:border-l-transparent',
+          '[&_[role=columnheader]]:border-s-transparent [&_[role=gridcell]]:border-s-transparent',
       )}
     >
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {liveMessage}
       </span>
       {!online && (
-        <div role="status" className="flex min-h-11 items-center gap-2 border-b border-amber-300/60 bg-amber-50 px-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
+        <div role="status" className="flex min-h-11 items-center gap-2 border-be border-amber-300/60 bg-amber-50 px-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
           <WifiOff className="size-4 shrink-0" />
           Нет сети. Последние загруженные данные доступны; изменения можно повторить после подключения.
         </div>
       )}
       {error && (
-        <div role="alert" className="flex min-h-11 items-center gap-3 border-b border-destructive/30 bg-destructive/5 px-3 text-sm text-destructive">
+        <div role="alert" className="flex min-h-11 items-center gap-3 border-be border-destructive/30 bg-destructive/5 px-3 text-sm text-destructive">
           <span className="min-w-0 flex-1 truncate">Не удалось обновить таблицу: {error}</span>
           <button
             type="button"
@@ -1442,7 +1442,7 @@ export function TableView({
             disabled={retrying}
             className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md px-2 font-medium hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60 [@media(hover:none)]:min-h-11"
           >
-            {retrying ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
+            {retrying ? <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
             Повторить
           </button>
         </div>
@@ -1500,8 +1500,8 @@ export function TableView({
               role="columnheader"
               aria-colindex={1}
               className={cn(
-                'group/gutter flex h-9 items-center justify-end bg-background pr-1',
-                tableState.freezeTitle && 'sticky left-0 z-30',
+                'group/gutter flex h-9 items-center justify-end bg-background pe-1',
+                tableState.freezeTitle && 'sticky start-0 z-30',
               )}
             >
               <label className="grid size-7 place-items-center sm:size-4">
@@ -1524,7 +1524,7 @@ export function TableView({
             <HeaderCell
               label="Название"
               iconNode={
-                <span className="font-mono text-[11px] leading-none text-muted-foreground/70">Aa</span>
+                <span className="font-mono text-2xs leading-none text-muted-foreground/70">Aa</span>
               }
               sortKey="title"
               sort={sort}
@@ -1657,14 +1657,14 @@ export function TableView({
             <div
               role="columnheader"
               aria-colindex={orderedKeys.length + 3}
-              className="h-9 border-b border-l bg-background"
+              className="h-9 border-be border-s bg-background"
               aria-label="Действия таблицы"
             />
             {/* Хвост шапки (Notion): «+» сразу создаёт колонку, плавно доводит
                 горизонтальный scroller до неё и открывает её меню; «⋯» —
                 «Видимость свойств» (глазки/поиск/Скрыть все). */}
             <div
-              className="absolute top-1/2 flex -translate-y-1/2 items-center gap-1 transition-[right] duration-200 motion-reduce:transition-none"
+              className="absolute inset-bs-1/2 flex -translate-y-1/2 items-center gap-1 transition-[right] duration-200 motion-reduce:transition-none"
               style={{ right: newPropertyOpen ? 318 : 4 }}
             >
               <Popover open={newPropertyOpen} onOpenChange={setPropertyCreatorOpen}>
@@ -1680,7 +1680,7 @@ export function TableView({
                     className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creatingProperty ? (
-                      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+                      <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" />
                     ) : (
                       <Plus className="size-4" />
                     )}
@@ -1704,7 +1704,7 @@ export function TableView({
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-auto p-2">
-                  <p className="px-1 pb-1.5 text-sm font-semibold">Видимость свойств</p>
+                  <p className="px-1 pbe-1.5 text-sm font-semibold">Видимость свойств</p>
                   <PropertyVisibilityPanel
                     items={visibilityItems}
                     hidden={hiddenCols}
@@ -1741,7 +1741,7 @@ export function TableView({
                 return [
                   <div
                     key={`__group-${g.key}`}
-                    className="flex items-center gap-1.5 px-1 pb-1 pt-3"
+                    className="flex items-center gap-1.5 px-1 pbe-1 pbs-3"
                   >
                     <button
                       type="button"
@@ -1750,7 +1750,7 @@ export function TableView({
                       className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-5"
                     >
                       <ChevronDown
-                        className={cn('size-3.5 transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
+                        className={cn('size-3.5 motion-safe:transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
                       />
                     </button>
                     <span className="text-sm font-medium">
@@ -1917,7 +1917,7 @@ export function TableView({
           })}
 
           {rows.length === 0 && (
-            <p role="status" aria-live="polite" className="py-6 pl-[var(--pf-table-gutter)] pr-2 text-sm text-muted-foreground">
+            <p role="status" aria-live="polite" className="py-6 ps-[var(--pf-table-gutter)] pe-2 text-sm text-muted-foreground">
               {filters.query || hasActiveFilters(filters)
                 ? 'Под фильтр ничего не попадает.'
                 : 'Задач пока нет.'}
@@ -1929,8 +1929,8 @@ export function TableView({
           {/* Notion New page: компактная строка 28px; Enter создаёт, закрывает ввод
               и выделяет клетку названия созданной строки. */}
           {canEdit && (
-            <div role="row" className="pl-[var(--pf-table-gutter)]">
-              <div className="flex h-9 items-center border-b">
+            <div role="row" className="ps-[var(--pf-table-gutter)]">
+              <div className="flex h-9 items-center border-be">
                 <NewTaskRow
                   create={async (input) => {
                     const created = await create(input);
@@ -1948,7 +1948,7 @@ export function TableView({
           <div role="row" className="group/calc grid" style={gridStyle}>
             {/* Пустая ячейка под sticky-gutter контролов. */}
             <div aria-hidden />
-            <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">
+            <p className="px-2 pbs-1.5 text-2xs text-muted-foreground/60">
               Всего: {rows.length}
             </p>
             {orderedKeys.map((k) => {
@@ -2127,13 +2127,13 @@ function HeaderCell({
       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : sortKey ? 'none' : undefined}
       data-colkey={colKey}
       className={cn(
-        'relative flex h-9 min-w-0 border-b bg-background',
-        !first && 'border-l',
+        'relative flex h-9 min-w-0 border-be bg-background',
+        !first && 'border-s',
         // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
-        frozen && 'sticky left-[var(--pf-table-gutter)] z-20 border-r bg-background',
+        frozen && 'sticky start-[var(--pf-table-gutter)] z-20 border-e bg-background',
         // Индикатор вставки при drag-переносе колонки.
-        dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
-        dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
+        dropSide === 'left' && 'shadow-[inset_2px_0_0_oklch(var(--primary))]',
+        dropSide === 'right' && 'shadow-[inset_-2px_0_0_oklch(var(--primary))]',
       )}
     >
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -2163,7 +2163,7 @@ function HeaderCell({
                   }
                 : undefined
             }
-            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {iconNode}
             <span className="truncate">{label}</span>
@@ -2189,7 +2189,7 @@ function HeaderCell({
             e.preventDefault();
             onResizeBy?.(e.key === 'ArrowLeft' ? -16 : 16);
           }}
-          className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize rounded transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="absolute -end-1 inset-bs-0 z-10 h-full w-2 cursor-col-resize rounded transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         />
       )}
     </div>
@@ -2211,7 +2211,7 @@ function InsertRow({
 }): React.ReactElement {
   const [value, setValue] = useState('');
   return (
-    <div role="row" style={gridStyle} className="grid min-h-9 border-b bg-accent/30">
+    <div role="row" style={gridStyle} className="grid min-h-9 border-be bg-accent/30">
       {/* Gutter без фона строки вставки. */}
       <div className="bg-background" aria-hidden />
       <div
@@ -2299,13 +2299,13 @@ function CalcCell({
       })),
   ];
   return (
-    <div role="gridcell" className="flex min-h-14 items-center justify-end border-l border-transparent px-4">
+    <div role="gridcell" className="flex min-h-14 items-center justify-end border-s border-transparent px-4">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1 text-[11px] transition-opacity hover:bg-accent',
+              'inline-flex items-center gap-1 rounded px-1 text-2xs transition-opacity hover:bg-accent',
               value
                 ? 'text-muted-foreground'
                 : 'text-muted-foreground/60 opacity-0 group-hover/calc:opacity-100',
@@ -2399,13 +2399,13 @@ function PropCalcCell({
     })),
   ];
   return (
-    <div role="gridcell" className="flex min-h-14 items-center justify-end border-l border-transparent px-4">
+    <div role="gridcell" className="flex min-h-14 items-center justify-end border-s border-transparent px-4">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1 text-[11px] transition-opacity hover:bg-accent',
+              'inline-flex items-center gap-1 rounded px-1 text-2xs transition-opacity hover:bg-accent',
               value
                 ? 'text-muted-foreground'
                 : 'text-muted-foreground/60 opacity-0 group-hover/calc:opacity-100',
@@ -2549,7 +2549,7 @@ function TableRow({
   } => ({
     // Без внутренних отступов: значение-кнопка занимает ВСЮ клетку, hover
     // подсвечивает её от края до края (Notion).
-    className: cn('relative flex min-h-9 border-b border-l', rangeClassFor(rowIdx, col)),
+    className: cn('relative flex min-h-9 border-be border-s', rangeClassFor(rowIdx, col)),
     role: 'gridcell',
     'aria-colindex': orderedKeys.indexOf(col) + 3,
     'data-cell': col,
@@ -2732,7 +2732,7 @@ function TableRow({
             selected && 'bg-selection',
             isDragging && 'opacity-40',
             // Синяя линия сверху — сюда вставится перетаскиваемая строка (Notion).
-            isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',
+            isOver && 'shadow-[inset_0_2px_0_0_oklch(var(--primary))]',
             // Только что перемещена — синее выделение до клика в стороне (как на канбане).
             recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
@@ -2743,11 +2743,11 @@ function TableRow({
       <div
         role="gridcell"
         aria-colindex={1}
-        className={cn('bg-background', frozenTitle && 'sticky left-0 z-20')}
+        className={cn('bg-background', frozenTitle && 'sticky start-0 z-20')}
       >
       <div
         className={cn(
-          'flex h-full items-center justify-end gap-0 pr-1 transition-opacity duration-100',
+          'flex h-full items-center justify-end gap-0 pe-1 transition-opacity duration-100',
           selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
         )}
       >
@@ -2819,9 +2819,9 @@ function TableRow({
         data-cell="title"
         tabIndex={-1}
         className={cn(
-          'relative flex min-h-9 min-w-0 items-center gap-2 border-b px-2 py-1',
+          'relative flex min-h-9 min-w-0 items-center gap-2 border-be px-2 py-1',
           // Freeze: липнет ПОСЛЕ sticky-gutter'а контролов (3.5rem).
-          frozenTitle && 'sticky left-[var(--pf-table-gutter)] z-10 border-r bg-background',
+          frozenTitle && 'sticky start-[var(--pf-table-gutter)] z-10 border-e bg-background',
           rangeClassFor(rowIdx, 'title'),
           // Редактирование: синяя рамка на ВСЮ клетку (Notion), не мини-инпут.
           editing && 'z-10 bg-background ring-2 ring-inset ring-primary/70',
@@ -2851,7 +2851,7 @@ function TableRow({
                 className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-4"
               >
                 <ChevronDown
-                  className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')}
+                  className={cn('size-3.5 motion-safe:transition-transform', !expanded && '-rotate-90')}
                 />
               </button>
             ) : (
@@ -2868,7 +2868,7 @@ function TableRow({
               type="button"
               onClick={onStartEdit}
               className={cn(
-                'flex min-w-0 self-stretch items-center rounded-sm text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'flex min-w-0 self-stretch items-center rounded-sm text-start text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 wrapTitle ? 'whitespace-normal break-words' : 'truncate',
                 // Notion: безымянная страница — серый плейсхолдер.
                 isUntitledTask(task) && 'font-normal text-muted-foreground/60',
@@ -2880,7 +2880,7 @@ function TableRow({
               type="button"
               onClick={onOpen}
               aria-label={`Открыть задачу «${taskTitle(task)}»`}
-              className="invisible ml-auto inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border bg-card px-2.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground opacity-0 shadow-sm transition-[background-color,color,opacity] hover:bg-accent hover:text-foreground focus:visible focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:min-h-11 [@media(hover:none)]:opacity-100"
+              className="invisible ms-auto inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border bg-card px-2.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground opacity-0 shadow-sm transition-[background-color,color,opacity] hover:bg-accent hover:text-foreground focus:visible focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:min-h-11 [@media(hover:none)]:opacity-100"
             >
               <PanelRight className="size-3" />
               Открыть
@@ -2888,7 +2888,7 @@ function TableRow({
           </>
         )}
         {editing && editPending && (
-          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="Сохранение" />
+          <Loader2 className="size-4 shrink-0 motion-safe:animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="Сохранение" />
         )}
         {editing && editError && (
           <span id={`table-title-error-${task.id}`} className="sr-only">
@@ -2922,7 +2922,7 @@ function TableRow({
       <div
         role="gridcell"
         aria-colindex={orderedKeys.length + 3}
-        className="border-b border-l"
+        className="border-be border-s"
         aria-label=""
       />
         </div>

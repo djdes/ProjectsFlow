@@ -44,7 +44,7 @@ function HunkDiff({
   return (
     <div
       className={cn(
-        'grid grid-cols-2 gap-px overflow-hidden rounded-md border border-zinc-200 bg-zinc-200 font-mono text-[11px] leading-[1.55] dark:border-white/10 dark:bg-white/10',
+        'grid grid-cols-2 gap-px overflow-clip rounded-md border border-zinc-200 bg-zinc-200 font-mono text-2xs leading-[1.55] dark:border-white/10 dark:bg-white/10',
         className,
       )}
     >
@@ -66,30 +66,30 @@ function DiffColumn({
   const isDel = tone === 'del';
   const isEmpty = lines.length === 0 || (lines.length === 1 && lines[0]!.length === 0);
   return (
-    <div className={cn('overflow-x-auto', isDel ? 'bg-rose-50 dark:bg-[#2d1618]' : 'bg-emerald-50 dark:bg-[#0f231a]')}>
+    <div className={cn('overflow-x-auto', isDel ? 'bg-rose-50 dark:bg-[oklch(23.34%_0.037_14.8)]' : 'bg-emerald-50 dark:bg-[oklch(23.59%_0.032_163.25)]')}>
       <div
         className={cn(
-          'sticky left-0 top-0 z-[1] border-b px-2 py-1 text-[10px] font-semibold uppercase tracking-wider backdrop-blur',
+          'sticky start-0 inset-bs-0 z-[1] border-be px-2 py-1 text-2xs font-semibold uppercase tracking-wider backdrop-blur',
           isDel
-            ? 'border-rose-200 bg-rose-50/90 text-rose-600 dark:border-white/10 dark:bg-[#2d1618]/90 dark:text-[#f48771]'
-            : 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-white/10 dark:bg-[#0f231a]/90 dark:text-[#7ee787]',
+            ? 'border-rose-200 bg-rose-50/90 text-rose-600 dark:border-white/10 dark:bg-[oklch(23.34%_0.037_14.8/0.9)] dark:text-[oklch(73.77%_0.138_32.5)]'
+            : 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-white/10 dark:bg-[oklch(23.59%_0.032_163.25/0.9)] dark:text-[oklch(84.16%_0.164_145.75)]',
         )}
       >
         {title}
       </div>
       {isEmpty ? (
-        <div className="px-2 py-1 text-[10px] italic text-zinc-400 dark:text-[#8b949e]">(пусто)</div>
+        <div className="px-2 py-1 text-2xs italic text-zinc-400 dark:text-[oklch(66.25%_0.018_250.92)]">(пусто)</div>
       ) : (
         <div className="min-w-full py-0.5">
           {lines.map((ln, i) => (
             <div key={i} className="flex">
-              <span className="w-8 shrink-0 select-none px-1 text-right text-zinc-500 dark:text-[#5a6169]">
+              <span className="w-8 shrink-0 select-none px-1 text-end text-zinc-500 dark:text-[oklch(48.93%_0.016_251.69)]">
                 {i + 1}
               </span>
               <pre
                 className={cn(
                   'm-0 flex-1 whitespace-pre px-2',
-                  isDel ? 'text-rose-700 dark:text-[#e5b3b3]' : 'text-emerald-800 dark:text-[#a6e3b8]',
+                  isDel ? 'text-rose-700 dark:text-[oklch(81.18%_0.058_18.43)]' : 'text-emerald-800 dark:text-[oklch(86.28%_0.086_153.61)]',
                 )}
               >
                 {ln.length > 0 ? ln : ' '}
@@ -166,7 +166,7 @@ function UnifiedDiff({
   return (
     <div
       className={cn(
-        'overflow-x-auto rounded-md border border-zinc-200 bg-white font-mono text-[11px] leading-[1.55] dark:border-white/10 dark:bg-[#181818]',
+        'overflow-x-auto rounded-md border border-zinc-200 bg-white font-mono text-2xs leading-[1.55] dark:border-white/10 dark:bg-[oklch(20.9%_0_none)]',
         className,
       )}
     >
@@ -174,28 +174,28 @@ function UnifiedDiff({
         {lines.map((l, i) => {
           const rowBg =
             l.type === 'add'
-              ? 'bg-emerald-50 dark:bg-[#0f231a]'
+              ? 'bg-emerald-50 dark:bg-[oklch(23.59%_0.032_163.25)]'
               : l.type === 'del'
-                ? 'bg-rose-50 dark:bg-[#2d1618]'
+                ? 'bg-rose-50 dark:bg-[oklch(23.34%_0.037_14.8)]'
                 : l.type === 'hunk'
-                  ? 'bg-sky-50 dark:bg-[#15243a]'
+                  ? 'bg-sky-50 dark:bg-[oklch(25.88%_0.047_257.85)]'
                   : '';
           const textCls =
             l.type === 'add'
-              ? 'text-emerald-700 dark:text-[#7ee787]'
+              ? 'text-emerald-700 dark:text-[oklch(84.16%_0.164_145.75)]'
               : l.type === 'del'
-                ? 'text-rose-700 dark:text-[#f48771]'
+                ? 'text-rose-700 dark:text-[oklch(73.77%_0.138_32.5)]'
                 : l.type === 'hunk'
-                  ? 'text-sky-600 dark:text-[#58a6ff]'
+                  ? 'text-sky-600 dark:text-[oklch(71.53%_0.152_253.31)]'
                   : l.type === 'meta'
-                    ? 'text-zinc-500 dark:text-[#5a6169]'
-                    : 'text-zinc-700 dark:text-[#c9d1d9]';
+                    ? 'text-zinc-500 dark:text-[oklch(48.93%_0.016_251.69)]'
+                    : 'text-zinc-700 dark:text-[oklch(85.69%_0.014_247.99)]';
           return (
             <div key={i} className={cn('flex', rowBg)}>
-              <span className="w-9 shrink-0 select-none border-r border-zinc-200 px-1 text-right text-[10px] text-zinc-400 dark:border-white/5 dark:text-[#5a6169]">
+              <span className="w-9 shrink-0 select-none border-e border-zinc-200 px-1 text-end text-[10px] text-zinc-400 dark:border-white/5 dark:text-[oklch(48.93%_0.016_251.69)]">
                 {l.oldNo ?? ''}
               </span>
-              <span className="w-9 shrink-0 select-none border-r border-zinc-200 px-1 text-right text-[10px] text-zinc-400 dark:border-white/5 dark:text-[#5a6169]">
+              <span className="w-9 shrink-0 select-none border-e border-zinc-200 px-1 text-end text-[10px] text-zinc-400 dark:border-white/5 dark:text-[oklch(48.93%_0.016_251.69)]">
                 {l.newNo ?? ''}
               </span>
               <pre className={cn('m-0 flex-1 whitespace-pre px-2', textCls)}>

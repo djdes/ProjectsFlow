@@ -198,8 +198,8 @@ export function RepositoryCodeEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-background">
-      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b bg-muted/15 px-3 py-2">
+    <div className="overflow-clip rounded-xl border bg-background">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-be bg-muted/15 px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {tree?.fullName ?? "GitHub repository"}
@@ -219,7 +219,7 @@ export function RepositoryCodeEditor({
             aria-label="Обновить дерево"
           >
             <RefreshCw
-              className={cn("size-3.5", treeLoading && "animate-spin")}
+              className={cn("size-3.5", treeLoading && "motion-safe:animate-spin")}
             />
           </Button>
           <Button variant="ghost" size="icon" className="size-8" asChild>
@@ -235,19 +235,19 @@ export function RepositoryCodeEditor({
         </div>
       </div>
       {tree?.truncated && (
-        <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+        <div className="flex items-center gap-2 border-be border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
           <AlertTriangle className="size-3.5" />
           GitHub вернул неполное дерево очень большого репозитория.
         </div>
       )}
       <div className="grid min-h-[560px] lg:grid-cols-[290px_minmax(0,1fr)]">
         <aside
-          className="max-h-[680px] overflow-auto border-b bg-muted/5 p-2 lg:border-b-0 lg:border-r"
+          className="max-h-[680px] overflow-auto border-be bg-muted/5 p-2 lg:border-be-0 lg:border-e"
           aria-label="Файлы репозитория"
         >
           {treeLoading && (
             <StateMessage
-              icon={<Loader2 className="size-4 animate-spin" />}
+              icon={<Loader2 className="size-4 motion-safe:animate-spin" />}
               text="Загружаем файлы…"
             />
           )}
@@ -273,7 +273,7 @@ export function RepositoryCodeEditor({
                   }
                   title={entry.path}
                   className={cn(
-                    "flex h-8 w-full items-center gap-1.5 rounded-md pr-2 text-left text-xs hover:bg-muted/70",
+                    "flex h-8 w-full items-center gap-1.5 rounded-md pe-2 text-start text-xs hover:bg-muted/70",
                     file?.path === entry.path && "bg-muted font-medium",
                   )}
                   style={{ paddingLeft: 8 + depth * 14 }}
@@ -282,7 +282,7 @@ export function RepositoryCodeEditor({
                     <>
                       <ChevronRight
                         className={cn(
-                          "size-3 transition-transform",
+                          "size-3 motion-safe:transition-transform",
                           open && "rotate-90",
                         )}
                       />
@@ -313,20 +313,20 @@ export function RepositoryCodeEditor({
           )}
         </aside>
         <section className="flex min-w-0 flex-col bg-zinc-950 text-zinc-100">
-          <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
+          <div className="flex min-h-12 flex-wrap items-center gap-2 border-be border-white/10 px-3 py-2">
             <div className="min-w-0 flex-1">
               <p className="truncate font-mono text-xs text-zinc-200">
                 {file?.path ?? "Выберите файл слева"}
               </p>
               {file && (
-                <p className="truncate font-mono text-[10px] text-zinc-500">
+                <p className="truncate font-mono text-2xs text-zinc-500">
                   sha {file.sha.slice(0, 12)} ·{" "}
                   {file.size.toLocaleString("ru-RU")} Б
                 </p>
               )}
             </div>
             {dirty && (
-              <span className="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-medium text-amber-300">
+              <span className="rounded-full bg-amber-400/15 px-2 py-1 text-2xs font-medium text-amber-300">
                 не сохранено
               </span>
             )}
@@ -339,7 +339,7 @@ export function RepositoryCodeEditor({
               aria-label="Перезагрузить файл"
             >
               <RefreshCw
-                className={cn("size-3.5", fileLoading && "animate-spin")}
+                className={cn("size-3.5", fileLoading && "motion-safe:animate-spin")}
               />
             </Button>
             <Button
@@ -348,7 +348,7 @@ export function RepositoryCodeEditor({
               disabled={!canEdit || !dirty || saving}
             >
               {saving ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="size-3.5 motion-safe:animate-spin" />
               ) : (
                 <Save className="size-3.5" />
               )}
@@ -356,14 +356,14 @@ export function RepositoryCodeEditor({
             </Button>
           </div>
           {fileError && (
-            <div className="border-b border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200">
+            <div className="border-be border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200">
               {fileError}
             </div>
           )}
           <div className="relative min-h-0 flex-1">
             {fileLoading && (
               <div className="absolute inset-0 z-10 grid place-items-center bg-zinc-950/70">
-                <Loader2 className="size-5 animate-spin" />
+                <Loader2 className="size-5 motion-safe:animate-spin" />
               </div>
             )}
             {file ? (
@@ -393,7 +393,7 @@ export function RepositoryCodeEditor({
             )}
           </div>
           {file && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-white/10 p-3">
+            <div className="flex flex-wrap items-center gap-2 border-bs border-white/10 p-3">
               <input
                 value={commitMessage}
                 onChange={(event) => setCommitMessage(event.target.value)}
@@ -402,7 +402,7 @@ export function RepositoryCodeEditor({
                 placeholder={`Сообщение коммита (необязательно)`}
                 className="h-9 min-w-[240px] flex-1 rounded-md border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-blue-400"
               />
-              <span className="text-[10px] text-zinc-500">Ctrl/⌘ + S</span>
+              <span className="text-2xs text-zinc-500">Ctrl/⌘ + S</span>
             </div>
           )}
         </section>

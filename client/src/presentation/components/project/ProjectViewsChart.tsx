@@ -5,8 +5,8 @@ import type { ProjectViewsPerDay } from '@/domain/project/ProjectAnalytics';
 // янтарная), подписи-дни с чёрточками по оси X, целочисленная ось Y, и чёрный тултип
 // при наведении (дата + всего + уникальных) с точкой и пунктирным перекрестием.
 
-const BLUE = 'hsl(var(--primary))';
-const AMBER = '#e0a63b';
+const BLUE = 'oklch(var(--primary))';
+const AMBER = 'oklch(76.16% 0.137 78.88)';
 
 // «26 июн» — короткая подпись дня под осью.
 function fmtTick(d: Date): string {
@@ -188,7 +188,7 @@ export function ProjectViewsChart({
           <g>
             <line x1={x(hi)} x2={x(hi)} y1={T} y2={T + plotH} stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" className="text-muted-foreground" opacity="0.7" />
             <line x1={L} x2={x(hi)} y1={y(hovered.count)} y2={y(hovered.count)} stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" className="text-muted-foreground" opacity="0.7" />
-            <circle cx={x(hi)} cy={y(hovered.count)} r="4" fill={BLUE} stroke="hsl(var(--background))" strokeWidth="1.5" />
+            <circle cx={x(hi)} cy={y(hovered.count)} r="4" fill={BLUE} stroke="oklch(var(--background))" strokeWidth="1.5" />
           </g>
         )}
       </svg>
@@ -203,7 +203,7 @@ export function ProjectViewsChart({
             transform: `translate(${flipLeft ? 'calc(-100% - 10px)' : '10px'}, -50%)`,
           }}
         >
-          <div className="mb-0.5 font-medium">{fmtFull(hovered.date)}</div>
+          <div className="mbe-0.5 font-medium">{fmtFull(hovered.date)}</div>
           <div className="flex items-center gap-1.5">
             <span className="size-2 shrink-0 rounded-[3px]" style={{ background: BLUE }} />
             {hovered.count} {pluralViews(hovered.count)} всего

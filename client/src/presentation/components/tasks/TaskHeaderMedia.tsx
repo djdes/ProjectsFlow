@@ -203,7 +203,7 @@ export function TaskHeaderMedia({
             )}
           />
           {canEdit && !repositioning && (
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-2.5">
+            <div className="pointer-events-none absolute inset-x-0 inset-bs-0 flex justify-end p-2.5">
               <div className="pointer-events-auto flex items-center gap-1.5 opacity-0 transition-opacity group-hover/cover:opacity-100">
                 <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                   <PopoverTrigger asChild>
@@ -247,7 +247,7 @@ export function TaskHeaderMedia({
                   </span>
                 </div>
               )}
-              <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1.5 p-2.5">
+              <div className="absolute inset-x-0 inset-be-0 flex justify-end gap-1.5 p-2.5">
                 <CoverButton onClick={saveReposition}>
                   <Check className="size-3.5" />
                   Сохранить положение
@@ -304,7 +304,7 @@ export function TaskHeaderMedia({
         {localIcon && (
           // pb-0.5 — маленький зазор от эмодзи до первого абзаца (как на скрине). При обложке —
           // отступ сверху, чтобы иконка стояла под обложкой с зазором.
-          <div className={cn('flex pb-0.5', localCover && 'pt-3 sm:pt-4')}>
+          <div className={cn('flex pbe-0.5', localCover && 'pbs-3 sm:pbs-4')}>
             <IconPicker
               value={localIcon}
               onChange={setIcon}
@@ -315,7 +315,7 @@ export function TaskHeaderMedia({
                   type="button"
                   aria-label="Сменить иконку"
                   title="Иконка"
-                  className="inline-flex shrink-0 cursor-pointer select-none items-center overflow-hidden rounded-lg leading-none"
+                  className="inline-flex shrink-0 cursor-pointer select-none items-center overflow-clip rounded-lg leading-none"
                 >
                   <ProjectIconView icon={localIcon} pixelSize={44} className="text-[2.6rem]" />
                 </button>

@@ -181,8 +181,8 @@ export function AppDataExplorer({
       <div className="grid min-h-[360px] place-items-center rounded-xl border border-dashed bg-muted/10 px-6">
         <div className="max-w-md text-center">
           <Database className="mx-auto size-7 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">База приложения ещё не создана</h3>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">Когда воркер добавит серверную базу, таблицы сразу появятся в Dashboard.</p>
+          <h3 className="mbs-3 font-semibold">База приложения ещё не создана</h3>
+          <p className="mbs-1 text-sm leading-6 text-muted-foreground">Когда воркер добавит серверную базу, таблицы сразу появятся в Dashboard.</p>
         </div>
       </div>
     );
@@ -204,8 +204,8 @@ export function AppDataExplorer({
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-      <aside className="shrink-0 overflow-hidden rounded-xl border bg-background lg:w-60">
-        <div className="flex items-center gap-1.5 border-b px-2.5 py-2">
+      <aside className="shrink-0 overflow-clip rounded-xl border bg-background lg:w-60">
+        <div className="flex items-center gap-1.5 border-be px-2.5 py-2">
           <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border px-2">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
             <input
@@ -235,18 +235,18 @@ export function AppDataExplorer({
               key={table.name}
               type="button"
               onClick={() => { setSelectedTableName(table.name); setFilters([]); setOffset(0); }}
-              className={cn('flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors', selectedTable?.name === table.name ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')}
+              className={cn('flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start text-sm transition-colors', selectedTable?.name === table.name ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')}
             >
               <Database className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{table.name}</span>
-              <span className="shrink-0 text-[11px] text-muted-foreground">{table.fields.length}</span>
+              <span className="shrink-0 text-2xs text-muted-foreground">{table.fields.length}</span>
             </button>
           ))}
         </div>
       </aside>
 
       <div className="min-w-0 flex-1 overflow-hidden rounded-xl border bg-background">
-        <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-3 py-2">
+        <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
           <span className="min-w-0 truncate text-sm font-semibold">{selectedTable?.name ?? '—'}{page ? ` (${page.total})` : ''}</span>
           <span className="hidden h-5 w-px bg-border sm:block" />
           <label className="flex h-9 min-w-[180px] flex-1 items-center gap-2 rounded-md border px-2.5 sm:max-w-xs">
@@ -265,7 +265,7 @@ export function AppDataExplorer({
         </div>
 
         {filters.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/15 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1.5 border-be bg-muted/15 px-3 py-2">
             {filters.map((filter, index) => (
               <span key={`${filter.column}-${index}`} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
                 {filter.column} · {OPERATOR_LABEL[filter.operator]}{filter.value !== undefined ? ` · ${String(filter.value)}` : ''}
@@ -277,20 +277,20 @@ export function AppDataExplorer({
         )}
 
         <div className="relative min-h-[430px] overflow-auto">
-          {loading && <div className="absolute inset-x-0 top-0 z-20 flex h-1 overflow-hidden bg-muted"><span className="h-full w-1/3 animate-pulse bg-primary" /></div>}
+          {loading && <div className="absolute inset-x-0 inset-bs-0 z-20 flex h-1 overflow-hidden bg-muted"><span className="h-full w-1/3 animate-pulse bg-primary" /></div>}
           {error ? (
-            <div className="grid min-h-[430px] place-items-center text-center text-sm text-muted-foreground"><div><p>{error}</p><Button className="mt-3" variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}>Повторить</Button></div></div>
+            <div className="grid min-h-[430px] place-items-center text-center text-sm text-muted-foreground"><div><p>{error}</p><Button className="mbs-3" variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}>Повторить</Button></div></div>
           ) : (
             <table className="w-max min-w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-10 bg-background">
+              <thead className="sticky inset-bs-0 z-10 bg-background">
                 <tr>
                   {columns.map((column, columnIndex) => (
-                    <th key={column} className={cn('min-w-[180px] border-b border-r px-3 py-2 text-left font-medium text-muted-foreground first:min-w-[220px]', columnIndex === 0 && 'sticky left-0 z-20 bg-background')}>
+                    <th key={column} className={cn('min-w-[180px] border-be border-e px-3 py-2 text-start font-medium text-muted-foreground first:min-w-[220px]', columnIndex === 0 && 'sticky start-0 z-20 bg-background')}>
                       <button type="button" className="flex w-full items-center gap-1.5 hover:text-foreground" onClick={() => applySort(column)}>
                         {column === 'id' && <KeyRound className="size-3.5" />}
                         {masked[column] && <Lock className="size-3 text-amber-600" aria-label="Значения скрыты" />}
                         {column}
-                        {sort.column === column && (sort.dir === 'asc' ? <ArrowUp className="ml-auto size-3.5" /> : <ArrowDown className="ml-auto size-3.5" />)}
+                        {sort.column === column && (sort.dir === 'asc' ? <ArrowUp className="ms-auto size-3.5" /> : <ArrowDown className="ms-auto size-3.5" />)}
                       </button>
                     </th>
                   ))}
@@ -314,7 +314,7 @@ export function AppDataExplorer({
                   >
                     {columns.map((column, columnIndex) => {
                       const field = selectedTable ? fieldForColumn(selectedTable, column) : null;
-                      return <td key={column} className={cn('max-w-[360px] border-b border-r px-3 py-2.5', columnIndex === 0 && 'sticky left-0 z-[5] bg-background group-hover:bg-muted/35 group-focus-visible:bg-muted/35')}><span className={cn('block truncate', row[column] === null || row[column] === undefined || row[column] === '' ? 'text-muted-foreground/60' : 'text-foreground')}>{displayValue(row[column], field)}</span></td>;
+                      return <td key={column} className={cn('max-w-[360px] border-be border-e px-3 py-2.5', columnIndex === 0 && 'sticky start-0 z-[5] bg-background group-hover:bg-muted/35 group-focus-visible:bg-muted/35')}><span className={cn('block truncate', row[column] === null || row[column] === undefined || row[column] === '' ? 'text-muted-foreground/60' : 'text-foreground')}>{displayValue(row[column], field)}</span></td>;
                     })}
                   </tr>
                 ))}
@@ -323,7 +323,7 @@ export function AppDataExplorer({
           )}
         </div>
 
-        <div className="flex min-h-12 items-center justify-between gap-3 border-t px-3 text-xs text-muted-foreground">
+        <div className="flex min-h-12 items-center justify-between gap-3 border-bs px-3 text-xs text-muted-foreground">
           <span>{page ? `${page.total} ${page.total === 1 ? 'запись' : 'записей'}` : '—'}</span>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" className="size-8" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}><ChevronLeft className="size-4" /><span className="sr-only">Предыдущая страница</span></Button>
@@ -408,15 +408,15 @@ function FilterPopover({ table, masked, filters, onChange }: { table: AppTableSc
   };
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-9 gap-1.5"><Filter className="size-3.5" /><span className="hidden sm:inline">Фильтр</span>{filters.length > 0 && <span className="rounded bg-muted px-1 text-[10px]">{filters.length}</span>}</Button></PopoverTrigger>
+      <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-9 gap-1.5"><Filter className="size-3.5" /><span className="hidden sm:inline">Фильтр</span>{filters.length > 0 && <span className="rounded bg-muted px-1 text-2xs">{filters.length}</span>}</Button></PopoverTrigger>
       <PopoverContent align="end" className="w-[min(92vw,420px)] p-3">
-        <div className="mb-3 flex items-center gap-2"><SlidersHorizontal className="size-4 text-muted-foreground" /><p className="text-sm font-semibold">Добавить фильтр</p></div>
+        <div className="mbe-3 flex items-center gap-2"><SlidersHorizontal className="size-4 text-muted-foreground" /><p className="text-sm font-semibold">Добавить фильтр</p></div>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1"><span className="text-xs text-muted-foreground">Поле</span><select value={column} onChange={(event) => setColumn(event.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">{columns.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
           <label className="space-y-1"><span className="text-xs text-muted-foreground">Условие</span><select value={operator} onChange={(event) => setOperator(event.target.value as AppFilterOperator)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">{availableOperators.map((item) => <option key={item} value={item}>{OPERATOR_LABEL[item]}</option>)}</select></label>
         </div>
-        {!noValue && <label className="mt-2 block space-y-1"><span className="text-xs text-muted-foreground">Значение</span><input value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') add(); }} autoFocus className="h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/30" /></label>}
-        <div className="mt-3 flex justify-end"><Button size="sm" onClick={add} disabled={!noValue && !value.trim()}>Добавить</Button></div>
+        {!noValue && <label className="mbs-2 block space-y-1"><span className="text-xs text-muted-foreground">Значение</span><input value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') add(); }} autoFocus className="h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/30" /></label>}
+        <div className="mbs-3 flex justify-end"><Button size="sm" onClick={add} disabled={!noValue && !value.trim()}>Добавить</Button></div>
       </PopoverContent>
     </Popover>
   );
@@ -484,16 +484,16 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-xl">
-          <SheetHeader className="border-b px-5 py-4 text-left"><SheetTitle>{isNew ? 'Новая запись' : `Запись · ${table.name}`}</SheetTitle><SheetDescription>{isNew ? 'Заполните поля схемы таблицы.' : String(existingRow?.id ?? '')}</SheetDescription></SheetHeader>
+          <SheetHeader className="border-be px-5 py-4 text-start"><SheetTitle>{isNew ? 'Новая запись' : `Запись · ${table.name}`}</SheetTitle><SheetDescription>{isNew ? 'Заполните поля схемы таблицы.' : String(existingRow?.id ?? '')}</SheetDescription></SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {conflict && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <AlertTriangle className="mbs-0.5 size-4 shrink-0" />
                 <span>Запись изменена другим участником. Ваши правки сохранены в форме — повторное сохранение перезапишет чужие изменения.</span>
               </div>
             )}
             {existingRow && SYSTEM_COLUMNS.map((column) => <div key={column} className="grid gap-1 sm:grid-cols-[140px_1fr]"><span className="text-xs font-medium text-muted-foreground">{column}</span><span className="break-all text-sm">{displayValue(existingRow[column], null)}</span></div>)}
-            {!isNew && <div className="border-t" />}
+            {!isNew && <div className="border-bs" />}
             {table.fields.map((field) => (
               <FieldEditor
                 key={field.name}
@@ -507,9 +507,9 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
               />
             ))}
           </div>
-          <div className="flex items-center justify-between border-t px-5 py-3">
-            {!isNew && canEdit ? <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)} disabled={saving}><Trash2 className="mr-1.5 size-4" />Удалить</Button> : <span />}
-            <div className="flex gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>{canEdit && <Button onClick={() => void save()} disabled={saving}>{saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}{isNew ? 'Создать' : 'Сохранить'}</Button>}</div>
+          <div className="flex items-center justify-between border-bs px-5 py-3">
+            {!isNew && canEdit ? <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)} disabled={saving}><Trash2 className="me-1.5 size-4" />Удалить</Button> : <span />}
+            <div className="flex gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>{canEdit && <Button onClick={() => void save()} disabled={saving}>{saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}{isNew ? 'Создать' : 'Сохранить'}</Button>}</div>
           </div>
         </SheetContent>
       </Sheet>
@@ -522,7 +522,7 @@ function FieldEditor({ field, value, sensitive, revealing, onReveal, disabled, o
   const label = (
     <span className="flex items-center gap-1.5 text-sm font-medium">
       {sensitive && <Lock className="size-3 text-amber-600" />}
-      {field.name}{field.required && <span className="ml-0.5 text-destructive">*</span>}
+      {field.name}{field.required && <span className="ms-0.5 text-destructive">*</span>}
       <span className="text-xs font-normal text-muted-foreground">{field.type}{field.unique ? ' · unique' : ''}</span>
       {sensitive && (
         <span className="text-xs font-normal text-amber-700 dark:text-amber-500">
@@ -530,15 +530,15 @@ function FieldEditor({ field, value, sensitive, revealing, onReveal, disabled, o
         </span>
       )}
       {sensitive && onReveal && (
-        <button type="button" onClick={onReveal} disabled={revealing} className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground">
-          {revealing ? <Loader2 className="size-3 animate-spin" /> : <Eye className="size-3" />}Показать
+        <button type="button" onClick={onReveal} disabled={revealing} className="ms-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground">
+          {revealing ? <Loader2 className="size-3 motion-safe:animate-spin" /> : <Eye className="size-3" />}Показать
         </button>
       )}
     </span>
   );
   if (field.type === 'bool') {
     const checked = value === true;
-    return <label className="flex items-center justify-between rounded-lg border px-3 py-3">{label}<button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={cn('relative h-6 w-11 rounded-full transition-colors', checked ? 'bg-primary' : 'bg-muted')}><span className={cn('absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} /></button></label>;
+    return <label className="flex items-center justify-between rounded-lg border px-3 py-3">{label}<button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={cn('relative h-6 w-11 rounded-full transition-colors', checked ? 'bg-primary' : 'bg-muted')}><span className={cn('absolute inset-bs-0.5 size-5 rounded-full bg-white shadow-sm motion-safe:transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} /></button></label>;
   }
   let inputValue = value === null || value === undefined ? '' : String(value);
   let type = 'text';
@@ -571,29 +571,29 @@ function PermissionsDialog({ open, onOpenChange, projectId, table, masked, canEd
           <DialogTitle>Права · {table.name}</DialogTitle>
           <DialogDescription>Кто может выполнять операции через публичный API приложения. Участники проекта с правом редактирования по-прежнему управляют данными через Dashboard.</DialogDescription>
         </DialogHeader>
-        <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[130px_1fr] border-b bg-muted/35 px-3 py-2 text-xs font-medium text-muted-foreground"><span>Операция</span><span>Доступ</span></div>
+        <div className="overflow-clip rounded-lg border">
+          <div className="grid grid-cols-[130px_1fr] border-be bg-muted/35 px-3 py-2 text-xs font-medium text-muted-foreground"><span>Операция</span><span>Доступ</span></div>
           {(['create', 'read', 'update', 'delete'] as const).map((operation) => (
-            <div key={operation} className="grid grid-cols-[130px_1fr] items-center border-b px-3 py-2.5 last:border-b-0">
+            <div key={operation} className="grid grid-cols-[130px_1fr] items-center border-be px-3 py-2.5 last:border-be-0">
               <span className="text-sm font-medium capitalize">{operation}</span>
               <select value={rules[operation]} disabled={!canEdit || saving} onChange={(event) => setRules((current) => ({ ...current, [operation]: event.target.value as AppAccess }))} className="h-9 rounded-md border bg-background px-2 text-sm">{ACCESS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label} — {option.hint}</option>)}</select>
             </div>
           ))}
         </div>
-        <div className="mt-1">
+        <div className="mbs-1">
           <p className="text-sm font-semibold">Чувствительность полей</p>
-          <p className="mb-2 mt-0.5 text-xs leading-5 text-muted-foreground">Секреты и персональные данные маскируются в гриде, не выгружаются в CSV и недоступны для поиска, фильтра и сортировки по значению.</p>
-          <div className="overflow-hidden rounded-lg border">
+          <p className="mbe-2 mbs-0.5 text-xs leading-5 text-muted-foreground">Секреты и персональные данные маскируются в гриде, не выгружаются в CSV и недоступны для поиска, фильтра и сортировки по значению.</p>
+          <div className="overflow-clip rounded-lg border">
             {table.fields.length === 0 ? (
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">В таблице нет пользовательских полей.</p>
             ) : table.fields.map((field) => {
               const heuristicOnly = !field.sensitive && Boolean(masked[field.name]);
               return (
-                <div key={field.name} className="grid grid-cols-[1fr_190px] items-center gap-2 border-b px-3 py-2.5 last:border-b-0">
+                <div key={field.name} className="grid grid-cols-[1fr_190px] items-center gap-2 border-be px-3 py-2.5 last:border-be-0">
                   <div className="min-w-0">
                     <span className="text-sm font-medium">{field.name}</span>
-                    <span className="ml-1.5 text-xs text-muted-foreground">{field.type}</span>
-                    {heuristicOnly && <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-500">Определено по имени — останется скрытым</p>}
+                    <span className="ms-1.5 text-xs text-muted-foreground">{field.type}</span>
+                    {heuristicOnly && <p className="mbs-0.5 text-xs text-amber-700 dark:text-amber-500">Определено по имени — останется скрытым</p>}
                   </div>
                   <select value={field.sensitive ?? ''} disabled={!canEdit || savingField === field.name} onChange={(event) => void changeSensitivity(field.name, event.target.value as '' | AppSensitiveKind)} className="h-9 rounded-md border bg-background px-2 text-sm">{SENSITIVITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                 </div>
@@ -603,7 +603,7 @@ function PermissionsDialog({ open, onOpenChange, projectId, table, masked, canEd
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>
-          {canEdit && <Button onClick={() => void save()} disabled={saving}>{saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}Сохранить права</Button>}
+          {canEdit && <Button onClick={() => void save()} disabled={saving}>{saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}Сохранить права</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -647,12 +647,12 @@ function ExportDialog({ open, onOpenChange, projectId, tableName, total, query }
           <DialogDescription>Будет выгружено строк: {willTruncate ? `${EXPORT_ROW_CAP.toLocaleString('ru-RU')} (первые из ${total.toLocaleString('ru-RU')})` : total.toLocaleString('ru-RU')}. Текущий поиск и фильтры учитываются.</DialogDescription>
         </DialogHeader>
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <AlertTriangle className="mbs-0.5 size-4 shrink-0" />
           <span>Чувствительные колонки (секреты и персональные данные) в файл не попадут — ни значением, ни маской.</span>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
-          <Button onClick={() => void run()} disabled={exporting}>{exporting && <Loader2 className="mr-1.5 size-4 animate-spin" />}<Download className="mr-1.5 size-4" />Выгрузить</Button>
+          <Button onClick={() => void run()} disabled={exporting}>{exporting && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}<Download className="me-1.5 size-4" />Выгрузить</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

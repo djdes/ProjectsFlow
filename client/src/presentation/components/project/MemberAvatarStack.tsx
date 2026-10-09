@@ -40,7 +40,7 @@ export function MemberAvatarStack({
       <PopoverAnchor asChild>
         <button
           type="button"
-          className="mr-1.5 flex items-center -space-x-1.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="me-1.5 flex items-center -space-x-1.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           onClick={() => setOpen((o) => !o)}
           aria-label="Участники проекта"
           aria-expanded={open}

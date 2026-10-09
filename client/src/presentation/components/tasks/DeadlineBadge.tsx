@@ -54,7 +54,7 @@ export function DeadlineBadge({ deadline, status, className }: Props): React.Rea
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium',
+        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs font-medium',
         overdue
           ? 'rounded-full bg-rose-500/15 px-1.5 py-0.5 text-rose-600 dark:bg-rose-400/15 dark:text-rose-400'
           : 'text-muted-foreground',

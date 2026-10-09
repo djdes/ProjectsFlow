@@ -105,7 +105,7 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
       title="Последние коммиты"
       actions={
         <Button variant="ghost" size="sm" onClick={load} disabled={loading} aria-label="Обновить">
-          <RefreshCw className={loading ? 'animate-spin' : undefined} />
+          <RefreshCw className={loading ? 'motion-safe:animate-spin' : undefined} />
         </Button>
       }
     >
@@ -131,11 +131,11 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
                 <img
                   src={c.authorAvatarUrl}
                   alt={c.authorName}
-                  className="mt-0.5 size-6 shrink-0 rounded-full"
+                  className="mbs-0.5 size-6 shrink-0 rounded-full"
                   loading="lazy"
                 />
               ) : (
-                <div className="mt-0.5 size-6 shrink-0 rounded-full bg-muted" />
+                <div className="mbs-0.5 size-6 shrink-0 rounded-full bg-muted" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{c.message.split('\n')[0]}</p>

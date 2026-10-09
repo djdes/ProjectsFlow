@@ -235,22 +235,22 @@ export function AiComposer({
 
   return (
     <div className={cn(
-      'rounded-2xl border bg-card shadow-[0_12px_40px_rgba(15,23,42,0.08)] transition focus-within:ring-2 focus-within:ring-ring',
-      compact ? 'pb-2' : 'pb-3',
+      'rounded-2xl border bg-card shadow-[0_12px_40px_oklch(20.77%_0.04_265.75/0.08)] transition focus-within:ring-2 focus-within:ring-ring',
+      compact ? 'pbe-2' : 'pbe-3',
     )}>
       {/* Выделенная зона — над полем ввода, как бейдж в отправленном пузыре. Показываем
           её независимо от режима: выделение принадлежит рабочей области, а не режиму,
           и его появление/исчезновение не должно выглядеть как побочный эффект тумблера. */}
       {selection && (
-        <div className="flex min-w-0 items-center gap-2 px-3 pt-2.5">
+        <div className="flex min-w-0 items-center gap-2 px-3 pbs-2.5">
           <AiSelectionChip selection={selection} onOpen={onOpenSelection} />
-          <span className="min-w-0 truncate text-[11px] leading-4 text-muted-foreground">Выделенная зона</span>
+          <span className="min-w-0 truncate text-2xs leading-4 text-muted-foreground">Выделенная зона</span>
         </div>
       )}
       <div className="relative">
         {/* Плейсхолдер прячем по факту непустого DOM, а не по trim: иначе он ляжет под набранные пробелы. */}
         {body === '' && (
-          <span aria-hidden="true" className="pointer-events-none absolute left-[14px] top-3 select-none truncate text-base leading-6 text-muted-foreground/70">
+          <span aria-hidden="true" className="pointer-events-none absolute start-[14px] inset-bs-3 select-none truncate text-base leading-6 text-muted-foreground/70">
             {modeSwitch ? placeholderFor(mode, Boolean(selection)) : 'О чём хотите подумать или что сделать?'}
           </span>
         )}
@@ -262,7 +262,7 @@ export function AiComposer({
           tabIndex={0}
           aria-multiline="true"
           aria-label="Сообщение для ИИ"
-          className="max-h-[40vh] min-h-6 w-full overflow-y-auto whitespace-pre-wrap break-words pb-0 pl-[14px] pr-3 pt-3 text-base leading-6 outline-none"
+          className="max-h-[40vh] min-h-6 w-full overflow-y-auto whitespace-pre-wrap break-words pbe-0 ps-[14px] pe-3 pbs-3 text-base leading-6 outline-none"
           onInput={syncFromEditor}
           onKeyDown={(event) => {
             // IME: во время набора иероглифов Enter подтверждает вариант, а не переносит строку.
@@ -297,17 +297,17 @@ export function AiComposer({
         />
       </div>
       {attachments.length > 0 && (
-        <div className="mb-2 mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto px-3">
+        <div className="mbe-2 mbs-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto px-3">
           {attachments.map((attachment) => (
-            <div key={attachment.id} className="group relative flex h-14 max-w-[220px] items-center gap-2 rounded-xl border bg-muted/30 p-1.5 pr-7">
+            <div key={attachment.id} className="group relative flex h-14 max-w-[220px] items-center gap-2 rounded-xl border bg-muted/30 p-1.5 pe-7">
               {attachment.previewUrl ? <img src={attachment.previewUrl} alt="" className="size-10 shrink-0 rounded-lg object-cover" /> : <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-background">{attachment.kind === 'text' ? <FileText className="size-4" /> : <Paperclip className="size-4" />}</span>}
-              <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-[10px] text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span>
-              <button type="button" className="absolute right-1 top-1 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground" onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))} aria-label={`Убрать ${attachment.name}`}><X className="size-3.5" /></button>
+              <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-2xs text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span>
+              <button type="button" className="absolute end-1 inset-bs-1 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground" onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))} aria-label={`Убрать ${attachment.name}`}><X className="size-3.5" /></button>
             </div>
           ))}
         </div>
       )}
-      <div className="mt-2 flex items-center gap-1.5 px-2.5">
+      <div className="mbs-2 flex items-center gap-1.5 px-2.5">
         <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.target.value = ''; }} />
         <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
         <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
@@ -321,7 +321,7 @@ export function AiComposer({
             title="Только обдумать, ничего не менять"
             onClick={() => modeSwitch.onChange(modeSwitch.mode === 'discuss' ? 'build' : 'discuss')}
             className={cn(
-              'inline-flex h-7 shrink-0 items-center gap-[5px] rounded-md py-0 pl-1.5 pr-2 text-xs font-medium leading-4',
+              'inline-flex h-7 shrink-0 items-center gap-[5px] rounded-md py-0 ps-1.5 pe-2 text-xs font-medium leading-4',
               'transition-colors duration-150',
               modeSwitch.mode === 'discuss'
                 ? 'bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300'
@@ -339,7 +339,7 @@ export function AiComposer({
             disabled={cancelling}
             aria-label="Остановить генерацию"
             title="Остановить генерацию"
-            className="grid size-9 place-items-center rounded-full bg-foreground text-background transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            className="grid size-9 place-items-center rounded-full bg-foreground text-background transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
           >
             <Square className="size-3.5 fill-current" />
           </button>
@@ -350,7 +350,7 @@ export function AiComposer({
             disabled={empty || sending}
             aria-label="Отправить"
             title="Отправить"
-            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:scale-100"
+            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:scale-100"
           >
             <ArrowUp className="size-4" />
           </button>

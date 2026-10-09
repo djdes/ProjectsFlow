@@ -8,6 +8,9 @@ export type WorkspaceCommitSyncAction = 'propose' | 'auto';
 export type WorkspaceAssigneeDigestSettings = {
   readonly workspaceId: string;
   readonly enabled: boolean;
+  // Личная сводка в бота: каждому участнику его задачи карточками с кнопками. Время, дни,
+  // проекты и получатели — общие с групповой таблицей.
+  readonly personalEnabled: boolean;
   readonly hour: number;
   readonly minute: number;
   readonly daysOfWeek: ScheduleDay[];
@@ -45,6 +48,7 @@ export type WorkspaceAssigneeDigestGroup = {
 
 export type SaveWorkspaceAssigneeDigestInput = {
   readonly enabled: boolean;
+  readonly personalEnabled: boolean;
   readonly hour: number;
   readonly minute: number;
   readonly daysOfWeek: ScheduleDay[];
@@ -68,4 +72,12 @@ export type WorkspaceAssigneeDigestSendResult = {
   readonly sentCount: number;
   readonly skippedRecipientUserIds: string[];
   readonly projectCount: number;
+  // Задач в сообщении «На утверждении» (0 — сообщения не было).
+  readonly approvalTaskCount?: number;
+  // Тест личной сводки — только нажавшему. null — личная сводка выключена.
+  readonly personal?: {
+    readonly sentCount: number;
+    readonly taskCount: number;
+    readonly skippedRecipientUserIds: string[];
+  } | null;
 };

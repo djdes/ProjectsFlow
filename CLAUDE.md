@@ -90,7 +90,13 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
 - Новый репозиторий → `infrastructure/http/Http<Name>Repository.ts`, реализует порт
   из `application/`, регистрируется в `container.tsx`.
 - Дизайн-токены (цвета, скругления) — CSS-переменные в `client/src/styles/globals.css`,
-  Tailwind-маппинг в `client/tailwind.config.ts`. Палитра: slate-нейтрали + один синий акцент.
+  Tailwind-маппинг в `client/tailwind.config.ts`. Палитра: тёплые нейтрали + один синий акцент.
+- CSS пишем по скиллу good-css (`.claude/skills/good-css`, `npx skills add vojtaholik/good-css`):
+  цвета — тройки OKLCH (`--x: L% C H`, в коде `oklch(var(--x) / a)`, производные — `color-mix`);
+  стороны — логические утилиты (`ms/me/ps/pe/start/end`, блочные `mbs/mbe/pbs/pbe/inset-bs/be/
+  border-bs/be/rounded-bs/be` из плагина в tailwind.config), не `mt/pl/top/border-b`; движение
+  (сдвиг, масштаб, вращение) — только под `motion-safe:`/`prefers-reduced-motion: no-preference`;
+  `transition-all` не используем; размеры текста — шкала (`text-2xs` = 11px … `text-title`).
 - Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.
 - Миграции БД — новый файл `db/00N_*.sql` (append-only, MariaDB-совместимый синтаксис).
 

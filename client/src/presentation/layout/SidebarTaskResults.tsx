@@ -43,7 +43,7 @@ export function SidebarTaskResults({
       </div>
 
       <motion.ul
-        className="mt-0.5 space-y-1"
+        className="mbs-0.5 space-y-1"
         initial={animations ? 'hidden' : false}
         animate="show"
         variants={{ show: { transition: { staggerChildren: 0.04 } } }}
@@ -61,12 +61,12 @@ export function SidebarTaskResults({
                     ? `/projects/${r.projectId}?task=${r.taskId}#comment-${r.commentId}`
                     : `/projects/${r.projectId}?task=${r.taskId}`
                 }
-                className="flex items-start gap-2 rounded-md px-2 py-2 transition-all hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
+                className="flex items-start gap-2 rounded-md px-2 py-2 transition-colors motion-safe:transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
               >
                 {inComment ? (
-                  <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <MessageSquare className="mbs-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                 ) : (
-                  <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <FileText className="mbs-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm leading-snug">
@@ -79,8 +79,8 @@ export function SidebarTaskResults({
                     )}
                   </span>
                   {inComment && (
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      <span className="mr-1 opacity-70">в комментарии:</span>
+                    <span className="mbs-0.5 block truncate text-xs text-muted-foreground">
+                      <span className="me-1 opacity-70">в комментарии:</span>
                       <Highlight text={r.commentExcerpt ?? ''} query={query} />
                     </span>
                   )}
@@ -96,10 +96,10 @@ export function SidebarTaskResults({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
+          className="mbs-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
         >
           <span className="grid size-5 shrink-0 place-items-center">
-            <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />
+            <ChevronDown className={cn('size-4 motion-safe:transition-transform', expanded && 'rotate-180')} />
           </span>
           {expanded ? 'скрыть' : 'ещё'}
         </button>

@@ -150,12 +150,12 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
       <div className="px-4 py-3">
         <div className="text-center">
           <h3 className="text-base font-semibold text-foreground">Опубликовать доску</h3>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">Публичная страница с канбаном проекта</p>
+          <p className="mbs-0.5 text-sm text-muted-foreground">Публичная страница с канбаном проекта</p>
         </div>
 
         {/* Мини-превью доски (обложка + иконка + имя) — как «окно» на скрине Notion. */}
-        <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.08] shadow-sm dark:border-white/10">
-          <div className="flex h-7 items-center gap-1.5 border-b border-black/[0.06] bg-black/[0.02] px-2 dark:border-white/[0.06] dark:bg-white/[0.03]">
+        <div className="mbs-3 overflow-clip rounded-lg border border-black/[0.08] shadow-sm dark:border-white/10">
+          <div className="flex h-7 items-center gap-1.5 border-be border-black/[0.06] bg-black/[0.02] px-2 dark:border-white/[0.06] dark:bg-white/[0.03]">
             <span className="size-2 rounded-full bg-black/10 dark:bg-white/15" />
             <span className="size-2 rounded-full bg-black/10 dark:bg-white/15" />
             <span className="size-2 rounded-full bg-black/10 dark:bg-white/15" />
@@ -179,15 +179,15 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
 
         <Button
           type="button"
-          className="mt-3 h-10 w-full text-sm"
+          className="mbs-3 h-10 w-full text-sm"
           disabled={!isOwner || busy}
           onClick={() => void doPublish()}
         >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
           Опубликовать
         </Button>
 
-        <p className="mt-2 text-center text-xs text-muted-foreground">
+        <p className="mbs-2 text-center text-xs text-muted-foreground">
           {isOwner
             ? 'После публикации любой, у кого есть ссылка, увидит доску проекта.'
             : 'Публиковать проект может только владелец.'}
@@ -201,7 +201,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
     <div className="px-3 py-3">
       {/* URL-строка: projectsflow.ru/p/<slug> + копирование. */}
       <div className="flex items-center gap-1.5 rounded-md border border-black/[0.08] bg-black/[0.02] px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.03]">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-blue-600 dark:text-blue-400">
+        <span className="min-w-0 flex-1 truncate text-sm text-blue-600 dark:text-blue-400">
           {slug ? publicBoardDisplayUrl(slug) : ''}
         </span>
         <button
@@ -214,25 +214,25 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
         </button>
       </div>
 
-      <div className="mt-2 space-y-0.5">
+      <div className="mbs-2 space-y-0.5">
         <button
           type="button"
           onClick={() => setAppearanceOpen((open) => !open)}
           aria-expanded={appearanceOpen}
-          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/60"
+          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm text-foreground transition-colors hover:bg-accent/60"
         >
           <Paintbrush className="size-4 shrink-0 opacity-70" />
           <span className="flex-1">Настроить оформление сайта</span>
-          {appearanceBusy && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />}
+          {appearanceBusy && <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" />}
           <ChevronRight
-            className={`size-4 opacity-60 transition-transform motion-reduce:transition-none ${appearanceOpen ? 'rotate-90' : ''}`}
+            className={`size-4 opacity-60 motion-safe:transition-transform motion-reduce:transition-none ${appearanceOpen ? 'rotate-90' : ''}`}
           />
         </button>
 
         {appearanceOpen && (
-          <div className="mx-2 mb-2 space-y-2 rounded-lg border bg-muted/20 p-3">
+          <div className="mx-2 mbe-2 space-y-2 rounded-lg border bg-muted/20 p-3">
             <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Цвет акцента</p>
+              <p className="mbe-2 text-xs font-medium text-muted-foreground">Цвет акцента</p>
               <div className="flex flex-wrap items-center gap-2">
                 {ACCENT_COLORS.map((color) => (
                   <button
@@ -242,7 +242,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
                     onClick={() => void saveAppearance({ ...appearance, accentColor: color })}
                     aria-label={`Цвет ${color}`}
                     aria-pressed={appearance.accentColor.toLowerCase() === color}
-                    className="grid size-8 place-items-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none"
+                    className="grid size-8 place-items-center rounded-full motion-safe:transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none"
                     style={{ backgroundColor: color }}
                   >
                     {appearance.accentColor.toLowerCase() === color && (
@@ -250,7 +250,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
                     )}
                   </button>
                 ))}
-                <label className="grid size-8 cursor-pointer place-items-center overflow-hidden rounded-full border bg-background">
+                <label className="grid size-8 cursor-pointer place-items-center overflow-clip rounded-full border bg-background">
                   <span className="sr-only">Свой цвет</span>
                   <input
                     type="color"
@@ -322,7 +322,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
         <StubRow icon={<Share2 className="size-4" />} label="Поделиться в соцсетях" />
       </div>
 
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mbs-2 flex items-center gap-2">
         <Button
           type="button"
           variant="outline"
@@ -330,7 +330,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
           disabled={!isOwner || busy}
           onClick={() => void doUnpublish()}
         >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
           Снять с публикации
         </Button>
         <Button type="button" className="h-9 flex-1" onClick={viewSite}>

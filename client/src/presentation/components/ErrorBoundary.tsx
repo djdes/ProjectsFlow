@@ -35,11 +35,11 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="grid min-h-dvh place-items-center bg-background px-6">
           <div className="max-w-md text-center">
             <h1 className="text-xl font-semibold text-foreground">Что-то пошло не так</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mbs-2 text-sm text-muted-foreground">
               Произошла непредвиденная ошибка. Попробуйте перезагрузить страницу — данные не
               потеряны.
             </p>
-            <div className="mt-5 flex items-center justify-center gap-2">
+            <div className="mbs-5 flex items-center justify-center gap-2">
               <Button onClick={() => window.location.reload()}>Перезагрузить</Button>
               <Button variant="outline" onClick={this.reset}>
                 Попробовать снова

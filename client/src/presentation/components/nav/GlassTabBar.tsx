@@ -64,7 +64,7 @@ export function GlassTabBar({ items, activeIndex, onSelect, layoutId, className 
               }
             }}
             className={cn(
-              'relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[10px] leading-none transition-colors duration-200',
+              'relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-2xs leading-none transition-colors duration-200',
               isHighlighted ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -73,7 +73,7 @@ export function GlassTabBar({ items, activeIndex, onSelect, layoutId, className 
                 aria-hidden
                 layoutId={layoutId}
                 transition={glassTransition}
-                className="absolute inset-0 rounded-xl bg-background/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.04] dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.3)] dark:ring-white/10"
+                className="absolute inset-0 rounded-xl bg-background/90 shadow-[inset_0_1px_0_oklch(100%_0_none/0.5),0_1px_3px_oklch(0%_0_none/0.12)] ring-1 ring-black/[0.04] dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_oklch(100%_0_none/0.12),0_1px_3px_oklch(0%_0_none/0.3)] dark:ring-white/10"
               />
             )}
             <span className="relative z-10 inline-flex">
@@ -93,7 +93,7 @@ export function GlassTabBar({ items, activeIndex, onSelect, layoutId, className 
                 icon
               )}
               {item.badge !== undefined && item.badge > 0 && (
-                <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+                <span className="absolute -end-1.5 -inset-bs-1 inline-flex tabular-nums min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
                   {item.badge > 99 ? '99+' : item.badge}
                 </span>
               )}

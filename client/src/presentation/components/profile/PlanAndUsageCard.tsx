@@ -35,10 +35,10 @@ export function PlanAndUsageCard(): React.ReactElement {
               <span className="text-sm text-muted-foreground">Тариф</span>
               <span className="text-sm font-semibold">{planNameRu(usage.plan)}</span>
             </div>
-            {expiryNote && <p className="-mt-2 text-xs text-muted-foreground">{expiryNote}</p>}
+            {expiryNote && <p className="-mbs-2 text-xs text-muted-foreground">{expiryNote}</p>}
             <UsageWindowBar window={usage.fiveHour} rubPerUsd={usage.rubPerUsd} />
             <UsageWindowBar window={usage.sevenDay} rubPerUsd={usage.rubPerUsd} />
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="flex flex-wrap gap-2 pbs-1">
               <Button variant="outline" size="sm" onClick={() => usageDialog.open()}>
                 Подробнее
               </Button>

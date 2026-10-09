@@ -122,12 +122,12 @@ export function SaveStatusIndicator({ state }: { state: StudioSaveState }): Reac
           aria-label={label}
         >
           {/* Крутится и на записи черновика, и на публикации: иконка у них одна. */}
-          <Icon className={cn('size-[18px]', busy && 'animate-spin motion-reduce:animate-none')} />
+          <Icon className={cn('size-[18px]', busy && 'motion-safe:animate-spin motion-reduce:animate-none')} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" className={DARK_TOOLTIP}>
         {label}
-        {hint ? <span className="mt-0.5 block text-white/70">{hint}</span> : null}
+        {hint ? <span className="mbs-0.5 block text-white/70">{hint}</span> : null}
       </TooltipContent>
     </Tooltip>
   );

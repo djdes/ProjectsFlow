@@ -90,7 +90,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         {/* Обёртка ради pf-burger-gap: отступ должен двигать кнопку, не перекрывая её
             -ml-3 (им она выровнена по тексту ниже) и не растягивая ghost-подложку. */}
         <div className="pf-burger-gap flex">
-          <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
+          <Button asChild variant="ghost" size="sm" className="-ms-3 gap-1">
             <Link to="/">
               <ArrowLeft />
               На&nbsp;главную
@@ -103,11 +103,11 @@ export function WorkspaceSettingsPage(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pbe-12 pbs-3.5 sm:px-6">
       {/* Обёртка ради pf-burger-gap — см. комментарий в ветке «пространство не найдено».
           Заметно только на узком окне: шире max-w-2xl колонка отъезжает от бургера сама. */}
       <div className="pf-burger-gap flex">
-        <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
+        <Button asChild variant="ghost" size="sm" className="-ms-3 gap-1">
           <Link to="/">
             <ArrowLeft />
             Назад
@@ -291,7 +291,7 @@ function TaskApprovalCard({
           />
           <Label className="min-w-0 flex-1">Требовать утверждение перед закрытием</Label>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mbs-2 text-xs text-muted-foreground">
           {canManage
             ? 'Личные «Входящие» приёмку не проходят — свою задачу утверждать не у кого. Задачи на утверждении видны в колонке «На утверждении» на доске проекта.'
             : 'Настройку меняет руководитель или владелец пространства.'}
@@ -362,7 +362,7 @@ function WorkerCard({
           />
           <Label className="min-w-0 flex-1">Использовать воркера в этом пространстве</Label>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mbs-2 text-xs text-muted-foreground">
           {canManage
             ? 'При выключении задачи из колонки «Воркер» переезжают в «Черновики» — обратное включение их туда не вернёт. Сервер перестаёт принимать задачи в эту колонку и из MCP, и из Telegram.'
             : 'Настройку меняет руководитель или владелец пространства.'}
@@ -520,6 +520,7 @@ function KanbanColumnsCard({
 
 type AssigneeDigestDraft = {
   enabled: boolean;
+  personalEnabled: boolean;
   hour: number;
   minute: number;
   daysOfWeek: ScheduleDay[];
@@ -603,6 +604,7 @@ function AssigneeDigestCard({
         savedCommitSelectedRef.current = JSON.stringify([...enabledIds].sort());
         setDraft({
           enabled: result.settings.enabled,
+          personalEnabled: result.settings.personalEnabled,
           hour: result.settings.hour,
           minute: result.settings.minute,
           daysOfWeek: result.settings.daysOfWeek,
@@ -682,7 +684,7 @@ function AssigneeDigestCard({
       return false;
     }
     if (
-      requireGroup &&
+      (requireGroup || draft.personalEnabled) &&
       draft.projectMode === 'selected' &&
       draft.projectIds.length === 0
     ) {
@@ -690,7 +692,7 @@ function AssigneeDigestCard({
       return false;
     }
     if (
-      draft.enabled &&
+      (draft.enabled || draft.personalEnabled) &&
       draft.recipientMode === 'selected' &&
       selectedEligible.length === 0
     ) {
@@ -706,6 +708,7 @@ function AssigneeDigestCard({
     try {
       const settings = await workspaceRepository.saveAssigneeDigest(workspaceId, {
         enabled: draft.enabled,
+        personalEnabled: draft.personalEnabled,
         hour: draft.hour,
         minute: draft.minute,
         daysOfWeek: draft.daysOfWeek,
@@ -728,6 +731,7 @@ function AssigneeDigestCard({
       });
       update({
         enabled: settings.enabled,
+        personalEnabled: settings.personalEnabled,
         hour: settings.hour,
         minute: settings.minute,
         daysOfWeek: settings.daysOfWeek,
@@ -809,14 +813,31 @@ function AssigneeDigestCard({
   };
 
   const sendNow = async (): Promise<void> => {
-    if (sending || !validate(true) || !(await save())) return;
+    if (!draft) return;
+    // Выключенная таблица не тестируется в группе, когда проверяют только личную сводку
+    // (сервер решает так же) — тогда и группа для теста не обязательна.
+    const groupTest = draft.enabled || !draft.personalEnabled;
+    if (sending || !validate(groupTest ? true : undefined) || !(await save())) return;
     setSending(true);
     try {
       const result = await workspaceRepository.sendAssigneeDigestNow(workspaceId);
-      if (result.sentCount === 0) {
+      const personal = result.personal ?? null;
+      if (personal) {
+        if (personal.sentCount > 0) {
+          toast.success(`Личная сводка отправлена вам в бота · задач: ${personal.taskCount}`);
+        } else if (personal.skippedRecipientUserIds.length > 0) {
+          toast.error(
+            'Не удалось написать вам в бота: подключите Telegram в профиле и нажмите Start у бота',
+          );
+        } else {
+          toast.message('У вас нет открытых задач — личную сводку не отправили');
+        }
+      }
+      if (!groupTest) return;
+      if (result.sentCount === 0 && !result.approvalTaskCount) {
         if (result.skippedRecipientUserIds.length > 0) {
           toast.error(
-            `Не удалось отправить сообщения: у ${result.skippedRecipientUserIds.length} участников Telegram не подключён или недоступен`,
+            `Telegram не принял сообщения (${result.skippedRecipientUserIds.length}). Проверьте, что бот есть в группе`,
           );
         } else {
           toast.message(
@@ -828,11 +849,12 @@ function AssigneeDigestCard({
         return;
       }
       toast.success(
-        `Отправлено сообщений: ${result.sentCount} · задач: ${result.taskCount}`,
+        `Отправлено сообщений: ${result.sentCount} · задач: ${result.taskCount}` +
+          (result.approvalTaskCount ? ` · на утверждении: ${result.approvalTaskCount}` : ''),
       );
       if (result.skippedRecipientUserIds.length > 0) {
         toast.warning(
-          `Не удалось отправить для ${result.skippedRecipientUserIds.length} участников без доступного Telegram`,
+          `Telegram не принял ${result.skippedRecipientUserIds.length} из сообщений — проверьте, что бот есть в группе`,
         );
       }
     } catch (error) {
@@ -893,7 +915,8 @@ function AssigneeDigestCard({
             </CardTitle>
             <CardDescription>
               Ежедневная таблица по ответственным, сверка выполненных задач и вечернее
-              напоминание. Всё публикуется в общей Telegram-группе пространства в выбранные дни.
+              напоминание публикуются в общей Telegram-группе пространства в выбранные дни.
+              Личная сводка уходит каждому в бота.
             </CardDescription>
           </div>
         </div>
@@ -969,7 +992,7 @@ function AssigneeDigestCard({
                   aria-label="Получить название группы"
                 >
                   {resolving ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-4 motion-safe:animate-spin" />
                   ) : (
                     <RefreshCw className="size-4" />
                   )}
@@ -981,7 +1004,7 @@ function AssigneeDigestCard({
               </p>
             </div>
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-bs pbs-4">
               <div className="flex flex-wrap items-center gap-3">
                 <Switch
                   checked={draft.enabled}
@@ -1017,6 +1040,20 @@ function AssigneeDigestCard({
                     })
                   }
                 />
+              </div>
+              <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+                <Switch
+                  checked={draft.personalEnabled}
+                  disabled={!canManage}
+                  onCheckedChange={(personalEnabled) => update({ personalEnabled })}
+                  aria-label="Включить личную сводку в бота"
+                />
+                <Label className="min-w-32">Каждому в личку бота</Label>
+                <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  в то же время каждый получает свои задачи по всем проектам — карточками
+                  с кнопками «Завершить», «Комментировать», «Посмотреть». Telegram-группа
+                  для этого не нужна.
+                </span>
               </div>
               <div className="space-y-3 rounded-md border px-3 py-3">
                 <div className="flex flex-wrap items-center gap-3">
@@ -1097,7 +1134,7 @@ function AssigneeDigestCard({
                         <input
                           type="radio"
                           name={`commit-sync-action-${workspaceId}`}
-                          className="mt-0.5"
+                          className="mbs-0.5"
                           checked={modeDraft === option.value}
                           disabled={!canManage}
                           onChange={() => {
@@ -1123,14 +1160,14 @@ function AssigneeDigestCard({
                   <button
                     type="button"
                     onClick={() => setCommitListOpen((v) => !v)}
-                    className="flex w-full items-center gap-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="flex w-full items-center gap-2 text-start text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-expanded={commitListOpen}
                   >
                     <ChevronDown
-                      className={cn('size-3.5 shrink-0 transition-transform', !commitListOpen && '-rotate-90')}
+                      className={cn('size-3.5 shrink-0 motion-safe:transition-transform', !commitListOpen && '-rotate-90')}
                     />
                     <span>Какие проекты включены в&nbsp;сверку</span>
-                    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 tabular-nums">
+                    <span className="ms-auto rounded-full bg-muted px-1.5 py-0.5 tabular-nums">
                       {commitSelected.length} из {commitProjects.length}
                     </span>
                   </button>
@@ -1236,7 +1273,8 @@ function AssigneeDigestCard({
                 <div>
                   <Label>Дни отправки</Label>
                   <p className="text-xs text-muted-foreground">
-                    Одинаково для таблицы, сверки коммитов и вечернего напоминания.
+                    Одинаково для таблицы, личной сводки, сверки коммитов и вечернего
+                    напоминания.
                   </p>
                 </div>
                 <ScheduleDayPicker
@@ -1247,8 +1285,8 @@ function AssigneeDigestCard({
               </div>
             </div>
 
-            <div className="space-y-3 border-t pt-4">
-              <Label>Проекты для всех трёх рассылок</Label>
+            <div className="space-y-3 border-bs pbs-4">
+              <Label>Проекты для всех рассылок</Label>
               <div className="flex flex-wrap gap-4 text-sm">
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
@@ -1291,7 +1329,7 @@ function AssigneeDigestCard({
               )}
             </div>
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-bs pbs-4">
               <Label>Кому формировать сообщения</Label>
               <div className="flex flex-wrap gap-4 text-sm">
                 <label className="flex cursor-pointer items-center gap-2">
@@ -1351,18 +1389,18 @@ function AssigneeDigestCard({
             </div>
 
             {canManage && (
-              <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+              <div className="flex flex-wrap justify-end gap-2 border-bs pbs-4">
                 <Button
                   variant="outline"
                   disabled={saving || sending}
                   onClick={() => void save()}
                 >
-                  {saving && !sending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {saving && !sending ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
                   Сохранить
                 </Button>
                 <Button disabled={saving || sending} onClick={() => void sendNow()}>
                   {sending ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-4 motion-safe:animate-spin" />
                   ) : (
                     <Send className="size-4" />
                   )}
@@ -1510,7 +1548,7 @@ function DangerZoneCard({
               disabled={saving}
               onClick={() => void doDelete()}
             >
-              {saving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {saving ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Trash2 className="size-4" />}
               Удалить
             </Button>
           </DialogFooter>

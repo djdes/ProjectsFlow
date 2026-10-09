@@ -142,9 +142,9 @@ export function AssigneeSelect({
               {member.displayName}
             </span>
             {member.id === user?.id ? (
-              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">вы</span>
+              <span className="ms-auto shrink-0 text-2xs text-muted-foreground">вы</span>
             ) : (
-              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+              <span className="ms-auto shrink-0 text-2xs text-muted-foreground">
                 {member.email}
               </span>
             )}

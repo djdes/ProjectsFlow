@@ -210,7 +210,7 @@ function AutomationCard({
       <div className="flex items-start gap-3 p-3.5">
         <span
           className={cn(
-            'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md',
+            'mbs-0.5 flex size-8 shrink-0 items-center justify-center rounded-md',
             isMaster ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
           )}
         >
@@ -222,11 +222,11 @@ function AutomationCard({
               {title}
             </h3>
             {toggleProps?.busy && (
-              <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              <Loader2 className="size-3 motion-safe:animate-spin text-muted-foreground" />
             )}
           </div>
           {description && (
-            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
+            <p className="mbs-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
           )}
         </div>
         {toggleProps && (
@@ -238,7 +238,7 @@ function AutomationCard({
           />
         )}
       </div>
-      {children && <div className="border-t px-3.5 py-3">{children}</div>}
+      {children && <div className="border-bs px-3.5 py-3">{children}</div>}
     </section>
   );
 }
@@ -246,7 +246,7 @@ function AutomationCard({
 // Заголовок группы контролов внутри карточки (для подсекций: «Критерии», «Лимит» и т.д.).
 function FieldGroupLabel({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
       {children}
     </p>
   );
@@ -274,9 +274,9 @@ function NestedSwitchRow({
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <Label className="text-sm font-medium">{title}</Label>
-          {busy && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+          {busy && <Loader2 className="size-3 motion-safe:animate-spin text-muted-foreground" />}
         </div>
-        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
+        <p className="mbs-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
       </div>
       <Switch
         checked={checked}
@@ -660,7 +660,7 @@ export function AutomationDialog({
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 motion-safe:animate-spin" />
             Загрузка…
           </div>
         ) : !draft ? (
@@ -714,9 +714,9 @@ export function AutomationDialog({
                           <span className="text-sm">{c.label}</span>
                         </label>
                         {c.enabled && (
-                          <div className="space-y-2 border-t px-3 py-2.5">
+                          <div className="space-y-2 border-bs px-3 py-2.5">
                             <div className="space-y-1">
-                              <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                                 Системный промпт
                               </Label>
                               <AutoGrowTextarea
@@ -730,7 +730,7 @@ export function AutomationDialog({
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                                 Уточнение (что именно хотите)
                               </Label>
                               <AutoGrowTextarea
@@ -879,7 +879,7 @@ export function AutomationDialog({
                   {draft.gitAuthorMode === 'custom' && (
                     <div className="space-y-2 rounded-md border bg-background px-3 py-2.5">
                       <div className="space-y-1">
-                        <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                           Имя автора
                         </Label>
                         <Input
@@ -891,7 +891,7 @@ export function AutomationDialog({
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                           Email автора
                         </Label>
                         <Input
@@ -906,7 +906,7 @@ export function AutomationDialog({
                     </div>
                   )}
                   {draft.gitAuthorMode === 'owner' && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       В публичных коммитах будут видны имя и email владельца проекта.
                     </p>
                   )}
@@ -963,7 +963,7 @@ export function AutomationDialog({
                   </RadioGroup>
                   {draft.deployMethod === 'ssh_manual' && (
                     <div className="space-y-1">
-                      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                         Команда деплоя (в корне проекта, после каждой задачи)
                       </Label>
                       <Input
@@ -976,7 +976,7 @@ export function AutomationDialog({
                     </div>
                   )}
                   {draft.deployMethod === 'auto' && (
-                    <p className="text-[11px] leading-snug text-muted-foreground">
+                    <p className="text-2xs leading-snug text-muted-foreground">
                       Воркер сам найдёт и выполнит деплой по инструкции из CLAUDE.md проекта —
                       команду указывать не нужно.
                     </p>
@@ -1010,7 +1010,7 @@ export function AutomationDialog({
                     className="gap-2"
                   >
                     <label className="flex cursor-pointer items-start gap-2 text-sm">
-                      <RadioGroupItem value="auto" className="mt-0.5" />
+                      <RadioGroupItem value="auto" className="mbs-0.5" />
                       <span>
                         <span className="font-medium">Переносить в «Готово» автоматически</span>
                         <span className="block text-xs text-muted-foreground">
@@ -1019,7 +1019,7 @@ export function AutomationDialog({
                       </span>
                     </label>
                     <label className="flex cursor-pointer items-start gap-2 text-sm">
-                      <RadioGroupItem value="propose" className="mt-0.5" />
+                      <RadioGroupItem value="propose" className="mbs-0.5" />
                       <span>
                         <span className="font-medium">Предлагать закрыть</span>
                         <span className="block text-xs text-muted-foreground">
@@ -1066,7 +1066,7 @@ export function AutomationDialog({
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                <div className="flex flex-wrap items-center gap-2 border-bs pbs-3">
                   <Button
                     type="button"
                     variant="outline"
@@ -1075,9 +1075,9 @@ export function AutomationDialog({
                     disabled={syncingNow}
                   >
                     {syncingNow ? (
-                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                      <Loader2 className="me-1.5 size-3.5 motion-safe:animate-spin" />
                     ) : (
-                      <RefreshCw className="mr-1.5 size-3.5" />
+                      <RefreshCw className="me-1.5 size-3.5" />
                     )}
                     Сверить сейчас
                   </Button>
@@ -1110,7 +1110,7 @@ export function AutomationDialog({
                   <div className="space-y-2">
                     {/* chat_id + история ранее введённых групп */}
                     <div className="space-y-1">
-                      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                         chat_id
                       </Label>
                       <div className="flex items-center gap-1.5">
@@ -1153,7 +1153,7 @@ export function AutomationDialog({
                                     <span className="truncate text-sm">
                                       {g.title || 'Без названия'}
                                     </span>
-                                    <span className="font-mono text-[11px] text-muted-foreground">
+                                    <span className="font-mono text-2xs text-muted-foreground">
                                       {g.chatId}
                                     </span>
                                   </div>
@@ -1166,7 +1166,7 @@ export function AutomationDialog({
                     </div>
                     {/* Название + резолв названия через бота */}
                     <div className="space-y-1">
-                      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                         Название (опц.)
                       </Label>
                       <div className="flex items-center gap-1.5">
@@ -1188,7 +1188,7 @@ export function AutomationDialog({
                           aria-label="Получить название группы из Telegram"
                         >
                           {resolvingTitle ? (
-                            <Loader2 className="size-4 animate-spin" />
+                            <Loader2 className="size-4 motion-safe:animate-spin" />
                           ) : (
                             <RefreshCw className="size-4" />
                           )}
@@ -1196,7 +1196,7 @@ export function AutomationDialog({
                       </div>
                     </div>
                   </div>
-                <p className="text-[11px] leading-snug text-muted-foreground">
+                <p className="text-2xs leading-snug text-muted-foreground">
                   chat_id групп отрицательный (супергруппа начинается с −100). Кнопка
                   <RefreshCw className="mx-1 inline size-3 align-text-bottom" />
                   подтянет название группы через бота; история
@@ -1207,7 +1207,7 @@ export function AutomationDialog({
 
                 {/* Параметры сводки — появляются, когда сводка включена. */}
                 {digest?.enabled ? (
-                  <div className="space-y-3 border-t pt-3">
+                  <div className="space-y-3 border-bs pbs-3">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-muted-foreground">Время (МSK)</span>
                     <Input
@@ -1234,7 +1234,7 @@ export function AutomationDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                       Дни отправки
                     </Label>
                     <ScheduleDayPicker
@@ -1287,7 +1287,7 @@ export function AutomationDialog({
                       ))}
                     </div>
                     {digest.channels.includes('telegram') && (
-                      <div className="flex flex-wrap gap-3 pl-1 pt-1">
+                      <div className="flex flex-wrap gap-3 ps-1 pbs-1">
                         <label className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Checkbox
                             checked={digest.tgTargets.includes('personal')}
@@ -1319,7 +1319,7 @@ export function AutomationDialog({
                         className="grid gap-2 sm:grid-cols-2"
                       >
                         <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5 text-sm">
-                          <RadioGroupItem value="assignee" className="mt-0.5" />
+                          <RadioGroupItem value="assignee" className="mbs-0.5" />
                           <span>
                             <span className="block font-medium">По ответственным</span>
                             <span className="block text-xs leading-snug text-muted-foreground">
@@ -1328,7 +1328,7 @@ export function AutomationDialog({
                           </span>
                         </label>
                         <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5 text-sm">
-                          <RadioGroupItem value="status" className="mt-0.5" />
+                          <RadioGroupItem value="status" className="mbs-0.5" />
                           <span>
                             <span className="block font-medium">По колонкам</span>
                             <span className="block text-xs leading-snug text-muted-foreground">
@@ -1358,7 +1358,7 @@ export function AutomationDialog({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 border-t pt-2.5">
+                  <div className="flex items-center gap-2 border-bs pbs-2.5">
                     <Button
                       type="button"
                       variant="outline"
@@ -1367,19 +1367,19 @@ export function AutomationDialog({
                       onClick={() => void handleSendNow()}
                     >
                       {sendingNow ? (
-                        <Loader2 className="size-4 animate-spin" />
+                        <Loader2 className="size-4 motion-safe:animate-spin" />
                       ) : (
                         <Send className="size-4" />
                       )}
                       Отправить сейчас
                     </Button>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-2xs text-muted-foreground">
                       сохранит настройки и отправит сводку сразу
                     </span>
                   </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] leading-snug text-muted-foreground">
+                  <p className="text-2xs leading-snug text-muted-foreground">
                     Включите сводку, чтобы задать время, получателей и колонки.
                   </p>
                 )}
@@ -1396,7 +1396,7 @@ export function AutomationDialog({
 
             {error && <p className="text-xs text-destructive">{error}</p>}
 
-            <div className="flex justify-end gap-2 border-t pt-3">
+            <div className="flex justify-end gap-2 border-bs pbs-3">
               <Button
                 type="button"
                 variant="ghost"

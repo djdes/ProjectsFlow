@@ -7,7 +7,7 @@ export function TrendChart({
   values,
   max,
   suffix = '',
-  color = 'hsl(var(--primary))',
+  color = 'oklch(var(--primary))',
 }: {
   label: string;
   values: ReadonlyArray<number | null>;
@@ -83,7 +83,7 @@ export function TrendChart({
         </div>
       )}
       {path && (
-        <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+        <div className="flex justify-between text-2xs text-muted-foreground tabular-nums">
           <span>{lo}{suffix}</span>
           <span>{hi}{suffix}</span>
         </div>

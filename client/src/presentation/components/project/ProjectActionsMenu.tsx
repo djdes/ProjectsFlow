@@ -309,8 +309,8 @@ export function ProjectActionsMenu({
           }}
         >
           {/* Поиск действий (Notion Search actions…). */}
-          <div className="relative px-0.5 pb-2 md:pb-1.5">
-            <Search className="pointer-events-none absolute left-3 top-[22px] size-4 -translate-y-1/2 text-muted-foreground/60 md:left-2.5 md:top-3.5 md:size-3.5" />
+          <div className="relative px-0.5 pbe-2 md:pbe-1.5">
+            <Search className="pointer-events-none absolute start-3 inset-bs-[22px] size-4 -translate-y-1/2 text-muted-foreground/60 md:start-2.5 md:inset-bs-3.5 md:size-3.5" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -323,7 +323,7 @@ export function ProjectActionsMenu({
               }}
               placeholder="Поиск действий…"
               aria-label="Поиск действий"
-              className="h-11 w-full rounded-lg border border-border/70 bg-accent/60 pl-9 pr-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:pl-7 md:pr-2 md:text-xs"
+              className="h-11 w-full rounded-lg border border-border/70 bg-accent/60 ps-9 pe-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:ps-7 md:pe-2 md:text-xs"
             />
           </div>
           {/* Тумблер «Скрыть плашки» — только на странице задач (только там живёт
@@ -342,7 +342,7 @@ export function ProjectActionsMenu({
               const Icon = a.icon;
               return (
                 <div key={a.key}>
-                  {prev && prev.section !== a.section && <div className="my-1 border-t" />}
+                  {prev && prev.section !== a.section && <div className="my-1 border-bs" />}
                   <button
                     type="button"
                     onClick={() => {
@@ -350,14 +350,14 @@ export function ProjectActionsMenu({
                       a.onSelect();
                     }}
                     className={cn(
-                      'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left text-sm transition-colors hover:bg-accent/60 md:min-h-0 md:rounded-md md:py-1.5',
+                      'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-start text-sm transition-colors hover:bg-accent/60 md:min-h-0 md:rounded-md md:py-1.5',
                       a.destructive && 'text-destructive hover:text-destructive',
                     )}
                   >
                     <Icon className={cn('size-4', a.destructive ? '' : 'text-muted-foreground')} />
                     <span className="min-w-0 flex-1 truncate">{a.label}</span>
                     {a.badge !== undefined && a.badge > 0 && (
-                      <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                      <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] tabular-nums font-semibold leading-4 text-white">
                         {a.badge}
                       </span>
                     )}
@@ -373,7 +373,7 @@ export function ProjectActionsMenu({
           </div>
           {/* Футер (Notion Last edited by …): дата создания проекта + маркер сборки
               (диагностика «у меня старая версия» без консоли). */}
-          <div className="mt-1 flex items-center justify-between gap-2 border-t px-2 pb-0.5 pt-1.5 text-[11px] text-muted-foreground/70">
+          <div className="mbs-1 flex items-center justify-between gap-2 border-bs px-2 pbe-0.5 pbs-1.5 text-2xs text-muted-foreground/70">
             <span>Создан {created}</span>
             <span className="font-mono text-muted-foreground/50">{__PF_BUILD__}</span>
           </div>
@@ -403,7 +403,7 @@ export function ProjectActionsMenu({
           <p className="text-sm text-muted-foreground">
             «{project.name}» и все его задачи будут удалены безвозвратно у всех участников.
           </p>
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2 pbs-1">
             <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
               Отмена
             </Button>
@@ -447,7 +447,7 @@ function BannersHidingRow({
             type="button"
             onClick={onToggle}
             aria-pressed={hidden}
-            className="mb-1 flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
+            className="mbe-1 flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-start text-sm transition-colors hover:bg-accent/60"
           >
             {hidden ? (
               <Eye className="size-4 shrink-0 text-muted-foreground" />
@@ -459,7 +459,7 @@ function BannersHidingRow({
             </span>
             <span
               className={cn(
-                'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                'shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-medium',
                 hidden ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
               )}
             >
@@ -481,7 +481,7 @@ function BannersHidingRow({
 function BannersPreview({ showGithub }: { showGithub: boolean }): React.ReactElement {
   return (
     <div className="space-y-1.5">
-      <p className="px-0.5 text-[11px] font-medium text-muted-foreground">
+      <p className="px-0.5 text-2xs font-medium text-muted-foreground">
         Плашки над доской проекта
       </p>
       {showGithub && (
@@ -490,29 +490,29 @@ function BannersPreview({ showGithub }: { showGithub: boolean }): React.ReactEle
             <Sparkles className="size-3 text-violet-600 dark:text-violet-300" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[11px] font-semibold text-foreground">
+            <span className="block truncate text-2xs font-semibold text-foreground">
               Подключите код проекта
             </span>
-            <span className="block truncate text-[10px] text-muted-foreground">
+            <span className="block truncate text-2xs text-muted-foreground">
               Онбординг GitHub и запуск проекта
             </span>
           </span>
         </div>
       )}
-      <div className="flex items-center gap-2 rounded-md border border-black/[0.05] bg-[#e8f3f9] px-2 py-1.5 dark:border-white/[0.06] dark:bg-[#1d2a31]">
+      <div className="flex items-center gap-2 rounded-md border border-black/[0.05] bg-[oklch(95.77%_0.014_231.21)] px-2 py-1.5 dark:border-white/[0.06] dark:bg-[oklch(27.62%_0.022_232.09)]">
         <span className="grid size-5 shrink-0 place-items-center rounded bg-white/70 dark:bg-white/10">
-          <Globe className="size-3 text-[#37352f] opacity-70 dark:text-blue-100" />
+          <Globe className="size-3 text-[oklch(32.89%_0.011_91.66)] opacity-70 dark:text-blue-100" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11px] font-semibold text-[#37352f] dark:text-blue-50">
+          <span className="block truncate text-2xs font-semibold text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50">
             Результат опубликован
           </span>
-          <span className="block truncate text-[10px] text-[#37352f]/60 dark:text-blue-100/60">
+          <span className="block truncate text-2xs text-[oklch(32.89%_0.011_91.66/0.6)] dark:text-blue-100/60">
             Ссылка на опубликованный сайт
           </span>
         </span>
       </div>
-      <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
+      <p className="px-0.5 text-2xs leading-snug text-muted-foreground">
         Настройка общая для всех проектов и сохраняется между сессиями.
       </p>
     </div>

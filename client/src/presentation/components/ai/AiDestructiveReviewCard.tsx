@@ -25,14 +25,14 @@ export function AiDestructiveReviewCard({
     : `Удалить ${entities.length} ${pluralizeTasks(entities.length)}?`;
 
   return (
-    <section className="not-prose mt-3 overflow-hidden rounded-xl border bg-card" aria-label="Требуется подтверждение">
-      <div className="flex items-center gap-2 border-b bg-muted/25 px-3 py-2 text-xs font-medium text-muted-foreground">
+    <section className="not-prose mbs-3 overflow-clip rounded-xl border bg-card" aria-label="Требуется подтверждение">
+      <div className="flex items-center gap-2 border-be bg-muted/25 px-3 py-2 text-xs font-medium text-muted-foreground">
         <AlertTriangle className="size-3.5 text-destructive" />
         Требуется подтверждение
       </div>
       <div className="px-3 py-2.5">
         <h3 className="text-sm font-normal leading-5">{heading}</h3>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mbs-2 flex items-center gap-2">
           <Button type="button" size="sm" variant="secondary" className="sm:h-7 sm:px-2" disabled={busy} onClick={onReject}>
             Отклонить
           </Button>
@@ -44,13 +44,13 @@ export function AiDestructiveReviewCard({
             disabled={busy || loading || entities.length === 0}
             onClick={onConfirm}
           >
-            {busy && <Loader2 className="animate-spin" />}
+            {busy && <Loader2 className="motion-safe:animate-spin" />}
             Удалить
           </Button>
         </div>
-        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+        {error && <p className="mbs-2 text-xs text-destructive">{error}</p>}
       </div>
-      <div className="max-h-48 overflow-y-auto border-t px-1.5 py-1.5">
+      <div className="max-h-48 overflow-y-auto border-bs px-1.5 py-1.5">
         {loading && (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">Загружаю задачи…</p>
         )}

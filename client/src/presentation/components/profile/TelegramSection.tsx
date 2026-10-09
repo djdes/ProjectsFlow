@@ -176,7 +176,7 @@ export function TelegramSection(): React.ReactElement {
       <CardContent className="space-y-4">
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Загрузка…
+            <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка…
           </div>
         ) : !status?.botUsername ? (
           <p className="rounded-md border border-dashed bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -199,13 +199,13 @@ export function TelegramSection(): React.ReactElement {
                 <p className="break-words font-medium [overflow-wrap:anywhere]">
                   ✅ Привязан: {status.telegramFirstName ?? ''}
                   {status.telegramUsername && (
-                    <span className="ml-1 text-muted-foreground">
+                    <span className="ms-1 text-muted-foreground">
                       @{status.telegramUsername}
                     </span>
                   )}
                 </p>
                 {!status.tgStarted && status.botDeepLink && (
-                  <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                  <p className="mbs-0.5 text-xs text-amber-700 dark:text-amber-400">
                     Нажми Start в боте, чтобы он мог писать тебе.
                   </p>
                 )}
@@ -228,12 +228,12 @@ export function TelegramSection(): React.ReactElement {
                 {prefRows.map(({ key, label, hint }) => (
                   <label
                     key={key}
-                    className="flex items-center justify-between gap-3 border-b px-3 py-2 last:border-b-0"
+                    className="flex items-center justify-between gap-3 border-be px-3 py-2 last:border-be-0"
                   >
                     <span className="text-sm">
                       {label}
                       {hint && (
-                        <span className="block text-[11px] text-muted-foreground">{hint}</span>
+                        <span className="block text-2xs text-muted-foreground">{hint}</span>
                       )}
                     </span>
                     <Switch
@@ -262,13 +262,13 @@ export function TelegramSection(): React.ReactElement {
               type="button"
               onClick={startTelegramLogin}
               disabled={connecting}
-              className="pf-tg-login-btn group relative inline-flex items-center gap-2.5 overflow-hidden rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 active:translate-y-0 active:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              className="pf-tg-login-btn group relative inline-flex items-center gap-2.5 overflow-clip rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 active:translate-y-0 active:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="relative z-[1] flex items-center gap-2.5">
                 {connecting ? (
-                  <Loader2 className="size-5 animate-spin" />
+                  <Loader2 className="size-5 motion-safe:animate-spin" />
                 ) : (
-                  <TelegramGlyph className="size-5 transition-transform duration-300 ease-out group-hover:-rotate-12 group-hover:scale-110" />
+                  <TelegramGlyph className="size-5 motion-safe:transition-transform duration-300 ease-out group-hover:-rotate-12 group-hover:scale-110" />
                 )}
                 <span>{connecting ? 'Привязываем…' : 'Войти через Telegram'}</span>
               </span>

@@ -251,13 +251,13 @@ export function Sidebar({
   }
 
   return (
-    <aside className="group/sidebar grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pb-3">
+    <aside className="group/sidebar grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pbe-3">
       {/* Шапка: переключатель пространства + тоггл панели. Высота строки = min-h-11 (44px)
           с вертикальным центрированием — ровно как верхняя строка крошек на страницах
           (Notion-style: свитчер пространства и топбар на одной горизонтали). Уведомления
           переехали в чат-ленту; колокольчика больше нет. На мобиле (drawer) правый отступ,
           чтобы контролы не лезли под крестик SheetContent. */}
-      <div className="flex h-11 items-center gap-1 max-md:pr-8">
+      <div className="flex h-11 items-center gap-1 max-md:pe-8">
         <WorkspaceSwitcher />
 
         {onToggleCollapse && (
@@ -280,7 +280,7 @@ export function Sidebar({
               </TooltipTrigger>
               <TooltipContent side="bottom" className="flex items-center gap-1.5">
                 <span>{peek ? 'Закрепить панель' : 'Свернуть панель'}</span>
-                <kbd className="rounded bg-foreground/10 px-1 text-[10px] leading-4">Ctrl+\</kbd>
+                <kbd className="rounded bg-foreground/10 px-1 text-2xs leading-4">Ctrl+\</kbd>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -333,7 +333,7 @@ export function Sidebar({
           затухание краёв (.pf-scroll-fade). */}
       {/* Без border-t: в Notion над этими кнопками разделителя нет, панель заканчивается
           самими кнопками. Отступ сверху даёт gap грида. */}
-      <div className="pt-1">
+      <div className="pbs-1">
         {/* Геометрия и тени сняты с Notion через CDP (кнопка New chat в подвале сайдбара):
             высота 40, радиус 999px, зазор 10px, круглая кнопка 40×40, трёхслойная мягкая
             тень с hairline-обводкой последним слоем. Белый фон заменён на bg-card, чтобы
@@ -347,13 +347,13 @@ export function Sidebar({
             className={cn(
               'inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-card px-3',
               'text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 disabled:opacity-60',
-              'shadow-[0_8px_12px_rgba(25,25,25,0.027),0_2px_6px_rgba(25,25,25,0.027),0_0_0_1px_rgba(42,28,0,0.07)]',
-              'dark:shadow-[0_8px_12px_rgba(0,0,0,0.30),0_2px_6px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.10)]',
+              'shadow-[0_8px_12px_oklch(21.34%_0_none/0.027),0_2px_6px_oklch(21.34%_0_none/0.027),0_0_0_1px_oklch(23.78%_0.049_82.45/0.07)]',
+              'dark:shadow-[0_8px_12px_oklch(0%_0_none/0.3),0_2px_6px_oklch(0%_0_none/0.25),0_0_0_1px_oklch(100%_0_none/0.1)]',
             )}
           >
             <Sparkles className="size-5 shrink-0" />
             <span className="min-w-0 truncate">Новый чат</span>
-            <kbd className="shrink-0 rounded-[4px] bg-[rgba(66,35,3,0.03)] px-1 py-0.5 text-xs font-medium text-muted-foreground/70 dark:bg-white/[0.06]">
+            <kbd className="shrink-0 rounded-[4px] bg-[oklch(29.16%_0.064_61.26/0.03)] px-1 py-0.5 text-xs font-medium text-muted-foreground/70 dark:bg-white/[0.06]">
               Ctrl+O
             </kbd>
           </button>
@@ -365,8 +365,8 @@ export function Sidebar({
             className={cn(
               'grid size-10 shrink-0 place-items-center rounded-full bg-card text-foreground/80',
               'transition-colors hover:bg-muted/40',
-              'shadow-[0_8px_12px_rgba(25,25,25,0.027),0_2px_6px_rgba(25,25,25,0.027),0_0_0_1px_rgba(42,28,0,0.07)]',
-              'dark:shadow-[0_8px_12px_rgba(0,0,0,0.30),0_2px_6px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.10)]',
+              'shadow-[0_8px_12px_oklch(21.34%_0_none/0.027),0_2px_6px_oklch(21.34%_0_none/0.027),0_0_0_1px_oklch(23.78%_0.049_82.45/0.07)]',
+              'dark:shadow-[0_8px_12px_oklch(0%_0_none/0.3),0_2px_6px_oklch(0%_0_none/0.25),0_0_0_1px_oklch(100%_0_none/0.1)]',
             )}
           >
             <SquarePen className="size-[22px]" />
@@ -378,7 +378,7 @@ export function Sidebar({
             to="/admin"
             className={({ isActive }) =>
               cn(
-                'mt-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
+                'mbs-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
                 isActive && 'bg-active font-medium text-foreground',
               )
             }
@@ -428,7 +428,7 @@ function RailButton({
         >
           {icon}
           {badge !== undefined && badge > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
+            <span className="absolute -end-0.5 -inset-bs-0.5 inline-flex tabular-nums h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
               {badge > 99 ? '99+' : badge}
             </span>
           )}
@@ -486,7 +486,7 @@ function RailNavLink({
                   })
                 : children}
               {badge !== undefined && badge > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
+                <span className="absolute -end-0.5 -inset-bs-0.5 inline-flex tabular-nums h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
                   {badge > 99 ? '99+' : badge}
                 </span>
               )}
@@ -508,7 +508,7 @@ function RailProjectLink({ project }: { project: Project }): React.ReactElement 
           aria-label={project.name}
           className={({ isActive }) =>
             cn(
-              'grid size-8 shrink-0 place-items-center rounded-md transition-transform hover:scale-105',
+              'grid size-8 shrink-0 place-items-center rounded-md motion-safe:transition-transform hover:scale-105',
               project.icon ? 'bg-foreground/[0.04] text-base dark:bg-white/[0.06]' : cn('text-[10px] font-semibold', avatarColor(project.name)),
               isActive && 'ring-2 ring-primary',
             )

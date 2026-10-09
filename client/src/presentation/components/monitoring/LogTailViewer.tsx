@@ -185,7 +185,7 @@ export function LogTailViewer({
             {t.label}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ms-auto flex items-center gap-1">
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -273,7 +273,7 @@ export function LogTailViewer({
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="фильтр…"
-              className="ml-auto h-7 w-40 text-xs"
+              className="ms-auto h-7 w-40 text-xs"
             />
           </div>
           {hasContent ? (

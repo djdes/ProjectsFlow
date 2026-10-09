@@ -28,7 +28,7 @@ export function CompletionCelebration(): React.ReactElement {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 3 }}
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-[110] -ml-16 flex h-10 w-32 items-center justify-center gap-2 rounded-full border bg-foreground text-sm font-medium text-background shadow-lg sm:bottom-7"
+          className="pointer-events-none fixed inset-be-[calc(5rem+env(safe-area-inset-bottom,0px))] start-1/2 z-[110] -ms-16 flex h-10 w-32 items-center justify-center gap-2 rounded-full border bg-foreground text-sm font-medium text-background shadow-lg sm:inset-be-7"
         >
           <svg
             aria-hidden="true"

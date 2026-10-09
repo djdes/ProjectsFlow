@@ -113,12 +113,12 @@ export function RepoPickerDialog({
 
         <div className="space-y-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute start-2.5 inset-bs-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск…"
-              className="pl-8"
+              className="ps-8"
               autoFocus
             />
           </div>
@@ -142,7 +142,7 @@ export function RepoPickerDialog({
           )}
 
           {filtered.length > 0 && (
-            <ul className="max-h-80 space-y-1 overflow-y-auto pr-1">
+            <ul className="max-h-80 space-y-1 overflow-y-auto pe-1">
               {filtered.map((repo) => {
                 const isCurrent = currentRepoUrl === repo.htmlUrl;
                 return (
@@ -151,7 +151,7 @@ export function RepoPickerDialog({
                       type="button"
                       disabled={(!selectionOnly && saving) || isCurrent}
                       onClick={() => handlePick(repo)}
-                      className="group flex w-full flex-col items-start gap-1 rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      className="group flex w-full flex-col items-start gap-1 rounded-md border bg-card p-3 text-start transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <div className="flex w-full items-center gap-2">
                         <span className="truncate font-mono text-sm font-medium">
@@ -164,7 +164,7 @@ export function RepoPickerDialog({
                           />
                         )}
                         {isCurrent && (
-                          <span className="ml-auto rounded-md border bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+                          <span className="ms-auto rounded-md border bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-widest text-muted-foreground">
                             подключён
                           </span>
                         )}
@@ -174,7 +174,7 @@ export function RepoPickerDialog({
                           {repo.description}
                         </p>
                       )}
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-2xs text-muted-foreground">
                         {repo.pushedAt && `обновлён ${formatPushed(repo.pushedAt)}`}
                       </p>
                     </button>

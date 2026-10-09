@@ -3,63 +3,64 @@
 @tailwind utilities;
 
 @layer base {
-  /* Тёплые Notion-нейтрали: чернила #37352F, сероватые тёплые поверхности (hue 45)
+  /* Тёплые Notion-нейтрали: чернила oklch(32.89% 0.011 91.66), сероватые тёплые поверхности (hue 45)
      вместо холодного slate (hue 240). --sidebar — отдельная подложка левой панели. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 45 8% 20%;
+    color-scheme: light;
+    --background: 100% 0 none;
+    --foreground: 32.89% 0.011 91.66;
 
-    --muted: 45 6% 94%;
-    --muted-foreground: 45 2% 46%;
+    --muted: 95.56% 0.002 67.8;
+    --muted-foreground: 56.67% 0.005 78.28;
 
-    --card: 0 0% 100%;
-    --card-foreground: 45 8% 20%;
+    --card: 100% 0 none;
+    --card-foreground: 32.89% 0.011 91.66;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 45 8% 20%;
+    --popover: 100% 0 none;
+    --popover-foreground: 32.89% 0.011 91.66;
 
-    --border: 45 10% 90%;
-    --input: 45 10% 90%;
-    --ring: 210 77% 52%;
+    --border: 92.76% 0.005 95.1;
+    --input: 92.76% 0.005 95.1;
+    --ring: 61.14% 0.166 252.49;
 
-    /* Синий акцент Notion #2383E2 (rgb 35,131,226) — см. план Phase 0/0.1. */
-    --primary: 210 77% 51%;
-    --primary-foreground: 0 0% 100%;
+    /* Синий акцент Notion oklch(60.58% 0.167 252.7) (rgb 35,131,226) — см. план Phase 0/0.1. */
+    --primary: 60.34% 0.169 252.97;
+    --primary-foreground: 100% 0 none;
 
-    --secondary: 45 6% 94%;
-    --secondary-foreground: 45 8% 20%;
+    --secondary: 95.56% 0.002 67.8;
+    --secondary-foreground: 32.89% 0.011 91.66;
 
-    --accent: 45 8% 93%;
-    --accent-foreground: 45 8% 20%;
+    --accent: 94.93% 0.003 84.56;
+    --accent-foreground: 32.89% 0.011 91.66;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 57.85% 0.214 27.17;
+    --destructive-foreground: 100% 0 none;
 
-    --sidebar: 45 12% 96%;
+    --sidebar: 97.06% 0.002 67.8;
 
     /* Пузырь сообщения пользователя в ИИ-чате. Отдельный токен, а не --muted: пузырю
        нужна заметно более плотная и тёплая заливка, иначе на белом фоне ленты он
        читается как пустое место. Значение — замер с референса (rgb 233,230,224). */
-    --message-bubble: 40 17% 90%;
+    --message-bubble: 92.86% 0.009 84.57;
 
     /* Зелёный акцент для действия «добавить» (кнопка добавления задачи и т.п.). */
-    --success: 142 71% 38%;
+    --success: 63.68% 0.168 149.72;
 
     /* Фирменные цвета Claude — для рендера комментариев актора 'agent' (Ralph-диспетчер,
        worker, grillme, verify). HEX-литералы по гайду Anthropic; не привязываем к тёмной
        теме — peach-фон с тёплым акцентом нормально читается и в dark, и в light. */
-    --claude-orange: #d97757;
-    --claude-orange-dark: #c15f3c;
-    --claude-peach: #fef3ec;
-    --claude-cream: #faf9f5;
+    --claude-orange: oklch(67.24% 0.131 38.76);
+    --claude-orange-dark: oklch(59.71% 0.135 39.87);
+    --claude-peach: oklch(97.08% 0.015 54.93);
+    --claude-cream: oklch(98.18% 0.005 95.1);
 
     --radius: 0.5rem;
 
     /* Notion-style мягкие заливки интерактивных поверхностей (hover/active/выделение).
        Содержат собственную альфу; используются как bg-hover / bg-active и в ::selection. */
-    --hover: rgba(55, 53, 47, 0.06);
-    --active: rgba(55, 53, 47, 0.08);
-    --selection: rgba(35, 131, 226, 0.14);
+    --hover: color-mix(in oklch, oklch(var(--foreground)) 6%, transparent);
+    --active: color-mix(in oklch, oklch(var(--foreground)) 8%, transparent);
+    --selection: color-mix(in oklch, oklch(60.58% 0.167 252.7) 14%, transparent);
   }
 
   /* Тёмная тема — графит Notion с ЕДИНОЙ палитрой по всему сайту. Прежняя версия
@@ -71,57 +72,102 @@
      (3) едва уловимый холодный тон (hue 222, sat 5%) вместо мёртво-серого 0% —
      графит остаётся нейтральным, но «живым»; (4) текст 88% для чуть большей резкости. */
   .dark {
-    --background: 222 5% 9%;
-    --foreground: 220 6% 88%;
+    color-scheme: dark;
+    --background: 20.11% 0.004 286.04;
+    --foreground: 90.65% 0.003 264.54;
 
-    --muted: 222 5% 16%;
-    --muted-foreground: 220 5% 61%;
+    --muted: 27.7% 0.006 271.21;
+    --muted-foreground: 68.6% 0.011 267.32;
 
-    --card: 222 5% 12%;
-    --card-foreground: 220 6% 88%;
+    --card: 23.48% 0.004 264.49;
+    --card-foreground: 90.65% 0.003 264.54;
 
-    --popover: 222 5% 14%;
-    --popover-foreground: 220 6% 88%;
+    --popover: 25.59% 0.004 264.5;
+    --popover-foreground: 90.65% 0.003 264.54;
 
-    --border: 222 5% 22%;
-    --input: 222 5% 22%;
-    --ring: 210 78% 60%;
+    --border: 33.64% 0.008 264.47;
+    --input: 33.64% 0.008 264.47;
+    --ring: 66.93% 0.143 250.8;
 
     /* В тёмной — Notion-синий чуть светлее, чтобы не резал на графите. */
-    --primary: 210 80% 62%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 68.5% 0.139 250.8;
+    --primary-foreground: 100% 0 none;
 
-    --secondary: 222 5% 16%;
-    --secondary-foreground: 220 6% 88%;
+    --secondary: 27.7% 0.006 271.21;
+    --secondary-foreground: 90.65% 0.003 264.54;
 
-    --accent: 222 5% 18%;
-    --accent-foreground: 220 6% 93%;
+    --accent: 29.73% 0.006 271.23;
+    --accent-foreground: 94.56% 0.002 247.84;
 
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 56.18% 0.196 26.22;
+    --destructive-foreground: 98.51% 0 none;
 
     /* В тёмной теме зелёный осветляем для читаемости на тёмном фоне. */
-    --success: 142 60% 52%;
+    --success: 75.36% 0.18 151.18;
 
     /* Тёмный аналог пузыря: ступень ВЫШЕ --muted — пузырь читается как приподнятая
        плашка над фоном ленты, а не сливается с обычными muted-поверхностями. */
-    --message-bubble: 222 5% 18%;
+    --message-bubble: 29.73% 0.006 271.23;
 
-    --sidebar: 222 6% 11%;
+    --sidebar: 22.23% 0.006 271.14;
 
-    --hover: rgba(255, 255, 255, 0.055);
-    --active: rgba(255, 255, 255, 0.08);
-    --selection: rgba(35, 131, 226, 0.26);
+    --hover: color-mix(in oklch, oklch(100% 0 none) 5.5%, transparent);
+    --active: color-mix(in oklch, oklch(100% 0 none) 8%, transparent);
+    --selection: color-mix(in oklch, oklch(60.58% 0.167 252.7) 26%, transparent);
   }
 
   * {
     @apply border-border;
   }
 
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
+  /* good-css «The reset» — добавлен по одному правилу и сверен на живых страницах.
+     Сознательно НЕ взяты: `* { min-width: 0 }` (иконки и аватары во flex-строках начинают
+     сжиматься рядом с длинным текстом — нужен flex: none на сотнях мест), глобальный
+     `input { font-size: max(16px, 1rem) }` (на десктопе поля плотнее, как у Notion; от зума
+     iOS защищает правило 16px для тач-экранов ниже) и `scrollbar-gutter` на :root
+     (документ не скроллится — скроллит <main>, у него gutter свой, см. experience.css). */
+  :root {
+    interpolate-size: allow-keywords;
+    text-wrap: pretty;
+    overflow-wrap: break-word;
+    /* Системный шрифт (Segoe UI / SF) везёт настоящие начертания — синтетический
+       «жирный» и «курсив» поверх них не нужны. */
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  /* В полях ввода и редакторе строки не должны перескакивать по мере набора. */
+  textarea,
+  [contenteditable] {
+    text-wrap: stable;
+  }
+
+  button,
+  a,
+  [role='button'] {
+    touch-action: manipulation;
+  }
+
+  /* Только элементы управления: текст в ссылках и на странице по-прежнему копируется. */
+  button,
+  [role='button'] {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 
   /* iOS: гасим горизонтальный «свайп назад/вперёд» + рабер-бенд. overscroll-behavior: none
@@ -149,7 +195,7 @@
      Chromium/WebKit — ::-webkit-scrollbar. */
   * {
     scrollbar-width: auto;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
+    scrollbar-color: oklch(var(--muted-foreground) / 0.4) transparent;
   }
 
   ::-webkit-scrollbar {
@@ -162,12 +208,14 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.4);
+    background-color: oklch(var(--muted-foreground) / 0.4);
     border-radius: 0; /* прямоугольный, как в Notion */
   }
 
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.6);
+  @media (hover: hover) and (pointer: fine) {
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: oklch(var(--muted-foreground) / 0.6);
+    }
   }
 
   /* Список проектов в сайдбаре (ПК): постоянно видимый и заметный грабабельный скроллбар.
@@ -179,17 +227,19 @@
     /* Длинные имена проектов не должны включать горизонтальный скролл (он ломает/прячет
        вертикальную полосу). Клипаем по X — имена и так усекаются через truncate. */
     overflow-x: hidden;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
+    scrollbar-color: oklch(var(--muted-foreground) / 0.5) transparent;
   }
   .pf-scroll-visible::-webkit-scrollbar {
     width: 12px;
   }
   .pf-scroll-visible::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.45);
+    background: oklch(var(--muted-foreground) / 0.45);
     border-radius: 0;
   }
-  .pf-scroll-visible::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.65);
+  @media (hover: hover) and (pointer: fine) {
+    .pf-scroll-visible::-webkit-scrollbar-thumb:hover {
+      background: oklch(var(--muted-foreground) / 0.65);
+    }
   }
 
   /* Тонкая полоса для вертикальной прокрутки ВНУТРИ колонки канбана. В отличие от
@@ -197,17 +247,19 @@
      реально длиннее колонки, и не крадёт ширину у карточек. */
   .pf-scroll-thin {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+    scrollbar-color: oklch(var(--muted-foreground) / 0.35) transparent;
   }
   .pf-scroll-thin::-webkit-scrollbar {
     width: 8px;
   }
   .pf-scroll-thin::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.3);
+    background: oklch(var(--muted-foreground) / 0.3);
     border-radius: 9999px;
   }
-  .pf-scroll-thin::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
+  @media (hover: hover) and (pointer: fine) {
+    .pf-scroll-thin::-webkit-scrollbar-thumb:hover {
+      background: oklch(var(--muted-foreground) / 0.5);
+    }
   }
 
   /* ТАЧ-устройства (телефон/PWA): принудительно-видимые скроллбары нужны только на ПК.
@@ -244,7 +296,7 @@
 
   /* Затухание НИЖНЕЙ кромки списка проектов — 1:1 с Notion, значение снято через CDP
      с .notion-scroller в сайдбаре:
-       linear-gradient(#000 0%, #000 calc(100% - 34px), transparent 100%)
+       linear-gradient(oklch(0% 0 none) 0%, oklch(0% 0 none) calc(100% - 34px), transparent 100%)
      Верх маской больше НЕ гасим. mask-image действует на весь контейнер вместе с
      потомками, включая липкие заголовки секций («Избранное», «Мои проекты», «Архивные» —
      sticky top-0 в том же скролл-боксе): их верхняя кромка совпадала с началом маски,
@@ -255,14 +307,14 @@
   .pf-scroll-fade {
     -webkit-mask-image: linear-gradient(
       to bottom,
-      #000 0,
-      #000 calc(100% - 34px),
+      oklch(0% 0 none) 0,
+      oklch(0% 0 none) calc(100% - 34px),
       transparent 100%
     );
     mask-image: linear-gradient(
       to bottom,
-      #000 0,
-      #000 calc(100% - 34px),
+      oklch(0% 0 none) 0,
+      oklch(0% 0 none) calc(100% - 34px),
       transparent 100%
     );
   }
@@ -281,18 +333,18 @@
   .pf-scroll-fade-top::before {
     content: '';
     position: sticky;
-    top: 0;
+    inset-block-start: 0;
     z-index: 5;
     display: block;
-    height: 18px;
-    margin-bottom: -18px;
+    block-size: 18px;
+    margin-block-end: -18px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 150ms ease-out;
     background: linear-gradient(
       to bottom,
-      hsl(var(--sidebar)) 0%,
-      hsl(var(--sidebar) / 0) 100%
+      oklch(var(--sidebar)) 0%,
+      oklch(var(--sidebar) / 0) 100%
     );
   }
 
@@ -330,7 +382,7 @@
        оставить ~128px пространства под полем — submit-кнопку видно без скроллов. */
     input,
     textarea {
-      scroll-margin-bottom: 8rem;
+      scroll-margin-block-end: 8rem;
     }
 
     /* Apple HIG / Material рекомендуют tap-target ≥ 44px на сенсорных устройствах.
@@ -358,7 +410,7 @@ main[data-pf-scrolled='true'] .pf-sticky-surface {
 }
 
 [data-pf-panel-scrolled='true'] .pf-panel-sticky-header {
-  box-shadow: 0 1px 0 hsl(var(--border) / 0.75), 0 6px 18px rgb(15 23 42 / 0.055);
+  box-shadow: 0 1px 0 oklch(var(--border) / 0.75), 0 6px 18px oklch(20.77% 0.04 265.75 / 0.055);
 }
 
 /* ЕДИНСТВЕННОЕ место, где живёт отступ под плавающий бургер свёрнутой левой панели.
@@ -385,24 +437,39 @@ main[data-pf-scrolled='true'] .pf-sticky-surface {
    перебивает Tailwind-утилиты по специфичности (0,2,0 против 0,1,0), т.е. съедает
    левый паддинг на том же элементе, а не складывается с ним. */
 [data-pf-floating-burger='true'] .pf-burger-gap {
-  padding-left: 1.875rem;
+  padding-inline-start: 1.875rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  button,
-  [role='button'] {
-    transform: none !important;
+/* Нажатие (good-css «Press feedback»): у каждой кнопки есть :active. Общая Button
+   (.pf-button) сжимается сама (motion.css); здесь — «сырые» кнопки и role=button.
+   Свойство scale, а не transform: оно складывается с translate-центровкой, а не затирает
+   её. Перетаскиваемые карточки (dnd-kit) не сжимаем — их отклик сам drag. */
+:where(button, [role='button']):not(.pf-button):not(:disabled):not([aria-disabled='true']):not(
+    [aria-roledescription='draggable']
+  ):active {
+  scale: 0.97;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button, [role='button']):not(.pf-button) {
+    transition: scale 140ms var(--pf-ease-press);
   }
+}
+
+/* Ссылки отвечают на нажатие прозрачностью: строчную ссылку не сжать — scale на inline
+   не действует. */
+:where(a[href]):active {
+  opacity: 0.7;
 }
 
 @keyframes pf-created-flash {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, hsl(var(--primary)) 0%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklch, oklch(var(--primary)) 0%, transparent);
   }
   22%,
   72% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 42%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, oklch(var(--primary)) 42%, transparent);
   }
 }
 
@@ -413,16 +480,25 @@ main[data-pf-scrolled='true'] .pf-sticky-surface {
 @media (prefers-reduced-motion: reduce) {
   .pf-created-flash {
     animation: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 42%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, oklch(var(--primary)) 42%, transparent);
   }
 }
 
-/* Raw icon/action buttons inherit the same keyboard affordance as the shared Button.
-   :focus-visible keeps the ring out of mouse interactions. */
+/* Один фокус-ринг на всё интерактивное (good-css «One focus ring»). :focus-visible держит
+   кольцо вне кликов мышью.
+   - :where() — нулевая специфичность: это кольцо «по умолчанию» для всего, у чего нет своего
+     (поля и общая Button рисуют кольцо box-shadow'ом, пункты меню — заливкой, редактор
+     ProseMirror кольца не показывает вовсе — их outline-утилиты побеждают);
+   - кнопки и ссылки получают кольцо всегда, даже с outline-none на элементе: иначе
+     клавиатурный фокус на «сырой» иконке-кнопке было бы не видно. */
+:where(:focus-visible) {
+  outline: max(2px, 0.08em) solid oklch(var(--ring));
+  outline-offset: 2px;
+}
 button:focus-visible,
 [role='button']:focus-visible,
 a:focus-visible {
-  outline: 2px solid hsl(var(--ring));
+  outline: max(2px, 0.08em) solid oklch(var(--ring));
   outline-offset: 2px;
 }
 
@@ -435,9 +511,10 @@ a:focus-visible {
    --tw-ring-shadow гасим отдельно: у общей кнопки (components/ui/button) кольцо рисуется
    не outline'ом, а Tailwind-ring'ом через box-shadow. */
 html[data-pf-modality='pointer'] :focus-visible {
-  outline: none;
-  --tw-ring-shadow: 0 0 #0000;
-  --tw-ring-offset-shadow: 0 0 #0000;
+  /* Прозрачный, а не none: в режиме высокой контрастности Windows кольцо перерисуется. */
+  outline-color: transparent;
+  --tw-ring-shadow: 0 0 oklch(0% 0 none / 0);
+  --tw-ring-offset-shadow: 0 0 oklch(0% 0 none / 0);
 }
 
 /* Claude-стилизация комментария актора 'agent'. Принципиально не через
@@ -446,8 +523,6 @@ html[data-pf-modality='pointer'] :focus-visible {
 @layer components {
   .pf-claude-agent-icon {
     color: var(--claude-orange);
-    /* Мягкое мерцание — узнаваемо как Claude, не отвлекает. */
-    animation: pf-claude-pulse 3s ease-in-out infinite;
     display: inline-block;
     transform-origin: center;
   }
@@ -455,14 +530,14 @@ html[data-pf-modality='pointer'] :focus-visible {
   /* Notion-style выделение текста фоном: ==текст== в markdown → <mark>.
      Тёплый янтарный тинт, наследует цвет текста (дефолтный mark красит в чёрный). */
   mark {
-    background: rgba(250, 204, 21, 0.35);
+    background: oklch(86.06% 0.1731 91.94 / 0.35);
     color: inherit;
     padding: 0 0.15em;
     border-radius: 0.2em;
   }
 
   .dark mark {
-    background: rgba(250, 204, 21, 0.22);
+    background: oklch(86.06% 0.1731 91.94 / 0.22);
   }
 
   /* Имя агента в комментарии — Notion-style плоская строка: обычный шрифт,
@@ -481,10 +556,17 @@ html[data-pf-modality='pointer'] :focus-visible {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.75; transform: scale(1.1); }
   }
+  /* Мягкое мерцание — узнаваемо как Claude, не отвлекает. Масштаб — движение, поэтому
+     только для тех, кто не просил его убрать (good-css «Opt-in motion»). */
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-claude-agent-icon {
+      animation: pf-claude-pulse 3s ease-in-out infinite;
+    }
+  }
 
   /* Deep-link подсветка комментария (?task=X#comment-Y): мягкая синяя вспышка. */
   @keyframes pf-comment-flash {
-    0%, 25% { background-color: rgba(59, 130, 246, 0.16); }
+    0%, 25% { background-color: oklch(62.31% 0.188 259.81 / 0.16); }
     100% { background-color: transparent; }
   }
   .pf-comment-flash {
@@ -495,7 +577,7 @@ html[data-pf-modality='pointer'] :focus-visible {
   /* Точечная подсветка процитированного фрагмента при переходе по баннеру «в ответ …»
      (CSS Custom Highlight API; db/080). Поддержка — Chrome 105+/Safari 17.2+. */
   ::highlight(pf-quote) {
-    background-color: rgba(59, 130, 246, 0.28);
+    background-color: oklch(62.31% 0.188 259.81 / 0.28);
     border-radius: 0.125rem;
   }
 
@@ -516,11 +598,11 @@ html[data-pf-modality='pointer'] :focus-visible {
      мигать: постоянная анимация в списке из десятка карточек превращается в шум.
      Поэтому свечение статичное, а «живость» даёт один медленный вдох-выдох. */
   .pf-unread {
-    border-color: rgb(56 189 248 / 0.75) !important;
+    border-color: oklch(75.35% 0.139 232.66 / 0.75) !important;
     box-shadow:
-      0 0 0 1px rgb(56 189 248 / 0.5),
-      0 0 13px -1px rgb(56 189 248 / 0.6),
-      inset 0 0 14px -6px rgb(56 189 248 / 0.5);
+      0 0 0 1px oklch(75.35% 0.139 232.66 / 0.5),
+      0 0 13px -1px oklch(75.35% 0.139 232.66 / 0.6),
+      inset 0 0 14px -6px oklch(75.35% 0.139 232.66 / 0.5);
     animation: pf-unread-breathe 6s ease-in-out infinite;
   }
   /* Геометрия свечения в обоих кадрах ОДИНАКОВАЯ (блюр 13px, spread -1px) — меняется
@@ -531,15 +613,15 @@ html[data-pf-modality='pointer'] :focus-visible {
     0%,
     100% {
       box-shadow:
-        0 0 0 1px rgb(56 189 248 / 0.42),
-        0 0 13px -1px rgb(56 189 248 / 0.48),
-        inset 0 0 14px -6px rgb(56 189 248 / 0.42);
+        0 0 0 1px oklch(75.35% 0.139 232.66 / 0.42),
+        0 0 13px -1px oklch(75.35% 0.139 232.66 / 0.48),
+        inset 0 0 14px -6px oklch(75.35% 0.139 232.66 / 0.42);
     }
     50% {
       box-shadow:
-        0 0 0 1px rgb(56 189 248 / 0.6),
-        0 0 13px -1px rgb(56 189 248 / 0.72),
-        inset 0 0 14px -6px rgb(56 189 248 / 0.58);
+        0 0 0 1px oklch(75.35% 0.139 232.66 / 0.6),
+        0 0 13px -1px oklch(75.35% 0.139 232.66 / 0.72),
+        inset 0 0 14px -6px oklch(75.35% 0.139 232.66 / 0.58);
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -554,26 +636,26 @@ html[data-pf-modality='pointer'] :focus-visible {
      только прозрачность: ореол, меняющий размер, читается как мигание и мешает
      работать (та же правка, что делали для непрочитанного). */
   .pf-urgent {
-    border-color: rgb(244 63 94 / 0.8) !important;
+    border-color: oklch(64.5% 0.215 16.44 / 0.8) !important;
     box-shadow:
-      0 0 0 1px rgb(244 63 94 / 0.55),
-      0 0 13px -1px rgb(244 63 94 / 0.6),
-      inset 0 0 14px -6px rgb(244 63 94 / 0.5);
+      0 0 0 1px oklch(64.5% 0.215 16.44 / 0.55),
+      0 0 13px -1px oklch(64.5% 0.215 16.44 / 0.6),
+      inset 0 0 14px -6px oklch(64.5% 0.215 16.44 / 0.5);
     animation: pf-urgent-breathe 5s ease-in-out infinite;
   }
   @keyframes pf-urgent-breathe {
     0%,
     100% {
       box-shadow:
-        0 0 0 1px rgb(244 63 94 / 0.46),
-        0 0 13px -1px rgb(244 63 94 / 0.5),
-        inset 0 0 14px -6px rgb(244 63 94 / 0.44);
+        0 0 0 1px oklch(64.5% 0.215 16.44 / 0.46),
+        0 0 13px -1px oklch(64.5% 0.215 16.44 / 0.5),
+        inset 0 0 14px -6px oklch(64.5% 0.215 16.44 / 0.44);
     }
     50% {
       box-shadow:
-        0 0 0 1px rgb(244 63 94 / 0.66),
-        0 0 13px -1px rgb(244 63 94 / 0.78),
-        inset 0 0 14px -6px rgb(244 63 94 / 0.6);
+        0 0 0 1px oklch(64.5% 0.215 16.44 / 0.66),
+        0 0 13px -1px oklch(64.5% 0.215 16.44 / 0.78),
+        inset 0 0 14px -6px oklch(64.5% 0.215 16.44 / 0.6);
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -589,33 +671,33 @@ html[data-pf-modality='pointer'] :focus-visible {
      и кольцо-псевдоэлемент по краю просто срезалось — эффекта не было видно вовсе.
      Правило стоит ПОСЛЕ .pf-unread/.pf-urgent, чтобы перебивать их на время вспышки. */
   .pf-arrive {
-    border-color: rgb(251 146 60 / 0.95) !important;
+    border-color: oklch(75.76% 0.159 55.93 / 0.95) !important;
     animation: pf-arrive 2600ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
   }
   @keyframes pf-arrive {
     0% {
       box-shadow:
-        0 0 0 2px rgb(251 146 60 / 0.95),
-        0 0 30px 6px rgb(251 146 60 / 0.9),
-        inset 0 0 22px -6px rgb(251 146 60 / 0.75);
+        0 0 0 2px oklch(75.76% 0.159 55.93 / 0.95),
+        0 0 30px 6px oklch(75.76% 0.159 55.93 / 0.9),
+        inset 0 0 22px -6px oklch(75.76% 0.159 55.93 / 0.75);
     }
     18% {
       box-shadow:
-        0 0 0 2px rgb(251 146 60 / 0.85),
-        0 0 24px 3px rgb(251 146 60 / 0.75),
-        inset 0 0 18px -6px rgb(251 146 60 / 0.55);
+        0 0 0 2px oklch(75.76% 0.159 55.93 / 0.85),
+        0 0 24px 3px oklch(75.76% 0.159 55.93 / 0.75),
+        inset 0 0 18px -6px oklch(75.76% 0.159 55.93 / 0.55);
     }
     62% {
       box-shadow:
-        0 0 0 1px rgb(251 146 60 / 0.45),
-        0 0 16px 0 rgb(251 146 60 / 0.4),
-        inset 0 0 12px -8px rgb(251 146 60 / 0.25);
+        0 0 0 1px oklch(75.76% 0.159 55.93 / 0.45),
+        0 0 16px 0 oklch(75.76% 0.159 55.93 / 0.4),
+        inset 0 0 12px -8px oklch(75.76% 0.159 55.93 / 0.25);
     }
     100% {
       box-shadow:
-        0 0 0 0 rgb(251 146 60 / 0),
-        0 0 0 0 rgb(251 146 60 / 0),
-        inset 0 0 0 0 rgb(251 146 60 / 0);
+        0 0 0 0 oklch(75.76% 0.159 55.93 / 0),
+        0 0 0 0 oklch(75.76% 0.159 55.93 / 0),
+        inset 0 0 0 0 oklch(75.76% 0.159 55.93 / 0);
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -624,8 +706,8 @@ html[data-pf-modality='pointer'] :focus-visible {
     .pf-arrive {
       animation: none;
       box-shadow:
-        0 0 0 2px rgb(251 146 60 / 0.9),
-        0 0 20px 2px rgb(251 146 60 / 0.6);
+        0 0 0 2px oklch(75.76% 0.159 55.93 / 0.9),
+        0 0 20px 2px oklch(75.76% 0.159 55.93 / 0.6);
     }
   }
 
@@ -647,22 +729,28 @@ html[data-pf-modality='pointer'] :focus-visible {
     background: linear-gradient(
       100deg,
       transparent 32%,
-      rgb(255 255 255 / 0.72) 48%,
-      rgb(253 230 138 / 0.5) 56%,
+      oklch(100% 0 none / 0.72) 48%,
+      oklch(92.43% 0.115 95.75 / 0.5) 56%,
       transparent 70%
     );
     background-size: 230% 100%;
-    animation: pf-shelf-sheen 900ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+    /* Без анимации (reduce) отблеска не видно; бегущий блик — движение, он ниже. */
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-shelf-flash::after {
+      animation: pf-shelf-sheen 900ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+    }
   }
   @keyframes pf-shelf-pulse {
     0% {
-      box-shadow: 0 0 0 0 rgb(251 191 36 / 0.6), inset 0 0 26px 0 rgb(251 191 36 / 0.55);
+      box-shadow: 0 0 0 0 oklch(83.69% 0.1644 84.43 / 0.6), inset 0 0 26px 0 oklch(83.69% 0.1644 84.43 / 0.55);
     }
     45% {
-      box-shadow: 0 0 0 7px rgb(251 191 36 / 0.18), inset 0 0 20px 0 rgb(251 191 36 / 0.3);
+      box-shadow: 0 0 0 7px oklch(83.69% 0.1644 84.43 / 0.18), inset 0 0 20px 0 oklch(83.69% 0.1644 84.43 / 0.3);
     }
     100% {
-      box-shadow: 0 0 0 16px rgb(251 191 36 / 0), inset 0 0 0 0 rgb(251 191 36 / 0);
+      box-shadow: 0 0 0 16px oklch(83.69% 0.1644 84.43 / 0), inset 0 0 0 0 oklch(83.69% 0.1644 84.43 / 0);
     }
   }
   /* Карточка, которая только что приехала в полку: жёлтая вспышка поверх неё.
@@ -675,9 +763,26 @@ html[data-pf-modality='pointer'] :focus-visible {
     border-radius: inherit;
     pointer-events: none;
     z-index: 1;
-    background: rgb(251 191 36 / 0.55);
-    box-shadow: 0 0 18px 2px rgb(251 191 36 / 0.75), inset 0 0 0 2px rgb(251 191 36 / 0.9);
-    animation: pf-card-flash 950ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+    background: oklch(83.69% 0.1644 84.43 / 0.55);
+    box-shadow: 0 0 18px 2px oklch(83.69% 0.1644 84.43 / 0.75), inset 0 0 0 2px oklch(83.69% 0.1644 84.43 / 0.9);
+    /* Вспышка — смена прозрачности (не движение, видна всем); «наезд» масштабом — ниже. */
+    animation: pf-card-flash-fade 950ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-card-flash::after {
+      animation-name: pf-card-flash;
+    }
+  }
+  @keyframes pf-card-flash-fade {
+    0% {
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
   }
   @keyframes pf-card-flash {
     0% {
@@ -710,7 +815,7 @@ html[data-pf-modality='pointer'] :focus-visible {
   /* Кнопка «Войти через Telegram» (TelegramSection): фирменный синий градиент +
      мягкая бегущая блик-полоса. Глиф/lift делает Tailwind (transition+hover). */
   .pf-tg-login-btn {
-    background-image: linear-gradient(135deg, #2aabee 0%, #229ed9 55%, #1d8fc4 100%);
+    background-image: linear-gradient(135deg, oklch(70.46% 0.144 237.76) 0%, oklch(66.23% 0.1334 235.92) 55%, oklch(61.51% 0.1234 235.41) 100%);
   }
   /* Блик: диагональная светлая полоса проходит слева направо, затем долгая пауза. */
   .pf-tg-login-btn::after {
@@ -720,23 +825,22 @@ html[data-pf-modality='pointer'] :focus-visible {
     background-image: linear-gradient(
       110deg,
       transparent 30%,
-      rgba(255, 255, 255, 0.42) 48%,
+      oklch(100% 0 none / 0.42) 48%,
       transparent 66%
     );
     transform: translateX(-130%);
-    animation: pf-tg-shine 3.4s ease-in-out infinite;
     pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-tg-login-btn::after {
+      animation: pf-tg-shine 3.4s ease-in-out infinite;
+    }
   }
   @keyframes pf-tg-shine {
     0% { transform: translateX(-130%); }
     55%, 100% { transform: translateX(130%); }
   }
 
-  /* Уважение системного prefers-reduced-motion. */
-  @media (prefers-reduced-motion: reduce) {
-    .pf-claude-agent-icon { animation: none; }
-    .pf-tg-login-btn::after { animation: none; opacity: 0; }
-  }
 
   /* Ручное выключение анимаций (toggle в профиле/сайдбаре). Тот же a11y-приём,
      что и для prefers-reduced-motion: глушим transition/animation у всех элементов,
@@ -762,15 +866,15 @@ html[data-pf-modality='pointer'] :focus-visible {
 /* Tiptap WYSIWYG-редактор (RichTextEditor): placeholder, mention, task-list. */
 @layer components {
   .ProseMirror {
-    outline: none;
+    outline-color: transparent;
   }
 
   /* Placeholder из @tiptap/extension-placeholder. */
   .ProseMirror p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
-    color: hsl(var(--muted-foreground));
-    float: left;
-    height: 0;
+    color: oklch(var(--muted-foreground));
+    float: inline-start;
+    block-size: 0;
     pointer-events: none;
   }
 
@@ -784,16 +888,16 @@ html[data-pf-modality='pointer'] :focus-visible {
   /* Только что перетащенный блок — мягкая пастельно-синяя подсветка (Notion-style),
      держится до следующего клика/правки. См. blockMovedHighlight.ts. */
   .ProseMirror .pf-block-moved {
-    background-color: rgba(35, 131, 226, 0.14);
+    background-color: var(--selection);
     border-radius: 0.375rem;
-    box-shadow: 0 0 0 4px rgba(35, 131, 226, 0.14);
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 0 0 4px var(--selection);
+    transition: background-color 0.3s var(--pf-ease), box-shadow 0.3s var(--pf-ease);
   }
 
   /* @-упоминание. */
   .pf-mention {
-    color: hsl(var(--primary));
-    background: hsl(var(--primary) / 0.1);
+    color: oklch(var(--primary));
+    background: oklch(var(--primary) / 0.1);
     border-radius: 0.25rem;
     padding: 0 0.15em;
     font-weight: 500;
@@ -803,8 +907,8 @@ html[data-pf-modality='pointer'] :focus-visible {
      чекбокс в цвет акцента, выполненный пункт приглушён и зачёркнут. */
   .ProseMirror ul[data-type='taskList'] {
     list-style: none;
-    padding-left: 0;
-    margin: 0.375rem 0;
+    padding-inline-start: 0;
+    margin-block: 0.375rem;
   }
   .ProseMirror ul[data-type='taskList'] li {
     display: flex;
@@ -813,13 +917,15 @@ html[data-pf-modality='pointer'] :focus-visible {
     padding: 0.1rem 0.25rem;
     margin: 0;
     border-radius: 0.375rem;
-    transition: background-color 0.12s ease;
+    transition: background-color 0.12s var(--pf-ease);
   }
-  .ProseMirror ul[data-type='taskList'] li:hover {
-    background: hsl(var(--hover));
+  @media (hover: hover) and (pointer: fine) {
+    .ProseMirror ul[data-type='taskList'] li:hover {
+      background: var(--hover);
+    }
   }
   .ProseMirror ul[data-type='taskList'] li > label {
-    margin-top: 0.15em;
+    margin-block-start: 0.15em;
     user-select: none;
     display: inline-flex;
   }
@@ -827,43 +933,48 @@ html[data-pf-modality='pointer'] :focus-visible {
   .ProseMirror ul[data-type='taskList'] li > label > input[type='checkbox'] {
     appearance: none;
     -webkit-appearance: none;
-    width: 1rem;
-    height: 1rem;
+    inline-size: 1rem;
+    block-size: 1rem;
     margin: 0;
-    border: 1.5px solid hsl(var(--border));
+    border: 1.5px solid oklch(var(--border));
     border-radius: 0.3rem;
-    background: hsl(var(--background));
+    background: oklch(var(--background));
     cursor: pointer;
     display: grid;
     place-content: center;
-    transition: background-color 0.12s ease, border-color 0.12s ease;
+    transition: background-color 0.12s var(--pf-ease), border-color 0.12s var(--pf-ease);
   }
-  .ProseMirror ul[data-type='taskList'] li > label > input[type='checkbox']:hover {
-    border-color: hsl(var(--primary) / 0.6);
+  @media (hover: hover) and (pointer: fine) {
+    .ProseMirror ul[data-type='taskList'] li > label > input[type='checkbox']:hover {
+      border-color: oklch(var(--primary) / 0.6);
+    }
+  }
+  .ProseMirror ul[data-type='taskList'] li > label > input[type='checkbox']:active {
+    scale: 0.92;
   }
   .ProseMirror ul[data-type='taskList'] li > label > input[type='checkbox']:checked {
-    background: hsl(var(--primary));
-    border-color: hsl(var(--primary));
+    background: oklch(var(--primary));
+    border-color: oklch(var(--primary));
   }
   /* Галочка через ::before (SVG-чек белым по акценту). */
   .ProseMirror ul[data-type='taskList'] li > label > input[type='checkbox']:checked::before {
     content: '';
-    width: 0.65rem;
-    height: 0.65rem;
-    background-color: hsl(var(--primary-foreground));
+    inline-size: 0.65rem;
+    block-size: 0.65rem;
+    background-color: oklch(var(--primary-foreground));
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / contain no-repeat;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / contain no-repeat;
   }
   .ProseMirror ul[data-type='taskList'] li > div {
     flex: 1 1 auto;
-    min-width: 0;
+    min-inline-size: 0;
   }
   .ProseMirror ul[data-type='taskList'] li > div > p {
     margin: 0;
   }
   /* Выполненный пункт — приглушаем и зачёркиваем (Notion). */
   .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
-    color: hsl(var(--muted-foreground));
+    color: oklch(var(--muted-foreground));
     text-decoration: line-through;
   }
 }

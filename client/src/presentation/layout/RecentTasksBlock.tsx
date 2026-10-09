@@ -33,10 +33,10 @@ export function RecentTasksBlock(): React.ReactElement | null {
         type="button"
         onClick={toggle}
         aria-expanded={!collapsed}
-        className="group flex w-full items-center rounded px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
+        className="group flex w-full items-center rounded px-2 py-1.5 text-start text-xs font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
       >
         <ChevronDown
-          className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100', collapsed && '-rotate-90')}
+          className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100', collapsed && '-rotate-90')}
         />
         <span>Недавнее</span>
       </button>
@@ -54,7 +54,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
             className="overflow-hidden"
           >
             <motion.ul
-              className="mt-0.5 space-y-1"
+              className="mbs-0.5 space-y-1"
               initial={animations ? 'hidden' : false}
               animate="show"
               variants={{ show: { transition: { staggerChildren: 0.04 } } }}
@@ -69,7 +69,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
                 >
                   <NavLink
                     to={`/projects/${item.projectId}?task=${item.taskId}`}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 transition-all hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
+                    className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors motion-safe:transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
                   >
                     <RecentTaskRow item={item} />
                   </NavLink>
@@ -84,11 +84,11 @@ export function RecentTasksBlock(): React.ReactElement | null {
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
                 aria-expanded={expanded}
-                className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
+                className="mbs-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
               >
                 <span className="grid size-5 shrink-0 place-items-center">
                   <ChevronDown
-                    className={cn('size-4 transition-transform', expanded && 'rotate-180')}
+                    className={cn('size-4 motion-safe:transition-transform', expanded && 'rotate-180')}
                   />
                 </span>
                 {expanded ? 'скрыть' : 'ещё'}

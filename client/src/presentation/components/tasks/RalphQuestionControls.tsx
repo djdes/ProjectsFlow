@@ -125,7 +125,7 @@ export function RalphAnswerControls({
   const isOpenOnly = question.type === 'open' || question.options.length === 0;
 
   return (
-    <div className="mt-2 flex flex-col gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-2">
+    <div className="mbs-2 flex flex-col gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-2">
       {!isOpenOnly && question.options.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {question.options.map((opt) =>
@@ -153,7 +153,7 @@ export function RalphAnswerControls({
                 disabled={submitting}
                 onClick={() => void post(opt)}
               >
-                {submitting ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {submitting ? <Loader2 className="size-3.5 motion-safe:animate-spin" /> : null}
                 {opt}
               </Button>
             ),
@@ -168,7 +168,7 @@ export function RalphAnswerControls({
           disabled={submitting || checked.size === 0}
           onClick={() => void post(Array.from(checked))}
         >
-          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+          {submitting ? <Loader2 className="size-3.5 motion-safe:animate-spin" /> : <Check className="size-3.5" />}
           Готово
         </Button>
       )}

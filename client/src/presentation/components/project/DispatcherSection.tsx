@@ -86,7 +86,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
       icon={<Bot className="size-4 text-muted-foreground" />}
       title="Ralph-диспетчер"
     >
-      <p className="mb-3 text-sm text-muted-foreground">
+      <p className="mbe-3 text-sm text-muted-foreground">
         Кто автономно выполняет задачи проекта через MCP-агент в режиме <code>/loop</code>.
         При создании задачи дежурный Ralph узнаёт о ней при следующем опросе и берёт в работу.
       </p>
@@ -94,7 +94,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
         {/* Loading / error */}
         {candidates === null && !loadError && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 motion-safe:animate-spin" />
             Загрузка кандидатов…
           </div>
         )}
@@ -106,7 +106,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
         {candidates !== null && candidates.length === 0 && (
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-sm">
             <div className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <Info className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
               <div>
                 <p className="font-medium">Нет ralph-кандидатов</p>
                 <p className="text-muted-foreground">
@@ -171,7 +171,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
                         onClick={() => void save(candidates[0]!.userId)}
                         disabled={saving}
                       >
-                        {saving && <Loader2 className="size-3.5 animate-spin" />}
+                        {saving && <Loader2 className="size-3.5 motion-safe:animate-spin" />}
                         Назначить {candidates[0]!.displayName}
                         {candidates[0]!.isAdmin ? ' (admin)' : ''} диспетчером
                       </Button>
@@ -203,7 +203,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
                       onClick={() => void save(pendingChoice)}
                       disabled={saving || pendingChoice === project.dispatcherUserId}
                     >
-                      {saving && <Loader2 className="size-3.5 animate-spin" />}
+                      {saving && <Loader2 className="size-3.5 motion-safe:animate-spin" />}
                       Сохранить
                     </Button>
                   </>

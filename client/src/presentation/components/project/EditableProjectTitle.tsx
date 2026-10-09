@@ -75,7 +75,7 @@ export function EditableProjectTitle({ projectId, name }: Props): React.ReactEle
       // The title stays above iOS's 16px zoom threshold; the generic input rule excludes it.
       className={cn(
         'w-full min-w-0 bg-transparent p-0 font-bold text-foreground outline-none',
-        'text-[22px] leading-[1.2] placeholder:text-muted-foreground/40 sm:text-[2rem]',
+        'text-title leading-[1.2] placeholder:text-muted-foreground/40',
       )}
     />
   );

@@ -157,7 +157,7 @@ export function BulkCredentialDialog({
               onClick={handleParse}
               disabled={parsing || rawText.trim().length === 0}
             >
-              {parsing ? <Loader2 className="size-4 animate-spin" /> : null}
+              {parsing ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
               Распарсить
             </Button>
             <Button
@@ -173,7 +173,7 @@ export function BulkCredentialDialog({
         </div>
 
         {preview && (
-          <form onSubmit={handleSave} className="space-y-4 border-t pt-4">
+          <form onSubmit={handleSave} className="space-y-4 border-bs pbs-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="bulk-title">Title</Label>
@@ -229,7 +229,7 @@ export function BulkCredentialDialog({
                         вставил и нуждается в визуальной проверке ПЕРЕД отправкой в vault.
                         Маскирование тут давало ложное чувство приватности (текст уже в textarea
                         выше), мешая поймать опечатки. */}
-                    <span className="ml-2 flex-1 truncate font-mono text-sm">
+                    <span className="ms-2 flex-1 truncate font-mono text-sm">
                       <span className="font-medium">{f.key}</span>
                       <span className="text-muted-foreground">: </span>
                       <span className="text-foreground">{f.value}</span>
@@ -246,7 +246,7 @@ export function BulkCredentialDialog({
                 Отмена
               </Button>
               <Button type="submit" disabled={saving || fileSlug.trim().length === 0}>
-                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                {saving ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
                 Создать credential
               </Button>
             </DialogFooter>

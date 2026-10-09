@@ -86,44 +86,44 @@ export function AiConversationListPanel(): React.ReactElement {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 px-1 pb-2">
+      <div className="flex items-center gap-2 px-1 pbe-2">
         <div className="grid size-7 place-items-center rounded-lg bg-foreground text-background"><Sparkles className="size-4" /></div>
         <div className="min-w-0 flex-1 truncate text-sm font-semibold">Мои ИИ-чаты</div>
         <button type="button" onClick={() => void create()} disabled={busy} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-hover hover:text-foreground" aria-label="Новый чат">
           <Plus className="size-4" />
         </button>
       </div>
-      <div className="relative mb-2">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск чатов" className="h-8 w-full rounded-lg border bg-background pl-8 pr-2 text-xs outline-none focus:border-primary/50" />
+      <div className="relative mbe-2">
+        <Search className="pointer-events-none absolute start-2.5 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск чатов" className="h-8 w-full rounded-lg border bg-background ps-8 pe-2 text-xs outline-none focus:border-primary/50" />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto pe-0.5">
         {loading && <div className="space-y-1 py-1">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-8 animate-pulse rounded-lg bg-muted" />)}</div>}
         {!loading && error && <p className="px-2 py-4 text-xs text-destructive">Не удалось загрузить чаты.</p>}
         {!loading && !error && groups.length === 0 && <p className="px-2 py-5 text-xs leading-5 text-muted-foreground">{search.trim() ? 'Личные чаты не найдены.' : 'Создайте личный чат — он будет всегда под рукой.'}</p>}
         {groups.map((group) => (
-          <section key={group.label} className="mb-3">
-            <h3 className="sticky top-0 z-10 bg-sidebar/90 px-2 py-1 text-xs font-medium leading-5 text-muted-foreground backdrop-blur-sm">{group.label}</h3>
+          <section key={group.label} className="mbe-3">
+            <h3 className="sticky inset-bs-0 z-10 bg-sidebar/90 px-2 py-1 text-xs font-medium leading-5 text-muted-foreground backdrop-blur-sm">{group.label}</h3>
             <div className="space-y-0.5">
               {group.items.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} now={now} />)}
             </div>
           </section>
         ))}
         {!loading && !error && projectItems.length > 0 && (
-          <section className="mt-3 border-t pt-2">
+          <section className="mbs-3 border-bs pbs-2">
             <button
               type="button"
               aria-expanded={showProjects}
               onClick={() => setProjectsOpen((value) => !value)}
               className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition hover:bg-hover hover:text-foreground"
             >
-              <ChevronRight className={cn('size-3.5 transition-transform', showProjects && 'rotate-90')} />
+              <ChevronRight className={cn('size-3.5 motion-safe:transition-transform', showProjects && 'rotate-90')} />
               <FolderKanban className="size-3.5" />
-              <span className="min-w-0 flex-1 truncate text-left">Чаты проектов</span>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{projectItems.length}</span>
+              <span className="min-w-0 flex-1 truncate text-start">Чаты проектов</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-2xs tabular-nums">{projectItems.length}</span>
             </button>
             {showProjects && (
-              <div className="mt-1 space-y-0.5 pl-2">
+              <div className="mbs-1 space-y-0.5 ps-2">
                 {projectItems.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} now={now} project />)}
               </div>
             )}
@@ -131,7 +131,7 @@ export function AiConversationListPanel(): React.ReactElement {
         )}
       </div>
       {/* min-h + padding, а не фикс-высота: под safe-area кнопка должна расти вниз, а не сжиматься. */}
-      <div className="shrink-0 border-t bg-sidebar/95 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-sm">
+      <div className="shrink-0 border-bs bg-sidebar/95 pbe-[env(safe-area-inset-bottom,0px)] pbs-2 backdrop-blur-sm">
         <button
           type="button"
           onClick={() => void create()}
@@ -139,8 +139,8 @@ export function AiConversationListPanel(): React.ReactElement {
           className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition hover:bg-hover disabled:opacity-50"
         >
           <Plus className="size-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-left">Новый чат</span>
-          <kbd className="shrink-0 rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] font-normal text-muted-foreground">{NEW_CHAT_HINT}</kbd>
+          <span className="min-w-0 flex-1 truncate text-start">Новый чат</span>
+          <kbd className="shrink-0 rounded border bg-muted px-1.5 py-0.5 font-sans text-2xs font-normal text-muted-foreground">{NEW_CHAT_HINT}</kbd>
         </button>
       </div>
     </div>
@@ -196,17 +196,17 @@ function ConversationRow({ conversation, now, project = false }: { conversation:
         <NavLink
           to={conversationPath}
           title={conversation.title}
-          className={({ isActive }) => cn('flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 pr-8 text-xs transition hover:bg-hover', isActive && 'bg-active font-medium')}
+          className={({ isActive }) => cn('flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 pe-8 text-xs transition hover:bg-hover', isActive && 'bg-active font-medium')}
         >
           {project ? <FolderKanban className="size-3.5 shrink-0 text-muted-foreground" /> : <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />}
           <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground transition group-hover:opacity-0">
+          <span className="shrink-0 text-2xs tabular-nums text-muted-foreground transition group-hover:opacity-0">
             {formatRelativeTime(conversationActivityAt(conversation), now)}
           </span>
         </NavLink>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="absolute right-1 top-1 grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition hover:bg-background group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:bg-background data-[state=open]:opacity-100" aria-label={`Действия с чатом «${conversation.title}»`}>
+            <button type="button" className="absolute end-1 inset-bs-1 grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition hover:bg-background group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:bg-background data-[state=open]:opacity-100" aria-label={`Действия с чатом «${conversation.title}»`}>
               <MoreHorizontal className="size-3.5" />
             </button>
           </DropdownMenuTrigger>

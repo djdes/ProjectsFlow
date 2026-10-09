@@ -30,7 +30,7 @@ export function AuthFormCard({ title, description, children, footer }: Props): R
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">{children}</CardContent>
-        <div className="border-t px-6 py-4 text-center text-sm text-muted-foreground">
+        <div className="border-bs px-6 py-4 text-center text-sm text-muted-foreground">
           {footer}
         </div>
       </Card>

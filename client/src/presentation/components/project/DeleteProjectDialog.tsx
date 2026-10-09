@@ -66,7 +66,7 @@ export function DeleteProjectDialog({
 
         <div className="space-y-3 text-sm">
           <p>Это действие необратимо. Будут удалены:</p>
-          <ul className="ml-5 list-disc text-muted-foreground space-y-0.5">
+          <ul className="ms-5 list-disc text-muted-foreground space-y-0.5">
             <li>задачи, комментарии и привязки коммитов</li>
             <li>локальные KB-документы и секреты в vault</li>
             <li>финансовые записи (расходы, доходы, начисления)</li>
@@ -84,7 +84,7 @@ export function DeleteProjectDialog({
                 {otherMemberCount === 1 ? 'другой участник' : 'других участников'} — они
                 потеряют доступ.
               </p>
-              <p className="mt-1">
+              <p className="mbs-1">
                 Если хотите передать проект — закройте этот диалог, откройте раздел{' '}
                 «Команда» и нажмите «Передать владение» рядом с нужным человеком.
               </p>
@@ -107,7 +107,7 @@ export function DeleteProjectDialog({
             onClick={() => void handleDelete()}
             disabled={deleting}
           >
-            {deleting && <Loader2 className="size-4 animate-spin" />}
+            {deleting && <Loader2 className="size-4 motion-safe:animate-spin" />}
             Удалить навсегда
           </Button>
         </DialogFooter>

@@ -195,7 +195,7 @@ export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Pro
 
           {loading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" />
+              <Loader2 className="size-5 motion-safe:animate-spin" />
             </div>
           ) : data && data.notifyMode === 'none' ? (
             <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
@@ -219,17 +219,17 @@ export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Pro
                   </Avatar>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">{g.displayName}</div>
-                    <div className="mt-0.5 flex flex-col gap-0.5">
+                    <div className="mbs-0.5 flex flex-col gap-0.5">
                       {g.rows.map((r) => (
                         <div
                           key={r.channel}
-                          className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground"
                         >
                           {channelIcon(r.channel)}
                           <span>{r.channel === 'email' ? 'E-mail' : 'Telegram'}</span>
                           <span
                             className={cn(
-                              'ml-auto inline-flex items-center gap-1',
+                              'ms-auto inline-flex items-center gap-1',
                               r.status === 'sent' && 'text-emerald-600',
                               r.status === 'failed' && 'text-destructive',
                             )}

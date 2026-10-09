@@ -45,7 +45,7 @@ export function ExpandableMarkdown({ children, className }: Props): React.ReactE
             e.stopPropagation();
             setExpanded((v) => !v);
           }}
-          className="mt-0.5 text-xs font-medium text-primary hover:underline"
+          className="mbs-0.5 text-xs font-medium text-primary hover:underline"
         >
           {expanded ? 'Свернуть' : 'Показать полностью'}
         </button>

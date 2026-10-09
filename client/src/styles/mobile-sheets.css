@@ -14,24 +14,23 @@
     max-height: min(
       94dvh,
       calc(
-        var(--pf-sheet-viewport, 100dvh) - max(12px, env(safe-area-inset-top))
+        var(--pf-sheet-viewport, 100dvh) - max(12px, env(safe-area-inset-top, 0px))
       )
     ) !important;
     margin: 0;
-    padding-top: 44px !important;
-    padding-bottom: max(
+    padding-block-start: 44px !important;
+    padding-block-end: max(
       var(--pf-sheet-bottom-padding, 12px),
-      env(safe-area-inset-bottom)
+      env(safe-area-inset-bottom, 0px)
     ) !important;
     border-radius: 24px 24px 0 0 !important;
-    border: 1px solid hsl(var(--border));
-    border-bottom: 0;
-    background: hsl(var(--background));
-    box-shadow: 0 -8px 40px rgb(0 0 0 / 0.14);
+    border: 1px solid oklch(var(--border));
+    border-block-end: 0;
+    background: oklch(var(--background));
+    box-shadow: 0 -8px 40px oklch(0% 0 none / 0.14);
     overscroll-behavior: contain;
     translate: none !important;
     transform: translate3d(0, var(--pf-sheet-y, 0px), 0);
-    transition: transform 240ms var(--pf-ease);
     animation-fill-mode: backwards;
     -webkit-tap-highlight-color: transparent;
   }
@@ -39,13 +38,20 @@
     --pf-sheet-bottom-padding: 24px;
     overflow-y: auto;
   }
-  [data-pf-mobile-sheet='true'][data-state='open'] {
-    animation-name: pf-sheet-enter;
-    animation-duration: 320ms;
-  }
-  [data-pf-mobile-sheet='true'][data-state='closed'] {
-    animation-name: pf-sheet-exit;
-    animation-duration: 200ms;
+  /* Выезд/уезд шторки и доводка после свайпа — движение: только без reduce. Без него
+     шторка появляется и закрывается сразу, а за пальцем всё равно следует. */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-pf-mobile-sheet='true'][data-state] {
+      transition: transform 240ms var(--pf-ease);
+    }
+    [data-pf-mobile-sheet='true'][data-state='open'] {
+      animation-name: pf-sheet-enter;
+      animation-duration: 320ms;
+    }
+    [data-pf-mobile-sheet='true'][data-state='closed'] {
+      animation-name: pf-sheet-exit;
+      animation-duration: 200ms;
+    }
   }
   [data-pf-mobile-sheet='true'][data-pf-sheet-interacted][data-state='open'] {
     animation-name: none;
@@ -65,9 +71,9 @@
     max-height: calc(
       min(
           94dvh,
-          var(--pf-sheet-viewport, 100dvh) - max(12px, env(safe-area-inset-top))
+          var(--pf-sheet-viewport, 100dvh) - max(12px, env(safe-area-inset-top, 0px))
         ) -
-        46px - max(12px, env(safe-area-inset-bottom))
+        46px - max(12px, env(safe-area-inset-bottom, 0px))
     );
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -84,8 +90,8 @@
     font-size: max(16px, 1em); /* Avoid iOS zoom when the keyboard opens. */
   }
   [data-pf-mobile-sheet='true'] > [data-pf-window-close] {
-    top: 34px;
-    right: 8px;
+    inset-block-start: 34px;
+    inset-inline-end: 8px;
     min-width: 44px;
     min-height: 44px;
     display: grid;
@@ -95,14 +101,14 @@
     position: fixed;
     inset: 0;
     z-index: 50;
-    background: rgb(0 0 0 / 0.16);
+    background: oklch(0% 0 none / 0.16);
     pointer-events: auto;
     animation: pf-content-reveal 220ms var(--pf-ease);
   }
   .pf-sheet-handle {
     position: absolute;
-    top: 0;
-    left: calc(50% - 48px);
+    inset-block-start: 0;
+    inset-inline-start: calc(50% - 48px);
     z-index: 30;
     display: grid;
     width: 96px;
@@ -114,7 +120,7 @@
     touch-action: none;
     user-select: none;
     transform: translateY(var(--pf-sheet-handle-scroll, 0px));
-    background: hsl(var(--background));
+    background: oklch(var(--background));
   }
   .pf-sheet-handle:active {
     cursor: grabbing;
@@ -123,10 +129,10 @@
     width: 36px;
     height: 4px;
     border-radius: 4px;
-    background: hsl(var(--muted-foreground) / 0.35);
+    background: oklch(var(--muted-foreground) / 0.35);
   }
   .pf-sheet-handle:focus-visible {
-    outline: 2px solid hsl(var(--ring));
+    outline: 2px solid oklch(var(--ring));
     outline-offset: -4px;
   }
 }
@@ -146,9 +152,4 @@
     transform: translate3d(0, 100%, 0);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  [data-pf-mobile-sheet='true'][data-state] {
-    animation-duration: 0.01ms;
-    transition: none;
-  }
-}
+

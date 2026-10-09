@@ -216,7 +216,7 @@ function CredentialFieldsCard({
                       aria-label="Сохранить"
                     >
                       {saving ? (
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <Loader2 className="size-3.5 motion-safe:animate-spin" />
                       ) : (
                         <Check className="size-3.5" />
                       )}
@@ -241,7 +241,7 @@ function CredentialFieldsCard({
                         ) : s?.state === 'err' ? (
                           <span className="text-destructive">не удалось загрузить ({s.err})</span>
                         ) : (
-                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                          <Loader2 className="size-3 motion-safe:animate-spin text-muted-foreground" />
                         )
                       ) : (
                         e.value
@@ -332,7 +332,7 @@ export function KbDocumentViewer({ projectId, document, kbRepoFullName, onEdit, 
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="ml-4 list-disc text-sm">
+            <ul className="ms-4 list-disc text-sm">
               {document.validationErrors.map((e, i) => <li key={i}>{e.message}</li>)}
             </ul>
           </CardContent>

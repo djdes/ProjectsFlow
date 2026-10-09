@@ -56,7 +56,7 @@ function CollapsingList<T>({
         <div
           key={getId(item)}
           data-pf-collapse
-          className="grid transition-all duration-300 ease-out motion-reduce:transition-none"
+          className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-300 motion-safe:ease-out"
           style={{ gridTemplateRows: exiting ? '0fr' : '1fr' }}
         >
           <div

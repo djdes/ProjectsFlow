@@ -297,9 +297,9 @@ export function AppShell(): React.ReactElement {
                   onPointerDown={onHandlePointerDown}
                   style={{ left: sidebarWidth }}
                   className={cn(
-                    'absolute top-0 z-30 h-full w-2 -translate-x-1/2 cursor-col-resize',
+                    'absolute inset-bs-0 z-30 h-full w-2 -translate-x-1/2 cursor-col-resize',
                     // Тонкая линия-индикатор по центру — проявляется на hover / во время тяги.
-                    'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:transition-colors hover:after:bg-primary/40',
+                    'after:absolute after:inset-y-0 after:start-1/2 after:w-px after:-translate-x-1/2 after:transition-colors hover:after:bg-primary/40',
                     sidebarDragging && 'after:bg-primary/60',
                   )}
                 />
@@ -316,7 +316,7 @@ export function AppShell(): React.ReactElement {
                   aria-hidden
                   onMouseEnter={openPeek}
                   onMouseLeave={closePeekSoon}
-                  className="absolute left-0 top-0 z-[105] h-full w-1"
+                  className="absolute start-0 inset-bs-0 z-[105] h-full w-1"
                 />
                 <TooltipProvider delayDuration={550} skipDelayDuration={120}>
                   <Tooltip>
@@ -342,7 +342,7 @@ export function AppShell(): React.ReactElement {
                         // бургеру mouseleave — ховер срывается (тултип мёртв), а клик
                         // «закрепить» уходит в переключатель пространства, который
                         // оказывается под курсором.
-                        className="absolute left-2 top-1.5 z-[101] grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                        className="absolute start-2 inset-bs-1.5 z-[101] grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Menu className="size-5" />
                         <BurgerUnreadBadge />
@@ -353,7 +353,7 @@ export function AppShell(): React.ReactElement {
                       className="flex items-center gap-1.5 border-transparent bg-foreground text-background"
                     >
                       <span>Закрепить панель</span>
-                      <kbd className="rounded bg-background/15 px-1 text-[10px] leading-4">Ctrl+\</kbd>
+                      <kbd className="rounded bg-background/15 px-1 text-2xs leading-4">Ctrl+\</kbd>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -374,7 +374,7 @@ export function AppShell(): React.ReactElement {
                       onMouseEnter={openPeek}
                       onMouseLeave={closePeekSoon}
                       style={{ width: sidebarWidth }}
-                      className="absolute bottom-3 left-1.5 top-11 z-[100] overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
+                      className="absolute inset-be-3 start-1.5 inset-bs-11 z-[100] overflow-clip rounded-xl border bg-sidebar shadow-2xl"
                     >
                       {/* peek — второй путь к закреплению (кроме бургера): кнопка в шапке
                           панели в этом режиме не сворачивает, а закрепляет, поэтому там
@@ -404,7 +404,7 @@ export function AppShell(): React.ReactElement {
           </div>
         ) : (
           <div className="flex h-dvh flex-col bg-background text-foreground">
-            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3">
+            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 border-be px-3">
               <Button
                 variant="ghost"
                 size="icon"
@@ -417,7 +417,7 @@ export function AppShell(): React.ReactElement {
                 <Menu className="size-5" />
               </Button>
               <MobileWorkspaceTitle />
-              <CompletedTodayPill inline />
+              <CompletedTodayPill />
               <Button
                 variant="ghost"
                 size="icon"
@@ -460,7 +460,7 @@ export function AppShell(): React.ReactElement {
                   type="button"
                   onClick={() => setDrawerOpen(false)}
                   aria-label="Закрыть"
-                  className="absolute right-2 top-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                  className="absolute end-2 inset-bs-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <X className="size-4" />
                 </button>
@@ -468,8 +468,6 @@ export function AppShell(): React.ReactElement {
             </Sheet>
           </div>
         )}
-        {/* Мотивационный счётчик закрытых сегодня задач — правый верхний угол, поверх страниц. */}
-        {isDesktop && <CompletedTodayPill />}
         {/* Конфетти на закрытие задачи из ЛЮБОЙ точки (чекбокс, ховер-кнопка, drag) — один
             праздник на приложение, запускается ключом из CompletedTodayProvider. */}
         <CompletionCelebration />
@@ -530,7 +528,7 @@ function BurgerUnreadBadge(): React.ReactElement | null {
       // открывающий предпросмотр панели, — «дырка» в её углу срывала бы и ховер, и клик.
       // Смещение всего на 0.5 (2px): правый край бейджа остаётся внутри 44px, под которые
       // страницы уступают место, иначе цифра наезжала бы на крошки.
-      className="pointer-events-none absolute -right-0.5 -top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground"
+      className="pointer-events-none absolute -end-0.5 -inset-bs-0.5 inline-flex tabular-nums min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground"
     >
       {total > 99 ? '99+' : total}
     </span>

@@ -244,9 +244,9 @@ export function ProjectVersionsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-black/70 backdrop-blur-[1px]"
-        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:rounded-xl"
+        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-[0_24px_80px_oklch(0%_0_none/0.55)] sm:rounded-xl"
       >
-        <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12">
+        <DialogHeader className="shrink-0 border-be px-5 py-4 pe-12">
           <DialogTitle className="flex items-center gap-2">
             <History className="size-5 text-muted-foreground" />
             История версий проекта
@@ -254,15 +254,15 @@ export function ProjectVersionsDialog({
           <p className="truncate text-xs text-muted-foreground">{projectName}</p>
         </DialogHeader>
 
-        <div className="shrink-0 space-y-2 border-b bg-muted/20 px-4 py-3">
+        <div className="shrink-0 space-y-2 border-be bg-muted/20 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-56 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute start-3 inset-bs-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Поиск по задачам и изменениям…"
-                className="h-9 pl-9"
+                className="h-9 ps-9"
               />
             </div>
 
@@ -384,7 +384,7 @@ export function ProjectVersionsDialog({
         <div className="flex min-h-0 flex-1 bg-muted/10">
           {loading ? (
             <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Загрузка истории…
+              <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка истории…
             </div>
           ) : loadError ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
@@ -402,7 +402,7 @@ export function ProjectVersionsDialog({
               <div className="min-w-0 flex-1 overflow-y-auto bg-background px-8 py-6 sm:px-12 sm:py-8">
                 {selected ? (
                   <>
-                    <div className="mx-auto mb-6 flex max-w-2xl items-center justify-between gap-3 border-b pb-4">
+                    <div className="mx-auto mbe-6 flex max-w-2xl items-center justify-between gap-3 border-be pbe-4">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">
                           {snapshotTaskTitle(selected.snapshot)}
@@ -443,7 +443,7 @@ export function ProjectVersionsDialog({
                 )}
               </div>
 
-              <div className="flex w-80 shrink-0 flex-col border-l bg-background xl:w-96">
+              <div className="flex w-80 shrink-0 flex-col border-s bg-background xl:w-96">
                 <ol className="min-h-0 flex-1 overflow-y-auto p-1.5">
                   {visibleVersions.map((version) => {
                     const locked = isLocked(version);
@@ -454,7 +454,7 @@ export function ProjectVersionsDialog({
                           disabled={locked}
                           onClick={() => setSelectedId(version.id)}
                           className={cn(
-                            'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-left text-sm transition-colors',
+                            'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-start text-sm transition-colors',
                             locked
                               ? 'cursor-not-allowed text-muted-foreground/60'
                               : 'hover:bg-accent',
@@ -486,14 +486,14 @@ export function ProjectVersionsDialog({
                               <span className="shrink-0">{formatDateTime(version.createdAt)}</span>
                             </span>
                             <span
-                              className="truncate text-[11px] leading-4 text-muted-foreground"
+                              className="truncate text-2xs leading-4 text-muted-foreground"
                               title={changedFieldsLabel(version.changedFields)}
                             >
                               {changedFieldsLabel(version.changedFields)}
                             </span>
                           </span>
                           {locked && (
-                            <Lock className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+                            <Lock className="mbs-1 size-3.5 shrink-0 text-muted-foreground" />
                           )}
                         </button>
                       </li>
@@ -501,8 +501,8 @@ export function ProjectVersionsDialog({
                   })}
                 </ol>
                 {hasLocked && (
-                  <div className="border-t p-3 text-center text-xs text-muted-foreground">
-                    <p className="mb-2">
+                  <div className="border-bs p-3 text-center text-xs text-muted-foreground">
+                    <p className="mbe-2">
                       История 7 дней. Версии старше — на тарифе Прайм или ВИП.
                     </p>
                     <Button

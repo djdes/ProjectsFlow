@@ -40,7 +40,7 @@ export function KanbanColorPicker({
               : 'hover:scale-110',
           )}
         >
-          {value === c && <Check className="size-3.5 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]" />}
+          {value === c && <Check className="size-3.5 text-white drop-shadow-[0_1px_1px_oklch(0%_0_none/0.5)]" />}
         </button>
       ))}
     </div>

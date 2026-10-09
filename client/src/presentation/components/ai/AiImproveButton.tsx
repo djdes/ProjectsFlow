@@ -126,7 +126,7 @@ export function AiImproveButton({
         className={cn('gap-1.5', compact ? 'h-10 px-2.5 text-xs' : 'h-8')}
       >
         {isBusy ? (
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="size-3.5 motion-safe:animate-spin" />
         ) : (
           <Sparkles className="size-3.5" />
         )}
@@ -141,7 +141,7 @@ export function AiImproveButton({
       >
         <DialogContent className="flex max-h-[85dvh] flex-col gap-4 sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 pr-6">
+            <DialogTitle className="flex items-center gap-2 pe-6">
               <Sparkles className="size-4 shrink-0 text-primary" />
               {title}
             </DialogTitle>
@@ -165,7 +165,7 @@ export function AiImproveButton({
                 <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-background px-3 py-2 text-sm max-sm:max-h-56 sm:min-h-[12rem]">
                   {phase === 'loading' ? (
                     <span className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="size-4 animate-spin" />
+                      <Loader2 className="size-4 motion-safe:animate-spin" />
                       Генерация…
                     </span>
                   ) : (

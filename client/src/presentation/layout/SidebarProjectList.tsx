@@ -211,7 +211,7 @@ function SidebarProjectRow({
               {project.gitRepoUrl && (
                 <span
                   aria-hidden
-                  className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar"
+                  className="absolute -inset-be-0.5 -end-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar"
                 />
               )}
             </span>
@@ -239,7 +239,7 @@ function SidebarProjectRow({
         <span
           aria-label={`Задач: ${project.taskCount}`}
           className={cn(
-            'pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-xs leading-5 tabular-nums text-muted-foreground',
+            'pointer-events-none absolute end-8 inset-bs-1/2 -translate-y-1/2 text-xs leading-5 tabular-nums text-muted-foreground',
             'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
             actionsActive && 'opacity-100',
           )}
@@ -258,7 +258,7 @@ function SidebarProjectRow({
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             className={cn(
-              'absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-all duration-200 hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
+              'absolute end-1 inset-bs-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors duration-200 hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
               'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
               menuOpen && 'opacity-100',
             )}
@@ -458,22 +458,22 @@ export function SidebarProjectList(): React.ReactElement {
   // фон читался уезжающий под заголовок текст. Проверено рендером: с блюром — чёткий
   // «призрак» названия проекта поверх заголовка, со сплошным фоном — чисто.
   const myProjectsHeader = (
-    <div className="sticky top-0 z-10 flex items-center justify-between gap-1 rounded bg-sidebar px-2 py-1.5">
+    <div className="sticky inset-bs-0 z-10 flex items-center justify-between gap-1 rounded bg-sidebar px-2 py-1.5">
       <button
         type="button"
         onClick={toggleMainCollapsed}
         aria-expanded={!mainCollapsed}
-        className="group flex flex-1 items-center rounded text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
+        className="group flex flex-1 items-center rounded text-start text-xs font-medium text-muted-foreground/80 hover:text-foreground"
       >
         <ChevronDown
           className={cn(
-            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100',
+            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100',
             mainCollapsed && '-rotate-90',
           )}
         />
         <span>Мои проекты</span>
         {/* Лимит показываем только когда он реально есть (тарифы); «/∞» — дев-шум. */}
-        <span className="ml-1.5 tabular-nums opacity-70">
+        <span className="ms-1.5 tabular-nums opacity-70">
           {PROJECT_LIMIT === Infinity ? visible.length : `${visible.length}/${PROJECT_LIMIT}`}
         </span>
       </button>
@@ -481,9 +481,9 @@ export function SidebarProjectList(): React.ReactElement {
         type="button"
         onClick={openNewProject}
         aria-label="Новый проект"
-        className="group grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-foreground/[0.06] hover:text-foreground active:scale-90 dark:hover:bg-white/10"
+        className="group grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:bg-foreground/[0.06] hover:text-foreground active:scale-90 dark:hover:bg-white/10"
       >
-        <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" />
+        <Plus className="size-4 motion-safe:transition-transform duration-300 group-hover:rotate-90" />
       </button>
     </div>
   );
@@ -551,13 +551,13 @@ export function SidebarProjectList(): React.ReactElement {
           скроллится. «Недавнее» переехало вниз — внутрь скролла, над списком проектов. */}
       {visible.length > 1 && (
         <div className="relative shrink-0">
-          <FolderSearch className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <FolderSearch className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Проект, задачи"
             aria-label="Поиск: проект, задачи"
-            className="h-8 w-full pl-7 text-sm"
+            className="h-8 w-full ps-7 text-sm"
           />
         </div>
       )}
@@ -583,16 +583,16 @@ export function SidebarProjectList(): React.ReactElement {
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
       {showFavoritesSection && favorites.length > 0 && (
-        <div className="space-y-1 pb-1">
+        <div className="space-y-1 pbe-1">
           <button
             type="button"
             onClick={toggleFavCollapsed}
             aria-expanded={!favCollapsed}
-            className="group sticky top-0 z-10 flex w-full items-center rounded bg-sidebar px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
+            className="group sticky inset-bs-0 z-10 flex w-full items-center rounded bg-sidebar px-2 py-1.5 text-start text-xs font-medium text-muted-foreground/80 hover:text-foreground"
           >
             <ChevronDown
               className={cn(
-                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100',
+                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -639,18 +639,18 @@ export function SidebarProjectList(): React.ReactElement {
       {/* «Архивные» — спрятанные проекты. Показываем ВСЕГДА (вне поиска), чтобы пункт был
           обнаружим даже без архивных. По умолчанию свёрнута; «Вернуть из архива» — в меню строки. */}
       {!searching && (
-        <div className="space-y-1 pt-1">
+        <div className="space-y-1 pbs-1">
           <button
             type="button"
             onClick={toggleArchivedCollapsed}
             aria-expanded={!archivedCollapsed}
-            className="group sticky top-0 z-10 flex w-full items-center rounded bg-sidebar px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
+            className="group sticky inset-bs-0 z-10 flex w-full items-center rounded bg-sidebar px-2 py-1.5 text-start text-xs font-medium text-muted-foreground/80 hover:text-foreground"
           >
             <ChevronDown
-              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
+              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
-            {archived.length > 0 && <span className="ml-1.5 tabular-nums opacity-70">{archived.length}</span>}
+            {archived.length > 0 && <span className="ms-1.5 tabular-nums opacity-70">{archived.length}</span>}
           </button>
           <Collapse open={!archivedCollapsed}>
             {archived.length > 0 ? (

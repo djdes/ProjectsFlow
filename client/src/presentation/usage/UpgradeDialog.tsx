@@ -97,7 +97,7 @@ export function UpgradeDialog({
           <DialogDescription>
             Диспетчер берёт задачи и выполняет их сам — код, тексты, рутина. Платите за подписку,
             а не за каждую задачу.
-            <span className="mt-1 block text-xs">
+            <span className="mbs-1 block text-xs">
               Ваш план:{' '}
               <span className="font-medium text-foreground">{planNameRu(currentPlan)}</span>
               {trial && ' (пробный час)'}
@@ -138,35 +138,35 @@ export function UpgradeDialog({
                 <div className="flex min-h-6 items-center justify-between gap-2">
                   <span className="font-semibold">{p.nameRu}</span>
                   {tone === 'current' && (
-                    <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-[11px] font-medium text-foreground/60">
+                    <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-2xs font-medium text-foreground/60">
                       Ваш план
                     </span>
                   )}
                   {tone === 'recommended' && (
-                    <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-2xs font-medium text-primary-foreground">
                       Рекомендуем
                     </span>
                   )}
                   {tone === 'vip' && (
-                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-300">
+                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-2xs font-medium text-violet-600 dark:text-violet-300">
                       Максимум
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-2xl font-bold tabular-nums">
+                <div className="mbs-1 text-2xl font-bold tabular-nums">
                   {/* Бесплатный тариф — в том же формате, что и платные: «0 ₽/мес». */}
                   {(p.priceRub ?? 0).toLocaleString('ru-RU')} ₽
                   <span className="text-sm font-normal text-muted-foreground">/мес</span>
                 </div>
-                <p className="mt-1 text-xs leading-snug text-muted-foreground">{p.tagline}</p>
+                <p className="mbs-1 text-xs leading-snug text-muted-foreground">{p.tagline}</p>
 
-                <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                <div className="mbs-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">
                   Что входит
                 </div>
-                <ul className="mt-1.5 flex-1 space-y-1.5 text-[13px]">
+                <ul className="mbs-1.5 flex-1 space-y-1.5 text-sm">
                   {prev && (
                     <li className="flex gap-2 font-medium text-foreground">
-                      <Check className={cn('mt-0.5 size-4 shrink-0', tone === 'vip' ? 'text-violet-500' : 'text-primary')} />
+                      <Check className={cn('mbs-0.5 size-4 shrink-0', tone === 'vip' ? 'text-violet-500' : 'text-primary')} />
                       <span>Всё из «{prev}»</span>
                     </li>
                   )}
@@ -174,7 +174,7 @@ export function UpgradeDialog({
                     <li key={f} className="flex gap-2 text-muted-foreground">
                       <Check
                         className={cn(
-                          'mt-0.5 size-4 shrink-0',
+                          'mbs-0.5 size-4 shrink-0',
                           tone === 'vip' ? 'text-violet-500/80' : 'text-primary/70',
                         )}
                       />
@@ -184,7 +184,7 @@ export function UpgradeDialog({
                 </ul>
 
                 {actions.length > 0 && (
-                  <div className="mt-4 space-y-2">
+                  <div className="mbs-4 space-y-2">
                     {actions.map((a) => (
                       <Button
                         key={a.key}
@@ -199,7 +199,7 @@ export function UpgradeDialog({
                         disabled={a.disabled}
                         onClick={a.onClick}
                       >
-                        {pending && a.key === 'trial' && a.onClick && <Loader2 className="size-4 animate-spin" />}
+                        {pending && a.key === 'trial' && a.onClick && <Loader2 className="size-4 motion-safe:animate-spin" />}
                         {a.label}
                       </Button>
                     ))}

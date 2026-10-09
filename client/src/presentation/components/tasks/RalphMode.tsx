@@ -96,10 +96,10 @@ export function RalphModeSelect({
           {RALPH_MODES.map((mode) => {
             const m = RALPH_MODE_META[mode];
             return (
-              <DropdownMenuRadioItem key={mode} value={mode} className="items-start py-2 pr-2">
+              <DropdownMenuRadioItem key={mode} value={mode} className="items-start py-2 pe-2">
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-sm font-medium">{m.label}</span>
-                  <span className="text-[11px] leading-snug text-muted-foreground">
+                  <span className="text-2xs leading-snug text-muted-foreground">
                     {m.description}
                   </span>
                 </div>
@@ -130,7 +130,7 @@ export function RalphModeBadge({
   return (
     <span
       title={m.description}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground ${className ?? ''}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground ${className ?? ''}`}
     >
       <span aria-hidden="true">{m.icon}</span>
       <span>{m.label}</span>

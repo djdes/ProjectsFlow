@@ -101,7 +101,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
         <DropdownMenuTrigger
           title={user.displayName}
           className={cn(
-            'group flex items-center rounded-md text-left text-sm transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/[0.06]',
+            'group flex items-center rounded-md text-start text-sm transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/[0.06]',
             compact ? 'justify-center p-1' : 'min-w-0 flex-1 gap-2 px-2 py-1.5',
           )}
         >
@@ -191,7 +191,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             }}
             aria-label="Скопировать email"
             title="Скопировать email"
-            className="group/mail flex w-full items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            className="group/mail flex w-full items-center gap-1.5 px-3 pbs-1.5 pbe-0.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
           >
             <span className="min-w-0 flex-1 truncate">{user.email}</span>
             {copied ? (
@@ -211,7 +211,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                       <button
                         type="button"
                         onClick={() => handleSwitch(ws.id)}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none"
+                        className="flex min-w-0 flex-1 items-center gap-2 text-start focus-visible:outline-none"
                       >
                         <WorkspaceIcon name={ws.name} icon={ws.icon} className="size-5 text-[10px]" />
                         {/* Название не растягиваем — домик встаёт вплотную после него. */}

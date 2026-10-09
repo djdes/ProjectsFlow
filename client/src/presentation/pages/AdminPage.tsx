@@ -42,7 +42,7 @@ export function AdminPage(): React.ReactElement {
   );
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
+    <div className="flex h-full flex-col gap-5 p-4 pbs-3.5 sm:p-6 sm:pbs-4">
       {/* pf-burger-gap — уступаем место плавающему бургеру свёрнутой панели. */}
       <div className="pf-burger-gap flex items-center gap-2.5">
         <Shield className="size-5 text-primary" />
@@ -137,7 +137,7 @@ function SupportTab(): React.ReactElement {
   }
 
   return (
-    <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+    <ul className="divide-y overflow-clip rounded-lg border bg-card">
       {tickets.map((t) => (
         <li key={t.id} className={cn('space-y-1.5 px-4 py-3', t.status === 'closed' && 'opacity-60')}>
           <div className="flex items-start justify-between gap-3">
@@ -147,11 +147,11 @@ function SupportTab(): React.ReactElement {
                 {t.submitterEmail && (
                   <span className="truncate text-xs text-muted-foreground">{t.submitterEmail}</span>
                 )}
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                   {t.source === 'landing' ? 'лендинг' : 'приложение'}
                 </span>
                 {t.status === 'closed' && (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                     закрыто
                   </span>
                 )}
@@ -212,7 +212,7 @@ function ProjectsTab(): React.ReactElement {
             </Avatar>
             {g.owner} <span className="text-xs">· {g.email}</span>
           </h2>
-          <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+          <ul className="divide-y overflow-clip rounded-lg border bg-card">
             {g.items.map((p) => (
               <li key={p.id} className="space-y-2 px-4 py-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -320,7 +320,7 @@ function EditableProjectRepo({
           onClick={() => void save()}
           aria-label="Сохранить"
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+          {saving ? <Loader2 className="size-3.5 motion-safe:animate-spin" /> : <Check className="size-3.5" />}
         </Button>
         <Button
           variant="ghost"
@@ -356,7 +356,7 @@ function EditableProjectRepo({
       <Button
         variant="ghost"
         size="icon"
-        className="ml-auto size-6"
+        className="ms-auto size-6"
         onClick={startEdit}
         aria-label="Изменить git-репо"
         title="Изменить git-репо"
@@ -417,18 +417,18 @@ function UsersTab(): React.ReactElement {
           <li key={u.id} className="space-y-2 px-4 py-3">
             <div className="flex items-start gap-3">
               <Avatar className="size-8 shrink-0">
-                <AvatarFallback className="text-[11px]">{getInitials(u.displayName)}</AvatarFallback>
+                <AvatarFallback className="text-2xs">{getInitials(u.displayName)}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate text-sm font-medium">
                   {u.displayName}
                   {u.isAdmin && (
-                    <span className="rounded bg-primary/15 px-1.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                    <span className="rounded bg-primary/15 px-1.5 text-2xs font-medium uppercase tracking-wide text-primary">
                       admin
                     </span>
                   )}
                   {u.plan !== 'free' && (
-                    <span className="rounded bg-amber-500/15 px-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                    <span className="rounded bg-amber-500/15 px-1.5 text-2xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
                       {planNameRu(u.plan)}
                       {u.subscriptionExpiresAt
                         ? ` до ${new Date(u.subscriptionExpiresAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
@@ -441,7 +441,7 @@ function UsersTab(): React.ReactElement {
                 </p>
                 {u.ownedProjectCount > 0 && (
                   <p
-                    className="mt-0.5 inline-flex items-center gap-1 truncate text-xs text-muted-foreground"
+                    className="mbs-0.5 inline-flex items-center gap-1 truncate text-xs text-muted-foreground"
                     title={
                       u.githubConnected
                         ? `${u.delegationEnabledCount} из ${u.ownedProjectCount} owned-проектов имеют делегацию GitHub-токена`
@@ -471,7 +471,7 @@ function UsersTab(): React.ReactElement {
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 pl-11">
+            <div className="flex flex-wrap items-center gap-2 ps-11">
               <Button
                 size="sm"
                 variant="outline"
@@ -499,7 +499,7 @@ function UsersTab(): React.ReactElement {
                       onClick={() => void changeUserPlan(u, pl)}
                     >
                       {planNameRu(pl)}
-                      {pl === u.plan && <Check className="ml-auto size-3.5" />}
+                      {pl === u.plan && <Check className="ms-auto size-3.5" />}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -662,7 +662,7 @@ function EmailTab(): React.ReactElement {
     <div className="flex flex-col gap-4 overflow-hidden lg:flex-row">
       {/* Список шаблонов */}
       <div className="w-full shrink-0 lg:w-72">
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Шаблоны ({templates.length})</h2>
+        <h2 className="mbe-2 text-sm font-medium text-muted-foreground">Шаблоны ({templates.length})</h2>
         <ul className="divide-y overflow-y-auto rounded-lg border bg-card lg:max-h-[calc(100vh-220px)]">
           {templates.map((t) => (
             <li key={t.key}>
@@ -670,7 +670,7 @@ function EmailTab(): React.ReactElement {
                 type="button"
                 onClick={() => setSelected(t.key)}
                 className={cn(
-                  'flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors',
+                  'flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm transition-colors',
                   selected === t.key
                     ? 'bg-primary/10 text-primary'
                     : 'text-foreground hover:bg-muted/50',
@@ -695,8 +695,8 @@ function EmailTab(): React.ReactElement {
         )}
 
         {/* Превью */}
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <div className="flex items-center justify-between border-b px-4 py-2">
+        <div className="overflow-clip rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-be px-4 py-2">
             <div className="flex items-center gap-2 text-sm">
               <Eye className="size-3.5 text-muted-foreground" />
               <span className="font-medium">Предпросмотр</span>
@@ -730,7 +730,7 @@ function EmailTab(): React.ReactElement {
           <div className="relative min-h-[360px]">
             {loadingPreview ? (
               <div className="flex h-[360px] items-center justify-center">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                <Loader2 className="size-6 motion-safe:animate-spin text-muted-foreground" />
               </div>
             ) : preview ? (
               showText ? (
@@ -755,7 +755,7 @@ function EmailTab(): React.ReactElement {
 
         {/* Тестовая отправка */}
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
+          <h3 className="mbe-3 flex items-center gap-2 text-sm font-medium">
             <Send className="size-3.5 text-muted-foreground" />
             Тестовая отправка
           </h3>
@@ -778,14 +778,14 @@ function EmailTab(): React.ReactElement {
               disabled={sending || !selected || !recipientEmail.trim()}
             >
               {sending ? (
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 className="size-4 motion-safe:animate-spin" />
               ) : (
                 <Send className="size-4" />
               )}
               Отправить
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mbs-2 text-xs text-muted-foreground">
             Письмо будет отправлено с демо-данными через настроенный SMTP. Если SMTP не настроен, письмо будет залогировано в консоль сервера.
           </p>
         </div>

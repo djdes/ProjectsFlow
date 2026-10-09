@@ -71,12 +71,12 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
   return (
     <aside
       style={{ width }}
-      className="absolute inset-y-0 right-0 z-40 flex max-w-[85vw] flex-col border-l bg-background shadow-2xl"
+      className="absolute inset-y-0 end-0 z-40 flex max-w-[85vw] flex-col border-s bg-background shadow-2xl"
       aria-label="Элемент и код"
     >
       <button
         type="button"
-        className="absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none outline-none before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 hover:before:bg-primary focus-visible:before:bg-primary"
+        className="absolute inset-y-0 -start-1.5 z-10 w-3 cursor-col-resize touch-none outline-none before:absolute before:inset-y-0 before:start-1/2 before:w-px before:-translate-x-1/2 hover:before:bg-primary focus-visible:before:bg-primary"
         aria-label="Изменить ширину панели кода"
         onPointerDown={(event) => {
           dragRef.current = { startX: event.clientX, startWidth: width };
@@ -85,15 +85,15 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
         }}
       />
 
-      <header className="flex items-start gap-3 border-b px-5 py-4 text-left">
+      <header className="flex items-start gap-3 border-be px-5 py-4 text-start">
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold">Элемент и код</h2>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{element ? `${element.locator.tagName.toLowerCase()} · ${element.locator.selector}` : 'Выберите элемент в Preview — панель останется открытой.'}</p>
+          <p className="mbs-1 truncate text-xs text-muted-foreground">{element ? `${element.locator.tagName.toLowerCase()} · ${element.locator.selector}` : 'Выберите элемент в Preview — панель останется открытой.'}</p>
         </div>
         <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => onOpenChange(false)} aria-label="Закрыть панель"><X className="size-4" /></Button>
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-be px-3 py-2">
         <div className="flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Представление элемента">
           <button type="button" role="tab" aria-selected={tab === 'preview'} onClick={() => setTab('preview')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'preview' && 'bg-background text-foreground shadow-sm')}><Eye className="size-3.5" />Параметры</button>
           <button type="button" role="tab" aria-selected={tab === 'source'} onClick={() => setTab('source')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'source' && 'bg-background text-foreground shadow-sm')}><Braces className="size-3.5" />Исходник</button>
@@ -115,7 +115,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
               className={cn('min-h-[360px] flex-1 resize-none bg-transparent p-5 font-mono text-xs leading-5 text-zinc-100 outline-none', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}
               aria-label="Исходный HTML выбранного элемента"
             />
-            <div className="sticky bottom-0 flex justify-end border-t border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
+            <div className="sticky inset-be-0 flex justify-end border-bs border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
               <Button type="button" size="sm" className="gap-1.5" disabled={!element || !sourceDraft.trim() || sourceDraft === source} onClick={() => onPatch({ kind: 'html', value: sourceDraft })}><Save className="size-3.5" />Сохранить исходник</Button>
             </div>
           </div>
@@ -132,7 +132,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
                 {styleEntries.length ? styleEntries.map(([property, value]) => (
                   <label key={`${element?.locator.selector}:${property}`} className="min-w-0 rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
                     <span className="block truncate">{property}</span>
-                    <input defaultValue={value} onBlur={(event) => { if (event.target.value !== value) onPatch({ kind: 'style', property, value: event.target.value }); }} className="mt-1 w-full bg-transparent font-mono text-xs text-foreground outline-none" />
+                    <input defaultValue={value} onBlur={(event) => { if (event.target.value !== value) onPatch({ kind: 'style', property, value: event.target.value }); }} className="mbs-1 w-full bg-transparent font-mono text-xs text-foreground outline-none" />
                   </label>
                 )) : <p className="text-sm text-muted-foreground">Стили появятся после выбора элемента.</p>}
               </div>
@@ -153,12 +153,12 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
         )}
       </div>
 
-      <form className="space-y-2 border-t bg-background p-4" onSubmit={(event) => { event.preventDefault(); const value = prompt.trim(); if (!value || busy || !element) return; onEditWithAi(value); }}>
+      <form className="space-y-2 border-bs bg-background p-4" onSubmit={(event) => { event.preventDefault(); const value = prompt.trim(); if (!value || busy || !element) return; onEditWithAi(value); }}>
         <label htmlFor="site-code-ai-prompt" className="flex items-center gap-1.5 text-sm font-medium"><Sparkles className="size-4 text-blue-500" />Изменить выбранный элемент с ИИ</label>
         <textarea id="site-code-ai-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={!element || busy} rows={2} maxLength={2000} placeholder="Опишите точное изменение этого элемента" className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60" />
         <div className="flex items-center justify-between gap-3">
           <p className={cn('min-w-0 truncate text-xs text-muted-foreground', status === 'error' && 'text-destructive')}>{message || 'Изменения сохраняются как черновик до общей публикации.'}</p>
-          <Button type="submit" size="sm" className="shrink-0 gap-1.5" disabled={!element || !prompt.trim() || busy}>{busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}Изменить</Button>
+          <Button type="submit" size="sm" className="shrink-0 gap-1.5" disabled={!element || !prompt.trim() || busy}>{busy ? <Loader2 className="size-3.5 motion-safe:animate-spin" /> : <Sparkles className="size-3.5" />}Изменить</Button>
         </div>
       </form>
     </aside>

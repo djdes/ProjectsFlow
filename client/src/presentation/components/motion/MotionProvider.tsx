@@ -55,9 +55,13 @@ export function MotionProvider({
       window.removeEventListener('storage', stored);
     };
   }, [storageKey]);
+  // Глобальный «выключатель» (html.pf-no-motion глушит длительности у всего) — только для
+  // явного «Анимации: выкл» в профиле. Системный prefers-reduced-motion так не глушим
+  // (good-css «Opt-in motion»): движение в CSS включается лишь под no-preference/motion-safe,
+  // а смены цвета и прозрачности должны оставаться плавными и для таких пользователей.
   useLayoutEffect(() => {
-    document.documentElement.classList.toggle('pf-no-motion', !animations);
-  }, [animations]);
+    document.documentElement.classList.toggle('pf-no-motion', preference === 'off');
+  }, [preference]);
   const setAnimations = (value: boolean): void => {
     const next = value ? 'on' : 'off';
     try {

@@ -104,7 +104,7 @@ export function StudioTopBar({
   if (embedded === 'trailing') return <>{trailing}</>;
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-2">
+    <header className="flex h-11 shrink-0 items-center gap-1.5 border-be bg-background px-2">
       {leading}
 
       <span className="min-w-0 flex-1" aria-hidden />

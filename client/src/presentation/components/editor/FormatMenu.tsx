@@ -91,7 +91,7 @@ const TURN_INTO: TurnIntoItem[] = [
     label: 'Маркированный список',
     hint: 'Список с маркерами.',
     example: (
-      <ul className="list-disc space-y-0.5 pl-4 text-xs">
+      <ul className="list-disc space-y-0.5 ps-4 text-xs">
         <li>Первый пункт</li>
         <li>Второй пункт</li>
       </ul>
@@ -105,7 +105,7 @@ const TURN_INTO: TurnIntoItem[] = [
     label: 'Нумерованный список',
     hint: 'Список с нумерацией.',
     example: (
-      <ol className="list-decimal space-y-0.5 pl-4 text-xs">
+      <ol className="list-decimal space-y-0.5 ps-4 text-xs">
         <li>Первый пункт</li>
         <li>Второй пункт</li>
       </ol>
@@ -141,7 +141,7 @@ const TURN_INTO: TurnIntoItem[] = [
     label: 'Цитата',
     hint: 'Выделенная цитата.',
     example: (
-      <blockquote className="border-l-2 border-foreground/30 pl-2 text-xs italic text-muted-foreground">
+      <blockquote className="border-s-2 border-foreground/30 ps-2 text-xs italic text-muted-foreground">
         Выделенная цитата
       </blockquote>
     ),
@@ -154,7 +154,7 @@ const TURN_INTO: TurnIntoItem[] = [
     label: 'Блок кода',
     hint: 'Блок кода с моноширинным шрифтом.',
     example: (
-      <code className="block rounded bg-foreground/10 px-1.5 py-1 font-mono text-[11px] leading-snug">
+      <code className="block rounded bg-foreground/10 px-1.5 py-1 font-mono text-2xs leading-snug">
         const x = 1
       </code>
     ),
@@ -230,7 +230,7 @@ const FORMAT_BTNS: FormatBtn[] = [
     label: 'Инлайн-код · Ctrl+E',
     hint: 'Моноширинный фрагмент внутри строки.',
     example: (
-      <code className="rounded bg-foreground/10 px-1 py-0.5 font-mono text-[11px]">inline code</code>
+      <code className="rounded bg-foreground/10 px-1 py-0.5 font-mono text-2xs">inline code</code>
     ),
     icon: Code,
   },
@@ -269,7 +269,7 @@ function ColorDot({ swatch, kind }: { swatch: ColorSwatch; kind: 'text' | 'bg' }
 }
 
 const ROW =
-  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-hover';
+  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover';
 
 // Богатая подсказка (как в Notion): стилизованный образец + строка-описание. Портал Radix
 // в body, z выше панелей меню (z-[70]). avoidCollisions сам флипнет, если у края экрана.
@@ -294,7 +294,7 @@ function MenuItemTooltip({
         className="z-[80] w-56 max-w-[calc(100vw-1rem)] overflow-hidden p-0"
       >
         {example != null && (
-          <div className="border-b bg-muted/40 px-3 py-2.5">{example}</div>
+          <div className="border-be bg-muted/40 px-3 py-2.5">{example}</div>
         )}
         <div className="px-3 py-2 text-xs leading-snug text-muted-foreground">{description}</div>
       </TooltipContent>
@@ -384,7 +384,7 @@ export function FormatMenu({ editor, getRange, inline = false }: {
               </MenuItemTooltip>
             ))}
           </div>
-          <div className={cn('flex items-center gap-1', inline ? 'ml-auto' : 'w-full border-t pt-1')}>
+          <div className={cn('flex items-center gap-1', inline ? 'ms-auto' : 'w-full border-bs pbs-1')}>
             <button type="button" aria-label="Тип блока" aria-expanded={openSub === 'turn'} aria-controls={panelId}
               onClick={() => setOpenSub(openSub === 'turn' ? null : 'turn')}
               className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10">
@@ -397,7 +397,7 @@ export function FormatMenu({ editor, getRange, inline = false }: {
             </button>
           </div>
         </div>
-        {openSub && <div id={panelId} className="mt-1 max-h-[min(22rem,45dvh)] overflow-y-auto border-t pt-2">
+        {openSub && <div id={panelId} className="mbs-1 max-h-[min(22rem,45dvh)] overflow-y-auto border-bs pbs-2">
           {openSub === 'turn' && <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
             {TURN_INTO.map(item => <button key={item.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => selectBlock(item)}
               aria-pressed={item.isActive(editor)} className={cn(ROW, 'min-h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', item.isActive(editor) && 'bg-primary/10 text-primary')}>
@@ -407,9 +407,9 @@ export function FormatMenu({ editor, getRange, inline = false }: {
               <Eraser className="size-4" />Очистить форматирование
             </button>
           </div>}
-          {openSub === 'color' && <div className="space-y-3 px-1 pb-1">
+          {openSub === 'color' && <div className="space-y-3 px-1 pbe-1">
             {([{ kind: 'text', label: 'Цвет текста', colors: TEXT_COLORS }, { kind: 'bg', label: 'Цвет фона', colors: BG_COLORS }] as const).map(group => <div key={group.kind}>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">{group.label}</p>
+              <p className="mbe-1.5 text-xs font-medium text-muted-foreground">{group.label}</p>
               <div className="grid grid-cols-5 gap-1">
                 {group.colors.map(sw => <button key={sw.id} type="button" aria-label={`${group.label}: ${sw.label}`} title={sw.label}
                   aria-pressed={(group.kind === 'text' ? active.textColor : active.bgColor) === sw.value}

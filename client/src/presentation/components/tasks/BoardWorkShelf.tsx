@@ -72,7 +72,7 @@ export function BoardWorkShelf({
           flash && 'pf-shelf-flash',
         )}
       >
-        <div className="mb-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300/90">
+        <div className="mbe-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300/90">
           <span className="min-w-0 truncate">{label}</span>
           {tasks.length > 0 && <span className="tabular-nums opacity-70">{tasks.length}</span>}
         </div>
@@ -144,13 +144,13 @@ function ShelfCard({
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-0 flex items-center rounded-xl pl-3 text-sm font-medium transition-colors',
+            'pointer-events-none absolute inset-0 flex items-center rounded-xl ps-3 text-sm font-medium transition-colors',
             armed
               ? 'bg-emerald-500/25 text-emerald-800 dark:text-emerald-300'
               : 'bg-emerald-500/10 text-emerald-700/70 dark:text-emerald-300/70',
           )}
         >
-          <Check className="mr-1.5 size-4" />
+          <Check className="me-1.5 size-4" />
           Готово
         </div>
       )}

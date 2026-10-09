@@ -43,7 +43,7 @@ export function HelpAiPanel({
   if (!session || creating) {
     return (
       <div className="grid flex-1 place-items-center">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        <Loader2 className="size-5 motion-safe:animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -63,21 +63,21 @@ export function HelpAiPanel({
         contextSlot={
           <>
             {session.projectName && (
-              <div className="pb-2">
-                <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+              <div className="pbe-2">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-2xs font-medium text-muted-foreground">
                   <Folder className="size-3 shrink-0" />
                   <span className="truncate">{session.projectName}</span>
                 </span>
               </div>
             )}
             {movedToOtherProject && (
-              <div className="mb-2 rounded-lg border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-200/90">
+              <div className="mbe-2 rounded-lg border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-2xs leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-200/90">
                 Этот чат привязан к проекту{' '}
                 {session.projectName ? `«${session.projectName}»` : 'из которого он начат'}.
                 <button
                   type="button"
                   onClick={onStartProjectChat}
-                  className="ml-1 font-medium underline underline-offset-2"
+                  className="ms-1 font-medium underline underline-offset-2"
                 >
                   Начать чат о «{routeProjectName ?? 'текущем проекте'}»
                 </button>

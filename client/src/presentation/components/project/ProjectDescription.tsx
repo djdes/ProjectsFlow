@@ -61,7 +61,7 @@ export function ProjectDescription({ projectId, description, canEdit }: Props): 
     const trimmed = (description ?? '').trim();
     if (trimmed.length === 0) return null;
     return (
-      <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{trimmed}</p>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{trimmed}</p>
     );
   }
 
@@ -82,7 +82,7 @@ export function ProjectDescription({ projectId, description, canEdit }: Props): 
       placeholder="Добавьте описание проекта…"
       rows={1}
       className={cn(
-        'block min-h-6 w-full resize-none overflow-hidden bg-transparent p-0 text-[15px] leading-relaxed text-foreground/90 outline-none',
+        'block min-h-6 w-full resize-none overflow-hidden bg-transparent p-0 text-sm leading-relaxed text-foreground/90 outline-none',
         'placeholder:text-muted-foreground/50',
       )}
       aria-label="Описание проекта"

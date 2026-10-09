@@ -1,5 +1,9 @@
+/* Токены движения (good-css «Motion tokens»): две кривые на весь интерфейс — ease-out для
+   появления и реакции, ease-in-out для перемещения между двумя состояниями. ease-in (медленный
+   старт) в интерфейсе не используем: он читается как задержка. */
 :root {
   --pf-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pf-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --pf-ease-press: cubic-bezier(0.2, 0.7, 0.3, 1);
   --pf-duration-fast: 140ms;
   --pf-duration: 220ms;
@@ -9,7 +13,7 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  background: hsl(var(--muted, 45 6% 94%));
+  background: oklch(var(--muted, 95.56% 0.002 67.8));
 }
 .pf-skeleton::after {
   content: "";
@@ -18,11 +22,16 @@
   background: linear-gradient(
     100deg,
     transparent 15%,
-    hsl(var(--background, 0 0% 100%) / 0.75) 50%,
+    oklch(var(--background, 100% 0 none) / 0.75) 50%,
     transparent 85%
   );
   transform: translateX(-100%);
-  animation: pf-skeleton-sweep 1.8s linear infinite;
+}
+/* Бегущий блик — движение: только без prefers-reduced-motion (good-css «Opt-in motion»). */
+@media (prefers-reduced-motion: no-preference) {
+  .pf-skeleton::after {
+    animation: pf-skeleton-sweep 1.8s linear infinite;
+  }
 }
 @keyframes pf-skeleton-sweep {
   to {
@@ -45,11 +54,11 @@
   grid-template-columns: var(--pf-boot-sidebar, 270px) minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
-  background: hsl(var(--background, 0 0% 100%));
+  background: oklch(var(--background, 100% 0 none));
 }
 .pf-loading-sidebar {
   overflow: hidden;
-  background: hsl(var(--sidebar, 45 12% 96%));
+  background: oklch(var(--sidebar, 97.06% 0.002 67.8));
 }
 @media (max-width: 767px) {
   .pf-loading-shell {
@@ -60,18 +69,23 @@
   }
 }
 .pf-button {
-  transition-property:
-    color, background-color, border-color, box-shadow, opacity, transform;
+  transition-property: color, background-color, border-color, box-shadow, opacity;
   transition-duration: var(--pf-duration-fast);
   transition-timing-function: var(--pf-ease-press);
 }
+/* Нажатие — состояние (видно всем); плавное сжатие — движение, только без reduce. */
 .pf-button:active:not(:disabled) {
   transform: scale(0.975);
 }
-.pf-switch-thumb {
-  transition:
-    transform 260ms var(--pf-ease),
-    width 160ms var(--pf-ease);
+@media (prefers-reduced-motion: no-preference) {
+  .pf-button {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  }
+  .pf-switch-thumb {
+    transition:
+      transform 260ms var(--pf-ease),
+      width 160ms var(--pf-ease);
+  }
 }
 .pf-switch:active:not(:disabled) .pf-switch-thumb {
   width: 23px;
@@ -79,15 +93,19 @@
 .pf-switch[aria-checked="true"]:active:not(:disabled) .pf-switch-thumb {
   transform: translateX(19px);
 }
-.pf-tab-indicator {
-  transition:
-    left 260ms var(--pf-ease),
-    right 320ms var(--pf-ease),
-    top 220ms var(--pf-ease),
-    height 220ms var(--pf-ease);
-}
-.pf-tab-indicator[data-direction="right"] {
-  transition-duration: 320ms, 260ms, 220ms, 220ms;
+/* Подложку активной вкладки двигает скрипт (left/right/top/height в style) — физические
+   свойства тут честные: это координаты из getBoundingClientRect. Переезд — движение. */
+@media (prefers-reduced-motion: no-preference) {
+  .pf-tab-indicator {
+    transition:
+      left 260ms var(--pf-ease),
+      right 320ms var(--pf-ease),
+      top 220ms var(--pf-ease),
+      height 220ms var(--pf-ease);
+  }
+  .pf-tab-indicator[data-direction="right"] {
+    transition-duration: 320ms, 260ms, 220ms, 220ms;
+  }
 }
 [data-pf-motion-surface] {
   animation-timing-function: var(--pf-ease);
@@ -101,9 +119,12 @@
 [data-pf-motion-surface="sheet"][data-state="open"] {
   animation-duration: var(--pf-duration-panel);
 }
-[data-pf-motion-surface="dialog"][data-state="open"],
-[data-pf-motion-surface="popover"][data-state="open"] {
-  --tw-enter-scale: 0.98;
+/* Появление с лёгким масштабом — движение; без него окно просто проявляется. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-pf-motion-surface="dialog"][data-state="open"],
+  [data-pf-motion-surface="popover"][data-state="open"] {
+    --tw-enter-scale: 0.98;
+  }
 }
 [data-sonner-toast][data-type="success"] [data-icon] svg {
   animation: pf-content-reveal 220ms var(--pf-ease);
@@ -114,15 +135,8 @@
   *::after {
     scroll-behavior: auto !important;
   }
-  .pf-skeleton::after {
-    animation: none;
-    display: none;
-  }
   .pf-content-reveal {
     animation: none;
-  }
-  .pf-button:active:not(:disabled) {
-    transform: none;
   }
 }
 html.pf-no-motion .pf-skeleton::after {

@@ -28,7 +28,7 @@ type Props = {
 
 // Кнопка плашки — белая «пилюля» «Открыть результат» (как в Notion).
 const BTN =
-  'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-[13px] font-medium text-[#37352f] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-white/10 dark:text-blue-50 dark:hover:bg-white/20';
+  'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-[13px] font-medium text-[oklch(32.89%_0.011_91.66)] shadow-[0_1px_2px_oklch(20.77%_0.04_265.75/0.06)] transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-white/10 dark:text-blue-50 dark:hover:bg-white/20';
 
 // Синяя плашка «результат опубликован» — один в один как «This page is live on …» в Notion, но
 // про РЕЗУЛЬТАТ проекта (задеплоенный воркером статический сайт на <slug>.projectsflow.ru), НЕ про
@@ -99,11 +99,11 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
 
   return (
     <div
-      className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-b border-black/[0.05] bg-[#e8f3f9] transition-[margin] duration-300 ease-in-out dark:border-white/[0.06] dark:bg-[#1d2a31]"
+      className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-be border-black/[0.05] bg-[oklch(95.77%_0.014_231.21)] transition-[margin] duration-300 ease-in-out dark:border-white/[0.06] dark:bg-[oklch(27.62%_0.022_232.09)]"
       style={shiftForOverlay ? { marginRight: rightPanelWidth } : undefined}
     >
       <div
-        className="relative flex flex-1 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:text-blue-50"
+        className="relative flex flex-1 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-10 py-2 text-[13px] leading-tight text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50"
         style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
       >
         <span className="truncate">
@@ -115,7 +115,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
           Открыть результат
         </a>
       </div>
-      <ProjectBannerDismissButton className="top-1/2 -translate-y-1/2 text-[#37352f]/40 hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50" />
+      <ProjectBannerDismissButton className="inset-bs-1/2 -translate-y-1/2 text-[oklch(32.89%_0.011_91.66/0.4)] hover:bg-black/[0.06] hover:text-[oklch(32.89%_0.011_91.66/0.7)] dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50" />
     </div>
   );
 }

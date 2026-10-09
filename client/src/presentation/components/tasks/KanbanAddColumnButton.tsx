@@ -35,7 +35,7 @@ export function KanbanAddColumnButton({ activeCount, onCreate }: Props): React.R
   };
 
   return (
-    <div className="flex shrink-0 items-start pt-2">
+    <div className="flex shrink-0 items-start pbs-2">
       <Popover
         open={open}
         onOpenChange={(next) => {

@@ -64,7 +64,7 @@ export function AlertCenterPage(): React.ReactElement {
   const critical = data?.active.filter((a) => a.severity === 'critical') ?? [];
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
+    <div className="flex h-full flex-col gap-5 p-4 pbs-3.5 sm:p-6 sm:pbs-4">
       {/* pf-burger-gap — уступаем место плавающему бургеру свёрнутой панели. Маркер на группе
           «иконка + заголовок», а не на всей строке: счётчик справа не должен ехать. */}
       <div className="pf-burger-gap flex items-center gap-2.5">
@@ -76,7 +76,7 @@ export function AlertCenterPage(): React.ReactElement {
           </span>
         )}
       </div>
-      <Link to="/monitoring" className="-mt-2 text-sm text-muted-foreground hover:text-foreground">
+      <Link to="/monitoring" className="-mbs-2 text-sm text-muted-foreground hover:text-foreground">
         ← Сводка по проектам
       </Link>
 

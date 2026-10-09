@@ -382,9 +382,9 @@ export function PropertyHeaderCell({
       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'}
       data-colkey={colKey}
       className={cn(
-        'relative flex h-9 min-w-0 border-b border-l bg-background',
-        dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
-        dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
+        'relative flex h-9 min-w-0 border-be border-s bg-background',
+        dropSide === 'left' && 'shadow-[inset_2px_0_0_oklch(var(--primary))]',
+        dropSide === 'right' && 'shadow-[inset_-2px_0_0_oklch(var(--primary))]',
       )}
     >
       <DropdownMenu
@@ -421,7 +421,7 @@ export function PropertyHeaderCell({
                   }
                 : undefined
             }
-            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
             <span className="truncate">{property.name}</span>
@@ -450,7 +450,7 @@ export function PropertyHeaderCell({
             <>
           {/* Имя свойства редактируется прямо в меню (Notion). stopPropagation:
               иначе Radix-typeahead перехватывает буквы. */}
-          <div className="flex items-center gap-1.5 px-1 pb-1.5 pt-0.5">
+          <div className="flex items-center gap-1.5 px-1 pbe-1.5 pbs-0.5">
             <span className="grid size-7 shrink-0 place-items-center rounded-md border text-muted-foreground">
               <Icon className="size-3.5" />
             </span>
@@ -501,12 +501,12 @@ export function PropertyHeaderCell({
               <DropdownMenuItem className="gap-2" onSelect={() => onSort(sorted === 'asc' ? null : 'asc')}>
                 <ArrowUp className="size-4" />
                 По возрастанию
-                {sorted === 'asc' && <span className="ml-auto text-xs text-primary">✓</span>}
+                {sorted === 'asc' && <span className="ms-auto text-xs text-primary">✓</span>}
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2" onSelect={() => onSort(sorted === 'desc' ? null : 'desc')}>
                 <ArrowDown className="size-4" />
                 По убыванию
-                {sorted === 'desc' && <span className="ml-auto text-xs text-primary">✓</span>}
+                {sorted === 'desc' && <span className="ms-auto text-xs text-primary">✓</span>}
               </DropdownMenuItem>
             </>
           )}
@@ -595,7 +595,7 @@ export function PropertyHeaderCell({
             e.preventDefault();
             onResizeBy?.(e.key === 'ArrowLeft' ? -16 : 16);
           }}
-          className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize rounded transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="absolute -end-1 inset-bs-0 z-10 h-full w-2 cursor-col-resize rounded transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         />
       )}
       {onRemove && (
@@ -656,15 +656,15 @@ export function NewPropertyForm({
         }}
         placeholder="Введите имя свойства…"
         aria-label="Имя свойства"
-        className="mb-4 h-11 w-full rounded-[10px] border bg-background px-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+        className="mbe-4 h-11 w-full rounded-[10px] border bg-background px-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
       />
-      <div className="flex items-center justify-between gap-2 px-0.5 pb-1.5">
-        <p className="shrink-0 text-[11px] font-medium text-muted-foreground">Выбрать тип</p>
+      <div className="flex items-center justify-between gap-2 px-0.5 pbe-1.5">
+        <p className="shrink-0 text-2xs font-medium text-muted-foreground">Выбрать тип</p>
         {/* Иконка-лупа → раскрывается в поле поиска (плавно). Схлопывается на blur,
             если пусто. */}
         {searchOpen ? (
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+            <Search className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
             <input
               autoFocus
               value={typeQuery}
@@ -674,7 +674,7 @@ export function NewPropertyForm({
               }}
               placeholder="Поиск типа…"
               aria-label="Поиск типа"
-              className="h-11 w-full rounded-[10px] border bg-background pl-8 pr-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+              className="h-11 w-full rounded-[10px] border bg-background ps-8 pe-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
             />
           </div>
         ) : (
@@ -697,7 +697,7 @@ export function NewPropertyForm({
               type="button"
               onClick={() => onCreate(t, name)}
               className={cn(
-                'flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-start text-sm transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 currentType === t && 'bg-accent/60 text-foreground',
               )}
             >
@@ -811,32 +811,32 @@ export function PropertyVisibilityPanel({
   return (
     <div className="flex w-72 flex-col gap-1">
       <div className="relative px-0.5">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+        <Search className="pointer-events-none absolute start-2.5 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Поиск свойства…"
           aria-label="Поиск свойства"
-          className="h-8 w-full rounded-md border bg-background pl-8 pr-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+          className="h-8 w-full rounded-md border bg-background ps-8 pe-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
         />
       </div>
       {/* «Название» всегда видно (Notion: Name нельзя скрыть). */}
       {(!q || 'название'.includes(q)) && (
         <div className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm">
-          <span className="font-mono text-[11px] leading-none text-muted-foreground/70">Aa</span>
+          <span className="font-mono text-2xs leading-none text-muted-foreground/70">Aa</span>
           <span className="min-w-0 flex-1 truncate">Название</span>
-          <Eye className="mr-1.5 size-3.5 text-muted-foreground/30" />
+          <Eye className="me-1.5 size-3.5 text-muted-foreground/30" />
         </div>
       )}
       {shown.length > 0 && (
         <>
-          <div className="flex items-center justify-between px-1.5 pt-1">
-            <p className="text-[11px] font-medium text-muted-foreground">В таблице</p>
+          <div className="flex items-center justify-between px-1.5 pbs-1">
+            <p className="text-2xs font-medium text-muted-foreground">В таблице</p>
             {onSetHidden && (
               <button
                 type="button"
                 onClick={() => onSetHidden(items.map((it) => it.key))}
-                className="text-[11px] text-primary transition-opacity hover:opacity-70"
+                className="text-2xs text-primary transition-opacity hover:opacity-70"
               >
                 Скрыть все
               </button>
@@ -867,13 +867,13 @@ export function PropertyVisibilityPanel({
       )}
       {hiddenItems.length > 0 && (
         <>
-          <div className="flex items-center justify-between px-1.5 pt-1">
-            <p className="text-[11px] font-medium text-muted-foreground">Скрыто в таблице</p>
+          <div className="flex items-center justify-between px-1.5 pbs-1">
+            <p className="text-2xs font-medium text-muted-foreground">Скрыто в таблице</p>
             {onSetHidden && (
               <button
                 type="button"
                 onClick={() => onSetHidden([])}
-                className="text-[11px] text-primary transition-opacity hover:opacity-70"
+                className="text-2xs text-primary transition-opacity hover:opacity-70"
               >
                 Показать все
               </button>
@@ -919,7 +919,7 @@ function CreateOptionInput({
       }}
       placeholder="Создать опцию…"
       aria-label="Создать опцию"
-      className="mx-1 mb-1 w-[calc(100%-0.5rem)] rounded bg-accent/60 px-2 py-1 text-xs outline-none placeholder:text-muted-foreground/60"
+      className="mx-1 mbe-1 w-[calc(100%-0.5rem)] rounded bg-accent/60 px-2 py-1 text-xs outline-none placeholder:text-muted-foreground/60"
     />
   );
 }
@@ -987,12 +987,12 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div role="gridcell" {...selAttrs} className={cn('relative min-h-9 border-b border-l', rangeClass)}>
+        <div role="gridcell" {...selAttrs} className={cn('relative min-h-9 border-be border-s', rangeClass)}>
           {/* Notion: редактор раскрывается ПОВЕРХ ячейки РОВНО по её ширине (w-full),
               текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
               Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
               перенос строки в тексте), Esc — отмена. */}
-          <div className="absolute -left-px -top-px z-30 w-[calc(100%+1px)] overflow-hidden rounded-[3px] bg-popover shadow-[0_0_0_1px_rgba(15,15,15,0.12),0_3px_12px_rgba(15,15,15,0.16)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_3px_12px_rgba(0,0,0,0.5)]">
+          <div className="absolute -start-px -inset-bs-px z-30 w-[calc(100%+1px)] overflow-clip rounded-[3px] bg-popover shadow-[0_0_0_1px_oklch(16.84%_0_none/0.12),0_3px_12px_oklch(16.84%_0_none/0.16)] dark:shadow-[0_0_0_1px_oklch(100%_0_none/0.14),0_3px_12px_oklch(0%_0_none/0.5)]">
             {property.type === 'text' ? (
               <textarea
                 autoFocus
@@ -1060,7 +1060,7 @@ export function PropertyValueCell({
           setEditing(true);
         }}
         className={cn(
-          'relative min-h-9 min-w-0 border-b border-l px-2 py-1 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+          'relative min-h-9 min-w-0 border-be border-s px-2 py-1 text-start text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
           rangeClass,
         )}
       >
@@ -1079,7 +1079,7 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div role="gridcell" {...selAttrs} tabIndex={-1} className={cn('relative flex min-h-9 items-center border-b border-l', rangeClass)}>
+      <div role="gridcell" {...selAttrs} tabIndex={-1} className={cn('relative flex min-h-9 items-center border-be border-s', rangeClass)}>
         <label className="flex min-h-9 w-full items-center px-2 py-1">
           <input
             type="checkbox"
@@ -1106,13 +1106,13 @@ export function PropertyValueCell({
             role="gridcell"
             disabled={readOnly}
             className={cn(
-              'relative flex min-h-9 min-w-0 items-center gap-2 border-b border-l px-2 py-1 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+              'relative flex min-h-9 min-w-0 items-center gap-2 border-be border-s px-2 py-1 text-start text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
               rangeClass,
             )}
           >
             {current ? (
               <>
-                <span className="grid size-4 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
+                <span className="grid size-4 shrink-0 place-items-center overflow-clip rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
                   {current.avatarUrl ? (
                     <img src={current.avatarUrl} alt="" className="size-full object-cover" />
                   ) : (
@@ -1134,7 +1134,7 @@ export function PropertyValueCell({
               className="gap-2"
               onSelect={() => onChange(value === m.id ? '' : m.id)}
             >
-              <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+              <span className="grid size-5 shrink-0 place-items-center overflow-clip rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
                 {m.avatarUrl ? (
                   <img src={m.avatarUrl} alt="" className="size-full object-cover" />
                 ) : (
@@ -1183,7 +1183,7 @@ export function PropertyValueCell({
           role="gridcell"
           disabled={readOnly}
           className={cn(
-            'relative flex min-h-9 min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+            'relative flex min-h-9 min-w-0 flex-wrap items-center gap-1 border-be border-s px-2 py-1 text-start transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
             rangeClass,
           )}
         >

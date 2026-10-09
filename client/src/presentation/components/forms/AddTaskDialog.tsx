@@ -501,7 +501,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             <button
               type="button"
               onClick={handleRestore}
-              className="flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+              className="flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-start text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               title="Вернуть прошлую незавершённую задачу со всеми параметрами"
             >
               <RotateCcw className="size-3.5 shrink-0" />
@@ -520,7 +520,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 {pending.map((pf) => (
                   <span
                     key={pf.id}
-                    className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+                    className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 ps-1.5 pe-1 text-2xs"
                     title={pf.file.name}
                   >
                     {pf.previewUrl ? (
@@ -605,7 +605,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           {/* Панель действий (разделитель-линия сразу под «+ Подзадача/+ Файл»):
               слева — выбор проекта + icon-кнопки (Приоритет, Дедлайн, Ответственный,
               Режим воркера, AI-перефразировка); справа по краю — Отмена/Добавить. */}
-          <div className="max-sm:flex-shrink-0 flex flex-col gap-2 border-t pt-2 sm:pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-sm:flex-shrink-0 flex flex-col gap-2 border-bs pbs-2 sm:pbs-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -61,12 +61,12 @@ export function MobileBottomNav(): React.ReactElement {
   return (
     <nav
       aria-label="Основная навигация"
-      className="shrink-0 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2"
+      className="shrink-0 px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2"
     >
       <div
         ref={innerRef}
         data-pf-no-edge-swipe
-        className="relative mx-auto flex max-w-md touch-pan-y select-none items-stretch rounded-[1.5rem] border border-border/80 bg-background p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.07)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
+        className="relative mx-auto flex max-w-md touch-pan-y select-none items-stretch rounded-[1.5rem] border border-border/80 bg-background p-1.5 shadow-[0_4px_20px_oklch(0%_0_none/0.07)] dark:shadow-[0_4px_20px_oklch(0%_0_none/0.3)]"
         onPointerDown={(event) => {
           if (!event.isPrimary) {
             suppressClickRef.current = true;
@@ -159,7 +159,7 @@ export function MobileBottomNav(): React.ReactElement {
         <span
           ref={indicatorRef}
           aria-hidden
-          className="pf-nav-glass pointer-events-none absolute inset-y-1.5 left-1.5 rounded-[1.125rem] bg-primary/10 transition-[transform,opacity] duration-300 ease-out dark:bg-primary/15"
+          className="pf-nav-glass pointer-events-none absolute inset-y-1.5 start-1.5 rounded-[1.125rem] bg-primary/10 transition-[transform,opacity] duration-300 ease-out dark:bg-primary/15"
           style={{
             width: `calc((100% - 0.75rem) / ${items.length})`,
             opacity: activeIndex < 0 ? 0 : 1,
@@ -175,7 +175,7 @@ export function MobileBottomNav(): React.ReactElement {
             aria-current={item.active ? 'page' : undefined}
             onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path)}
             className={cn(
-              'relative z-10 flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[1.125rem] px-2 py-1.5 text-[11px] font-medium leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+              'relative z-10 flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[1.125rem] px-2 py-1.5 text-2xs font-medium leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
               item.active
                 ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground',
@@ -190,7 +190,7 @@ export function MobileBottomNav(): React.ReactElement {
                 <Sparkles className="size-5" />
               )}
               {item.badge > 0 && (
-                <span className="absolute -right-2 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground ring-2 ring-background">
+                <span className="absolute -end-2 -inset-bs-1 inline-flex tabular-nums min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground ring-2 ring-background">
                   {item.badge > 99 ? '99+' : item.badge}
                 </span>
               )}

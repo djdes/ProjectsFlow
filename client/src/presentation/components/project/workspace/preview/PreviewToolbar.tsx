@@ -58,7 +58,7 @@ export function PreviewToolbar({
   return (
     <div
       className={cn(
-        'flex items-center gap-1 border-b bg-background px-2 py-1',
+        'flex items-center gap-1 border-be bg-background px-2 py-1',
         // В studio-раскладке высота ЖЁСТКАЯ (h-11) и совпадает с хедером левой панели —
         // только так нижние границы обеих панелей сходятся в одну сплошную линию.
         // min-h-* здесь нельзя: тулбар подрастает от контента и линия разъезжается.
@@ -116,9 +116,9 @@ export function PreviewToolbar({
           </Tooltip>
         </form>
         {routeMenuOpen && (
-          <div id={listId} role="listbox" aria-label="Страницы результата" className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
+          <div id={listId} role="listbox" aria-label="Страницы результата" className="absolute start-0 end-0 inset-bs-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
             {filteredRoutes.map((route) => (
-              <button key={route} type="button" role="option" aria-selected={route === path} className={cn('flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted', route === path && 'bg-muted font-medium')} onClick={() => onApplyPath(route)}>{route}</button>
+              <button key={route} type="button" role="option" aria-selected={route === path} className={cn('flex w-full items-center rounded-md px-2.5 py-2 text-start text-sm hover:bg-muted', route === path && 'bg-muted font-medium')} onClick={() => onApplyPath(route)}>{route}</button>
             ))}
             {!filteredRoutes.length && <p className="px-2.5 py-2 text-sm text-muted-foreground">Ничего не найдено. Можно ввести путь вручную и нажать Enter.</p>}
           </div>

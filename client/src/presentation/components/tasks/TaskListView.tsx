@@ -220,7 +220,7 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
           </span>
         </div>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+        <ul className="divide-y overflow-clip rounded-lg border bg-card">
           {sorted.map((t, i) => (
             <TaskListRow
               key={t.id}
@@ -321,7 +321,7 @@ function QuickAddInput({
         {fmt.menuContent}
       </ContextMenu>
       {submitting && (
-        <Loader2 className="absolute right-3 top-3.5 size-4 animate-spin text-muted-foreground" />
+        <Loader2 className="absolute end-3 inset-bs-3.5 size-4 motion-safe:animate-spin text-muted-foreground" />
       )}
     </div>
   );
@@ -379,7 +379,7 @@ function TaskListRow({
         // Priority-accent — левый цветной border 4px. На List-row даёт визуально
         // понятный «прокрашенный» strip слева, не меняя bg и не конкурируя с
         // bg-muted hover.
-        task.priority && `border-l-4 ${PRIORITY_META[task.priority].border}`,
+        task.priority && `border-s-4 ${PRIORITY_META[task.priority].border}`,
         // Срочная задача светится красным и в списке — иначе приоритет виден только на
         // доске, а люди, живущие в списке, его пропускают.
         task.priority === 1 && !isDone && 'pf-urgent',
@@ -411,7 +411,7 @@ function TaskListRow({
           // Вторичная мета (дедлайн/счётчики/ralph/ответственный/относительная дата) —
           // скрыта по умолчанию, проявляется на hover строки (Notion reveal-on-hover).
           // На таче (max-sm) и при фокусе внутри строки — всегда видна.
-          <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+          <div className="mbs-1 flex items-center gap-2 text-2xs text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
             <AssigneeBadge assignee={task.assignee} />
             {(task.commentCount ?? 0) > 0 && (
               <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
@@ -441,7 +441,7 @@ function TaskListRow({
           }}
           aria-label="Редактировать"
         >
-          <Pencil className="size-3.5 transition-transform duration-150 group-hover/edit:-rotate-12 group-hover/edit:scale-110" />
+          <Pencil className="size-3.5 motion-safe:transition-transform duration-150 group-hover/edit:-rotate-12 group-hover/edit:scale-110" />
         </Button>
         <Button
           variant="ghost"
@@ -453,7 +453,7 @@ function TaskListRow({
           }}
           aria-label="Удалить"
         >
-          <Trash2 className="size-3.5 transition-transform duration-150 group-hover/del:scale-110" />
+          <Trash2 className="size-3.5 motion-safe:transition-transform duration-150 group-hover/del:scale-110" />
         </Button>
       </div>
     </motion.li>

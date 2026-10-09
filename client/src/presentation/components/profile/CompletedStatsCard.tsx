@@ -52,7 +52,7 @@ export function CompletedStatsCard(): React.ReactElement {
           <p className="text-sm text-destructive">Не удалось загрузить статистику: {error}</p>
         ) : rows === null ? (
           <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 motion-safe:animate-spin" />
             Считаем…
           </div>
         ) : rows.length === 0 ? (
@@ -61,25 +61,25 @@ export function CompletedStatsCard(): React.ReactElement {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[20rem] text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-1.5 pr-3 font-medium">Пространство</th>
-                  <th className="w-20 py-1.5 pr-3 text-right font-medium">Всего</th>
-                  <th className="w-24 py-1.5 text-right font-medium">За 30 дней</th>
+                <tr className="text-start text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-1.5 pe-3 font-medium">Пространство</th>
+                  <th className="w-20 py-1.5 pe-3 text-end font-medium">Всего</th>
+                  <th className="w-24 py-1.5 text-end font-medium">За 30 дней</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.workspaceId} className="border-t">
-                    <td className="max-w-[16rem] truncate py-2 pr-3">{row.name}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{row.doneTotal}</td>
-                    <td className="py-2 text-right tabular-nums">{row.completedRecent}</td>
+                  <tr key={row.workspaceId} className="border-bs">
+                    <td className="max-w-[16rem] truncate py-2 pe-3">{row.name}</td>
+                    <td className="py-2 pe-3 text-end tabular-nums">{row.doneTotal}</td>
+                    <td className="py-2 text-end tabular-nums">{row.completedRecent}</td>
                   </tr>
                 ))}
                 {rows.length > 1 && (
-                  <tr className="border-t font-medium">
-                    <td className="py-2 pr-3">Итого</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{totalDone}</td>
-                    <td className="py-2 text-right tabular-nums">{totalRecent}</td>
+                  <tr className="border-bs font-medium">
+                    <td className="py-2 pe-3">Итого</td>
+                    <td className="py-2 pe-3 text-end tabular-nums">{totalDone}</td>
+                    <td className="py-2 text-end tabular-nums">{totalRecent}</td>
                   </tr>
                 )}
               </tbody>

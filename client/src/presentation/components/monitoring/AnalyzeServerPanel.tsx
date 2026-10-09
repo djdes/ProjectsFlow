@@ -102,7 +102,7 @@ export function AnalyzeServerPanel({
       {canManage ? (
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => void analyze('snapshot')} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Sparkles className="size-4" />}
             Разобрать снимок
           </Button>
           <Button variant="outline" size="sm" onClick={() => void analyze('logs')} disabled={busy}>
@@ -116,7 +116,7 @@ export function AnalyzeServerPanel({
 
       {busy && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
+          <Loader2 className="size-4 motion-safe:animate-spin" />
           Диспетчер анализирует… (15–60с)
         </p>
       )}
@@ -134,7 +134,7 @@ export function AnalyzeServerPanel({
         ) : (
           history.map((a) => (
             <div key={a.jobId} className="rounded-md border border-border/60 p-3">
-              <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="mbe-1 flex items-center gap-2 text-xs text-muted-foreground">
                 <Sparkles className="size-3.5 text-primary" />
                 <span className="font-medium text-foreground">{TYPE_LABEL[a.analysisType]}</span>
                 <span>· {relativeTime(a.createdAt)}</span>

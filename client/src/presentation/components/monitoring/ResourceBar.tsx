@@ -19,11 +19,11 @@ export function ResourceBar({
         <span className="text-muted-foreground">{label}</span>
         <span className="font-medium tabular-nums">
           {value === null ? '—' : `${Math.round(value)}%`}
-          {sub ? <span className="ml-1 text-muted-foreground">{sub}</span> : null}
+          {sub ? <span className="ms-1 text-muted-foreground">{sub}</span> : null}
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${value ?? 0}%` }} />
+      <div className="h-1.5 w-full overflow-clip rounded-full bg-muted">
+        <div className={cn('h-full rounded-full motion-safe:transition-[width]', color)} style={{ width: `${value ?? 0}%` }} />
       </div>
     </div>
   );

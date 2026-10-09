@@ -53,7 +53,7 @@ export function PlanTaskButton({
         className,
       )}
     >
-      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Map className="size-4" />}
+      {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Map className="size-4" />}
     </button>
   );
 }

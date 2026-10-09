@@ -154,7 +154,7 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
       {/* Панель управления — в правом ВЕРХНЕМ углу обложки (как в Notion). Видна сразу, как
           только есть обложка (без наведения) — 3 кнопки: Поменять / Переместить / Скачать. */}
       {canEdit && !repositioning && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-3">
+        <div className="pointer-events-none absolute inset-x-0 inset-bs-0 flex justify-end p-3">
           <div className="pointer-events-auto flex items-center gap-1.5">
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
@@ -201,7 +201,7 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
               </span>
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1.5 p-3">
+          <div className="absolute inset-x-0 inset-be-0 flex justify-end gap-1.5 p-3">
             <CoverButton onClick={saveReposition} disabled={busy}>
               <Check className="size-3.5" />
               Сохранить положение

@@ -182,7 +182,7 @@ export function AppExperience({
               }
             >
               {refreshing ? (
-                <RefreshCw className="size-4 animate-spin" />
+                <RefreshCw className="size-4 motion-safe:animate-spin" />
               ) : done ? (
                 <Check className="size-4 text-success" />
               ) : (

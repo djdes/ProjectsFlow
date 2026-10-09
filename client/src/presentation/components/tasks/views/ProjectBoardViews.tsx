@@ -839,7 +839,7 @@ export function ProjectBoardViews({
       <div
         id="pf-views-tabs-row"
         style={{ marginRight: rightPanelWidth }}
-        className="group/tabs relative z-30 flex min-w-0 items-center gap-2 bg-background pb-3 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none md:gap-0.5 md:pb-2"
+        className="group/tabs relative z-30 flex min-w-0 items-center gap-2 bg-background pbe-3 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none md:gap-0.5 md:pbe-2"
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">
@@ -954,7 +954,7 @@ export function ProjectBoardViews({
           <div
             ref={tabsMeasureRef}
             aria-hidden
-            className="pointer-events-none invisible absolute left-0 top-0 flex items-center whitespace-nowrap"
+            className="pointer-events-none invisible absolute start-0 inset-bs-0 flex items-center whitespace-nowrap"
           >
             <span className={TAB_METRICS_CLASS}>
               {displayFor(DEFAULT_VIEW_ID) !== 'text' && (
@@ -1046,7 +1046,7 @@ export function ProjectBoardViews({
                 </button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-72 p-3">
-                <p className="pb-2 text-xs font-medium text-muted-foreground">Начать с нуля</p>
+                <p className="pbe-2 text-xs font-medium text-muted-foreground">Начать с нуля</p>
                 <div className="grid grid-cols-4 gap-1">
                   {BOARD_VIEW_TYPES.map((t) => {
                     const Icon = VIEW_TYPE_ICONS[t];
@@ -1055,7 +1055,7 @@ export function ProjectBoardViews({
                         key={t}
                         type="button"
                         onClick={() => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
-                        className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                       >
                         <Icon className="size-5" />
                         {BOARD_VIEW_TYPE_LABELS[t]}
@@ -1086,7 +1086,7 @@ export function ProjectBoardViews({
             )}
             {searchOpen ? (
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                  <Search className="pointer-events-none absolute start-2 inset-bs-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
                   <input
                     autoFocus
                     value={state.filters.query}
@@ -1102,7 +1102,7 @@ export function ProjectBoardViews({
                     }}
                     placeholder="Поиск…"
                     aria-label="Поиск задач"
-                    className="h-7 w-36 rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60"
+                    className="h-7 w-36 rounded-md bg-accent/60 ps-7 pe-2 text-xs outline-none placeholder:text-muted-foreground/60"
                   />
                 </div>
               ) : (
@@ -1130,7 +1130,7 @@ export function ProjectBoardViews({
             aria-label="Открыть Студию"
             title="Открыть Студию"
             onClick={() => navigate(`/projects/${projectId}/studio`)}
-            className="ml-1 hidden size-7 rounded-md md:inline-flex"
+            className="ms-1 hidden size-7 rounded-md md:inline-flex"
           >
             <PanelsTopLeft className="size-4" />
           </Button>
@@ -1143,7 +1143,7 @@ export function ProjectBoardViews({
               Высота: 28px только с md — там начинается десктопная раскладка ряда. Между
               sm и md работает `sm:h-9` из самого варианта (36px), иначе primary-CTA на
               сенсорном планшете превращается в 28px-мишень. */}
-          {canEdit && <div className="inline-flex shrink-0 overflow-hidden rounded-lg md:ml-1 md:rounded-md">
+          {canEdit && <div className="inline-flex shrink-0 overflow-clip rounded-lg md:ms-1 md:rounded-md">
             <Button
               size="sm"
               className="h-11 rounded-none px-3 text-sm font-medium sm:h-9 sm:text-sm md:h-7"
@@ -1156,7 +1156,7 @@ export function ProjectBoardViews({
                 <Button
                   size="sm"
                   aria-label="Создать в колонке…"
-                  className="h-11 w-11 rounded-none border-l border-primary-foreground/20 px-0 sm:h-9 sm:w-9 sm:px-0 md:h-7 md:w-7"
+                  className="h-11 w-11 rounded-none border-s border-primary-foreground/20 px-0 sm:h-9 sm:w-9 sm:px-0 md:h-7 md:w-7"
                 >
                   <ChevronDown className="size-3.5" />
                 </Button>
@@ -1169,11 +1169,11 @@ export function ProjectBoardViews({
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                <DropdownMenuLabel className="px-2 py-1 text-2xs font-medium text-muted-foreground">
                   Шаблоны
                 </DropdownMenuLabel>
                 {templates.length === 0 ? (
-                  <div className="px-2 pb-1.5 text-xs text-muted-foreground">
+                  <div className="px-2 pbe-1.5 text-xs text-muted-foreground">
                     Нет — «Сохранить как шаблон» в меню задачи
                   </div>
                 ) : (
@@ -1209,7 +1209,7 @@ export function ProjectBoardViews({
       {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
           попап значений (чекбоксы) + «Убрать фильтр»; «+ Фильтр» добавляет следующий. */}
       {chipsVisible && (
-        <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto pbe-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
           {state.sort && (
             <button
               type="button"
@@ -1448,7 +1448,7 @@ export function ProjectBoardViews({
           <p className="text-sm text-muted-foreground">
             «{deleteTarget?.name}» будет удалена у всех участников. Задачи не пострадают.
           </p>
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2 pbs-1">
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               Отмена
             </Button>
@@ -1559,10 +1559,10 @@ function BoardSidePanel({
         transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)',
       }}
       className={cn(
-        'fixed inset-x-3 bottom-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-xl border bg-popover pb-[env(safe-area-inset-bottom)] shadow-lg',
-        'max-lg:!inset-0 max-lg:!top-0 max-lg:!max-h-none max-lg:rounded-none',
-        'animate-in fade-in slide-in-from-right-3 motion-reduce:animate-none',
-        'lg:sticky lg:inset-auto lg:z-30 lg:w-[386px] lg:shrink-0 lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none',
+        'fixed inset-x-3 inset-be-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-xl border bg-popover pbe-[env(safe-area-inset-bottom,0px)] shadow-lg',
+        'max-lg:!inset-0 max-lg:!inset-bs-0 max-lg:!max-h-none max-lg:rounded-none',
+        'animate-in fade-in motion-safe:slide-in-from-right-3 motion-reduce:animate-none',
+        'lg:sticky lg:inset-auto lg:z-30 lg:w-[386px] lg:shrink-0 lg:rounded-none lg:border-y-0 lg:border-e-0 lg:shadow-none',
         'motion-reduce:transition-none',
       )}
     >
@@ -1635,7 +1635,7 @@ function SelectRow<T extends string | number>({
           const option = options.find((item) => String(item.value) === event.target.value);
           if (option) onChange(option.value);
         }}
-        className="max-w-[11rem] rounded-md bg-transparent px-1.5 py-1 text-right text-sm text-muted-foreground outline-none focus:bg-accent"
+        className="max-w-[11rem] rounded-md bg-transparent px-1.5 py-1 text-end text-sm text-muted-foreground outline-none focus:bg-accent"
       >
         {options.map((option) => (
           <option key={String(option.value)} value={String(option.value)}>
@@ -1657,7 +1657,7 @@ function LayoutOptions({
   onChange: (patch: Partial<ViewLayoutState>) => void;
 }): React.ReactElement {
   return (
-    <div className="flex flex-col border-t px-1.5 py-1.5">
+    <div className="flex flex-col border-bs px-1.5 py-1.5">
       <ToggleRow
         label="Показывать иконку страницы"
         checked={layout.showPageIcon}
@@ -1788,13 +1788,13 @@ function NewViewPanel({
   };
   return (
     <div className="flex flex-col">
-      <div className="pf-panel-sticky-header sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-card px-3 py-2.5">
+      <div className="pf-panel-sticky-header sticky inset-bs-0 z-10 flex shrink-0 items-center justify-between border-be bg-card px-3 py-2.5">
         <p className="text-sm font-semibold">Новое отображение</p>
         <PanelCloseButton label="Закрыть" onClick={onClose} />
       </div>
       {/* Имя с иконкой слева — как в Notion; клик по квадратику открывает пикер
           эмодзи-иконки вью (Icon → Remove). */}
-      <div className="flex items-center gap-1.5 px-3 pb-1">
+      <div className="flex items-center gap-1.5 px-3 pbe-1">
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -1810,7 +1810,7 @@ function NewViewPanel({
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-64 p-2">
-            <div className="flex items-center justify-between pb-1.5">
+            <div className="flex items-center justify-between pbe-1.5">
               <p className="text-xs font-medium text-muted-foreground">Иконка</p>
               {state.icon && (
                 <button
@@ -1852,7 +1852,7 @@ function NewViewPanel({
           className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none ring-primary/30 focus:ring-2"
         />
       </div>
-      <div className="grid grid-cols-3 gap-1.5 p-3 pt-2">
+      <div className="grid grid-cols-3 gap-1.5 p-3 pbs-2">
         {BOARD_VIEW_LAYOUT_TYPES.map((t) => {
           const Icon = VIEW_TYPE_ICONS[t];
           const selected = view.type === t;
@@ -1878,7 +1878,7 @@ function NewViewPanel({
       </div>
       <LayoutOptions type={view.type} layout={state.layout} onChange={onLayout} />
       {/* Настройки выбранного типа (Notion: per-layout options). */}
-      <div className="border-t px-1.5 py-1.5">
+      <div className="border-bs px-1.5 py-1.5">
         {view.type === 'table' && (
           <>
             <ToggleRow
@@ -1911,7 +1911,7 @@ function NewViewPanel({
                 {(Object.keys(VIEW_GROUPING_LABELS) as StandardGrouping[]).map((g) => (
                   <DropdownMenuItem key={g} className="gap-2" onClick={() => onGrouping(g)}>
                     {VIEW_GROUPING_LABELS[g]}
-                    {state.grouping === g && <Check className="ml-auto size-3.5 text-primary" />}
+                    {state.grouping === g && <Check className="ms-auto size-3.5 text-primary" />}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -1921,7 +1921,7 @@ function NewViewPanel({
         {view.type === 'calendar' && (
           <div className="flex items-center justify-between rounded-md px-1.5 py-1.5 text-sm">
             Режим
-            <div className="inline-flex overflow-hidden rounded-md border">
+            <div className="inline-flex overflow-clip rounded-md border">
               {(
                 [
                   ['month', 'Месяц'],
@@ -1952,13 +1952,13 @@ function NewViewPanel({
         )}
       </div>
       {/* Источник данных (Notion Source) — задачи этого проекта. */}
-      <div className="border-t px-1.5 py-1.5">
+      <div className="border-bs px-1.5 py-1.5">
         <div className="flex items-center justify-between rounded-md px-1.5 py-1.5 text-sm">
           <span className="text-muted-foreground">Источник</span>
           <span className="max-w-[10rem] truncate">{projectName ?? 'Проект'}</span>
         </div>
       </div>
-      <div className="px-3 pb-3 pt-1">
+      <div className="px-3 pbe-3 pbs-1">
         <Button className="w-full" onClick={onDone}>
           Готово
         </Button>
@@ -2141,7 +2141,7 @@ function FilterPicker({
             key={p.key}
             type="button"
             onClick={() => setStep(p.key)}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
           >
             <p.icon className="size-4 text-muted-foreground/80" />
             {p.label}
@@ -2242,14 +2242,14 @@ function SortMenu({
                       : { key: k, dir: 'asc' },
                   )
                 }
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
               >
                 {VIEW_SORT_LABELS[k]}
                 {sort?.key === k &&
                   (sort.dir === 'asc' ? (
-                    <ArrowUp className="ml-auto size-3.5" />
+                    <ArrowUp className="ms-auto size-3.5" />
                   ) : (
-                    <ArrowDown className="ml-auto size-3.5" />
+                    <ArrowDown className="ms-auto size-3.5" />
                   ))}
               </button>
             ))}
@@ -2258,11 +2258,11 @@ function SortMenu({
             )}
           </div>
           {sort && (
-            <div className="border-t pt-1">
+            <div className="border-bs pbs-1">
               <button
                 type="button"
                 onClick={() => onChange(null)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-accent"
               >
                 <X className="size-3.5" />
                 Убрать сортировку
@@ -2302,11 +2302,11 @@ function FilterChipPopover({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-60 p-1.5">
         <FilterValueList prop={prop} filters={filters} onChange={onChange} />
-        <div className="mt-1 border-t pt-1">
+        <div className="mbs-1 border-bs pbs-1">
           <button
             type="button"
             onClick={onClear}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-destructive transition-colors hover:bg-destructive/10"
           >
             <Trash2 className="size-3.5" />
             Убрать фильтр
@@ -2512,7 +2512,7 @@ function TabRenamePopup({
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-md duration-150 animate-in fade-in zoom-in-95"
+      className="absolute start-0 inset-bs-full z-50 mbs-1 w-64 rounded-md border bg-popover p-1.5 shadow-md duration-150 animate-in fade-in motion-safe:zoom-in-95"
     >
       <TabRenameInput initial={initial} onSubmit={onSubmit} onClose={onClose} />
     </div>
@@ -2658,7 +2658,7 @@ function ViewSettingsCard({
 
   return (
     <div className="flex flex-col">
-      <div className="pf-panel-sticky-header sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-popover px-3 py-2.5">
+      <div className="pf-panel-sticky-header sticky inset-bs-0 z-10 flex shrink-0 items-center justify-between border-be bg-popover px-3 py-2.5">
         <p className="text-sm font-semibold">Настройки отображения</p>
         <PanelCloseButton label="Закрыть" onClick={onClose} />
       </div>
@@ -2666,7 +2666,7 @@ function ViewSettingsCard({
         {page === 'root' && (
           <div className="flex flex-col gap-1">
             {/* Имя вью с иконкой типа (Notion: инпут сверху панели). */}
-            <div className="flex items-center gap-1.5 px-0.5 pb-1">
+            <div className="flex items-center gap-1.5 px-0.5 pbe-1">
               <span className="grid size-8 shrink-0 place-items-center rounded-md border">
                 <TypeIcon className="size-4 text-muted-foreground" />
               </span>
@@ -2742,7 +2742,7 @@ function ViewSettingsCard({
             <PanelRow icon={LinkIcon} label="Скопировать ссылку на отображение" onClick={onCopyLink} />
             {canEdit && (
               <>
-                <div className="my-0.5 border-t" />
+                <div className="my-0.5 border-bs" />
                 <PanelRow icon={Copy} label="Дублировать отображение" onClick={onDuplicate} />
                 <PanelRow icon={Trash2} label="Удалить отображение" onClick={onDelete} destructive />
               </>
@@ -2752,7 +2752,7 @@ function ViewSettingsCard({
         {page === 'layout' && (
           <div className="flex flex-col gap-1.5">
             {backHeader('Макет')}
-            <div className="grid grid-cols-3 gap-1.5 px-0.5 pb-1">
+            <div className="grid grid-cols-3 gap-1.5 px-0.5 pbe-1">
               {BOARD_VIEW_LAYOUT_TYPES.map((t) => {
                 const Icon = VIEW_TYPE_ICONS[t];
                 return (
@@ -2810,20 +2810,20 @@ function ViewSettingsCard({
             <button
               type="button"
               onClick={() => onGrouping(null)}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
             >
               Нет
-              {grouping === null && <Check className="ml-auto size-3.5" />}
+              {grouping === null && <Check className="ms-auto size-3.5" />}
             </button>
             {(Object.keys(VIEW_GROUPING_LABELS) as StandardGrouping[]).map((g) => (
               <button
                 key={g}
                 type="button"
                 onClick={() => onGrouping(g)}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
               >
                 {VIEW_GROUPING_LABELS[g]}
-                {grouping === g && <Check className="ml-auto size-3.5" />}
+                {grouping === g && <Check className="ms-auto size-3.5" />}
               </button>
             ))}
           </div>
@@ -2848,20 +2848,20 @@ function ViewSettingsCard({
                       : { key: k, dir: 'asc' },
                   )
                 }
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
               >
                 {VIEW_SORT_LABELS[k]}
                 {sort?.key === k &&
                   (sort.dir === 'asc' ? (
-                    <ArrowUp className="ml-auto size-3.5" />
+                    <ArrowUp className="ms-auto size-3.5" />
                   ) : (
-                    <ArrowDown className="ml-auto size-3.5" />
+                    <ArrowDown className="ms-auto size-3.5" />
                   ))}
               </button>
             ))}
             {sort && (
               <>
-                <div className="my-0.5 border-t" />
+                <div className="my-0.5 border-bs" />
                 <PanelRow icon={X} label="Убрать сортировку" onClick={() => onSort(null)} />
               </>
             )}
@@ -2909,9 +2909,9 @@ function ColorRulesEditor({
           Правил нет. Строки будут окрашены по первому совпавшему правилу.
         </p>
       )}
-      <div className="mt-1 border-t pt-2">
-        <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Новое правило</p>
-        <div className="flex gap-1 px-2 pb-1.5">
+      <div className="mbs-1 border-bs pbs-2">
+        <p className="px-2 pbe-1 text-xs font-medium text-muted-foreground">Новое правило</p>
+        <div className="flex gap-1 px-2 pbe-1.5">
           {(['status', 'priority'] as const).map((p) => (
             <button
               key={p}
@@ -2948,7 +2948,7 @@ function ColorRulesEditor({
                     ])
                   }
                   className={cn(
-                    'size-4 shrink-0 rounded-full ring-offset-1 transition-transform hover:scale-125',
+                    'size-4 shrink-0 rounded-full ring-offset-1 motion-safe:transition-transform hover:scale-125',
                     RULE_COLOR_DOT[c],
                   )}
                 />
@@ -2977,11 +2977,11 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-accent"
+      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-foreground/90 transition-colors hover:bg-accent"
     >
       <Icon className="size-4 shrink-0 text-muted-foreground/80" />
       {label}
-      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+      <span className="ms-auto flex items-center gap-1 text-xs text-muted-foreground">
         {value}
         <ChevronRight className="size-3.5" />
       </span>
@@ -3005,7 +3005,7 @@ function PanelRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent',
+        'flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent',
         destructive ? 'text-destructive' : 'text-foreground/90',
       )}
     >

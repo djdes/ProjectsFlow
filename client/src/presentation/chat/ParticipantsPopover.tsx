@@ -54,7 +54,7 @@ export function ParticipantsPopover({
         <button
           type="button"
           aria-label="Участники чата"
-          className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+          className="ms-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
         >
           <Users className="size-3.5" />
           {memberCount}

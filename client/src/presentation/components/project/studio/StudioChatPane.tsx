@@ -70,7 +70,7 @@ export function StudioChatPane({
         )}
       >
         <div style={splitPane.contentStyle} className="relative flex h-full min-h-0 flex-col">
-          <header className="flex h-11 shrink-0 items-center gap-1 border-b px-2">
+          <header className="flex h-11 shrink-0 items-center gap-1 border-be px-2">
             {sidebarCollapsed && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -92,8 +92,8 @@ export function StudioChatPane({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex min-w-0 max-w-[calc(100%_-_116px)] items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>
-                      <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-md bg-muted text-xs" aria-hidden>
+                    <button type="button" className="flex min-w-0 max-w-[calc(100%_-_116px)] items-center gap-1.5 rounded-md px-1.5 py-1.5 text-start text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>
+                      <span className="grid size-5 shrink-0 place-items-center overflow-clip rounded-md bg-muted text-xs" aria-hidden>
                         {projectIcon ? <ProjectIconView icon={projectIcon} pixelSize={18} /> : (projectName.trim()[0] ?? '?').toUpperCase()}
                       </span>
                       <span className="truncate">{projectName}</span><ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -138,8 +138,8 @@ export function StudioChatPane({
           {...splitPane.separatorProps}
           className={cn(
             'group relative z-20 hidden h-full w-px shrink-0 cursor-col-resize bg-border outline-none lg:block',
-            'before:absolute before:inset-y-0 before:left-1/2 before:w-3 before:-translate-x-1/2',
-            'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent after:transition-colors',
+            'before:absolute before:inset-y-0 before:start-1/2 before:w-3 before:-translate-x-1/2',
+            'after:absolute after:inset-y-0 after:start-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent after:transition-colors',
             'hover:after:bg-primary/50 focus-visible:after:bg-primary',
             splitPane.dragging && 'after:bg-primary',
           )}

@@ -88,7 +88,7 @@ export function CommunicationPanel(): React.ReactElement {
         </TabButton>
       </div>
 
-      <div className="mt-2 min-h-0 flex-1">
+      <div className="mbs-2 min-h-0 flex-1">
         {tab === 'ai' ? (
           <AiConversationListPanel />
         ) : tab === 'chat' ? (
@@ -118,7 +118,7 @@ function TabButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 transition active:scale-95',
+        'inline-flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition active:scale-95',
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
       )}
     >
@@ -126,7 +126,7 @@ function TabButton({
       {badge !== undefined && badge > 0 && (
         <span
           className={cn(
-            'inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium',
+            'inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums',
             active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/15 text-primary',
           )}
         >
@@ -173,7 +173,7 @@ function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElemen
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+      <ul className="divide-y overflow-clip rounded-lg border bg-card">
         {feed.items.map((it) =>
           it.type === 'activity' ? (
             <ActivityItem key={it.id} item={it} />
@@ -186,7 +186,7 @@ function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElemen
         <button
           type="button"
           onClick={feed.loadMore}
-          className="mt-2 w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="mbs-2 w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           Загрузить ещё
         </button>

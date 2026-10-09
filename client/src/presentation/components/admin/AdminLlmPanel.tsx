@@ -168,7 +168,7 @@ export function AdminLlmPanel(): React.ReactElement {
   if (!status) {
     return (
       <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-10 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Загружаем…
+        <Loader2 className="size-4 motion-safe:animate-spin" /> Загружаем…
       </div>
     );
   }
@@ -213,13 +213,13 @@ export function AdminLlmPanel(): React.ReactElement {
           <div className="flex flex-wrap gap-2">
             {needsLogin && (
               <Button onClick={() => void startLogin()} disabled={busy !== null}>
-                {busy === 'start' ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                {busy === 'start' ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <KeyRound className="size-4" />}
                 {connection ? 'Войти заново по коду' : 'Войти по коду'}
               </Button>
             )}
             {connection && (
               <Button variant="outline" onClick={() => void runTest()} disabled={busy !== null}>
-                {busy === 'test' ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+                {busy === 'test' ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <PlugZap className="size-4" />}
                 Проверить связь
               </Button>
             )}
@@ -314,7 +314,7 @@ function LoginCode({
   };
   return (
     <div className="space-y-3 rounded-md border border-dashed p-4">
-      <ol className="list-decimal space-y-1 pl-5 text-sm">
+      <ol className="list-decimal space-y-1 ps-5 text-sm">
         <li>
           Откройте{' '}
           <a href={login.verificationUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline">
@@ -335,7 +335,7 @@ function LoginCode({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-2">
-          <Loader2 className="size-4 animate-spin" /> Ждём подтверждения · код действует до{' '}
+          <Loader2 className="size-4 motion-safe:animate-spin" /> Ждём подтверждения · код действует до{' '}
           {new Date(login.expiresAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
         </span>
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
@@ -429,7 +429,7 @@ function SettingsSection({
       </div>
       <div className="flex justify-end">
         <Button onClick={() => void save()} disabled={!dirty || saving}>
-          {saving && <Loader2 className="size-4 animate-spin" />} Сохранить
+          {saving && <Loader2 className="size-4 motion-safe:animate-spin" />} Сохранить
         </Button>
       </div>
     </section>

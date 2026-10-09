@@ -100,7 +100,7 @@ function ViewRow({
       <button
         type="button"
         onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px]"
+        className="flex min-w-0 flex-1 items-center gap-2 text-start text-sm"
       >
         <ViewIconGlyph icon={icon} className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
@@ -248,18 +248,18 @@ export function ViewsOverflowMenu({
             }}
             style={!creating && pos ? { left: pos.left, top: pos.top } : undefined}
             className={cn(
-              'fixed z-50 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in zoom-in-95',
+              'fixed z-50 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in motion-safe:zoom-in-95',
               // «Начать с нуля» — центрированное окно (Notion Start from scratch),
               // список вью — у кнопки-триггера.
               creating
-                ? 'left-1/2 top-[38%] w-[420px] max-w-[calc(100vw-24px)] -translate-x-1/2 p-3'
+                ? 'start-1/2 inset-bs-[38%] w-[420px] max-w-[calc(100vw-24px)] -translate-x-1/2 p-3'
                 : 'w-[290px]',
             )}
           >
           {creating ? (
             <>
-              <p className="px-0.5 pb-2 text-sm font-medium">Начать с нуля</p>
-              <div className="grid grid-cols-4 gap-1 pb-1">
+              <p className="px-0.5 pbe-2 text-sm font-medium">Начать с нуля</p>
+              <div className="grid grid-cols-4 gap-1 pbe-1">
                 {BOARD_VIEW_TYPES.map((t) => {
                   const Icon = VIEW_TYPE_ICONS[t];
                   return (
@@ -270,7 +270,7 @@ export function ViewsOverflowMenu({
                         setOpen(false);
                         onCreate(t);
                       }}
-                      className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     >
                       <Icon className="size-5" />
                       {BOARD_VIEW_TYPE_LABELS[t]}
@@ -278,8 +278,8 @@ export function ViewsOverflowMenu({
                   );
                 })}
               </div>
-              <div className="relative mt-2 border-t pt-3">
-                <Sparkles className="pointer-events-none absolute left-2.5 top-[22px] size-4 text-muted-foreground/60" />
+              <div className="relative mbs-2 border-bs pbs-3">
+                <Sparkles className="pointer-events-none absolute start-2.5 inset-bs-[22px] size-4 text-muted-foreground/60" />
                 <input
                   autoFocus
                   value={description}
@@ -289,14 +289,14 @@ export function ViewsOverflowMenu({
                   }}
                   placeholder="Или опишите отображение…"
                   aria-label="Описать новое отображение"
-                  className="h-9 w-full rounded-md border bg-background pl-8 pr-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="h-9 w-full rounded-md border bg-background ps-8 pe-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             </>
           ) : (
             <>
-              <div className="relative px-0.5 pb-1.5">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-[calc(50%+3px)] text-muted-foreground/60" />
+              <div className="relative px-0.5 pbe-1.5">
+                <Search className="pointer-events-none absolute start-2.5 inset-bs-1/2 size-3.5 -translate-y-[calc(50%+3px)] text-muted-foreground/60" />
                 <input
                   autoFocus
                   value={query}
@@ -306,7 +306,7 @@ export function ViewsOverflowMenu({
                   }}
                   placeholder="Поиск вью…"
                   aria-label="Поиск вью"
-                  className="h-7 w-full rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60"
+                  className="h-7 w-full rounded-md bg-accent/60 ps-7 pe-2 text-xs outline-none placeholder:text-muted-foreground/60"
                 />
               </div>
               <div className="max-h-72 overflow-y-auto">
@@ -355,11 +355,11 @@ export function ViewsOverflowMenu({
                   </p>
                 )}
               </div>
-              {canManage && <div className="mt-1 border-t pt-1">
+              {canManage && <div className="mbs-1 border-bs pbs-1">
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
                 >
                   <Plus className="size-4" />
                   Новое отображение
@@ -369,7 +369,7 @@ export function ViewsOverflowMenu({
                   onClick={() =>
                     toast.info('Все отображения уже подключены к задачам текущего проекта')
                   }
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
                 >
                   <Database className="size-4" />
                   Новый источник данных

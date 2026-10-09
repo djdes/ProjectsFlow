@@ -218,9 +218,9 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
         <div className="grid h-full place-items-center px-6 text-center">
           <div className="max-w-md">
             <AlertCircle className="mx-auto size-7 text-destructive" />
-            <h1 className="mt-3 text-lg font-semibold">Project Studio не открылся</h1>
-            <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{error ?? 'Неизвестная ошибка.'}</p>
-            <Button type="button" variant="outline" className="mt-4" onClick={() => setReload((value) => value + 1)}>
+            <h1 className="mbs-3 text-lg font-semibold">Project Studio не открылся</h1>
+            <p className="mbs-1.5 text-sm leading-6 text-muted-foreground">{error ?? 'Неизвестная ошибка.'}</p>
+            <Button type="button" variant="outline" className="mbs-4" onClick={() => setReload((value) => value + 1)}>
               Повторить
             </Button>
           </div>

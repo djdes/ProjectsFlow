@@ -28,7 +28,7 @@ export function DropIndicatorLine(): React.ReactElement {
         className="mx-1 flex items-center gap-1.5 py-0.5"
       >
         <div className="size-2 shrink-0 rounded-full border-2 border-primary" />
-        <div className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_rgba(59,130,246,0.5)]" />
+        <div className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_oklch(62.31%_0.188_259.81/0.5)]" />
         <div className="size-2 shrink-0 rounded-full border-2 border-primary" />
       </motion.div>
     </motion.div>

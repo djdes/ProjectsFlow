@@ -17,7 +17,7 @@ function worstSeverity(alerts: ServerAlert[]): ServerAlert['severity'] {
 function Metric({ label, text, tone }: { label: string; text: string; tone: HealthTone }): React.ReactElement {
   return (
     <div className="flex w-14 flex-col items-end leading-tight">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-2xs uppercase tracking-wide text-muted-foreground">{label}</span>
       <span className={cn('text-xs font-medium tabular-nums', metricTextClass(tone))}>{text}</span>
     </div>
   );
@@ -47,12 +47,12 @@ export function ServerRow({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+      className="group flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-start transition-colors hover:border-foreground/30 hover:bg-muted/40"
     >
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate text-sm font-medium">{server.name}</span>
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
           {server.kind}
         </span>
         <StatusBadge status={status} />
@@ -98,7 +98,7 @@ export function ServerRow({
         <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
           {latest ? relativeTime(latest.collectedAt) : '—'}
         </span>
-        <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        <ChevronRight className="size-4 text-muted-foreground motion-safe:transition-transform group-hover:translate-x-0.5" />
       </div>
     </button>
   );

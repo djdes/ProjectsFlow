@@ -61,8 +61,8 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
 
   return <form onSubmit={event => void submit(event)} className="space-y-3 rounded-xl border border-primary/15 bg-primary/[0.035] p-3 sm:p-4">
     <div className="flex items-start gap-2.5">
-      <UserPlus className="mt-0.5 size-4 shrink-0 text-primary" />
-      <div className="min-w-0"><p className="text-sm font-semibold">Новое приглашение</p><p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
+      <UserPlus className="mbs-0.5 size-4 shrink-0 text-primary" />
+      <div className="min-w-0"><p className="text-sm font-semibold">Новое приглашение</p><p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
     </div>
     <div className="flex flex-wrap gap-2">
       <label className="min-w-0 flex-[3_1_12rem] space-y-1.5"><span className="text-xs font-medium">Кого пригласить</span><Input value={email} onChange={event => setEmail(event.target.value)} disabled={busy} aria-label="Email для приглашения" aria-invalid={!!error} placeholder="Email, через запятую" autoComplete="email" /></label>
@@ -74,7 +74,7 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <p className="max-w-xs flex-1 text-xs leading-relaxed text-muted-foreground">Отправим письмо и уведомление на сайте. Если Telegram подключён — напишем и туда.</p>
-      <Button type="submit" className="shrink-0" disabled={busy || !email.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{busy ? 'Приглашаем…' : 'Пригласить'}</Button>
+      <Button type="submit" className="shrink-0" disabled={busy || !email.trim()}>{busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <UserPlus className="size-4" />}{busy ? 'Приглашаем…' : 'Пригласить'}</Button>
     </div>
   </form>;
 }

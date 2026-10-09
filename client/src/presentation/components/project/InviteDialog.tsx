@@ -209,7 +209,7 @@ export function InviteDialog({ open, onClose, workspaceId, onCreated }: Props): 
                 Отмена
               </Button>
               <Button type="submit" disabled={submitting || !targetWorkspaceId}>
-                {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+                {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
                 Пригласить
               </Button>
             </DialogFooter>

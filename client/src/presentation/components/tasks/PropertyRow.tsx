@@ -53,7 +53,7 @@ export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRow
 // у каждого пикера левый край значения «уезжал» по-своему. Дублируем sm:-оверрайды,
 // чтобы все значения начинались строго на одной вертикали, единым шрифтом.
 export const PROPERTY_VALUE_CLASS =
-  '-ml-1.5 h-7 max-w-full justify-start gap-1.5 rounded-md border-0 bg-transparent px-1.5 ' +
+  '-ms-1.5 h-7 max-w-full justify-start gap-1.5 rounded-md border-0 bg-transparent px-1.5 ' +
   'text-sm font-normal shadow-none hover:bg-hover sm:h-7 sm:px-1.5 sm:text-sm';
 
 // Тихий muted-плейсхолдер «Пусто» / «Никто» для свойств без редактирования.

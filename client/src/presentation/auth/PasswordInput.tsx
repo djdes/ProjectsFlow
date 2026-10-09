@@ -12,7 +12,7 @@ export function PasswordInput({ className, ...props }: PasswordInputProps): Reac
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
-      <Input {...props} type={visible ? 'text' : 'password'} className={cn('pr-10', className)} />
+      <Input {...props} type={visible ? 'text' : 'password'} className={cn('pe-10', className)} />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
@@ -20,7 +20,7 @@ export function PasswordInput({ className, ...props }: PasswordInputProps): Reac
         aria-pressed={visible}
         aria-controls={props.id}
         title={visible ? 'Скрыть пароль' : 'Показать пароль'}
-        className="absolute right-0 top-0 grid size-10 place-items-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute end-0 inset-bs-0 grid size-10 place-items-center rounded-e-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
       </button>

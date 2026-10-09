@@ -131,10 +131,10 @@ export function HelpSupportPanel({
           aria-label="Сообщение в поддержку"
           className="w-full bg-transparent px-1.5 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
-        <div className="mt-1.5 flex items-center justify-between gap-2 px-1">
+        <div className="mbs-1.5 flex items-center justify-between gap-2 px-1">
           <span
             className={cn(
-              'text-[11px] tabular-nums',
+              'text-2xs tabular-nums',
               overLimit ? 'font-medium text-destructive' : 'text-muted-foreground',
             )}
           >
@@ -148,7 +148,7 @@ export function HelpSupportPanel({
             className="gap-1.5"
           >
             {status === 'submitting' ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 className="size-4 motion-safe:animate-spin" />
             ) : (
               <Send className="size-4" />
             )}
@@ -163,7 +163,7 @@ export function HelpSupportPanel({
         </p>
       )}
 
-      <p className="mt-auto text-[11px] leading-relaxed text-muted-foreground/80">
+      <p className="mbs-auto text-2xs leading-relaxed text-muted-foreground/80">
         Обычно отвечаем в течение рабочего дня.
       </p>
     </div>

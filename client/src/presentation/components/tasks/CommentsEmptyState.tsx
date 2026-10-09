@@ -77,7 +77,7 @@ export function CommentsEmptyState({
               width="52"
               height="22"
               rx="6"
-              fill="hsl(var(--card))"
+              fill="oklch(var(--card))"
               stroke="currentColor"
               strokeWidth="1.5"
             />
@@ -91,7 +91,7 @@ export function CommentsEmptyState({
               width="52"
               height="22"
               rx="6"
-              fill="hsl(var(--card))"
+              fill="oklch(var(--card))"
               stroke="currentColor"
               strokeWidth="1.5"
             />
@@ -105,7 +105,7 @@ export function CommentsEmptyState({
               width="56"
               height="22"
               rx="6"
-              fill="hsl(var(--card))"
+              fill="oklch(var(--card))"
               stroke="currentColor"
               strokeWidth="1.5"
             />

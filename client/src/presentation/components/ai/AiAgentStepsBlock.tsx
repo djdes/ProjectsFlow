@@ -22,13 +22,13 @@ export function AiAgentStepsBlock({
   if (steps.length === 0 && !needsReview) return null;
 
   return (
-    <div className="not-prose mb-2 text-sm leading-5">
+    <div className="not-prose mbe-2 text-sm leading-5">
       {steps.length > 0 && (
         <Collapsible
           trigger={<span className="text-muted-foreground">{steps.length} {pluralizeSteps(steps.length)}</span>}
           triggerClassName="py-1 text-muted-foreground hover:text-foreground"
         >
-          <ul className="ml-[26px] flex flex-col">
+          <ul className="ms-[26px] flex flex-col">
             {steps.map((step) => <AgentStepItem key={step.id} step={step} />)}
           </ul>
         </Collapsible>
@@ -49,7 +49,7 @@ function AgentStepItem({ step }: { step: AiAgentStep }): React.ReactElement {
     <span className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
       <span className="truncate">{step.label}</span>
       {step.durationMs !== null && (
-        <span className="shrink-0 text-[11px] tabular-nums opacity-70">
+        <span className="shrink-0 text-2xs tabular-nums opacity-70">
           {formatDuration(step.durationMs)}
         </span>
       )}
@@ -58,7 +58,7 @@ function AgentStepItem({ step }: { step: AiAgentStep }): React.ReactElement {
 
   if (!step.detail) {
     return (
-      <li className={cn('flex min-h-8 items-center gap-1.5 pl-[14px]')}>
+      <li className={cn('flex min-h-8 items-center gap-1.5 ps-[14px]')}>
         <span aria-hidden="true" className="size-1 shrink-0 rounded-full bg-muted-foreground/50" />
         {label}
       </li>
@@ -70,7 +70,7 @@ function AgentStepItem({ step }: { step: AiAgentStep }): React.ReactElement {
       <Collapsible
         trigger={label}
         triggerClassName="min-h-8 py-1 hover:text-foreground"
-        contentClassName="pb-1.5 pl-[22px] text-xs leading-5 text-muted-foreground"
+        contentClassName="pbe-1.5 ps-[22px] text-xs leading-5 text-muted-foreground"
       >
         {step.detail}
       </Collapsible>

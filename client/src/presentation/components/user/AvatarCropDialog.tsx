@@ -193,7 +193,7 @@ export function AvatarCropDialog({
               className="flex flex-col items-center gap-4"
             >
               <div
-                className="relative touch-none select-none overflow-hidden rounded-[25%] bg-muted shadow-inner"
+                className="relative touch-none select-none overflow-clip rounded-[25%] bg-muted shadow-inner"
                 style={{ width: VIEWPORT, height: VIEWPORT }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
@@ -258,11 +258,11 @@ export function AvatarCropDialog({
               type="button"
               onClick={() => void handleSave()}
               disabled={phase === 'saving' || !nat}
-              className="transition-transform active:scale-95"
+              className="motion-safe:transition-transform active:scale-95"
             >
               {phase === 'saving' ? (
                 <>
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-4 motion-safe:animate-spin" />
                   Сохраняем…
                 </>
               ) : (

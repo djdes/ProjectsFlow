@@ -45,11 +45,11 @@ export function SelectedBar({
       className={cn(
         'flex items-center overflow-hidden border bg-card shadow-lg duration-200 animate-in fade-in',
         host
-          ? 'absolute inset-y-0 left-0 z-40 rounded-lg'
-          : 'fixed left-1/2 top-16 z-40 -translate-x-1/2 rounded-lg slide-in-from-top-2',
+          ? 'absolute inset-y-0 start-0 z-40 rounded-lg'
+          : 'fixed start-1/2 inset-bs-16 z-40 -translate-x-1/2 rounded-lg motion-safe:slide-in-from-top-2',
       )}
     >
-      <span className="flex items-center gap-1.5 border-r px-2.5 py-1.5 text-xs font-medium text-primary">
+      <span className="flex items-center gap-1.5 border-e px-2.5 py-1.5 text-xs font-medium text-primary">
         Выбрано: {count}
         <button type="button" aria-label="Снять выбор" onClick={onExit}>
           <X className="size-3.5 opacity-60 hover:opacity-100" />
@@ -57,7 +57,7 @@ export function SelectedBar({
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
+          <button type="button" className="border-e px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
             Статус
           </button>
         </DropdownMenuTrigger>
@@ -72,7 +72,7 @@ export function SelectedBar({
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
+          <button type="button" className="border-e px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
             Приоритет
           </button>
         </DropdownMenuTrigger>
@@ -91,7 +91,7 @@ export function SelectedBar({
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
+          <button type="button" className="border-e px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
             Срок
           </button>
         </DropdownMenuTrigger>

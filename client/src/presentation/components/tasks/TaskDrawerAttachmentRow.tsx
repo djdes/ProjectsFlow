@@ -83,7 +83,7 @@ export function TaskDrawerAttachmentRow({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="-ml-1.5 inline-flex h-7 items-center rounded-md px-1.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          className="-ms-1.5 inline-flex h-7 items-center rounded-md px-1.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           title="Прикрепить файл (или Ctrl+V в комментарий)"
         >
           Выбрать файл…
@@ -104,7 +104,7 @@ export function TaskDrawerAttachmentRow({
   };
 
   return (
-    <div className="flex basis-full flex-col gap-1.5 pt-1">
+    <div className="flex basis-full flex-col gap-1.5 pbs-1">
       <div className="flex flex-wrap items-center gap-1.5">
         {/* Загруженные вложения */}
         {items.map((att) => {
@@ -113,7 +113,7 @@ export function TaskDrawerAttachmentRow({
             <span
               key={att.id}
               className={cn(
-                'group/att inline-flex max-w-full items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1 pr-1 text-[11px] transition-opacity',
+                'group/att inline-flex max-w-full items-center gap-1.5 rounded-md border bg-background py-0.5 ps-1 pe-1 text-2xs transition-opacity',
                 deleting && 'opacity-50',
               )}
             >
@@ -141,7 +141,7 @@ export function TaskDrawerAttachmentRow({
                   aria-label={`Удалить ${att.filename}`}
                   title="Удалить файл"
                 >
-                  {deleting ? <Loader2 className="size-2.5 animate-spin" /> : <X className="size-2.5" />}
+                  {deleting ? <Loader2 className="size-2.5 motion-safe:animate-spin" /> : <X className="size-2.5" />}
                 </button>
               )}
             </span>
@@ -152,7 +152,7 @@ export function TaskDrawerAttachmentRow({
         {pending.map((pf) => (
           <span
             key={pf.id}
-            className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1 pr-1 text-[11px]"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-background py-0.5 ps-1 pe-1 text-2xs"
             title={pf.name}
           >
             {/* Ещё не загруженную картинку тоже можно рассмотреть — лайтбокс на blob-превью. */}
@@ -213,7 +213,7 @@ export function TaskDrawerAttachmentRow({
             <button
               type="button"
               onClick={onCancelAll}
-              className="self-start text-[11px] text-muted-foreground underline-offset-2 transition-colors hover:text-destructive hover:underline"
+              className="self-start text-2xs text-muted-foreground underline-offset-2 transition-colors hover:text-destructive hover:underline"
             >
               Отменить все ({uploads.length})
             </button>
@@ -221,11 +221,11 @@ export function TaskDrawerAttachmentRow({
           {uploads.map((u) => (
             <div key={u.id} className="flex items-center gap-2">
               <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="max-w-[140px] shrink-0 truncate text-[11px] text-muted-foreground">{u.name}</span>
+              <span className="max-w-[140px] shrink-0 truncate text-2xs text-muted-foreground">{u.name}</span>
               <Progress value={u.progress} className="h-1.5 min-w-0 flex-1" />
-              <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{u.progress}%</span>
+              <span className="w-8 shrink-0 text-end text-2xs tabular-nums text-muted-foreground">{u.progress}%</span>
               {u.etaSec !== null && (
-                <span className="shrink-0 text-[10px] text-muted-foreground/70">{etaText(u.etaSec)}</span>
+                <span className="shrink-0 text-2xs text-muted-foreground/70">{etaText(u.etaSec)}</span>
               )}
               {onCancelUpload && (
                 <button

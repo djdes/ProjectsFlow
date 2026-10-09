@@ -26,7 +26,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
         event.stopPropagation();
         deleteNode();
       }}
-      className="absolute right-2 top-2 hidden size-7 items-center justify-center rounded-md bg-background/85 text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-background hover:text-destructive group-hover/img:flex"
+      className="absolute end-2 inset-bs-2 hidden size-7 items-center justify-center rounded-md bg-background/85 text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-background hover:text-destructive group-hover/img:flex"
     >
       <Trash2 className="size-4" />
     </button>
@@ -40,7 +40,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
           contentEditable={false}
         >
           <ImageIcon className="size-7 text-muted-foreground/60" aria-hidden />
-          <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted">
+          <div className="h-1.5 w-full max-w-md overflow-clip rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
               style={{ width: `${progress}%` }}
@@ -67,7 +67,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
             }`}
           />
           {uploading ? (
-            <div className="absolute inset-x-3 bottom-3 overflow-hidden rounded-full bg-black/25 p-0.5 backdrop-blur-sm">
+            <div className="absolute inset-x-3 inset-be-3 overflow-clip rounded-full bg-black/25 p-0.5 backdrop-blur-sm">
               <div
                 className="h-1.5 rounded-full bg-primary transition-[width] duration-200 ease-out"
                 style={{ width: `${progress}%` }}
@@ -75,7 +75,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
             </div>
           ) : null}
           {uploadError ? (
-            <div className="absolute inset-x-2 bottom-2 flex items-center gap-1.5 rounded-md bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground shadow-sm">
+            <div className="absolute inset-x-2 inset-be-2 flex items-center gap-1.5 rounded-md bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground shadow-sm">
               <AlertTriangle className="size-3.5 shrink-0" />
               Не удалось загрузить изображение
             </div>
@@ -111,7 +111,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
             />
             <DialogPrimitive.Close
               aria-label="Закрыть"
-              className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+              className="absolute end-4 inset-bs-4 flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
             >
               <X className="size-5" />
             </DialogPrimitive.Close>

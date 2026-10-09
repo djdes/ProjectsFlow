@@ -45,11 +45,11 @@ export function BoardSkeleton({
       className={cn('min-w-0 space-y-4', className)}
     >
       {shelf && (
-        <div className="mb-4 rounded-xl bg-muted/35 p-3">
-          <Skeleton className="mb-3 h-3 w-20" />
+        <div className="mbe-4 rounded-xl bg-muted/35 p-3">
+          <Skeleton className="mbe-3 h-3 w-20" />
           <div className="max-w-72 rounded-lg border border-border/50 bg-background p-3">
             <Skeleton className="h-3.5 w-4/5" />
-            <Skeleton className="mt-2 h-3 w-3/5" />
+            <Skeleton className="mbs-2 h-3 w-3/5" />
           </div>
         </div>
       )}
@@ -71,7 +71,7 @@ export function BoardSkeleton({
                 <Skeleton className={cn('h-3.5', widths[(col + row) % 3])} />
                 <Skeleton className="h-3 w-5/6" />
                 {row === 0 && <Skeleton className="h-3 w-2/3" />}
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center justify-between pbs-2">
                   <Skeleton className="h-4 w-14 rounded-full" />
                   <Skeleton className="size-5 rounded-full" />
                 </div>
@@ -93,9 +93,9 @@ export function TableSkeleton({
   return (
     <LoadingRegion
       label="Загружаем таблицу…"
-      className="overflow-hidden rounded-lg border border-border/60"
+      className="overflow-clip rounded-lg border border-border/60"
     >
-      <div className="grid grid-cols-[minmax(10rem,2fr)_1fr_1fr] gap-8 border-b bg-muted/35 px-4 py-3">
+      <div className="grid grid-cols-[minmax(10rem,2fr)_1fr_1fr] gap-8 border-be bg-muted/35 px-4 py-3">
         <Skeleton className="h-3 w-28" />
         <Skeleton className="h-3 w-16" />
         <Skeleton className="h-3 w-20" />
@@ -103,7 +103,7 @@ export function TableSkeleton({
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
-          className="grid h-12 grid-cols-[minmax(10rem,2fr)_1fr_1fr] items-center gap-8 border-b px-4 last:border-0"
+          className="grid h-12 grid-cols-[minmax(10rem,2fr)_1fr_1fr] items-center gap-8 border-be px-4 last:border-0"
         >
           <Skeleton className={cn('h-3.5', widths[i % 3])} />
           <Skeleton className="h-5 w-20 rounded-full" />
@@ -137,15 +137,15 @@ export function ListSkeleton({
 export function CalendarSkeleton(): React.ReactElement {
   return (
     <LoadingRegion label="Загружаем календарь…">
-      <div className="mb-4 flex justify-between">
+      <div className="mbe-4 flex justify-between">
         <Skeleton className="h-7 w-40" />
         <Skeleton className="h-7 w-24" />
       </div>
-      <div className="grid grid-cols-7 overflow-hidden rounded-lg border">
+      <div className="grid grid-cols-7 overflow-clip rounded-lg border">
         {Array.from({ length: 35 }, (_, i) => (
           <div
             key={i}
-            className="min-h-20 space-y-3 border-b border-r p-2 sm:min-h-28"
+            className="min-h-20 space-y-3 border-be border-e p-2 sm:min-h-28"
           >
             <Skeleton className="size-3" />
             {i % 3 === 0 && <Skeleton className="h-5 w-full" />}
@@ -201,7 +201,7 @@ export function PageSkeleton({
         label="Открываем Студию…"
         className="flex h-full min-h-[520px] flex-col"
       >
-        <div className="flex h-12 items-center justify-between border-b px-4">
+        <div className="flex h-12 items-center justify-between border-be px-4">
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-8 w-28" />
         </div>
@@ -210,7 +210,7 @@ export function PageSkeleton({
             <Skeleton className="h-8 w-48" />
             <Skeleton className="h-[50dvh] w-full rounded-xl" />
           </div>
-          <div className="hidden flex-col justify-between gap-6 border-l p-5 md:flex">
+          <div className="hidden flex-col justify-between gap-6 border-s p-5 md:flex">
             <DocumentSkeleton />
             <Skeleton className="h-24 w-full rounded-xl" />
           </div>
@@ -236,11 +236,11 @@ export function PageSkeleton({
     return (
       <div
         data-pf-page-skeleton={layout}
-        className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6"
+        className="mx-auto w-full max-w-2xl space-y-6 px-4 pbe-12 pbs-3.5 sm:px-6"
       >
         <LoadingRegion label="Загружаем настройки…">
           <Skeleton className="h-9 w-20" />
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mbs-6 flex items-center gap-3">
             <Skeleton className="size-9" />
             <Skeleton className="h-7 w-48" />
           </div>
@@ -249,7 +249,7 @@ export function PageSkeleton({
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-11 w-full" />
           <Skeleton className="h-32 w-full" />
-          <Skeleton className="ml-auto h-9 w-24" />
+          <Skeleton className="ms-auto h-9 w-24" />
         </div>
         <div className="rounded-xl border p-6">
           <Skeleton className="h-5 w-36" />
@@ -263,7 +263,7 @@ export function PageSkeleton({
         data-pf-page-skeleton={layout}
         className="grid h-full min-w-0 grid-cols-1 md:grid-cols-[280px_1fr]"
       >
-        <aside className="hidden space-y-5 border-r p-3 md:block">
+        <aside className="hidden space-y-5 border-e p-3 md:block">
           <Skeleton className="h-8 w-full" />
           <ListSkeleton rows={5} />
         </aside>
@@ -277,10 +277,10 @@ export function PageSkeleton({
     return (
       <div
         data-pf-page-skeleton={layout}
-        className="space-y-6 p-4 pt-3.5 sm:p-6 sm:pt-4"
+        className="space-y-6 p-4 pbs-3.5 sm:p-6 sm:pbs-4"
       >
         <LoadingRegion label="Загружаем показатели…">
-          <div className="mb-6 flex items-center gap-3">
+          <div className="mbe-6 flex items-center gap-3">
             <Skeleton className="size-9" />
             <Skeleton className="h-7 w-48" />
           </div>
@@ -306,8 +306,8 @@ export function PageSkeleton({
       </div>
       <div
         className={cn(
-          'px-6 pb-10 sm:px-14 lg:px-24',
-          layout === 'inbox' ? 'pt-2' : layout === 'overview' ? 'pt-1' : 'pt-9',
+          'px-6 pbe-10 sm:px-14 lg:px-24',
+          layout === 'inbox' ? 'pbs-2' : layout === 'overview' ? 'pbs-1' : 'pbs-9',
         )}
       >
         <div className={cn('space-y-6', narrow && 'mx-auto max-w-4xl')}>
@@ -320,7 +320,7 @@ export function PageSkeleton({
                 )}
               />
               <Skeleton className="h-3.5 w-1/2 max-w-xs" />
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pbs-2">
                 <div className="flex gap-2">
                   <Skeleton className="h-8 w-24 rounded-full" />
                   <Skeleton className="h-8 w-20 rounded-full" />
@@ -341,7 +341,7 @@ export function PageSkeleton({
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-24 w-full" />
-                <Skeleton className="ml-auto h-9 w-24" />
+                <Skeleton className="ms-auto h-9 w-24" />
               </div>
               <div className="rounded-xl border p-5">
                 <Skeleton className="h-4 w-28" />
@@ -358,10 +358,10 @@ export function PageSkeleton({
           {layout === 'chat' && (
             <LoadingRegion className="mx-auto flex min-h-[55dvh] max-w-3xl flex-col justify-between">
               <div className="space-y-8">
-                <Skeleton className="ml-auto h-16 w-2/3 rounded-2xl" />
+                <Skeleton className="ms-auto h-16 w-2/3 rounded-2xl" />
                 <DocumentSkeleton />
               </div>
-              <Skeleton className="mt-12 h-24 w-full rounded-2xl" />
+              <Skeleton className="mbs-12 h-24 w-full rounded-2xl" />
             </LoadingRegion>
           )}
         </div>
@@ -414,7 +414,7 @@ export function AppShellSkeleton(): React.ReactElement {
         <SidebarSkeleton />
       </aside>
       <div className="min-w-0 overflow-hidden">
-        <div className="flex h-11 items-center gap-3 border-b px-3 md:hidden">
+        <div className="flex h-11 items-center gap-3 border-be px-3 md:hidden">
           <Skeleton className="size-6" />
           <Skeleton className="h-3 w-32" />
         </div>

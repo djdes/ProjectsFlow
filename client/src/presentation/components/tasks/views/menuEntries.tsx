@@ -44,7 +44,7 @@ function itemInner(e: Extract<MenuEntry, { kind: 'item' }>): React.ReactNode {
       {e.icon && <e.icon className="size-4" />}
       {e.dotClass && <span className={cn('size-2 rounded-full', e.dotClass)} />}
       {e.label}
-      {e.checked && <Check className="ml-auto size-3.5" />}
+      {e.checked && <Check className="ms-auto size-3.5" />}
     </>
   );
 }

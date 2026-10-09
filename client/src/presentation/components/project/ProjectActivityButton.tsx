@@ -122,24 +122,24 @@ export function ProjectActivityButton({
         {summary && (
           <TooltipContent side="bottom" align="end" className="w-64 p-0">
             <div className="p-2">
-              <p className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-1.5 pbe-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Активность
               </p>
               {summary.lastEditedAt && (
                 <div className="flex items-baseline justify-between gap-3 rounded px-1.5 py-1">
-                  <span className="min-w-0 truncate text-[13px]">
+                  <span className="min-w-0 truncate text-sm">
                     Изменено{summary.lastEditedByName ? ` · ${summary.lastEditedByName}` : ''}
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                  <span className="shrink-0 text-2xs text-muted-foreground">
                     {relativeTime(summary.lastEditedAt)}
                   </span>
                 </div>
               )}
               <div className="flex items-baseline justify-between gap-3 rounded px-1.5 py-1">
-                <span className="min-w-0 truncate text-[13px]">
+                <span className="min-w-0 truncate text-sm">
                   Создано{summary.createdByName ? ` · ${summary.createdByName}` : ''}
                 </span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
+                <span className="shrink-0 text-2xs text-muted-foreground">
                   {relativeTime(summary.createdAt)}
                 </span>
               </div>

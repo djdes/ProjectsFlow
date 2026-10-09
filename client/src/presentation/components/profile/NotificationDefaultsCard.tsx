@@ -87,7 +87,7 @@ export function NotificationDefaultsCard(): React.ReactElement {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-md border">
-          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 border-b px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:gap-x-4">
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 border-be px-3 py-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground sm:gap-x-4">
             <span>Событие</span>
             <span className="w-12 text-center">Команда</span>
             <span className="w-12 text-center">MCP</span>

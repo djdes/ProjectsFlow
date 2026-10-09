@@ -14,7 +14,7 @@ export function PageLoadError({
           Проверьте подключение к интернету и попробуйте ещё раз.
         </p>
         <Button variant="outline" onClick={onRetry}>
-          <RotateCw className="mr-2 size-4" />
+          <RotateCw className="me-2 size-4" />
           Попробовать снова
         </Button>
       </div>

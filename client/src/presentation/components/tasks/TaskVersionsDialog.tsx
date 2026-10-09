@@ -157,15 +157,15 @@ export function TaskVersionPreview({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h3 className="mb-4 text-[1.75rem] font-bold leading-tight tracking-tight">
+      <h3 className="mbe-4 text-[1.75rem] font-bold leading-tight tracking-tight">
         {prev ? <DiffText oldText={prevTitle} newText={title} /> : title}
       </h3>
-      <div className="mb-2 space-y-0.5">
+      <div className="mbe-2 space-y-0.5">
         <PropertyRow icon={CircleDot} label="Статус">
           <ChangedMark changed={!!prev && prev.status !== snapshot.status}>
             <span
               className={cn(
-                'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                'inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium',
                 STATUS_BADGE_COLOR[status] ?? 'bg-muted text-muted-foreground',
               )}
             >
@@ -217,9 +217,9 @@ export function TaskVersionPreview({
         </PropertyRow>
       </div>
       {(body || prevBody) && (
-        <div className="border-t pt-3">
+        <div className="border-bs pbs-3">
           {prev ? (
-            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
               <DiffText oldText={prevBody} newText={body} />
             </p>
           ) : (
@@ -367,11 +367,11 @@ export function TaskVersionsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-black/70 backdrop-blur-[1px]"
-        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:rounded-xl"
+        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-[0_24px_80px_oklch(0%_0_none/0.55)] sm:rounded-xl"
       >
         {/* Заголовок + основное действие справа сверху (как в Notion Version history):
             кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4). */}
-        <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-b px-5 py-3 pr-12">
+        <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-be px-5 py-3 pe-12">
           <DialogTitle>История версий</DialogTitle>
           <div className="flex items-center gap-2">
             <DropdownMenu>
@@ -414,7 +414,7 @@ export function TaskVersionsDialog({
               disabled={!selected || restoring || (selected != null && isLocked(selected.createdAt))}
               onClick={() => void restore()}
             >
-              {restoring ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
+              {restoring ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Clock className="size-4" />}
               Восстановить
             </Button>
           </div>
@@ -424,7 +424,7 @@ export function TaskVersionsDialog({
           <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12">
             {loading ? (
               <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Загрузка…
+                <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка…
               </div>
             ) : selected ? (
               <TaskVersionPreview snapshot={selected.snapshot} prev={prevSnapshot} />
@@ -433,7 +433,7 @@ export function TaskVersionsDialog({
             )}
           </div>
           {/* Список версий */}
-          <div className="flex w-80 shrink-0 flex-col border-l xl:w-96">
+          <div className="flex w-80 shrink-0 flex-col border-s xl:w-96">
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {visibleVersions.map((v) => {
                 const locked = isLocked(v.createdAt);
@@ -444,7 +444,7 @@ export function TaskVersionsDialog({
                       disabled={locked}
                       onClick={() => setSelectedId(v.id)}
                       className={cn(
-                        'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-left text-sm transition-colors',
+                        'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-start text-sm transition-colors',
                         locked
                           ? 'cursor-not-allowed text-muted-foreground/60'
                           : 'hover:bg-accent',
@@ -470,13 +470,13 @@ export function TaskVersionsDialog({
                           {fmtDateTime(v.createdAt)}
                         </span>
                         <span
-                          className="truncate text-[11px] leading-4 text-muted-foreground"
+                          className="truncate text-2xs leading-4 text-muted-foreground"
                           title={changedFieldsLabel(v.changedFields)}
                         >
                           {changedFieldsLabel(v.changedFields)}
                         </span>
                       </span>
-                      {locked && <Lock className="mt-1 size-3.5 shrink-0 text-muted-foreground" />}
+                      {locked && <Lock className="mbs-1 size-3.5 shrink-0 text-muted-foreground" />}
                     </button>
                   </li>
                 );
@@ -489,8 +489,8 @@ export function TaskVersionsDialog({
             </ul>
             {/* Гейтинг: старше 7 дней — Прайм/ВИП */}
             {hasLocked && (
-              <div className="border-t p-3 text-center text-xs text-muted-foreground">
-                <p className="mb-2">История 7 дней. Версии старше — на тарифе Прайм или ВИП.</p>
+              <div className="border-bs p-3 text-center text-xs text-muted-foreground">
+                <p className="mbe-2">История 7 дней. Версии старше — на тарифе Прайм или ВИП.</p>
                 <Button variant="outline" size="sm" className="w-full" onClick={() => upgrade.open()}>
                   Улучшить план
                 </Button>

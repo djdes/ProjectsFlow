@@ -29,8 +29,8 @@ const TABS: ReadonlyArray<{ value: HelpTab; label: string; icon: React.ReactNode
 // Notion-геометрия: круглая кнопка 40×40 в 31px от правого и нижнего края и панель
 // шириной 360, прижатая к правому краю во всю высоту (без скругления и тени).
 const FAB_SHADOW =
-  'shadow-[0_8px_12px_rgba(25,25,25,0.027),0_2px_6px_rgba(25,25,25,0.027),0_0_0_1px_rgba(42,28,0,0.07)] ' +
-  'dark:shadow-[0_8px_12px_rgba(0,0,0,0.30),0_2px_6px_rgba(0,0,0,0.25),0_0_0_1px_rgba(255,255,255,0.10)]';
+  'shadow-[0_8px_12px_oklch(21.34%_0_none/0.027),0_2px_6px_oklch(21.34%_0_none/0.027),0_0_0_1px_oklch(23.78%_0.049_82.45/0.07)] ' +
+  'dark:shadow-[0_8px_12px_oklch(0%_0_none/0.3),0_2px_6px_oklch(0%_0_none/0.25),0_0_0_1px_oklch(100%_0_none/0.1)]';
 
 function normalizeTab(tab: OpenHelpDetail['tab']): HelpTab | null {
   if (tab === 'support') return 'support';
@@ -170,11 +170,11 @@ export function HelpWidget({
             onFocusOutside={(event) => event.preventDefault()}
             // Панель немодальная: интерфейс слева остаётся кликабельным, страница не
             // сужается. Встык к краю окна — без скругления и тени, только разделитель.
-            className="flex w-full flex-col overflow-hidden border-l bg-card p-0 shadow-none sm:max-w-[360px]"
+            className="flex w-full flex-col overflow-hidden border-s bg-card p-0 shadow-none sm:max-w-[360px]"
           >
             <SheetTitle className="sr-only">ИИ и поддержка</SheetTitle>
             <SheetDescription className="sr-only">Помощник проекта и обращение в поддержку</SheetDescription>
-            <header className="flex shrink-0 items-center gap-2 border-b px-2.5 py-2">
+            <header className="flex shrink-0 items-center gap-2 border-be px-2.5 py-2">
               <div role="tablist" className="flex min-w-0 flex-1 rounded-xl bg-muted p-1">
                 {TABS.map((t) => {
                   const active = t.value === tab;
@@ -186,7 +186,7 @@ export function HelpWidget({
                       aria-selected={active}
                       onClick={() => setTab(t.value)}
                       className={cn(
-                        'relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[13px] font-medium transition-colors',
+                        'relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium transition-colors',
                         active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -261,10 +261,10 @@ export function HelpWidget({
             whileHover={animations ? { scale: 1.06 } : undefined}
             whileTap={animations ? { scale: 0.92 } : undefined}
             className={cn(
-              'fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 grid size-10 place-items-center',
+              'fixed inset-be-[calc(4.5rem+env(safe-area-inset-bottom,0px))] end-4 z-40 grid size-10 place-items-center',
               'rounded-full bg-card text-foreground/80 transition-colors hover:bg-muted/40',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              'md:bottom-[31px] md:right-[31px]',
+              'md:inset-be-[31px] md:end-[31px]',
               FAB_SHADOW,
             )}
           >
