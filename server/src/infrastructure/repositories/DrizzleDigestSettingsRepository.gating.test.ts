@@ -23,8 +23,8 @@ function fakeProjectMembers(projects: readonly Partial<ProjectWithRole>[]): Proj
 test('listGroupsForUser: ws-участник БЕЗ project_members-строки — видит группу своего проекта (ветка А через ProjectMemberRepository)', async () => {
   const db = fakeDb({
     selectRowsSeq: [
-      [{ chatId: 111, title: 'Группа A' }], // (A) мои проекты
-      [{ workspaceId: 'w1' }], // resolve workspaceId текущего projectId
+      [{ workspaceId: 'w1' }], // resolve workspaceId текущего projectId — общий скоуп обеих веток
+      [{ chatId: 111, title: 'Группа A' }], // (A) мои проекты этого пространства
       [], // (B) остальные проекты пространства — пусто
     ],
   }) as unknown as Database;

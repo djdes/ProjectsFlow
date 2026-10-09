@@ -33,6 +33,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Красный серверный тест останавливает выкладку: прод остаётся на прошлой версии.
+      - name: Server tests
+        run: npm run test:server
+
       - name: Build client
         run: npm run build:client
 

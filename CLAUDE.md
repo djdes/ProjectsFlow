@@ -134,7 +134,9 @@ npm run deploy
 ```
 
 Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4. Push в `main` триггерит
-автодеплой на прод (`.github/workflows/deploy.yml`) — катим по мере готовности.
+автодеплой на прод (`.github/workflows/deploy.yml`) — катим по мере готовности. Перед сборкой
+CI гоняет typecheck, lint и серверные тесты (`npm run test:server`): красный тест останавливает
+выкладку, прод остаётся на прошлой версии. Перед пушем прогоняй их локально.
 
 ## SSH / Git / доступы
 
