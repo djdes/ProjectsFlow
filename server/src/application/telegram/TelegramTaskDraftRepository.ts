@@ -183,6 +183,9 @@ export interface TelegramTaskDraftRepository {
   claimForConfirmation(id: string, dueOnly: boolean): Promise<TelegramTaskDraft | null>;
   // При временной ошибке возвращаем черновик в очередь; при ручной отмене меняем только composing.
   releaseConfirmation(id: string, retrySeconds: number): Promise<void>;
+  // Повторять бессмысленно: confirming → cancelled. Только из confirming — уже созданный
+  // (confirmed) черновик не перетирается. true — черновик действительно закрыт этим вызовом.
+  cancelConfirmation(id: string): Promise<boolean>;
   cancelComposing(id: string): Promise<boolean>;
   recoverStaleConfirmations(staleSeconds: number, retrySeconds: number): Promise<number>;
   // Удалить истёкшие черновики. Возвращает число удалённых.

@@ -38,6 +38,15 @@ import {
   isColumnHidden,
 } from '../../../domain/kanban/KanbanSettings.js';
 import { markdownToTelegramHtml } from '../telegramMarkdown.js';
+import {
+  InsufficientProjectRoleError,
+  ProjectNotFoundError,
+} from '../../../domain/project/errors.js';
+import {
+  AssigneeNotProjectMemberError,
+  AssigneeNotSharedMemberError,
+  TaskDescriptionEmptyError,
+} from '../../../domain/task/errors.js';
 
 // Минимальный slice callback_query, который мы обрабатываем (см. TG Bot API #callbackquery).
 export type TelegramCallbackQuery = {
@@ -93,6 +102,9 @@ type Deps = {
 const DRAFT_TTL_SECONDS = 3650 * 24 * 60 * 60;
 const AUTO_CREATE_SECONDS = 10 * 60;
 const AUTO_RETRY_SECONDS = 60;
+// Временный сбой (БД, сеть) повторяем раз в минуту, но не дольше суток от создания черновика:
+// ошибку, которую повтор не лечит, иначе молотили бы вечно.
+const AUTO_RETRY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const STALE_CONFIRMATION_SECONDS = 15 * 60;
 const PAGE_SIZE = 6; // кнопок-вариантов на страницу пикера
 const ATTACHMENT_TASK_PAGE_SIZE = 6;
@@ -136,6 +148,19 @@ function escapeHtml(s: string): string {
 function excerpt(text: string, limit = EXCERPT_LIMIT): string {
   const s = text.trim().replace(/\s+/g, ' ');
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
+}
+
+// Отказ CreateTask, который повтор не исправит, — причина для карточки. null — сбой временный
+// (БД, сеть), черновик стоит повторить. Без этого различия черновик с битым id проекта трое
+// суток раз в минуту падал на «Project not found».
+function permanentFailureReason(err: unknown): string | null {
+  if (err instanceof ProjectNotFoundError) return 'проект не найден или нет доступа';
+  if (err instanceof InsufficientProjectRoleError) return 'нет прав создавать задачи в проекте';
+  if (err instanceof AssigneeNotProjectMemberError || err instanceof AssigneeNotSharedMemberError) {
+    return 'ответственный не участник проекта';
+  }
+  if (err instanceof TaskDescriptionEmptyError) return 'пустой текст задачи';
+  return null;
 }
 
 // Одна ссылка блока «Связанные задачи» в комментарии-оригинале.
@@ -490,10 +515,22 @@ export class TelegramComposerService {
         }
       } catch (err) {
         console.warn(`[tg-composer] auto-create draft ${draft.id} failed:`, err);
-        await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+        await this.retryOrClose(draft, true);
       }
     }
     return processed;
+  }
+
+  // Захваченный (confirming) черновик, по которому ничего не создалось: вернуть в очередь
+  // через минуту или закрыть. Закрываем, если сбой не временный или черновик бьётся дольше
+  // AUTO_RETRY_WINDOW_MS. true — черновик закрыт этим вызовом.
+  private async retryOrClose(draft: TelegramTaskDraft, retryable: boolean): Promise<boolean> {
+    const age = this.now().getTime() - draft.createdAt.getTime();
+    if (retryable && age < AUTO_RETRY_WINDOW_MS) {
+      await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+      return false;
+    }
+    return this.deps.drafts.cancelConfirmation(draft.id);
   }
 
   // Точка входа из HandleTelegramWebhook: не-командное, не-reply сообщение → задача.
@@ -1273,10 +1310,21 @@ export class TelegramComposerService {
       }
     } catch (err) {
       console.warn('[tg-composer] finalize failed:', err);
-      await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+      const permanent = permanentFailureReason(err);
+      const closed = await this.retryOrClose(draft, permanent === null);
+      const why = permanent ? `: ${permanent}` : '';
+      if (closed && messageId) {
+        await this.edit(
+          chatId,
+          messageId,
+          `⚠️ Не удалось создать задачу${why}.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n⛔ Черновик закрыт — поправьте и отправьте сообщение заново.`,
+        );
+      }
       if (cqId) {
         await this.deps.client.answerCallbackQuery(cqId, {
-          text: 'Не удалось создать задачу. Повторю автоматически через минуту.',
+          text: closed
+            ? `Не удалось создать задачу${why}.`
+            : 'Не удалось создать задачу. Повторю автоматически через минуту.',
           showAlert: true,
         });
       }
@@ -1551,13 +1599,17 @@ export class TelegramComposerService {
     forceStatus: VisibleKanbanStatus | null = null,
   ): Promise<TelegramDraftSegment[]> {
     const out: TelegramDraftSegment[] = [];
+    const projects = hintProjectId
+      ? []
+      : (await this.deps.members.listProjectsForUser(creatorUserId)).filter((p) => !p.isInbox);
     for (const s of parsed) {
-      const projectId = hintProjectId ?? s.projectId;
+      const project = hintProjectId ? null : this.matchSegmentProject(s, projects);
+      const projectId = hintProjectId ?? project?.id ?? null;
       out.push({
         title: s.title,
         body: s.body,
         projectId,
-        projectName: hintProjectId ? null : s.projectName,
+        projectName: hintProjectId ? null : (project?.name ?? s.projectName),
         assigneeUserId: await this.resolveSegmentAssignee(s, projectId, creatorUserId),
         assigneeName: s.assigneeName,
         // Срока нет — ставим конец недели ЗДЕСЬ, а не при создании: так он попадает в карточку,
@@ -1576,6 +1628,22 @@ export class TelegramComposerService {
     return out;
   }
 
+  // Модель переписывает id проекта из контекста и иногда портит его: в проде пришло
+  // «b1d4e7a-…» вместо «b1dd4e7a-…». С таким id CreateTask отвечает «Project not found».
+  // Поэтому id сверяем с проектами автора, битый восстанавливаем по имени проекта (модель
+  // отдаёт его рядом), а не вышло — сегмент уходит во «Входящие», как без проекта.
+  private matchSegmentProject<P extends { id: string; name: string }>(
+    seg: ParsedComposeSegment,
+    projects: readonly P[],
+  ): P | null {
+    if (!seg.projectId) return null;
+    const byId = projects.find((p) => p.id === seg.projectId);
+    if (byId) return byId;
+    const name = seg.projectName?.trim().toLowerCase();
+    const byName = name ? projects.filter((p) => p.name.trim().toLowerCase() === name) : [];
+    return byName.length === 1 ? (byName[0] ?? null) : null;
+  }
+
   // Модель часто называет ответственного, но не возвращает его id. В проде это выглядело так:
   // {"assigneeUserId":null,"assigneeName":"hotspotping"} — карточка показывала имя, а в задачу
   // уходил `assigneeUserId ?? userId`, то есть автор. Пользователь видел «ответственный
@@ -1584,16 +1652,22 @@ export class TelegramComposerService {
   // Сопоставляем имя тем же fuzzyMatch по тем же кандидатам, что и ручной путь (см. резолв
   // @упоминания выше) — отдельной эвристики заводить не надо. Не совпало однозначно → null,
   // и тогда карточка честно покажет автора, а не имя, которое всё равно не применится.
+  // id от модели берём, только если это автор или участник: битый или чужой id CreateTask
+  // отвергнет (как и битый id проекта, см. matchSegmentProject), и задача не создастся вовсе.
   private async resolveSegmentAssignee(
     seg: ParsedComposeSegment,
     projectId: string | null,
     creatorUserId: string,
   ): Promise<string | null> {
-    if (seg.assigneeUserId) return seg.assigneeUserId;
+    if (seg.assigneeUserId === creatorUserId) return creatorUserId;
     const name = seg.assigneeName?.trim();
-    if (!name) return null;
+    if (!seg.assigneeUserId && !name) return null;
     try {
       const candidates = await this.assigneeCandidates(creatorUserId, projectId);
+      if (seg.assigneeUserId && candidates.some((c) => c.id === seg.assigneeUserId)) {
+        return seg.assigneeUserId;
+      }
+      if (!name) return null;
       return (await this.matchAssignee(name, candidates)).unique?.id ?? null;
     } catch (err) {
       // Резолв ответственного — украшение, а не условие создания задачи: список участников
@@ -2368,6 +2442,8 @@ export class TelegramComposerService {
     // «создано» про них врало бы, но и провалом это не является.
     let appended = 0;
     let failed = 0;
+    // Сбои, которые повтор может исправить (БД, сеть). Только из-за них черновик повторяем.
+    let retryable = 0;
     let lastTaskId: string | null = null;
     let lastProjectId: string | null = null;
     const createdTargets: {
@@ -2455,7 +2531,11 @@ export class TelegramComposerService {
       } catch (err) {
         console.warn('[tg-composer] finalizeSegments: segment failed:', err);
         failed += 1;
-        summary.push(`⚠️ ${escapeHtml(seg.title.trim() || excerpt(seg.body, 40))} — не удалось`);
+        const reason = permanentFailureReason(err);
+        if (reason === null) retryable += 1;
+        summary.push(
+          `⚠️ ${escapeHtml(seg.title.trim() || excerpt(seg.body, 40))} — ${reason ?? 'не удалось'}`,
+        );
       }
     }
     // Оригинал исходного сообщения — в каждую созданную задачу. Из одного сообщения на N
@@ -2493,9 +2573,8 @@ export class TelegramComposerService {
     }
     // Дополнение существующей задачи — такой же успешный исход, как создание: черновик
     // отработан, повторять его через минуту не нужно.
-    if (created + appended === 0) {
-      await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
-    }
+    const nothingDone = created + appended === 0;
+    const closed = nothingDone && (await this.retryOrClose(draft, retryable > 0));
     // reply→комментарий: маппим сообщение только когда создана РОВНО одна задача (для N задач
     // одно сообщение к нескольким задачам однозначно не привязать).
     if (created === 1 && lastTaskId && lastProjectId && messageId) {
@@ -2515,16 +2594,25 @@ export class TelegramComposerService {
         ? `✅ Создано задач: ${created}${appendedSuffix}`
         : `Создано: ${created}${appendedSuffix}, ошибок: ${failed}`) + autoSuffix;
     const attachmentSummary = this.attachmentResultText(attachmentResult).trim();
+    const outcome = !nothingDone
+      ? ''
+      : closed
+        ? '⛔ Черновик закрыт — поправьте и отправьте сообщение заново.'
+        : '🔁 Повторю через минуту.';
     if (messageId) {
       await this.edit(
         chatId,
         messageId,
-        [header, attachmentSummary, '', ...summary].filter(Boolean).join('\n'),
+        [header, attachmentSummary, '', ...summary, outcome].filter(Boolean).join('\n'),
       );
     }
     if (cqId) {
       await this.deps.client.answerCallbackQuery(cqId, {
-        text: created + appended > 0 ? 'Готово' : 'Не удалось — повторю через минуту',
+        text: !nothingDone
+          ? 'Готово'
+          : closed
+            ? 'Не удалось — черновик закрыт'
+            : 'Не удалось — повторю через минуту',
       });
     }
   }

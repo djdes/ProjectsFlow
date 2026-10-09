@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TelegramComposerService, type TelegramCallbackQuery } from './TelegramComposerService.js';
 import type { TelegramTaskDraft } from '../TelegramTaskDraftRepository.js';
+import {
+  InsufficientProjectRoleError,
+  ProjectNotFoundError,
+} from '../../../domain/project/errors.js';
 
 // --- Минимальные in-memory фейки (tsx + node:test, без новых deps). ---
 
@@ -55,6 +59,8 @@ function makeHarness(opts?: {
   commentOutcome?: 'throw';
   // Уже существующие задачи (для сегментов-дополнений, B3): taskId → задача.
   existingTasks?: Record<string, any>;
+  // Отказ CreateTask: вернуть ошибку — createTask её бросит (нет проекта, сбой БД и т.п.).
+  createTaskError?: (input: any) => Error | null;
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
@@ -64,6 +70,7 @@ function makeHarness(opts?: {
   const telegramUsernames = opts?.telegramUsernames ?? {};
   const commentOutcome = opts?.commentOutcome;
   const existingTasks = opts?.existingTasks ?? {};
+  const createTaskError = opts?.createTaskError;
 
   const drafts = new Map<string, TelegramTaskDraft>();
   let seq = 0;
@@ -111,7 +118,7 @@ function makeHarness(opts?: {
         attachments: input.attachments ?? [],
         targetStatus: input.targetStatus ?? null,
         status: 'composing',
-        createdAt: new Date(0),
+        createdAt: new Date(),
         autoCreateAt:
           input.autoCreateSeconds == null ? null : new Date(Date.now() + input.autoCreateSeconds * 1000),
         confirmationStartedAt: null,
@@ -181,6 +188,12 @@ function makeHarness(opts?: {
         confirmationStartedAt: null,
         autoCreateAt: new Date(Date.now() + retrySeconds * 1000),
       });
+    },
+    async cancelConfirmation(id: string) {
+      const cur = drafts.get(id);
+      if (!cur || cur.status !== 'confirming') return false;
+      drafts.set(id, { ...cur, status: 'cancelled', confirmationStartedAt: null, autoCreateAt: null });
+      return true;
     },
     async cancelComposing(id: string) {
       const cur = drafts.get(id);
@@ -279,6 +292,8 @@ function makeHarness(opts?: {
     },
     createTask: {
       async execute(input: any) {
+        const failure = createTaskError?.(input);
+        if (failure) throw failure;
         createTaskCalls.push({
           projectId: input.projectId,
           ownerUserId: input.ownerUserId,
@@ -1664,4 +1679,111 @@ test('картинка, отправленная документом, оста�
     { taskId: 't1', filename: 'original.png', mimeType: 'image/png' },
   ]);
   assert.equal(h.updatedDescriptions.length, 0);
+});
+
+// ===================== Битые id от модели и повторы автосоздания =====================
+
+test('AI: битый id проекта восстанавливается по имени проекта', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }, { id: 'p2', name: 'Бета' }],
+    // Так было в проде: модель потеряла символ в UUID, но имя проекта вернула верно.
+    aiSegments: [seg1({ projectId: 'p-broken', projectName: 'альфа' })],
+  });
+  await h.service.startFromMessage(111, 500, 'почини сборку');
+  const draftId = [...h.drafts.keys()][0]!;
+  const seg = h.drafts.get(draftId)!.segments![0]!;
+  assert.equal(seg.projectId, 'p1');
+  assert.equal(seg.projectName, 'Альфа');
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1');
+});
+
+test('AI: битый id без узнаваемого имени → «Входящие», а не вечный «Project not found»', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1({ projectId: 'p-broken', projectName: 'Гамма' })],
+  });
+  await h.service.startFromMessage(111, 500, 'почини сборку');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.equal(h.drafts.get(draftId)!.segments![0]!.projectId, null);
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1');
+});
+
+test('AI: id ответственного не из участников отбрасывается, имя ещё может сматчиться', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [
+      seg1({ id: 's1', assigneeUserId: 'ghost', assigneeName: 'Вася' }),
+      seg1({ id: 's2', assigneeUserId: 'ghost', assigneeName: null }),
+      seg1({ id: 's3', assigneeUserId: 'u1', assigneeName: null }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'три задачи');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.deepEqual(
+    h.drafts.get(draftId)!.segments!.map((s) => s.assigneeUserId),
+    ['u2', null, 'u1'],
+  );
+});
+
+test('автосоздание: отказ, который повтор не исправит, закрывает черновик сразу', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1({ title: 'Скрыть чужие задачи' })],
+    createTaskError: () => new ProjectNotFoundError(),
+  });
+  await h.service.startFromMessage(111, 500, 'скрыть чужие задачи');
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  h.drafts.set(draftId, { ...draft, autoCreateAt: new Date(Date.now() - 1_000) });
+
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.drafts.get(draftId)!.status, 'cancelled');
+  assert.equal(h.drafts.get(draftId)!.autoCreateAt, null);
+  const card = h.edits[h.edits.length - 1]!.text;
+  assert.match(card, /Скрыть чужие задачи — проект не найден или нет доступа/);
+  assert.match(card, /Черновик закрыт/);
+  assert.equal(await h.service.processDueAutoCreate(), 0);
+});
+
+test('автосоздание: временный сбой повторяется через минуту, но не дольше суток', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1()],
+    createTaskError: () => new Error('connect ENOENT /run/mysqld/mysqld.sock'),
+  });
+  await h.service.startFromMessage(111, 500, 'задача');
+  const draftId = [...h.drafts.keys()][0]!;
+  let draft = h.drafts.get(draftId)!;
+  h.drafts.set(draftId, { ...draft, autoCreateAt: new Date(Date.now() - 1_000) });
+
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  draft = h.drafts.get(draftId)!;
+  assert.equal(draft.status, 'composing');
+  assert.ok(draft.autoCreateAt! > new Date(), 'повтор назначен на будущее');
+  assert.match(h.edits[h.edits.length - 1]!.text, /Повторю через минуту/);
+
+  // Черновик бьётся больше суток — дальше не повторяем.
+  h.drafts.set(draftId, {
+    ...draft,
+    createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    autoCreateAt: new Date(Date.now() - 1_000),
+  });
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.drafts.get(draftId)!.status, 'cancelled');
+  assert.match(h.edits[h.edits.length - 1]!.text, /Черновик закрыт/);
+});
+
+test('ручной черновик: нет прав в проекте → черновик закрыт с причиной, без повторов', async () => {
+  const h = makeHarness({
+    aiOutcome: 'timeout',
+    createTaskError: () => new InsufficientProjectRoleError('viewer', 'create_task'),
+  });
+  await h.service.startFromMessage(111, 500, 'починить сборку');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.drafts.get(draftId)!.status, 'cancelled');
+  assert.match(h.answers[h.answers.length - 1]!.text ?? '', /нет прав создавать задачи/);
+  assert.match(h.edits[h.edits.length - 1]!.text, /Черновик закрыт/);
 });

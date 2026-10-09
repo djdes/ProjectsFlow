@@ -319,6 +319,14 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
       .where(and(eq(telegramTaskDrafts.id, id), eq(telegramTaskDrafts.status, 'confirming')));
   }
 
+  async cancelConfirmation(id: string): Promise<boolean> {
+    const result = await this.db
+      .update(telegramTaskDrafts)
+      .set({ status: 'cancelled', confirmationStartedAt: null, autoCreateAt: null })
+      .where(and(eq(telegramTaskDrafts.id, id), eq(telegramTaskDrafts.status, 'confirming')));
+    return affectedRows(result) > 0;
+  }
+
   async cancelComposing(id: string): Promise<boolean> {
     const result = await this.db
       .update(telegramTaskDrafts)
