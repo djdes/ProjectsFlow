@@ -1,0 +1,553 @@
+/* =============================================================================
+   Доска «Входящие» в hero (KanbanBoard.tsx) — плотная раскладка C4, как в приложении:
+   колонка — серый лист #F7F7F5 с радиусом 10px, карточка — белая 8px с тенью-кольцом,
+   отступ 7×10px, заголовок 13.5px полужирный, подпись 12.5px серым.
+   Узкая рамка — горизонтальная лента колонок со snap, широкая — сетка из четырёх колонок.
+   Классы карточек не вложены в .kb: копия карточки в руке (DragOverlay) живёт в body.
+   ============================================================================= */
+
+/* --- Рамка «окна» приложения ---------------------------------------------- */
+.kb {
+  container: kb / inline-size;
+  position: relative;
+  border-radius: var(--r-2xl);
+  background: oklch(var(--background));
+  box-shadow: var(--shadow-frame);
+  overflow: clip;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Шапка страницы: строка 44px с линией снизу — крошки слева, счётчик справа. */
+.kb__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  block-size: 2.75rem;
+  padding-inline: 0.625rem 0.75rem;
+  border-block-end: 1px solid oklch(var(--border));
+  font-size: var(--text-ui);
+}
+.kb__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  min-inline-size: 0;
+  color: oklch(var(--muted-foreground));
+}
+.kb__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-inline-size: 0;
+  padding: 0.25rem 0.375rem;
+  border-radius: var(--r-md);
+  white-space: nowrap;
+}
+.kb__crumb--current { color: oklch(var(--foreground)); }
+.kb__ws {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  border-radius: var(--r-sm);
+  background: oklch(var(--foreground));
+  color: oklch(var(--background));
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+.kb__chev,
+.kb__sep { color: oklch(var(--muted-foreground) / 0.7); }
+.kb__done {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  block-size: 1.5rem;
+  margin-inline-start: auto;
+  padding-inline: 0.5rem;
+  border-radius: var(--r-md);
+  background: var(--done-soft);
+  color: oklch(var(--done-ink));
+  font-weight: 600;
+}
+.kb__done-n { font-variant-numeric: tabular-nums; }
+.kb__done-label { font-weight: 500; }
+
+/* Заголовок страницы 22px. */
+.kb__head { padding: 1.125rem 1rem 0.75rem; }
+.kb__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: oklch(var(--foreground));
+}
+
+/* --- Лента колонок ---------------------------------------------------------- */
+.kb__lane {
+  display: flex;
+  align-items: stretch;
+  gap: 0.625rem;
+  padding: 0 1rem 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(var(--muted-foreground) / 0.35) transparent;
+}
+.kb.is-dragging .kb__lane { scroll-snap-type: none; }
+.kb__lane > .kb-col {
+  flex: none;
+  inline-size: min(17.5rem, calc(100cqi - 4.5rem));
+  scroll-snap-align: start;
+}
+.kb__lane > .kb-col--now { inline-size: min(18.5rem, calc(100cqi - 4.5rem)); }
+
+/* Планшет: «Сейчас» закреплена слева, проекты уезжают под неё. */
+@container kb (width >= 40rem) {
+  .kb__lane > .kb-col--now {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 2;
+    box-shadow:
+      0 0 0 0.625rem oklch(var(--background)),
+      0.625rem 0 1rem -0.5rem var(--sticky-shadow, oklch(16.84% 0 none / 0.12));
+  }
+}
+
+/* Широкая рамка: все колонки помещаются — сетка без прокрутки. */
+@container kb (width >= 60rem) {
+  .kb__head { padding-inline: 1.25rem; }
+  .kb__lane {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) repeat(3, minmax(0, 1fr));
+    padding: 0 1.25rem 1.25rem;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .kb__lane > .kb-col,
+  .kb__lane > .kb-col--now { inline-size: auto; }
+  .kb__lane > .kb-col--now { position: static; box-shadow: none; }
+}
+
+/* Узкая рамка: прячем имя пространства и подпись счётчика. */
+@container kb (width < 30rem) {
+  .kb__ws-name,
+  .kb__chev,
+  .kb__done-label { display: none; }
+}
+
+/* --- Колонка ---------------------------------------------------------------- */
+.kb-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-block-size: 22rem;
+  padding: 6px;
+  border-radius: var(--r-xl);
+  background: oklch(var(--panel));
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    outline-color var(--dur-fast) var(--ease-out);
+}
+.kb-col__head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-inline-size: 0;
+  block-size: 1.75rem;
+  padding-inline: 0.25rem;
+}
+.kb-col__name {
+  font-size: var(--text-ui);
+  font-weight: 600;
+  color: oklch(var(--foreground));
+}
+.kb-col__pin { color: oklch(var(--muted-foreground)); }
+.kb-col__count {
+  flex: none;
+  font-size: var(--text-xs);
+  color: oklch(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+/* Доступная зона броска — штрих; под карточкой — подсветка (синяя или янтарная). */
+.kb-col.is-target {
+  outline: 1.5px dashed oklch(var(--drop-line));
+  outline-offset: -1.5px;
+}
+.kb-col.is-over {
+  background: var(--drop);
+  outline-color: oklch(var(--primary));
+}
+.kb-col--now.is-over {
+  background: var(--manual-zone);
+  outline-color: oklch(var(--manual));
+}
+
+.kb-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.kb-group + .kb-group { margin-block-start: 0.375rem; }
+.kb-group--manual { flex: 1; }
+.kb-group__head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  block-size: 1.5rem;
+  padding-inline: 0.25rem;
+}
+
+.kb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kb-empty {
+  margin: 0;
+  padding: 0.25rem 0.375rem 0.375rem;
+  font-size: var(--text-meta);
+  line-height: var(--leading-snug);
+  color: oklch(var(--muted-foreground));
+}
+.kb-dropzone {
+  display: grid;
+  place-items: center;
+  min-block-size: 2.75rem;
+  margin-block-start: auto;
+  padding: 0.5rem 0.75rem;
+  border: 1.5px dashed oklch(var(--drop-line));
+  border-radius: var(--r-lg);
+  font-size: var(--text-meta);
+  line-height: var(--leading-snug);
+  color: oklch(var(--muted-foreground));
+  text-align: center;
+}
+.kb-col.is-over .kb-dropzone { border-color: currentColor; }
+/* На янтарной подсветке серый текст на грани AA — счётчики и подсказка темнеют. */
+.kb-col--now.is-over :is(.kb-dropzone, .kb-col__count) { color: oklch(var(--manual-ink)); }
+
+/* --- Карточка ---------------------------------------------------------------- */
+.kb-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: var(--r-lg);
+  background: oklch(var(--card));
+  box-shadow: var(--shadow-card);
+  color: oklch(var(--foreground));
+  cursor: grab;
+  /* Свайп листает ленту; перетаскивание на тач-экране — долгим нажатием. */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.kb-card.is-running,
+.kb-card--approval { cursor: default; }
+.kb-card.is-dragging { opacity: 0.4; }
+.kb-card__title {
+  font-size: var(--text-card);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.kb-card__note {
+  font-size: var(--text-meta);
+  line-height: var(--leading-snug);
+  color: oklch(var(--muted-foreground));
+}
+.kb-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-block-start: 0.25rem;
+  font-size: var(--text-xs);
+}
+
+.kb-ic {
+  flex: none;
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+.kb-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: oklch(var(--muted-foreground));
+}
+.kb-due .kb-ic { inline-size: 0.75rem; block-size: 0.75rem; }
+.kb-due--today { color: oklch(var(--today)); }
+.kb-due--late { color: oklch(var(--destructive)); }
+
+/* «AI делает» — синяя точка + полоса прогресса по низу карточки. */
+.kb-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: oklch(var(--primary-ink));
+}
+.kb-run::before {
+  content: '';
+  flex: none;
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  border-radius: 50%;
+  background: oklch(var(--primary));
+}
+.kb-card__progress {
+  position: absolute;
+  inset-inline: 10px;
+  inset-block-end: 0;
+  block-size: 2px;
+  border-radius: 2px;
+  background: color-mix(in oklch, oklch(var(--primary)) 18%, transparent);
+  overflow: clip;
+}
+.kb-card__progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: oklch(var(--primary));
+  transform-origin: left center;
+  scale: 0.35 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb.is-live .kb-card__progress::after { animation: kb-progress 3.2s linear forwards; }
+}
+@keyframes kb-progress {
+  from { scale: 0 1; }
+  to { scale: 1 1; }
+}
+
+/* Быстрое действие по наведению — плашка в правом верхнем углу (как в приложении). */
+.kb-card__hint {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.4375rem;
+  border-radius: var(--r-md);
+  background: oklch(var(--raised));
+  box-shadow: var(--shadow-menu);
+  color: oklch(var(--foreground));
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.kb-card__hint .kb-ic { inline-size: 0.75rem; block-size: 0.75rem; color: oklch(var(--primary)); }
+.kb-card:focus-visible .kb-card__hint,
+.kb-card:has(.kb-card__handle:focus-visible) .kb-card__hint { opacity: 1; }
+.kb.is-dragging .kb-card__hint { opacity: 0; }
+
+@media (hover: hover) and (pointer: fine) {
+  .kb-card:hover { box-shadow: var(--shadow-card-hover); background: oklch(var(--card-hover)); }
+  .kb-card--approval:hover { box-shadow: var(--shadow-card); background: oklch(var(--card)); }
+  .kb-card:hover .kb-card__hint { opacity: 1; }
+}
+
+/* Ручная задача: квадратная галочка слева, текст — ручка для перетаскивания. */
+.kb-card--manual {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.kb-card__handle {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  cursor: grab;
+  border-radius: var(--r-sm);
+}
+.kb-card__handle:focus-visible { outline: 2px solid transparent; }
+.kb-card--manual:has(.kb-card__handle:focus-visible) {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+}
+.kb-check {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin-block-start: 1px;
+  padding: 0;
+  border: 1.5px solid oklch(var(--muted-foreground) / 0.55);
+  border-radius: var(--r-sm);
+  background: oklch(var(--card));
+  color: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.kb-check .kb-ic { inline-size: 0.6875rem; block-size: 0.6875rem; stroke-width: 3; }
+/* Зона нажатия больше самой галочки: 32px, на тач-экране 44px. */
+.kb-check::after {
+  content: '';
+  position: absolute;
+  inset: -0.5rem;
+}
+@media (pointer: coarse) {
+  .kb-check::after { inset: -0.875rem; }
+}
+.kb-check:active { background: var(--done-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .kb-check:hover { border-color: oklch(var(--done)); color: oklch(var(--done)); }
+}
+
+/* На утверждении: метка проекта, результат, «Принять» / «Вернуть». */
+.kb-card--approval { gap: 3px; }
+.kb-card--approval > .pf-tag { margin-block-end: 2px; }
+.kb-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-block-start: 0.375rem;
+}
+.kb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  min-block-size: 1.75rem;
+  padding-inline: 0.5625rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: var(--text-ui);
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.kb-btn .kb-ic { inline-size: 0.8125rem; block-size: 0.8125rem; }
+.kb-btn--accept {
+  background: var(--done-soft);
+  color: oklch(var(--done-ink));
+  font-weight: 600;
+}
+.kb-btn--return {
+  background: transparent;
+  border-color: oklch(var(--input));
+  color: oklch(var(--foreground));
+}
+.kb-btn:active { scale: 0.97; }
+@media (prefers-reduced-motion: no-preference) {
+  .kb-btn {
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      scale 140ms var(--ease-out);
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .kb-btn--accept:hover { background: var(--done-soft-hover); }
+  .kb-btn--return:hover { background: var(--hover); }
+}
+@media (pointer: coarse) {
+  .kb-btn { min-block-size: 2.75rem; padding-inline: 0.875rem; }
+}
+
+/* Карточка в руке (DragOverlay): поднята — глубокая тень, лёгкий наклон без reduced-motion. */
+.kb-card--overlay {
+  cursor: grabbing;
+  box-shadow: var(--shadow-card), var(--shadow-float);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb-card--overlay { rotate: 1.5deg; }
+}
+
+/* --- Тост отмены ------------------------------------------------------------ */
+.kb__toasts {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0.875rem;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  padding-inline: 0.75rem;
+  pointer-events: none;
+}
+.kb-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  max-inline-size: 100%;
+  padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+  border-radius: var(--r-lg);
+  background: oklch(var(--toast));
+  color: oklch(var(--toast-foreground));
+  box-shadow: var(--shadow-float);
+  font-size: var(--text-ui);
+  pointer-events: auto;
+  animation: kb-toast-fade 160ms var(--ease-out);
+}
+.kb-toast__ic { color: oklch(var(--done)); }
+.kb-toast__text {
+  min-inline-size: 0;
+  overflow: clip;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-toast__undo {
+  flex: none;
+  min-block-size: 1.75rem;
+  padding-inline: 0.5rem;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: oklch(var(--toast-accent));
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.kb-toast__undo:focus-visible { outline-color: oklch(var(--toast-accent)); }
+.kb-toast__undo:active { background: color-mix(in oklch, oklch(var(--toast-foreground)) 14%, transparent); }
+@media (hover: hover) and (pointer: fine) {
+  .kb-toast__undo:hover { background: color-mix(in oklch, oklch(var(--toast-foreground)) 10%, transparent); }
+}
+@keyframes kb-toast-fade {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kb-toast { animation-name: kb-toast-in; }
+  @keyframes kb-toast-in {
+    from { opacity: 0; translate: 0 0.5rem; }
+  }
+}
+
+/* --- Тёмная тема: счётчик без подложки, карточки держатся рамкой ------------- */
+@media (prefers-color-scheme: dark) {
+  .kb__done {
+    background: transparent;
+    padding-inline: 0.25rem;
+    color: oklch(var(--done));
+  }
+  .kb__lane > .kb-col--now { --sticky-shadow: oklch(0% 0 none / 0.45); }
+}

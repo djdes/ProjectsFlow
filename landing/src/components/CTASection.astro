@@ -1,125 +1,60 @@
 ---
-// Финальный CTA — вторая тёмная full-bleed секция (data-theme="dark" флипает токены).
-// Одна сильная приглашающая кнопка + auth-aware вариант «Открыть приложение».
+// Финальный призыв: одна главная кнопка + вариант «Открыть приложение» для вошедших.
 // Пути относительные — лендинг и SPA отдаются одним Express'ом; PUBLIC_APP_URL — только для dev.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 ---
 
-<section class="pf-section cta" data-theme="dark">
-  <!-- Тонкий цианный glow: на тёмном фоне «дышит» ярко. На токенах. -->
-  <div class="cta__glow mesh-blob" aria-hidden="true"></div>
-
-  <div class="pf-container cta__inner" data-reveal>
-    <span class="pf-eyebrow">
-      <span class="pf-dot"></span>
-      Готов, когда ты готов
-    </span>
-
-    <h2 class="cta__title">
-      Преврати идею в продукт <span class="pf-grad">уже сегодня</span>
-    </h2>
-
-    <p class="cta__sub">
-      Опиши, что хочешь получить, — остальное платформа берёт на себя. Бесплатно и без карты,
-      а на Прайм переходишь, только если зашло.
-    </p>
-
-    <div class="cta__actions">
-      <!-- Anonymous (по умолчанию). data-auth-anon скрипт скроет, если юзер авторизован. -->
-      <a
-        href={`${appBase}/register`}
-        data-auth-anon
-        class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite"
-      >
-        Начать бесплатно
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="cta__arrow" aria-hidden="true">
-          <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-      </a>
-
-      <!-- Authed (скрыто изначально; BaseLayout выставит data-auth="authed"). -->
-      <a
-        href={`${appBase}/`}
-        data-auth-authed
-        class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite cta__authed"
-      >
-        Открыть приложение
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="cta__arrow" aria-hidden="true">
-          <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-      </a>
+<section class="pf-section cta" aria-labelledby="cta-title">
+  <div class="pf-container">
+    <div class="cta__panel">
+      <div class="cta__text">
+        <h2 id="cta-title" class="pf-h2">Преврати идею в продукт уже сегодня</h2>
+        <p class="cta__sub">
+          Опиши, что хочешь получить, — остальное платформа берёт на себя. Бесплатно и без
+          карты, а на Прайм переходишь, только если зашло.
+        </p>
+      </div>
+      <div class="cta__actions">
+        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg">Начать бесплатно</a>
+        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg">Открыть приложение</a>
+        <p class="cta__fine">Без карты. Не зашло — вернём деньги. Проект остаётся твоим.</p>
+      </div>
     </div>
-
-    <p class="cta__fineprint">без карты · не зашло — вернём деньги · проект остаётся твоим</p>
   </div>
 </section>
 
 <style>
-  .cta {
-    position: relative;
-    overflow: hidden;
-    /* Тёмный остров + двухтоновое (cyan/violet) свечение по углам — «сочно», но не заливка. */
-    background:
-      radial-gradient(70% 60% at 15% -10%, rgba(34, 224, 255, 0.12), transparent 60%),
-      radial-gradient(70% 60% at 88% 115%, rgba(124, 92, 255, 0.16), transparent 60%),
-      var(--bg);
+  .cta__panel {
+    display: grid;
+    gap: 1.5rem 3rem;
+    align-items: center;
+    padding: clamp(1.5rem, 1rem + 2.5vw, 3rem);
+    border-radius: var(--r-2xl);
+    background: oklch(var(--panel));
   }
-  /* Мягкий цианный свет из-под контента — точечный акцент, не заливка. */
-  .cta__glow {
-    width: 720px;
-    height: 720px;
-    bottom: -50%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--accent-bright);
-    opacity: 0.14;
+  @media (min-width: 900px) {
+    .cta__panel { grid-template-columns: minmax(0, 1fr) auto; }
   }
-  .cta__inner {
-    position: relative;
-    max-width: 46rem;
-    margin-inline: auto;
-    text-align: center;
-  }
-  .cta__title {
-    margin-top: var(--sp-6);
-    font-size: var(--fs-3xl);
-    line-height: var(--lh-tight);
-    letter-spacing: var(--tracking-tight);
-    font-weight: 800;
-    color: var(--text);
-    text-wrap: balance;
-  }
-  @media (min-width: 768px) {
-    .cta__title {
-      font-size: clamp(2rem, 4vw, 2.8rem);
-    }
+  @media (prefers-color-scheme: dark) {
+    .cta__panel { box-shadow: var(--shadow-card); }
   }
   .cta__sub {
-    margin: var(--sp-4) auto 0;
-    max-width: 34rem;
-    font-size: var(--fs-lg);
-    line-height: var(--lh-normal);
-    color: var(--muted);
+    max-inline-size: var(--measure);
+    margin-block-start: 0.875rem;
+    font-size: var(--text-lead);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
   }
   .cta__actions {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: var(--sp-3);
-    margin-top: var(--sp-8);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.625rem;
   }
-  .cta__arrow {
-    width: 16px;
-    height: 16px;
-  }
-  /* Authed-вариант скрыт до тех пор, пока BaseLayout не выставит data-auth="authed". */
-  .cta__authed {
-    display: none;
-  }
-  .cta__fineprint {
-    margin-top: var(--sp-4);
-    font-size: var(--fs-xs);
-    color: var(--dim);
+  .cta__fine {
+    max-inline-size: 22rem;
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: oklch(var(--muted-foreground));
   }
 </style>

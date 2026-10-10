@@ -1,11 +1,11 @@
 ---
-// Grand Offer (по Хормози): сильная безусловная гарантия + снятие рисков + value-stack.
-// Только реальные обещания (контент-контракт §4): возврат денег, нет лок-ина, прозрачность,
-// старт без карты. Никаких выдуманных цифр результата.
+// Снятие риска: только реальные обещания — возврат денег, нет лок-ина, старт без карты,
+// помощь. Никаких выдуманных цифр результата.
+
+import { nbspDash } from '@/lib/typo';
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
-// 4 снятия риска (risk-reversal) — все реальные.
 const risks = [
   {
     icon: 'trial',
@@ -36,7 +36,6 @@ const iconPaths: Record<string, string> = {
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v9H5z',
 };
 
-// Что получаешь (ядро ценности).
 const coreStack = [
   'Идеи превращаются в готовый результат',
   'Проект на автопилоте — задачи делаются сами',
@@ -44,54 +43,49 @@ const coreStack = [
   'Всё по проекту в одном месте',
 ];
 
-// Бонусы — реальные, входят бесплатно (Hormozi: бонусы > скидка).
 const bonuses = [
   'Поможем запустить первый проект — проведём за руку',
   'Готовые шаблоны и стартеры, чтобы начать быстрее',
   'Приоритетная поддержка в Telegram',
 ];
+
+const check = 'M20 6 9 17l-5-5';
 ---
 
-<section id="guarantee" class="pf-section guarantee" data-theme="dark">
+<section id="guarantee" class="pf-section pf-section--alt">
   <div class="pf-container">
-    <div class="guarantee__head" data-reveal>
-      <div class="pf-stag">Почему не страшно начать</div>
-      <h2 class="pf-h2">Предложение, от которого глупо&nbsp;отказаться</h2>
-      <p class="pf-lead pf-lead--center">
+    <div class="pf-head">
+      <h2 class="pf-h2">Почему не страшно начать</h2>
+      <p class="pf-lead">
         Мы убрали риск со своей стороны: начинаешь бесплатно, платишь — только если зашло,
         а результат всегда остаётся твоим.
       </p>
     </div>
 
-    <div class="guarantee__layout">
-      <!-- Печать-гарантия — фирменный акцент секции. -->
-      <aside class="guarantee__seal pf-card" data-reveal>
-        <div class="guarantee__seal-badge" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 2.5l7 3v5.5c0 5-3.2 8.6-7 10.5-3.8-1.9-7-5.5-7-10.5V5.5l7-3z" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M8.5 12l2.3 2.3L16 9" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </div>
-        <div class="guarantee__seal-tag">Гарантия · нулевой риск</div>
-        <h3 class="guarantee__seal-title">«Не&nbsp;зашло&nbsp;— вернём деньги»</h3>
-        <p class="guarantee__seal-body">
-          Начни бесплатно, без карты — первый результат увидишь в первый час. Не зашло —
-          <b class="guarantee__hl">вернём деньги, без вопросов и мелкого шрифта</b>. Проверить
-          ProjectsFlow не стоит ничего.
+    <div class="gr">
+      <aside class="gr__seal" aria-labelledby="gr-seal-title">
+        <svg class="gr__shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <path d="M12 2.5l7 3v5.5c0 5-3.2 8.6-7 10.5-3.8-1.9-7-5.5-7-10.5V5.5l7-3z" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M8.5 12l2.3 2.3L16 9" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3 class="gr__seal-title" id="gr-seal-title">Не&nbsp;зашло&nbsp;— вернём деньги</h3>
+        <p class="gr__seal-body">
+          Начни бесплатно, без карты — первый результат увидишь в первый час. Не зашло — вернём
+          деньги, без вопросов и мелкого шрифта. Проверить ProjectsFlow не стоит ничего.
         </p>
-        <a href={`${appBase}/register`} class="pf-btn pf-btn--primary pf-btn--block">Начать бесплатно</a>
-        <p class="guarantee__seal-note">Первый час Прайма — бесплатно · без карты</p>
+        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg gr__cta">Начать бесплатно</a>
+        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg gr__cta">Открыть приложение</a>
+        <p class="gr__seal-note">Первый час Прайма — бесплатно и без карты.</p>
       </aside>
 
-      <!-- Value-stack: ядро + бонусы. -->
-      <div class="guarantee__stack" data-reveal>
-        <div class="guarantee__stack-tag">Что получаешь</div>
-        <ul class="guarantee__stack-list">
+      <div class="gr__stack">
+        <h3 class="gr__stack-title">Что получаешь</h3>
+        <ul class="pf-checks gr__list">
           {
             coreStack.map((s) => (
-              <li class="guarantee__stack-item">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                  <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+              <li>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <path d={check} stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 <span>{s}</span>
               </li>
@@ -99,13 +93,13 @@ const bonuses = [
           }
         </ul>
 
-        <div class="guarantee__bonus-tag">Бонусы — бесплатно</div>
-        <ul class="guarantee__stack-list">
+        <h3 class="gr__stack-title gr__stack-title--next">Бонусы&nbsp;— бесплатно</h3>
+        <ul class="pf-checks gr__list">
           {
             bonuses.map((s) => (
-              <li class="guarantee__stack-item guarantee__stack-item--bonus">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                  <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+              <li>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <path d={check} stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 <span>{s}</span>
               </li>
@@ -115,182 +109,108 @@ const bonuses = [
       </div>
     </div>
 
-    <!-- 4 снятия риска. -->
-    <div class="guarantee__risks">
+    <ul class="gr__risks">
       {
-        risks.map((r, i) => (
-          <article class="pf-card pf-card--hover guarantee__risk" data-reveal style={`--reveal-delay: ${i * 70}ms`}>
-            <div class="guarantee__risk-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                <path d={iconPaths[r.icon]} stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </div>
-            <h3 class="guarantee__risk-title">{r.title}</h3>
-            <p class="guarantee__risk-body">{r.body}</p>
-          </article>
+        risks.map((r) => (
+          <li class="gr__risk">
+            <svg class="gr__risk-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+              <path d={iconPaths[r.icon]} stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <h3 class="gr__risk-title">{nbspDash(r.title)}</h3>
+            <p class="gr__risk-body">{r.body}</p>
+          </li>
         ))
       }
-    </div>
+    </ul>
   </div>
 </section>
 
 <style>
-  /* Тёмный «остров» (data-theme="dark" флипает токены). Без этого фона near-white текст
-     ложился на светлую бумагу и сливался — красим фон + мягкое циан-свечение сверху. */
-  .guarantee {
-    background:
-      radial-gradient(120% 90% at 50% -10%, rgba(34, 224, 255, 0.14), transparent 60%),
-      radial-gradient(90% 70% at 88% 112%, rgba(124, 92, 255, 0.16), transparent 60%),
-      var(--bg);
-  }
-  .guarantee__head {
-    max-width: 42rem;
-    margin-inline: auto;
-    text-align: center;
-  }
-
-  .guarantee__layout {
+  .gr {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-4);
-    margin-top: var(--sp-12);
+    gap: 1.5rem 3rem;
+    align-items: start;
   }
-  @media (min-width: 880px) {
-    .guarantee__layout { grid-template-columns: 0.9fr 1.1fr; align-items: stretch; }
+  @media (min-width: 900px) {
+    .gr { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
   }
 
-  /* Печать-гарантия. */
-  .guarantee__seal {
-    padding: var(--sp-8);
-    text-align: center;
+  /* Карточка гарантии — единственная белая плитка секции, с главной кнопкой. */
+  .gr__seal {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    border-color: var(--accent-line);
-    background:
-      radial-gradient(120% 80% at 50% 0%, var(--accent-soft), transparent 70%),
-      var(--surface);
-    box-shadow: var(--shadow-accent);
-  }
-  .guarantee__seal-badge {
-    display: grid;
-    place-items: center;
-    width: 64px;
-    height: 64px;
-    border-radius: var(--r-full);
-    color: var(--accent);
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
-    box-shadow: var(--glow);
-  }
-  .guarantee__seal-badge svg { width: 32px; height: 32px; }
-  .guarantee__seal-tag {
-    margin-top: var(--sp-4);
-    font-size: var(--fs-xs);
-    letter-spacing: 0.14em;
-    color: var(--accent);
-    text-transform: uppercase;
-  }
-  .guarantee__seal-title {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-2xl);
-    font-weight: 800;
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
-  }
-  .guarantee__seal-body {
-    margin: var(--sp-3) 0 var(--sp-6);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-normal);
-    color: var(--muted);
-  }
-  .guarantee__hl { color: var(--accent); font-weight: 700; }
-  .guarantee__seal .pf-btn { margin-top: auto; }
-  .guarantee__seal-note {
-    margin-top: var(--sp-3);
-    font-size: var(--fs-xs);
-    color: var(--accent);
-  }
-
-  /* Value-stack. */
-  .guarantee__stack {
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--surface-2);
-    padding: var(--sp-8);
-  }
-  .guarantee__stack-tag {
-    font-size: var(--fs-xs);
-    color: var(--accent);
-    letter-spacing: 0.08em;
-  }
-  .guarantee__stack-list {
-    list-style: none;
-    margin: var(--sp-4) 0 0;
-    padding: 0;
-    display: grid;
-    gap: var(--sp-3);
-  }
-  .guarantee__stack-item {
-    display: flex;
     align-items: flex-start;
-    gap: var(--sp-3);
-    font-size: var(--fs-base);
-    color: var(--text);
-    line-height: var(--lh-snug);
+    gap: 0.75rem;
+    padding: clamp(1.5rem, 1.25rem + 1vw, 2rem);
+    border-radius: var(--r-2xl);
+    background: oklch(var(--card));
+    box-shadow: var(--shadow-card);
   }
-  .guarantee__stack-item svg {
-    flex: none;
-    width: 18px;
-    height: 18px;
-    margin-top: 3px;
-    color: var(--signal);
+  .gr__shield {
+    inline-size: 2rem;
+    block-size: 2rem;
+    color: oklch(var(--done));
   }
-  .guarantee__stack-item--bonus svg { color: var(--accent); }
-  .guarantee__bonus-tag {
-    margin-top: var(--sp-6);
-    padding-top: var(--sp-4);
-    border-top: 1px dashed var(--accent-line);
-    font-size: var(--fs-sm);
+  .gr__seal-title {
+    font-size: clamp(1.375rem, 1.2rem + 0.75vw, 1.75rem);
     font-weight: 700;
-    color: var(--accent);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-display);
+    color: oklch(var(--foreground));
+  }
+  .gr__seal-body {
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
+  }
+  .gr__cta { margin-block-start: 0.5rem; }
+  .gr__seal-note {
+    font-size: var(--text-sm);
+    color: oklch(var(--muted-foreground));
   }
 
-  /* 4 снятия риска. */
-  .guarantee__risks {
+  .gr__stack { padding-block: 0.5rem; }
+  .gr__stack-title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: oklch(var(--foreground));
+  }
+  .gr__stack-title--next {
+    margin-block-start: 1.75rem;
+    padding-block-start: 1.5rem;
+    border-block-start: 1px solid oklch(var(--border));
+  }
+  .gr__list {
+    margin-block-start: 0.875rem;
+    font-size: var(--text-base);
+    color: oklch(var(--foreground));
+  }
+
+  /* Четыре снятия риска — ряд без карточек, под линией. */
+  .gr__risks {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-4);
-    margin-top: var(--sp-4);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: 1.75rem 2rem;
+    margin: clamp(2.5rem, 2rem + 2vw, 3.5rem) 0 0;
+    padding: clamp(2rem, 1.5rem + 1.5vw, 2.5rem) 0 0;
+    list-style: none;
+    border-block-start: 1px solid oklch(var(--border));
   }
-  @media (min-width: 560px) {
-    .guarantee__risks { grid-template-columns: repeat(2, 1fr); }
+  .gr__risk-ic {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    color: oklch(var(--muted-foreground));
   }
-  @media (min-width: 1024px) {
-    .guarantee__risks { grid-template-columns: repeat(4, 1fr); }
+  .gr__risk-title {
+    margin-block-start: 0.75rem;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: oklch(var(--foreground));
   }
-  .guarantee__risk { padding: var(--sp-6); }
-  .guarantee__risk-icon {
-    display: grid;
-    place-items: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--r-sm);
-    color: var(--accent);
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
-  }
-  .guarantee__risk-icon svg { width: 20px; height: 20px; }
-  .guarantee__risk-title {
-    margin-top: var(--sp-4);
-    font-size: var(--fs-base);
-    font-weight: 700;
-    color: var(--text);
-  }
-  .guarantee__risk-body {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-normal);
-    color: var(--muted);
+  .gr__risk-body {
+    margin-block-start: 0.375rem;
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
   }
 </style>

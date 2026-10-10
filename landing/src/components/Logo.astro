@@ -1,22 +1,21 @@
 ---
-// Логотип ProjectsFlow — циан-моно марка «PF» (направление Dev-cool).
+// Логотип ProjectsFlow: та же марка, что у иконки приложения (client/public/pf-icon.svg),
+// в цвете акцента темы — синий в светлой, барвинок в тёмной.
 interface Props {
   class?: string;
-  size?: 'sm' | 'md';
 }
-const { class: className = '', size = 'md' } = Astro.props as Props;
-const markSize = size === 'sm' ? 22 : 26;
-const markFont = size === 'sm' ? 12 : 14;
+const { class: className = '' } = Astro.props as Props;
 ---
 
 <a href="/" class={`pf-logo ${className}`} aria-label="ProjectsFlow — на главную">
-  <span
-    class="pf-logo__mark pf-mono"
-    style={`width:${markSize}px;height:${markSize}px;font-size:${markFont}px`}
-    aria-hidden="true"
-  >
-    PF
-  </span>
+  <svg class="pf-logo__mark" viewBox="0 0 512 512" aria-hidden="true">
+    <rect class="pf-logo__bg" width="512" height="512" rx="112"></rect>
+    <g class="pf-logo__glyph" transform="translate(102 109) scale(6.4)">
+      <path
+        d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"
+      ></path>
+    </g>
+  </svg>
   <span class="pf-logo__word">ProjectsFlow</span>
 </a>
 
@@ -24,23 +23,22 @@ const markFont = size === 'sm' ? 12 : 14;
   .pf-logo {
     display: inline-flex;
     align-items: center;
-    gap: var(--sp-2);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--text);
+    gap: 0.5rem;
+    min-block-size: 2.25rem;
+    color: oklch(var(--foreground));
+    text-decoration: none;
+    border-radius: var(--r-md);
   }
   .pf-logo__mark {
-    display: grid;
-    place-items: center;
-    border-radius: 7px;
-    background: var(--grad-accent);
-    color: var(--accent-ink);
-    font-weight: 800;
-    box-shadow: var(--shadow-accent);
+    flex: none;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
   }
+  .pf-logo__bg { fill: oklch(var(--primary-fill)); }
+  .pf-logo__glyph { fill: oklch(var(--primary-foreground)); }
   .pf-logo__word {
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    letter-spacing: var(--tracking-tight);
+    font-size: var(--text-md);
+    font-weight: 700;
+    letter-spacing: var(--tracking-heading);
   }
 </style>

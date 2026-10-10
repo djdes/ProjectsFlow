@@ -4,7 +4,7 @@
 
 export interface Plan {
   readonly id: 'free' | 'prime' | 'vip';
-  /** Отображаемое имя тарифа (моно/циан в карточке). */
+  /** Отображаемое имя тарифа. */
   readonly name: string;
   /** Цена в рублях. 0 — бесплатно. */
   readonly priceRub: number;
@@ -20,7 +20,7 @@ export interface Plan {
   readonly cta: string;
   /** Выделить карточку (рекомендуемый тариф). */
   readonly highlight: boolean;
-  /** Бейдж над карточкой (напр. «POPULAR»). */
+  /** Метка рядом с именем тарифа (напр. «Популярный»). */
   readonly badge?: string;
   /** Доступен только по запросу — не самоподключение. */
   readonly requestOnly?: boolean;

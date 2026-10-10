@@ -5,28 +5,30 @@ import { NAV_LINKS } from '@/data/nav';
 // Лендинг и SPA отдаются одним Express'ом в prod → относительные пути работают.
 // В dev (Astro :4321, Vite :5173) можно задать `PUBLIC_APP_URL=http://localhost:5173`.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+// Раздел блога подсвечиваем как текущий на /blog и в статьях.
+const inBlog = Astro.url.pathname.startsWith('/blog');
+const isCurrent = (href: string): boolean => inBlog && href === '/blog';
 ---
 
-<header class="pf-nav" data-nav>
+<header class="pf-nav">
   <nav class="pf-container pf-nav__inner" aria-label="Основная навигация">
     <Logo />
 
-    <div class="pf-nav__links" id="pf-nav-links">
+    <div class="pf-nav__links">
       {NAV_LINKS.map((l) => (
-        <a href={l.href} class="pf-nav__link">{l.label}</a>
+        <a href={l.href} class="pf-nav__link" aria-current={isCurrent(l.href) ? 'page' : undefined}>
+          {l.label}
+        </a>
       ))}
     </div>
 
     <div class="pf-nav__actions">
-      {/* Десктопные CTA — на мобиле прячем весь блок, действия живут в панели бургера. */}
+      {/* Десктопные кнопки; на мобиле действия живут в панели бургера. */}
       <div class="pf-nav__cta">
-        {/* Anonymous (по умолчанию). data-auth-anon скрипт скроет если юзер авторизован. */}
-        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--ghost">Войти</a>
+        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--secondary">Войти</a>
         <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary">Создать аккаунт</a>
-        {/* Authed (скрыта изначально, показывается если /api/auth/me вернул 200). */}
-        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary">
-          Открыть приложение →
-        </a>
+        {/* Видна, если /api/auth/me ответил 200 (BaseLayout ставит html[data-auth="authed"]). */}
+        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary">Открыть приложение</a>
       </div>
 
       <button
@@ -42,16 +44,22 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     </div>
   </nav>
 
-  {/* Мобильная панель — раскрывается по бургеру. */}
   <div class="pf-nav__mobile" id="pf-nav-mobile" data-mobile-panel hidden>
     <div class="pf-container pf-nav__mobile-inner">
       {NAV_LINKS.map((l) => (
-        <a href={l.href} class="pf-nav__mobile-link" data-mobile-close>{l.label}</a>
+        <a
+          href={l.href}
+          class="pf-nav__mobile-link"
+          aria-current={isCurrent(l.href) ? 'page' : undefined}
+          data-mobile-close
+        >
+          {l.label}
+        </a>
       ))}
       <div class="pf-nav__mobile-actions">
-        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--ghost pf-btn--block">Войти</a>
         <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--block">Создать аккаунт</a>
-        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--block pf-nav__authed">Открыть приложение →</a>
+        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--secondary pf-btn--block">Войти</a>
+        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--block">Открыть приложение</a>
       </div>
     </div>
   </div>
@@ -60,121 +68,124 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 <style>
   .pf-nav {
     position: sticky;
-    top: 0;
+    inset-block-start: 0;
     z-index: 50;
-    background: rgba(251, 251, 249, 0.72);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid transparent;
-    transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
-  }
-  /* При скролле добавляем линию-границу (data-scrolled выставляет JS). */
-  .pf-nav[data-scrolled] {
-    border-bottom-color: var(--line);
-    background: rgba(251, 251, 249, 0.9);
+    background: oklch(var(--background));
+    border-block-end: 1px solid oklch(var(--border));
   }
   .pf-nav__inner {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    height: 60px;
+    gap: 1.5rem;
+    block-size: var(--nav-h);
   }
   .pf-nav__links {
     display: none;
-    gap: var(--sp-6);
+    align-items: center;
+    gap: 0.125rem;
   }
   .pf-nav__link {
-    color: var(--muted);
-    font-size: var(--fs-sm);
-    transition: color var(--dur-fast) var(--ease);
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--r-md);
+    color: oklch(var(--muted-foreground));
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
   }
-  .pf-nav__link:hover { color: var(--text); }
+  .pf-nav__link[aria-current='page'] { color: oklch(var(--foreground)); }
   .pf-nav__actions {
     display: flex;
     align-items: center;
-    gap: var(--sp-2);
+    gap: 0.5rem;
+    margin-inline-start: auto;
   }
-  /* На мобиле прячем десктопные CTA целиком (через родителя — не задевает auth-логику). */
   .pf-nav__cta { display: none; }
 
-  /* Бургер — виден только на узких экранах. */
+  /* Бургер — только на узких экранах. */
   .pf-nav__burger {
     display: inline-flex;
     flex-direction: column;
     justify-content: center;
     gap: 4px;
-    width: 40px;
-    height: 40px;
-    padding: 0 9px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    padding-inline: 0.75rem;
+    border: 0;
+    border-radius: var(--r-md);
     background: transparent;
+    color: oklch(var(--foreground));
     cursor: pointer;
   }
+  .pf-nav__burger:active { background: var(--active); }
   .pf-nav__burger span {
     display: block;
-    height: 1.5px;
-    background: var(--text);
+    block-size: 1.5px;
     border-radius: 2px;
-    transition: transform var(--dur) var(--ease), opacity var(--dur-fast) var(--ease);
+    background: currentColor;
   }
   .pf-nav__burger[aria-expanded='true'] span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
   .pf-nav__burger[aria-expanded='true'] span:nth-child(2) { opacity: 0; }
   .pf-nav__burger[aria-expanded='true'] span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-nav__burger span { transition: transform var(--dur) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+  }
 
-  /* Мобильная панель. */
+  /* Мобильная панель под полосой. */
   .pf-nav__mobile {
-    border-top: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.97);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    overflow: hidden;
+    border-block-start: 1px solid oklch(var(--border));
+    background: oklch(var(--background));
   }
   .pf-nav__mobile[hidden] { display: none; }
   .pf-nav__mobile-inner {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-1);
-    padding-block: var(--sp-4);
+    gap: 0.125rem;
+    padding-block: 0.75rem 1rem;
   }
   .pf-nav__mobile-link {
-    padding: var(--sp-3) var(--sp-2);
-    color: var(--text);
-    font-size: var(--fs-lg);
-    border-radius: var(--r-sm);
+    display: flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    padding-inline: 0.625rem;
+    margin-inline: -0.625rem;
+    border-radius: var(--r-md);
+    color: oklch(var(--foreground));
+    font-size: var(--text-base);
+    font-weight: 500;
+    text-decoration: none;
   }
-  .pf-nav__mobile-link:hover { background: var(--surface-2); color: var(--accent); }
+  .pf-nav__mobile-link:active { background: var(--active); }
   .pf-nav__mobile-actions {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-2);
-    margin-top: var(--sp-3);
-    padding-top: var(--sp-4);
-    border-top: 1px solid var(--line);
+    gap: 0.5rem;
+    margin-block-start: 0.75rem;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid oklch(var(--border));
   }
 
-  /* Десктоп: показываем ссылки и CTA, прячем бургер и мобильную панель. */
+  @media (hover: hover) and (pointer: fine) {
+    .pf-nav__link:hover { background: var(--hover); color: oklch(var(--foreground)); }
+    .pf-nav__burger:hover { background: var(--hover); }
+    .pf-nav__mobile-link:hover { background: var(--hover); }
+  }
+
+  /* Десктоп: ссылки и кнопки в полосе, бургер и панель скрыты. */
   @media (min-width: 880px) {
     .pf-nav__links { display: flex; }
-    .pf-nav__cta { display: flex; align-items: center; gap: var(--sp-2); }
+    .pf-nav__cta { display: flex; align-items: center; gap: 0.5rem; }
     .pf-nav__burger { display: none; }
     .pf-nav__mobile { display: none !important; }
   }
 </style>
 
 <script>
-  // Граница навбара при скролле + раскрытие мобильного меню.
-  const nav = document.querySelector<HTMLElement>('[data-nav]');
+  // Раскрытие мобильного меню: Esc закрывает и возвращает фокус на бургер.
   const burger = document.querySelector<HTMLButtonElement>('[data-burger]');
   const panel = document.querySelector<HTMLElement>('[data-mobile-panel]');
-
-  const onScroll = (): void => {
-    if (!nav) return;
-    if (window.scrollY > 8) nav.setAttribute('data-scrolled', '');
-    else nav.removeAttribute('data-scrolled');
-  };
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
 
   const closePanel = (returnFocus = false): void => {
     if (!burger || !panel) return;
@@ -192,12 +203,10 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     panel.querySelectorAll('[data-mobile-close]').forEach((el) =>
       el.addEventListener('click', () => closePanel()),
     );
-    // Закрываем по Esc (возвращаем фокус на бургер) и при переходе на десктоп-ширину.
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closePanel(true);
     });
-    const mq = window.matchMedia('(min-width: 880px)');
-    mq.addEventListener('change', (e) => {
+    window.matchMedia('(min-width: 880px)').addEventListener('change', (e) => {
       if (e.matches) closePanel();
     });
   }

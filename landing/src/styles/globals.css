@@ -1,4 +1,4 @@
-/* Дизайн-токены направления «A · Dev-cool» (P0). Источник истины — tokens.css. */
+/* Дизайн-система «C4 плотный» (светлая Notion + тёмная C3). Источник токенов — tokens.css. */
 @import './tokens.css';
 
 @tailwind base;
@@ -6,124 +6,71 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Раскрытие <details> анимирует высоту до auto (FAQ) — там, где браузер умеет. */
+    interpolate-size: allow-keywords;
+    text-wrap: pretty;
+    overflow-wrap: break-word;
+    /* Системный шрифт везёт настоящие начертания — синтетический жирный/курсив не нужен. */
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   html {
-    scroll-behavior: smooth;
-    background: var(--bg);
-    color: var(--text);
+    background: oklch(var(--background));
+    color: oklch(var(--foreground));
+    /* Якоря не прячут заголовок под липкой навигацией (высота полосы + воздух). */
+    scroll-padding-block-start: calc(var(--nav-h) + 1rem);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
   }
 
   body {
+    min-block-size: 100svh;
     font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-    /* clip, а не hidden: убирает горизонтальный скролл, НО не делает body скролл-контейнером
-       (иначе ломается position: sticky у оглавления статьи). */
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    /* clip, а не hidden: убирает горизонтальный скролл, но не делает body скролл-контейнером
+       (иначе ломается position: sticky у навигации и оглавления статьи). */
     overflow-x: clip;
   }
 
-  ::selection {
-    background: rgba(8, 146, 192, 0.18);
-    color: var(--text);
+  h1, h2, h3, h4 { text-wrap: balance; }
+
+  button, a, [role='button'] { touch-action: manipulation; }
+  button, [role='button'] {
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  /* Единый focus-ring для клавиатуры (Tailwind preflight обнуляет UA-outline).
-     В тёмных секциях --accent автоматически ярче. */
-  :where(a, button, summary, [tabindex]):focus-visible {
-    outline: 2px solid var(--accent);
+  ::selection { background: var(--selection); }
+
+  /* Одно кольцо фокуса для всего интерактивного — только с клавиатуры. */
+  :where(:focus-visible) {
+    outline: 2px solid oklch(var(--ring));
     outline-offset: 2px;
-    border-radius: 3px;
   }
 
-  /* Skip-link: уводим за экран, показываем при фокусе (клавиатура/скринридер). */
+  /* Ссылки отвечают на нажатие прозрачностью (scale на строчном элементе не работает). */
+  :where(a[href]):active { opacity: 0.7; }
+
+  /* Skip-link: за экраном, появляется при фокусе с клавиатуры. */
   .skip-link {
     position: absolute;
-    left: var(--sp-4);
-    top: -100px;
+    inset-inline-start: 1rem;
+    inset-block-start: -100px;
     z-index: 100;
-    padding: 0.6rem 1rem;
-    border-radius: var(--r-sm);
-    background: var(--accent);
-    color: var(--accent-ink);
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--r-md);
+    background: oklch(var(--primary-fill));
+    color: oklch(var(--primary-foreground));
+    font-size: var(--text-sm);
     font-weight: 600;
     text-decoration: none;
-    transition: top var(--dur-fast) var(--ease);
   }
-  .skip-link:focus-visible { top: var(--sp-3); outline-offset: 3px; }
-}
-
-@layer components {
-  /* Сетка — фоновая координатная сетка (тёмные линии на светлом) */
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, rgba(15, 27, 45, 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(15, 27, 45, 0.045) 1px, transparent 1px);
-    background-size: 56px 56px;
-    background-position: -1px -1px;
-    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 80%);
-    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 80%);
-  }
-
-  /* Меш-градиент-блобы (мягкое цветное свечение). На светлом — деликатнее. */
-  .mesh-blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(110px);
-    opacity: 0.35;
-    pointer-events: none;
-  }
-
-  /* Mouse-tracking блоб: следует за курсором с soft-easing. CSS-переменные --mx/--my
-     обновляются глобальным mousemove-handler'ом в Hero.astro. */
-  .mesh-blob--magnetic {
-    transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
-    transform: translate3d(var(--blob-x, 0px), var(--blob-y, 0px), 0);
-  }
-
-  /* Scroll-reveal: элементы с data-reveal стартуют невидимыми, плавно появляются
-     когда IntersectionObserver выставит .is-visible. Stagger через --reveal-delay. */
-  [data-reveal] {
-    opacity: 0;
-    transform: translateY(28px);
-    transition:
-      opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--reveal-delay, 0ms),
-      transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--reveal-delay, 0ms);
-    will-change: opacity, transform;
-  }
-  [data-reveal].is-visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* Связующая линия между шагами HowItWorks. Тонкий градиент на токене-акценте
-     деликатно «прорисовывается» слева направо (без неона). */
-  .step-connector {
-    position: absolute;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--accent-line) 50%,
-      transparent
-    );
-    background-size: 200% 100%;
-    animation: connector-shimmer 5s linear infinite;
-  }
-
-  @keyframes connector-shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-}
-
-/* Уважаем prefers-reduced-motion: всё лишнее выключаем. */
-@media (prefers-reduced-motion: reduce) {
-  .mesh-blob--magnetic,
-  [data-reveal],
-  .step-connector {
-    transition: none !important;
-    animation: none !important;
-    transform: none !important;
-  }
-  [data-reveal] {
-    opacity: 1 !important;
-  }
+  .skip-link:focus-visible { inset-block-start: 0.75rem; }
 }

@@ -1,0 +1,74 @@
+---
+// Карточка статьи блога: метка темы, заголовок-ссылка (вся карточка кликабельна через неё),
+// описание, дата и время чтения. Одна на главную, список блога и «Читайте также».
+import { topicTone, formatDate } from '@/lib/blog';
+import { nbspDash } from '@/lib/typo';
+
+interface Props {
+  slug: string;
+  title: string;
+  topic: string;
+  date: Date;
+  minutes: number;
+  description?: string;
+  /** Уровень заголовка: h2 в списке блога, h3 внутри секций. */
+  level?: 2 | 3;
+}
+const { slug, title, topic, date, minutes, description, level = 3 } = Astro.props as Props;
+const Heading = level === 2 ? 'h2' : 'h3';
+---
+
+<article class="pf-card post-card">
+  <span class={`pf-tag ${topicTone(topic)}`}><span class="pf-tag__text">{topic}</span></span>
+  <Heading class="post-card__title">
+    <a class="pf-card-link post-card__link" href={`/blog/${slug}`}>{nbspDash(title)}</a>
+  </Heading>
+  {description && <p class="post-card__desc">{description}</p>}
+  <p class="post-card__meta">
+    <time datetime={date.toISOString()}>{formatDate(date)}</time>
+    <span>{minutes} мин чтения</span>
+  </p>
+</article>
+
+<style>
+  .post-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.625rem;
+    block-size: 100%;
+    padding: 1.25rem;
+    border-radius: var(--r-xl);
+  }
+  .post-card__title {
+    font-size: var(--text-lead);
+    font-weight: 700;
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-heading);
+    color: oklch(var(--foreground));
+  }
+  .post-card__link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .post-card__desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: clip;
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
+  }
+  .post-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    inline-size: 100%;
+    margin-block-start: auto;
+    padding-block-start: 0.5rem;
+    font-size: var(--text-sm);
+    color: oklch(var(--muted-foreground));
+  }
+</style>

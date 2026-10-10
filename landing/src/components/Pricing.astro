@@ -2,225 +2,171 @@
 import { PLANS, formatRub } from '@/data/pricing';
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
-
-// Лёгкие пастельные подложки карт — попадают в общий цветной ритм страницы.
-const TONE: Record<string, string> = {
-  free: '#eef4fb', // светло-синяя
-  prime: '#ebfaff', // светло-циан (рекомендуемая — ярче + свечение)
-  vip: '#f2eefe', // светло-фиолетовая
-};
 ---
 
-<section id="pricing" class="pf-section pricing">
+<section id="pricing" class="pf-section">
   <div class="pf-container">
-    <div class="pricing__head" data-reveal>
-      <div class="pf-stag">Тарифы</div>
-      <h2 class="pf-h2">Простые тарифы — начни бесплатно</h2>
-      <p class="pf-lead pf-lead--center">
+    <div class="pf-head">
+      <h2 class="pf-h2">Простые тарифы&nbsp;— начни бесплатно</h2>
+      <p class="pf-lead">
         На бесплатном — подключаешь свою подписку Claude. На Прайме и VIP — Claude работает
         онлайн от нас, ключи не нужны. Не зашло — вернём деньги.
       </p>
     </div>
 
-    <div class="pricing__grid">
+    <div class="plans">
       {
-        PLANS.map((plan, i) => (
-          <article
-            class:list={['pf-card', 'pricing__plan', plan.highlight && 'pricing__plan--pop']}
-            data-reveal
-            style={`--reveal-delay: ${i * 90}ms; --tone-bg: ${TONE[plan.id]}`}
-          >
-            {plan.badge && <span class="pricing__badge">{plan.badge}</span>}
-
-            <div class="pricing__name">{plan.name}</div>
-            <p class="pricing__tagline">{plan.tagline}</p>
-
-            <div class="pricing__price">
-              <span class="pricing__amount">{formatRub(plan.priceRub)}&nbsp;₽</span>
-              <span class="pricing__note">
-                / {plan.priceNote}
-                {plan.priceUsd && <span class="pricing__usd"> · ${plan.priceUsd}</span>}
-              </span>
+        PLANS.map((plan) => (
+          <article class:list={['plan', plan.highlight && 'plan--pop']} aria-labelledby={`plan-${plan.id}`}>
+            <div class="plan__head">
+              <h3 class="plan__name" id={`plan-${plan.id}`}>
+                {plan.name}
+                {plan.badge && (
+                  <span class="pf-tag pf-tone-queue plan__badge">
+                    <span class="pf-tag__text">{plan.badge}</span>
+                  </span>
+                )}
+              </h3>
+              <p class="plan__tagline">{plan.tagline}</p>
             </div>
 
-            <ul class="pricing__features">
+            <p class="plan__price">
+              <span class="plan__amount">{formatRub(plan.priceRub)}&nbsp;₽</span>
+              <span class="plan__per">
+                {plan.priceNote}
+                {plan.priceUsd && <span> (${plan.priceUsd})</span>}
+              </span>
+            </p>
+
+            <div class="plan__actions">
+              <a
+                href={`${appBase}${plan.href}`}
+                class:list={['pf-btn', 'pf-btn--block', plan.highlight ? 'pf-btn--primary' : 'pf-btn--secondary']}
+              >
+                {plan.cta}
+              </a>
+              {plan.trialCta && (
+                <button type="button" class="pf-btn pf-btn--block pf-btn--secondary">
+                  {plan.trialCta}
+                </button>
+              )}
+            </div>
+
+            <ul class="pf-checks plan__features">
               {plan.features.map((f) => (
-                <li class="pricing__feature">
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                    <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+                <li>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
                   <span>{f}</span>
                 </li>
               ))}
             </ul>
 
-            <a
-              href={`${appBase}${plan.href}`}
-              class:list={[
-                'pf-btn',
-                'pf-btn--block',
-                plan.highlight ? 'pf-btn--primary pf-btn--invite' : 'pf-btn--ghost',
-              ]}
-            >
-              {plan.cta}
-            </a>
-
-            {/* Вторая кнопка-заглушка (триал) — без действия/href, рендерим только если задан trialCta. */}
-            {plan.trialCta && (
-              <button type="button" class="pf-btn pf-btn--block pf-btn--ghost pricing__trial">
-                {plan.trialCta}
-              </button>
+            {(plan.note || plan.requestOnly) && (
+              <p class="plan__note">{plan.note ?? 'Подключаем вручную, не самостоятельно.'}</p>
             )}
-
-            {plan.note && <p class="pricing__plan-note pricing__plan-note--offer">{plan.note}</p>}
-            {plan.requestOnly && <p class="pricing__plan-note">подключаем вручную, не самостоятельно</p>}
           </article>
         ))
       }
     </div>
 
-    <p class="pricing__guarantee" data-reveal>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+    <p class="plans__guarantee">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
         <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      Гарантия возврата на платных тарифах — <strong>не подошло, вернём деньги</strong>.
+      <span>Гарантия возврата на платных тарифах: <strong>не подошло — вернём деньги</strong>.</span>
     </p>
   </div>
 </section>
 
 <style>
-  /* Светлая секция: чередующийся тёплый фон, карточки на белом. */
-  .pricing { background: var(--bg-alt); }
-  .pricing__head {
-    max-width: 40rem;
-    margin-inline: auto;
-    text-align: center;
-  }
-
-  .pricing__grid {
+  /* Карточки тарифов делят строки сетки (subgrid): кнопки и списки на одной высоте. */
+  .plans {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-4);
-    margin-top: var(--sp-12);
-    align-items: start;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: 1rem 1.25rem;
   }
-  @media (min-width: 880px) {
-    .pricing__grid { grid-template-columns: repeat(3, 1fr); }
+  .plan {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    row-gap: 1.25rem;
+    align-content: start;
+    padding: 1.5rem;
+    border-radius: var(--r-2xl);
+    background: oklch(var(--card));
+    box-shadow: var(--shadow-card);
   }
-
-  .pricing__plan {
-    padding: var(--sp-6);
-    background: var(--tone-bg, var(--surface));
-  }
-  .pricing__plan--pop {
-    border-color: var(--accent);
-    /* Цветной cyan+violet лифт на рекомендуемой карте — притягивает взгляд к конверсии. */
+  /* Рекомендуемый — синее кольцо 2px вместо тени-кольца; без свечений и подъёма. */
+  .plan--pop {
     box-shadow:
-      0 0 0 1px var(--accent),
-      0 22px 55px -20px var(--violet-glow),
-      0 10px 30px -14px var(--accent-glow);
-  }
-  /* Выделенный тариф чуть приподнят на десктопе. */
-  @media (min-width: 880px) {
-    .pricing__plan--pop { transform: translateY(-10px); }
+      0 0 0 2px oklch(var(--primary)),
+      0 1px 3px oklch(16.84% 0 none / 0.06);
   }
 
-  .pricing__badge {
-    position: absolute;
-    top: -11px;
-    right: var(--sp-4);
-    background: var(--grad-accent);
-    color: var(--accent-ink);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    padding: 4px 10px;
-    border-radius: var(--r-full);
-  }
-  .pricing__name {
-    font-size: var(--fs-sm);
-    color: var(--accent-deep);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .pricing__tagline {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    min-height: 2.6em;
-  }
-  .pricing__price {
+  .plan__name {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--text-lead);
+    font-weight: 700;
+    line-height: var(--leading-snug);
+    color: oklch(var(--foreground));
+  }
+  .plan__tagline {
+    margin-block-start: 0.375rem;
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: oklch(var(--muted-foreground));
+  }
+  .plan__price {
+    display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--sp-2);
-    margin: var(--sp-4) 0 var(--sp-6);
+    gap: 0.25rem 0.5rem;
   }
-  .pricing__amount {
-    font-size: var(--fs-3xl);
-    font-weight: 800;
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
+  .plan__amount {
+    font-size: clamp(2rem, 1.75rem + 1vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: var(--tracking-display);
+    font-variant-numeric: tabular-nums;
+    color: oklch(var(--foreground));
   }
-  .pricing__note { font-size: var(--fs-sm); color: var(--muted); }
-  .pricing__usd { color: var(--dim); font-family: var(--font-mono); font-size: 0.92em; }
-
-  .pricing__features {
-    list-style: none;
-    margin: 0 0 var(--sp-6);
-    padding: 0;
+  .plan__per {
+    font-size: var(--text-sm);
+    color: oklch(var(--muted-foreground));
+  }
+  .plan__actions {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-3);
+    gap: 0.5rem;
   }
-  .pricing__feature {
+  .plan__features {
+    font-size: var(--text-md);
+    color: oklch(var(--foreground));
+  }
+  .plan__note {
+    font-size: var(--text-sm);
+    color: oklch(var(--muted-foreground));
+  }
+
+  .plans__guarantee {
     display: flex;
     align-items: flex-start;
-    gap: var(--sp-2);
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    line-height: var(--lh-snug);
+    gap: 0.5rem;
+    margin-block-start: 1.75rem;
+    font-size: var(--text-md);
+    line-height: var(--leading-snug);
+    color: oklch(var(--muted-foreground));
   }
-  .pricing__feature svg {
+  .plans__guarantee strong { font-weight: 600; color: oklch(var(--foreground)); }
+  .plans__guarantee svg {
     flex: none;
-    width: 17px;
-    height: 17px;
-    margin-top: 1px;
-    color: var(--accent);
+    inline-size: 1.125rem;
+    block-size: 1lh;
   }
-  /* Вторая CTA-кнопка-заглушка (триал) — отступ от основной кнопки. */
-  .pricing__trial { margin-top: var(--sp-2); }
-
-  .pricing__plan-note {
-    margin-top: var(--sp-3);
-    text-align: center;
-    font-size: var(--fs-xs);
-    color: var(--dim);
-  }
-  /* Оффер «первый час бесплатно» — заметная акцентная плашка. */
-  .pricing__plan-note--offer {
-    margin-inline: auto;
-    margin-top: var(--sp-4);
-    display: inline-block;
-    width: 100%;
-    padding: var(--sp-2) var(--sp-3);
-    border-radius: var(--r-sm);
-    border: 1px solid var(--accent-line);
-    background: var(--accent-soft);
-    color: var(--accent-deep);
-    font-weight: 600;
-  }
-
-  .pricing__guarantee {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--sp-2);
-    margin-top: var(--sp-8);
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    text-align: center;
-  }
-  .pricing__guarantee strong { color: var(--text); font-weight: 600; }
-  .pricing__guarantee svg { flex: none; width: 18px; height: 18px; color: var(--accent); }
 </style>

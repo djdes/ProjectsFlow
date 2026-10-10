@@ -1,552 +1,424 @@
 ---
 import { FEATURES, SECONDARY_FEATURES } from '@/data/features';
+import { nbspDash } from '@/lib/typo';
 
-// Line-иконки (24×24) под ключи из features.ts. Циан-плитка задаётся в стилях.
+// Line-иконки (24×24) для второго ряда возможностей.
 const ICONS: Record<string, string> = {
-  // идея / лампочка
-  idea: 'M9 18h6M10 21h4M12 3a6 6 0 00-3.8 10.6c.7.6 1.3 1.2 1.3 2.4h5c0-1.2.6-1.8 1.3-2.4A6 6 0 0012 3z',
-  // автопилот / бесконечность
-  autopilot:
-    'M7 8.5a3.5 3.5 0 100 7c1.7 0 2.8-1.2 4-2.5l1-1.1c1.2-1.3 2.3-2.4 4-2.4a3.5 3.5 0 110 7c-1.7 0-2.8-1.2-4-2.4l-1-1.2c-1.2-1.3-2.3-2.5-4-2.5z',
-  // рубль / стоимость
-  cost: 'M9 5h4.5a3.5 3.5 0 010 7H9m0 0V5m0 7v7m0-7H7m2 4H7',
-  // искра / Claude
-  claude: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z',
-  // команда
   team: 'M16 20v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM21 20v-1a4 4 0 00-3-3.9M16 4.1a4 4 0 010 7.8',
-  // telegram (бумажный самолётик)
   telegram: 'M21 4L3 11l6 2.5L11 20l3-4 4 3z',
-  // мониторинг (пульс)
   monitoring: 'M3 12h4l2 6 4-12 2 6h6',
-  // финансы (кошелёк)
   finance: 'M3 7h15a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1h12M16 12h3',
-  // хаб / всё в одном
   hub: 'M12 8a2 2 0 100-4 2 2 0 000 4zM5 20a2 2 0 100-4 2 2 0 000 4zM19 20a2 2 0 100-4 2 2 0 000 4zM12 6v4M12 10l-5 6M12 10l5 6',
-  // живой прогресс
   live: 'M12 8v4l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
 };
 
-// Мини-мокапы реального продуктового UI под смысл каждой фичи (ключ = f.icon).
-// Не абстрактные полоски — настоящие подписи, ID задач PF-###, суммы в ₽, статусы.
-type MockKind = 'idea' | 'autopilot' | 'cost' | 'claude';
-const MOCK_KINDS = new Set<MockKind>(['idea', 'autopilot', 'cost', 'claude']);
+// Расход по месяцам для мини-графика (доля от максимума).
+const spend = [42, 66, 51, 78, 60, 88];
 ---
 
-<section id="features" class="pf-section features">
-  <div class="features__blob mesh-blob" aria-hidden="true"></div>
-
+<section id="features" class="pf-section pf-section--alt">
   <div class="pf-container">
-    <div class="features__head" data-reveal>
-      <div class="pf-stag">Возможности</div>
-      <h2 class="pf-h2">Меньше рутины — больше готового</h2>
+    <div class="pf-head">
+      <h2 class="pf-h2">Меньше рутины&nbsp;— больше готового</h2>
       <p class="pf-lead">
         Идеи, работа над ними и деньги — в одном месте. Ты задаёшь направление, платформа
         доводит до результата. Без разброса по чатам и десятку вкладок.
       </p>
     </div>
 
-    <div class="features__grid">
+    <div class="ft-grid">
       {
-        FEATURES.map((f, i) => (
-          <article
-            class="pf-card pf-card--hover features__card"
-            data-reveal
-            style={`--reveal-delay: ${i * 80}ms`}
-          >
-            <div class="features__card-top">
-              <div class="features__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </div>
-              <h3 class="features__title">{f.title}</h3>
-              <p class="features__body">{f.body}</p>
+        FEATURES.map((f) => (
+          <article class={`ft ft--${f.icon}`}>
+            <div class="ft__text">
+              <h3 class="ft__title">{nbspDash(f.title)}</h3>
+              <p class="ft__body">{f.body}</p>
             </div>
 
-            {MOCK_KINDS.has(f.icon as MockKind) && (
-              <div class="features__mock" aria-hidden="true">
-                {f.icon === 'idea' && (
-                  <div class="mock mock--task">
-                    <div class="mock__row">
-                      <span class="mock__id">PF-214</span>
-                      <span class="mock__status mock__status--done">Готово</span>
-                    </div>
-                    <p class="mock__task-title">Собрать лендинг для запуска</p>
-                    <div class="mock__row mock__row--foot">
-                      <span class="mock__meta">Описал словами</span>
-                      <span class="mock__check">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-                          <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                      </span>
-                    </div>
+            {/* Фрагмент настоящего интерфейса под смысл возможности. */}
+            <div class="ft__ui" aria-hidden="true">
+              {f.icon === 'idea' && (
+                <>
+                  <div class="ui-composer">
+                    <span class="ui-composer__text">Собери лендинг для запуска</span>
+                    <span class="ui-composer__send">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                    </span>
                   </div>
-                )}
-
-                {f.icon === 'autopilot' && (
-                  <div class="mock mock--pilot">
-                    <div class="mock__row">
-                      <span class="mock__pilot-label">
-                        <span class="mock__dot" />
-                        Автопилот
-                      </span>
-                      <span class="mock__status mock__status--run">В работе</span>
-                    </div>
-                    <ul class="mock__steps">
-                      <li class="mock__step mock__step--done">
-                        <span class="mock__step-id">PF-118</span>Настроил CI
-                      </li>
-                      <li class="mock__step mock__step--done">
-                        <span class="mock__step-id">PF-121</span>Починил формы
-                      </li>
-                      <li class="mock__step mock__step--now">
-                        <span class="mock__step-id">PF-124</span>Пишет тесты…
-                      </li>
-                    </ul>
+                  <div class="ui-card">
+                    <span class="ui-card__title">Собрать лендинг для запуска</span>
+                    <span class="ui-card__note">Hero, тарифы, форма заявки — по описанию</span>
+                    <span class="ui-card__meta">
+                      <span class="pf-tag pf-tone-done"><span class="pf-tag__text">Готово</span></span>
+                      <span class="ui-muted">за 14 минут</span>
+                    </span>
                   </div>
-                )}
+                </>
+              )}
 
-                {f.icon === 'cost' && (
-                  <div class="mock mock--cost">
-                    <div class="mock__cost-head">
-                      <span class="mock__meta">Расход за проект</span>
-                      <span class="mock__amount mock__amount--spend">1 240&nbsp;₽</span>
-                    </div>
-                    <div class="mock__bars">
-                      <span class="mock__bar" style="--h: 42%" />
-                      <span class="mock__bar" style="--h: 66%" />
-                      <span class="mock__bar" style="--h: 51%" />
-                      <span class="mock__bar" style="--h: 78%" />
-                      <span class="mock__bar" style="--h: 60%" />
-                      <span class="mock__bar mock__bar--live" style="--h: 88%" />
-                    </div>
-                    <div class="mock__row mock__row--foot">
-                      <span class="mock__meta">За задачу</span>
-                      <span class="mock__amount-sm">≈ 38&nbsp;₽</span>
-                    </div>
-                  </div>
-                )}
-
-                {f.icon === 'claude' && (
-                  <div class="mock mock--claude">
-                    <div class="mock__row">
-                      <span class="mock__claude-label">
-                        <span class="mock__spark" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d={ICONS.claude} />
-                          </svg>
-                        </span>
-                        Claude
+              {f.icon === 'autopilot' && (
+                <div class="ui-card ui-pilot">
+                  <span class="ui-pilot__head">
+                    <span class="ui-card__title">Автопилот</span>
+                    <span class="ui-switch"><span></span></span>
+                  </span>
+                  <ul class="ui-steps">
+                    <li class="ui-step">
+                      <span class="ui-step__ic ui-step__ic--done">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                       </span>
-                      <span class="mock__status mock__status--online">
-                        <span class="mock__dot mock__dot--online" />
-                        Онлайн
+                      Настроил проверку сборки
+                    </li>
+                    <li class="ui-step">
+                      <span class="ui-step__ic ui-step__ic--done">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                       </span>
-                    </div>
-                    <div class="mock__plan">
-                      <span class="mock__plan-tag">Прайм</span>
-                      <span class="mock__meta">Ключи не нужны</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                      Починил формы на телефоне
+                    </li>
+                    <li class="ui-step ui-step--now">
+                      <span class="ui-step__ic ui-step__ic--run"></span>
+                      Пишет тесты оплаты
+                      <span class="ui-run">AI делает</span>
+                    </li>
+                  </ul>
+                </div>
+              )}
 
-            <span class="pf-underline" aria-hidden="true"></span>
+              {f.icon === 'cost' && (
+                <div class="ui-card ui-cost">
+                  <span class="ui-cost__head">
+                    <span class="ui-muted">Расход за проект</span>
+                    <span class="ui-cost__sum">1 240&nbsp;₽</span>
+                  </span>
+                  <span class="ui-bars">
+                    {spend.map((h, i) => (
+                      <span class:list={['ui-bar', i === spend.length - 1 && 'ui-bar--now']} style={`--h: ${h}%`} />
+                    ))}
+                  </span>
+                  <span class="ui-cost__foot">
+                    <span class="ui-muted">Январь — июнь</span>
+                    <span class="ui-muted">≈ 38&nbsp;₽ за задачу</span>
+                  </span>
+                </div>
+              )}
+
+              {f.icon === 'claude' && (
+                <div class="ui-card ui-plans">
+                  <span class="ui-plan">
+                    <span class="ui-plan__name">Claude от ProjectsFlow</span>
+                    <span class="pf-tag pf-tone-blue"><span class="pf-tag__text">Прайм</span></span>
+                    <span class="ui-online">онлайн</span>
+                  </span>
+                  <span class="ui-plan">
+                    <span class="ui-plan__name">Claude для команды</span>
+                    <span class="pf-tag pf-tone-brown"><span class="pf-tag__text">VIP</span></span>
+                    <span class="ui-online">онлайн</span>
+                  </span>
+                  <span class="ui-plan">
+                    <span class="ui-plan__name">Своя подписка Claude</span>
+                    <span class="pf-tag pf-tone-gray"><span class="pf-tag__text">Бесплатный</span></span>
+                    <span class="ui-muted">подключить</span>
+                  </span>
+                </div>
+              )}
+            </div>
           </article>
         ))
       }
     </div>
 
-    <div class="features__more" data-reveal>
-      <div class="pf-stag features__more-tag">И это ещё не всё</div>
-      <div class="features__more-grid">
+    <div class="ft-more">
+      <h3 class="pf-h3">Ещё в ProjectsFlow</h3>
+      <ul class="ft-more__list">
         {
-          SECONDARY_FEATURES.map((f, i) => (
-            <article class="features__more-card" data-reveal style={`--reveal-delay: ${i * 60}ms`}>
-              <span class="features__more-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </span>
-              <div class="min-w-0">
-                <h3 class="features__more-title">{f.title}</h3>
-                <p class="features__more-body">{f.body}</p>
-              </div>
-            </article>
+          SECONDARY_FEATURES.map((f) => (
+            <li class="ft-more__item">
+              <svg class="ft-more__ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <p class="ft-more__title">{nbspDash(f.title)}</p>
+              <p class="ft-more__body">{f.body}</p>
+            </li>
           ))
         }
-      </div>
+      </ul>
     </div>
   </div>
 </section>
 
 <style>
-  .features { overflow: hidden; }
-  .features__blob {
-    width: 560px;
-    height: 560px;
-    background: var(--accent-deep);
-    top: -10%;
-    right: -18%;
-    opacity: 0.1;
-  }
-  .features__head { max-width: 40rem; }
-
-  /* Крупные цветные панели-бенто (как секции возможностей у Notion): 2 в ряд. */
-  .features__grid {
+  /* Плитки разной ширины: 7/5, затем 5/7 — не четыре одинаковые карточки. */
+  .ft-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-5);
-    margin-top: var(--sp-12);
+    gap: 1rem;
   }
-  @media (min-width: 768px) {
-    .features__grid { grid-template-columns: repeat(2, 1fr); gap: var(--sp-6); }
+  @media (min-width: 900px) {
+    .ft-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1.25rem; }
+    .ft:nth-child(4n + 1),
+    .ft:nth-child(4n + 4) { grid-column: span 7; }
+    .ft:nth-child(4n + 2),
+    .ft:nth-child(4n + 3) { grid-column: span 5; }
   }
 
-  .features__card {
+  .ft {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    padding: clamp(1.5rem, 3vw, 2.5rem);
-    border-radius: var(--r-lg);
-    background: var(--tone-bg, var(--surface));
-    border-color: var(--tone-line, var(--line));
+    gap: 1.5rem;
+    padding: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+    border-radius: var(--r-2xl);
+    background: oklch(var(--card));
+    box-shadow: var(--shadow-card);
   }
-  /* Пастельные тона панелей — «живость». Каждая фича — свой цвет. */
-  .features__card:nth-child(1) { --tone-bg: #dbeaf7; --tone-accent: #2f6fd4; --tone-line: rgba(47, 111, 212, 0.18); }
-  .features__card:nth-child(2) { --tone-bg: #e7e1fa; --tone-accent: #7c5cff; --tone-line: rgba(124, 92, 255, 0.18); }
-  .features__card:nth-child(3) { --tone-bg: #fbe9d7; --tone-accent: #c9760a; --tone-line: rgba(201, 118, 10, 0.20); }
-  .features__card:nth-child(4) { --tone-bg: #cfebe0; --tone-accent: #0f9d77; --tone-line: rgba(15, 157, 119, 0.20); }
-  .features__card-top { flex: 1; max-width: 30rem; }
-  .features__icon {
+  .ft__text { max-inline-size: 32rem; }
+  .ft__title {
+    font-size: var(--text-h3);
+    font-weight: 700;
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-heading);
+    color: oklch(var(--foreground));
+  }
+  .ft__body {
+    margin-block-start: 0.5rem;
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
+  }
+
+  /* Фрагмент интерфейса: серая подложка колонки + белые карточки, как в приложении. */
+  .ft__ui {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    margin-block-start: auto;
+    min-block-size: 9.5rem;
+    padding: 0.75rem;
+    border-radius: var(--r-xl);
+    background: oklch(var(--panel));
+  }
+  .ui-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 10px;
+    border-radius: var(--r-lg);
+    background: oklch(var(--card));
+    box-shadow: var(--shadow-card);
+  }
+  .ui-card__title {
+    font-size: var(--text-card);
+    font-weight: 600;
+    line-height: 1.3;
+    color: oklch(var(--foreground));
+  }
+  .ui-card__note,
+  .ui-muted {
+    font-size: var(--text-meta);
+    line-height: var(--leading-snug);
+    color: oklch(var(--muted-foreground));
+  }
+  .ui-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-block-start: 0.25rem;
+  }
+
+  /* Композер: задача словами. */
+  .ui-composer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 2.5rem;
+    padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+    border-radius: var(--r-lg);
+    background: oklch(var(--field));
+    box-shadow: var(--shadow-card);
+  }
+  .ui-composer__text {
+    flex: 1;
+    min-inline-size: 0;
+    font-size: var(--text-sm);
+    color: oklch(var(--foreground));
+    white-space: nowrap;
+    overflow: clip;
+    text-overflow: ellipsis;
+  }
+  .ui-composer__send {
     display: grid;
     place-items: center;
-    width: 48px;
-    height: 48px;
-    border-radius: var(--r-sm);
-    color: var(--tone-accent, var(--accent));
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid var(--tone-line, var(--accent-line));
+    flex: none;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--r-md);
+    background: oklch(var(--primary-fill));
+    color: oklch(var(--primary-foreground));
   }
-  .features__icon svg { width: 24px; height: 24px; }
-  .features__title {
-    margin-top: var(--sp-5);
-    font-size: var(--fs-xl);
-    font-weight: 700;
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
-  }
-  .features__body {
-    margin-top: var(--sp-3);
-    font-size: var(--fs-base);
-    line-height: var(--lh-normal);
-    color: var(--muted);
-  }
+  .ui-composer__send svg { inline-size: 0.875rem; block-size: 0.875rem; }
 
-  /* --- Мини-мокап реального UI внутри карточки --- */
-  .features__mock { margin-top: var(--sp-6); }
-  /* На цветной панели мокап — белый «скрин», который выпрыгивает (как в Notion). */
-  .mock {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
-    padding: var(--sp-4);
-    border-radius: var(--r);
-    background: var(--surface);
-    border: 1px solid rgba(11, 18, 32, 0.06);
-    box-shadow:
-      0 1px 2px rgba(11, 18, 32, 0.05),
-      0 12px 26px -14px rgba(11, 18, 32, 0.16);
-  }
-  .mock__row {
+  /* Автопилот: переключатель + шаги. */
+  .ui-pilot { gap: 0.5rem; padding-block: 0.625rem; }
+  .ui-pilot__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--sp-3);
+    gap: 0.5rem;
   }
-  .mock__row--foot { margin-top: auto; }
-  .mock__id,
-  .mock__step-id {
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--accent-deep);
-  }
-  .mock__meta {
-    font-size: var(--fs-xs);
-    color: var(--dim);
-  }
-
-  /* Статус-чипы */
-  .mock__status {
+  .ui-switch {
     display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
+    justify-content: flex-end;
+    inline-size: 1.75rem;
+    block-size: 1rem;
+    padding: 2px;
     border-radius: var(--r-full);
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    line-height: 1;
-    white-space: nowrap;
+    background: oklch(var(--primary));
   }
-  .mock__status--done {
-    color: var(--profit);
-    background: color-mix(in srgb, var(--profit) 12%, transparent);
+  .ui-switch span {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border-radius: 50%;
+    background: oklch(100% 0 none);
   }
-  .mock__status--run {
-    color: var(--warn);
-    background: color-mix(in srgb, var(--warn) 14%, transparent);
-  }
-  .mock__status--online {
-    color: var(--signal);
-    background: color-mix(in srgb, var(--signal) 12%, transparent);
-  }
-
-  .mock__dot {
-    width: 6px;
-    height: 6px;
-    border-radius: var(--r-full);
-    background: currentColor;
-  }
-  .mock__dot--online { background: var(--signal); }
-
-  /* Карточка «задача» (idea) */
-  .mock__task-title {
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    line-height: var(--lh-snug);
-    color: var(--text);
-  }
-  .mock__check {
-    display: grid;
-    place-items: center;
-    width: 20px;
-    height: 20px;
-    border-radius: var(--r-full);
-    color: var(--accent-ink);
-    background: var(--profit);
-  }
-  .mock__check svg { width: 12px; height: 12px; }
-
-  /* Автопилот — список шагов */
-  .mock__pilot-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--text);
-  }
-  .mock__pilot-label .mock__dot { color: var(--accent); }
-  .mock__steps {
+  .ui-steps {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 0.375rem;
     margin: 0;
     padding: 0;
     list-style: none;
   }
-  .mock__step {
+  .ui-step {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    font-size: var(--fs-xs);
-    color: var(--muted);
+    gap: 0.25rem 0.5rem;
+    font-size: var(--text-ui);
+    color: oklch(var(--muted-foreground));
   }
-  .mock__step--done { color: var(--dim); }
-  .mock__step--done .mock__step-id { color: var(--profit); }
-  .mock__step--now { color: var(--text); font-weight: 600; }
-  .mock__step--now .mock__step-id { color: var(--accent); }
+  .ui-step--now { color: oklch(var(--foreground)); font-weight: 500; }
+  .ui-step__ic {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border-radius: 50%;
+  }
+  .ui-step__ic svg { inline-size: 0.625rem; block-size: 0.625rem; }
+  .ui-step__ic--done {
+    background: var(--done-soft);
+    color: oklch(var(--done-ink));
+  }
+  .ui-step__ic--run::before {
+    content: '';
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: 50%;
+    background: oklch(var(--primary));
+  }
+  .ui-run {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: oklch(var(--primary-ink));
+  }
 
-  /* Стоимость — столбики расхода */
-  .mock__cost-head {
+  /* Расход: сумма + столбики по месяцам, текущий — синим. */
+  .ui-cost { gap: 0.5rem; padding-block: 0.625rem; }
+  .ui-cost__head,
+  .ui-cost__foot {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--sp-2);
+    gap: 0.5rem;
   }
-  .mock__amount {
-    font-family: var(--font-mono);
-    font-size: var(--fs-lg);
+  .ui-cost__sum {
+    font-size: var(--text-h3);
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: var(--tracking-heading);
+    font-variant-numeric: tabular-nums;
+    color: oklch(var(--foreground));
   }
-  .mock__amount--spend { color: var(--spend); }
-  .mock__amount-sm {
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--muted);
-  }
-  .mock__bars {
+  .ui-bars {
     display: flex;
     align-items: flex-end;
     gap: 6px;
-    height: 40px;
+    block-size: 3rem;
   }
-  .mock__bar {
+  .ui-bar {
     flex: 1;
-    height: var(--h);
-    border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--spend) 24%, var(--surface));
+    block-size: var(--h);
+    border-radius: 3px;
+    background: color-mix(in oklch, oklch(var(--muted-foreground)) 24%, transparent);
   }
-  .mock__bar--live { background: var(--accent); }
+  .ui-bar--now { background: oklch(var(--primary)); }
 
-  /* Claude — статус подписки */
-  .mock__claude-label {
+  /* Подписки: от нас — онлайн, своя — подключаешь. */
+  .ui-plans { gap: 0; padding-block: 0.25rem; }
+  .ui-plan {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+    padding-block: 0.5rem;
+  }
+  .ui-plan + .ui-plan { border-block-start: 1px solid oklch(var(--border)); }
+  .ui-plan__name {
+    flex: 1 1 10rem;
+    min-inline-size: 0;
+    font-size: var(--text-card);
+    font-weight: 600;
+    color: oklch(var(--foreground));
+  }
+  .ui-online {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    font-size: var(--fs-sm);
+    gap: 0.3125rem;
+    font-size: var(--text-meta);
+    color: oklch(var(--muted-foreground));
+  }
+  .ui-online::before {
+    content: '';
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: 50%;
+    background: oklch(var(--done));
+  }
+
+  /* Второй ряд — список без карточек: иконка, название, одна строка пользы. */
+  .ft-more {
+    margin-block-start: clamp(3rem, 2rem + 3vw, 4.5rem);
+  }
+  .ft-more__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+    gap: 1.75rem 2.5rem;
+    margin: 1.5rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .ft-more__item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 0.75rem;
+    align-items: start;
+  }
+  .ft-more__ic {
+    grid-row: span 2;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-block-start: 0.125rem;
+    color: oklch(var(--muted-foreground));
+  }
+  .ft-more__title {
+    font-size: var(--text-base);
     font-weight: 600;
-    color: var(--text);
+    line-height: var(--leading-snug);
+    color: oklch(var(--foreground));
   }
-  .mock__spark {
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border-radius: var(--r-sm);
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
-  .mock__spark svg { width: 14px; height: 14px; }
-  .mock__plan {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .mock__plan-tag {
-    padding: 3px 10px;
-    border-radius: var(--r-full);
-    font-size: var(--fs-xs);
-    font-weight: 700;
-    color: var(--accent-ink);
-    background: var(--grad-accent);
-  }
-
-  /* --- Вторая сетка: дополнительный функционал --- */
-  .features__more { margin-top: var(--sp-16); }
-  .features__more-tag { text-align: center; display: block; }
-  .features__more-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-4);
-    margin-top: var(--sp-6);
-  }
-  @media (min-width: 640px) {
-    .features__more-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (min-width: 1024px) {
-    .features__more-grid { grid-template-columns: repeat(3, 1fr); }
-  }
-  .features__more-card {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--sp-3);
-    padding: var(--sp-4);
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .features__more-card:hover {
-      border-color: var(--accent-line);
-      box-shadow: var(--shadow);
-    }
-  }
-  .features__more-icon {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--r-sm);
-    color: var(--accent);
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
-  }
-  .features__more-icon svg { width: 18px; height: 18px; }
-  .features__more-title {
-    font-size: var(--fs-base);
-    font-weight: 600;
-    color: var(--text);
-  }
-  .features__more-body {
-    margin-top: 2px;
-    font-size: var(--fs-sm);
-    line-height: var(--lh-snug);
-    color: var(--muted);
-  }
-
-  /* --- Оживление мини-мокапов (уважает reduced-motion) --- */
-  @media (prefers-reduced-motion: no-preference) {
-    /* Столбики расхода дышат как живой эквалайзер. */
-    .mock__bar { transform-origin: bottom; animation: mock-bars 3s ease-in-out infinite; }
-    .mock__bars .mock__bar:nth-child(2) { animation-delay: 0.35s; }
-    .mock__bars .mock__bar:nth-child(3) { animation-delay: 0.7s; }
-    .mock__bars .mock__bar:nth-child(4) { animation-delay: 0.15s; }
-    .mock__bars .mock__bar:nth-child(5) { animation-delay: 0.55s; }
-    .mock__bar--live { animation-duration: 1.5s; }
-    @keyframes mock-bars {
-      0%, 100% { transform: scaleY(0.7); }
-      50% { transform: scaleY(1); }
-    }
-
-    /* «В работе» — мягкая пульсация. */
-    .mock__status--run { animation: mock-fade 1.8s ease-in-out infinite; }
-    @keyframes mock-fade { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-    /* Claude онлайн — расходящийся пульс точки. */
-    .mock__dot--online { animation: mock-ping 1.9s ease-out infinite; }
-    @keyframes mock-ping {
-      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
-      70%, 100% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
-    }
-
-    /* Галочка «Готово» — периодический мягкий «поп». */
-    .mock__check { animation: mock-pop 3.4s ease-in-out infinite; }
-    @keyframes mock-pop {
-      0%, 88%, 100% { transform: scale(1); }
-      94% { transform: scale(1.2); }
-    }
-
-    /* Текущий шаг воркера — мигающий каретка-курсор набора. */
-    .mock__step--now::after {
-      content: '';
-      display: inline-block;
-      width: 5px;
-      height: 1.05em;
-      margin-left: 4px;
-      border-radius: 1px;
-      background: var(--accent);
-      vertical-align: -0.16em;
-      animation: mock-caret 1s steps(1) infinite;
-    }
-    @keyframes mock-caret { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+  .ft-more__body {
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
   }
 </style>
-
-<script>
-  // «Живые» цифры в мокапе расхода: общий расход ползёт вверх, цена за задачу подрагивает.
-  // Уважает prefers-reduced-motion.
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const total = document.querySelector<HTMLElement>('.mock--cost .mock__amount--spend');
-    const per = document.querySelector<HTMLElement>('.mock--cost .mock__amount-sm');
-    if (total && per) {
-      const fmt = (n: number) => n.toLocaleString('ru-RU');
-      let t = 1240;
-      const tick = (): void => {
-        t += Math.floor(Math.random() * 8);
-        if (t > 1420) t = 1180;
-        total.textContent = `${fmt(t)} ₽`;
-        per.textContent = `≈ ${34 + Math.floor(Math.random() * 10)} ₽`;
-      };
-      setInterval(tick, 1600);
-    }
-  }
-</script>

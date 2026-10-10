@@ -10,91 +10,93 @@ const year = new Date().getFullYear();
   <div class="pf-container footer__inner">
     <div class="footer__brand">
       <Logo />
-      <p class="footer__tagline">
-        Для тех, кто строит с AI: опиши идею — получи готовый продукт.
-      </p>
+      <p class="footer__tagline">Для тех, кто строит с AI: опиши идею — получи готовый продукт.</p>
     </div>
 
-    <nav class="footer__nav" aria-label="Подвал">
-      <span class="footer__col-title">Продукт</span>
-      {NAV_LINKS.map((l) => <a href={l.href} class="footer__link">{l.label}</a>)}
+    <nav class="footer__nav" aria-labelledby="footer-product">
+      <h2 class="footer__title" id="footer-product">Продукт</h2>
+      <ul>
+        {NAV_LINKS.map((l) => <li><a href={l.href} class="footer__link">{l.label}</a></li>)}
+      </ul>
     </nav>
 
-    <nav class="footer__nav" aria-label="Аккаунт">
-      <span class="footer__col-title">Аккаунт</span>
-      <a href={`${appBase}/register`} data-auth-anon class="footer__link">Создать аккаунт</a>
-      <a href={`${appBase}/login`} data-auth-anon class="footer__link">Войти</a>
-      <a href={`${appBase}/`} data-auth-authed class="footer__link">Открыть приложение</a>
+    <nav class="footer__nav" aria-labelledby="footer-account">
+      <h2 class="footer__title" id="footer-account">Аккаунт</h2>
+      <ul>
+        <li data-auth-anon><a href={`${appBase}/register`} class="footer__link">Создать аккаунт</a></li>
+        <li data-auth-anon><a href={`${appBase}/login`} class="footer__link">Войти</a></li>
+        <li data-auth-authed><a href={`${appBase}/`} class="footer__link">Открыть приложение</a></li>
+      </ul>
     </nav>
   </div>
 
-  <div class="pf-container footer__bottom">
-    <p class="footer__copy">© {year} ProjectsFlow · сделано с любовью</p>
-    <p class="footer__status"><span class="pf-dot"></span> ранний доступ</p>
+  <div class="pf-container">
+    <div class="footer__bottom">
+      <p>© {year} ProjectsFlow. Сделано с любовью.</p>
+      <span class="pf-tag pf-tone-gray"><span class="pf-tag__text">Ранний доступ</span></span>
+    </div>
   </div>
 </footer>
 
 <style>
   .footer {
-    background: var(--bg-alt);
-    border-top: 1px solid var(--line);
-    padding-block: var(--sp-12) var(--sp-8);
-    position: relative;
-    z-index: 1;
+    padding-block: clamp(2.5rem, 2rem + 2vw, 3.5rem) 2rem;
+    border-block-start: 1px solid oklch(var(--border));
+    background: oklch(var(--sidebar));
   }
   .footer__inner {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-8);
+    gap: 2rem;
   }
   @media (min-width: 768px) {
-    .footer__inner { grid-template-columns: 1.6fr 1fr 1fr; }
+    .footer__inner { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
   }
-  .footer__brand { max-width: 22rem; }
+  .footer__brand { max-inline-size: 22rem; }
   .footer__tagline {
-    margin-top: var(--sp-4);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-normal);
-    color: var(--muted);
+    margin-block-start: 0.75rem;
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
   }
-  .footer__nav {
+  .footer__title {
+    margin-block-end: 0.5rem;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: oklch(var(--foreground));
+  }
+  .footer__nav ul {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-3);
-  }
-  .footer__col-title {
-    font-size: var(--fs-xs);
-    color: var(--dim);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: var(--sp-1);
+    align-items: flex-start;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
   .footer__link {
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    transition: color var(--dur-fast) var(--ease);
-    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2rem;
+    font-size: var(--text-md);
+    color: oklch(var(--muted-foreground));
+    text-decoration: none;
+    transition: color var(--dur-fast) var(--ease-out);
   }
-  .footer__link:hover { color: var(--accent); }
-
+  @media (hover: hover) and (pointer: fine) {
+    .footer__link:hover { color: oklch(var(--foreground)); text-decoration: underline; text-underline-offset: 3px; }
+  }
+  @media (pointer: coarse) {
+    .footer__link { min-block-size: 2.75rem; }
+  }
   .footer__bottom {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--sp-3);
-    margin-top: var(--sp-12);
-    padding-top: var(--sp-6);
-    border-top: 1px solid var(--line);
-  }
-  .footer__copy,
-  .footer__status {
-    font-size: var(--fs-xs);
-    color: var(--dim);
-  }
-  .footer__status {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-2);
+    gap: 0.75rem;
+    margin-block-start: 2.5rem;
+    padding-block-start: 1.5rem;
+    border-block-start: 1px solid oklch(var(--border));
+    font-size: var(--text-sm);
+    color: oklch(var(--muted-foreground));
   }
 </style>

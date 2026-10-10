@@ -3,7 +3,8 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import Nav from '@/components/Nav.astro';
 import Footer from '@/components/Footer.astro';
-import { readingMinutes, topicStyle, formatDate } from '@/lib/blog';
+import PostCard from '@/components/PostCard.astro';
+import { readingMinutes, topicTone } from '@/lib/blog';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
@@ -15,8 +16,11 @@ const cards = posts.map((post) => ({
   ...post.data,
 }));
 
-// Уникальные темы для фильтра (в порядке появления).
-const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
+// Темы для фильтра (в порядке появления) со счётчиком статей.
+const topics = Array.from(new Set(cards.map((c) => c.topic))).map((t) => ({
+  name: t,
+  count: cards.filter((c) => c.topic === t).length,
+}));
 ---
 
 <BaseLayout
@@ -25,26 +29,24 @@ const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
 >
   <Nav />
   <main id="main" class="blog">
-    <header class="blog__head pf-container" data-reveal>
-      <div class="pf-stag">Блог</div>
-      <h1 class="blog__title">Как строить продукты с&nbsp;AI</h1>
-      <p class="pf-lead">
-        Короткие полезные заметки о практике, продукте, деньгах и автоматизации.
-        Без воды — то, что пригодится, когда строишь своё.
-      </p>
-    </header>
-
     <div class="pf-container">
+      <header class="blog__head">
+        <h1 class="blog__title">Как строить продукты с&nbsp;AI</h1>
+        <p class="pf-lead">
+          Короткие полезные заметки о практике, продукте, деньгах и автоматизации.
+          Без воды — то, что пригодится, когда строишь своё.
+        </p>
+      </header>
+
       <div class="blog__filters" role="group" aria-label="Фильтр по темам">
+        <button type="button" class="chip" data-topic-filter="Все" aria-pressed="true">
+          Все <span class="chip__count">{cards.length}</span>
+        </button>
         {
-          topics.map((t, i) => (
-            <button
-              type="button"
-              class="blog__filter"
-              data-topic-filter={t}
-              aria-pressed={i === 0 ? 'true' : 'false'}
-            >
-              {t}
+          topics.map((t) => (
+            <button type="button" class={`chip ${topicTone(t.name)}`} data-topic-filter={t.name} aria-pressed="false">
+              <span class="chip__dot" aria-hidden="true" />
+              {t.name} <span class="chip__count">{t.count}</span>
             </button>
           ))
         }
@@ -52,33 +54,19 @@ const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
 
       <ul class="blog__grid">
         {
-          cards.map((c, i) => {
-            const st = topicStyle(c.topic);
-            return (
-              <li class="blog__item" data-topic={c.topic} data-reveal style={`--reveal-delay: ${i * 70}ms`}>
-                <a href={`/blog/${c.slug}`} class="blog__card pf-card pf-card--hover">
-                  <div class="blog__cover" style={`background: ${st.gradient}`}>
-                    <svg class="blog__cover-icon" style={`color: ${st.ink}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                      <path d={st.icon} stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                    <span class="blog__cover-topic" style={`color: ${st.ink}`}>{c.topic}</span>
-                  </div>
-                  <div class="blog__body">
-                    <span class="blog__badge" style={`color: ${st.ink}; background: ${st.gradient}`}>
-                      {c.topic}
-                    </span>
-                    <h2 class="blog__card-title">{c.title}</h2>
-                    <p class="blog__desc">{c.description}</p>
-                    <div class="blog__meta">
-                      <span>{formatDate(c.date)}</span>
-                      <span class="blog__dot" aria-hidden="true">·</span>
-                      <span class="pf-mono">{c.minutes} мин чтения</span>
-                    </div>
-                  </div>
-                </a>
-              </li>
-            );
-          })
+          cards.map((c) => (
+            <li class="blog__item" data-topic={c.topic}>
+              <PostCard
+                slug={c.slug}
+                title={c.title}
+                topic={c.topic}
+                date={c.date}
+                minutes={c.minutes}
+                description={c.description}
+                level={2}
+              />
+            </li>
+          ))
         }
       </ul>
 
@@ -89,113 +77,92 @@ const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
 </BaseLayout>
 
 <style>
-  .blog { padding-top: var(--sp-16); padding-bottom: var(--section-y); }
-  .blog__head { max-width: 42rem; margin-bottom: var(--sp-12); }
+  .blog {
+    padding-block: clamp(2.5rem, 1.5rem + 3vw, 4rem) var(--section-y);
+  }
+  .blog__head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    max-inline-size: 46rem;
+    margin-block-end: 2rem;
+  }
   .blog__title {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-3xl);
-    font-weight: 720;
-    line-height: var(--lh-tight);
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
-    text-wrap: balance;
+    font-size: clamp(2.25rem, 1.75rem + 2vw, 3rem);
+    font-weight: 700;
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-display);
+    color: oklch(var(--foreground));
   }
 
-  /* Фильтр по темам */
+  /* Чипы-фильтры: 28px, рамка, точка тона темы, счётчик серым; выбранный — синяя подложка. */
   .blog__filters {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-2);
-    margin-bottom: var(--sp-8);
+    gap: 0.375rem;
+    margin-block-end: 1.75rem;
   }
-  .blog__filter {
-    padding: var(--sp-2) var(--sp-4);
-    border-radius: var(--r-full);
-    border: 1px solid var(--line);
-    background: var(--surface);
-    color: var(--muted);
-    font-size: var(--fs-sm);
-    font-weight: 600;
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 1.75rem;
+    padding-inline: 0.625rem;
+    border: 1px solid oklch(var(--border));
+    border-radius: var(--r-md);
+    background: transparent;
+    color: oklch(var(--foreground));
+    font: inherit;
+    font-size: var(--text-ui);
+    font-weight: 500;
     cursor: pointer;
     transition:
-      border-color var(--dur-fast) var(--ease),
-      background-color var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
   }
-  .blog__filter:hover { border-color: var(--line-strong); color: var(--text); }
-  .blog__filter[aria-pressed='true'] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--accent-deep);
+  .chip__dot {
+    flex: none;
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: 2px;
+    background: var(--tone);
   }
-  .blog__filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip__count {
+    color: oklch(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+  }
+  .chip[aria-pressed='true'] {
+    border-color: oklch(var(--primary));
+    background: var(--primary-soft);
+  }
+  /* Серый счётчик на мягкой синей подложке не дотягивает до AA — берём синий текст (4.7:1). */
+  .chip[aria-pressed='true'] .chip__count { color: oklch(var(--primary-ink)); }
+  .chip:active { background: var(--active); }
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover { background: var(--hover); }
+    .chip[aria-pressed='true']:hover { background: var(--primary-soft); }
+  }
+  @media (pointer: coarse) {
+    .chip { min-block-size: 2.5rem; }
+  }
 
-  /* Сетка карточек */
   .blog__grid {
-    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 1rem 1.25rem;
     margin: 0;
     padding: 0;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-6);
+    list-style: none;
   }
-  @media (min-width: 640px) { .blog__grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1024px) { .blog__grid { grid-template-columns: repeat(3, 1fr); } }
   .blog__item[hidden] { display: none; }
-
-  .blog__card { display: flex; flex-direction: column; overflow: hidden; height: 100%; text-decoration: none; }
-  .blog__cover {
-    position: relative;
-    aspect-ratio: 16 / 9;
-    display: flex;
-    align-items: flex-end;
-    padding: var(--sp-4);
-    overflow: hidden;
+  .blog__empty {
+    margin-block-start: 2rem;
+    color: oklch(var(--muted-foreground));
   }
-  .blog__cover-topic {
-    position: relative;
-    z-index: 1;
-    font-size: var(--fs-xs);
-    font-weight: 700;
-    letter-spacing: var(--tracking-wide);
-    text-transform: uppercase;
-  }
-  .blog__cover-icon {
-    position: absolute;
-    right: -14px;
-    bottom: -18px;
-    width: 130px;
-    height: 130px;
-    opacity: 0.18;
-    transform: rotate(-8deg);
-  }
-  .blog__card:hover .blog__cover-icon { opacity: 0.24; }
-  .blog__body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-4) var(--sp-6); flex: 1; }
-  .blog__badge {
-    align-self: flex-start;
-    padding: 2px 10px;
-    border-radius: var(--r-full);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .blog__card-title {
-    font-size: var(--fs-lg);
-    font-weight: 700;
-    line-height: var(--lh-snug);
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
-    text-wrap: balance;
-  }
-  .blog__desc { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-normal); flex: 1; }
-  .blog__meta { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--dim); }
-  .blog__dot { opacity: 0.6; }
-  .blog__empty { margin-top: var(--sp-8); color: var(--muted); }
 </style>
 
 <script>
-  // Клиентский фильтр по темам: переключает видимость карточек по data-topic.
+  // Фильтр по темам: переключает видимость карточек по data-topic.
   const filters = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-topic-filter]'));
   const items = Array.from(document.querySelectorAll<HTMLElement>('.blog__item'));
   const empty = document.querySelector<HTMLElement>('[data-blog-empty]');

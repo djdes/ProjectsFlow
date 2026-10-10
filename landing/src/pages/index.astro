@@ -10,25 +10,21 @@ import Guarantees from '@/components/Guarantees.astro';
 import Faq from '@/components/Faq.astro';
 import BlogTeaser from '@/components/BlogTeaser.astro';
 import CTASection from '@/components/CTASection.astro';
-import SectionDivider from '@/components/SectionDivider.astro';
 import Footer from '@/components/Footer.astro';
 ---
 
 <BaseLayout>
   <Nav />
   <main id="main">
+    <!-- Ритм: белый лист чередуется с серыми секциями #F7F7F5 — без разделителей-украшений. -->
     <Hero />
-    <SectionDivider />
     <Features />
     <HowItWorks />
-    <SectionDivider />
     <Screenshots />
     <Pricing />
     <Guarantees />
     <Faq />
-    <SectionDivider />
     <BlogTeaser />
-    <SectionDivider />
     <CTASection />
   </main>
   <Footer />

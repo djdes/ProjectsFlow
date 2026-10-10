@@ -1,9 +1,7 @@
 ---
-// Основной шрифт — системный Segoe UI (см. --font-sans в tokens.css), webfont не грузим.
-// Моно-шрифт для dev-cool акцентов (eyebrow, терминал, метки). Разрешён в DESIGN.md (P0).
-import '@fontsource-variable/jetbrains-mono';
+// Шрифт — системный стек Notion (--font-sans в tokens.css), веб-шрифты не грузим.
 import '@/styles/globals.css';
-// Общие классы секций лендинга (P1, на токенах P0 — globals.css не трогаем).
+// Общие классы секций лендинга (контейнер, кнопки, карточки, метки).
 import '@/styles/landing.css';
 
 interface Props {
@@ -29,8 +27,10 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#fbfbf9" />
-    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#16171b" media="(prefers-color-scheme: dark)" />
+    <!-- Тёмная тема — по системной настройке: браузер сразу красит холст нужным цветом. -->
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
 
@@ -51,11 +51,6 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-
-    <!-- Анти-FOUC: цвет холста выставляется до рендера React/island'ов. -->
-    <script is:inline>
-      document.documentElement.style.background = '#fbfbf9';
-    </script>
 
     <title>{title}</title>
   </head>
@@ -82,28 +77,6 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
           // Сеть недоступна или эндпоинт не отвечает — оставляем anonymous-дефолты.
         }
       })();
-    </script>
-
-    <script>
-      // Глобальный scroll-reveal: вешает `.is-visible` когда элемент с `[data-reveal]`
-      // попадает во вьюпорт. Один раз, без обратных переключений. Уважает reduced-motion.
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (!reduceMotion && 'IntersectionObserver' in window) {
-        const io = new IntersectionObserver(
-          (entries) => {
-            for (const entry of entries) {
-              if (entry.isIntersecting) {
-                entry.target.classList.add('is-visible');
-                io.unobserve(entry.target);
-              }
-            }
-          },
-          { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
-        );
-        document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
-      } else {
-        document.querySelectorAll('[data-reveal]').forEach((el) => el.classList.add('is-visible'));
-      }
     </script>
   </body>
 </html>

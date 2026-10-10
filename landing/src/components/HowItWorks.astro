@@ -1,58 +1,52 @@
 ---
-// Нарратив для вайб-кодера: от идеи до запуска, языком результата — без техники.
+// Путь задачи от идеи до запуска. У каждого шага — метка статуса из приложения: те же
+// цвета, что на доске в hero (черновик → AI делает → на утверждении → готово).
 const steps = [
   {
-    n: '01',
     title: 'Опиши идею',
     body: 'Просто словами расскажи, что хочешь получить. Никаких форм с двадцатью полями.',
+    tag: 'Черновик',
+    tone: 'pf-tone-gray',
   },
   {
-    n: '02',
     title: 'AI берётся за дело',
     body: 'Платформа разбивает задумку на задачи и доводит их до готового результата сама.',
+    tag: 'AI делает',
+    tone: 'pf-tone-queue',
   },
   {
-    n: '03',
     title: 'Смотришь, как растёт',
-    body: 'Видишь прогресс в реальном времени и сколько всё стоит — прозрачно, в рублях.',
+    body: 'Видишь прогресс в реальном времени и сколько всё стоит, в рублях. Готовое приходит тебе на утверждение.',
+    tag: 'На утверждении',
+    tone: 'pf-tone-approval',
   },
   {
-    n: '04',
     title: 'Запускаешь',
     body: 'Готовый продукт — у тебя на руках. Дальше развивай новыми идеями, когда захочешь.',
+    tag: 'Готово',
+    tone: 'pf-tone-done',
   },
-];
-
-// Пастельные тона шагов — та же палитра «живости», что и в фичах.
-const tones = [
-  { bg: '#dbeaf7', accent: '#2f6fd4', line: 'rgba(47, 111, 212, 0.18)' },
-  { bg: '#e7e1fa', accent: '#7c5cff', line: 'rgba(124, 92, 255, 0.18)' },
-  { bg: '#fbe9d7', accent: '#c9760a', line: 'rgba(201, 118, 10, 0.20)' },
-  { bg: '#cfebe0', accent: '#0f9d77', line: 'rgba(15, 157, 119, 0.20)' },
 ];
 ---
 
-<section id="how" class="pf-section how">
+<section id="how" class="pf-section">
   <div class="pf-container">
-    <div class="how__head" data-reveal>
-      <div class="pf-stag">Как это работает</div>
-      <h2 class="pf-h2">Четыре шага — от идеи до запуска</h2>
+    <div class="pf-head">
+      <h2 class="pf-h2">Четыре шага&nbsp;— от идеи до запуска</h2>
       <p class="pf-lead">
         Ты остаёшься на уровне идей и решений. Всё, что между задумкой и готовым продуктом,
         платформа берёт на себя.
       </p>
     </div>
 
-    <ol class="how__grid">
-      <span class="step-connector how__connector" aria-hidden="true"></span>
+    <ol class="how">
       {
         steps.map((s, i) => (
-          <li
-            class="how__step"
-            data-reveal
-            style={`--reveal-delay: ${i * 110}ms; --tone-bg: ${tones[i].bg}; --tone-accent: ${tones[i].accent}; --tone-line: ${tones[i].line}`}
-          >
-            <div class="pf-mono how__num">{s.n}</div>
+          <li class="how__step">
+            <span class="how__n" aria-hidden="true">{i + 1}</span>
+            <span class={`pf-tag ${s.tone} how__tag`}>
+              <span class="pf-tag__text">{s.tag}</span>
+            </span>
             <h3 class="how__title">{s.title}</h3>
             <p class="how__body">{s.body}</p>
           </li>
@@ -63,60 +57,52 @@ const tones = [
 </section>
 
 <style>
-  /* Контрастная глава — тёплый бумажный фон чередования. */
-  .how { background: var(--bg-alt); }
-
-  .how__head { max-width: 40rem; }
-  .how__grid {
-    position: relative;
-    list-style: none;
-    margin: var(--sp-12) 0 0;
-    padding: 0;
+  /* Дорожка: шаги стоят на одной линии, номер — на линии. На телефоне — столбиком. */
+  .how {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-4);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: 2rem 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
-  @media (min-width: 640px) {
-    .how__grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (min-width: 1024px) {
-    .how__grid { grid-template-columns: repeat(4, 1fr); }
-  }
-
-  /* Коннектор убран: цветные панели-шаги сами читаются как последовательность. */
-  .how__connector { display: none; }
-
   .how__step {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding-block-start: 1.75rem;
+    border-block-start: 1px solid oklch(var(--border));
     position: relative;
-    padding: clamp(1.5rem, 2.5vw, 2rem);
-    border: 1px solid var(--tone-line, var(--line));
-    border-radius: var(--r-lg);
-    background: var(--tone-bg, var(--surface));
-    transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   }
-  @media (prefers-reduced-motion: no-preference) {
-    .how__step:hover {
-      transform: translateY(-3px);
-      box-shadow: var(--shadow);
-    }
-  }
-  .how__num {
-    font-size: var(--fs-lg);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    color: var(--tone-accent, var(--accent));
+  .how__n {
+    position: absolute;
+    inset-block-start: -0.8125rem;
+    inset-inline-start: 0;
+    display: grid;
+    place-items: center;
+    inline-size: 1.625rem;
+    block-size: 1.625rem;
+    border: 1px solid oklch(var(--border));
+    border-radius: 50%;
+    background: oklch(var(--background));
+    font-size: var(--text-ui);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: oklch(var(--foreground));
   }
   .how__title {
-    margin-top: var(--sp-3);
-    font-size: var(--fs-lg);
+    margin-block-start: 0.25rem;
+    font-size: var(--text-h3);
     font-weight: 700;
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-heading);
+    color: oklch(var(--foreground));
   }
   .how__body {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-normal);
-    color: var(--muted);
+    max-inline-size: 30rem;
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+    color: oklch(var(--muted-foreground));
   }
 </style>

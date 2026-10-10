@@ -1,130 +1,210 @@
 /* =============================================================================
-   ProjectsFlow — лендинг · ДИЗАЙН-ТОКЕНЫ
-   Направление «Editorial paper»: тёплая бумага, near-black текст, крупная типографика,
-   циан — точечный акцент (не заливать всё), amber — деталь для «денег». 2 тёмных
-   full-bleed секции для ритма (навесить [data-theme="dark"] на секцию).
-   Компоненты строят ТОЛЬКО на этих переменных — не хардкодить цвета.
+   ProjectsFlow — лендинг · ДИЗАЙН-ТОКЕНЫ «C4 плотный»
+   Светлая тема — Notion: белый лист, серые колонки и секции #F7F7F5, тёплый текст #37352F,
+   один синий акцент. Тёмная — палитра C3, включается системной настройкой
+   (prefers-color-scheme). Значения и имена — те же, что у приложения
+   (client/src/styles/globals.css): лендинг, вход и приложение — один продукт.
+   Цвета — тройки OKLCH (`--x: L% C H`, в коде `oklch(var(--x))`), производные — color-mix.
+   В комментариях — исходный HEX из спецификации
+   docs/superpowers/specs/2026-10-10-redesign-c4-design.md.
    ============================================================================= */
 :root {
   color-scheme: light;
 
-  /* --- Поверхности / текст / линии ---------------------------------------- */
-  --bg: #fbfbf9;            /* тёплая бумага (холст) */
-  --bg-alt: #f5f5f0;        /* чередующаяся секция */
-  --surface: #ffffff;       /* карточки/мокапы/панели */
-  --surface-2: #f1f1ec;     /* инпуты, «дно» колонок, hover-строки */
-  --elevated: #ffffff;
-  --line: #e4e4dd;
-  --line-strong: #d2d3c9;
+  /* --- Поверхности и текст ------------------------------------------------- */
+  --background: 100% 0 none;              /* #FFFFFF — лист */
+  --foreground: 32.89% 0.011 91.66;       /* #37352F — текст */
+  --muted-foreground: 53.75% 0.008 97.45; /* #6F6E69 — вторичный текст, 5.1:1 на белом */
+  --sidebar: 97.56% 0.003 106.45;         /* #F7F7F5 — второстепенные секции */
+  --panel: 97.56% 0.003 106.45;           /* #F7F7F5 — колонка, подложка под карточками */
+  --card: 100% 0 none;                    /* карточка — белая, держится тенью-кольцом */
+  --card-hover: 100% 0 none;
+  --raised: 100% 0 none;                  /* плашка поверх карточки */
+  --field: 100% 0 none;                   /* поле ввода */
+  --border: 93.35% 0.003 106.45;          /* #E9E9E7 — линии */
+  --input: 90.66% 0.004 91.45;            /* #E1E0DD — рамка поля и вторичной кнопки */
 
-  --text: #0b0e14;          /* near-black cool */
-  --muted: #5a6472;
-  --dim: #6b7280;           /* ≥4.5:1 на бумаге — годен для мелкого текста (не только декор) */
+  /* --- Акцент -------------------------------------------------------------- */
+  --primary: 60.58% 0.167 252.7;          /* #2383E2 — кольцо фокуса, точки, зона броска */
+  --ring: 60.58% 0.167 252.7;
+  /* Заливка главной кнопки — тот же синий на 4% темнее (#0F77D4): белый текст 4.56:1 (AA).
+     На #2383E2 белый даёт 3.88:1 — для текста кнопки мало. */
+  --primary-fill: 56.58% 0.167 252.7;
+  --primary-fill-hover: 51.5% 0.155 252.7;
+  --primary-foreground: 100% 0 none;
+  /* Синий текст-ссылка. Спецификация — #1F6FC0; взят на полтона темнее (#1B6CBD), чтобы
+     и на мягкой подложке #E7F1FB держать AA (4.68:1). */
+  --primary-ink: 52.79% 0.147 252.87;
+  --primary-soft: oklch(95.36% 0.017 248.01); /* #E7F1FB */
 
-  /* --- Акцент (циан) + сигналы -------------------------------------------- */
-  /* Правило: циан-ТЕКСТ/иконки/бордеры = --accent; --accent-bright только в заливках/glow. */
-  --accent: #0892c0;
-  --accent-deep: #066f94;
-  --accent-bright: #22e0ff;
-  --accent-ink: #04222b;    /* тёмный текст НА ярком циане (кнопка) */
-  --accent-soft: #e6f7fc;   /* фон чипов/eyebrow/drop-зоны */
-  --accent-line: rgba(8, 146, 192, 0.28);
-  --accent-glow: rgba(8, 146, 192, 0.5);  /* свечение кнопок; флипается ярче в тёмных секциях */
+  /* --- Статусы: цвет = смысл, как в приложении ------------------------------
+     --x — точка, иконка, счётчик (графика, ≥3:1); --x-soft — подложка метки;
+     --x-ink — текст на подложке (≥10:1). Текст цветом самого статуса не пишем. */
+  --approval: 58.14% 0.12 309.5;          /* #9065B0 — на утверждении */
+  --approval-soft: oklch(91.32% 0.024 313.13); /* #E8DEEE */
+  --approval-ink: 32.16% 0.088 310.25;    /* #412454 */
+  --manual: 62.55% 0.123 77.93;           /* #B07D1A — вручную */
+  --manual-soft: oklch(94.76% 0.05 85.71); /* #FDECC8 */
+  --manual-ink: 31.22% 0.041 60.87;       /* #402C1B */
+  --manual-zone: oklch(95.61% 0.028 88.75); /* подсветка зоны «Вручную» при броске */
+  --done: 55.79% 0.085 158.39;            /* #448361 — готово, принять */
+  --done-soft: oklch(92.78% 0.031 145.32); /* #DBEDDB */
+  --done-soft-hover: oklch(88.75% 0.047 148.09);
+  --done-ink: 31.34% 0.044 159.05;        /* #1C3829 */
+  --destructive: 54.49% 0.183 26.91;      /* #C4332F — ошибка, просрочено */
+  --today: 55.57% 0.138 52.22;            /* #B0570B — срок сегодня */
+  --drop: oklch(96.3% 0.015 247.99);      /* #EBF4FD — колонка под перетаскиваемой карточкой */
+  --drop-line: 82.96% 0.009 91.5;         /* штрих пустой зоны броска */
+  --toast: 30.11% 0.005 91.56;            /* #2F2E2B — тост отмены */
+  --toast-foreground: 100% 0 none;
+  --toast-accent: 78% 0.09 250;
 
-  /* Вторичный акцент — фиолет. Живёт ТОЛЬКО в градиентах/свечениях (не в тексте),
-     чтобы «раскрасить» точки действия, не ломая бумажную базу. */
-  --violet: #7c5cff;
-  --violet-bright: #9d7bff;
-  --violet-glow: rgba(124, 92, 255, 0.5);
-  --signal: #129a6e;        /* готово/онлайн */
-  --warn: #d97706;          /* в работе */
-  --danger: #e5484d;
+  /* --- Мягкие заливки интерактивного (Notion): своя альфа внутри ------------ */
+  --hover: color-mix(in oklch, oklch(var(--foreground)) 8%, transparent);
+  --active: color-mix(in oklch, oklch(var(--foreground)) 11%, transparent);
+  --selection: color-mix(in oklch, oklch(var(--primary)) 14%, transparent);
 
-  /* --- Amber (дозированно: деньги/тепло, ≤5% площади) --------------------- */
-  --amber: #f0a020;
-  --profit: #129a6e;
-  --spend: #5a6472;
+  /* --- Тени. Карточка на светлом — кольцо 1px + мягкая тень вместо рамки. --- */
+  --shadow-card: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 1px 3px oklch(16.84% 0 none / 0.06);
+  --shadow-card-hover: 0 0 0 1px oklch(16.84% 0 none / 0.1), 0 3px 8px oklch(16.84% 0 none / 0.12);
+  --shadow-float: 0 10px 30px oklch(16.84% 0 none / 0.18);
+  --shadow-menu: 0 0 0 1px oklch(16.84% 0 none / 0.05), 0 3px 6px oklch(16.84% 0 none / 0.1),
+    0 9px 24px oklch(16.84% 0 none / 0.2);
+  /* Крупная рамка «окна» приложения в hero. */
+  --shadow-frame: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 2px 4px oklch(16.84% 0 none / 0.04),
+    0 24px 56px -20px oklch(16.84% 0 none / 0.2);
 
-  /* --- Тёмные острова ([data-theme="dark"] на секции) --------------------- */
-  --dark-bg: #0b1220;
-  --dark-surface: #111a2e;
+  /* --- Шрифт: системный стек Notion, без веб-шрифтов ------------------------ */
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI',
+    Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  /* Моно — только для настоящего кода в статьях. */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* --- Градиенты ---------------------------------------------------------- */
-  --grad-accent: linear-gradient(135deg, #22e0ff 0%, #4bbcff 45%, #9d7bff 100%);
-  --grad-text: linear-gradient(115deg, #0aa2c7 0%, #2aa5e6 45%, #7c5cff 100%);
-  /* Насыщенный градиент для главных кнопок: белый текст держит контраст на всех стопах. */
-  --grad-cta: linear-gradient(135deg, #0f9fc9 0%, #2a72d6 55%, #6b48f5 100%);
+  /* --- Шкала текста (как в приложении) + плавающие заголовки ----------------
+     h1: 36px на 390px → 64px от 1224px; h2: 28px → 40px. Отношение max/min < 2.5. */
+  --text-2xs: 0.6875rem;   /* 11 — счётчики, мелкие метки */
+  --text-xs: 0.75rem;      /* 12 */
+  --text-meta: 0.78125rem; /* 12.5 — подпись карточки */
+  --text-ui: 0.8125rem;    /* 13 — крошки, кнопки доски */
+  --text-card: 0.84375rem; /* 13.5 — заголовок карточки */
+  --text-sm: 0.875rem;     /* 14 */
+  --text-md: 0.9375rem;    /* 15 */
+  --text-base: 1rem;       /* 16 */
+  --text-lead: 1.0625rem;  /* 17 — лид под заголовком */
+  --text-h3: 1.25rem;      /* 20 */
+  --text-h2: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem);
+  --text-h1: clamp(2.25rem, 1.5rem + 3.2vw, 4rem);
+  --leading-tight: 1.1;
+  --leading-snug: 1.35;
+  --leading-body: 1.6;
+  --tracking-display: -0.025em;
+  --tracking-heading: -0.015em;
 
-  /* --- Шрифты ------------------------------------------------------------- */
-  --font-sans: 'Segoe UI', -apple-system, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* --- Сетка и ритм --------------------------------------------------------- */
+  --container: 75rem;                                  /* 1200px */
+  --gutter: clamp(1rem, 0.5rem + 2.5vw, 2rem);         /* 16px на телефоне → 32px */
+  --section-y: clamp(3.5rem, 2.25rem + 4vw, 6rem);     /* 56px → 96px */
+  --nav-h: 3.5rem;                                     /* 56px — полоса навигации */
+  --measure: 38rem;                                    /* длина строки лида < 80 символов */
 
-  /* --- Типографическая шкала --------------------------------------------- */
-  --fs-xs: 0.75rem;
-  --fs-sm: 0.8125rem;
-  --fs-base: 1.0625rem;
-  --fs-lg: 1.25rem;
-  --fs-xl: 1.375rem;
-  --fs-2xl: 1.75rem;
-  --fs-3xl: clamp(2.1rem, 4vw, 3.25rem);
-  --fs-display: clamp(3rem, 6.5vw, 5.5rem);
-  --lh-tight: 1.02;
-  --lh-snug: 1.3;
-  --lh-normal: 1.65;
-  --tracking-tight: -0.03em;
-  --tracking-wide: 0.14em;
-
-  /* --- Spacing / ритм ----------------------------------------------------- */
-  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem; --sp-5: 1.25rem;
-  --sp-6: 1.5rem; --sp-8: 2rem; --sp-12: 3rem; --sp-16: 4rem; --sp-24: 6rem;
-  --section-y: clamp(2.75rem, 5vw, 4.5rem);
-  --container: 1400px;
-  --container-wide: 1480px;
-
-  /* --- Радиусы ------------------------------------------------------------ */
-  --r-sm: 8px;
-  --r: 12px;
-  --r-md: 16px;
-  --r-lg: 24px;
+  /* --- Радиусы: метка 4 · кнопка/поле 6 · карточка 8 · колонка 10 · панель 12 */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --r-2xl: 12px;
   --r-full: 999px;
 
-  /* --- Тени (холодно-синие, слоистые, мягкие) ---------------------------- */
-  --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.05);
-  --shadow: 0 4px 16px -4px rgba(11, 18, 32, 0.08), 0 2px 4px -2px rgba(11, 18, 32, 0.05);
-  --shadow-lg: 0 24px 60px -20px rgba(11, 18, 32, 0.14);
-  --shadow-float: 0 2px 4px rgba(11, 18, 32, 0.04), 0 32px 64px -24px rgba(11, 18, 32, 0.18);
-  --shadow-accent: 0 12px 40px -12px rgba(8, 146, 192, 0.35);
-  --glow: 0 0 60px -18px rgba(8, 146, 192, 0.35);
-  --ring: 0 0 0 1px var(--line);
-  --inner-edge: inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
-
-  /* --- Motion ------------------------------------------------------------- */
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --dur-fast: 150ms;
-  --dur: 300ms;
-  --dur-slow: 700ms;
+  /* --- Движение: только функциональное ------------------------------------- */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-fast: 140ms;
+  --dur: 200ms;
 }
 
-/* Тёмный остров: навесить data-theme="dark" на <section> (переопределяет токены локально,
-   компоненты на токенах становятся тёмными; циан «дышит» ярко). */
-[data-theme='dark'] {
-  color-scheme: dark;
-  --bg: var(--dark-bg);
-  --bg-alt: #0f1930;
-  --surface: var(--dark-surface);
-  --surface-2: #1b2540;
-  --elevated: #1b2540;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #eaf0f6;
-  --muted: #94a3b8;
-  --dim: #6b7789;
-  --accent: #22e0ff;
-  --accent-soft: rgba(34, 224, 255, 0.10);
-  --accent-line: rgba(34, 224, 255, 0.32);
-  --accent-glow: rgba(34, 224, 255, 0.6);
-  --shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 40px 120px -40px rgba(0, 0, 0, 0.6);
-  --inner-edge: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+/* Тёмная тема «C3» — по системной настройке. Ступени поверхностей: фон #16171B → секция
+   #1A1B20 → колонка #1D1E23 → карточка #24262C → плашка #2B2D35, линия #2E3038.
+   Карточка держится рамкой, без тени. Акцент — барвинок #7C8CFF с тёмным текстом на заливке. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --background: 20.53% 0.008 274.52;      /* #16171B */
+    --foreground: 94.59% 0.003 264.54;      /* #ECEDEF */
+    --muted-foreground: 71.62% 0.015 272.62; /* #A0A3AD */
+    --sidebar: 22.32% 0.01 276.61;          /* #1A1B20 */
+    --panel: 23.61% 0.01 276.66;            /* #1D1E23 */
+    --card: 26.91% 0.012 270.96;            /* #24262C */
+    --card-hover: 28.59% 0.013 272.91;
+    --raised: 29.85% 0.015 274.37;          /* #2B2D35 */
+    --field: 23.61% 0.01 276.66;
+    --border: 31.05% 0.015 274.41;          /* #2E3038 */
+    --input: 33.45% 0.016 275.59;
+
+    --primary: 68.09% 0.169 275.03;         /* #7C8CFF */
+    --ring: 68.09% 0.169 275.03;
+    --primary-fill: 68.09% 0.169 275.03;
+    --primary-fill-hover: 74% 0.14 275.03;
+    --primary-foreground: 19.65% 0.068 275.73; /* #0E1033 — тёмный текст на заливке, 6.2:1 */
+    --primary-ink: 78.95% 0.107 277.23;     /* #A9B4FF */
+    --primary-soft: color-mix(in oklch, oklch(68.09% 0.169 275.03) 14%, transparent);
+
+    --approval: 73.68% 0.142 299.36;        /* #B794F6 */
+    --approval-soft: color-mix(in oklch, oklch(73.68% 0.142 299.36) 16%, transparent);
+    --approval-ink: 80.5% 0.105 299.36;
+    --manual: 81.65% 0.14 80.1;             /* #F2B84B */
+    --manual-soft: color-mix(in oklch, oklch(81.65% 0.14 80.1) 16%, transparent);
+    --manual-ink: 85% 0.115 80.1;
+    --manual-zone: color-mix(in oklch, oklch(81.65% 0.14 80.1) 7%, transparent);
+    --done: 77.67% 0.143 155.36;            /* #5ED18E */
+    --done-soft: oklch(40.44% 0.069 157.52); /* #24543A — кнопка «Принять» */
+    --done-soft-hover: oklch(47.72% 0.086 155.9);
+    --done-ink: 92.53% 0.054 158.39;        /* #C9F2D9 */
+    --destructive: 73.45% 0.163 25.78;      /* #FF7B72 */
+    --today: 81.65% 0.14 80.1;              /* #F2B84B */
+    --drop: color-mix(in oklch, oklch(68.09% 0.169 275.03) 8%, transparent);
+    --drop-line: 42.12% 0.017 272.38;
+    --toast: 29.85% 0.015 274.37;           /* #2B2D35 */
+    --toast-foreground: 94.59% 0.003 264.54;
+    --toast-accent: 78.95% 0.107 277.23;
+
+    --hover: color-mix(in oklch, oklch(100% 0 none) 7%, transparent);
+    --active: color-mix(in oklch, oklch(100% 0 none) 10%, transparent);
+    --selection: color-mix(in oklch, oklch(68.09% 0.169 275.03) 30%, transparent);
+
+    --shadow-card: 0 0 0 1px oklch(31.05% 0.015 274.41);
+    --shadow-card-hover: 0 0 0 1px oklch(36.87% 0.018 272.29);
+    --shadow-float: 0 12px 32px oklch(0% 0 none / 0.5);
+    --shadow-menu: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 12px 32px oklch(0% 0 none / 0.5);
+    --shadow-frame: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 24px 56px -20px oklch(0% 0 none / 0.6);
+  }
+}
+
+/* =============================================================================
+   Тона-метки Notion (проекты, темы блога) и статусные тона — та же механика, что в
+   приложении: класс .pf-tone-<имя> задаёт --tone-bg (подложка), --tone-fg (текст) и
+   --tone (точка). Светлая — пастельная подложка; тёмная — без подложки, с цветной точкой.
+   ============================================================================= */
+.pf-tone-gray { --tone-bg: oklch(91.3% 0.003 84.56); --tone-fg: oklch(30.98% 0.008 84.59); --tone: oklch(68.62% 0.004 91.47); }
+.pf-tone-brown { --tone-bg: oklch(91.62% 0.017 44.8); --tone-fg: oklch(31.39% 0.044 45.46); --tone: oklch(57.66% 0.076 45.56); }
+.pf-tone-orange { --tone-bg: oklch(91.82% 0.042 59.1); --tone-fg: oklch(31.64% 0.062 57.69); --tone: oklch(65.94% 0.159 55.7); }
+.pf-tone-green { --tone-bg: oklch(92.78% 0.031 145.32); --tone-fg: oklch(31.34% 0.044 159.05); --tone: oklch(55.79% 0.085 158.39); }
+.pf-tone-blue { --tone-bg: oklch(91.15% 0.024 231.86); --tone-fg: oklch(30.98% 0.049 242.64); --tone: oklch(56.56% 0.099 237.42); }
+.pf-tone-pink { --tone-bg: oklch(92.62% 0.026 349.76); --tone-fg: oklch(32% 0.068 351.01); --tone: oklch(58.97% 0.164 350.38); }
+.pf-tone-approval { --tone-bg: var(--approval-soft); --tone-fg: oklch(var(--approval-ink)); --tone: oklch(var(--approval)); }
+.pf-tone-manual { --tone-bg: var(--manual-soft); --tone-fg: oklch(var(--manual-ink)); --tone: oklch(var(--manual)); }
+.pf-tone-done { --tone-bg: var(--done-soft); --tone-fg: oklch(var(--done-ink)); --tone: oklch(var(--done)); }
+.pf-tone-queue { --tone-bg: var(--primary-soft); --tone-fg: oklch(var(--primary-ink)); --tone: oklch(var(--primary)); }
+
+@media (prefers-color-scheme: dark) {
+  .pf-tone-gray { --tone: oklch(70.97% 0.015 272.62); }   /* #9EA1AB */
+  .pf-tone-brown { --tone: oklch(75.87% 0.094 71.94); }   /* #D6A76C */
+  .pf-tone-orange { --tone: oklch(75.14% 0.161 46.76); }  /* #FF8A4C */
+  .pf-tone-green { --tone: oklch(80.03% 0.182 151.71); }  /* #4ADE80 */
+  .pf-tone-blue { --tone: oklch(71.37% 0.143 254.62); }   /* #60A5FA */
+  .pf-tone-pink { --tone: oklch(72.53% 0.175 349.76); }   /* #F472B6 */
+  [class*='pf-tone-'] {
+    --tone-bg: color-mix(in oklch, var(--tone) 14%, transparent);
+    --tone-fg: oklch(var(--foreground));
+  }
 }
