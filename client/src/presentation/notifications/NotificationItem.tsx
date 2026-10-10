@@ -32,7 +32,7 @@ export function NotificationItem({
         // overflow-hidden = содержит float аватара; текст обтекает иконку (справа от неё и
         // продолжается под ней на всю ширину блока) — так шире и читабельнее.
         'group cursor-pointer overflow-hidden px-3 py-2 transition-colors',
-        isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40',
+        isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-hover',
       )}
     >
       <span className="relative float-start me-2.5">
@@ -68,7 +68,7 @@ export function NotificationItem({
                 <>
                   {' '}
                   <span
-                    className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                    className="inline-flex items-center gap-1 rounded-md bg-manual-soft px-1.5 py-0.5 text-xs font-medium text-manual-ink"
                     title="Задача ждёт твоего ответа"
                   >
                     🤔 ждёт уточнения
@@ -95,7 +95,7 @@ export function NotificationItem({
               <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
             </p>
             {actionUi === 'accepted' ? (
-              <p className="clear-start pbs-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <p className="clear-start pbs-1 text-xs font-medium text-done">
                 ✓ Принято
               </p>
             ) : actionUi === 'resolved' ? (
@@ -125,7 +125,7 @@ export function NotificationItem({
               {roleLabel[payload.role]}
             </p>
             {actionUi === 'accepted' ? (
-              <p className="clear-start pbs-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <p className="clear-start pbs-1 text-xs font-medium text-done">
                 ✓ Принято
               </p>
             ) : actionUi === 'resolved' ? (
@@ -271,7 +271,7 @@ export function NotificationItem({
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>
             {actionUi === 'accepted' ? (
-              <p className="clear-start pbs-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <p className="clear-start pbs-1 text-xs font-medium text-done">
                 ✓ Доступ предоставлен
               </p>
             ) : actionUi === 'declined' ? (

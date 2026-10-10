@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
+import { AuthFormCard, authFieldClass } from '@/presentation/auth/AuthFormCard';
 import { useContainer } from '@/infrastructure/di/container';
 
 // «Забыли пароль»: вводим email → сервер (если аккаунт есть) шлёт ссылку сброса.
@@ -34,18 +34,18 @@ export function ForgotPasswordPage(): React.ReactElement {
         title="Проверьте почту"
         description="Если аккаунт с таким email существует, мы отправили на него ссылку для сброса пароля. Ссылка действительна 1 час."
         footer={
-          <>
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Вернуться ко входу
-            </Link>
-          </>
+          <Link to="/login" className="font-medium text-primary-ink hover:underline">
+            Вернуться ко входу
+          </Link>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-xl bg-panel px-4 py-3 text-sm text-muted-foreground">
           Не пришло письмо? Проверьте папку «Спам» или{' '}
+          {/* !min-h-0: кнопка стоит внутри строки текста — глобальный минимум 44px для кнопок
+              на тач-экранах раздул бы строку (для ссылок в тексте он и не нужен). */}
           <button
             type="button"
-            className="font-medium text-primary hover:underline"
+            className="!min-h-0 font-medium text-primary-ink hover:underline"
             onClick={() => setSent(false)}
           >
             попробуйте другой email
@@ -63,14 +63,14 @@ export function ForgotPasswordPage(): React.ReactElement {
       footer={
         <>
           Вспомнили пароль?{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-primary-ink hover:underline">
             Войти
           </Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -78,11 +78,12 @@ export function ForgotPasswordPage(): React.ReactElement {
             autoComplete="email"
             autoFocus
             required
+            className={authFieldClass}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <Button type="submit" className="w-full" disabled={submitting}>
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           {submitting ? 'Отправляем…' : 'Отправить ссылку'}
         </Button>
       </form>

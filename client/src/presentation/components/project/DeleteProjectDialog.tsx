@@ -78,7 +78,7 @@ export function DeleteProjectDialog({
           </p>
 
           {otherMemberCount > 0 && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning-ink">
               <p className="font-medium">
                 В проекте ещё {otherMemberCount}{' '}
                 {otherMemberCount === 1 ? 'другой участник' : 'других участников'} — они

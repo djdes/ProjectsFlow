@@ -78,7 +78,7 @@ function MemberRow({
       <button
         type="button"
         onClick={onZoom}
-        className="shrink-0 rounded-full outline-none motion-safe:transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 rounded-full outline-none motion-safe:transition-transform motion-safe:hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`Увеличить аватар: ${member.user.displayName}`}
       >
         <Avatar className="size-8">

@@ -80,8 +80,8 @@ function ViewRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'group/vrow flex items-center gap-1 rounded-md px-1 py-1 transition-colors hover:bg-accent/60',
-        active && 'bg-accent/60',
+        'group/vrow flex items-center gap-1 rounded-md px-1 py-1 transition-colors hover:bg-hover',
+        active && 'bg-active',
         isDragging && 'z-10 opacity-70',
       )}
     >
@@ -91,7 +91,7 @@ function ViewRow({
         {...attributes}
         {...listeners}
         className={cn(
-          'grid size-5 shrink-0 cursor-grab place-items-center rounded text-muted-foreground/50 transition-opacity hover:bg-accent hover:text-foreground',
+          'grid size-5 shrink-0 cursor-grab place-items-center rounded text-muted-foreground/50 transition-opacity hover:bg-hover hover:text-foreground',
           !draggable && 'invisible',
         )}
       >
@@ -110,7 +110,7 @@ function ViewRow({
           <button
             type="button"
             aria-label={`Меню вью «${name}»`}
-            className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground/70 opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/vrow:opacity-100 data-[state=open]:opacity-100"
+            className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground/70 opacity-0 transition-opacity hover:bg-hover hover:text-foreground group-hover/vrow:opacity-100 data-[state=open]:opacity-100"
           >
             <MoreHorizontal className="size-3.5" />
           </button>
@@ -220,8 +220,8 @@ export function ViewsOverflowMenu({
   // так что размер здесь в одиночку менять нельзя.
   const triggerClass = cn(
     VIEWS_MORE_METRICS_CLASS,
-    'text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
-    open && 'bg-accent/60 text-foreground',
+    'text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
+    open && 'bg-active text-foreground',
   );
   return (
     <span ref={rootRef} className="relative inline-flex shrink-0">
@@ -248,7 +248,7 @@ export function ViewsOverflowMenu({
             }}
             style={!creating && pos ? { left: pos.left, top: pos.top } : undefined}
             className={cn(
-              'fixed z-50 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in motion-safe:zoom-in-95',
+              'fixed z-50 rounded-lg bg-popover p-1.5 shadow-menu duration-100 animate-in fade-in motion-safe:zoom-in-95',
               // «Начать с нуля» — центрированное окно (Notion Start from scratch),
               // список вью — у кнопки-триггера.
               creating
@@ -270,7 +270,7 @@ export function ViewsOverflowMenu({
                         setOpen(false);
                         onCreate(t);
                       }}
-                      className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                     >
                       <Icon className="size-5" />
                       {BOARD_VIEW_TYPE_LABELS[t]}
@@ -306,7 +306,7 @@ export function ViewsOverflowMenu({
                   }}
                   placeholder="Поиск вью…"
                   aria-label="Поиск вью"
-                  className="h-7 w-full rounded-md bg-accent/60 ps-7 pe-2 text-xs outline-none placeholder:text-muted-foreground/60"
+                  className="h-7 w-full rounded-md bg-panel ps-7 pe-2 text-xs outline-none placeholder:text-muted-foreground/60"
                 />
               </div>
               <div className="max-h-72 overflow-y-auto">
@@ -359,7 +359,7 @@ export function ViewsOverflowMenu({
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <Plus className="size-4" />
                   Новое отображение
@@ -369,7 +369,7 @@ export function ViewsOverflowMenu({
                   onClick={() =>
                     toast.info('Все отображения уже подключены к задачам текущего проекта')
                   }
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <Database className="size-4" />
                   Новый источник данных

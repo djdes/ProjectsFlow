@@ -15,6 +15,9 @@ import { KbDocumentEditor } from '@/presentation/components/kb/KbDocumentEditor'
 import { NewKbDocumentDialog } from '@/presentation/components/kb/NewKbDocumentDialog';
 import { BulkCredentialDialog } from '@/presentation/components/kb/BulkCredentialDialog';
 import { KbSearchBar } from '@/presentation/components/kb/KbSearchBar';
+import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { PageTopBar } from '@/presentation/layout/PageChrome';
+import { PageMessage } from '@/presentation/pages/PageScaffold';
 
 export function KbPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -47,28 +50,40 @@ export function KbPage(): React.ReactElement {
 
   if (projectLoading) return <PageSkeleton layout="document" />;
   if (projectError) return <PageLoadError />;
-  if (!project) return <div className="p-6">Проект не найден</div>;
+  if (!project) return <PageMessage title="Проект не найден" />;
+
+  // Шапка C4 — та же строка 44px с крошками проекта, что у финансов и мониторинга.
+  const breadcrumbs = (
+    <ProjectBreadcrumbs
+      projectId={project.id}
+      projectName={project.name}
+      projectIcon={project.icon}
+      view="kb"
+    />
+  );
+
   if (project.kbKind === 'none') {
     return (
-      <div className="grid h-full place-items-center p-6">
-        <div className="max-w-md space-y-3 text-center">
-          <h1 className="text-xl font-semibold">KB не подключён</h1>
-          <p className="text-sm text-muted-foreground">Подключи KB-репо на странице проекта.</p>
+      <div className="flex min-h-full flex-col">
+        <PageTopBar>{breadcrumbs}</PageTopBar>
+        <PageMessage
+          className="min-h-0 flex-1"
+          title="KB не подключён"
+          description="Подключи KB-репо на странице проекта."
+        >
           <Button asChild variant="outline">
             <Link to={`/projects/${project.id}`}>К проекту</Link>
           </Button>
-        </div>
+        </PageMessage>
       </div>
     );
   }
 
   const sidebarContent = (
     <aside className="flex h-full flex-col overflow-y-auto p-3">
-      {/* Обёртка, а не маркер на самой кнопке: правило даёт padding-left, и на кнопке он
-          раздул бы её ghost-подложку на ширину отступа, а заодно перекрыл бы -ml-2,
-          которым она выровнена по тексту дерева ниже. flex — чтобы обёртка не заводила
-          строчный бокс и не добавляла лишних пикселей под кнопкой. */}
-      <div className="pf-burger-gap mbe-3 flex">
+      {/* Плавающий бургер свёрнутой панели теперь стоит в строке крошек над деревом, поэтому
+          отступ под него (pf-burger-gap) кнопке больше не нужен. */}
+      <div className="mbe-3 flex">
         <Button asChild variant="ghost" size="sm" className="-ms-2 gap-1">
           <Link to={`/projects/${project.id}`}>
             <ArrowLeft className="size-3.5" />
@@ -95,7 +110,7 @@ export function KbPage(): React.ReactElement {
   );
 
   const mainContent = (
-    <main className="overflow-y-auto p-4 md:p-6">
+    <div className="min-h-0 overflow-y-auto px-4 pbe-12 pbs-4 sm:px-6 sm:pbs-5">
       {activePath && docLoading && <DocumentSkeleton />}
       {activePath && document && (editing ? (
         <KbDocumentEditor
@@ -118,24 +133,29 @@ export function KbPage(): React.ReactElement {
           {isDesktop ? 'Выбери файл слева.' : 'Нажми кнопку слева, чтобы открыть дерево файлов.'}
         </p>
       )}
-    </main>
+    </div>
   );
 
   return (
     <>
       {isDesktop ? (
-        <div className="grid h-full grid-cols-[280px_1fr] gap-0">
-          <div className="border-e">{sidebarContent}</div>
-          {mainContent}
+        <div className="flex h-full flex-col">
+          <PageTopBar>{breadcrumbs}</PageTopBar>
+          <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr] gap-0">
+            <div className="min-h-0 border-e">{sidebarContent}</div>
+            {mainContent}
+          </div>
         </div>
       ) : (
         <div className="flex h-full flex-col">
-          <div className="flex items-center gap-2 border-be px-2 py-1.5">
-            <Button variant="ghost" size="icon" className="size-8" onClick={() => setDrawerOpen(true)} aria-label="Открыть дерево файлов">
+          {/* На мобиле дерево файлов — в выезжающей панели; кнопка открывает её слева, рядом
+              с крошками («Проекты › проект › База знаний» заменили подпись «проект / KB»). */}
+          <PageTopBar>
+            <Button variant="ghost" size="icon" className="-ms-1.5 shrink-0" onClick={() => setDrawerOpen(true)} aria-label="Открыть дерево файлов">
               <PanelLeft className="size-4" />
             </Button>
-            <p className="truncate text-xs font-medium text-muted-foreground">{project.name} / KB</p>
-          </div>
+            {breadcrumbs}
+          </PageTopBar>
           {mainContent}
           <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
             <SheetContent side="left" mobileSheet={false} className="w-72 p-0">

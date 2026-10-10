@@ -71,7 +71,7 @@ export function HelpAiPanel({
               </div>
             )}
             {movedToOtherProject && (
-              <div className="mbe-2 rounded-lg border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-2xs leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-200/90">
+              <div className="mbe-2 rounded-lg border border-warning/30 bg-warning-soft px-2.5 py-2 text-2xs leading-relaxed text-warning-ink">
                 Этот чат привязан к проекту{' '}
                 {session.projectName ? `«${session.projectName}»` : 'из которого он начат'}.
                 <button

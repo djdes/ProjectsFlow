@@ -11,14 +11,17 @@ import { ProjectIconView } from '@/presentation/components/project/projectIconVi
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { boardSlugFromHost, publicBoardUrl } from '@/lib/publicBoardUrl';
+import { cn } from '@/lib/utils';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import type { PublicComment, PublicTaskDetail } from '@/domain/public/PublicBoard';
+import { publicStatusTone } from './PublicKanban';
 
-const PRIORITY_COLOR: Record<1 | 2 | 3 | 4, string> = {
-  1: 'oklch(63.68% 0.208 25.33)', 2: 'oklch(76.86% 0.1647 70.08)', 3: 'oklch(62.31% 0.188 259.81)', 4: 'oklch(71.07% 0.035 256.79)',
-};
-const PRIORITY_LABEL: Record<1 | 2 | 3 | 4, string> = {
-  1: 'Срочно', 2: 'Высокий', 3: 'Средний', 4: 'Низкий',
-};
+// Кнопка-иконка верхней полосы окна задачи.
+const PANEL_ICON_CLS =
+  'grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground';
+
+// Чип свойства задачи (приоритет, срок) — нейтральный, цвет только у значка.
+const CHIP_CLS = 'inline-flex h-[22px] items-center gap-1.5 rounded-md bg-muted px-2 text-xs text-muted-foreground';
 
 function fmtDate(iso: string): string {
   try {
@@ -42,10 +45,10 @@ function CommentRow({ c }: { c: PublicComment }): React.ReactElement {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-[13px] font-medium text-foreground">{c.authorDisplayName}</span>
+          <span className="text-ui font-medium text-foreground">{c.authorDisplayName}</span>
           <span className="text-xs text-muted-foreground">{fmtDate(c.createdAt)}</span>
         </div>
-        <Markdown className="mbs-0.5 text-[13px]">{c.body}</Markdown>
+        <Markdown className="mbs-0.5 text-ui">{c.body}</Markdown>
       </div>
     </li>
   );
@@ -114,7 +117,7 @@ export function PublicTaskPanel({
             type="button"
             onClick={() => navigate(expandPath)}
             aria-label="Открыть отдельной страницей"
-            className="grid size-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            className={PANEL_ICON_CLS}
           >
             <Maximize2 className="size-4" />
           </button>
@@ -122,7 +125,7 @@ export function PublicTaskPanel({
             type="button"
             onClick={copyLink}
             aria-label="Копировать ссылку"
-            className="grid size-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            className={PANEL_ICON_CLS}
           >
             <Copy className="size-4" />
           </button>
@@ -150,24 +153,24 @@ export function PublicTaskPanel({
                     <ProjectIconView icon={detail.icon} pixelSize={28} />
                   </span>
                 )}
-                <SheetTitle className="text-xl font-bold leading-snug text-foreground">
+                <SheetTitle className="text-h1 font-bold leading-snug tracking-[-0.01em] text-foreground">
                   {title || 'Без названия'}
                 </SheetTitle>
               </div>
 
               {/* Чипы: статус / приоритет / дедлайн (read-only). */}
               <div className="mbs-3 flex flex-wrap items-center gap-2 text-xs">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 text-muted-foreground">
-                  {STATUS_LABEL[detail.status]}
+                <span className={cn('pf-tag pf-tag-lg', publicStatusTone(detail.status))}>
+                  <span className="truncate">{STATUS_LABEL[detail.status]}</span>
                 </span>
                 {detail.priority && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 text-muted-foreground">
-                    <Flag className="size-3" style={{ color: PRIORITY_COLOR[detail.priority] }} />
-                    {PRIORITY_LABEL[detail.priority]}
+                  <span className={CHIP_CLS}>
+                    <Flag className={cn('size-3', PRIORITY_META[detail.priority].textColor)} />
+                    {PRIORITY_META[detail.priority].label}
                   </span>
                 )}
                 {detail.deadline && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 text-muted-foreground">
+                  <span className={CHIP_CLS}>
                     <Calendar className="size-3" />
                     {fmtDate(detail.deadline)}
                   </span>

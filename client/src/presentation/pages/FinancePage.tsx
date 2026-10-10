@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Plus, Trash2, Wallet } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { PageTitle, PageTopBar } from '@/presentation/layout/PageChrome';
 import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
+import { PAGE_BODY_CLASS, PageMessage } from '@/presentation/pages/PageScaffold';
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
 const fmtDate = (d: Date): string => dateFmt.format(d);
@@ -78,62 +80,49 @@ export function FinancePage(): React.ReactElement {
 
   if (forbidden) {
     return (
-      <div className="grid h-full place-items-center p-6 text-center">
-        <div className="space-y-3">
-          <h1 className="text-2xl font-semibold">Финансы недоступны</h1>
-          <p className="text-sm text-muted-foreground">
-            Доступ к финансам этого проекта есть только у владельца.
-          </p>
-          <Button asChild variant="outline">
-            <Link to={`/projects/${pid}`}>К доске</Link>
-          </Button>
-        </div>
-      </div>
+      <PageMessage
+        title="Финансы недоступны"
+        description="Доступ к финансам этого проекта есть только у владельца."
+      >
+        <Button asChild variant="outline">
+          <Link to={`/projects/${pid}`}>К доске</Link>
+        </Button>
+      </PageMessage>
     );
   }
 
   if (loadError) {
     return (
-      <div className="grid h-full place-items-center p-6 text-center">
-        <div className="space-y-3">
-          <h1 className="text-2xl font-semibold">Не удалось загрузить</h1>
-          <p className="text-sm text-muted-foreground">
-            Проверьте соединение и попробуйте ещё раз.
-          </p>
-          <Button variant="outline" onClick={reload}>
-            Повторить
-          </Button>
-        </div>
-      </div>
+      <PageMessage title="Не удалось загрузить" description="Проверьте соединение и попробуйте ещё раз.">
+        <Button variant="outline" onClick={reload}>
+          Повторить
+        </Button>
+      </PageMessage>
     );
   }
 
   if (projectError) return <PageLoadError />;
-  if (projectNotFound) return <div className="p-6">Проект не найден</div>;
+  if (projectNotFound) return <PageMessage title="Проект не найден" />;
   if (!finance || !project) return <PageSkeleton layout="dashboard" />;
 
   const profitPositive = finance.profitKopecks >= 0;
   const activeEmployees = employees.filter((e) => e.active);
 
   return (
-    <>
-      {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
-          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="flex h-11 items-center justify-between gap-2 px-2.5">
+    <div className="flex min-h-full flex-col">
+      {/* Шапка C4: строка 44px с крошками проекта (на одной горизонтали со свитчером
+          пространства в сайдбаре) и счётчиком «сделано сегодня» справа. */}
+      <PageTopBar end={<HeaderCompletedTodayPill />}>
         <ProjectBreadcrumbs
           projectId={pid ?? ''}
           projectName={project.name}
           projectIcon={project.icon}
           view="finance"
         />
-        <HeaderCompletedTodayPill />
-      </div>
+      </PageTopBar>
 
-      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pbe-12 pbs-1 sm:px-6">
-      <div className="flex items-center gap-3">
-        <Wallet className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold tracking-tight">Финансы</h1>
-      </div>
+      <div className={cn(PAGE_BODY_CLASS, 'mx-auto max-w-3xl')}>
+      <PageTitle icon={<Wallet className="size-5 shrink-0 text-muted-foreground" />}>Финансы</PageTitle>
 
       {/* P&L */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -143,7 +132,7 @@ export function FinancePage(): React.ReactElement {
         <Stat
           label="Прибыль"
           value={formatRub(finance.profitKopecks)}
-          valueClass={profitPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}
+          valueClass={profitPositive ? 'text-done' : 'text-destructive'}
           hint={finance.marginPercent === null ? undefined : `маржа ${finance.marginPercent}%`}
         />
       </div>
@@ -284,7 +273,7 @@ export function FinancePage(): React.ReactElement {
         </Card>
       )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -351,7 +340,7 @@ function AssignForm({
     return (
       <p className="border-bs pbs-3 text-xs text-muted-foreground">
         Нет активных сотрудников. Добавьте их в{' '}
-        <Link to="/profile" className="text-primary hover:underline">профиле</Link>.
+        <Link to="/profile" className="text-primary-ink hover:underline">профиле</Link>.
       </p>
     );
   }

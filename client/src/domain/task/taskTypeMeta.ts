@@ -12,17 +12,18 @@ export type TaskTypeMeta = {
 };
 
 export const TASK_TYPE_META: Record<TaskType, TaskTypeMeta> = {
+  // Цвета — тона Notion (.pf-tone-* в styles/globals.css), как у приоритета.
   feature: {
     label: 'Фича',
-    dotColor: 'bg-slate-400',
-    textColor: 'text-slate-500 dark:text-slate-400',
-    badge: 'bg-slate-500/10 text-slate-600 dark:text-slate-300',
+    dotColor: 'pf-tone-gray bg-tone',
+    textColor: 'text-muted-foreground',
+    badge: 'pf-tone-gray bg-tone-bg text-tone-fg',
   },
   bug: {
     label: 'Баг',
-    dotColor: 'bg-rose-500',
-    textColor: 'text-rose-600 dark:text-rose-400',
-    badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    dotColor: 'pf-tone-red bg-tone',
+    textColor: 'pf-tone-red text-tone',
+    badge: 'pf-tone-red bg-tone-bg text-tone-fg',
   },
 };
 

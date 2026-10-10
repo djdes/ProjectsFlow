@@ -59,7 +59,7 @@ export function ViewLoadFeedback({
           'mbe-2 flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm',
           online
             ? 'border-destructive/30 bg-destructive/5 text-destructive'
-            : 'border-amber-300/60 bg-amber-50 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100',
+            : 'border-warning/30 bg-warning/5 text-warning-ink',
           className,
         )}
       >
@@ -91,7 +91,7 @@ export function ViewLoadFeedback({
         'flex min-h-44 flex-col items-center justify-center gap-3 rounded-lg border px-6 py-8 text-center',
         online
           ? 'border-destructive/30 bg-destructive/5 text-destructive'
-          : 'border-amber-300/60 bg-amber-50 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100',
+          : 'border-warning/30 bg-warning/5 text-warning-ink',
         className,
       )}
     >
@@ -101,7 +101,7 @@ export function ViewLoadFeedback({
         type="button"
         onClick={() => void retry()}
         disabled={retrying || !online}
-        className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-background px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-60"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-hover disabled:cursor-wait disabled:opacity-60"
       >
         {retrying ? (
           <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" />

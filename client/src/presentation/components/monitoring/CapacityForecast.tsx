@@ -33,9 +33,9 @@ export function CapacityForecast({
   if (!disk && !mem) return null;
 
   return (
-    <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+    <div className="space-y-1 rounded-lg border border-warning/40 bg-warning/5 p-3">
       <h4 className="flex items-center gap-1.5 text-sm font-medium">
-        <TrendingUp className="size-4 text-amber-600 dark:text-amber-400" />
+        <TrendingUp className="size-4 text-warning" />
         Прогноз нагрузки
       </h4>
       {disk && (

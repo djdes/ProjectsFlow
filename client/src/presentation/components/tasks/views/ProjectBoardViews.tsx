@@ -1055,7 +1055,7 @@ export function ProjectBoardViews({
                         key={t}
                         type="button"
                         onClick={() => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
-                        className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Icon className="size-5" />
                         {BOARD_VIEW_TYPE_LABELS[t]}
@@ -1193,7 +1193,7 @@ export function ProjectBoardViews({
                           e.preventDefault();
                           removeTemplate(t);
                         }}
-                        className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive group-hover/tpl:opacity-100"
+                        className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-hover hover:text-destructive group-hover/tpl:opacity-100"
                       >
                         <Trash2 className="size-3.5" />
                       </button>
@@ -1214,7 +1214,7 @@ export function ProjectBoardViews({
             <button
               type="button"
               onClick={() => setSort({ ...state.sort!, dir: state.sort!.dir === 'asc' ? 'desc' : 'asc' })}
-              className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 text-xs text-primary transition-colors hover:bg-primary/10"
+              className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/40 bg-primary-soft px-2 text-xs text-primary-ink transition-colors hover:bg-primary/15"
             >
               {state.sort.dir === 'asc' ? (
                 <ArrowUp className="size-3" />
@@ -1559,7 +1559,7 @@ function BoardSidePanel({
         transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)',
       }}
       className={cn(
-        'fixed inset-x-3 inset-be-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-xl border bg-popover pbe-[env(safe-area-inset-bottom,0px)] shadow-lg',
+        'fixed inset-x-3 inset-be-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-xl border bg-popover pbe-[env(safe-area-inset-bottom,0px)] shadow-menu',
         'max-lg:!inset-0 max-lg:!inset-bs-0 max-lg:!max-h-none max-lg:rounded-none',
         'animate-in fade-in motion-safe:slide-in-from-right-3 motion-reduce:animate-none',
         'lg:sticky lg:inset-auto lg:z-30 lg:w-[386px] lg:shrink-0 lg:rounded-none lg:border-y-0 lg:border-e-0 lg:shadow-none',
@@ -1586,7 +1586,7 @@ function PanelCloseButton({
             type="button"
             aria-label={label}
             onClick={onClick}
-            className="grid size-10 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="grid size-10 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           >
             <X className="size-4" />
           </button>
@@ -1608,7 +1608,7 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }): React.ReactElement {
   return (
-    <label className="flex cursor-pointer items-center justify-between rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-accent/50">
+    <label className="flex cursor-pointer items-center justify-between rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-hover">
       {label}
       <Switch checked={checked} onCheckedChange={onChange} />
     </label>
@@ -1627,7 +1627,7 @@ function SelectRow<T extends string | number>({
   onChange: (value: T) => void;
 }): React.ReactElement {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-accent/50">
+    <label className="flex items-center justify-between gap-3 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-hover">
       <span>{label}</span>
       <select
         value={String(value)}
@@ -1635,7 +1635,7 @@ function SelectRow<T extends string | number>({
           const option = options.find((item) => String(item.value) === event.target.value);
           if (option) onChange(option.value);
         }}
-        className="max-w-[11rem] rounded-md bg-transparent px-1.5 py-1 text-end text-sm text-muted-foreground outline-none focus:bg-accent"
+        className="max-w-[11rem] rounded-md bg-transparent px-1.5 py-1 text-end text-sm text-muted-foreground outline-none focus:bg-hover"
       >
         {options.map((option) => (
           <option key={String(option.value)} value={String(option.value)}>
@@ -1801,7 +1801,7 @@ function NewViewPanel({
               type="button"
               aria-label="Иконка отображения"
               title="Иконка отображения"
-              className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
             >
               <ViewIconGlyph
                 icon={state.icon ?? VIEW_TYPE_ICONS[view.type]}
@@ -1816,7 +1816,7 @@ function NewViewPanel({
                 <button
                   type="button"
                   onClick={() => onIcon(null)}
-                  className="rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   Убрать
                 </button>
@@ -1829,8 +1829,8 @@ function NewViewPanel({
                   type="button"
                   onClick={() => onIcon(e)}
                   className={cn(
-                    'grid size-7 place-items-center rounded text-base transition-colors hover:bg-accent',
-                    state.icon === e && 'bg-accent ring-1 ring-primary/50',
+                    'grid size-7 place-items-center rounded text-base transition-colors hover:bg-hover',
+                    state.icon === e && 'bg-primary-soft ring-1 ring-primary/50',
                   )}
                 >
                   {e}
@@ -1866,8 +1866,8 @@ function NewViewPanel({
               className={cn(
                 'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors',
                 selected
-                  ? 'border-primary text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ? 'border-primary bg-primary-soft text-primary-ink'
+                  : 'text-muted-foreground hover:bg-hover hover:text-foreground',
               )}
             >
               <Icon className="size-5" />
@@ -1900,7 +1900,7 @@ function NewViewPanel({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   {state.grouping ? groupingLabel(state.grouping) : 'Нет'}
                   <ChevronRight className="size-3.5 opacity-60" />
@@ -1935,8 +1935,8 @@ function NewViewPanel({
                   className={cn(
                     'px-2 py-0.5 text-xs transition-colors',
                     state.calendarMode === m
-                      ? 'bg-accent font-medium text-foreground'
-                      : 'text-muted-foreground hover:bg-accent/50',
+                      ? 'bg-active font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-hover',
                   )}
                 >
                   {label}
@@ -1993,7 +1993,7 @@ function ToolbarIcon({
         // md:flex`, компактный переключатель — `md:hidden`). На sm ряд ещё мобильный, и
         // 28px там дают и разнобой с соседним переключателем (36px), и мелкую тач-цель
         // на планшете — глобальный min-height:44px действует только до 639px.
-        'inline-flex size-10 items-center justify-center rounded-md transition-colors hover:bg-accent sm:size-9 md:size-7',
+        'inline-flex size-10 items-center justify-center rounded-md transition-colors hover:bg-hover sm:size-9 md:size-7',
         active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
       )}
     >
@@ -2030,7 +2030,7 @@ function FilterValueList({
   ): React.ReactElement => (
     <label
       key={key}
-      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover"
     >
       <input
         type="checkbox"
@@ -2113,7 +2113,7 @@ function FilterPicker({
         <button
           type="button"
           onClick={() => setStep('pick')}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" />
           {meta.label}
@@ -2141,7 +2141,7 @@ function FilterPicker({
             key={p.key}
             type="button"
             onClick={() => setStep(p.key)}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover"
           >
             <p.icon className="size-4 text-muted-foreground/80" />
             {p.label}
@@ -2174,7 +2174,7 @@ function FilterMenu({
           aria-label="Фильтр"
           title="Фильтр"
           className={cn(
-            'inline-flex size-11 items-center justify-center rounded-lg transition-colors hover:bg-accent sm:size-9 sm:rounded-md md:size-7',
+            'inline-flex size-11 items-center justify-center rounded-lg transition-colors hover:bg-hover sm:size-9 sm:rounded-md md:size-7',
             active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -2213,7 +2213,7 @@ function SortMenu({
           aria-label="Сортировка"
           title="Сортировка"
           className={cn(
-            'inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent',
+            'inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-hover',
             sort ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -2242,7 +2242,7 @@ function SortMenu({
                       : { key: k, dir: 'asc' },
                   )
                 }
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover"
               >
                 {VIEW_SORT_LABELS[k]}
                 {sort?.key === k &&
@@ -2262,7 +2262,7 @@ function SortMenu({
               <button
                 type="button"
                 onClick={() => onChange(null)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-accent"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-muted-foreground transition-colors hover:bg-hover"
               >
                 <X className="size-3.5" />
                 Убрать сортировку
@@ -2294,7 +2294,7 @@ function FilterChipPopover({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 text-xs text-primary transition-colors hover:bg-primary/10"
+          className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/40 bg-primary-soft px-2 text-xs text-primary-ink transition-colors hover:bg-primary/15"
         >
           {label}
           <ChevronDown className="size-3 opacity-60" />
@@ -2331,7 +2331,7 @@ function AddFilterChip({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-6 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex h-6 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
         >
           <Plus className="size-3" />
           Фильтр
@@ -2409,7 +2409,7 @@ function ViewTab({
     // плотной ступени нет, а по активной вкладке кликают ради меню, и когда курсор
     // уходит в раскрытое меню, вкладка не должна «гаснуть» до обычного состояния.
     active
-      ? 'bg-active text-foreground hover:bg-foreground/[0.12] data-[state=open]:bg-foreground/[0.12] dark:hover:bg-white/[0.12] dark:data-[state=open]:bg-white/[0.12]'
+      ? 'bg-active text-foreground hover:bg-foreground/[0.12] data-[state=open]:bg-foreground/[0.12]'
       : 'text-muted-foreground hover:bg-hover hover:text-foreground data-[state=open]:bg-hover',
   );
   const inner = (
@@ -2512,7 +2512,7 @@ function TabRenamePopup({
   return (
     <div
       ref={ref}
-      className="absolute start-0 inset-bs-full z-50 mbs-1 w-64 rounded-md border bg-popover p-1.5 shadow-md duration-150 animate-in fade-in motion-safe:zoom-in-95"
+      className="absolute start-0 inset-bs-full z-50 mbs-1 w-64 rounded-lg bg-popover p-1.5 shadow-menu duration-150 animate-in fade-in motion-safe:zoom-in-95"
     >
       <TabRenameInput initial={initial} onSubmit={onSubmit} onClose={onClose} />
     </div>
@@ -2649,7 +2649,7 @@ function ViewSettingsCard({
     <button
       type="button"
       onClick={() => setPage('root')}
-      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent"
+      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-hover"
     >
       <ChevronLeft className="size-4 text-muted-foreground" />
       {title}
@@ -2764,7 +2764,7 @@ function ViewSettingsCard({
                       'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors',
                       view.type === t
                         ? 'border-primary/50 bg-primary/5 text-foreground ring-1 ring-primary/30'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                        : 'text-muted-foreground hover:bg-hover hover:text-foreground',
                     )}
                   >
                     <Icon className="size-5" />
@@ -2810,7 +2810,7 @@ function ViewSettingsCard({
             <button
               type="button"
               onClick={() => onGrouping(null)}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover"
             >
               Нет
               {grouping === null && <Check className="ms-auto size-3.5" />}
@@ -2820,7 +2820,7 @@ function ViewSettingsCard({
                 key={g}
                 type="button"
                 onClick={() => onGrouping(g)}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover"
               >
                 {VIEW_GROUPING_LABELS[g]}
                 {grouping === g && <Check className="ms-auto size-3.5" />}
@@ -2848,7 +2848,7 @@ function ViewSettingsCard({
                       : { key: k, dir: 'asc' },
                   )
                 }
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover"
               >
                 {VIEW_SORT_LABELS[k]}
                 {sort?.key === k &&
@@ -2921,7 +2921,7 @@ function ColorRulesEditor({
                 'rounded-md border px-2 py-1 text-xs transition-colors',
                 draftProp === p
                   ? 'border-primary/50 bg-primary/5 text-foreground'
-                  : 'text-muted-foreground hover:bg-accent',
+                  : 'text-muted-foreground hover:bg-hover',
               )}
             >
               {p === 'status' ? 'Статус' : 'Приоритет'}
@@ -2933,7 +2933,7 @@ function ColorRulesEditor({
             ? VISIBLE_KANBAN_STATUSES.map((s) => ({ value: s as string, label: STATUS_LABEL[s] }))
             : TASK_PRIORITIES.map((p) => ({ value: String(p), label: PRIORITY_META[p].label }))
           ).map(({ value, label }) => (
-            <div key={value} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-accent/50">
+            <div key={value} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-hover">
               <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
               {(Object.keys(RULE_COLOR_DOT) as ViewRuleColor[]).map((c) => (
                 <button
@@ -2948,7 +2948,7 @@ function ColorRulesEditor({
                     ])
                   }
                   className={cn(
-                    'size-4 shrink-0 rounded-full ring-offset-1 motion-safe:transition-transform hover:scale-125',
+                    'size-4 shrink-0 rounded-full ring-offset-1 motion-safe:transition-transform motion-safe:hover:scale-125',
                     RULE_COLOR_DOT[c],
                   )}
                 />
@@ -2977,7 +2977,7 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-foreground/90 transition-colors hover:bg-accent"
+      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm text-foreground/90 transition-colors hover:bg-hover"
     >
       <Icon className="size-4 shrink-0 text-muted-foreground/80" />
       {label}
@@ -3005,7 +3005,7 @@ function PanelRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-accent',
+        'flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover',
         destructive ? 'text-destructive' : 'text-foreground/90',
       )}
     >

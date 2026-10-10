@@ -183,7 +183,7 @@ export function ImportProjectRepoDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Archive className="size-5 text-violet-600" />
+            <Archive className="size-5 text-primary" />
             Импортировать проект
           </DialogTitle>
           <DialogDescription>
@@ -204,10 +204,11 @@ export function ImportProjectRepoDialog({
             }}
             className={cn(
               'flex w-full flex-col items-center gap-2 rounded-xl border border-dashed px-5 py-7 text-center transition-colors',
-              dragging ? 'border-violet-500 bg-violet-500/10' : 'border-border bg-muted/30 hover:bg-muted/60',
+              // Зона броска C4: штрих drop-line, под файлом — подсветка drop с синей рамкой.
+              dragging ? 'border-primary bg-drop' : 'border-drop-line bg-panel hover:bg-hover',
             )}
           >
-            {archive ? <FileArchive className="size-8 text-violet-600" /> : <UploadCloud className="size-8 text-muted-foreground" />}
+            {archive ? <FileArchive className="size-8 text-primary" /> : <UploadCloud className="size-8 text-muted-foreground" />}
             <span className="max-w-full truncate text-sm font-medium">
               {archive?.name ?? 'Перетащи ZIP сюда или выбери файл'}
             </span>
@@ -216,8 +217,8 @@ export function ImportProjectRepoDialog({
           <input ref={inputRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => choose(e.target.files?.[0])} />
 
           {analyzing && (
-            <div className="flex items-center gap-2 rounded-xl border bg-muted/35 px-3 py-3 text-sm text-muted-foreground">
-              <Loader2 className="size-4 motion-safe:animate-spin text-violet-600" />
+            <div className="flex items-center gap-2 rounded-xl border bg-panel px-3 py-3 text-sm text-muted-foreground">
+              <Loader2 className="size-4 motion-safe:animate-spin text-primary" />
               Проверяем структуру, runtime, базу данных и секреты…
             </div>
           )}
@@ -225,15 +226,15 @@ export function ImportProjectRepoDialog({
           {analysis && !analyzing && (
             <div className={cn(
               'overflow-clip rounded-xl border',
-              analysis.status === 'supported' && 'border-emerald-500/30 bg-emerald-500/[0.06]',
-              analysis.status === 'needs_config' && 'border-amber-500/35 bg-amber-500/[0.07]',
+              analysis.status === 'supported' && 'border-done/30 bg-done/[0.06]',
+              analysis.status === 'needs_config' && 'border-warning/35 bg-warning/[0.07]',
               analysis.status === 'unsupported' && 'border-destructive/30 bg-destructive/[0.05]',
             )}>
               <div className="flex gap-3 px-3.5 py-3">
                 {analysis.status === 'supported' ? (
-                  <CheckCircle2 className="mbs-0.5 size-5 shrink-0 text-emerald-600" />
+                  <CheckCircle2 className="mbs-0.5 size-5 shrink-0 text-done" />
                 ) : analysis.status === 'needs_config' ? (
-                  <AlertTriangle className="mbs-0.5 size-5 shrink-0 text-amber-600" />
+                  <AlertTriangle className="mbs-0.5 size-5 shrink-0 text-warning" />
                 ) : (
                   <XCircle className="mbs-0.5 size-5 shrink-0 text-destructive" />
                 )}
@@ -253,7 +254,7 @@ export function ImportProjectRepoDialog({
                     <div key={item.code} className="flex gap-2 text-xs leading-relaxed">
                       <ShieldAlert className={cn(
                         'mbs-0.5 size-3.5 shrink-0',
-                        item.severity === 'error' ? 'text-destructive' : 'text-amber-600',
+                        item.severity === 'error' ? 'text-destructive' : 'text-warning',
                       )} />
                       <div>
                         <p className="text-foreground">{item.message}</p>
@@ -277,7 +278,7 @@ export function ImportProjectRepoDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/60 p-1">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-foreground/[0.06] p-1 dark:border dark:border-border dark:bg-panel">
             <button
               type="button"
               onClick={() => {
@@ -287,7 +288,9 @@ export function ImportProjectRepoDialog({
               }}
               className={cn(
                 'flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-medium transition',
-                targetMode === 'new' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                targetMode === 'new'
+                  ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <Github className="size-4" />
@@ -302,7 +305,9 @@ export function ImportProjectRepoDialog({
               }}
               className={cn(
                 'flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-medium transition',
-                targetMode === 'existing' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                targetMode === 'existing'
+                  ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <FolderGit2 className="size-4" />
@@ -349,8 +354,8 @@ export function ImportProjectRepoDialog({
           )}
 
           {reusedExisting && selectedRepo && (
-            <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm">
-              <ShieldCheck className="mbs-0.5 size-4 shrink-0 text-emerald-600" />
+            <div className="flex gap-3 rounded-xl border border-done/25 bg-done/10 p-3 text-sm">
+              <ShieldCheck className="mbs-0.5 size-4 shrink-0 text-done" />
               <div>
                 <p className="font-medium text-foreground">Нашли твой пустой репозиторий</p>
                 <p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">
@@ -362,7 +367,7 @@ export function ImportProjectRepoDialog({
           {saving && (
             <div className="space-y-1.5">
               <div className="h-1.5 overflow-clip rounded-full bg-muted">
-                <div className="h-full rounded-full bg-violet-600 transition-[width]" style={{ width: `${Math.max(8, progress)}%` }} />
+                <div className="h-full rounded-full bg-primary motion-safe:transition-[width]" style={{ width: `${Math.max(8, progress)}%` }} />
               </div>
               <p className="text-xs text-muted-foreground">
                 {progress < 100

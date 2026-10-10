@@ -291,7 +291,7 @@ function GitTokenDelegationToggle({
         <strong
           className={
             enabled
-              ? 'text-emerald-700 dark:text-emerald-400'
+              ? 'text-done'
               : 'text-muted-foreground'
           }
         >

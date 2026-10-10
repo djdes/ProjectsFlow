@@ -16,6 +16,9 @@ export type RailItem = {
   readonly variant?: 'tab' | 'action';
   // Только для variant: 'action' — обработчик клика-действия.
   readonly onAction?: () => void;
+  // Иконка — «живая» AnimatedXxx (принимает active). false — обычная lucide-иконка: ей
+  // active не передаём, иначе React пишет его атрибутом в <svg> и ругается в консоли.
+  readonly animatedIcon?: boolean;
 };
 
 // Навигационный рейл 1:1 с Notion (замер через CDP, см. reference/notion-project-page/
@@ -40,7 +43,7 @@ export function SidebarNavRail({
 
   const renderIcon = (item: RailItem, idx: number, forceActive: boolean): React.ReactNode => {
     const live = forceActive || idx === hovered;
-    return isValidElement(item.icon)
+    return item.animatedIcon !== false && isValidElement(item.icon)
       ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: live })
       : item.icon;
   };

@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock } from 'lucide-react';
+import { AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskStatus } from '@/domain/task/Task';
 
@@ -31,7 +31,7 @@ function ruDays(n: number): string {
 }
 
 // Срок компактно: сегодня / завтра / вчера / «N дней». БЕЗ «через/назад» — направление читается
-// цветом бейджа (красный = просрочено, серый = впереди), см. DeadlineBadge. Абсолютную дату не
+// цветом (красный = просрочено, оранжевый = сегодня, серый = впереди). Абсолютную дату не
 // показываем (полная дата — в title-тултипе).
 function formatDeadline(deadline: string): string {
   // Парсим 'YYYY-MM-DD' как локальную дату (без UTC-сдвига): new Date(y, m-1, d).
@@ -46,27 +46,23 @@ function formatDeadline(deadline: string): string {
   return `${Math.abs(diff)} ${ruDays(diff)}`;
 }
 
-// Бейдж со сроком: иконка часов + дата (relative для близких / Intl для дальних).
-// Обычный срок — монохром (шум не нужен); просроченный и task не done — красная
-// пилюля + AlertTriangle (единственный «громкий» случай).
+// Срок задачи (дизайн C4): часы + относительная дата, смысл — цветом текста без подложки.
+// Просрочено — красный с треугольником (единственный «громкий» случай), сегодня — тёплый
+// оранжевый, впереди — вторичный серый.
 export function DeadlineBadge({ deadline, status, className }: Props): React.ReactElement {
-  const overdue = status !== 'done' && deadline < todayIso();
+  const today = todayIso();
+  const overdue = status !== 'done' && deadline < today;
+  const dueToday = status !== 'done' && deadline === today;
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs font-medium',
-        overdue
-          ? 'rounded-full bg-rose-500/15 px-1.5 py-0.5 text-rose-600 dark:bg-rose-400/15 dark:text-rose-400'
-          : 'text-muted-foreground',
+        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs',
+        overdue ? 'font-medium text-destructive' : dueToday ? 'font-medium text-today' : 'text-muted-foreground',
         className,
       )}
       title={`Срок: ${deadline}${overdue ? ' (просрочено)' : ''}`}
     >
-      {overdue ? (
-        <AlertTriangle className="size-2.5" />
-      ) : (
-        <CalendarClock className="size-2.5" />
-      )}
+      {overdue ? <AlertTriangle className="size-3" /> : <Clock className="size-3" />}
       {formatDeadline(deadline)}
     </span>
   );

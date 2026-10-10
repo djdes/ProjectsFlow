@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/presentation/auth/PasswordInput';
 import { useAuth } from '@/presentation/auth/AuthProvider';
-import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
+import { AuthFormCard, authFieldClass } from '@/presentation/auth/AuthFormCard';
+import { ErrorNote } from '@/presentation/pages/PageScaffold';
 import { UserEmailAlreadyExistsError } from '@/domain/user/errors';
 import { goToPostAuthTarget, safeNextTarget } from '@/lib/authRedirect';
 
@@ -60,12 +61,15 @@ export function RegisterPage(): React.ReactElement {
       description="Создай аккаунт — у тебя появится свой набор проектов."
       footer={
         <>
-          Уже есть аккаунт? <Link to="/login" className="font-medium text-primary hover:underline">Войти</Link>
+          Уже есть аккаунт?{' '}
+          <Link to="/login" className="font-medium text-primary-ink hover:underline">
+            Войти
+          </Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="displayName">Имя</Label>
           <Input
             id="displayName"
@@ -73,22 +77,24 @@ export function RegisterPage(): React.ReactElement {
             autoFocus
             required
             maxLength={80}
+            className={authFieldClass}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
             autoComplete="email"
             required
+            className={authFieldClass}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="password">Пароль</Label>
           <PasswordInput
             id="password"
@@ -100,12 +106,8 @@ export function RegisterPage(): React.ReactElement {
           />
           <p className="text-xs text-muted-foreground">Минимум 8 символов.</p>
         </div>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
-        <Button type="submit" className="w-full" disabled={submitting}>
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           {submitting ? 'Создаём…' : 'Создать аккаунт'}
         </Button>
       </form>

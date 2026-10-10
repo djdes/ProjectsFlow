@@ -17,7 +17,7 @@ function renderBody(body: string): React.ReactNode {
   const parts = body.split(/(@[^\s@]+)/g);
   return parts.map((p, i) =>
     p.startsWith('@') ? (
-      <span key={i} className="font-medium text-primary">
+      <span key={i} className="font-medium text-primary-ink">
         {p}
       </span>
     ) : (
@@ -67,7 +67,7 @@ export function ChatBubble({
   if (message.deleted) {
     return (
       <div className={cn('flex px-2 py-0.5', isOwn ? 'justify-end' : 'justify-start')}>
-        <div className="rounded-2xl bg-foreground/[0.04] px-3 py-1.5 text-xs italic text-muted-foreground dark:bg-white/[0.04]">
+        <div className="rounded-2xl bg-foreground/[0.04] px-3 py-1.5 text-xs italic text-muted-foreground">
           Сообщение удалено
         </div>
       </div>
@@ -114,7 +114,7 @@ export function ChatBubble({
 
       <div className={cn('relative min-w-0 max-w-[85%]', isOwn ? 'items-end' : 'items-start')}>
         {showAuthor && !isOwn && (
-          <div className="mbe-0.5 px-1 text-xs font-medium text-primary/90">
+          <div className="mbe-0.5 px-1 text-xs font-medium text-primary-ink/90">
             {message.authorDisplayName}
           </div>
         )}
@@ -137,8 +137,8 @@ export function ChatBubble({
             'relative rounded-2xl px-3 py-1.5 text-sm text-foreground',
             // Мягкий полупрозрачный акцент вместо «бьющего» синего — нежно, как в TG.
             isOwn
-              ? 'bg-primary/10 dark:bg-primary/20'
-              : 'bg-foreground/[0.05] dark:bg-white/[0.06]',
+              ? 'bg-primary-soft'
+              : 'bg-foreground/[0.05]',
           )}
         >
           {/* reply-цитата */}
@@ -148,7 +148,7 @@ export function ChatBubble({
               onClick={() => onJumpTo(message.replyTo!.id)}
               className="mbe-1 flex w-full flex-col items-start rounded-md border-s-2 border-primary/40 bg-primary/5 px-2 py-0.5 text-start text-xs"
             >
-              <span className="font-medium text-primary/90">{message.replyTo.authorDisplayName}</span>
+              <span className="font-medium text-primary-ink/90">{message.replyTo.authorDisplayName}</span>
               <span className="line-clamp-1 text-muted-foreground">{message.replyTo.excerpt}</span>
             </button>
           )}
@@ -166,7 +166,7 @@ export function ChatBubble({
                     key={a.id}
                     type="button"
                     onClick={() => setPreview({ url: a.url, filename: a.filename })}
-                    className="block overflow-clip rounded-lg motion-safe:transition-transform hover:scale-[1.01]"
+                    className="block overflow-clip rounded-lg motion-safe:transition-transform motion-safe:hover:scale-[1.01]"
                   >
                     <img
                       src={a.url}
@@ -182,7 +182,7 @@ export function ChatBubble({
                     target="_blank"
                     rel="noreferrer"
                     download={a.filename}
-                    className="truncate rounded-md bg-foreground/[0.04] px-2 py-1 text-xs underline-offset-2 hover:underline dark:bg-white/[0.05]"
+                    className="truncate rounded-md bg-foreground/[0.04] px-2 py-1 text-xs underline-offset-2 hover:underline"
                   >
                     📎 {a.filename}
                   </a>
@@ -210,8 +210,8 @@ export function ChatBubble({
                   className={cn(
                     'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-xs transition-colors',
                     mine
-                      ? 'border-primary/40 bg-primary/10 text-foreground'
-                      : 'border-transparent bg-foreground/[0.05] text-muted-foreground hover:bg-foreground/[0.08] dark:bg-white/[0.06]',
+                      ? 'border-primary/40 bg-primary-soft text-foreground'
+                      : 'border-transparent bg-foreground/[0.05] text-muted-foreground hover:bg-hover',
                   )}
                 >
                   <span>{r.emoji}</span>
@@ -233,7 +233,7 @@ export function ChatBubble({
             openMenu(r.left, r.bottom + 4);
           }}
           className={cn(
-            'absolute inset-bs-0.5 z-20 grid size-6 place-items-center rounded-full border bg-background/95 text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
+            'absolute inset-bs-0.5 z-20 grid size-6 place-items-center rounded-full bg-raised/95 text-muted-foreground opacity-0 shadow-card backdrop-blur transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
             isOwn ? 'start-0.5' : 'end-0.5',
           )}
         >
@@ -251,7 +251,7 @@ export function ChatBubble({
               <a
                 href={preview?.url}
                 download={preview?.filename}
-                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 aria-label="Скачать"
               >
                 <Download className="size-4" />
@@ -260,7 +260,7 @@ export function ChatBubble({
                 type="button"
                 onClick={() => setPreview(null)}
                 aria-label="Закрыть"
-                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               >
                 <X className="size-4" />
               </button>

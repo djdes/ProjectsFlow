@@ -323,7 +323,7 @@ export function ProjectActionsMenu({
               }}
               placeholder="Поиск действий…"
               aria-label="Поиск действий"
-              className="h-11 w-full rounded-lg border border-border/70 bg-accent/60 ps-9 pe-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:ps-7 md:pe-2 md:text-xs"
+              className="h-11 w-full rounded-lg border border-border/70 bg-panel ps-9 pe-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:ps-7 md:pe-2 md:text-xs"
             />
           </div>
           {/* Тумблер «Скрыть плашки» — только на странице задач (только там живёт
@@ -350,14 +350,14 @@ export function ProjectActionsMenu({
                       a.onSelect();
                     }}
                     className={cn(
-                      'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-start text-sm transition-colors hover:bg-accent/60 md:min-h-0 md:rounded-md md:py-1.5',
+                      'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-start text-sm transition-colors hover:bg-hover md:min-h-0 md:rounded-md md:py-1.5',
                       a.destructive && 'text-destructive hover:text-destructive',
                     )}
                   >
                     <Icon className={cn('size-4', a.destructive ? '' : 'text-muted-foreground')} />
                     <span className="min-w-0 flex-1 truncate">{a.label}</span>
                     {a.badge !== undefined && a.badge > 0 && (
-                      <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] tabular-nums font-semibold leading-4 text-white">
+                      <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] tabular-nums font-semibold leading-4 text-destructive-foreground">
                         {a.badge}
                       </span>
                     )}
@@ -447,7 +447,7 @@ function BannersHidingRow({
             type="button"
             onClick={onToggle}
             aria-pressed={hidden}
-            className="mbe-1 flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-start text-sm transition-colors hover:bg-accent/60"
+            className="mbe-1 flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-start text-sm transition-colors hover:bg-hover"
           >
             {hidden ? (
               <Eye className="size-4 shrink-0 text-muted-foreground" />
@@ -460,7 +460,7 @@ function BannersHidingRow({
             <span
               className={cn(
                 'shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-medium',
-                hidden ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
+                hidden ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground/70',
               )}
             >
               {hidden ? 'скрыты' : 'видны'}
@@ -477,7 +477,7 @@ function BannersHidingRow({
 
 // Миниатюры плашек: не настоящие компоненты (они тянут данные, диалоги и поллинг),
 // а узнаваемые «обложки» — те же фоны/иконки/первая строка текста, что и в оригиналах.
-// Цвета копируются из самих плашек вместе с их dark:-вариантами.
+// Цвета — те же токены, что у самих плашек (превью живёт в тултипе на поверхности меню).
 function BannersPreview({ showGithub }: { showGithub: boolean }): React.ReactElement {
   return (
     <div className="space-y-1.5">
@@ -485,9 +485,9 @@ function BannersPreview({ showGithub }: { showGithub: boolean }): React.ReactEle
         Плашки над доской проекта
       </p>
       {showGithub && (
-        <div className="flex items-center gap-2 rounded-md border border-indigo-950/10 bg-[linear-gradient(105deg,#f5f7ff_0%,#f7f3ff_45%,#f0f9ff_100%)] px-2 py-1.5 dark:border-white/10 dark:bg-[linear-gradient(105deg,#171a2c_0%,#21192d_48%,#13232d_100%)]">
-          <span className="grid size-5 shrink-0 place-items-center rounded bg-white shadow-sm ring-1 ring-black/5 dark:bg-white/10 dark:ring-white/10">
-            <Sparkles className="size-3 text-violet-600 dark:text-violet-300" />
+        <div className="flex items-center gap-2 rounded-md border border-primary/10 bg-primary/[0.04] px-2 py-1.5">
+          <span className="grid size-5 shrink-0 place-items-center rounded bg-raised shadow-card">
+            <Sparkles className="size-3 text-primary" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-2xs font-semibold text-foreground">
@@ -499,15 +499,15 @@ function BannersPreview({ showGithub }: { showGithub: boolean }): React.ReactEle
           </span>
         </div>
       )}
-      <div className="flex items-center gap-2 rounded-md border border-black/[0.05] bg-[oklch(95.77%_0.014_231.21)] px-2 py-1.5 dark:border-white/[0.06] dark:bg-[oklch(27.62%_0.022_232.09)]">
-        <span className="grid size-5 shrink-0 place-items-center rounded bg-white/70 dark:bg-white/10">
-          <Globe className="size-3 text-[oklch(32.89%_0.011_91.66)] opacity-70 dark:text-blue-100" />
+      <div className="flex items-center gap-2 rounded-md border border-border bg-primary-soft px-2 py-1.5">
+        <span className="grid size-5 shrink-0 place-items-center rounded bg-raised/70">
+          <Globe className="size-3 text-foreground opacity-70" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-2xs font-semibold text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50">
+          <span className="block truncate text-2xs font-semibold text-foreground">
             Результат опубликован
           </span>
-          <span className="block truncate text-2xs text-[oklch(32.89%_0.011_91.66/0.6)] dark:text-blue-100/60">
+          <span className="block truncate text-2xs text-foreground/60">
             Ссылка на опубликованный сайт
           </span>
         </span>

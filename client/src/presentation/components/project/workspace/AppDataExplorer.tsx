@@ -235,7 +235,7 @@ export function AppDataExplorer({
               key={table.name}
               type="button"
               onClick={() => { setSelectedTableName(table.name); setFilters([]); setOffset(0); }}
-              className={cn('flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start text-sm transition-colors', selectedTable?.name === table.name ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')}
+              className={cn('flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start text-sm transition-colors', selectedTable?.name === table.name ? 'bg-active font-medium text-foreground' : 'text-muted-foreground hover:bg-hover hover:text-foreground')}
             >
               <Database className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{table.name}</span>
@@ -288,7 +288,7 @@ export function AppDataExplorer({
                     <th key={column} className={cn('min-w-[180px] border-be border-e px-3 py-2 text-start font-medium text-muted-foreground first:min-w-[220px]', columnIndex === 0 && 'sticky start-0 z-20 bg-background')}>
                       <button type="button" className="flex w-full items-center gap-1.5 hover:text-foreground" onClick={() => applySort(column)}>
                         {column === 'id' && <KeyRound className="size-3.5" />}
-                        {masked[column] && <Lock className="size-3 text-amber-600" aria-label="Значения скрыты" />}
+                        {masked[column] && <Lock className="size-3 text-warning" aria-label="Значения скрыты" />}
                         {column}
                         {sort.column === column && (sort.dir === 'asc' ? <ArrowUp className="ms-auto size-3.5" /> : <ArrowDown className="ms-auto size-3.5" />)}
                       </button>
@@ -304,7 +304,7 @@ export function AppDataExplorer({
                     key={String(row.id ?? rowIndex)}
                     tabIndex={0}
                     aria-label={`Открыть запись ${String(row.id ?? rowIndex + 1)}`}
-                    className="group cursor-pointer hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="group cursor-pointer hover:bg-hover focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     onClick={() => setEditingRow(row)}
                     onKeyDown={(event) => {
                       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -487,7 +487,7 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
           <SheetHeader className="border-be px-5 py-4 text-start"><SheetTitle>{isNew ? 'Новая запись' : `Запись · ${table.name}`}</SheetTitle><SheetDescription>{isNew ? 'Заполните поля схемы таблицы.' : String(existingRow?.id ?? '')}</SheetDescription></SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {conflict && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+              <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-warning-ink">
                 <AlertTriangle className="mbs-0.5 size-4 shrink-0" />
                 <span>Запись изменена другим участником. Ваши правки сохранены в форме — повторное сохранение перезапишет чужие изменения.</span>
               </div>
@@ -521,16 +521,16 @@ function RowEditorSheet({ open, onOpenChange, row, table, masked, canEdit, proje
 function FieldEditor({ field, value, sensitive, revealing, onReveal, disabled, onChange }: { field: AppField; value: unknown; sensitive: AppSensitiveKind | null; revealing: boolean; onReveal: (() => void) | null; disabled: boolean; onChange: (value: unknown) => void }): React.ReactElement {
   const label = (
     <span className="flex items-center gap-1.5 text-sm font-medium">
-      {sensitive && <Lock className="size-3 text-amber-600" />}
+      {sensitive && <Lock className="size-3 text-warning" />}
       {field.name}{field.required && <span className="ms-0.5 text-destructive">*</span>}
       <span className="text-xs font-normal text-muted-foreground">{field.type}{field.unique ? ' · unique' : ''}</span>
       {sensitive && (
-        <span className="text-xs font-normal text-amber-700 dark:text-amber-500">
+        <span className="text-xs font-normal text-warning">
           {sensitive === 'secret' ? '· секрет, скрыт' : '· персональные данные, скрыты'}
         </span>
       )}
       {sensitive && onReveal && (
-        <button type="button" onClick={onReveal} disabled={revealing} className="ms-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground">
+        <button type="button" onClick={onReveal} disabled={revealing} className="ms-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-hover hover:text-foreground">
           {revealing ? <Loader2 className="size-3 motion-safe:animate-spin" /> : <Eye className="size-3" />}Показать
         </button>
       )}
@@ -538,7 +538,7 @@ function FieldEditor({ field, value, sensitive, revealing, onReveal, disabled, o
   );
   if (field.type === 'bool') {
     const checked = value === true;
-    return <label className="flex items-center justify-between rounded-lg border px-3 py-3">{label}<button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={cn('relative h-6 w-11 rounded-full transition-colors', checked ? 'bg-primary' : 'bg-muted')}><span className={cn('absolute inset-bs-0.5 size-5 rounded-full bg-white shadow-sm motion-safe:transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} /></button></label>;
+    return <label className="flex items-center justify-between rounded-lg border px-3 py-3">{label}<button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className={cn('relative h-6 w-11 rounded-full transition-colors', checked ? 'bg-primary' : 'bg-foreground/20')}><span className={cn('absolute inset-bs-0.5 size-5 rounded-full bg-white shadow-sm motion-safe:transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} /></button></label>;
   }
   let inputValue = value === null || value === undefined ? '' : String(value);
   let type = 'text';
@@ -593,7 +593,7 @@ function PermissionsDialog({ open, onOpenChange, projectId, table, masked, canEd
                   <div className="min-w-0">
                     <span className="text-sm font-medium">{field.name}</span>
                     <span className="ms-1.5 text-xs text-muted-foreground">{field.type}</span>
-                    {heuristicOnly && <p className="mbs-0.5 text-xs text-amber-700 dark:text-amber-500">Определено по имени — останется скрытым</p>}
+                    {heuristicOnly && <p className="mbs-0.5 text-xs text-warning">Определено по имени — останется скрытым</p>}
                   </div>
                   <select value={field.sensitive ?? ''} disabled={!canEdit || savingField === field.name} onChange={(event) => void changeSensitivity(field.name, event.target.value as '' | AppSensitiveKind)} className="h-9 rounded-md border bg-background px-2 text-sm">{SENSITIVITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                 </div>
@@ -646,7 +646,7 @@ function ExportDialog({ open, onOpenChange, projectId, tableName, total, query }
           <DialogTitle>Выгрузить CSV · {tableName}</DialogTitle>
           <DialogDescription>Будет выгружено строк: {willTruncate ? `${EXPORT_ROW_CAP.toLocaleString('ru-RU')} (первые из ${total.toLocaleString('ru-RU')})` : total.toLocaleString('ru-RU')}. Текущий поиск и фильтры учитываются.</DialogDescription>
         </DialogHeader>
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-warning-ink">
           <AlertTriangle className="mbs-0.5 size-4 shrink-0" />
           <span>Чувствительные колонки (секреты и персональные данные) в файл не попадут — ни значением, ни маской.</span>
         </div>

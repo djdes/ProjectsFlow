@@ -5,9 +5,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-// Чёрная подсказка «как в Notion» на границе-ресайзере: «Свернуть — клик/Ctrl+\,
+// Тёмная подсказка «как в Notion» на границе-ресайзере: «Свернуть — клик/Ctrl+\,
 // изменить ширину — тяните». Оборачивает саму ручку (children = триггер).
-// Единый вид для всех ресайзеров сайта (левая панель, окно задачи и т.д.).
+// Единый вид для всех ресайзеров сайта (левая панель, окно задачи и т.д.). Тёмный вид
+// включается явно (bg-foreground): общий тултип — светлая поверхность меню.
 export function ResizeHandleHint({
   children,
   side = 'right',
@@ -27,15 +28,15 @@ export function ResizeHandleHint({
         <TooltipContent
           side={side}
           avoidCollisions={false}
-          className="border-transparent bg-neutral-900 text-white dark:bg-neutral-800"
+          className="border-transparent bg-foreground text-background"
         >
           <div>
             <span className="font-medium">{action}</span>{' '}
-            <span className="text-white/55">{shortcut}</span>
+            <span className="text-background/60">{shortcut}</span>
           </div>
           <div>
             <span className="font-medium">Изменить ширину</span>{' '}
-            <span className="text-white/55">Тяните</span>
+            <span className="text-background/60">Тяните</span>
           </div>
         </TooltipContent>
       </Tooltip>

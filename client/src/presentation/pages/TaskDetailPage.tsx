@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { PageTopBar } from '@/presentation/layout/PageChrome';
+import { PageMessage } from '@/presentation/pages/PageScaffold';
 import { TaskDrawer } from '@/presentation/components/tasks/TaskDrawer';
 import type { Task } from '@/domain/task/Task';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
@@ -85,16 +87,25 @@ export function TaskDetailPage(): React.ReactElement {
 
   if (notFound || !task || !projectId) {
     return (
-      <div className="grid h-full place-items-center p-6">
-        <div className="max-w-md space-y-3 text-center">
-          <h1 className="text-2xl font-semibold">Задача не&nbsp;найдена</h1>
+      <div className="flex min-h-full flex-col">
+        {projectId && (
+          <PageTopBar>
+            <ProjectBreadcrumbs
+              projectId={projectId}
+              projectName={project?.name ?? '…'}
+              projectIcon={project?.icon}
+              view="board"
+            />
+          </PageTopBar>
+        )}
+        <PageMessage className="min-h-0 flex-1" title={<>Задача не&nbsp;найдена</>}>
           <Link
             to={projectId ? `/projects/${projectId}` : '/'}
-            className="text-sm text-primary hover:underline"
+            className="text-sm font-medium text-primary-ink hover:underline"
           >
             К&nbsp;доске задач
           </Link>
-        </div>
+        </PageMessage>
       </div>
     );
   }

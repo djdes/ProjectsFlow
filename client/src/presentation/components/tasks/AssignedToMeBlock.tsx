@@ -1,7 +1,6 @@
 import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -35,6 +34,7 @@ import {
   CalendarOff,
   CalendarRange,
   Check,
+  ChevronsLeft,
   Eye,
   EyeOff,
   ArrowRight,
@@ -50,7 +50,9 @@ import {
   ShieldCheck,
   MessageSquare,
   Paperclip,
+  Play,
   Plus,
+  RotateCcw,
   Trash2,
   Users,
   X,
@@ -61,6 +63,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { projectToneClass } from '@/lib/tone';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
@@ -69,6 +72,7 @@ import { useExitingListItems } from '@/presentation/hooks/useExitingListItems';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useSpotlightTask } from '@/presentation/hooks/useSpotlightTask';
 import {
   REALTIME_CONNECTED_EVENT,
@@ -77,7 +81,7 @@ import {
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
-import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
+import type { Task, RalphMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import {
   ASSIGNED_GROUPING_LABELS,
@@ -89,6 +93,7 @@ import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import {
+  dueKindOf,
   endOfMonthYmd,
   endOfWeekYmd,
   groupAssignedByTime,
@@ -96,7 +101,9 @@ import {
   startOfDay,
   ymd,
   type AssigneeDirection,
+  type DueKind,
 } from './assignedGrouping';
+import { DueFilterChips, InboxSearch, ManualIcon, QueueHeader } from './inbox/InboxChrome';
 import { COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard } from './KanbanColumn';
@@ -137,20 +144,15 @@ type Props = {
   inboxProjectId: string;
   // Колбэк после смены ответственного/toggle — InboxPage перефетчит доску ниже.
   onChanged?: () => void;
-  // Режим отображения (как у страницы «Входящие»): 'kanban' — группы становятся колонками
-  // канбана, 'list' — плоский список с заголовками групп.
-  // DOM-узел в шапке страницы, куда портализуются фильтры (от/кому/проект) + «Сортировка».
-  // null (нет слота) → рендерим их на месте, в шапке блока (фолбэк).
-  toolbarSlot?: HTMLElement | null;
+  // Заголовок страницы и её действия («Выделить») — блок ставит их в свою первую строку
+  // рядом с вкладками, людьми и поиском (дизайн C4: одна строка управления над доской).
+  heading?: React.ReactNode;
+  actions?: React.ReactNode;
   // Скрыть выполненные (status='done'). Действует и на этот блок, и на доску ниже — один
   // тумблер на страницу (persist в localStorage у InboxPage). Тумблер живёт внутри кнопки
   // «Фильтры» этого блока, поэтому нужен и сеттер.
   hideDone?: boolean;
   onHideDoneChange?: (v: boolean) => void;
-  // Full-bleed классы (как у доски проекта): в kanban ряд колонок выносится за паддинг
-  // страницы, чтобы отступы от краёв были такими же, как в проектах.
-  bleedNegClass?: string;
-  bleedPadClass?: string;
   // Режим мультивыделения СРАЗУ ВО ВСЕХ колонках блока: кнопка «Выделить» живёт в шапке
   // страницы «Входящие», поэтому состояние приходит снаружи. Выключение (Esc, крестик на
   // панели действий, полностью успешное массовое действие) блок сообщает обратно.
@@ -250,6 +252,39 @@ function readStoredTab(): AssigneeTab | null {
   }
 }
 
+// Свёрнутая колонка «Сейчас» и свёрнутые колонки очереди (дизайн C4) — запоминаем за
+// браузером: это раскладка рабочего места, серверу она не нужна.
+const NOW_COLLAPSED_KEY = 'pf.inbox.nowCollapsed';
+const COLLAPSED_COLUMNS_KEY = 'pf.inbox.collapsedColumns';
+function readStoredFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+function readStoredSet(key: string): ReadonlySet<string> {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+// Поиск по задаче: текст задачи и имя проекта, без регистра.
+function matchesInboxQuery(t: InboxBlockTask, q: string): boolean {
+  if (!q) return true;
+  return (
+    (t.description ?? '').toLowerCase().includes(q) ||
+    (t.projectName ?? '').toLowerCase().includes(q)
+  );
+}
+
+// Шаг листания ряда колонок кнопками ‹ › — ширина колонки (256px) и зазор.
+const COLUMN_SCROLL_STEP = 264;
+
 // «Скрыть личные» на вкладке «Другим»: личные доски коллег могут занимать много колонок,
 // поэтому выбор запоминаем между сессиями. По умолчанию — показывать.
 const HIDE_PERSONAL_STORAGE_KEY = 'pf.inbox.hidePersonal';
@@ -265,11 +300,10 @@ export function AssignedToMeBlock({
   boardTasks,
   inboxProjectId,
   onChanged,
-  toolbarSlot = null,
+  heading,
+  actions,
   hideDone = false,
   onHideDoneChange,
-  bleedNegClass = '',
-  bleedPadClass = '',
   selectionActive = false,
   onSelectionActiveChange,
 }: Props): React.ReactElement | null {
@@ -339,6 +373,42 @@ export function AssignedToMeBlock({
     }
     setHidePersonal(next);
   }, []);
+  // Поиск и фильтр по сроку (дизайн C4). Действуют на «Вручную» и очередь; полку приёмки
+  // фильтрует только поиск — решение по сданной работе не прячется за сроком.
+  const [query, setQuery] = useState('');
+  const [due, setDue] = useState<DueKind | null>(null);
+  const { animations } = useMotion();
+  // Сворачивать колонки имеет смысл только на широком экране: на телефоне колонка и так
+  // одна на экран, а полоска 38px только мешала бы листать.
+  const canCollapse = useMediaQuery('(min-width: 768px)');
+  const [nowCollapsed, setNowCollapsed] = useState<boolean>(() => readStoredFlag(NOW_COLLAPSED_KEY));
+  const toggleNowCollapsed = useCallback((): void => {
+    setNowCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(NOW_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+  const [collapsedColumns, setCollapsedColumns] = useState<ReadonlySet<string>>(() =>
+    readStoredSet(COLLAPSED_COLUMNS_KEY),
+  );
+  const toggleColumnCollapsed = useCallback((key: string): void => {
+    setCollapsedColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(COLLAPSED_COLUMNS_KEY, JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
   // Подтверждение удаления карточки (кнопка-корзина в hover-панели).
   const [deleteTarget, setDeleteTarget] = useState<InboxBlockTask | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -351,13 +421,44 @@ export function AssignedToMeBlock({
   // досках проектов): держим ref на сам скролл-контейнер, чтобы SyncedStickyScrollbar
   // зеркалил его scrollLeft. Комбинированный callback-ref — и persist-скролл, и sticky-бар.
   const hScrollElRef = useRef<HTMLDivElement>(null);
+  // Можно ли листать ряд колонок назад/вперёд — гасит кнопки ‹ › в заголовке очереди.
+  const [scrollEdges, setScrollEdges] = useState({ back: false, forward: false });
+  const measureScrollEdges = useCallback((el: HTMLDivElement | null): void => {
+    if (!el) return;
+    const back = el.scrollLeft > 2;
+    const forward = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setScrollEdges((prev) => (prev.back === back && prev.forward === forward ? prev : { back, forward }));
+  }, []);
   const setRowRef = useCallback(
     (el: HTMLDivElement | null): void => {
       hScrollElRef.current = el;
       setHScrollRef(el);
+      measureScrollEdges(el);
     },
-    [setHScrollRef],
+    [setHScrollRef, measureScrollEdges],
   );
+  const handleRowScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>): void => {
+      onHScroll(e);
+      measureScrollEdges(e.currentTarget);
+    },
+    [onHScroll, measureScrollEdges],
+  );
+  // Ширина ряда меняется с окном и составом колонок — края пересчитываем по ResizeObserver.
+  useEffect(() => {
+    const el = hScrollElRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureScrollEdges(el));
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => ro.disconnect();
+  });
+  const scrollColumns = (direction: -1 | 1): void => {
+    hScrollElRef.current?.scrollBy({
+      left: direction * COLUMN_SCROLL_STEP,
+      behavior: animations ? 'smooth' : 'auto',
+    });
+  };
   const [loading, setLoading] = useState(true);
   const [drawerTask, setDrawerTask] = useState<InboxBlockTask | null>(null);
   // Зеркало hideDone для mount-эффекта: prop не в deps (иначе refetch на каждый
@@ -731,9 +832,30 @@ export function AssignedToMeBlock({
   // 'in_progress': тот считается открытой работой диспетчера, и воркер выполнил бы задачу,
   // которую пользователь взял себе. Задачи полки ИСКЛЮЧЕНЫ из обычных групп, иначе одна
   // карточка висела бы в двух местах.
+  // Поиск и срок — поверх вкладки/фильтров. Счётчики чипов считаем по задачам после поиска
+  // (без учёта самого срока), иначе выбранный чип обнулял бы соседние.
+  const today = ymd(startOfDay(new Date()));
+  const normalizedQuery = query.trim().toLowerCase();
+  const queriedTasks = useMemo(
+    () => (normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks),
+    [visibleTasks, normalizedQuery],
+  );
+  const filteredTasks = useMemo(
+    () => (due ? queriedTasks.filter((t) => dueKindOf(t.deadline, today) === due) : queriedTasks),
+    [queriedTasks, due, today],
+  );
+  const dueCounts = useMemo(() => {
+    const counts = { late: 0, today: 0, none: 0 };
+    for (const t of queriedTasks) {
+      if (t.status === 'pending_approval' || t.status === 'done') continue;
+      const kind = dueKindOf(t.deadline, today);
+      if (kind !== 'future') counts[kind] += 1;
+    }
+    return counts;
+  }, [queriedTasks, today]);
   const inProgressTasks = useMemo(
-    () => visibleTasks.filter((t) => t.status === 'manual'),
-    [visibleTasks],
+    () => filteredTasks.filter((t) => t.status === 'manual'),
+    [filteredTasks],
   );
   // Приёмка руководителем (db/150). Состав полки зависит от роли, и это не косметика:
   //
@@ -748,12 +870,22 @@ export function AssignedToMeBlock({
   //    в комментарии selectApprovalTasks (inboxBlockTasks.ts).
   //
   // Фильтры вкладок не применяем: очередь не должна прятаться за фильтром.
-  const approvalTasks = useMemo(
+  const approvalTasksAll = useMemo(
     () =>
       selectApprovalTasks({ toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover }),
     [toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover],
   );
-  const groupedTasks = useMemo(() => selectBoardTasks(visibleTasks), [visibleTasks]);
+  const approvalTasks = useMemo(
+    () => approvalTasksAll.filter((t) => matchesInboxQuery(t, normalizedQuery)),
+    [approvalTasksAll, normalizedQuery],
+  );
+  // У кого из людей есть сданная работа — фиолетовая точка на их аватаре (только тому,
+  // кто принимает: исполнителю чужая очередь ни о чём не говорит).
+  const peopleWithApproval = useMemo(
+    () => new Set(isApprover ? approvalTasksAll.map((t) => t.assignee.userId) : []),
+    [approvalTasksAll, isApprover],
+  );
+  const groupedTasks = useMemo(() => selectBoardTasks(filteredTasks), [filteredTasks]);
   // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
   // стояли на месте и не переезжали, когда задача уходит с доски.
   const projectOrder = useMemo(() => (allProjects ?? []).map((p) => p.id), [allProjects]);
@@ -1040,6 +1172,116 @@ export function AssignedToMeBlock({
     [user, taskRepository, refresh, onChanged],
   );
 
+  // Отзыв задачи с утверждения самим исполнителем: «случайно нажал выполнено». Он же —
+  // «Отменить» в тосте после сдачи работы. Оптимистичную правку снимаем сразу: иначе
+  // карточка, сданная секунду назад, так и висела бы на полке приёмки.
+  const withdrawApproval = useCallback(
+    async (item: InboxBlockTask): Promise<void> => {
+      dropPatch(item.id);
+      try {
+        await taskRepository.withdrawApproval(item.projectId, item.id);
+        forget(item.id);
+        toast.success('Задача снова в работе');
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось забрать: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, forget, refresh, onChanged, dropPatch],
+  );
+
+  // Вернуть задаче прежний статус — действие «Отменить» в тосте после жеста.
+  const restoreStatus = useCallback(
+    async (item: InboxBlockTask, status: TaskStatus): Promise<void> => {
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status }));
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: status,
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        void refresh();
+        onChanged?.();
+      } catch (e) {
+        dropPatch(item.id);
+        toast.error(`Не удалось отменить: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, refresh, onChanged, dropPatch],
+  );
+
+  // «Готово» броском на нижнюю полосу. Там, где работу принимает руководитель, сервер
+  // переводит 'done' исполнителя в 'pending_approval' — показываем сразу итоговый статус,
+  // иначе оптимистичная правка разошлась бы с ответом сервера и не снялась.
+  const completeTask = useCallback(
+    async (item: InboxBlockTask): Promise<void> => {
+      if (!item.canModify || item.status === 'done') return;
+      const shownStatus: TaskStatus = approvalEnabled && !isApprover ? 'pending_approval' : 'done';
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: shownStatus }));
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: 'done',
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        celebrate(item.id);
+        toast.success(shownStatus === 'done' ? 'Готово' : 'Отправлена на утверждение', {
+          description: plainTaskTitle(item.description ?? '') || undefined,
+          duration: 8000,
+          action: {
+            label: 'Отменить',
+            onClick: () => {
+              forget(item.id);
+              void (shownStatus === 'done'
+                ? taskRepository
+                    .move(item.projectId, item.id, {
+                      targetStatus: item.status,
+                      beforeTaskId: null,
+                      afterTaskId: null,
+                      restore: true,
+                    })
+                    .then(() => {
+                      dropPatch(item.id);
+                      void refresh();
+                      onChanged?.();
+                    })
+                    .catch((err: unknown) => {
+                      toast.error(`Не удалось отменить: ${(err as Error).message}`);
+                    })
+                : withdrawApproval(item));
+            },
+          },
+        });
+        void refresh();
+        onChanged?.();
+      } catch (e) {
+        dropPatch(item.id);
+        toast.error(`Не удалось: ${(e as Error).message}`);
+      }
+    },
+    [approvalEnabled, isApprover, taskRepository, celebrate, forget, dropPatch, refresh, onChanged, withdrawApproval],
+  );
+
+  // Перенос задачи в другой проект — бросок карточки на колонку проекта. Права проверяет
+  // сервер (из личных — только владелец, из проекта — право переноса).
+  const moveToProject = useCallback(
+    async (item: InboxBlockTask, targetProjectId: string): Promise<void> => {
+      const target = (allProjects ?? []).find((p) => p.id === targetProjectId);
+      try {
+        await taskRepository.assignToProject(item.projectId, item.id, targetProjectId);
+        toast.success(target?.isInbox ? 'Перенесли в «Личные»' : `Перенесли в «${target?.name ?? 'проект'}»`, {
+          description: plainTaskTitle(item.description ?? '') || undefined,
+        });
+        void refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось перенести: ${(e as Error).message}`);
+      }
+    },
+    [allProjects, taskRepository, refresh, onChanged],
+  );
+
   // Вспышка полки «В работе»: `key` растёт на каждое взятие задачи (булев флаг не дал бы
   // перезапустить анимацию на второй задаче подряд), `id` — какую карточку подсветить.
   const [workFlash, setWorkFlash] = useState<{ id: string; key: number } | null>(null);
@@ -1061,6 +1303,13 @@ export function AssignedToMeBlock({
           beforeTaskId: null,
           afterTaskId: null,
         });
+        // Отмена из тоста возвращает прежний статус: жест мог быть промахом.
+        const prev = item.status;
+        toast.success(next === 'manual' ? 'Взята в работу' : 'Вернули в очередь', {
+          description: plainTaskTitle(item.description ?? '') || undefined,
+          duration: 8000,
+          action: { label: 'Отменить', onClick: () => void restoreStatus(item, prev) },
+        });
         void refresh();
         onChanged?.();
       } catch (e) {
@@ -1068,7 +1317,7 @@ export function AssignedToMeBlock({
         toast.error(`Не удалось: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged, dropPatch],
+    [taskRepository, refresh, onChanged, dropPatch, restoreStatus],
   );
 
   // Отправить свою задачу на приёмку жестом. Явный 'pending_approval' сервер пропускает
@@ -1089,6 +1338,11 @@ export function AssignedToMeBlock({
           beforeTaskId: null,
           afterTaskId: null,
         });
+        toast.success('Отправлена на утверждение', {
+          description: plainTaskTitle(item.description ?? '') || undefined,
+          duration: 8000,
+          action: { label: 'Отменить', onClick: () => void withdrawApproval(item) },
+        });
         void refresh();
         onChanged?.();
       } catch (e) {
@@ -1099,7 +1353,7 @@ export function AssignedToMeBlock({
         toast.error(`Не удалось отправить на утверждение: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged, dropPatch, celebrate, forget],
+    [taskRepository, refresh, onChanged, dropPatch, celebrate, forget, withdrawApproval],
   );
 
   // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
@@ -1128,19 +1382,6 @@ export function AssignedToMeBlock({
     },
     [taskRepository, refresh, onChanged],
   );
-
-  // Отзыв задачи с утверждения самим исполнителем: «случайно нажал выполнено».
-  const withdrawApproval = async (item: InboxBlockTask): Promise<void> => {
-    try {
-      await taskRepository.withdrawApproval(item.projectId, item.id);
-      forget(item.id);
-      toast.success('Задача снова в работе');
-      await refresh();
-      onChanged?.();
-    } catch (e) {
-      toast.error(`Не удалось забрать: ${(e as Error).message}`);
-    }
-  };
 
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
   // он уходит в один диалог, а не в мемоизированный список карточек.
@@ -1183,10 +1424,29 @@ export function AssignedToMeBlock({
     setDragActive(false);
     const over = e.over;
     const data = over?.data.current as
-      | { type?: string; bucket?: string; member?: SharedMember; status?: 'manual' | 'backlog' }
+      | {
+          type?: string;
+          bucket?: string;
+          member?: SharedMember;
+          status?: 'manual' | 'backlog';
+          grouping?: string;
+          projectId?: string;
+        }
       | undefined;
     const item = e.active.data.current?.item as InboxBlockTask | undefined;
     if (!over || !item || !data) return;
+    // Бросок на полосу «Готово» внизу экрана — закрыть задачу.
+    if (data.type === 'done') {
+      void completeTask(item);
+      return;
+    }
+    // Бросок на колонку другого проекта — перенести задачу в этот проект.
+    if (data.type === 'group' && data.grouping === 'project' && data.projectId) {
+      if (item.canModify && item.projectId !== data.projectId) {
+        void moveToProject(item, data.projectId);
+      }
+      return;
+    }
     // Дроп в полку «В работе» (и обратно в колонки — тем же типом).
     if (data.type === 'work' && data.status) {
       void setWorkStatus(item, data.status);
@@ -1224,20 +1484,48 @@ export function AssignedToMeBlock({
     setDragActive(false);
   };
 
-  if (loading || boardTasks === null) return <BoardSkeleton shelf={false} />;
+  // Пока грузится — заголовок страницы уже на месте, под ним скелетон доски: при появлении
+  // данных строка заголовка не «прыгает».
+  if (loading || boardTasks === null) {
+    return (
+      <section id="assigned-to-me" className="flex flex-col gap-3">
+        <div className="flex min-h-9 items-center gap-3">{heading}</div>
+        <BoardSkeleton shelf={false} now className="pbs-[42px]" />
+      </section>
+    );
+  }
 
-  // #2: единая кнопка «Фильтры» в шапке страницы. Сортировка (когда есть задачи) +
-  // скрыть-выполненные (всегда) + фильтры ответственного/проекта (только вкладка «Другим»).
-  // Открытая доска сотрудника держит блок на экране, даже если своих задач нет вовсе, —
-  // иначе руководитель кликнул бы по кубику и зона исчезла бы у него из-под рук. По той же
-  // причине руководителю с пустыми входящими зона показывается ради самих кубиков: без
-  // них инструмент «открыть входящие сотрудника» ему просто негде взять (тот же приём,
-  // что и с полкой приёмки для принимающего).
+  // Быстрое действие карточки очереди: «Взять в работу» — то же, что перетащить её в
+  // «Вручную» (статус 'manual', агент такие не берёт). Не предлагаем там, где задачей уже
+  // занят воркер (в работе / ждёт уточнения), и для закрытой или сданной.
+  const takeToWorkAction = (item: InboxBlockTask): React.ReactNode =>
+    item.canModify &&
+    item.status !== 'manual' &&
+    item.status !== 'done' &&
+    item.status !== 'pending_approval' &&
+    item.status !== 'in_progress' &&
+    item.status !== 'awaiting_clarification' ? (
+      <QuickAction
+        label="Взять в работу"
+        className="text-manual"
+        onClick={() => void setWorkStatus(item, 'manual')}
+      >
+        <Play className="size-3 fill-current" />
+      </QuickAction>
+    ) : null;
+
+  // Блок пуст, когда пусто В ОБЕИХ вкладках (с учётом hide-done). Открытая доска сотрудника
+  // держит блок на экране, даже если своих задач нет вовсе, — иначе руководитель кликнул бы
+  // по кубику и зона исчезла бы у него из-под рук. По той же причине руководителю с пустыми
+  // входящими зона показывается ради самих людей: без них инструмент «открыть входящие
+  // сотрудника» ему просто негде взять (тот же приём, что и с полкой приёмки).
   const hasAny =
     toMeVisible.length > 0 ||
     byMeVisibleAll.length > 0 ||
     focusedMemberId !== null ||
     (isWorkspaceLead && members.length > 0);
+  // Единая кнопка «Фильтры»: сортировка (когда есть задачи) + скрыть-выполненные (всегда) +
+  // фильтры ответственного/проекта (только вкладка «Для всех»).
   const filtersPopover = (
     <InboxFiltersPopover
       showSort={hasAny}
@@ -1262,16 +1550,11 @@ export function AssignedToMeBlock({
       }}
     />
   );
-  const filtersToolbar = toolbarSlot ? createPortal(filtersPopover, toolbarSlot) : null;
-
-  // Блок скрыт, когда пусто В ОБЕИХ вкладках (с учётом hide-done): саму зону не рисуем, но
-  // кнопку «Фильтры» (скрыть-выполненные для доски ниже) в шапке страницы оставляем.
-  if (!hasAny) return filtersToolbar;
 
   const subtitleBase = focusedMember
     ? 'Все задачи сотрудника по пространству — открыты вам как руководителю'
     : tab === 'toMe'
-      ? 'Задачи, за которые отвечаете вы'
+      ? 'Ваши задачи и то, что ждёт вашего решения'
       : 'Задачи других участников';
   // Пустая видимая вкладка: сначала честно про фильтры, затем про скрытые done
   // (непустой СЫРОЙ список без фильтров = всё выполнено и скрыто Eye-toggle'ом),
@@ -1292,431 +1575,541 @@ export function AssignedToMeBlock({
             // значит, спрятал Eye-toggle, и говорим про него, а не виним фильтры.
             'Все подходящие задачи выполнены и скрыты («Скрыть выполненные»)';
 
-  // Тело блока — общее для обоих режимов.
-  // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
-  // канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
-  // заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
-  // колонках канбана и hairline-линейка, замыкающая зону перед основной доской.
-  const body = (
-    <section id="assigned-to-me" className="space-y-3">
-      <div className="space-y-2.5">
-        <div className="flex items-start justify-between gap-3 px-0.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            {/* Своя ава (владелец зоны) — И drop-цель «забрать себе»: перетащи задачу сюда, чтобы
-                вернуть/назначить её себе. size-8 крупнее аватаров в строках/карточках. */}
-            {user ? (
-              <SelfDropAvatar user={user} dragging={dragActive} />
-            ) : (
-              <UserAvatar displayName="" className="size-8 text-2xs" />
-            )}
-            <div className="min-w-0">
-              {/* Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для
-                  всех» тут не про что — показывается одна конкретная доска. Возврат — ×. */}
-              {focusedMember ? (
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <h2 className="min-w-0 truncate text-lg font-semibold tracking-tight">
-                    Задачи · {focusedMember.displayName}
-                  </h2>
-                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-2xs font-medium tabular-nums text-primary">
-                    {focusedVisible.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFocusedMember(null)}
-                    aria-label="Вернуться к своим входящим"
-                    title="Вернуться к своим входящим"
-                    className="shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-              ) : (
-                /* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
-                   там, где стоял бы обычный заголовок (и подзаголовок под ним). */
-                <AssigneeTabs
-                  tab={tab}
-                  onChange={handleTabChange}
-                  toMeCount={toMeVisible.length}
-                  // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
-                  // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
-                  // расходилось с количеством видимых карточек («неверное количество»).
-                  byMeCount={byMeVisible.length}
-                />
-              )}
-              <p className="mbs-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
-            </div>
+  // Строка управления (дизайн C4): заголовок страницы, «Мои / Для всех», люди, поиск,
+  // фильтры и действия страницы — одной строкой над доской, переносится на узком экране.
+  const headRow = (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {heading}
+      {hasAny &&
+        (focusedMember ? (
+          // Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для всех»
+          // тут не про что — показывается одна конкретная доска. Возврат — ×.
+          <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-primary-soft py-1 pe-1 ps-2.5 max-sm:order-2">
+            <span className="min-w-0 truncate text-ui font-semibold">
+              Задачи · {focusedMember.displayName}
+            </span>
+            <span className="shrink-0 text-meta tabular-nums text-muted-foreground">
+              {focusedVisible.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => setFocusedMember(null)}
+              aria-label="Вернуться к своим входящим"
+              title="Вернуться к своим входящим"
+              className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:size-6"
+            >
+              <X className="size-3.5" />
+            </button>
           </div>
-          {/* Единая кнопка «Фильтры» порталится в шапку страницы (toolbarSlot). Фолбэк (нет
-              слота) — рендерим на месте, в шапке блока. Сам портал отдаётся из return ниже. */}
-          {!toolbarSlot && (
-            <div className="flex flex-wrap items-center justify-end gap-1 self-center">{filtersPopover}</div>
-          )}
-        </div>
-
-        {/* Кубики участников для делегации (задача 3a36e7e8) — СЛЕВА, крупными блоками,
-            переносятся на несколько строк (все видны сразу). Тащить карточку на них удобнее,
-            чем в мелкий ряд у правого края. Каждый блок — drop-цель смены ответственного;
-            под курсором раскрывается в «Назначить: <имя>». На «Другим» блок ещё и клик-фильтр
-            «кому». Во время drag добавляется тихая подпись-подсказка слева. */}
-        {members.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-0.5">
-            {members.map((m) => (
-              <UserCube
-                key={m.id}
-                member={m}
-                dragging={dragActive}
-                // Руководитель/владелец: клик открывает личные входящие сотрудника (на любой
-                // вкладке). Остальным остаётся прежний клик-фильтр «кому» на «Для всех»
-                // (спека 2026-07-13); руководителю тот же фильтр доступен в меню «Фильтры».
-                // На «Для меня» без обеих ролей пропы не передаём — кубик только drop-цель.
-                {...(isWorkspaceLead
+        ) : (
+          <AssigneeTabs
+            className="max-sm:order-2"
+            tab={tab}
+            onChange={handleTabChange}
+            toMeCount={toMeVisible.length}
+            // #3: счётчик «Для всех» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
+            // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
+            // расходилось с количеством видимых карточек («неверное количество»).
+            byMeCount={byMeVisible.length}
+          />
+        ))}
+      {/* Люди: своя ава (бросить задачу — забрать себе) и участники пространства (бросить —
+          назначить; клик — их задачи). В покое — аватары, во время перетаскивания — крупные
+          плитки с именем: в маленький кружок трудно попасть (задача 3a36e7e8). */}
+      {hasAny && (user || members.length > 0) && (
+        <div role="group" aria-label="Люди" className="flex flex-wrap items-center gap-1.5 max-sm:order-3">
+          {user && <SelfDropAvatar user={user} dragging={dragActive} />}
+          {members.map((m) => (
+            <UserCube
+              key={m.id}
+              member={m}
+              dragging={dragActive}
+              hasApproval={peopleWithApproval.has(m.id)}
+              // Руководитель/владелец: клик открывает личные входящие сотрудника (на любой
+              // вкладке). Остальным остаётся прежний клик-фильтр «кому» на «Для всех»
+              // (спека 2026-07-13); руководителю тот же фильтр доступен в меню «Фильтры».
+              // На «Мои» без обеих ролей пропы не передаём — аватар только drop-цель.
+              {...(isWorkspaceLead
+                ? {
+                    filterActive: focusedMemberId === m.id,
+                    onToggleFilter: () =>
+                      setFocusedMember(
+                        focusedMemberId === m.id
+                          ? null
+                          : { userId: m.id, displayName: m.displayName },
+                      ),
+                    hint: 'нажмите, чтобы открыть его входящие',
+                  }
+                : tab === 'byMe'
                   ? {
-                      filterActive: focusedMemberId === m.id,
-                      onToggleFilter: () =>
-                        setFocusedMember(
-                          focusedMemberId === m.id
-                            ? null
-                            : { userId: m.id, displayName: m.displayName },
-                        ),
-                      clearLabel: 'Вернуться к своим входящим',
-                      hint: 'нажмите, чтобы открыть его входящие',
+                      filterActive: filterTo === m.id,
+                      onToggleFilter: () => setFilterTo((prev) => (prev === m.id ? null : m.id)),
+                      hint: 'нажмите, чтобы показать его задачи',
                     }
-                  : tab === 'byMe'
-                    ? {
-                        filterActive: filterTo === m.id,
-                        onToggleFilter: () =>
-                          setFilterTo((prev) => (prev === m.id ? null : m.id)),
-                      }
-                    : {})}
-              />
-            ))}
-          </div>
+                  : {})}
+            />
+          ))}
+        </div>
+      )}
+      <span className="hidden flex-1 sm:block" />
+      {hasAny && (
+        <InboxSearch value={query} onChange={setQuery} className="w-full max-sm:order-4 sm:w-60" />
+      )}
+      {/* На телефоне «Фильтры» и «Выделить» встают в строку заголовка справа, а не
+          отдельной строкой под поиском. */}
+      <div className="flex items-center gap-1 max-sm:order-1 max-sm:ms-auto">
+        {filtersPopover}
+        {actions}
+      </div>
+    </div>
+  );
+
+  if (!hasAny) {
+    return (
+      <section id="assigned-to-me" className="flex flex-col gap-3">
+        {headRow}
+        <p className="py-12 text-center text-ui text-muted-foreground">{emptyText}</p>
+      </section>
+    );
+  }
+
+  const hasLocalFilters =
+    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null;
+  const resetFilters = (): void => {
+    setQuery('');
+    setDue(null);
+    setFilterTo(null);
+    setFilterProject(null);
+  };
+  // Колонка «Сейчас» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
+  // это единственная цель дропа для «сдать первую задачу» жестом. В режиме выделения пустые
+  // полки прячем: тащить в них нечего, а подсказка «перетащите сюда» врала бы.
+  const showApprovalZone = approvalTasks.length > 0 || (approvalEnabled && !selectionActive);
+  const showManualZone = inProgressTasks.length > 0 || !selectionActive;
+  const showNow = showApprovalZone || showManualZone;
+  // Свёрнутая «Сейчас» раскрывается сама на время перетаскивания — иначе некуда бросить.
+  const nowExpanded = !nowCollapsed || dragActive || !canCollapse;
+  const collapseNowButton = canCollapse ? (
+    <button
+      type="button"
+      onClick={toggleNowCollapsed}
+      aria-label="Свернуть «Сейчас»"
+      title="Свернуть «Сейчас»"
+      className={cn(COLUMN_ACTION_CLASS, 'ms-auto')}
+    >
+      <ChevronsLeft className="size-3.5" />
+    </button>
+  ) : null;
+  // Сколько карточек в очереди: «N» или «N из M», когда поиск/срок что-то спрятали.
+  const queueShown = (grouping === 'deadline' ? kanbanGroups : groups).reduce(
+    (n, g) => n + g.items.length,
+    0,
+  );
+  const queueTotal = selectBoardTasks(visibleTasks).length;
+  const queueCountText = queueShown === queueTotal ? String(queueTotal) : `${queueShown} из ${queueTotal}`;
+  const emptyColumnText = hasLocalFilters ? 'Нет задач по фильтрам' : 'Задач нет';
+  // Бросок в «Готово» — только для своей карточки, которую можно менять и которая не закрыта.
+  const showDoneBar =
+    activeDrag !== null && activeDrag.canModify && activeDrag.status !== 'done' && !selectionActive;
+
+  // Тело блока (дизайн C4 «Одна доска»): строка управления, строка сроков, затем доска —
+  // закреплённая колонка «Сейчас» и очередь по проектам, которая листается вбок.
+  const body = (
+    <section id="assigned-to-me" className="flex flex-col gap-3">
+      {headRow}
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <DueFilterChips value={due} onChange={setDue} counts={dueCounts} />
+        {hasLocalFilters && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="inline-flex h-10 items-center rounded-md px-2 text-sm font-medium text-primary-ink transition-colors hover:bg-hover sm:h-[26px] sm:text-meta"
+          >
+            Сбросить фильтры
+          </button>
         )}
+        <span className="flex-1" />
+        <span className="hidden text-meta text-muted-foreground lg:inline">{subtitleBase}</span>
       </div>
 
-      {/* Полки «На утверждении» и «Вручную» — в ширину страницы, с теми же отступами слева
-          и справа, что у шапки. Full-bleed (bleedNeg/bleedPad) — только у ряда колонок: он
-          листается вбок до края экрана, а полка переносится по строкам, и с bleed её рамка
-          упиралась в правый край, оставляя отступ лишь слева. */}
-      {/* Полка «В работе» — над колонками, всегда видима: это ответ на вопрос «чем я занят
-          прямо сейчас». Принимает дроп карточки (статус → manual), карточки внутри
-          можно вернуть обратно кнопкой. Не показываем только в режиме выделения, где drag
-          отключён и полка была бы мёртвой. */}
-      {/* Полка нужна и рядовому исполнителю с пустой очередью: это единственная цель
-          дропа для «сдать первую задачу» жестом, и без неё жест физически некуда
-          применить, пока в очереди не появится хотя бы одна чужая/старая карточка. */}
-      {(approvalTasks.length > 0 || (approvalEnabled && !selectionActive)) && (
-        <ApprovalShelf
-          items={approvalTasks}
-          selecting={selectionActive}
-          selectedIds={selectedIds}
-          onSelectToggle={handleSelectToggle}
-          onOpen={(t) => setDrawerTask(t)}
-          onChanged={handleToggled}
-          onAccept={acceptApproval}
-          onReject={(t) => setRejectTarget(t)}
-          onWithdraw={(t) => void withdrawApproval(t)}
-          isApprover={isApprover}
-          currentUserId={user?.id ?? null}
-          canDrop={activeDrag ? canSendToApproval(activeDrag, user?.id ?? null) : false}
-          dragActive={dragActive}
-          {...(focusedMember
-            ? {
-                emptyHint: `Задач на утверждении от ${focusedMember.displayName} сейчас нет.`,
-              }
-            : {})}
-        />
-      )}
-
-      {/* В режиме выделения пустую полку прячем: тащить в неё нечего, а подсказка
-          «перетащите сюда» врала бы. С задачами — остаётся, их тоже выделяют. */}
-      {(inProgressTasks.length > 0 || !selectionActive) && (
-        <InProgressShelf
-          items={inProgressTasks}
-          onOpen={(t) => setDrawerTask(t)}
-          onChanged={handleToggled}
-          onDelete={handleDelete}
-          onRemoveFromWork={(t) => void setWorkStatus(t, 'backlog')}
-          flashKey={workFlash?.key ?? 0}
-          flashItemId={workFlash?.id ?? null}
-          selecting={selectionActive}
-          selectedIds={selectedIds}
-          onSelectToggle={handleSelectToggle}
-        />
-      )}
-
-      {visibleTasks.length === 0 ? (
-        // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
-        <p className="px-0.5 py-1 text-sm text-muted-foreground/60">{emptyText}</p>
-      ) : grouping === 'deadline' ? (
-        // Сортировка «по дедлайну» = 3 колонки по времени (Без срока / На сегодня / Будущее).
-        // Drag между колонками меняет дедлайн; drag на аватар участника — назначает его. Ряд
-        // колонок full-bleed'ится за паддинг страницы (как доска проекта).
-        <div
-          ref={setRowRef}
-          onScroll={onHScroll}
-          className={cn(
-            // Как у основной доски: каждая колонка заканчивается под своей последней
-            // задачей, а не растягивается до высоты самой длинной соседней колонки.
-            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pbe-2',
-            // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
-            // SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
-            '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-            bleedNegClass,
-            bleedPadClass,
-          )}
-        >
-          {kanbanGroups.map((group, index) => (
-            // Дроп-зона (drag-срок/ответственный) + перетаскиваемые карточки.
-            <TimeBucketColumn
-              key={group.key}
-              bucket={group.key}
-              label={group.label}
-              count={group.items.length}
-              selection={columnSelectionAt(index)}
-              onSelectAll={handleSelectAllIn}
-              onSelectNone={handleSelectNoneIn}
-              onCardsPointerDown={dragSelect.onPointerDown}
+      <div className="flex flex-col gap-2.5 md:flex-row md:items-start">
+        {showNow &&
+          (nowExpanded ? (
+            <section
+              aria-label="Сейчас"
+              className="flex w-full shrink-0 flex-col rounded-xl bg-panel md:w-[284px]"
             >
-              {group.items.length === 0 ? (
-                <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
-              ) : (
-                <ColumnPreviewList
-                  // key по вкладке+фильтрам: смена датасета ремаунтит список (не тащим
-                  // позицию скролла колонки между вкладками).
-                  key={[tab, filterTo ?? '', filterProject ?? ''].join('|')}
-                  items={group.items}
-                  getId={(item) => item.id}
-                  renderItem={(item, cardExiting) => (
-                    <DraggableTask
-                      key={item.id}
-                      item={item}
-                      disabled={!item.canModify || cardExiting}
-                      selecting={selectionActive}
-                      ghost={cardExiting}
-                    >
-                      <AcceptedCard
-                        item={item}
-                        onOpen={() => setDrawerTask(item)}
-                        onChanged={handleToggled}
-                        onDelete={() => handleDelete(item)}
-                        selecting={selectionActive}
-                        selected={selectedIds.has(item.id)}
-                        onSelectToggle={handleSelectToggle}
-                      />
-                    </DraggableTask>
-                  )}
+              {showApprovalZone && (
+                <ApprovalShelf
+                  items={approvalTasks}
+                  selecting={selectionActive}
+                  selectedIds={selectedIds}
+                  onSelectToggle={handleSelectToggle}
+                  onOpen={(t) => setDrawerTask(t)}
+                  onChanged={handleToggled}
+                  onAccept={acceptApproval}
+                  onReject={(t) => setRejectTarget(t)}
+                  onWithdraw={(t) => void withdrawApproval(t)}
+                  isApprover={isApprover}
+                  currentUserId={user?.id ?? null}
+                  canDrop={activeDrag ? canSendToApproval(activeDrag, user?.id ?? null) : false}
+                  dragActive={dragActive}
+                  headerEnd={collapseNowButton}
+                  className={showManualZone ? 'rounded-be-none' : undefined}
+                  {...(focusedMember
+                    ? {
+                        emptyHint: `Задач на утверждении от ${focusedMember.displayName} сейчас нет.`,
+                      }
+                    : {})}
                 />
               )}
-            </TimeBucketColumn>
+              {showManualZone && (
+                <InProgressShelf
+                  items={inProgressTasks}
+                  onOpen={(t) => setDrawerTask(t)}
+                  onChanged={handleToggled}
+                  onDelete={handleDelete}
+                  renderActions={(t) => (
+                    <>
+                      {approvalEnabled && canSendToApproval(t, user?.id ?? null) && (
+                        <QuickAction
+                          label="Сдать на утверждение"
+                          className="text-approval"
+                          onClick={() => void sendToApproval(t)}
+                        >
+                          <ShieldCheck className="size-3.5" />
+                        </QuickAction>
+                      )}
+                      {t.canModify && (
+                        <QuickAction
+                          label="Вернуть в очередь"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => void setWorkStatus(t, 'backlog')}
+                        >
+                          <RotateCcw className="size-3.5" />
+                        </QuickAction>
+                      )}
+                    </>
+                  )}
+                  flashKey={workFlash?.key ?? 0}
+                  flashItemId={workFlash?.id ?? null}
+                  selecting={selectionActive}
+                  selectedIds={selectedIds}
+                  onSelectToggle={handleSelectToggle}
+                  dragActive={dragActive && activeDrag !== null && activeDrag.status !== 'manual'}
+                  headerEnd={showApprovalZone ? null : collapseNowButton}
+                  className={
+                    showApprovalZone ? 'rounded-bs-none border-bs border-panel-divider' : undefined
+                  }
+                />
+              )}
+            </section>
+          ) : (
+            <button
+              type="button"
+              onClick={toggleNowCollapsed}
+              aria-label="Развернуть «Сейчас»"
+              title="Развернуть «Сейчас»"
+              className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
+            >
+              <span className="[writing-mode:vertical-rl]">Сейчас</span>
+              <span className="tabular-nums text-approval">{approvalTasks.length}</span>
+              <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
+            </button>
           ))}
-          {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
-              ЦЕНТРУ и через snap, и через max-scroll (iOS). Ширина = «пипке» соседа. */}
-          <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
-        </div>
-      ) : (
-        // Прочие сортировки (проект / дата создания / приоритет): горизонтальные КОЛОНКИ-канбаны —
-        // каждая группа = колонка-бордер с заголовком-ярлыком и задачами внутри (задачи одного
-        // проекта в одной колонке). Всегда канбан, никаких списков. Ряд full-bleed за паддинг.
-        // Пока тащат карточку С ДОСКИ (boardDragActive) колонки становятся drop-целями по
-        // смыслу сортировки, а первой в ряду появляется фантомная колонка (см. план
-        // inbox-grouped-dnd): «Другой проект…» / инфо «Сюда нельзя» / «Другой приоритет…».
-        <div
-          ref={setRowRef}
-          onScroll={onHScroll}
-          className={cn(
-            'flex items-start snap-x snap-mandatory sm:snap-none gap-3 overflow-x-auto overscroll-x-none pbe-2',
-            // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
-            // SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
-            '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-            bleedNegClass,
-            bleedPadClass,
-          )}
-        >
-          {boardDragActive && phantomProjectNeeded && (
-            <PhantomDropColumn
-              id="phantom-project"
-              kind="project"
-              icon={FolderKanban}
-              label="Другой проект…"
-              hint="Бросьте сюда, чтобы выбрать проект из списка"
-            />
-          )}
-          {boardDragActive && phantomPriorityNeeded && (
-            <PhantomDropColumn
-              id="phantom-priority"
-              kind="priority"
-              icon={Flag}
-              label="Другой приоритет…"
-              hint="Бросьте сюда, чтобы выбрать приоритет"
-            />
-          )}
-          {displayGroups.map(({ item: group, exiting }) => {
-            // Индекс в РЕАЛЬНОМ groups (не в displayGroups — там есть ещё «призраки»
-            // опустевших колонок) — columnSelectionAt индексирует именно groups/selectableGroups.
-            // Для призрака индекса нет: выделение на исчезающей колонке не имеет смысла.
-            const index = groups.findIndex((g) => g.key === group.key);
-            // Смысл дропа карточки доски на колонку: project → перенос задачи в проект
-            // («Личные» — не цель, задача и так в инбоксе); priority → смена приоритета;
-            // created — колонки не принимают (дату создания не изменить). Призрак дроп не
-            // принимает вовсе — она уже уходит.
-            const dropData =
-              exiting
-                ? null
-                : grouping === 'project' && !group.isInbox
-                  ? { type: 'group', grouping: 'project', projectId: group.key }
-                  : grouping === 'priority'
-                    ? { type: 'group', grouping: 'priority', priority: group.key }
-                    : null;
-            const columnSelection = index >= 0 ? columnSelectionAt(index) : null;
-            // #2 (af1ebf44): колонка = реальный проект (группировка по проекту, не «Личные»).
-            // Тогда её название кликабельно (→ страница проекта), а по ховеру доступна «+».
-            const isProjectColumn = grouping === 'project' && !group.isInbox;
-            // «+» на колонке-проекте — на ОБЕИХ вкладках («Мои» И «Для всех»: юзер спросил
-            // «где плюсы» на «Для всех»). Гейт по canModify: показываем там, где у юзера есть
-            // право менять задачи проекта (≈ право создавать). Задача создаётся в этом проекте
-            // на текущего юзера, поэтому попадёт во вкладку «Мои» (о чём говорит тост).
-            const canQuickAdd = !exiting && isProjectColumn && group.items.some((i) => i.canModify);
-            return (
-            // Обёртка-коллапс СНАРУЖИ droppable-колонки (не на самом её узле — droppable
-            // ref живёт внутри GroupDropColumn) — overflow:hidden тут не задевает measure
-            // dnd-kit'а над самим droppable/sortable-узлом (см. брифа примечание про
-            // «залипший transform»). data-pf-collapse — едет и при выключенных на тач
-            // анимациях (globals.css .pf-no-motion исключение).
-            <div
-              key={group.key}
-              data-pf-collapse
-              className="grid shrink-0 motion-safe:transition-[grid-template-columns] motion-safe:duration-300 motion-safe:ease-out"
-              style={{ gridTemplateColumns: exiting ? '0fr' : '1fr' }}
-            >
-            <div className={cn('min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
-            <GroupDropColumn
-              id={`group-${grouping}-${group.key}`}
-              data={dropData}
-              highlight={boardDragActive}
-              exiting={exiting}
-              className={cn(
-                'group/col flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-clip rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none',
-                exiting && 'pointer-events-none opacity-0 transition-opacity duration-200 motion-reduce:transition-none',
-              )}
-            >
-              <div className="flex items-center gap-1.5 border-be border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
-                <GroupIcon mode={grouping} isInbox={group.isInbox} />
-                {isProjectColumn ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/projects/${group.key}`)}
-                    title="Открыть проект"
-                    className="min-w-0 truncate text-start underline-offset-2 transition-colors hover:text-primary hover:underline"
+
+        <section aria-label="Очередь" className="flex min-w-0 flex-1 flex-col gap-2">
+          <QueueHeader
+            label={QUEUE_LABEL[grouping]}
+            count={queueCountText}
+            onScroll={scrollColumns}
+            canScrollBack={scrollEdges.back}
+            canScrollForward={scrollEdges.forward}
+          />
+          {visibleTasks.length === 0 ? (
+            // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
+            <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
+              {emptyText}
+            </p>
+          ) : grouping === 'deadline' ? (
+            // Группировка «Дедлайн» = 3 колонки по времени (Без срока / На сегодня / Будущее).
+            // Drag между колонками меняет дедлайн; drag на аватар участника — назначает его.
+            <div ref={setRowRef} onScroll={handleRowScroll} className={COLUMNS_ROW_CLASS}>
+              {kanbanGroups.map((group, index) => {
+                const collapseKey = `bucket:${group.key}`;
+                return (
+                  <TimeBucketColumn
+                    key={group.key}
+                    bucket={group.key}
+                    label={group.label}
+                    count={group.items.length}
+                    collapsed={canCollapse && collapsedColumns.has(collapseKey)}
+                    onToggleCollapsed={canCollapse ? () => toggleColumnCollapsed(collapseKey) : undefined}
+                    selection={columnSelectionAt(index)}
+                    onSelectAll={handleSelectAllIn}
+                    onSelectNone={handleSelectNoneIn}
+                    onCardsPointerDown={dragSelect.onPointerDown}
                   >
-                    {group.label}
-                  </button>
-                ) : (
-                  <span className="truncate">{group.label}</span>
-                )}
-                {columnSelection ? (
-                  <ColumnSelectionControls
-                    selection={columnSelection}
-                    onAll={handleSelectAllIn}
-                    onNone={handleSelectNoneIn}
-                  />
-                ) : (
-                  <span className="ms-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
-                    {group.items.length}
-                  </span>
-                )}
-                {canQuickAdd && !columnSelection && (
-                  <button
-                    type="button"
-                    aria-label="Создать задачу в проекте"
-                    title="Создать задачу"
-                    onClick={() =>
-                      setComposingProject((p) => (p === group.key ? null : group.key))
-                    }
-                    // Всегда видна (как «+» в шапке колонок на досках проекта) — юзер жаловался,
-                    // что hover-only «+» не заметен. Тихий muted, ярче по наведению.
-                    className="shrink-0 rounded-md p-0.5 text-muted-foreground/70 transition-colors hover:bg-background hover:text-foreground"
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                )}
-              </div>
-              <div
-                onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
-                className={cn('flex flex-col gap-1.5 p-1.5', COLUMN_SCROLL_CLASS)}
-              >
-                {/* #2: инлайн-создание сверху колонки-проекта — ТОТ ЖЕ композер, что и в
-                    нижних канбанах (InlineNewCard): плавно, Enter создаёт и оставляет поле для
-                    следующей, иконки, blur-commit. Без модального окна. */}
-                {composingProject === group.key && (
-                  <InlineNewCard
-                    onCreate={(name, icon) => createInProjectColumn(group.key, name, icon)}
-                    onClose={() => setComposingProject(null)}
-                    onOpenFull={() => setComposingProject(null)}
-                  />
-                )}
-                <ColumnPreviewList
-                  key={[grouping, group.key].join('|')}
-                  items={group.items}
-                  getId={(item) => item.id}
-                  renderItem={(item, cardExiting) => (
-                    <DraggableTask
-                      key={item.id}
-                      item={item}
-                      disabled={!item.canModify || exiting || cardExiting}
-                      selecting={selectionActive}
-                      // Вся ГРУППА-колонка сейчас призрак (useExitingListItems держит её старый
-                      // снимок вместе с карточками) — карточка внутри могла уже переехать в
-                      // другую живую колонку с тем же item.id. Без суффикса unmount призрака
-                      // стёр бы draggableNodes-запись живой карточки, и та молча переставала
-                      // бы таскаться (см. draggableTaskId). То же и для призрака ОДНОЙ
-                      // карточки, доигрывающей своё схлопывание внутри живой колонки.
-                      ghost={exiting || cardExiting}
-                    >
-                      <AcceptedCard
-                        item={item}
-                        onOpen={() => setDrawerTask(item)}
-                        onChanged={handleToggled}
-                        onDelete={() => handleDelete(item)}
-                        showCreatedAt={grouping === 'created'}
-                        hideProjectLabel={grouping === 'project'}
-                        selecting={selectionActive}
-                        selected={selectedIds.has(item.id)}
-                        onSelectToggle={handleSelectToggle}
+                    {group.items.length === 0 ? (
+                      <p className="px-1.5 py-2 text-meta text-muted-foreground">{emptyColumnText}</p>
+                    ) : (
+                      <ColumnPreviewList
+                        // key по вкладке+фильтрам: смена датасета ремаунтит список (не тащим
+                        // позицию скролла колонки между вкладками).
+                        key={[tab, filterTo ?? '', filterProject ?? ''].join('|')}
+                        items={group.items}
+                        getId={(item) => item.id}
+                        renderItem={(item, cardExiting) => (
+                          <DraggableTask
+                            key={item.id}
+                            item={item}
+                            disabled={!item.canModify || cardExiting}
+                            selecting={selectionActive}
+                            ghost={cardExiting}
+                          >
+                            <AcceptedCard
+                              item={item}
+                              onOpen={() => setDrawerTask(item)}
+                              onChanged={handleToggled}
+                              onDelete={() => handleDelete(item)}
+                              extraActions={takeToWorkAction(item)}
+                              selecting={selectionActive}
+                              selected={selectedIds.has(item.id)}
+                              onSelectToggle={handleSelectToggle}
+                            />
+                          </DraggableTask>
+                        )}
                       />
-                    </DraggableTask>
-                  )}
+                    )}
+                  </TimeBucketColumn>
+                );
+              })}
+              {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
+                  ЦЕНТРУ и через snap, и через max-scroll (iOS). Ширина = «пипке» соседа. */}
+              <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
+            </div>
+          ) : groups.length === 0 && !boardDragActive ? (
+            <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
+              {hasLocalFilters ? 'Под фильтры ничего не попадает' : 'Очередь пуста'}
+            </p>
+          ) : (
+            // Остальные сортировки (проект / дата создания / приоритет / тип): колонки-группы.
+            // Пока тащат свою карточку, колонки других проектов принимают её (перенос в проект).
+            <div ref={setRowRef} onScroll={handleRowScroll} className={COLUMNS_ROW_CLASS}>
+              {boardDragActive && phantomProjectNeeded && (
+                <PhantomDropColumn
+                  id="phantom-project"
+                  kind="project"
+                  icon={FolderKanban}
+                  label="Другой проект…"
+                  hint="Бросьте сюда, чтобы выбрать проект из списка"
                 />
-              </div>
-            </GroupDropColumn>
+              )}
+              {boardDragActive && phantomPriorityNeeded && (
+                <PhantomDropColumn
+                  id="phantom-priority"
+                  kind="priority"
+                  icon={Flag}
+                  label="Другой приоритет…"
+                  hint="Бросьте сюда, чтобы выбрать приоритет"
+                />
+              )}
+              {displayGroups.map(({ item: group, exiting }) => {
+                // Индекс в РЕАЛЬНОМ groups (не в displayGroups — там есть ещё «призраки»
+                // опустевших колонок) — columnSelectionAt индексирует именно groups/selectableGroups.
+                // Для призрака индекса нет: выделение на исчезающей колонке не имеет смысла.
+                const index = groups.findIndex((g) => g.key === group.key);
+                // Колонка = реальный проект (группировка по проекту). Своя «Личные» — тоже
+                // проект (инбокс), в неё тоже можно перенести; чужие «Личные · имя» — нет.
+                const isProjectColumn =
+                  grouping === 'project' && (!group.isInbox || group.key === inboxProjectId);
+                // Смысл дропа на колонку: project → перенос задачи в проект; priority →
+                // смена приоритета (только карточки доски). Призрак дроп не принимает.
+                const dropData = exiting
+                  ? null
+                  : isProjectColumn
+                    ? { type: 'group', grouping: 'project', projectId: group.key }
+                    : grouping === 'priority' && boardDragActive
+                      ? { type: 'group', grouping: 'priority', priority: group.key }
+                      : null;
+                const ownDropHere =
+                  activeDrag !== null &&
+                  isProjectColumn &&
+                  activeDrag.canModify &&
+                  activeDrag.projectId !== group.key;
+                const columnSelection = index >= 0 ? columnSelectionAt(index) : null;
+                // «+» на колонке-проекте (не на «Личных» коллег): задача создаётся в этом
+                // проекте на текущего юзера. Гейт по canModify ≈ право создавать.
+                const canQuickAdd =
+                  !exiting && grouping === 'project' && !group.isInbox && group.items.some((i) => i.canModify);
+                const collapseKey = `${grouping}:${group.key}`;
+                const collapsed = canCollapse && collapsedColumns.has(collapseKey) && !exiting;
+                const tone = groupToneClass(grouping, group);
+                const tag = (
+                  <span className={cn('pf-tag pf-tag-lg', grouping !== 'project' && 'pf-tag-plain', tone)}>
+                    {grouping !== 'project' && <GroupIcon mode={grouping} isInbox={group.isInbox} />}
+                    <span className="truncate">{group.label}</span>
+                  </span>
+                );
+                return (
+                  // Обёртка-коллапс СНАРУЖИ droppable-колонки (не на самом её узле — droppable
+                  // ref живёт внутри GroupDropColumn) — overflow:hidden тут не задевает measure
+                  // dnd-kit'а над самим droppable/sortable-узлом. data-pf-collapse — едет и при
+                  // выключенных на тач анимациях (globals.css .pf-no-motion исключение).
+                  <div
+                    key={group.key}
+                    data-pf-collapse
+                    className="grid shrink-0 motion-safe:transition-[grid-template-columns] motion-safe:duration-300 motion-safe:ease-out"
+                    style={{ gridTemplateColumns: exiting ? '0fr' : '1fr' }}
+                  >
+                    <div className={cn('min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
+                      <GroupDropColumn
+                        id={`group-${grouping}-${group.key}`}
+                        data={dropData}
+                        highlight={boardDragActive || ownDropHere}
+                        exiting={exiting}
+                        className={cn(
+                          collapsed ? COLLAPSED_COLUMN_CLASS : cn('group/col', INBOX_COLUMN_CLASS),
+                          exiting &&
+                            'pointer-events-none opacity-0 transition-opacity duration-200 motion-reduce:transition-none',
+                        )}
+                      >
+                        {collapsed ? (
+                          <CollapsedColumnButton
+                            label={group.label}
+                            count={group.items.length}
+                            toneClass={tone}
+                            onExpand={() => toggleColumnCollapsed(collapseKey)}
+                          />
+                        ) : (
+                          <>
+                            <ColumnHead
+                              tag={
+                                isProjectColumn && !group.isInbox ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/projects/${group.key}`)}
+                                    title="Открыть проект"
+                                    className="flex min-w-0 rounded-[5px] transition-opacity hover:opacity-80"
+                                  >
+                                    {tag}
+                                  </button>
+                                ) : (
+                                  tag
+                                )
+                              }
+                              count={group.items.length}
+                              selection={columnSelection}
+                              onSelectAll={handleSelectAllIn}
+                              onSelectNone={handleSelectNoneIn}
+                            >
+                              {canQuickAdd && (
+                                <button
+                                  type="button"
+                                  aria-label="Создать задачу в проекте"
+                                  title="Создать задачу"
+                                  onClick={() =>
+                                    setComposingProject((p) => (p === group.key ? null : group.key))
+                                  }
+                                  className={COLUMN_ACTION_CLASS}
+                                >
+                                  <Plus className="size-3.5" />
+                                </button>
+                              )}
+                              {canCollapse && !exiting && (
+                                <button
+                                  type="button"
+                                  aria-label={`Свернуть «${group.label}»`}
+                                  title="Свернуть"
+                                  onClick={() => toggleColumnCollapsed(collapseKey)}
+                                  className={COLUMN_ACTION_CLASS}
+                                >
+                                  <ChevronsLeft className="size-3.5" />
+                                </button>
+                              )}
+                            </ColumnHead>
+                            <div
+                              onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
+                              className={cn('flex flex-col gap-[5px]', COLUMN_SCROLL_CLASS)}
+                            >
+                              {/* #2: инлайн-создание сверху колонки-проекта — ТОТ ЖЕ композер, что и
+                                  на досках проектов (InlineNewCard): Enter создаёт и оставляет поле
+                                  для следующей, иконки, blur-commit. Без модального окна. */}
+                              {composingProject === group.key && (
+                                <InlineNewCard
+                                  onCreate={(name, icon) => createInProjectColumn(group.key, name, icon)}
+                                  onClose={() => setComposingProject(null)}
+                                  onOpenFull={() => setComposingProject(null)}
+                                />
+                              )}
+                              {group.items.length === 0 && composingProject !== group.key && (
+                                <p className="px-1.5 py-2 text-meta text-muted-foreground">{emptyColumnText}</p>
+                              )}
+                              <ColumnPreviewList
+                                key={[grouping, group.key].join('|')}
+                                items={group.items}
+                                getId={(item) => item.id}
+                                renderItem={(item, cardExiting) => (
+                                  <DraggableTask
+                                    key={item.id}
+                                    item={item}
+                                    disabled={!item.canModify || exiting || cardExiting}
+                                    selecting={selectionActive}
+                                    // Вся ГРУППА-колонка сейчас призрак (useExitingListItems держит её
+                                    // старый снимок вместе с карточками) — карточка внутри могла уже
+                                    // переехать в другую живую колонку с тем же item.id. Без суффикса
+                                    // unmount призрака стёр бы draggableNodes-запись живой карточки
+                                    // (см. draggableTaskId). То же и для призрака ОДНОЙ карточки.
+                                    ghost={exiting || cardExiting}
+                                  >
+                                    <AcceptedCard
+                                      item={item}
+                                      onOpen={() => setDrawerTask(item)}
+                                      onChanged={handleToggled}
+                                      onDelete={() => handleDelete(item)}
+                                      extraActions={takeToWorkAction(item)}
+                                      showCreatedAt={grouping === 'created'}
+                                      hideProjectLabel={grouping === 'project'}
+                                      selecting={selectionActive}
+                                      selected={selectedIds.has(item.id)}
+                                      onSelectToggle={handleSelectToggle}
+                                    />
+                                  </DraggableTask>
+                                )}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </GroupDropColumn>
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
+                  ЦЕНТРУ и через snap, и через max-scroll (iOS). Ширина = «пипке» соседа. */}
+              <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
             </div>
-            </div>
-            );
-          })}
-          {/* Хвостовой спейсер (моб): пустота справа, чтобы последняя колонка вставала по
-              ЦЕНТРУ и через snap, и через max-scroll (iOS). Ширина = «пипке» соседа. */}
-          <div aria-hidden className="w-[max(7vw,calc(50vw_-_11rem))] shrink-0 sm:hidden" />
-        </div>
+          )}
+        </section>
+      </div>
+
+      {/* Закреплённый снизу вьюпорта горизонтальный скролл ряда колонок — как на досках
+          проектов: прилипает к низу вьюпорта, пока зона в поле зрения; рендерится только при
+          переполнении и только на десктопе (на мобиле ряд листается свайпом). */}
+      <SyncedStickyScrollbar key={grouping} targetRef={hScrollElRef} />
+
+      {/* Полоса «Готово» — появляется на время перетаскивания своей карточки. Там, где работу
+          принимает руководитель, бросок сдаёт её на утверждение (сервер так и сделает). */}
+      {showDoneBar && (
+        <DoneDropBar
+          label={
+            approvalEnabled && !isApprover
+              ? 'Бросьте сюда, чтобы сдать на утверждение'
+              : 'Бросьте сюда, чтобы отметить готовой'
+          }
+        />
       )}
-
-      {/* Закреплённый снизу вьюпорта горизонтальный скролл ряда верхних канбанов — как на
-          досках проектов (запрос юзера: «скролл всегда закреплён снизу при скролле страницы»).
-          Прилипает к низу вьюпорта, пока зона #assigned-to-me в поле зрения; рендерится
-          только при переполнении и только на десктопе (на мобиле ряд листается свайпом). */}
-      <SyncedStickyScrollbar key={grouping} targetRef={hScrollElRef} className={bleedNegClass} />
-
-      {/* Hairline-линейка замыкает персональную зону перед основной доской. В канбане
-          уезжает full-bleed теми же отрицательными маржинами, что и ряд колонок (в list
-          bleedNegClass = '' — линия в ширину читаемой колонки). !mt-* перебивает space-y-3
-          секции: линии нужно больше воздуха сверху, чем шагу шапка→тело. */}
-      <div
-        aria-hidden
-        className={cn(
-          '!mbs-5 mbe-1 border-bs border-border sm:!mbs-6 sm:mbe-2',
-          // Ряд колонок (при любой сортировке) full-bleed'ится за паддинг — линия тоже.
-          bleedNegClass,
-        )}
-      />
 
       <TaskDrawer
         state={drawerTask ? ({ mode: 'edit', task: drawerTask } as TaskDrawerState) : null}
@@ -1816,7 +2209,6 @@ export function AssignedToMeBlock({
     // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
     // (drag → смена ответственного) — общие drop-цели одного перетаскивания карточки.
     <>
-      {filtersToolbar}
       <DndContext
         sensors={sensors}
         collisionDetection={dndCollision}
@@ -1852,7 +2244,7 @@ export function TaskDragPill({ title }: { title: string }): React.ReactElement {
       initial={{ scale: 1.25, opacity: 0.3 }}
       animate={{ scale: 1, opacity: 0.55 }}
       transition={{ type: 'spring', stiffness: 520, damping: 34, mass: 0.6 }}
-      className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-full border border-primary/40 bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-lg ring-1 ring-primary/20"
+      className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-lg bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-float ring-1 ring-primary/40"
     >
       <GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
       <span className="truncate">{title || 'Задача'}</span>
@@ -1908,12 +2300,175 @@ function ColumnSelectionControls({
   );
 }
 
-// Колонка канбана «по времени» = drop-зона. При наведении таскаемой карточки колонка
-// подсвечивается (ring), сигналя, что дроп сменит срок на этот бакет.
+// === Колонки доски «Входящих» (дизайн C4) ===
+// Колонка — серая панель 256px с радиусом 10px, карточки внутри с зазором 5px; шапка 28px:
+// метка-тон, счётчик, действия справа. Свёрнутая колонка — вертикальная полоска 38px.
+const INBOX_COLUMN_CLASS =
+  'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col gap-[5px] rounded-xl bg-panel p-1.5 transition-[background-color,outline-color] duration-150 sm:w-64 sm:max-w-none';
+const COLLAPSED_COLUMN_CLASS =
+  'flex min-h-[200px] w-[38px] shrink-0 flex-col rounded-xl bg-panel transition-[background-color,outline-color] duration-150';
+// Ряд колонок: свой скролл вбок, родная полоса спрятана — видимую и закреплённую снизу даёт
+// SyncedStickyScrollbar (иначе внизу второй «раздвоенный» бар, как на доске).
+const COLUMNS_ROW_CLASS =
+  'flex items-start snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-none pbe-2 sm:snap-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+// Иконка-кнопка в шапке колонки («+», «свернуть»): 24px на десктопе, 36px на тач-экранах.
+const COLUMN_ACTION_CLASS =
+  'grid size-9 shrink-0 place-items-center rounded-[5px] text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:size-6';
+// Подсветка колонки как цели броска: штрих — «сюда можно», сплошная синяя — «отпустите».
+const DROP_TARGET_CLASS = 'outline outline-1 -outline-offset-2 outline-dashed outline-drop-line';
+const DROP_OVER_CLASS = 'bg-drop outline outline-2 -outline-offset-2 outline-primary';
+
+const QUEUE_LABEL: Record<AssignedGrouping, string> = {
+  project: 'Очередь по проектам',
+  deadline: 'Очередь по срокам',
+  priority: 'Очередь по приоритету',
+  created: 'Очередь по дате создания',
+  taskType: 'Очередь по типу',
+};
+
+// Тон метки в шапке колонки: проект — его постоянный цвет (как в сайдбаре), приоритет —
+// от красного «Срочно» к синему «Низкий», остальное — нейтральный серый.
+const PRIORITY_TONE: Record<string, string> = {
+  '1': 'pf-tone-red',
+  '2': 'pf-tone-orange',
+  '3': 'pf-tone-yellow',
+  '4': 'pf-tone-blue',
+  none: 'pf-tone-gray',
+};
+function groupToneClass(
+  grouping: AssignedGrouping,
+  group: { readonly key: string; readonly isInbox: boolean },
+): string {
+  if (grouping === 'project') return projectToneClass(group.key, group.isInbox);
+  if (grouping === 'priority') return PRIORITY_TONE[group.key] ?? 'pf-tone-gray';
+  return 'pf-tone-gray';
+}
+
+// Шапка колонки: метка, счётчик (или «Выбрано N · Все · Очистить» в режиме выделения) и
+// действия колонки справа.
+function ColumnHead({
+  tag,
+  count,
+  selection = null,
+  onSelectAll,
+  onSelectNone,
+  children,
+}: {
+  tag: React.ReactNode;
+  count: number;
+  selection?: ColumnSelection | null;
+  onSelectAll?: (ids: readonly string[]) => void;
+  onSelectNone?: (ids: readonly string[]) => void;
+  children?: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="flex h-7 shrink-0 items-center gap-1.5 px-[3px] text-ui">
+      <span className="flex min-w-0 items-center">{tag}</span>
+      {selection && onSelectAll && onSelectNone ? (
+        <ColumnSelectionControls selection={selection} onAll={onSelectAll} onNone={onSelectNone} />
+      ) : (
+        <>
+          <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+          <span className="ms-auto flex shrink-0 items-center gap-0.5">{children}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Свёрнутая колонка: вертикальное имя и число; клик разворачивает. Бросать карточку можно и
+// на свёрнутую — droppable живёт на обёртке (GroupDropColumn).
+function CollapsedColumnButton({
+  label,
+  count,
+  toneClass,
+  onExpand,
+}: {
+  label: string;
+  count: number;
+  toneClass: string;
+  onExpand: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      aria-label={`Развернуть «${label}»`}
+      title={label}
+      className="flex w-full flex-1 flex-col items-center gap-2 rounded-xl py-2.5 text-meta font-semibold transition-colors hover:bg-hover"
+    >
+      <span aria-hidden className={cn('size-2 shrink-0 rounded-[3px] bg-tone', toneClass)} />
+      <span className="max-h-48 overflow-hidden [writing-mode:vertical-rl]">{label}</span>
+      <span className="tabular-nums text-muted-foreground">{count}</span>
+    </button>
+  );
+}
+
+// Кнопка в плашке быстрых действий карточки (взять в работу, сдать, вернуть). Нажатие не
+// проваливается в карточку и не стартует перетаскивание.
+const QUICK_ACTION_CLASS =
+  'grid size-6 shrink-0 place-items-center rounded-[5px] transition-colors hover:bg-hover max-sm:size-8';
+function QuickAction({
+  label,
+  className,
+  onClick,
+  children,
+}: {
+  label: string;
+  className?: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      className={cn(QUICK_ACTION_CLASS, className)}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Полоса «Готово» внизу экрана на время перетаскивания: бросок закрывает задачу. Фиксирована
+// над нижней навигацией на телефоне и у нижнего края на десктопе.
+function DoneDropBar({ label }: { label: string }): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({ id: 'done-bar', data: { type: 'done' } });
+  return (
+    <div className="pointer-events-none fixed inset-x-0 inset-be-[calc(5.5rem_+_env(safe-area-inset-bottom))] z-40 flex justify-center px-4 md:inset-be-6">
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'pointer-events-auto flex items-center gap-2.5 rounded-xl border border-dashed px-5 py-3 text-task font-semibold text-done-ink shadow-float transition-colors duration-150',
+          isOver ? 'border-done bg-done-soft-hover' : 'border-done/60 bg-done-soft',
+        )}
+      >
+        <Check className="size-4 shrink-0" strokeWidth={2.4} />
+        {label}
+      </div>
+    </div>
+  );
+}
+
+// Колонка канбана «по сроку» (группировка «Дедлайн») = drop-зона: дроп меняет срок задачи
+// на этот бакет. Вид — как у колонок проектов.
+const BUCKET_TONE: Record<string, string> = {
+  none: 'pf-tone-gray',
+  today: 'pf-tone-orange',
+  future: 'pf-tone-blue',
+};
 function TimeBucketColumn({
   bucket,
   label,
   count,
+  collapsed = false,
+  onToggleCollapsed,
   selection = null,
   onSelectAll,
   onSelectNone,
@@ -1923,6 +2478,8 @@ function TimeBucketColumn({
   bucket: string;
   label: string;
   count: number;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   // Режим выделения: счётчик + «Все»/«Очистить» по ЭТОЙ колонке. null — режим выключен.
   selection?: ColumnSelection | null;
   onSelectAll?: (ids: readonly string[]) => void;
@@ -1931,45 +2488,64 @@ function TimeBucketColumn({
   onCardsPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
   children: React.ReactNode;
 }): React.ReactElement {
-  const { setNodeRef, isOver } = useDroppable({ id: `bucket-${bucket}`, data: { type: 'bucket', bucket } });
+  const { setNodeRef, isOver, active } = useDroppable({
+    id: `bucket-${bucket}`,
+    data: { type: 'bucket', bucket },
+  });
+  const tone = BUCKET_TONE[bucket] ?? 'pf-tone-gray';
   return (
     <div
       ref={setNodeRef}
-      // Шёпот-тинт primary вместо серого muted — колонки читаются «чуть голубыми» на фоне
-      // серых колонок доски ниже. На мобиле альфа выше, в dark ещё выше. Не поднимать выше
-      // /[0.09]//[0.11] — начинает «светиться».
       className={cn(
-        'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col overflow-clip rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
-        isOver && 'ring-2 ring-inset ring-primary',
+        collapsed ? COLLAPSED_COLUMN_CLASS : INBOX_COLUMN_CLASS,
+        active && !isOver && DROP_TARGET_CLASS,
+        isOver && DROP_OVER_CLASS,
       )}
     >
-      <div className="flex items-center gap-1.5 border-be border-black/[0.06] px-3 pbe-1.5 pbs-2.5 text-xs font-medium text-muted-foreground dark:border-white/[0.06]">
-        <TimeBucketIcon bucket={bucket} />
-        <span className="min-w-0 truncate">{label}</span>
-        {selection && onSelectAll && onSelectNone ? (
-          <ColumnSelectionControls
+      {collapsed && onToggleCollapsed ? (
+        <CollapsedColumnButton label={label} count={count} toneClass={tone} onExpand={onToggleCollapsed} />
+      ) : (
+        <>
+          <ColumnHead
+            tag={
+              <span className={cn('pf-tag pf-tag-lg pf-tag-plain', tone)}>
+                <TimeBucketIcon bucket={bucket} />
+                <span className="truncate">{label}</span>
+              </span>
+            }
+            count={count}
             selection={selection}
-            onAll={onSelectAll}
-            onNone={onSelectNone}
-          />
-        ) : (
-          <span className="shrink-0 text-muted-foreground/60">{count}</span>
-        )}
-      </div>
-      <div
-        // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
-        onPointerDown={selection ? onCardsPointerDown : undefined}
-        className={cn('flex min-h-[3rem] flex-col gap-2 px-2 pbe-2', COLUMN_SCROLL_CLASS)}
-      >
-        {children}
-      </div>
+            {...(onSelectAll ? { onSelectAll } : {})}
+            {...(onSelectNone ? { onSelectNone } : {})}
+          >
+            {onToggleCollapsed && (
+              <button
+                type="button"
+                aria-label={`Свернуть «${label}»`}
+                title="Свернуть"
+                onClick={onToggleCollapsed}
+                className={COLUMN_ACTION_CLASS}
+              >
+                <ChevronsLeft className="size-3.5" />
+              </button>
+            )}
+          </ColumnHead>
+          <div
+            // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
+            onPointerDown={selection ? onCardsPointerDown : undefined}
+            className={cn('flex min-h-[3rem] flex-col gap-[5px]', COLUMN_SCROLL_CLASS)}
+          >
+            {children}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-// Колонка-группа (сортировки проект/дата/приоритет) как drop-цель для карточек ДОСКИ
-// (единый DnD, план inbox-grouped-dnd). data=null (created / «Личные») — цель выключена,
-// обычная колонка. Подсветка ring — только пока тащат карточку с доски (highlight).
+// Колонка-группа (сортировки проект/дата/приоритет/тип) как drop-цель: свою карточку можно
+// бросить на колонку другого проекта (перенос в проект). data=null — цель выключена,
+// обычная колонка. Подсветка — только пока тащат то, что сюда можно бросить (highlight).
 function GroupDropColumn({
   id,
   data,
@@ -1977,10 +2553,9 @@ function GroupDropColumn({
   className,
   // Колонка сейчас схлопывается (группа опустела) — её собственный opacity-переход
   // (см. className вызывающего кода) получает data-pf-collapse, иначе на тач он
-  // проседает в 0.01ms под pf-no-motion отдельно от grid-схлопывания враппера снаружи
-  // (то же рассинхрон-ревью, что было у InProgressShelf: коробка едет, карточка гаснет
-  // рывком). Не ставим атрибут БЕЗУСЛОВНО — иначе он заодно форсировал бы duration и у
-  // соседнего drag-highlight ring'а (transition выше), которого сейчас это не касается.
+  // проседает в 0.01ms под pf-no-motion отдельно от grid-схлопывания враппера снаружи.
+  // Не ставим атрибут БЕЗУСЛОВНО — иначе он заодно форсировал бы duration и у
+  // соседней подсветки броска, которой сейчас это не касается.
   exiting = false,
   children,
 }: {
@@ -1998,15 +2573,9 @@ function GroupDropColumn({
       {...(exiting ? { 'data-pf-collapse': true } : {})}
       className={cn(
         className,
-        // Пока тащат карточку с доски: все колонки-цели получают тихий ринг-намёк, а та, что
-        // под курсором, — сплошной ринг + лёгкий тинт. Одно из двух (не оба разом — конфликт
-        // ring-1/ring-2 в CSS решался бы порядком в стайлшите, а не в className).
-        data !== null && highlight && 'transition-[color,background-color,border-color,box-shadow] duration-200',
-        data !== null &&
-          highlight &&
-          (isOver
-            ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary'
-            : 'ring-1 ring-inset ring-primary/15'),
+        // Пока тащат подходящую карточку: все колонки-цели получают штрих-намёк, а та, что под
+        // курсором, — сплошную рамку и тинт. Одно из двух, не оба разом.
+        data !== null && highlight && (isOver ? DROP_OVER_CLASS : DROP_TARGET_CLASS),
       )}
     >
       {children}
@@ -2035,13 +2604,13 @@ function PhantomDropColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-40 shrink-0 snap-center snap-always flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-[color,background-color,border-color,box-shadow] duration-200 sm:w-44',
-        isOver && 'scale-[1.02] border-primary bg-primary/[0.08]',
+        'flex w-40 shrink-0 snap-center snap-always flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-drop-line bg-panel px-3 py-4 text-center transition-[background-color,border-color] duration-200 sm:w-44',
+        isOver && 'border-primary bg-drop',
       )}
     >
-      <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
-      <span className="text-xs font-medium text-foreground/80">{label}</span>
-      <span className="text-2xs leading-tight text-muted-foreground/70">{hint}</span>
+      <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-muted-foreground')} />
+      <span className="text-xs font-medium text-foreground">{label}</span>
+      <span className="text-2xs leading-tight text-muted-foreground">{hint}</span>
     </div>
   );
 }
@@ -2198,9 +2767,9 @@ function RejectApprovalDialog({
   );
 }
 
-// Полка «На утверждении» (db/150): очередь приёмки руководителя. Появляется только когда
-// есть что принимать, поэтому командам без приёмки страница выглядит как раньше. Цвет —
-// фиолетовый, тот же, что у одноимённой колонки на доске проекта.
+// Полка «На утверждении» (db/150): очередь приёмки руководителя — верхняя часть колонки
+// «Сейчас». Нейтральная зона с фиолетовой меткой (цвет статуса), карточки стопкой; при
+// перетаскивании своей готовой работы зона подсвечивается как цель.
 function ApprovalShelf({
   items,
   onOpen,
@@ -2216,6 +2785,7 @@ function ApprovalShelf({
   selecting = false,
   selectedIds,
   onSelectToggle,
+  headerEnd,
   className,
 }: {
   items: readonly InboxBlockTask[];
@@ -2234,8 +2804,8 @@ function ApprovalShelf({
   // Можно ли бросить в полку карточку, которую тащат прямо сейчас. Считает родитель:
   // только он знает, что именно в руке (activeDrag). false — цель погашена.
   canDrop: boolean;
-  // Идёт ЛЮБОЙ drag общего контекста — нужен для тихого ring-намёка «сюда можно», того же,
-  // что у соседних GroupDropColumn: полка не должна раскрываться только под курсором.
+  // Идёт ЛЮБОЙ drag общего контекста — нужен для штрих-намёка «сюда можно»: полка не
+  // должна раскрываться только под курсором.
   dragActive: boolean;
   // Чем объяснить пустую полку. На доске сотрудника это «у него нечего принимать», а не
   // общее «сотрудники ещё ничего не сдали» — иначе руководитель читает чужую очередь как свою.
@@ -2245,6 +2815,8 @@ function ApprovalShelf({
   selecting?: boolean;
   selectedIds?: ReadonlySet<string>;
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
+  // Кнопка в правом конце шапки (свернуть колонку «Сейчас»).
+  headerEnd?: React.ReactNode;
   className?: string;
 }): React.ReactElement {
   // Цель дропа. disabled гасит её целиком: недоступная полка не попадает в коллизии,
@@ -2254,59 +2826,51 @@ function ApprovalShelf({
     data: { type: 'approval' },
     disabled: !canDrop || selecting,
   });
-  // Пустую полку видит теперь и рядовой исполнитель (не только принимающий) — текст
-  // по умолчанию должен объяснять её именно ему: это цель для СВОЕЙ сделанной работы,
-  // а не чужая очередь. emptyHint (доска сотрудника) и isApprover-текст — не трогаем.
+  // Пустую полку видит и рядовой исполнитель (не только принимающий) — текст по умолчанию
+  // объясняет её именно ему: это цель для СВОЕЙ сделанной работы, а не чужая очередь.
   const defaultEmptyHint = isApprover
     ? 'Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их можете только вы.'
-    : 'Сюда перетаскивают свою сделанную работу, чтобы её принял руководитель.';
+    : 'Готовую задачу перетащите сюда из «Вручную» — её примет руководитель.';
   return (
-    <div className={className}>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'rounded-xl border border-violet-300/50 bg-violet-100/40 px-2.5 py-2 transition-colors duration-150 dark:border-violet-400/20 dark:bg-violet-400/[0.07]',
-          // Пока тащат карточку, которую можно бросить сюда: тихий ring-намёк того же
-          // языка, что у GroupDropColumn (та же ring-1/inset-primary/15), плюс сплошной
-          // ring под курсором — иначе полка «молчит» до тех пор, пока не наведёшься точно.
-          canDrop && dragActive && !isOver && 'ring-1 ring-inset ring-primary/15',
-          isOver &&
-            'border-violet-400/80 bg-violet-200/60 dark:border-violet-300/50 dark:bg-violet-400/[0.16]',
-        )}
-      >
-        <div className="mbe-1.5 flex items-center gap-1.5 text-2xs font-medium text-violet-800 dark:text-violet-300/90">
-          <ShieldCheck className="size-3 shrink-0" />
-          <span>На утверждении</span>
-          {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
-        </div>
-        {items.length === 0 ? (
-          // Пустую очередь теперь видят и принимающий, и рядовой исполнитель (см.
-          // approvalEnabled у родителя) — без этого либо новую область не находят, либо
-          // цели дропа для «сдать первую задачу» жестом попросту нет.
-          <p className="px-0.5 py-1 text-xs text-violet-800/60 dark:text-violet-200/45">
-            {emptyHint ?? defaultEmptyHint}
-          </p>
-        ) : (
-        <div className="flex flex-wrap gap-2">
-          {items.map((item) => (
-            <ApprovalItemCard
-              key={item.id}
-              item={item}
-              onOpen={() => onOpen(item)}
-              onChanged={onChanged}
-              onReject={() => onReject(item)}
-              onWithdraw={() => onWithdraw(item)}
-              onAccept={onAccept}
-              isApprover={isApprover}
-              currentUserId={currentUserId}
-              selecting={selecting}
-              selected={selectedIds?.has(item.id) ?? false}
-              {...(onSelectToggle ? { onSelectToggle } : {})}
-            />
-          ))}
-        </div>
-        )}
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex flex-col gap-[5px] rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        canDrop && dragActive && !isOver && DROP_TARGET_CLASS,
+        isOver && 'bg-approval-zone outline outline-2 -outline-offset-2 outline-primary',
+        className,
+      )}
+    >
+      <div className="flex h-7 items-center gap-1.5 px-[3px] text-ui">
+        <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-approval">
+          <ShieldCheck className="size-3.5 shrink-0 text-approval" strokeWidth={2.3} />
+          На утверждении
+        </span>
+        <span className="tabular-nums text-muted-foreground">{items.length}</span>
+        {headerEnd}
       </div>
+      {items.length === 0 ? (
+        <p className="px-1 pbe-1 text-meta leading-snug text-muted-foreground">
+          {emptyHint ?? defaultEmptyHint}
+        </p>
+      ) : (
+        items.map((item) => (
+          <ApprovalItemCard
+            key={item.id}
+            item={item}
+            onOpen={() => onOpen(item)}
+            onChanged={onChanged}
+            onReject={() => onReject(item)}
+            onWithdraw={() => onWithdraw(item)}
+            onAccept={onAccept}
+            isApprover={isApprover}
+            currentUserId={currentUserId}
+            selecting={selecting}
+            selected={selectedIds?.has(item.id) ?? false}
+            {...(onSelectToggle ? { onSelectToggle } : {})}
+          />
+        ))
+      )}
     </div>
   );
 }
@@ -2341,14 +2905,11 @@ function ApprovalItemCard({
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 }): React.ReactElement {
   const { celebrate, forget } = useCompletedToday();
-  // Общий движок фаз (useFlashExitPhase, см. AcceptedCard.completePhase выше и сам хук):
+  // Общий движок фаз (useFlashExitPhase, см. AcceptedCard.completePhase ниже и сам хук):
   // в зависимостях его эффекта — только item.id, а onAccept/onError уходят через ref
   // внутри хука. Это важно именно здесь — полка рендерит НЕСКОЛЬКО таких карточек сразу,
   // и refresh() от соседней (свой же после её приёмки, SSE-эхо, mount/visibilitychange)
   // пересобирает approvalTasks и меняет ссылку на item у ВСЕХ смонтированных карточек.
-  // Раньше это был весь `item` в зависимостях — эффект перезапускался, отменял уже
-  // тикающий таймер и взводил его заново: при приёмке нескольких задач подряд карточка
-  // могла визуально исчезнуть, а move() так и не вызваться.
   const { phase, start: startPhase } = useFlashExitPhase(
     item.id,
     () => onAccept(item),
@@ -2371,29 +2932,65 @@ function ApprovalItemCard({
 
   const accepting = phase !== 'idle';
 
+  // Явные кнопки внутри карточки, а не только чекбокс: приёмка — решение, а не отметка.
+  // В режиме выделения их прячем: решение принимают по одной задаче, а не пачкой.
+  const footer = selecting ? null : isApprover ? (
+    <div className="flex gap-1.5">
+      <button
+        type="button"
+        onClick={startAccept}
+        disabled={accepting}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-done-soft px-2.5 text-meta font-semibold text-done-ink transition-colors hover:bg-done-soft-hover disabled:cursor-not-allowed disabled:opacity-70 sm:h-[26px]"
+      >
+        {accepting ? (
+          <Loader2 className="size-3 motion-safe:animate-spin" />
+        ) : (
+          <Check className="size-3.5" strokeWidth={2.6} />
+        )}
+        Принять
+      </button>
+      <button
+        type="button"
+        onClick={onReject}
+        disabled={accepting}
+        className="inline-flex h-9 items-center rounded-md px-2.5 text-meta text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:h-[26px]"
+      >
+        Вернуть
+      </button>
+    </div>
+  ) : item.assignee.userId === currentUserId ? (
+    // Исполнителю — выход из тупика: отправил по ошибке, забрал обратно.
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      Ждёт решения руководителя
+      <button
+        type="button"
+        onClick={onWithdraw}
+        disabled={accepting}
+        title="Забрать задачу с утверждения и продолжить работу"
+        className="ms-auto inline-flex h-9 items-center rounded-md px-2 text-xs font-semibold text-primary-ink transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-6"
+      >
+        Забрать
+      </button>
+    </div>
+  ) : null;
+
   return (
-    // Тот же коллапс-паттерн, что у AcceptedCard, но по ОБЕИМ осям: полка — flex-wrap-ряд
-    // (ApprovalShelf), и только схлопывание ШИРИНЫ сдвигает соседей по строке влево; высота
-    // сама по себе (как у одиночного AcceptedCard в вертикальном списке) на flex-wrap не
-    // влияет. Здесь он охватывает и карточку, и ряд кнопок под ней — снаружи AcceptedCard
-    // трогать не нужно. data-pf-collapse — едет даже при выключенных на тач анимациях
+    // Тот же коллапс-паттерн, что у AcceptedCard: схлопывание по высоте, соседи по стопке
+    // подтягиваются плавно. data-pf-collapse — едет даже при выключенных на тач анимациях
     // (globals.css .pf-no-motion исключение), полка «На утверждении» видна и на телефоне.
     <div
       data-pf-collapse
       className={cn(
-        'grid transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-columns,grid-template-rows,opacity]',
+        'grid transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-rows,opacity]',
         phase === 'exit' && 'opacity-0',
       )}
-      style={{
-        gridTemplateColumns: phase === 'exit' ? '0fr' : '1fr',
-        gridTemplateRows: phase === 'exit' ? '0fr' : '1fr',
-      }}
+      style={{ gridTemplateRows: phase === 'exit' ? '0fr' : '1fr' }}
     >
       <div className={cn('min-h-0 min-w-0', phase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
         <div
           className={cn(
-            'w-[17rem] max-w-full shrink-0 grow-0 space-y-1 rounded-lg transition-[box-shadow] duration-200 motion-safe:transition-[transform,box-shadow]',
-            phase === 'flash' && 'scale-[1.02] ring-2 ring-emerald-500/50',
+            'rounded-lg transition-[box-shadow] duration-200 motion-safe:transition-[transform,box-shadow]',
+            phase === 'flash' && 'scale-[1.02] ring-2 ring-done/60',
             phase === 'exit' && 'scale-[0.96]',
           )}
         >
@@ -2403,80 +3000,55 @@ function ApprovalItemCard({
             onChanged={onChanged}
             onDelete={onReject}
             hideQuickActions
+            showAssignee
+            footer={footer}
             selecting={selecting}
             selected={selected}
             {...(onSelectToggle ? { onSelectToggle } : {})}
           />
-          {/* Явные кнопки, а не только чекбокс: приёмка — решение, а не отметка. В режиме
-              выделения их прячем: решение принимают по одной задаче, а не пачкой. */}
-          {selecting ? null : isApprover ? (
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={startAccept}
-                disabled={accepting}
-                className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-2xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-70 dark:text-emerald-400"
-              >
-                {accepting && <Loader2 className="size-3 motion-safe:animate-spin" />}
-                Принять
-              </button>
-              <button
-                type="button"
-                onClick={onReject}
-                disabled={accepting}
-                className="flex-1 rounded-md bg-muted px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Вернуть в работу
-              </button>
-            </div>
-          ) : item.assignee.userId === currentUserId ? (
-            // Исполнителю — выход из тупика: отправил по ошибке, забрал обратно.
-            <button
-              type="button"
-              onClick={onWithdraw}
-              disabled={accepting}
-              className="w-full rounded-md bg-muted px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              title="Забрать задачу с утверждения и продолжить работу"
-            >
-              Забрать обратно
-            </button>
-          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-// Полка «В работе»: мягко-жёлтая зона над колонками, куда перетаскивают задачи, которыми
-// занимается сам (статус manual — агент такие не берёт). Подсвечивается при наведении драга. Пустая
-// показывает подсказку — иначе непонятно, что сюда можно тащить.
+// Полка «Вручную»: нижняя часть колонки «Сейчас», куда перетаскивают задачи, которыми
+// занимаются сами (статус manual — агент такие не берёт). Подсвечивается при наведении
+// драга; внизу всегда штриховая подсказка-цель «перетащите сюда».
 function InProgressShelf({
   items,
   onOpen,
   onChanged,
   onDelete,
-  onRemoveFromWork,
+  renderActions,
   flashKey,
   flashItemId,
   selecting = false,
   selectedIds,
   onSelectToggle,
+  dragActive = false,
+  headerEnd,
   className,
 }: {
   items: readonly InboxBlockTask[];
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
   onDelete: (item: InboxBlockTask) => void;
-  onRemoveFromWork: (item: InboxBlockTask) => void;
+  // Быстрые действия карточки «Вручную» (сдать на утверждение, вернуть в очередь) —
+  // их собирает родитель: только он знает правила приёмки.
+  renderActions: (item: InboxBlockTask) => React.ReactNode;
   // Растёт на каждое взятие задачи в работу — полка проигрывает вспышку.
   flashKey: number;
   // Какую карточку подсветить вместе с полкой (та, что только что приехала).
   flashItemId: string | null;
   // Режим выделения: карточки полки выбираются наравне с колоночными, dnd и точечные
-  // действия («убрать из работы») на это время отключены.
+  // действия на это время отключены.
   selecting?: boolean;
   selectedIds?: ReadonlySet<string>;
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
+  // Тащат карточку, которую можно взять в работу, — штрих-намёк «сюда можно».
+  dragActive?: boolean;
+  headerEnd?: React.ReactNode;
   className?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
@@ -2487,8 +3059,8 @@ function InProgressShelf({
   const { animations } = useMotion();
   const [flash, setFlash] = useState(false);
   // Убранная из работы/удалённая карточка не выбрасывается из полки мгновенно — держим
-  // «призрак» ещё EXIT_MS и схлопываем его CSS-ом (grid 1fr→0fr по обеим осям), чтобы
-  // соседи по flex-wrap-ряду сдвигались влево плавно, а не скачком (см. useExitingListItems).
+  // «призрак» ещё EXIT_MS и схлопываем его CSS-ом (grid 1fr→0fr), чтобы соседи по стопке
+  // подтягивались плавно, а не скачком (см. useExitingListItems).
   const displayItems = useExitingListItems(items, (t) => t.id, EXIT_MS);
 
   useEffect(() => {
@@ -2504,107 +3076,80 @@ function InProgressShelf({
   }, [flashKey, animations]);
 
   return (
-    <div className={className}>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          // Мягкий жёлтый: amber с низкой насыщенностью, чтобы полка читалась как «тёплая
-          // зона», а не как предупреждение. В тёмной теме — тот же оттенок в глубину.
-          'relative rounded-xl border border-amber-300/50 bg-amber-100/45 px-2.5 py-2 transition-colors duration-150',
-          'dark:border-amber-400/20 dark:bg-amber-400/[0.07]',
-          isOver && 'border-amber-400/80 bg-amber-200/60 dark:border-amber-300/50 dark:bg-amber-400/[0.16]',
-          flash && 'pf-shelf-flash',
-        )}
-      >
-        {/* Без спиннера: крутящийся лоадер в заголовке читался как «идёт загрузка»,
-            хотя это просто зона. Заголовок и жёлтый фон говорят всё сами. */}
-        <div className="mbe-1.5 flex items-center gap-1.5 text-2xs font-medium text-amber-800 dark:text-amber-300/90">
-          {/* Полка — это статус 'manual', и называться должна так же. «В работе» здесь
-              было бы вторым смыслом того же слова: в сводках/TG/EOD «В работе» — это
-              статус 'in_progress' (задача у воркера), а не «делаю руками». */}
-          <span>{STATUS_LABEL.manual}</span>
-          {items.length > 0 && <span className="tabular-nums opacity-70">{items.length}</span>}
-        </div>
-        {items.length === 0 && displayItems.length === 0 ? (
-          <p className="px-0.5 py-1 text-xs text-amber-800/60 dark:text-amber-200/45">
-            Перетащите сюда задачу, которой занимаетесь сейчас.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {displayItems.map(({ item, exiting }) => (
-              // Обёртка-коллапс (аналог AcceptedCard/ApprovalItemCard, но по ОБЕИМ осям —
-              // карточка живёт в flex-wrap-ряду, соседи по строке сдвигаются только когда
-              // схлопывается именно ширина, а не высота). overflow — только на exit,
-              // иначе на вспышке обрезался бы зелёный ring. data-pf-collapse — исключение
-              // из pf-no-motion (globals.css): едет даже когда анимации на тач выключены.
-              <div
-                key={item.id}
-                data-pf-collapse
-                className="grid shrink-0 grow-0 motion-safe:transition-[grid-template-columns,grid-template-rows] motion-safe:duration-300 motion-safe:ease-out"
-                style={{
-                  gridTemplateColumns: exiting ? '0fr' : '1fr',
-                  gridTemplateRows: exiting ? '0fr' : '1fr',
-                }}
-              >
-                <div className={cn('min-h-0 min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
-                  <div
-                    // rounded-xl на обёртке — чтобы вспышка (::after с border-radius: inherit)
-                    // повторяла скругление карточки. Фона и рамки у обёртки нет, видимого
-                    // эффекта от радиуса самого по себе тоже. data-pf-collapse — ТОЖЕ на этом
-                    // div'е (не только на внешнем grid-враппере выше): без него на тач
-                    // pf-no-motion зануляет именно ЭТОТ opacity-transition (у него своя
-                    // duration, отдельная от grid-схлопывания снаружи) — карточка гасла бы
-                    // рывком, пока пустая коробка вокруг нее ещё 300мс едет схлопыванием
-                    // (ревью этапа 3, Important).
-                    data-pf-collapse
-                    className={cn(
-                      'group relative w-[17rem] max-w-full shrink-0 grow-0 rounded-xl transition-opacity duration-200 motion-reduce:transition-none',
-                      flash && item.id === flashItemId && 'pf-card-flash',
-                      exiting && 'pointer-events-none opacity-0',
-                    )}
-                  >
-                    {/* Полка «В работе»: та же ловушка dnd-id, что и у ghost-групп выше —
-                        item могли снять с полки (принята/удалена), а призрак ещё доигрывает
-                        коллапс поверх уже отрисованной живой карточки этой же задачи в другом
-                        месте доски. ghost={exiting} суффиксует dnd-id (см. draggableTaskId). */}
-                    <DraggableTask
-                      item={item}
-                      disabled={!item.canModify || exiting}
-                      ghost={exiting}
-                      selecting={selecting}
-                    >
-                      <AcceptedCard
-                        item={item}
-                        onOpen={() => onOpen(item)}
-                        onChanged={onChanged}
-                        onDelete={() => onDelete(item)}
-                        selecting={selecting}
-                        selected={selectedIds?.has(item.id) ?? false}
-                        {...(onSelectToggle ? { onSelectToggle } : {})}
-                      />
-                    </DraggableTask>
-                    {item.canModify && !selecting && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveFromWork(item);
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        title="Убрать из работы (вернуть в «Черновики»)"
-                        className="absolute -end-1.5 -inset-bs-1.5 z-20 grid size-5 place-items-center rounded-full border border-amber-300/70 bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 dark:border-amber-400/30"
-                        aria-label="Убрать из работы"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'relative flex flex-col gap-[5px] rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        dragActive && !isOver && DROP_TARGET_CLASS,
+        isOver && 'bg-manual-zone outline outline-2 -outline-offset-2 outline-primary',
+        flash && 'pf-shelf-flash',
+        className,
+      )}
+    >
+      <div className="flex h-7 items-center gap-1.5 px-[3px] text-ui">
+        {/* Полка — это статус 'manual', и называться должна так же. «В работе» здесь
+            было бы вторым смыслом того же слова: в сводках/TG/EOD «В работе» — это
+            статус 'in_progress' (задача у воркера), а не «делаю руками». */}
+        <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-manual">
+          <ManualIcon className="text-manual" />
+          {STATUS_LABEL.manual}
+        </span>
+        <span className="tabular-nums text-muted-foreground">{items.length}</span>
+        {headerEnd}
       </div>
+      {displayItems.map(({ item, exiting }) => (
+        // Обёртка-коллапс (аналог AcceptedCard/ApprovalItemCard): схлопывается высота,
+        // соседи по стопке подтягиваются. overflow — только на exit, иначе на вспышке
+        // обрезался бы ring. data-pf-collapse — исключение из pf-no-motion (globals.css).
+        <div
+          key={item.id}
+          data-pf-collapse
+          className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-300 motion-safe:ease-out"
+          style={{ gridTemplateRows: exiting ? '0fr' : '1fr' }}
+        >
+          <div className={cn('min-h-0 min-w-0', exiting ? 'overflow-hidden' : 'overflow-visible')}>
+            <div
+              // rounded-lg на обёртке — чтобы вспышка (::after с border-radius: inherit)
+              // повторяла скругление карточки. data-pf-collapse — ТОЖЕ здесь: без него на тач
+              // pf-no-motion зануляет именно ЭТОТ opacity-transition, и карточка гасла бы
+              // рывком, пока пустая коробка вокруг ещё 300мс едет схлопыванием.
+              data-pf-collapse
+              className={cn(
+                'relative rounded-lg transition-opacity duration-200 motion-reduce:transition-none',
+                flash && item.id === flashItemId && 'pf-card-flash',
+                exiting && 'pointer-events-none opacity-0',
+              )}
+            >
+              {/* Та же ловушка dnd-id, что и у ghost-групп: призрак ещё доигрывает коллапс
+                  поверх уже отрисованной живой карточки этой же задачи в другом месте доски.
+                  ghost={exiting} суффиксует dnd-id (см. draggableTaskId). */}
+              <DraggableTask
+                item={item}
+                disabled={!item.canModify || exiting}
+                ghost={exiting}
+                selecting={selecting}
+              >
+                <AcceptedCard
+                  item={item}
+                  onOpen={() => onOpen(item)}
+                  onChanged={onChanged}
+                  onDelete={() => onDelete(item)}
+                  extraActions={exiting ? null : renderActions(item)}
+                  dueOnTop
+                  selecting={selecting}
+                  selected={selectedIds?.has(item.id) ?? false}
+                  {...(onSelectToggle ? { onSelectToggle } : {})}
+                />
+              </DraggableTask>
+            </div>
+          </div>
+        </div>
+      ))}
+      {!selecting && (
+        <div className="grid h-8 place-items-center rounded-[7px] border border-dashed border-drop-line px-2 text-center text-xs text-muted-foreground">
+          {items.length === 0 ? 'Перетащите сюда задачу, которой заняты' : 'Перетащите сюда то, чем заняты'}
+        </div>
+      )}
     </div>
   );
 }
@@ -2668,99 +3213,92 @@ function DraggableTask({
   );
 }
 
-// Кубик участника пространства = drop-цель смены ответственного. В покое — компактная ава + имя
-// (ховер раскрывает карточку UserAvatarHover). Во время drag'а кубик получает тихий
-// primary-ринг (сигнал «сюда можно»), а тот, что под курсором, плавно всплывает: лёгкий
-// scale + сплошной ринг + подпись сменяется на «Назначить». Себя тут нет — «забрать себе»
-// делается дропом на свою аву слева (SelfDropAvatar).
-// filterActive/onToggleFilter — клик по кубику (не по хвостовой ×) переключает состояние,
-// за которое отвечает вызывающий: у руководителя пространства это открытая доска входящих
-// сотрудника, у остальных на вкладке «Для всех» — single-фильтр «кому» (спека 2026-07-13),
-// общий с шапочным меню-фильтром.
+// Участник пространства = drop-цель смены ответственного (дизайн C4: ряд аватаров рядом с
+// вкладками). В покое — аватар 30px с карточкой по наведению; фиолетовая точка — у человека
+// есть сданная работа. Во время drag'а аватар раскрывается в плитку с именем — большую цель,
+// в которую легко попасть (задача 3a36e7e8); под курсором подпись меняется на «Назначить».
+// filterActive/onToggleFilter — клик переключает состояние, за которое отвечает вызывающий:
+// у руководителя пространства это открытая доска входящих сотрудника, у остальных на
+// вкладке «Для всех» — single-фильтр «кому» (спека 2026-07-13).
 function UserCube({
   member,
   dragging,
+  hasApproval = false,
   filterActive = false,
   onToggleFilter,
-  clearLabel = 'Снять фильтр',
   hint,
 }: {
   member: SharedMember;
   dragging: boolean;
+  hasApproval?: boolean;
   filterActive?: boolean;
   onToggleFilter?: () => void;
-  // Подпись хвостовой ×: «снять фильтр» у обычного участника, «вернуться к своим» у
-  // руководителя, который смотрит чужие входящие.
-  clearLabel?: string;
-  // Что даёт клик — уходит в hover-подсказку аватара рядом с «перетащите, чтобы назначить».
+  // Что даёт клик — уходит в карточку аватара рядом с «перетащите, чтобы назначить».
   hint?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
-  // Клик-фильтр доступен только вне drag'а (в drag-режиме кубик — цель назначения, не
-  // клик-таргет) и только когда проп передан (т.е. на вкладке «Другим», см. место рендера).
-  const clickable = !dragging && !!onToggleFilter;
+  if (dragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]',
+          isOver
+            ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
+            : 'border-dashed border-primary/50 bg-primary-soft',
+        )}
+      >
+        <UserAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} className="size-6 text-2xs" />
+        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : member.displayName}</span>
+      </div>
+    );
+  }
+  // Клик-фильтр доступен только когда проп передан (см. место рендера).
+  const clickable = !!onToggleFilter;
   return (
     <div
       ref={setNodeRef}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-pressed={clickable ? filterActive : undefined}
+      aria-label={member.displayName}
       onClick={clickable ? onToggleFilter : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              onToggleFilter?.();
+            }
+          : undefined
+      }
       className={cn(
-        // Крупный блок-плитка (задача 3a36e7e8): больше площадь → легче попасть при drag.
-        'relative flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-[color,background-color,border-color,box-shadow] duration-200 ease-out motion-safe:transition-[color,background-color,border-color,box-shadow,transform]',
+        'relative grid shrink-0 rounded-[28%] transition-shadow',
         clickable && 'cursor-pointer',
-        dragging
-          ? isOver
-            ? 'scale-105 border-primary bg-primary/10 text-primary shadow-md ring-2 ring-inset ring-primary'
-            : 'border-primary/30 bg-primary/[0.06] text-foreground ring-1 ring-inset ring-primary/20'
-          : filterActive
-            ? 'border-primary/30 bg-primary/10 text-primary'
-            : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
+        filterActive && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
       )}
     >
-      {dragging ? (
-        // Во время drag — без hover-тултипа (чтобы не мешал прицеливанию), просто ава.
-        <UserAvatar
-          displayName={member.displayName}
-          avatarUrl={member.avatarUrl}
-          className="size-7 shrink-0 text-2xs"
+      <UserAvatarHover
+        displayName={member.displayName}
+        avatarUrl={member.avatarUrl}
+        subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
+          hint ? ` · ${hint}` : ''
+        }`}
+        triggerClassName="size-9 text-2xs sm:size-[30px]"
+      />
+      {hasApproval && (
+        <span
+          aria-hidden
+          className="absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 ring-background"
         />
-      ) : (
-        <UserAvatarHover
-          displayName={member.displayName}
-          avatarUrl={member.avatarUrl}
-          subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
-            hint ? ` · ${hint}` : ''
-          }`}
-          triggerClassName="size-7 text-2xs"
-        />
-      )}
-      <span className="max-w-[8rem] truncate font-medium">
-        {dragging && isOver ? 'Назначить' : member.displayName}
-      </span>
-      {/* Активный фильтр — инлайновый × ВНУТРИ пилюли (не absolute: ряд аватаров в
-          overflow-x-auto обрезал бы вынесенный badge — «крестик отображался фигово»).
-          stopPropagation — клик по × снимает фильтр, не проваливаясь в onClick кубика. */}
-      {!dragging && filterActive && onToggleFilter && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFilter();
-          }}
-          aria-label={clearLabel}
-          title={clearLabel}
-          className="-me-1 ms-0.5 flex size-4 shrink-0 items-center justify-center rounded-full text-primary/70 transition-colors hover:bg-primary/15 hover:text-primary"
-        >
-          <X className="size-3" />
-        </button>
       )}
     </div>
   );
 }
 
-// Своя ава = drop-цель «забрать себе» (стоит левее вкладок). В покое — обычная ава; во время
-// drag'а — тихий ринг-сигнал, под курсором всплывает (scale + сплошной ринг) и над ней
-// появляется плавающая подпись «Забрать себе». Дроп сюда идёт по тому же type:'user' с
-// member.id === user.id — и для карточек доски, и блока (см. dropBoardTaskOnUser/handleDragEnd).
+// Своя ава = drop-цель «забрать себе» — первая в ряду людей. В покое — обычный аватар;
+// во время drag'а — плитка «Себе», под курсором — «Забрать себе». Дроп сюда идёт по тому же
+// type:'user' с member.id === user.id (см. handleDragEnd).
 function SelfDropAvatar({
   user,
   dragging,
@@ -2775,22 +3313,31 @@ function SelfDropAvatar({
       member: { id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl ?? null },
     },
   });
-  return (
-    <div ref={setNodeRef} className="relative shrink-0">
-      {dragging && isOver && (
-        <span className="pointer-events-none absolute -inset-bs-7 start-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-primary px-1.5 py-0.5 text-2xs font-medium text-primary-foreground shadow-md">
-          Забрать себе
-        </span>
-      )}
+  if (dragging) {
+    return (
       <div
+        ref={setNodeRef}
         className={cn(
-          'rounded-full transition-[box-shadow] duration-200 ease-out motion-safe:transition-[box-shadow,transform]',
-          dragging && !isOver && 'ring-2 ring-primary/25 ring-offset-2 ring-offset-background',
-          dragging && isOver && 'scale-110 ring-2 ring-primary ring-offset-2 ring-offset-background',
+          'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]',
+          isOver
+            ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
+            : 'border-dashed border-primary/50 bg-primary-soft',
         )}
       >
-        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-8 text-2xs" />
+        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-6 text-2xs" />
+        <span className="whitespace-nowrap font-medium">{isOver ? 'Забрать себе' : 'Себе'}</span>
       </div>
+    );
+  }
+  return (
+    <div ref={setNodeRef} className="shrink-0">
+      <UserAvatarHover
+        displayName={user.displayName}
+        avatarUrl={user.avatarUrl}
+        you
+        subtitle="перетащите сюда задачу, чтобы забрать себе"
+        triggerClassName="size-9 text-2xs sm:size-[30px]"
+      />
     </div>
   );
 }
@@ -2966,15 +3513,16 @@ export function AssigneeConfirmDialog({
   );
 }
 
-// Вкладки блока ответственных: «Для меня» / «Другим».
-// Тихие текстовые табы в масштабе прежнего заголовка секции: активная — semibold +
-// primary-пилюля счётчика, неактивная — muted с hover.
+// Вкладки блока ответственных: «Мои» / «Для всех» — переключатель в стиле C4: серая
+// подложка, выбранная вкладка — белая плашка (в тёмной теме — приподнятая графитовая).
 function AssigneeTabs({
   tab,
   onChange,
   toMeCount,
   byMeCount,
+  className,
 }: {
+  className?: string;
   tab: AssigneeTab;
   onChange: (t: AssigneeTab) => void;
   toMeCount: number;
@@ -2983,7 +3531,14 @@ function AssigneeTabs({
   return (
     // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
     // стрелочной навигации — вместо ложной семантики честные toggle-кнопки (aria-pressed).
-    <div className="-ms-2 flex items-center gap-0.5">
+    <div
+      role="group"
+      aria-label="Чьи задачи"
+      className={cn(
+        'flex min-w-0 items-center rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel',
+        className,
+      )}
+    >
       <TabButton
         active={tab === 'toMe'}
         label="Мои"
@@ -3017,22 +3572,15 @@ function TabButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        // min-w-0 — на 320px лейбл таба ужимается truncate'ом, а не вылезает из бокса.
-        'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-sm leading-tight tracking-tight transition-colors',
+        // min-w-0 — на 320px подпись ужимается truncate'ом, а не вылезает из бокса.
+        'inline-flex h-9 min-w-0 items-center gap-1.5 rounded-md px-2.5 text-ui transition-colors sm:h-7',
         active
-          ? 'font-semibold text-foreground'
-          : 'font-medium text-muted-foreground hover:bg-hover hover:text-foreground',
+          ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
+          : 'font-medium text-muted-foreground hover:text-foreground',
       )}
     >
       <span className="truncate">{label}</span>
-      <span
-        className={cn(
-          'inline-flex h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full px-1.5 text-2xs font-medium leading-none tabular-nums',
-          active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
-        )}
-      >
-        {count}
-      </span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
     </button>
   );
 }
@@ -3089,14 +3637,14 @@ function InboxFiltersPopover({
           type="button"
           aria-label="Фильтры"
           className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
+            'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:h-8 sm:px-2 sm:text-ui',
             badgeCount > 0 && 'bg-hover text-foreground',
           )}
         >
           <Filter className="size-3.5" />
           <span className="hidden sm:inline">Фильтры</span>
           {badgeCount > 0 && (
-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold tabular-nums text-primary">
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-soft px-1 text-[10px] font-semibold tabular-nums text-primary-ink">
               {badgeCount}
             </span>
           )}
@@ -3134,9 +3682,7 @@ function InboxFiltersPopover({
           {showFilters && (
             <>
               <div className="mbs-1 flex items-center justify-between border-bs px-3 pbe-1 pbs-2">
-                <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70">
-                  Фильтры
-                </span>
+                <span className="text-xs font-semibold text-muted-foreground">Фильтры</span>
                 {activeFilterCount > 0 && (
                   <button
                     type="button"
@@ -3191,7 +3737,7 @@ function HidePersonalRow({
       <span
         className={cn(
           'rounded-full px-1.5 py-0.5 text-2xs font-medium',
-          value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
+          value ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground',
         )}
       >
         {value ? 'скрыты' : 'видны'}
@@ -3224,7 +3770,7 @@ function HideDoneRow({
       <span
         className={cn(
           'rounded-full px-1.5 py-0.5 text-2xs font-medium',
-          value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
+          value ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground',
         )}
       >
         {value ? 'скрыты' : 'видны'}
@@ -3282,10 +3828,10 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'max-w-[12rem] truncate rounded-full border px-2 py-0.5 text-2xs transition-colors',
+        'max-w-[12rem] truncate rounded-md border px-2 py-0.5 text-xs transition-colors',
         active
-          ? 'border-primary/30 bg-primary/10 font-medium text-primary'
-          : 'border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+          ? 'border-primary bg-primary-soft font-medium text-foreground'
+          : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
       )}
     >
       {children}
@@ -3321,7 +3867,11 @@ function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
 }
 
 // === Карточки канбана (колонка = группа) ===
-// Принятая задача-карточка: чекбокс «выполнено» + описание + мета-бейджи, клик открывает drawer.
+// Карточка задачи «Входящих» (дизайн C4): белая плашка с кольцом-тенью (в тёмной — графит с
+// линией). Сверху — метка проекта (и автор работы на полке приёмки, срок — у «Вручную»),
+// заголовок 13.5px, первая строка описания вторичным цветом, снизу — срок и счётчики.
+// Быстрые действия — плашкой в правом верхнем углу по наведению; на тач-экранах — рядом
+// снизу. Клик открывает drawer, ПКМ и Ctrl+клик — «выполнено».
 function AcceptedCard({
   item,
   onOpen,
@@ -3333,22 +3883,34 @@ function AcceptedCard({
   selected = false,
   onSelectToggle,
   hideQuickActions = false,
+  extraActions = null,
+  footer = null,
+  showAssignee = false,
+  dueOnTop = false,
 }: {
   item: InboxBlockTask;
   onOpen: () => void;
   onChanged: () => void;
   onDelete: () => void;
-  // При сортировке «по дате создания» показываем дату создания в мета-строке (по наведению).
+  // При сортировке «по дате создания» показываем дату создания в нижней строке.
   showCreatedAt?: boolean;
-  // При сортировке «по проекту» колонка уже названа проектом — ярлык на карточке не нужен.
+  // При сортировке «по проекту» колонка уже названа проектом — метка на карточке не нужна.
   hideProjectLabel?: boolean;
   // Режим выделения: клик тогает выбор вместо открытия дравера, действия карточки скрыты.
   selecting?: boolean;
   selected?: boolean;
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
   // Приёмка (db/150): в полке утверждения действия живут в явных кнопках «Принять» /
-  // «Вернуть в работу», поэтому встроенные чекбокс и корзина только путают.
+  // «Вернуть» (footer), поэтому плашка «готово/удалить» только путает.
   hideQuickActions?: boolean;
+  // Действия перед «готово/удалить» в плашке: «Взять в работу», «Сдать на утверждение»…
+  extraActions?: React.ReactNode;
+  // Нижняя часть карточки (кнопки решения на полке приёмки).
+  footer?: React.ReactNode;
+  // Аватар и имя ответственного в верхней строке — на полке приёмки «чья это работа».
+  showAssignee?: boolean;
+  // Срок — в верхней строке справа (полка «Вручную»), а не внизу.
+  dueOnTop?: boolean;
 }): React.ReactElement {
   const isDone = item.status === 'done';
   const { taskRepository } = useContainer();
@@ -3358,7 +3920,7 @@ function AcceptedCard({
   // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
   // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
   // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание). Движок
-  // фаз — общий хук useFlashExitPhase (см. его же в ApprovalItemCard ниже): в зависимостях
+  // фаз — общий хук useFlashExitPhase (см. его же в ApprovalItemCard выше): в зависимостях
   // его внутреннего эффекта только item.id, а не сторонние onChanged/onCommit — иначе
   // посторонний refresh() посреди анимации сбрасывал бы уже тикающий таймер.
   // Держать ли серую вуаль во время анимации. true только для Ctrl-пути, где она уже видна
@@ -3406,12 +3968,11 @@ function AcceptedCard({
   // собирать пачку свободно. Действие по такой задаче честно попадёт в «не удалось» —
   // это лучше, чем карточка, которая молча не откликается на клик.
   const selectable = selecting;
-  // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
-  // line-clamp-4 — видно только название (запросы 3, 4).
+  // Заголовок/тело как на досках проектов: 1-я строка — заголовок, тело — первая строка
+  // описания вторичным цветом.
   const { title, body } = splitTitleBody(item.description ?? '');
-  // Название проекта — всегда видимая пилюля в правом верхнем углу. Чужие личные входящие
-  // подписываем владельцем («Личные · Денис Волков»): без имени задача выглядела бы своей,
-  // хотя запись живёт у другого человека (статус и порядок у вас общие).
+  // Метка проекта. Чужие личные входящие подписываем владельцем («Личные · Денис Волков»):
+  // без имени задача выглядела бы своей, хотя запись живёт у другого человека.
   const foreignInboxOwner =
     item.isInbox && item.inboxOwner && item.inboxOwner.userId !== currentUser?.id
       ? item.inboxOwner.displayName
@@ -3422,13 +3983,12 @@ function AcceptedCard({
       : 'Личные'
     : item.projectName;
 
-  // Кнопки действий (чекбокс + удалить). Рендерятся в ДВУХ раскладках: десктоп — плавающий
-  // оверлей по hover, мобила — статичный ряд под текстом. big=true → тач-размер (size-9).
-  // В режиме выделения действий нет: карточка целиком — цель выбора, а «выполнить»/«удалить»
-  // на ней конфликтовали бы с кликом-тоглом (и есть в панели массовых действий).
-  const renderActions = (big: boolean): React.ReactNode =>
-    selecting || hideQuickActions ? null : (
+  const showActions = !selecting && !hideQuickActions;
+  // Кнопки действий: свои (extraActions) + «выполнено» + «удалить». Рендерятся в ДВУХ
+  // раскладках: десктоп — плавающая плашка по hover, мобила — ряд под текстом.
+  const actions = showActions ? (
     <>
+      {extraActions}
       <InboxCheckbox
         task={item}
         lastDoneTaskId={null}
@@ -3440,66 +4000,60 @@ function AcceptedCard({
       {/* Удаление показываем только при правах — кнопка, которая заведомо упадёт, хуже её
           отсутствия. Чекбокс же остаётся видимым (disabled) как индикатор статуса. */}
       {item.canModify && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
-            big ? 'size-9' : 'size-6',
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          aria-label="Удалить"
+        <QuickAction
+          label="Удалить"
+          className="text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
         >
-          <Trash2 className={big ? 'size-4' : 'size-3'} />
-        </Button>
+          <Trash2 className="size-3.5" />
+        </QuickAction>
       )}
     </>
-  );
+  ) : null;
 
-  // Мета-бейджи (дата/ответственный/коммиты/вложения/комменты/приоритет/срок). Десктоп —
-  // нижний левый оверлей по hover, мобила — тот же контент в статичном нижнем ряду.
-  const metaInner = (
-    <>
-      {/* Дата создания — при сортировке «по дате создания». */}
-      {showCreatedAt && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-          <CalendarDays className="size-3" />
-          {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(item.createdAt)}
-        </span>
-      )}
-      <AssigneeBadge assignee={item.assignee} />
-      {(item.commitCount ?? 0) > 0 && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-blue-600 dark:text-blue-400">
-          <GitCommit className="size-3" />
-          {item.commitCount}
-        </span>
-      )}
-      {(item.attachmentCount ?? 0) > 0 && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400">
-          <ImageIcon className="size-3" />
-          {item.attachmentCount}
-        </span>
-      )}
-      {(item.commentCount ?? 0) > 0 && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-violet-600 dark:text-violet-400">
-          <MessageSquare className="size-3" />
-          {item.commentCount}
-        </span>
-      )}
-      <RalphModeBadge mode={item.ralphMode} />
-      {item.priority !== null && item.priority !== undefined && (
-        <PriorityBadge priority={item.priority} />
-      )}
-      {item.deadline ? (
-        <DeadlineBadge deadline={item.deadline} status={item.status} />
-      ) : (
-        <span className="whitespace-nowrap text-muted-foreground/50">без срока</span>
-      )}
-    </>
-  );
+  const deadline = item.deadline ? (
+    <DeadlineBadge deadline={item.deadline} status={item.status} />
+  ) : null;
+  const showTopMeta = showAssignee || !hideProjectLabel || (dueOnTop && deadline !== null);
+  const assigneeIsMe = item.assignee.userId === currentUser?.id;
+  // Нижняя строка — только то, что есть: срок, приоритет, режим агента, счётчики,
+  // ответственный (если не вы). Пустой строки не бывает.
+  const bottomMeta = [
+    !dueOnTop && deadline ? <span key="due">{deadline}</span> : null,
+    item.priority !== null && item.priority !== undefined ? (
+      <PriorityBadge key="priority" priority={item.priority} />
+    ) : null,
+    item.ralphMode !== 'normal' ? <RalphModeBadge key="ralph" mode={item.ralphMode} /> : null,
+    (item.commentCount ?? 0) > 0 ? (
+      <span key="comments" className="flex shrink-0 items-center gap-1 whitespace-nowrap" title="Комментарии">
+        <MessageSquare className="size-3" />
+        {item.commentCount}
+      </span>
+    ) : null,
+    (item.attachmentCount ?? 0) > 0 ? (
+      <span key="files" className="flex shrink-0 items-center gap-1 whitespace-nowrap" title="Вложения">
+        <ImageIcon className="size-3" />
+        {item.attachmentCount}
+      </span>
+    ) : null,
+    (item.commitCount ?? 0) > 0 ? (
+      <span key="commits" className="flex shrink-0 items-center gap-1 whitespace-nowrap" title="Коммиты">
+        <GitCommit className="size-3" />
+        {item.commitCount}
+      </span>
+    ) : null,
+    showCreatedAt ? (
+      <span key="created" className="flex shrink-0 items-center gap-1 whitespace-nowrap" title="Создана">
+        <CalendarDays className="size-3" />
+        {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(item.createdAt)}
+      </span>
+    ) : null,
+    !showAssignee && !assigneeIsMe ? (
+      <span key="assignee" className="ms-auto flex shrink-0 items-center">
+        <AssigneeBadge assignee={item.assignee} />
+      </span>
+    ) : null,
+  ].filter(Boolean);
 
   return (
     // Обёртка-аниматор: плавный коллапс высоты (grid 1fr→0fr) + затухание при «выполнено».
@@ -3510,163 +4064,199 @@ function AcceptedCard({
     <div
       data-pf-collapse
       className={cn(
-        // grid-cols-[minmax(0,1fr)] — не косметика: у единственной неявной колонки
-        // размер `auto`, а её минимум = min-content содержимого. Карточка с неразрывным
-        // куском шире колонки (длинное имя проекта в шапке, ряд nowrap-бейджей на узком
-        // экране) раздвигала трек, вылезала за свои 17rem в полках и наезжала на соседнюю.
-        // Замер: 400px вместо 272px; minmax(0,1fr) и min-w-0 ниже дают ровно 272px.
+        // grid-cols-[minmax(0,1fr)] — не косметика: у единственной неявной колонки размер
+        // `auto`, а её минимум = min-content содержимого. Карточка с неразрывным куском шире
+        // колонки (длинное имя проекта, ряд nowrap-бейджей на узком экране) раздвигала трек.
         'grid grid-cols-[minmax(0,1fr)] transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-rows,opacity]',
         completePhase === 'exit' && 'opacity-0',
       )}
       style={{ gridTemplateRows: completePhase === 'exit' ? '0fr' : '1fr' }}
     >
-    {/* min-w-0 к min-h-0: у grid-элемента min-width по умолчанию auto (= min-content) и
-        без сброса он сам распирает колонку — второй замок на ту же дверь. */}
-    <div className={cn('min-h-0 min-w-0', completePhase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
-    <div
-      // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
-      data-pf-task-id={item.id}
-      // Вне режима выделения role/tabIndex приходят от dnd-kit на обёртке DraggableTask —
-      // второй кнопки внутри кнопки не создаём. В режиме выделения атрибуты сняты, и
-      // фокусируемость с ролью возвращает карточка.
-      role={selecting ? 'button' : undefined}
-      tabIndex={selecting ? 0 : undefined}
-      aria-pressed={selectable ? selected : undefined}
-      onContextMenu={completeByContextMenu}
-      className={cn(
-        'group relative flex cursor-pointer select-none flex-col overflow-clip rounded-lg border border-black/[0.06] bg-card transition-[color,background-color,border-color,box-shadow] duration-200 dark:border-white/[0.08]',
-        isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
-        // Непрочитанная: синий неон по контуру. До состояний выбора/вспышки — те
-        // временные и должны перебивать подсветку.
-        !selecting && item.priority !== 1 && isUnread(item.id) && 'pf-unread',
-        // Срочная: красное свечение. Перебивает синее — «сделай сейчас» важнее «посмотри».
-        !selecting && item.priority === 1 && 'pf-urgent',
-        // Выбор показываем ТОЛЬКО рамкой и кольцом. Кружок-отметку в левом верхнем углу
-        // убрали: он повторял вид старого круглого чекбокса «готово» и читался как он.
-        selected && 'border-primary ring-2 ring-primary/60',
-        // Вспышка «выполнено»: мягкий зелёный + лёгкий pop.
-        completePhase === 'flash' &&
-          'scale-[1.02] border-emerald-500/60 bg-emerald-500/[0.12] ring-2 ring-emerald-500/50 dark:bg-emerald-500/[0.16]',
-        // Уход: сжимаемся внутрь, обёртка коллапсит высоту и гасит opacity.
-        completePhase === 'exit' && 'scale-[0.96]',
-      )}
-      onClick={(e) => {
-        if (selecting) {
-          if (selectable) {
-            onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
-          }
-          return;
-        }
-        // Ctrl/⌘ + ЛКМ = выполнить (вместо открытия дравера).
-        if ((e.ctrlKey || e.metaKey) && item.canModify && !isDone && completePhase === 'idle') {
-          e.preventDefault();
-          startComplete(true);
-          return;
-        }
-        onOpen();
-      }}
-      onKeyDown={(e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        if (selecting) {
-          if (selectable) {
-            onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
-          }
-          return;
-        }
-        onOpen();
-      }}
-    >
-      {/* Аффорданс «Ctrl+клик = выполнить»: серый оверлей с зелёной галочкой поверх карточки,
-          виден только при зажатом Ctrl и наведении. pointer-events-none — клик идёт в карточку. */}
-      {(completeArmed || (completing && completeVeiled)) && (
+      {/* min-w-0 к min-h-0: у grid-элемента min-width по умолчанию auto (= min-content) и
+          без сброса он сам распирает колонку — второй замок на ту же дверь. */}
+      <div className={cn('min-h-0 min-w-0', completePhase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
         <div
+          // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
+          data-pf-task-id={item.id}
+          // Вне режима выделения role/tabIndex приходят от dnd-kit на обёртке DraggableTask —
+          // второй кнопки внутри кнопки не создаём. В режиме выделения атрибуты сняты, и
+          // фокусируемость с ролью возвращает карточка.
+          role={selecting ? 'button' : undefined}
+          tabIndex={selecting ? 0 : undefined}
+          aria-pressed={selectable ? selected : undefined}
+          onContextMenu={completeByContextMenu}
           className={cn(
-            'pointer-events-none absolute inset-0 z-30 items-center justify-center rounded-lg bg-zinc-500/30 backdrop-blur-[1px] transition-opacity duration-150 dark:bg-zinc-900/45',
-            // Во время выполнения вуаль видна безусловно — не завязана на hover: при коллапсе
-            // карточка уезжает из-под курсора, и hover-условие сняло бы её на полпути.
-            completing
-              ? 'flex opacity-100'
-              : 'hidden opacity-0 group-hover:flex group-hover:opacity-100',
+            'group relative flex cursor-pointer select-none flex-col gap-1 rounded-lg bg-card px-2.5 py-[7px] text-card-foreground shadow-card transition-[box-shadow,background-color] duration-150 hover:shadow-card-hover dark:hover:bg-card-hover',
+            // Непрочитанная: синий неон по контуру. До состояний выбора/вспышки — те
+            // временные и должны перебивать подсветку.
+            !selecting && item.priority !== 1 && isUnread(item.id) && 'pf-unread',
+            // Срочная: красное свечение. Перебивает синее — «сделай сейчас» важнее «посмотри».
+            !selecting && item.priority === 1 && 'pf-urgent',
+            selected && 'ring-2 ring-primary',
+            // Вспышка «выполнено»: мягкий зелёный + лёгкий pop.
+            completePhase === 'flash' && 'scale-[1.02] bg-done-soft ring-2 ring-done/60',
+            // Уход: сжимаемся внутрь, обёртка коллапсит высоту и гасит opacity.
+            completePhase === 'exit' && 'scale-[0.96]',
           )}
+          onClick={(e) => {
+            if (selecting) {
+              if (selectable) {
+                onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
+              }
+              return;
+            }
+            // Ctrl/⌘ + ЛКМ = выполнить (вместо открытия дравера).
+            if ((e.ctrlKey || e.metaKey) && item.canModify && !isDone && completePhase === 'idle') {
+              e.preventDefault();
+              startComplete(true);
+              return;
+            }
+            onOpen();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            if (selecting) {
+              if (selectable) {
+                onSelectToggle?.(item.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
+              }
+              return;
+            }
+            onOpen();
+          }}
         >
-          <span
-            className={cn(
-              'flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 motion-safe:transition-transform duration-200 ring-white/70 dark:ring-black/30',
-              // Галочка на вспышке слегка «подпрыгивает», на уходе — сжимается вместе с карточкой.
-              completePhase === 'flash' && 'scale-110',
-              completePhase === 'exit' && 'scale-90',
+          {/* Аффорданс «Ctrl+клик = выполнить»: серый оверлей с зелёной галочкой поверх
+              карточки, виден только при зажатом Ctrl и наведении. pointer-events-none — клик
+              идёт в карточку. */}
+          {(completeArmed || (completing && completeVeiled)) && (
+            <div
+              className={cn(
+                'pointer-events-none absolute inset-0 z-30 items-center justify-center rounded-lg bg-foreground/15 backdrop-blur-[1px] transition-opacity duration-150 dark:bg-black/40',
+                // Во время выполнения вуаль видна безусловно — не завязана на hover: при коллапсе
+                // карточка уезжает из-под курсора, и hover-условие сняло бы её на полпути.
+                completing
+                  ? 'flex opacity-100'
+                  : 'hidden opacity-0 group-hover:flex group-hover:opacity-100',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex size-9 items-center justify-center rounded-full bg-done text-background shadow-float ring-2 ring-background/70 duration-200 motion-safe:transition-transform',
+                  // Галочка на вспышке слегка «подпрыгивает», на уходе — сжимается с карточкой.
+                  completePhase === 'flash' && 'scale-110',
+                  completePhase === 'exit' && 'scale-90',
+                )}
+              >
+                <Check className="size-5" strokeWidth={3} />
+              </span>
+            </div>
+          )}
+
+          {showTopMeta && (
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              {showAssignee && (
+                <span className="flex min-w-0 shrink items-center gap-1.5">
+                  <UserAvatar
+                    displayName={item.assignee.displayName}
+                    avatarUrl={item.assignee.avatarUrl}
+                    className="size-[18px] text-[8.5px]"
+                  />
+                  <span className="truncate">{item.assignee.displayName}</span>
+                </span>
+              )}
+              {!hideProjectLabel && (
+                <span
+                  className={cn('pf-tag min-w-0', projectToneClass(item.projectId, item.isInbox))}
+                  title={projectLabel}
+                >
+                  <span className="truncate">{projectLabel}</span>
+                </span>
+              )}
+              {dueOnTop && deadline && <span className="ms-auto shrink-0">{deadline}</span>}
+            </div>
+          )}
+
+          <div className="min-w-0">
+            {item.description?.trim() ? (
+              <>
+                {/* Моб: весь текст задачи; десктоп — до трёх строк заголовка и строка тела. */}
+                <div
+                  className={cn(
+                    'line-clamp-3 max-sm:line-clamp-none',
+                    isDone && 'text-muted-foreground line-through decoration-muted-foreground/40',
+                  )}
+                >
+                  <TaskTitleText title={title} className={taskCardTitleClass(title)} authoredBold />
+                </div>
+                {/* Тело — одна строка с многоточием (на телефоне до четырёх): высота в em от
+                    своего 12.5px, поэтому вторая строка не выглядывает наполовину. */}
+                {body.trim() && (
+                  <div className="max-h-[1.42em] overflow-hidden text-meta max-sm:max-h-[5.68em]">
+                    <Markdown
+                      className={cn(TASK_CARD_BODY_CLASS, '[&>*]:line-clamp-1 max-sm:[&>*]:line-clamp-4')}
+                    >
+                      {body}
+                    </Markdown>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-task text-muted-foreground">—</p>
             )}
-          >
-            <Check className="size-5" strokeWidth={3} />
-          </span>
-        </div>
-      )}
-      {/* Название проекта — полоса-заголовок. Скрываем при сортировке по проекту (колонка = проект). */}
-      {!hideProjectLabel && (
-        <div className="flex items-center justify-center gap-1 border-be border-black/[0.05] bg-muted/40 px-2 py-1 text-2xs font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
-          {item.isInbox ? (
-            <InboxIcon className="size-2.5 shrink-0" />
-          ) : (
-            <FolderKanban className="size-2.5 shrink-0" />
+          </div>
+
+          {/* Нижняя строка. На телефоне с действиями — одна строка «мета слева, кнопки
+              справа» (ниже), чтобы карточка не росла на отдельный ряд кнопок. */}
+          {bottomMeta.length > 0 && (
+            <div
+              className={cn(
+                'min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pbs-0.5 text-2xs text-muted-foreground',
+                showActions ? 'hidden sm:flex' : 'flex',
+              )}
+            >
+              {bottomMeta}
+            </div>
           )}
-          {/* min-w-0 — иначе flex-элемент не сжимается ниже min-content и truncate не
-              срабатывает: длинное имя проекта просто обрезалось краем карточки без «…». */}
-          <span className="min-w-0 truncate">{projectLabel}</span>
-        </div>
-      )}
-      {/* Моб: колонка (текст сверху, ряд мета/действий снизу); десктоп — строка с
-          плавающими оверлеями (как на доске проекта, см. KanbanCard). */}
-      <div className="relative flex flex-col gap-1.5 px-2 py-2 sm:flex-row sm:items-start">
-        {/* Действия — ДЕСКТОП: оверлей в правом верхнем углу (по hover/фокусу). На мобиле
-            скрыт (hidden) — действия в статичном нижнем ряду (ниже), текст виден целиком. */}
-        {!selecting && (
-          <div
-            className="pointer-events-none absolute end-1 inset-bs-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-          >
-            {renderActions(false)}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-        {item.description?.trim() ? (
-          // Моб: весь текст задачи (line-clamp-none). Жирность заголовка — как на доске.
-          <div className="max-h-[4lh] overflow-hidden text-sm leading-snug max-sm:max-h-none">
-            <TaskTitleText title={title} className={taskCardTitleClass(title)} authoredBold />
-            {body.trim() && <Markdown className={TASK_CARD_BODY_CLASS}>{body}</Markdown>}
-          </div>
-        ) : (
-          <p className="text-sm leading-snug text-muted-foreground">—</p>
-        )}
-      </div>
-        {/* Параметры — ДЕСКТОП: нижний левый оверлей по hover. На мобиле скрыт (hidden). */}
-        <div className="pointer-events-none absolute inset-be-1 start-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-clip rounded-md bg-card px-1.5 py-0.5 text-2xs text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]">
-          {metaInner}
-        </div>
-        {/* Параметры/действия — МОБИЛА: статичный ряд под текстом (всегда виден, крупные кнопки).
-            В режиме выделения ряд не перехватывает клики — тап по нему тогает выбор карточки,
-            как и по остальной её площади (тач-протяжки нет, клик обязан работать везде). */}
-        <div
-          className="mbs-0.5 flex items-center justify-between gap-2 border-bs border-black/[0.05] pbs-1 text-2xs text-muted-foreground sm:hidden dark:border-white/[0.06]"
-          {...(selecting
-            ? {}
-            : {
-                onClick: (e: React.MouseEvent) => e.stopPropagation(),
-                onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
-                onTouchStart: (e: React.TouchEvent) => e.stopPropagation(),
-              })}
-        >
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 overflow-hidden">{metaInner}</span>
-          {!selecting && (
-            <span className="flex shrink-0 items-center gap-1">{renderActions(true)}</span>
+
+          {footer && (
+            <div
+              className="relative z-[1] pbs-0.5"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {footer}
+            </div>
+          )}
+
+          {/* Быстрые действия — ДЕСКТОП: плашка в правом верхнем углу по hover/фокусу. */}
+          {showActions && (
+            <div
+              className="pointer-events-none absolute end-[5px] inset-bs-[5px] z-20 hidden items-center gap-px rounded-[7px] bg-raised p-0.5 opacity-0 shadow-[0_2px_6px_oklch(16.84%_0_none/0.08)] ring-1 ring-border transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:shadow-none"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              {actions}
+            </div>
+          )}
+          {/* Быстрые действия — МОБИЛА: в одной строке с мета (всегда видны, крупные). */}
+          {showActions && (
+            <div className="flex items-center gap-2 sm:hidden">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
+                {bottomMeta}
+              </div>
+              <div
+                className="flex shrink-0 items-center gap-0.5"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                {actions}
+              </div>
+            </div>
           )}
         </div>
       </div>
-    </div>
-    </div>
     </div>
   );
 }
-

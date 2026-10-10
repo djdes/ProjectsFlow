@@ -83,7 +83,7 @@ export function AiSuggestionChips({
                 className={cn(
                   'inline-flex h-7 max-w-full shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2',
                   'bg-message-bubble text-xs font-medium leading-4 text-foreground',
-                  'transition-colors duration-150 hover:border-border hover:bg-accent',
+                  'transition-colors duration-150 hover:border-border hover:bg-hover',
                 )}
               >
                 <span className="min-w-0 truncate">{suggestion.title}</span>

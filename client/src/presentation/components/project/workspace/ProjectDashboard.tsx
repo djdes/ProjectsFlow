@@ -238,7 +238,7 @@ export function ProjectDashboard({
                     "flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-start text-sm transition-colors motion-reduce:transition-none",
                     section === id
                       ? "bg-muted font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      : "text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   )}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />

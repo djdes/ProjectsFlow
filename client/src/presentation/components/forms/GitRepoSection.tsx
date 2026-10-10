@@ -87,7 +87,7 @@ export function GitRepoSection({ project }: Props): React.ReactElement {
               href={project.gitRepoUrl}
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary-ink hover:underline"
             >
               {project.gitRepoUrl}
               <ExternalLink className="size-3.5 shrink-0" />
@@ -111,9 +111,9 @@ export function GitRepoSection({ project }: Props): React.ReactElement {
             </div>
 
             {collision && (
-              <div className="flex flex-col gap-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
+              <div className="flex flex-col gap-2 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <div className="flex items-start gap-2">
-                  <Users className="mbs-0.5 size-4 shrink-0 text-blue-600" />
+                  <Users className="mbs-0.5 size-4 shrink-0 text-primary" />
                   <p className="text-sm text-foreground">
                     Этот репозиторий уже используется в проекте{' '}
                     <span className="font-medium">«{collision.projectName}»</span>. Запросить

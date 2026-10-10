@@ -71,7 +71,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
   return (
     <aside
       style={{ width }}
-      className="absolute inset-y-0 end-0 z-40 flex max-w-[85vw] flex-col border-s bg-background shadow-2xl"
+      className="absolute inset-y-0 end-0 z-40 flex max-w-[85vw] flex-col border-s bg-background shadow-float"
       aria-label="Элемент и код"
     >
       <button
@@ -94,9 +94,9 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-be px-3 py-2">
-        <div className="flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Представление элемента">
-          <button type="button" role="tab" aria-selected={tab === 'preview'} onClick={() => setTab('preview')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'preview' && 'bg-background text-foreground shadow-sm')}><Eye className="size-3.5" />Параметры</button>
-          <button type="button" role="tab" aria-selected={tab === 'source'} onClick={() => setTab('source')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'source' && 'bg-background text-foreground shadow-sm')}><Braces className="size-3.5" />Исходник</button>
+        <div className="flex rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5" role="tablist" aria-label="Представление элемента">
+          <button type="button" role="tab" aria-selected={tab === 'preview'} onClick={() => setTab('preview')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'preview' && 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none')}><Eye className="size-3.5" />Параметры</button>
+          <button type="button" role="tab" aria-selected={tab === 'source'} onClick={() => setTab('source')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'source' && 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none')}><Braces className="size-3.5" />Исходник</button>
         </div>
         <div className="flex items-center gap-1.5">
           {tab === 'source' && <Button type="button" variant="outline" size="icon" className="size-8" aria-label={wrap ? 'Не переносить длинные строки' : 'Переносить длинные строки'} aria-pressed={wrap} onClick={() => setWrap((value) => !value)}><WrapText className="size-3.5" /></Button>}
@@ -106,22 +106,22 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
 
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === 'source' ? (
-          <div className="flex min-h-full flex-col bg-zinc-950">
+          <div className="flex min-h-full flex-col bg-panel">
             <textarea
               value={sourceDraft}
               onChange={(event) => setSourceDraft(event.target.value)}
               disabled={!element}
               spellCheck={false}
-              className={cn('min-h-[360px] flex-1 resize-none bg-transparent p-5 font-mono text-xs leading-5 text-zinc-100 outline-none', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}
+              className={cn('min-h-[360px] flex-1 resize-none bg-transparent p-5 font-mono text-xs leading-5 text-foreground outline-none', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}
               aria-label="Исходный HTML выбранного элемента"
             />
-            <div className="sticky inset-be-0 flex justify-end border-bs border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
+            <div className="sticky inset-be-0 flex justify-end border-bs bg-panel/95 p-3 backdrop-blur">
               <Button type="button" size="sm" className="gap-1.5" disabled={!element || !sourceDraft.trim() || sourceDraft === source} onClick={() => onPatch({ kind: 'html', value: sourceDraft })}><Save className="size-3.5" />Сохранить исходник</Button>
             </div>
           </div>
         ) : (
           <div className="space-y-5 p-5">
-            <section className="space-y-2 rounded-xl border bg-muted/15 p-4">
+            <section className="space-y-2 rounded-xl border bg-panel p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Содержимое</p>
               <Input key={`${element?.locator.selector}:text`} defaultValue={element?.locator.text ?? ''} disabled={!element} onBlur={(event) => { if (event.target.value !== (element?.locator.text ?? '')) onPatch({ kind: 'text', value: event.target.value }); }} aria-label="Текст элемента" />
             </section>
@@ -154,7 +154,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
       </div>
 
       <form className="space-y-2 border-bs bg-background p-4" onSubmit={(event) => { event.preventDefault(); const value = prompt.trim(); if (!value || busy || !element) return; onEditWithAi(value); }}>
-        <label htmlFor="site-code-ai-prompt" className="flex items-center gap-1.5 text-sm font-medium"><Sparkles className="size-4 text-blue-500" />Изменить выбранный элемент с ИИ</label>
+        <label htmlFor="site-code-ai-prompt" className="flex items-center gap-1.5 text-sm font-medium"><Sparkles className="size-4 text-primary" />Изменить выбранный элемент с ИИ</label>
         <textarea id="site-code-ai-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={!element || busy} rows={2} maxLength={2000} placeholder="Опишите точное изменение этого элемента" className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60" />
         <div className="flex items-center justify-between gap-3">
           <p className={cn('min-w-0 truncate text-xs text-muted-foreground', status === 'error' && 'text-destructive')}>{message || 'Изменения сохраняются как черновик до общей публикации.'}</p>

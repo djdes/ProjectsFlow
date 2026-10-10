@@ -33,7 +33,8 @@ import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { avatarColor, getInitials } from './projectIcons';
+import { getInitials } from './projectIcons';
+import { projectToneClass } from '@/lib/tone';
 
 // Активная вкладка рейла (только переключатели слева): Главная показывает список проектов
 // в нижней области, Чат — общий чат пространства. Входящие/Поиск — это icon-кнопки действий
@@ -164,6 +165,7 @@ export function Sidebar({
       key: 'add',
       label: 'Задача',
       icon: <Plus className="size-5" />,
+      animatedIcon: false,
       variant: 'action',
       onAction: openAddTask,
     },
@@ -334,10 +336,10 @@ export function Sidebar({
       {/* Без border-t: в Notion над этими кнопками разделителя нет, панель заканчивается
           самими кнопками. Отступ сверху даёт gap грида. */}
       <div className="pbs-1">
-        {/* Геометрия и тени сняты с Notion через CDP (кнопка New chat в подвале сайдбара):
-            высота 40, радиус 999px, зазор 10px, круглая кнопка 40×40, трёхслойная мягкая
-            тень с hairline-обводкой последним слоем. Белый фон заменён на bg-card, чтобы
-            не ломалась тёмная тема; для неё же отдельный вариант тени. */}
+        {/* Геометрия снята с Notion через CDP (кнопка New chat в подвале сайдбара): высота 40,
+            радиус 999px, зазор 10px, круглая кнопка 40×40. Поверхность — та же, что у карточек
+            (bg-card + shadow-card): белая с кольцом-тенью в светлой теме, графитовая с линией
+            в тёмной. */}
         <div className="flex items-center gap-2.5">
           <button
             type="button"
@@ -345,15 +347,13 @@ export function Sidebar({
             disabled={creatingChat}
             title="Новый чат"
             className={cn(
-              'inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-card px-3',
-              'text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 disabled:opacity-60',
-              'shadow-[0_8px_12px_oklch(21.34%_0_none/0.027),0_2px_6px_oklch(21.34%_0_none/0.027),0_0_0_1px_oklch(23.78%_0.049_82.45/0.07)]',
-              'dark:shadow-[0_8px_12px_oklch(0%_0_none/0.3),0_2px_6px_oklch(0%_0_none/0.25),0_0_0_1px_oklch(100%_0_none/0.1)]',
+              'inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-card px-3 shadow-card',
+              'text-sm font-medium text-muted-foreground transition-[color,box-shadow,background-color] hover:text-foreground hover:shadow-card-hover disabled:opacity-60 dark:hover:bg-card-hover',
             )}
           >
             <Sparkles className="size-5 shrink-0" />
             <span className="min-w-0 truncate">Новый чат</span>
-            <kbd className="shrink-0 rounded-[4px] bg-[oklch(29.16%_0.064_61.26/0.03)] px-1 py-0.5 text-xs font-medium text-muted-foreground/70 dark:bg-white/[0.06]">
+            <kbd className="shrink-0 rounded-[4px] bg-hover px-1 py-0.5 text-xs font-medium text-muted-foreground/80">
               Ctrl+O
             </kbd>
           </button>
@@ -363,10 +363,8 @@ export function Sidebar({
             aria-label="Новый проект"
             title="Новый проект"
             className={cn(
-              'grid size-10 shrink-0 place-items-center rounded-full bg-card text-foreground/80',
-              'transition-colors hover:bg-muted/40',
-              'shadow-[0_8px_12px_oklch(21.34%_0_none/0.027),0_2px_6px_oklch(21.34%_0_none/0.027),0_0_0_1px_oklch(23.78%_0.049_82.45/0.07)]',
-              'dark:shadow-[0_8px_12px_oklch(0%_0_none/0.3),0_2px_6px_oklch(0%_0_none/0.25),0_0_0_1px_oklch(100%_0_none/0.1)]',
+              'grid size-10 shrink-0 place-items-center rounded-full bg-card text-foreground/80 shadow-card',
+              'transition-[color,box-shadow,background-color] hover:text-foreground hover:shadow-card-hover dark:hover:bg-card-hover',
             )}
           >
             <SquarePen className="size-[22px]" />
@@ -379,7 +377,7 @@ export function Sidebar({
             className={({ isActive }) =>
               cn(
                 'mbs-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
-                isActive && 'bg-active font-medium text-foreground',
+                isActive && 'bg-active font-semibold text-foreground',
               )
             }
           >
@@ -509,7 +507,9 @@ function RailProjectLink({ project }: { project: Project }): React.ReactElement 
           className={({ isActive }) =>
             cn(
               'grid size-8 shrink-0 place-items-center rounded-md motion-safe:transition-transform hover:scale-105',
-              project.icon ? 'bg-foreground/[0.04] text-base dark:bg-white/[0.06]' : cn('text-[10px] font-semibold', avatarColor(project.name)),
+              project.icon
+                ? 'bg-hover text-base'
+                : cn('text-[10px] font-bold bg-tone-bg text-tone-fg dark:text-tone', projectToneClass(project.id)),
               isActive && 'ring-2 ring-primary',
             )
           }

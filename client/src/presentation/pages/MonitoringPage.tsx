@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Activity, ChevronRight, Plus } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
+import { PageTitle, PageTopBar } from '@/presentation/layout/PageChrome';
 import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useMonitoring } from '@/presentation/hooks/useMonitoring';
@@ -16,6 +18,7 @@ import { AddServerDialog } from '@/presentation/components/monitoring/AddServerD
 import { AlertRulesDialog } from '@/presentation/components/monitoring/AlertRulesDialog';
 import { IncidentHistory } from '@/presentation/components/monitoring/IncidentHistory';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
+import { EmptyPanel, ErrorNote, PAGE_BODY_CLASS } from '@/presentation/pages/PageScaffold';
 
 const DENSITY_KEY = 'pf:monitoring:density';
 
@@ -47,41 +50,26 @@ export function MonitoringPage(): React.ReactElement {
   const alertsFor = (serverId: string): typeof alerts => alerts.filter((a) => a.serverId === serverId);
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
-          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="flex h-11 items-center justify-between gap-2 px-2.5">
+    <div className="flex min-h-full flex-col">
+      {/* Шапка C4: строка 44px с крошками проекта (на одной горизонтали со свитчером
+          пространства в сайдбаре) и счётчиком «сделано сегодня» справа. */}
+      <PageTopBar end={<HeaderCompletedTodayPill />}>
         <ProjectBreadcrumbs
           projectId={pid ?? ''}
           projectName={data?.name ?? 'Проект'}
           projectIcon={data?.icon}
           view="monitoring"
         />
-        <HeaderCompletedTodayPill />
-      </div>
+      </PageTopBar>
 
-      {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 pbs-1 sm:p-6 sm:pbs-1">
-      <div className="flex items-center gap-2">
-        <Activity className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold tracking-tight">Мониторинг</h1>
-      </div>
+      <div className={PAGE_BODY_CLASS}>
+      <PageTitle icon={<Activity className="size-5 shrink-0 text-muted-foreground" />}>Мониторинг</PageTitle>
 
       {forbidden ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            Мониторинг доступен участникам проекта.
-          </CardContent>
-        </Card>
+        <EmptyPanel>Мониторинг доступен участникам проекта.</EmptyPanel>
       ) : (
         <>
-          {error && (
-            <Card>
-              <CardContent className="py-4 text-sm text-red-600 dark:text-red-400">
-                Не удалось загрузить данные мониторинга: {error.message}
-              </CardContent>
-            </Card>
-          )}
+          {error && <ErrorNote>Не удалось загрузить данные мониторинга: {error.message}</ErrorNote>}
 
           {servers && servers.length > 0 && (
             <ProjectHealthSummary
@@ -108,10 +96,10 @@ export function MonitoringPage(): React.ReactElement {
           )}
 
           {loading && !servers ? (
-            <div className="space-y-2">
-              <div className="h-16 pf-skeleton rounded-lg bg-muted" />
-              <div className="h-16 pf-skeleton rounded-lg bg-muted" />
-            </div>
+            <LoadingRegion label="Загружаем серверы…" className="space-y-2">
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+            </LoadingRegion>
           ) : servers && servers.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 2xl:grid-cols-2">
               {servers.map((item) => (
@@ -125,25 +113,23 @@ export function MonitoringPage(): React.ReactElement {
               ))}
             </div>
           ) : (
-            <Card>
-              <CardContent className="space-y-3 py-10 text-center">
-                <p className="text-muted-foreground">Серверов пока нет.</p>
-                {canManage ? (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Добавьте «local» — хост самого ProjectsFlow (читается напрямую), либо «remote» —
-                      удалённый сервер, метрики которого пушит агент-сборщик.
-                    </p>
-                    <Button size="sm" onClick={() => setAddOpen(true)}>
-                      <Plus className="size-4" />
-                      Добавить сервер
-                    </Button>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Серверы добавляют участники с правами редактора.</p>
-                )}
-              </CardContent>
-            </Card>
+            <EmptyPanel className="space-y-3">
+              <p>Серверов пока нет.</p>
+              {canManage ? (
+                <>
+                  <p>
+                    Добавьте «local» — хост самого ProjectsFlow (читается напрямую), либо «remote» —
+                    удалённый сервер, метрики которого пушит агент-сборщик.
+                  </p>
+                  <Button size="sm" onClick={() => setAddOpen(true)}>
+                    <Plus className="size-4" />
+                    Добавить сервер
+                  </Button>
+                </>
+              ) : (
+                <p>Серверы добавляют участники с правами редактора.</p>
+              )}
+            </EmptyPanel>
           )}
 
           {servers && servers.length > 0 && (
@@ -152,6 +138,7 @@ export function MonitoringPage(): React.ReactElement {
                 <button
                   type="button"
                   onClick={() => setHistoryOpen((v) => !v)}
+                  aria-expanded={historyOpen}
                   className="flex items-center gap-1 text-start text-base font-semibold hover:text-foreground"
                 >
                   <ChevronRight

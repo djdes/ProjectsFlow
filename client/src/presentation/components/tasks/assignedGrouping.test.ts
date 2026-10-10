@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
+import { dueKindOf, groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
 import type { TaskPriority, TaskType } from '@/domain/task/Task';
 import {
   asAssignedInboxBlockTask,
@@ -205,4 +205,12 @@ test('byTime: дедлайн позже сегодня → «Будущее»', 
   const future = mk({ deadline: '2026-06-10' });
   const groups = groupAssignedByTime([future], NOW);
   assert.equal(groups[2]?.items[0]?.id, future.id);
+});
+
+test('dueKindOf: просрочено / сегодня / без срока / впереди', () => {
+  assert.equal(dueKindOf('2026-06-08', '2026-06-09'), 'late');
+  assert.equal(dueKindOf('2026-06-09', '2026-06-09'), 'today');
+  assert.equal(dueKindOf(null, '2026-06-09'), 'none');
+  assert.equal(dueKindOf(undefined, '2026-06-09'), 'none');
+  assert.equal(dueKindOf('2026-06-10', '2026-06-09'), 'future');
 });

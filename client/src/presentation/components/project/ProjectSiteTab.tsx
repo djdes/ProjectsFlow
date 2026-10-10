@@ -74,10 +74,8 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
         <h3 className="text-base font-semibold text-foreground">Сайт проекта</h3>
         <span
           className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium',
-            state.deployed
-              ? 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-              : 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+            'shrink-0 rounded-sm px-1.5 py-0.5 text-2xs font-medium',
+            state.deployed ? 'bg-done-soft text-done-ink' : 'bg-primary-soft text-primary-ink',
           )}
         >
           {state.deployed ? 'Опубликован' : 'В разработке'}
@@ -88,13 +86,13 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
       </p>
 
       {/* URL-строка + копирование. */}
-      <div className="mbs-3 flex items-center gap-1.5 rounded-md border border-black/[0.08] bg-black/[0.02] px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.03]">
-        <span className="min-w-0 flex-1 truncate text-sm text-blue-600 dark:text-blue-400">{display}</span>
+      <div className="mbs-3 flex items-center gap-1.5 rounded-md border border-border bg-panel px-2.5 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-sm text-primary-ink">{display}</span>
         <button
           type="button"
           onClick={copyLink}
           aria-label="Скопировать ссылку"
-          className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/10"
+          className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-hover hover:text-foreground"
         >
           <Copy className="size-3.5" />
         </button>
@@ -108,17 +106,18 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
 
       {/* Бэкенд приложения (db/102): показываем только когда воркер его завёл. */}
       {appBackend?.status === 'active' && (
-        <div className="mbs-3 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 dark:bg-emerald-500/[0.08]">
+        // Контейнер нейтральный (C4), смысл «работает» — зелёным в счётчике и полосе.
+        <div className="mbs-3 rounded-lg border border-border bg-panel px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-foreground">Бэкенд приложения</span>
-            <span className="shrink-0 text-2xs font-medium text-emerald-700 dark:text-emerald-400">
+            <span className="shrink-0 text-2xs font-medium text-done">
               {formatMb(appBackend.usageBytes)} / {formatMb(appBackend.storageLimitBytes)}
             </span>
           </div>
           {/* Полоса заполнения квоты. */}
-          <div className="mbs-1.5 h-1.5 w-full overflow-clip rounded-full bg-black/[0.06] dark:bg-white/10">
+          <div className="mbs-1.5 h-1.5 w-full overflow-clip rounded-full bg-foreground/10">
             <div
-              className="h-full rounded-full bg-emerald-500 motion-safe:transition-[width]"
+              className="h-full rounded-full bg-done motion-safe:transition-[width]"
               style={{
                 width: `${Math.min(100, appBackend.storageLimitBytes > 0 ? (appBackend.usageBytes / appBackend.storageLimitBytes) * 100 : 0)}%`,
               }}

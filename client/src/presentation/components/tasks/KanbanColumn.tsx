@@ -76,7 +76,7 @@ export type KanbanColumnColorClasses = {
 // Фолбэк-тонировка колонки, когда цвет не передан. Живёт отдельной константой, потому что
 // её обязана повторить ОТКРЕПЛЁННАЯ шапка: position:fixed уносит её из колонки, и подложку
 // (страница + тонировка) она докрашивает сама — иначе на стыке видна полоса другого тона.
-const DEFAULT_COLUMN_TINT = 'bg-[oklch(32.89%_0.011_91.66/0.03)] dark:bg-[oklch(100%_0_none/0.045)]';
+const DEFAULT_COLUMN_TINT = 'bg-panel';
 
 type InlineCreateInput = {
   description: string;
@@ -452,7 +452,9 @@ export function KanbanColumn({
         // видно, что доска листается. На sm+ снап выключен (sm:snap-none) — свободный скролл.
         // Замеры Notion: колонка 276px, скругление 10px. Шапка и тело — ОДИН блок с общим
         // фоном (у Notion это 10px 10px 0 0 + 0 0 10px 10px), поэтому фон и радиус живут здесь.
-        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center snap-always flex-col rounded-[10px] sm:w-[276px] sm:max-w-none',
+        // Дизайн C4: колонка — серый лист (bg-panel) с радиусом 10px; цветная колонка
+        // (настройка пользователя) — та же форма с лёгкой тонировкой своего цвета.
+        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-center snap-always flex-col rounded-xl sm:w-[276px] sm:max-w-none',
         colorClasses?.body ?? DEFAULT_COLUMN_TINT,
         // Объявляет --pf-card-ring: карточки внутри наследуют цвет своего кольца.
         colorClasses?.ring,
@@ -468,9 +470,10 @@ export function KanbanColumn({
           // остаётся 10px, ещё 8px даёт p-2 тела — до первой карточки 18px, как в эталоне.
           // min-h-10 держит те же 40px и когда правой группы нет вовсе (read-only доска):
           // шапки всех колонок обязаны быть одной высоты, иначе карточки стартуют вразнобой.
-          'flex min-h-10 shrink-0 items-center justify-between gap-2 px-3 py-1.5',
+          // Дизайн C4: шапка плотнее — 36px, метка-тег слева, счётчик серым числом.
+          'flex min-h-9 shrink-0 items-center justify-between gap-2 px-2 py-1',
           // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
-          selectionMode && 'rounded-bs-[10px] bg-primary/10',
+          selectionMode && 'rounded-bs-xl bg-primary-soft',
           // Своя заливка нужна шапке ТОЛЬКО пока она реально откреплена (position: fixed):
           // иначе сквозь неё просвечивали бы уезжающие карточки. В обычном состоянии шапка
           // прозрачная — сквозь неё видна тонировка колонки, шапка и тело читаются как один
@@ -479,7 +482,7 @@ export function KanbanColumn({
           // и подсветку выделения возвращают слои ниже — одним классом их не сложить, twMerge
           // оставил бы от двух bg-* только последний (из-за этого у закреплённой шапки и
           // пропадала подсветка выделения).
-          pinnedHeader != null && 'z-30 rounded-bs-[10px] bg-background',
+          pinnedHeader != null && 'z-30 rounded-bs-xl bg-background',
           )}
         >
         {/* Слои открепленной шапки. Она ушла из потока колонки, поэтому тонировку колонки
@@ -492,14 +495,14 @@ export function KanbanColumn({
             <span
               aria-hidden
               className={cn(
-                'pointer-events-none absolute inset-0 -z-10 rounded-bs-[10px]',
+                'pointer-events-none absolute inset-0 -z-10 rounded-bs-xl',
                 colorClasses?.body ?? DEFAULT_COLUMN_TINT,
               )}
             />
             {selectionMode && (
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10 rounded-bs-[10px] bg-primary/10"
+                className="pointer-events-none absolute inset-0 -z-10 rounded-bs-xl bg-primary-soft"
               />
             )}
           </>
@@ -556,15 +559,20 @@ export function KanbanColumn({
                       переименования, и пилюля обязана подрасти под него. leading-5 вместо
                       leading-none: 14px-строка в 14px-боксе резала выносные кириллицы
                       (у, р, д) — у названия стоит truncate, т.е. overflow:hidden. */}
+                  {/* Дизайн C4: метка-тег 22px с радиусом 5px, полужирное название. Цвет —
+                      из настроек колонки (пастель в светлой теме, тинт в тёмной); точка
+                      цвета — только в тёмной теме, где подложка тише (как метки «Входящих»). */}
                   <span
                     className={cn(
-                      'flex min-h-5 min-w-0 max-w-full items-center gap-1.5 rounded-[10px] px-2 text-sm leading-5',
-                      colorClasses?.pill ??
-                        'bg-[oklch(32.89%_0.011_91.66/0.08)] text-[oklch(44.25%_0.008_88.71)] dark:bg-[oklch(100%_0_none/0.09)] dark:text-[oklch(81.42%_0.007_88.65)]',
+                      'flex min-h-[22px] min-w-0 max-w-full items-center gap-1.5 rounded-[5px] px-[7px] text-ui leading-5',
+                      colorClasses?.pill ?? 'bg-tone-bg text-tone-fg pf-tone-gray',
                     )}
                   >
                     <span
-                      className={cn('size-2 shrink-0 rounded-full', colorClasses?.dot ?? 'bg-muted-foreground/40')}
+                      className={cn(
+                        'hidden size-2 shrink-0 rounded-[3px] dark:block',
+                        colorClasses?.dot ?? 'bg-muted-foreground/50',
+                      )}
                       aria-hidden
                     />
                     {editingLabel ? (
@@ -598,7 +606,7 @@ export function KanbanColumn({
                         }
                         title={onRename ? 'Переименовать колонку' : undefined}
                         className={cn(
-                          'min-w-0 truncate font-medium',
+                          'min-w-0 truncate font-semibold',
                           // Внутри залитой пилюли hover-плашка выглядела бы заплаткой —
                           // «кликабельность» показываем лёгким прозрачным откликом.
                           onRename &&
@@ -636,9 +644,7 @@ export function KanbanColumn({
                 </>
               )}
               {headerBadge}
-              <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-md bg-background/70 px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
-                {tasks.length}
-              </span>
+              <span className="shrink-0 text-ui tabular-nums text-muted-foreground">{tasks.length}</span>
             </div>
             <div className="flex items-center gap-0.5">
               {/* «Тихие» действия: видны на hover/focus колонки и при открытом меню;
@@ -691,16 +697,15 @@ export function KanbanColumn({
         onPointerDown={selectionMode ? onDragSelectStart : undefined}
         className={cn(
           // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
-          // p-2 + gap-2 = замеры Notion: паддинг 8px (276 − 16 = 260 ширина карточки),
-          // вертикальный зазор между карточками 8px.
-          'flex min-h-[4rem] flex-col gap-2 p-2 transition-colors',
+          // Дизайн C4: отступ 6px и зазор между карточками 5px — плотнее Notion.
+          'flex min-h-[4rem] flex-col gap-[5px] p-1.5 pbs-0.5 transition-colors',
           COLUMN_SCROLL_CLASS,
           // Подсветка цели дропа. Серый bg-muted/60 читался заплаткой, а 2% чёрного поверх
           // уже тонированной колонки не читались вовсе — состояние было мёртвым. Берём цвет
           // акцента (тот же синий, что у полоски-индикатора): от тонировки колонки он
           // отличается и светлотой, и тоном, при этом остаётся мягким. rounded-b — у колонки
           // без композера тело доходит до низа, квадратные углы вылезали бы за её скругление.
-          isOver && !lockOffer && 'rounded-be-[10px] bg-primary/[0.08] dark:bg-primary/[0.14]',
+          isOver && !lockOffer && 'rounded-be-xl bg-drop',
         )}
       >
         {/* I6: на free-тарифе колонка «Воркер» — не список задач, а оффер (в обычном потоке,
@@ -757,7 +762,7 @@ export function KanbanColumn({
           })}
         </SortableContext>
         {tasks.length === 0 && !inlineCard && !composing && (
-          <div className="pointer-events-none mx-0.5 rounded-xl border border-dashed border-foreground/10 px-3 py-5 text-center">
+          <div className="pointer-events-none mx-0.5 rounded-lg border border-dashed border-drop-line px-3 py-5 text-center">
             <p className="text-xs font-medium text-muted-foreground">Здесь пока нет задач</p>
             {!readOnly && <p className="mbs-1 text-2xs leading-relaxed text-muted-foreground/80">Перенесите сюда задачу из другой колонки</p>}
           </div>
@@ -776,7 +781,7 @@ export function KanbanColumn({
       </div>
 
       {onInlineCreate && !lockOffer && (
-        <div className="shrink-0 p-2 pbs-0">
+        <div className="shrink-0 p-1.5 pbs-0">
           {composing ? (
             <TaskComposer
               variant="inline"
@@ -801,17 +806,17 @@ export function KanbanColumn({
                 // Высота ровно 40px (h-10) только на десктопе: на мобиле globals.css поднимает
                 // кнопкам без явного size-* min-height до 44px (тач-цель Apple HIG), и
                 // min-height бьёт height — так и задумано, тач-цель не урезаем.
-                'flex h-10 w-full items-center gap-1.5 rounded-[10px] bg-transparent px-2.5 text-sm font-normal transition-colors',
+                'flex h-9 w-full items-center gap-1.5 rounded-lg bg-transparent px-2.5 text-ui font-normal transition-colors',
                 // Кольцо — ТО ЖЕ, что у карточек этой колонки: читаем --pf-card-ring, которую
                 // объявляет корень колонки (colorClasses.ring). Второго источника цвета нет.
                 // Фолбэки (нейтральные) повторяют KanbanCard — на случай рендера вне доски.
                 'shadow-[0_0_0_1px_var(--pf-card-ring,oklch(23.78%_0.049_82.45/0.07))] dark:shadow-[0_0_0_1px_var(--pf-card-ring,oklch(100%_0_none/0.09))]',
                 // Текст — акцент колонки (у Notion он в цвет статуса, а не серый).
-                colorClasses?.action ?? 'text-[oklch(48.12%_0.008_97.48)] dark:text-[oklch(68.31%_0.008_88.67)]',
+                colorClasses?.action ?? 'text-muted-foreground',
                 // Ховер — прозрачная подложка, а не bg-accent: сплошной серый поверх
                 // тонированной колонки читался бы заплаткой (та же логика, что у подсветки
                 // цели дропа выше).
-                'hover:bg-[oklch(32.89%_0.011_91.66/0.045)] dark:hover:bg-[oklch(100%_0_none/0.05)]',
+                'hover:bg-hover',
               )}
             >
               <Plus className="size-4" />
@@ -949,7 +954,7 @@ export function InlineNewCard({
   // Радиус 10px — как у обычной карточки (замеры Notion), чтобы карточка создания
   // не выбивалась из ряда.
   return (
-    <div className="group/new rounded-[10px] border bg-card p-2 ring-1 ring-primary/20">
+    <div className="group/new rounded-lg bg-card p-2 shadow-card ring-1 ring-primary/30">
       {/* items-start: иконка стоит рядом с ПЕРВОЙ строкой (при многострочном названии остаётся
           сверху); при однострочном — визуально по центру. gap-1.5 — компактно. */}
       <div className="flex items-start gap-1.5">

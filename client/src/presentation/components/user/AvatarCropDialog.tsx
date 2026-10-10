@@ -214,7 +214,7 @@ export function AvatarCropDialog({
                   style={{ left: offset.x, top: offset.y, width: sw, height: sh }}
                 />
                 {/* Лёгкая рамка-подсказка области */}
-                <div className="pointer-events-none absolute inset-0 rounded-[25%] ring-1 ring-inset ring-black/10 dark:ring-white/15" />
+                <div className="pointer-events-none absolute inset-0 rounded-[25%] ring-1 ring-inset ring-foreground/15" />
               </div>
 
               <div className="flex w-full items-center gap-3">
@@ -258,7 +258,7 @@ export function AvatarCropDialog({
               type="button"
               onClick={() => void handleSave()}
               disabled={phase === 'saving' || !nat}
-              className="motion-safe:transition-transform active:scale-95"
+              className="motion-safe:transition-transform motion-safe:active:scale-95"
             >
               {phase === 'saving' ? (
                 <>

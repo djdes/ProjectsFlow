@@ -20,7 +20,7 @@ export function ProjectWorkspaceSwitcher({
     <div
       role="tablist"
       aria-label="Рабочая область проекта"
-      className="mbe-3 inline-flex w-fit max-w-full items-center rounded-lg border border-border/70 bg-muted/35 p-0.5"
+      className="mbe-3 inline-flex w-fit max-w-full items-center rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5"
     >
       {ITEMS.map(({ id, label, icon: Icon }) => (
         <button
@@ -32,8 +32,8 @@ export function ProjectWorkspaceSwitcher({
           className={cn(
             'inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors',
             value === id
-              ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(20.77%_0.04_265.75/0.08)]'
-              : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+              ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           <Icon className="size-3.5" aria-hidden />

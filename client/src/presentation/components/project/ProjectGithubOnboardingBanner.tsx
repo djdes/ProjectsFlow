@@ -155,7 +155,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
             size="sm"
             disabled={loading || Boolean(activeLaunchTask)}
             onClick={() => setLaunchOpen(true)}
-            className="group ms-12 min-h-11 shrink-0 gap-2 rounded-lg px-3 text-xs sm:ms-0 sm:min-h-9"
+            className="group ms-12 min-h-11 shrink-0 gap-2 px-3 text-xs sm:ms-0 sm:min-h-9"
           >
             {loading || activeLaunchTask?.status === 'in_progress' ? (
               <Loader2 className="size-4 motion-safe:animate-spin" />
@@ -166,7 +166,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
             )}
             {actionLabel}
             {!loading && !activeLaunchTask && (
-              <ArrowRight className="size-3.5 opacity-60 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-60 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
             )}
           </Button>
         </div>
@@ -308,7 +308,7 @@ export function ProjectGithubOnboardingBanner({
         >
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white shadow-sm ring-1 ring-black/5 dark:bg-white/10 dark:ring-white/10">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-raised shadow-card">
                 <Sparkles className="size-3.5 text-primary" />
               </span>
               Подключите код проекта
@@ -319,7 +319,7 @@ export function ProjectGithubOnboardingBanner({
             <div className="mbs-1.5 flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-muted-foreground">
               {['Репозиторий', 'Делегация', 'База знаний'].map((label) => (
                 <span key={label} className="inline-flex items-center gap-1">
-                  <CheckCircle2 className="size-3 text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2 className="size-3 text-done" />
                   {label}
                 </span>
               ))}
@@ -329,29 +329,29 @@ export function ProjectGithubOnboardingBanner({
             <button
               type="button"
               onClick={() => setIntro('create')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[oklch(27.85%_0.013_253.04)] px-3.5 text-xs font-semibold text-white shadow-sm transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:-translate-y-0.5 hover:bg-[oklch(23.69%_0.01_248.24)] hover:shadow-md"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <Github className="size-4" />
               Создать на GitHub
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
             </button>
             <button
               type="button"
               onClick={() => setIntro('import')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-accent"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-3.5 text-xs font-semibold text-foreground transition-colors hover:bg-hover"
             >
               <Archive className="size-4" />
               Импортировать ZIP
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
             </button>
             <button
               type="button"
               onClick={() => setIntro('link')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-sky-600/20 bg-white/80 px-3.5 text-xs font-semibold text-sky-800 shadow-sm transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:-translate-y-0.5 hover:border-sky-600/35 hover:bg-white hover:shadow-md dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-primary/20 bg-background px-3.5 text-xs font-semibold text-primary-ink transition-colors hover:border-primary/35 hover:bg-hover"
             >
               <Link2 className="size-4" />
               Привязать репозиторий
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
             </button>
           </div>
         </div>

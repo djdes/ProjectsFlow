@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
@@ -45,13 +46,9 @@ export function DuplicatePage(): React.ReactElement {
       {error ? (
         <div className="max-w-sm text-center">
           <p className="text-sm text-foreground">{error}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="mbs-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
+          <Button type="button" className="mbs-4" onClick={() => navigate('/')}>
             На главную
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 text-muted-foreground">

@@ -73,7 +73,7 @@ export function CommunicationPanel(): React.ReactElement {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5 text-xs">
+      <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5 text-xs">
         <TabButton active={tab === 'all'} onClick={() => select('all')}>
           Все
         </TabButton>
@@ -118,18 +118,14 @@ function TabButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition active:scale-95',
-        active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+        // Вид SegmentedControl (C4): выбранная вкладка — белая плашка, а не синяя заливка.
+        'inline-flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:active:scale-95',
+        active ? 'font-medium bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none' : 'text-muted-foreground hover:text-foreground',
       )}
     >
       {children}
       {badge !== undefined && badge > 0 && (
-        <span
-          className={cn(
-            'inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums',
-            active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/15 text-primary',
-          )}
-        >
+        <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary-soft px-1 text-[10px] font-medium tabular-nums text-primary-ink">
           {badge > 99 ? '99+' : badge}
         </span>
       )}
@@ -186,7 +182,7 @@ function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElemen
         <button
           type="button"
           onClick={feed.loadMore}
-          className="mbs-2 w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="mbs-2 w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
         >
           Загрузить ещё
         </button>

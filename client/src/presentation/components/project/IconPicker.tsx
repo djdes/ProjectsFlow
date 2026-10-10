@@ -61,7 +61,7 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
             aria-label={value ? 'Сменить иконку' : 'Добавить иконку'}
             title="Иконка"
             className={cn(
-              'grid shrink-0 cursor-pointer select-none place-items-center overflow-clip rounded-md leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              'grid shrink-0 cursor-pointer select-none place-items-center overflow-clip rounded-md leading-none text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
               big ? 'size-9' : 'size-7',
               triggerClassName,
             )}
@@ -96,7 +96,7 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
                 onClick={() => pick(randomEmoji())}
                 aria-label="Случайная иконка"
                 title="Случайная иконка"
-                className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               >
                 <Shuffle className="size-4" />
               </button>
@@ -106,7 +106,7 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
                   onClick={() => pick(null)}
                   aria-label="Убрать иконку"
                   title="Убрать иконку"
-                  className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <Trash2 className="size-4" />
                 </button>

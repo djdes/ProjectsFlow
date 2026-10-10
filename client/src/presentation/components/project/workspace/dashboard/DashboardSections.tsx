@@ -100,6 +100,19 @@ export type DashboardContentProps = {
   readonly onToggleFavorite: (favorite: boolean) => Promise<void>;
 };
 
+// Вкладки разделов — вид SegmentedControl дизайна C4: серая подложка, выбранный сегмент —
+// белая плашка с лёгкой тенью (в тёмной теме — приподнятая графитовая), остальные — вторичным
+// цветом. Высота 32px — вровень с полями поиска в той же строке.
+const SEGMENTS_CLASS =
+  "inline-flex rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel";
+const segmentClass = (active: boolean): string =>
+  cn(
+    "h-8 rounded-md px-3 text-ui transition-colors",
+    active
+      ? "bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
+      : "font-medium text-muted-foreground hover:text-foreground",
+  );
+
 function SectionHeader({
   title,
   description,
@@ -132,10 +145,10 @@ function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-2 py-1 text-xs font-medium",
-        tone === "ok" &&
-          "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-        tone === "warn" && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        // Метка статуса C4: радиус 4px, мягкая подложка смысла и тёмный текст на ней.
+        "inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
+        tone === "ok" && "bg-done-soft text-done-ink",
+        tone === "warn" && "bg-warning-soft text-warning-ink",
         tone === "muted" && "bg-muted text-muted-foreground",
       )}
     >
@@ -152,7 +165,7 @@ function NotConnected({
   description: string;
 }): React.ReactElement {
   return (
-    <div className="rounded-xl border border-dashed bg-muted/10 p-5">
+    <div className="rounded-xl border border-dashed bg-panel p-5">
       <div className="flex items-start gap-3">
         <CircleDashed className="mbs-0.5 size-5 text-muted-foreground" />
         <div>
@@ -286,7 +299,7 @@ export function OverviewSection({
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start gap-4">
-        <span className="grid size-16 shrink-0 place-items-center rounded-2xl border bg-muted/25">
+        <span className="grid size-16 shrink-0 place-items-center rounded-xl border bg-panel">
           <ProjectIconPicker
             projectId={project.id}
             icon={project.icon}
@@ -299,7 +312,7 @@ export function OverviewSection({
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-2xl font-semibold">{project.name}</h2>
             {canEdit && !editingDescription && (
-              <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Редактировать описание" onClick={() => setEditingDescription(true)}>
+              <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground" aria-label="Редактировать описание" onClick={() => setEditingDescription(true)}>
                 <Pencil className="size-4" />
               </button>
             )}
@@ -341,7 +354,7 @@ export function OverviewSection({
                 href={publicBoardUrl(project.publicSlug)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-w-0 items-center gap-1 truncate text-xs text-primary hover:underline"
+                className="inline-flex min-w-0 items-center gap-1 truncate text-xs text-primary-ink hover:underline"
               >
                 <span className="truncate">
                   {publicBoardDisplayUrl(project.publicSlug)}
@@ -352,7 +365,7 @@ export function OverviewSection({
                 type="button"
                 onClick={() => void copyBoardLink()}
                 aria-label="Скопировать ссылку доски"
-                className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-hover hover:text-foreground"
               >
                 <Copy className="size-3.5" />
               </button>
@@ -393,7 +406,7 @@ export function OverviewSection({
             disabled={favoriteBusy}
             onClick={() => void toggleFavorite()}
             aria-label={project.isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
-            className={project.isFavorite ? "text-amber-500 hover:text-amber-600" : undefined}
+            className={project.isFavorite ? "pf-tone-yellow text-tone" : undefined}
           >
             <Star className={cn("size-5", project.isFavorite && "fill-current")} />
           </Button>
@@ -414,7 +427,7 @@ export function OverviewSection({
           </div>
           {url ? (
             <div className="mbs-5 flex flex-wrap items-center gap-2">
-              <span className="min-w-0 flex-1 truncate rounded-lg bg-muted/45 px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate rounded-md bg-panel px-3 py-2 text-sm">
                 {siteResultDisplayUrl(site!.siteSlug!)}
               </span>
               <Button
@@ -465,7 +478,7 @@ export function OverviewSection({
           <p className="text-xs text-muted-foreground">участников проекта</p>
           <button
             type="button"
-            className="mbs-4 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mbs-4 text-sm font-medium text-primary-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() =>
               window.dispatchEvent(
                 new CustomEvent("pf:open-project-share", {
@@ -574,7 +587,7 @@ function HealthRow({
       <CheckCircle2
         className={cn(
           "size-4",
-          ok ? "text-emerald-500" : "text-muted-foreground/40",
+          ok ? "text-done" : "text-muted-foreground/40",
         )}
       />
       <span className={ok ? "" : "text-muted-foreground"}>{label}</span>
@@ -738,7 +751,7 @@ export function UsersSection({
       <div className="overflow-clip rounded-xl border">
         <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
           <div
-            className="inline-flex rounded-lg bg-muted/50 p-0.5"
+            className={SEGMENTS_CLASS}
             role="tablist"
             aria-label="Тип пользователей"
           >
@@ -750,10 +763,7 @@ export function UsersSection({
                 setTab("runtime");
                 setRole("");
               }}
-              className={cn(
-                "h-9 rounded-md px-3 text-sm",
-                tab === "runtime" && "bg-background shadow-sm",
-              )}
+              className={segmentClass(tab === "runtime")}
             >
               Пользователи приложения ({runtimeUsers.length})
             </button>
@@ -762,10 +772,7 @@ export function UsersSection({
               role="tab"
               aria-selected={tab === "team"}
               onClick={() => setTab("team")}
-              className={cn(
-                "h-9 rounded-md px-3 text-sm",
-                tab === "team" && "bg-background shadow-sm",
-              )}
+              className={segmentClass(tab === "team")}
             >
               Команда ({members.length})
             </button>
@@ -810,7 +817,7 @@ export function UsersSection({
             ) : runtimeError ? (
               <div className="grid min-h-64 place-items-center gap-3 px-5 text-center text-sm text-muted-foreground">
                 <div>
-                  <AlertTriangle className="mx-auto mbe-2 size-5 text-amber-500" />
+                  <AlertTriangle className="mx-auto mbe-2 size-5 text-warning" />
                   <p>{runtimeError}</p>
                   <Button
                     className="mbs-3"
@@ -839,7 +846,7 @@ export function UsersSection({
                   key={user.id}
                   className="grid min-h-16 grid-cols-[40px_minmax(180px,1fr)_160px_130px_auto] items-center gap-3 px-3 text-sm max-lg:grid-cols-[40px_minmax(150px,1fr)_100px_auto]"
                 >
-                  <span className="grid size-8 place-items-center rounded-full bg-primary/10 font-semibold text-primary">
+                  <span className="grid size-8 place-items-center rounded-full bg-primary-soft font-semibold text-primary-ink">
                     {user.email.slice(0, 1).toUpperCase()}
                   </span>
                   <div className="min-w-0">
@@ -1055,7 +1062,7 @@ function AppTrafficView({
 }): React.ReactElement {
   if (!published) {
     return (
-      <div className="grid min-h-64 place-items-center rounded-xl border border-dashed bg-muted/10 px-6 text-center">
+      <div className="grid min-h-64 place-items-center rounded-xl border border-dashed bg-panel px-6 text-center">
         <div>
           <Globe2 className="mx-auto mbe-3 size-7 text-muted-foreground opacity-60" />
           <p className="text-sm font-medium">Приложение ещё не опубликовано</p>
@@ -1147,7 +1154,7 @@ function AppTrafficView({
         <h3 className="text-sm font-semibold">Типы клиентов</h3>
         <div className="mbs-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {classes.map((item) => (
-            <div key={item.cls} className="rounded-lg bg-muted/40 px-3 py-2">
+            <div key={item.cls} className="rounded-lg bg-panel px-3 py-2">
               <p className="text-xs text-muted-foreground">{item.label}</p>
               <p className="mbs-1 text-lg font-semibold tabular-nums">
                 {item.value}
@@ -1406,7 +1413,7 @@ export function MarketingSection({
         }
       />
       <div
-        className="inline-flex flex-wrap rounded-lg bg-muted/50 p-0.5"
+        className={cn(SEGMENTS_CLASS, "flex-wrap")}
         role="tablist"
         aria-label="SEO"
       >
@@ -1424,10 +1431,7 @@ export function MarketingSection({
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={cn(
-              "h-9 rounded-md px-3 text-sm",
-              tab === id && "bg-background shadow-sm",
-            )}
+            className={segmentClass(tab === id)}
           >
             {label}
           </button>
@@ -1443,11 +1447,12 @@ export function MarketingSection({
               управление индексацией.
             </p>
           </section>
-          <section className="rounded-xl border bg-muted/15 p-4">
-            <p className="truncate text-lg text-blue-700 dark:text-blue-300">
+          {/* Превью сниппета поисковой выдачи: заголовок — ссылкой, адрес — зелёным, как в выдаче. */}
+          <section className="rounded-xl border bg-panel p-4">
+            <p className="truncate text-lg text-primary-ink">
               {title || project.name}
             </p>
-            <p className="mbs-1 text-xs text-emerald-700 dark:text-emerald-300">
+            <p className="pf-tone-green mbs-1 text-xs text-tone">
               {canonicalUrl ||
                 `projectsflow.ru › p › ${project.publicSlug ?? "preview"}`}
             </p>
@@ -1499,7 +1504,7 @@ export function MarketingSection({
                 Поисковики увидят настройку после публикации проекта.
               </span>
               {!project.isPublic && (
-                <span className="mbs-1 block text-xs text-amber-600">
+                <span className="mbs-1 block text-xs text-warning">
                   Проект пока не опубликован.
                 </span>
               )}
@@ -1530,7 +1535,7 @@ export function MarketingSection({
               placeholder={'{\n  "@context": "https://schema.org"\n}'}
               disabled={!canEdit}
               rows={9}
-              className="w-full resize-y rounded-lg border bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100"
+              className="w-full resize-y rounded-lg border bg-panel px-3 py-2 font-mono text-xs text-foreground"
             />
             <span className="text-xs text-muted-foreground">
               Перед сохранением JSON проверяется сервером.
@@ -1777,7 +1782,7 @@ export function DomainsSection({
           </div>
         </label>
         {dashboardSettings.customDomain.error && (
-          <p className="mbs-3 text-sm text-amber-700 dark:text-amber-300">
+          <p className="mbs-3 text-sm text-warning">
             {dashboardSettings.customDomain.error}
           </p>
         )}
@@ -1988,7 +1993,7 @@ export function IntegrationsSection({
               href={integration.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-xl border p-4 transition-colors hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-xl border p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {content}
             </a>
@@ -2010,7 +2015,7 @@ export function IntegrationsSection({
         })}
       </div>
       <section className="overflow-clip rounded-xl border">
-        <div className="border-be bg-muted/15 px-4 py-3">
+        <div className="border-be bg-panel px-4 py-3">
           <p className="text-sm font-semibold">Внешние подключения</p>
           <p className="mbs-1 text-xs text-muted-foreground">
             Статус «Ожидает настройки» означает сохранённый запрос, а не
@@ -2184,8 +2189,8 @@ export function SecuritySection({
           className={cn(
             "rounded-xl border p-4",
             scan.findings.length
-              ? "border-amber-500/30 bg-amber-500/5"
-              : "border-emerald-500/30 bg-emerald-500/5",
+              ? "border-warning/30 bg-warning/5"
+              : "border-done/30 bg-done/5",
           )}
         >
           <p className="font-medium">
@@ -2217,10 +2222,10 @@ export function SecuritySection({
                   className={cn(
                     "mbs-0.5 size-4 shrink-0",
                     finding.severity === "critical"
-                      ? "text-red-500"
+                      ? "text-destructive"
                       : finding.severity === "warning"
-                        ? "text-amber-500"
-                        : "text-blue-500",
+                        ? "text-warning"
+                        : "text-primary",
                   )}
                 />
                 <div>
@@ -2245,9 +2250,9 @@ export function SecuritySection({
               className="flex items-center gap-3 px-4 py-3 text-sm"
             >
               {check.ok ? (
-                <CheckCircle2 className="size-4 text-emerald-500" />
+                <CheckCircle2 className="size-4 text-done" />
               ) : (
-                <AlertTriangle className="size-4 text-amber-500" />
+                <AlertTriangle className="size-4 text-warning" />
               )}
               <span className="flex-1">{check.label}</span>
               <StatusPill tone={check.ok ? "ok" : "warn"}>
@@ -2485,7 +2490,7 @@ export function AgentsSection({
             Сохранить диспетчера
           </Button>
         </section>
-        <aside className="rounded-xl border bg-muted/10 p-4">
+        <aside className="rounded-xl border bg-panel p-4">
           <div className="flex items-center gap-2">
             <Bot className="size-4 text-primary" />
             <h3 className="text-sm font-semibold">Режим выполнения</h3>
@@ -2514,7 +2519,7 @@ export function AgentsSection({
                 "h-5 w-9 rounded-full p-0.5 transition-colors",
                 project.multiTaskWorker
                   ? "bg-primary"
-                  : "bg-muted-foreground/25",
+                  : "bg-foreground/20",
               )}
             >
               <span
@@ -2553,7 +2558,7 @@ export function AgentsSection({
           </p>
         ) : (
           <div className="grid gap-4 p-4 sm:grid-cols-2">
-            <div className="rounded-lg border bg-muted/10 p-3">
+            <div className="rounded-lg border bg-panel p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <KeyRound className="size-4 text-muted-foreground" />
                 Права доступа (capabilities)
@@ -2585,7 +2590,7 @@ export function AgentsSection({
                 </ul>
               )}
             </div>
-            <div className="rounded-lg border bg-muted/10 p-3">
+            <div className="rounded-lg border bg-panel p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Bot className="size-4 text-muted-foreground" />
                 Режим
@@ -2825,7 +2830,7 @@ function WorkflowRulesPanel({
 
   return (
     <section className="overflow-clip rounded-xl border">
-      <div className="border-be bg-muted/15 px-4 py-3">
+      <div className="border-be bg-panel px-4 py-3">
         <p className="text-sm font-semibold">Правила «событие → действие»</p>
         <p className="mbs-1 text-xs text-muted-foreground">
           Конструктор поверх автономного цикла: замкнутый набор триггеров и действий над
@@ -2840,7 +2845,7 @@ function WorkflowRulesPanel({
           Загружаем правила…
         </p>
       ) : loadError ? (
-        <p className="px-4 py-4 text-sm text-amber-700 dark:text-amber-300">
+        <p className="px-4 py-4 text-sm text-warning">
           Не удалось прочитать правила. Проект и задачи не затронуты.
         </p>
       ) : rules.length === 0 ? (
@@ -2855,7 +2860,7 @@ function WorkflowRulesPanel({
               <span
                 className={cn(
                   "size-2 shrink-0 rounded-full",
-                  rule.enabled ? "bg-emerald-500" : "bg-muted-foreground/40",
+                  rule.enabled ? "bg-done" : "bg-muted-foreground/40",
                 )}
               />
               <div className="min-w-0 flex-1">
@@ -2872,7 +2877,7 @@ function WorkflowRulesPanel({
                       "mbs-0.5 truncate text-2xs",
                       rule.lastStatus.startsWith("error") ||
                         rule.lastStatus.startsWith("disabled")
-                        ? "text-amber-600 dark:text-amber-400"
+                        ? "text-warning"
                         : "text-muted-foreground",
                     )}
                   >
@@ -2903,7 +2908,7 @@ function WorkflowRulesPanel({
       )}
 
       {canEdit && (
-        <div className="space-y-3 border-bs bg-muted/10 p-4">
+        <div className="space-y-3 border-bs bg-panel p-4">
           <p className="text-xs font-semibold text-muted-foreground">Новое правило</p>
           <Input
             value={name}
@@ -3129,7 +3134,7 @@ export function WorkflowsSection({
           </span>
         </div>
       ) : loadError ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-800 dark:text-amber-200">
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning-ink">
           Не удалось прочитать настройки автоматизации. Основной проект и задачи
           не затронуты.
         </div>
@@ -3202,7 +3207,7 @@ export function WorkflowsSection({
         )
       )}
       <section className="overflow-clip rounded-xl border">
-        <div className="border-be bg-muted/15 px-4 py-3">
+        <div className="border-be bg-panel px-4 py-3">
           <p className="text-sm font-semibold">Готовность проекта</p>
           <p className="mbs-1 text-xs text-muted-foreground">
             Перед запуском планировщик проверит эти реальные настройки.
@@ -3217,7 +3222,7 @@ export function WorkflowsSection({
               <span
                 className={cn(
                   "size-2 rounded-full",
-                  state.ok ? "bg-emerald-500" : "bg-amber-500",
+                  state.ok ? "bg-done" : "bg-warning",
                 )}
               />
               <span className="min-w-0 flex-1 text-sm font-medium">
@@ -3291,49 +3296,49 @@ export async function appRequest(path, options = {}) {
       method: "GET",
       suffix: "",
       label: "Получить и отфильтровать записи",
-      tone: "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300",
+      tone: "pf-tone-green",
     },
     {
       method: "POST",
       suffix: "",
       label: "Создать запись",
-      tone: "text-blue-700 bg-blue-500/10 dark:text-blue-300",
+      tone: "pf-tone-blue",
     },
     {
       method: "PATCH",
       suffix: "/{id}",
       label: "Изменить запись по ID",
-      tone: "text-amber-700 bg-amber-500/10 dark:text-amber-300",
+      tone: "pf-tone-yellow",
     },
     {
       method: "DELETE",
       suffix: "/{id}",
       label: "Удалить запись по ID (обратимо)",
-      tone: "text-red-700 bg-red-500/10 dark:text-red-300",
+      tone: "pf-tone-red",
     },
     {
       method: "POST",
       suffix: "/bulk",
       label: "Создать до 100 записей за запрос",
-      tone: "text-blue-700 bg-blue-500/10 dark:text-blue-300",
+      tone: "pf-tone-blue",
     },
     {
       method: "PUT",
       suffix: "/bulk",
       label: "Обновить до 100 записей списком",
-      tone: "text-violet-700 bg-violet-500/10 dark:text-violet-300",
+      tone: "pf-tone-purple",
     },
     {
       method: "POST",
       suffix: "/update-many",
       label: "Обновить записи по условию",
-      tone: "text-violet-700 bg-violet-500/10 dark:text-violet-300",
+      tone: "pf-tone-purple",
     },
     {
       method: "POST",
       suffix: "/{id}/restore",
       label: "Восстановить удалённую запись",
-      tone: "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300",
+      tone: "pf-tone-green",
     },
   ] as const;
   return (
@@ -3343,7 +3348,7 @@ export async function appRequest(path, options = {}) {
         description="Документация создаётся из опубликованной схемы приложения. Ключи и приватные значения не показываются."
       />
       <div
-        className="inline-flex rounded-lg bg-muted/50 p-0.5"
+        className={SEGMENTS_CLASS}
         role="tablist"
         aria-label="API документация"
       >
@@ -3352,10 +3357,7 @@ export async function appRequest(path, options = {}) {
           role="tab"
           aria-selected={tab === "docs"}
           onClick={() => setTab("docs")}
-          className={cn(
-            "h-9 rounded-md px-3 text-sm",
-            tab === "docs" && "bg-background shadow-sm",
-          )}
+          className={segmentClass(tab === "docs")}
         >
           Endpoints
         </button>
@@ -3364,10 +3366,7 @@ export async function appRequest(path, options = {}) {
           role="tab"
           aria-selected={tab === "openapi"}
           onClick={() => setTab("openapi")}
-          className={cn(
-            "h-9 rounded-md px-3 text-sm",
-            tab === "openapi" && "bg-background shadow-sm",
-          )}
+          className={segmentClass(tab === "openapi")}
         >
           OpenAPI
         </button>
@@ -3376,10 +3375,7 @@ export async function appRequest(path, options = {}) {
           role="tab"
           aria-selected={tab === "sdk"}
           onClick={() => setTab("sdk")}
-          className={cn(
-            "h-9 rounded-md px-3 text-sm",
-            tab === "sdk" && "bg-background shadow-sm",
-          )}
+          className={segmentClass(tab === "sdk")}
         >
           JavaScript SDK
         </button>
@@ -3392,7 +3388,7 @@ export async function appRequest(path, options = {}) {
                 key={table}
                 className="overflow-clip rounded-xl border"
               >
-                <div className="border-be bg-muted/15 px-3 py-2">
+                <div className="border-be bg-panel px-3 py-2">
                   <p className="font-mono text-xs font-semibold">{table}</p>
                   <p className="mbs-1 text-xs text-muted-foreground">
                     {runtimeUrl
@@ -3408,7 +3404,9 @@ export async function appRequest(path, options = {}) {
                     >
                       <span
                         className={cn(
-                          "w-fit rounded px-2 py-1 font-mono text-2xs font-semibold",
+                          // Метод — категория (как в Swagger), цвет — тон Notion: в светлой
+                          // теме тёмный текст на пастели, в тёмной — цветной текст на тинте.
+                          "w-fit rounded-sm bg-tone-bg px-2 py-1 font-mono text-2xs font-semibold text-tone-fg dark:text-tone",
                           endpoint.tone,
                         )}
                       >
@@ -3450,32 +3448,32 @@ export async function appRequest(path, options = {}) {
           )}
         </div>
       ) : tab === "sdk" ? (
-        <div className="overflow-clip rounded-xl border bg-zinc-950">
-          <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-be border-white/10 px-3 py-2 text-xs text-zinc-400">
+        <div className="overflow-clip rounded-xl border bg-panel">
+          <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-be px-3 py-2 text-xs text-muted-foreground">
             <span>projectsflow-app.js</span>
             <Button
               variant="ghost"
               size="sm"
-              className="text-zinc-200 hover:bg-white/10 hover:text-white"
+              className="text-muted-foreground hover:text-foreground"
               onClick={() => void copy(sdkSnippet)}
             >
               <Copy className="me-1.5 size-3.5" />
               Копировать SDK
             </Button>
           </div>
-          <pre className="max-h-[520px] overflow-auto p-4 font-mono text-xs leading-6 text-zinc-100">
+          <pre className="max-h-[520px] overflow-auto p-4 font-mono text-xs leading-6 text-foreground">
             <code>{sdkSnippet}</code>
           </pre>
         </div>
       ) : (
-        <div className="overflow-clip rounded-xl border bg-zinc-950">
-          <div className="flex h-11 items-center justify-between border-be border-white/10 px-3 text-xs text-zinc-400">
+        <div className="overflow-clip rounded-xl border bg-panel">
+          <div className="flex h-11 items-center justify-between border-be px-3 text-xs text-muted-foreground">
             <span>openapi.json</span>
             <div className="flex gap-1">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-zinc-200 hover:bg-white/10 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={downloadOpenApi}
               >
                 <Download className="me-1.5 size-3.5" />
@@ -3484,7 +3482,7 @@ export async function appRequest(path, options = {}) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-zinc-200 hover:bg-white/10 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => void copy(openApi)}
               >
                 <Copy className="me-1.5 size-3.5" />
@@ -3492,7 +3490,7 @@ export async function appRequest(path, options = {}) {
               </Button>
             </div>
           </div>
-          <pre className="max-h-[520px] overflow-auto p-4 font-mono text-xs leading-6 text-zinc-100">
+          <pre className="max-h-[520px] overflow-auto p-4 font-mono text-xs leading-6 text-foreground">
             <code>{openApi}</code>
           </pre>
         </div>
@@ -3519,7 +3517,7 @@ export async function appRequest(path, options = {}) {
           </Button>
         )}
       </div>
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm">
+      <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm">
         <p className="font-medium">Аутентификация</p>
         <p className="mbs-1 text-muted-foreground">
           Runtime API использует сессию опубликованного приложения и правила
@@ -3736,7 +3734,7 @@ export function SettingsSection({
         description="Профиль приложения, публикация и запросы на внешние способы входа."
       />
       <div
-        className="inline-flex rounded-lg bg-muted/50 p-0.5"
+        className={SEGMENTS_CLASS}
         role="tablist"
         aria-label="Настройки"
       >
@@ -3745,10 +3743,7 @@ export function SettingsSection({
           role="tab"
           aria-selected={tab === "app"}
           onClick={() => setTab("app")}
-          className={cn(
-            "h-9 rounded-md px-3 text-sm",
-            tab === "app" && "bg-background shadow-sm",
-          )}
+          className={segmentClass(tab === "app")}
         >
           Приложение
         </button>
@@ -3757,10 +3752,7 @@ export function SettingsSection({
           role="tab"
           aria-selected={tab === "access"}
           onClick={() => setTab("access")}
-          className={cn(
-            "h-9 rounded-md px-3 text-sm",
-            tab === "access" && "bg-background shadow-sm",
-          )}
+          className={segmentClass(tab === "access")}
         >
           Доступ
         </button>
@@ -3769,10 +3761,7 @@ export function SettingsSection({
           role="tab"
           aria-selected={tab === "auth"}
           onClick={() => setTab("auth")}
-          className={cn(
-            "h-9 rounded-md px-3 text-sm",
-            tab === "auth" && "bg-background shadow-sm",
-          )}
+          className={segmentClass(tab === "auth")}
         >
           Вход
         </button>
@@ -3890,7 +3879,7 @@ export function SettingsSection({
               <span
                 className={cn(
                   "h-5 w-9 rounded-full p-0.5 transition-colors",
-                  showPlatformBadge ? "bg-primary" : "bg-muted-foreground/25",
+                  showPlatformBadge ? "bg-primary" : "bg-foreground/20",
                 )}
               >
                 <span
@@ -3945,7 +3934,7 @@ export function SettingsSection({
                     "h-5 w-9 rounded-full p-0.5 transition-colors",
                     project.publicIndexing
                       ? "bg-primary"
-                      : "bg-muted-foreground/25",
+                      : "bg-foreground/20",
                   )}
                 >
                   <span
@@ -3959,7 +3948,7 @@ export function SettingsSection({
             )}
           </section>
           <section className="max-w-3xl overflow-clip rounded-xl border">
-            <div className="border-be bg-muted/15 px-4 py-3">
+            <div className="border-be bg-panel px-4 py-3">
               <p className="text-sm font-semibold">Копирование и шаблоны</p>
               <p className="mbs-1 text-xs text-muted-foreground">
                 Копия переносит профиль и конфигурацию Dashboard в новый проект.
@@ -4053,7 +4042,7 @@ export function SettingsSection({
       )}
       {tab === "auth" && (
         <section className="max-w-3xl overflow-clip rounded-xl border">
-          <div className="border-be bg-muted/15 px-4 py-3">
+          <div className="border-be bg-panel px-4 py-3">
             <p className="text-sm font-semibold">Способы входа</p>
             <p className="mbs-1 text-xs text-muted-foreground">
               Email применяется к runtime API сразу. Внешние провайдеры
@@ -4132,7 +4121,7 @@ function AuthRow({
         onClick={onClick}
         className={cn(
           "h-6 w-11 rounded-full p-0.5 transition-colors disabled:opacity-50",
-          active ? "bg-primary" : "bg-muted-foreground/25",
+          active ? "bg-primary" : "bg-foreground/20",
         )}
       >
         <span
@@ -4271,7 +4260,7 @@ function GoogleAuthProviderRow({
         </Button>
       </div>
       {expanded && (
-        <div className="mbs-4 space-y-4 rounded-lg border bg-muted/10 p-4">
+        <div className="mbs-4 space-y-4 rounded-lg border bg-panel p-4">
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <p>
               Создайте OAuth-клиент в{" "}
@@ -4279,7 +4268,7 @@ function GoogleAuthProviderRow({
                 href="https://console.cloud.google.com/apis/credentials"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                className="inline-flex items-center gap-1 font-medium text-primary-ink underline-offset-2 hover:underline"
               >
                 Google Cloud Console
                 <ExternalLink className="size-3" />

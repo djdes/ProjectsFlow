@@ -82,7 +82,7 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
     const who = task.ralphCancelRequestedByDisplayName;
     return (
       <div className="space-y-2 border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <div className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-ink">
           <p className="font-medium">🛑 Отмена запрошена ({formatRelativeMinutes(when)})</p>
           {who && <p className="mbs-0.5 opacity-80">{who}</p>}
           <p className="mbs-1 text-2xs opacity-70">

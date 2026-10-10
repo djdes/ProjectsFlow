@@ -168,7 +168,7 @@ export function GitTokenDelegationBlock({
               )}
             </p>
             {mineDisabledReason && (
-              <p className="mbs-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <p className="mbs-1 flex items-center gap-1 text-xs text-warning">
                 <ShieldAlert className="size-3" />
                 {mineDisabledReason}
               </p>
@@ -200,7 +200,7 @@ export function GitTokenDelegationBlock({
             Порядок выбора сервером сверху вниз. Owner идёт первым, дальше — по
             алфавиту. Диспетчер сам исключается из кандидатов.
           </p>
-          <ul className="divide-y rounded-md border bg-muted/5">
+          <ul className="divide-y rounded-md border bg-panel">
             {status.all.map((m, idx) => (
               <GrantorRow
                 key={m.granterUserId}
@@ -212,7 +212,7 @@ export function GitTokenDelegationBlock({
             ))}
           </ul>
           {selectedGrantorId === null && (
-            <p className="mbs-2 text-xs text-amber-600 dark:text-amber-400">
+            <p className="mbs-2 text-xs text-warning">
               ⚠ Сейчас никто не будет выбран — все включённые грантеры либо без GH,
               либо являются текущим диспетчером.
             </p>
@@ -301,7 +301,7 @@ function GrantorRow({
       <span className="flex-1 truncate font-medium">
         {m.displayName}
         {m.isOwner && (
-          <span className="ms-1.5 rounded bg-primary/15 px-1 text-2xs font-medium uppercase tracking-wide text-primary">
+          <span className="ms-1.5 rounded bg-primary-soft px-1 text-2xs font-medium uppercase tracking-wide text-primary-ink">
             owner
           </span>
         )}
@@ -320,7 +320,7 @@ function GrantorRow({
         )}
       </span>
       {isSelected ? (
-        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-2xs text-emerald-700 dark:text-emerald-400">
+        <span className="shrink-0 rounded bg-done-soft px-1.5 py-0.5 font-mono text-2xs text-done-ink">
           ✓ выбран
         </span>
       ) : (
@@ -382,10 +382,10 @@ function ContextBadge({
 
 function OutcomeBadge({ outcome }: { outcome: GitTokenAccessOutcome }): React.ReactElement {
   const cfg: Record<GitTokenAccessOutcome, { label: string; cls: string }> = {
-    ok: { label: 'ok', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
+    ok: { label: 'ok', cls: 'bg-done-soft text-done-ink' },
     not_dispatcher: {
       label: 'не диспетчер',
-      cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+      cls: 'bg-warning-soft text-warning-ink',
     },
     delegation_disabled: {
       label: 'нет грантеров',
@@ -393,7 +393,7 @@ function OutcomeBadge({ outcome }: { outcome: GitTokenAccessOutcome }): React.Re
     },
     no_eligible_grantor: {
       label: 'без github',
-      cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+      cls: 'bg-warning-soft text-warning-ink',
     },
     granter_github_disconnected: {
       label: 'github отключён',

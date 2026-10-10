@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Bot, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -28,6 +32,8 @@ import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 import { AdminLlmPanel } from '@/presentation/components/admin/AdminLlmPanel';
+import { EmptyPanel } from '@/presentation/pages/PageScaffold';
+import { SectionPage } from '@/presentation/pages/SectionPage';
 
 type Tab = 'projects' | 'users' | 'support' | 'email' | 'ai';
 
@@ -42,62 +48,48 @@ export function AdminPage(): React.ReactElement {
   );
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pbs-3.5 sm:p-6 sm:pbs-4">
-      {/* pf-burger-gap — уступаем место плавающему бургеру свёрнутой панели. */}
-      <div className="pf-burger-gap flex items-center gap-2.5">
-        <Shield className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold tracking-tight">Администрирование</h1>
-      </div>
+    <SectionPage icon={Shield} label="Администрирование">
+      {/* Вкладки — общий Tabs (как в профиле): неактивная вкладка не монтируется, поэтому
+          данные раздела грузятся только при его открытии. */}
+      <Tabs value={tab} onValueChange={(next) => setTab(next as Tab)}>
+        {/* Пять вкладок на телефоне шире экрана — ряд прокручивается вбок, а не режется. */}
+        <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pf-scrollbar-hide sm:mx-0 sm:px-0">
+          <TabsList>
+            <TabsTrigger value="projects">
+              <FolderGit2 className="size-3.5" /> Проекты
+            </TabsTrigger>
+            <TabsTrigger value="users">
+              <Users className="size-3.5" /> Пользователи
+            </TabsTrigger>
+            <TabsTrigger value="support">
+              <LifeBuoy className="size-3.5" /> Поддержка
+            </TabsTrigger>
+            <TabsTrigger value="email">
+              <Mail className="size-3.5" /> Email
+            </TabsTrigger>
+            <TabsTrigger value="ai">
+              <Bot className="size-3.5" /> ИИ
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className="inline-flex w-fit items-center gap-0.5 rounded-md border bg-card p-0.5 text-sm">
-        <TabButton active={tab === 'projects'} onClick={() => setTab('projects')}>
-          <FolderGit2 className="size-4" /> Проекты
-        </TabButton>
-        <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
-          <Users className="size-4" /> Пользователи
-        </TabButton>
-        <TabButton active={tab === 'support'} onClick={() => setTab('support')}>
-          <LifeBuoy className="size-4" /> Поддержка
-        </TabButton>
-        <TabButton active={tab === 'email'} onClick={() => setTab('email')}>
-          <Mail className="size-4" /> Email
-        </TabButton>
-        <TabButton active={tab === 'ai'} onClick={() => setTab('ai')}>
-          <Bot className="size-4" /> ИИ
-        </TabButton>
-      </div>
-
-      {tab === 'projects' && <ProjectsTab />}
-      {tab === 'users' && <UsersTab />}
-      {tab === 'support' && <SupportTab />}
-      {tab === 'email' && <EmailTab />}
-      {tab === 'ai' && <AdminLlmPanel />}
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors',
-        active
-          ? 'bg-primary text-primary-foreground shadow-sm'
-          : 'text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
+        <TabsContent value="projects" className="mbs-5">
+          <ProjectsTab />
+        </TabsContent>
+        <TabsContent value="users" className="mbs-5">
+          <UsersTab />
+        </TabsContent>
+        <TabsContent value="support" className="mbs-5">
+          <SupportTab />
+        </TabsContent>
+        <TabsContent value="email" className="mbs-5">
+          <EmailTab />
+        </TabsContent>
+        <TabsContent value="ai" className="mbs-5">
+          <AdminLlmPanel />
+        </TabsContent>
+      </Tabs>
+    </SectionPage>
   );
 }
 
@@ -129,15 +121,11 @@ function SupportTab(): React.ReactElement {
 
   if (!tickets) return <ListSkeleton />;
   if (tickets.length === 0) {
-    return (
-      <p className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-        Обращений пока нет.
-      </p>
-    );
+    return <EmptyPanel>Обращений пока нет.</EmptyPanel>;
   }
 
   return (
-    <ul className="divide-y overflow-clip rounded-lg border bg-card">
+    <ul className={LIST_CLASS}>
       {tickets.map((t) => (
         <li key={t.id} className={cn('space-y-1.5 px-4 py-3', t.status === 'closed' && 'opacity-60')}>
           <div className="flex items-start justify-between gap-3">
@@ -147,11 +135,11 @@ function SupportTab(): React.ReactElement {
                 {t.submitterEmail && (
                   <span className="truncate text-xs text-muted-foreground">{t.submitterEmail}</span>
                 )}
-                <span className="rounded bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
+                <span className="rounded-sm bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                   {t.source === 'landing' ? 'лендинг' : 'приложение'}
                 </span>
                 {t.status === 'closed' && (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
+                  <span className="rounded-sm bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                     закрыто
                   </span>
                 )}
@@ -191,7 +179,7 @@ function ProjectsTab(): React.ReactElement {
 
   if (!projects) return <ListSkeleton />;
   if (projects.length === 0) {
-    return <EmptyBox>Проектов нет.</EmptyBox>;
+    return <EmptyPanel>Проектов нет.</EmptyPanel>;
   }
 
   // Группировка по владельцу. Проект уникален (без дублей по members).
@@ -203,16 +191,16 @@ function ProjectsTab(): React.ReactElement {
   }
 
   return (
-    <div className="space-y-6 overflow-y-auto">
+    <div className="space-y-6">
       {[...groups.values()].map((g) => (
         <section key={g.email} className="space-y-2">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <h2 className="flex min-w-0 items-center gap-2 text-ui font-medium text-muted-foreground">
             <Avatar className="size-6">
               <AvatarFallback className="text-[10px]">{getInitials(g.owner)}</AvatarFallback>
             </Avatar>
-            {g.owner} <span className="text-xs">· {g.email}</span>
+            <span className="truncate">{g.owner}</span> <span className="truncate text-xs">· {g.email}</span>
           </h2>
-          <ul className="divide-y overflow-clip rounded-lg border bg-card">
+          <ul className={LIST_CLASS}>
             {g.items.map((p) => (
               <li key={p.id} className="space-y-2 px-4 py-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -412,7 +400,7 @@ function UsersTab(): React.ReactElement {
 
   return (
     <>
-      <ul className="divide-y overflow-y-auto overflow-x-hidden rounded-lg border bg-card">
+      <ul className={LIST_CLASS}>
         {users.map((u) => (
           <li key={u.id} className="space-y-2 px-4 py-3">
             <div className="flex items-start gap-3">
@@ -422,13 +410,14 @@ function UsersTab(): React.ReactElement {
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate text-sm font-medium">
                   {u.displayName}
+                  {/* Метки — данные о человеке, а не статусы: тоны палитры меток (pf-tag). */}
                   {u.isAdmin && (
-                    <span className="rounded bg-primary/15 px-1.5 text-2xs font-medium uppercase tracking-wide text-primary">
+                    <span className="pf-tag pf-tone-blue shrink-0 text-2xs font-medium uppercase tracking-wide">
                       admin
                     </span>
                   )}
                   {u.plan !== 'free' && (
-                    <span className="rounded bg-amber-500/15 px-1.5 text-2xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                    <span className="pf-tag pf-tone-yellow shrink-0 text-2xs font-medium uppercase tracking-wide">
                       {planNameRu(u.plan)}
                       {u.subscriptionExpiresAt
                         ? ` до ${new Date(u.subscriptionExpiresAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
@@ -455,14 +444,14 @@ function UsersTab(): React.ReactElement {
                         <span
                           className={
                             u.delegationEnabledCount > 0
-                              ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                              ? 'font-medium text-done'
                               : ''
                           }
                         >
                           {u.delegationEnabledCount}/{u.ownedProjectCount}
                         </span>
                       ) : (
-                        <span className="text-amber-600 dark:text-amber-400">
+                        <span className="text-warning">
                           GitHub не подключён
                         </span>
                       )}
@@ -659,21 +648,22 @@ function EmailTab(): React.ReactElement {
   const selectedMeta = templates.find((t) => t.key === selected);
 
   return (
-    <div className="flex flex-col gap-4 overflow-hidden lg:flex-row">
+    <div className="flex flex-col gap-4 lg:flex-row">
       {/* Список шаблонов */}
       <div className="w-full shrink-0 lg:w-72">
-        <h2 className="mbe-2 text-sm font-medium text-muted-foreground">Шаблоны ({templates.length})</h2>
-        <ul className="divide-y overflow-y-auto rounded-lg border bg-card lg:max-h-[calc(100vh-220px)]">
+        <h2 className="mbe-2 text-ui font-medium text-muted-foreground">Шаблоны ({templates.length})</h2>
+        <ul className={cn(LIST_CLASS, 'overflow-y-auto lg:max-h-[calc(100dvh-220px)]')}>
           {templates.map((t) => (
             <li key={t.key}>
               <button
                 type="button"
                 onClick={() => setSelected(t.key)}
+                aria-current={selected === t.key ? 'true' : undefined}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm transition-colors',
                   selected === t.key
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-foreground hover:bg-muted/50',
+                    ? 'bg-primary-soft text-primary-ink'
+                    : 'text-foreground hover:bg-hover',
                 )}
               >
                 <Mail className="size-3.5 shrink-0 text-muted-foreground" />
@@ -695,37 +685,22 @@ function EmailTab(): React.ReactElement {
         )}
 
         {/* Превью */}
-        <div className="overflow-clip rounded-lg border bg-card">
-          <div className="flex items-center justify-between border-be px-4 py-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Eye className="size-3.5 text-muted-foreground" />
+        <Card className="overflow-clip">
+          <div className="flex items-center justify-between gap-2 border-be px-4 py-2">
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <Eye className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="font-medium">Предпросмотр</span>
               {preview && (
-                <span className="text-xs text-muted-foreground">· {preview.subject}</span>
+                <span className="truncate text-xs text-muted-foreground">· {preview.subject}</span>
               )}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setShowText(false)}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs transition-colors',
-                  !showText ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                HTML
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowText(true)}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs transition-colors',
-                  showText ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                Text
-              </button>
-            </div>
+            <SegmentedControl
+              size="sm"
+              className="shrink-0"
+              value={showText ? 'text' : 'html'}
+              onChange={(next) => setShowText(next === 'text')}
+              options={PREVIEW_MODES}
+            />
           </div>
           <div className="relative min-h-[360px]">
             {loadingPreview ? (
@@ -738,6 +713,8 @@ function EmailTab(): React.ReactElement {
                   {preview.text}
                 </pre>
               ) : (
+                // Белый холст независимо от темы: письма свёрстаны под белый фон почтовых
+                // клиентов, а прозрачный iframe в тёмной теме показал бы их на графите.
                 <iframe
                   ref={iframeRef}
                   title="Email preview"
@@ -751,10 +728,10 @@ function EmailTab(): React.ReactElement {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Тестовая отправка */}
-        <div className="rounded-lg border bg-card p-4">
+        <Card className="p-4">
           <h3 className="mbe-3 flex items-center gap-2 text-sm font-medium">
             <Send className="size-3.5 text-muted-foreground" />
             Тестовая отправка
@@ -788,26 +765,26 @@ function EmailTab(): React.ReactElement {
           <p className="mbs-2 text-xs text-muted-foreground">
             Письмо будет отправлено с демо-данными через настроенный SMTP. Если SMTP не настроен, письмо будет залогировано в консоль сервера.
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );
 }
 
+const PREVIEW_MODES = [
+  { value: 'html', label: 'HTML' },
+  { value: 'text', label: 'Text' },
+] as const;
+
+// Список строк администрирования — карточка C4: белая на листе, держится тенью-кольцом.
+const LIST_CLASS = 'divide-y divide-border overflow-clip rounded-lg bg-card shadow-card';
+
 function ListSkeleton(): React.ReactElement {
   return (
-    <div className="space-y-2">
+    <LoadingRegion className="space-y-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="h-16 pf-skeleton rounded-lg bg-muted" />
+        <Skeleton key={i} className="h-16 rounded-lg" />
       ))}
-    </div>
-  );
-}
-
-function EmptyBox({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <div className="rounded-lg border border-dashed bg-muted/20 py-12 text-center text-sm text-muted-foreground">
-      {children}
-    </div>
+    </LoadingRegion>
   );
 }

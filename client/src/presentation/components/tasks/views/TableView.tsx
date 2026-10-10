@@ -1402,7 +1402,7 @@ export function TableView({
             type="button"
             onClick={() => void retryLoad()}
             disabled={retrying}
-            className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border bg-background px-4 text-sm font-medium transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
           >
             {retrying ? <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
             Повторить
@@ -1428,7 +1428,7 @@ export function TableView({
         {liveMessage}
       </span>
       {!online && (
-        <div role="status" className="flex min-h-11 items-center gap-2 border-be border-amber-300/60 bg-amber-50 px-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
+        <div role="status" className="flex min-h-11 items-center gap-2 border-be border-warning/30 bg-warning/5 px-3 text-sm text-warning-ink">
           <WifiOff className="size-4 shrink-0" />
           Нет сети. Последние загруженные данные доступны; изменения можно повторить после подключения.
         </div>
@@ -1677,7 +1677,7 @@ export function TableView({
                       canEdit ? 'Добавить свойство' : 'Недостаточно прав для добавления свойства'
                     }
                     disabled={!canEdit || creatingProperty}
-                    className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creatingProperty ? (
                       <Loader2 className="size-4 motion-safe:animate-spin motion-reduce:animate-none" />
@@ -1698,7 +1698,7 @@ export function TableView({
                     type="button"
                     aria-label="Видимость свойств"
                     title="Видимость свойств"
-                    className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <MoreHorizontal className="size-4" />
                   </button>
@@ -1747,7 +1747,7 @@ export function TableView({
                       type="button"
                       aria-label={collapsedGroups.has(g.key) ? 'Развернуть группу' : 'Свернуть группу'}
                       onClick={() => toggleGroup(g.key)}
-                      className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-5"
+                      className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground sm:size-5"
                     >
                       <ChevronDown
                         className={cn('size-3.5 motion-safe:transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
@@ -1772,7 +1772,7 @@ export function TableView({
                             status: grouping === 'status' ? (g.key as Task['status']) : 'backlog',
                           })
                         }
-                        className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-5"
+                        className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground sm:size-5"
                       >
                         <Plus className="size-3.5" />
                       </button>
@@ -1984,7 +1984,7 @@ export function TableView({
       {/* Призрак перетаскиваемой строки. */}
       <DragOverlay dropAnimation={null}>
         {dragTask ? (
-          <div className="pointer-events-none max-w-[16rem] truncate rounded-md border bg-card px-2 py-1 text-sm font-medium shadow-lg ring-1 ring-primary/20">
+          <div className="pointer-events-none max-w-[16rem] truncate rounded-md bg-card px-2 py-1 text-sm font-medium shadow-float ring-1 ring-primary/20">
             {taskTitle(dragTask)}
           </div>
         ) : null}
@@ -2163,7 +2163,7 @@ function HeaderCell({
                   }
                 : undefined
             }
-            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {iconNode}
             <span className="truncate">{label}</span>
@@ -2305,7 +2305,7 @@ function CalcCell({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1 text-2xs transition-opacity hover:bg-accent',
+              'inline-flex items-center gap-1 rounded px-1 text-2xs transition-opacity hover:bg-hover',
               value
                 ? 'text-muted-foreground'
                 : 'text-muted-foreground/60 opacity-0 group-hover/calc:opacity-100',
@@ -2405,7 +2405,7 @@ function PropCalcCell({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1 text-2xs transition-opacity hover:bg-accent',
+              'inline-flex items-center gap-1 rounded px-1 text-2xs transition-opacity hover:bg-hover',
               value
                 ? 'text-muted-foreground'
                 : 'text-muted-foreground/60 opacity-0 group-hover/calc:opacity-100',
@@ -2568,7 +2568,7 @@ function TableRow({
                   type="button"
                   disabled={!canEdit}
                   aria-label={`Изменить статус задачи «${taskTitle(task)}». Сейчас: ${STATUS_LABEL[task.status]}`}
-                  className="flex h-full min-h-9 w-full items-center gap-1 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+                  className="flex h-full min-h-9 w-full items-center gap-1 px-2 text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -2603,7 +2603,7 @@ function TableRow({
                   type="button"
                   disabled={!canEdit}
                   aria-label={`Изменить приоритет задачи «${taskTitle(task)}»`}
-                  className="flex h-full min-h-9 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+                  className="flex h-full min-h-9 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -2650,7 +2650,7 @@ function TableRow({
               onChanged={onChanged}
               projectId={projectId}
               disabled={!currentUserId || !canEdit}
-              className="h-full min-h-9 w-full justify-start rounded-none px-2 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset"
+              className="h-full min-h-9 w-full justify-start rounded-none px-2 text-sm hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset"
             />
           </div>
         );
@@ -2726,7 +2726,7 @@ function TableRow({
           }}
           className={cn(
             // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
-            'group relative grid min-h-9 transition-colors hover:bg-accent/40 focus-within:bg-accent/30 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/50',
+            'group relative grid min-h-9 transition-colors hover:bg-hover focus-within:bg-accent/30 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/50',
             // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
             rowColor,
             selected && 'bg-selection',
@@ -2757,7 +2757,7 @@ function TableRow({
             aria-label="Добавить задачу ниже (Alt — выше)"
             title="Добавить задачу ниже (Alt — выше)"
             onClick={(e) => onCreateBelow(e.altKey)}
-            className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground max-sm:hidden"
+            className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground max-sm:hidden"
           >
             <Plus className="size-3.5" />
           </button>
@@ -2781,7 +2781,7 @@ function TableRow({
                 if (e.defaultPrevented) return; // click после drag
                 setGripMenuOpen(true);
               }}
-              className="grid size-7 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing sm:size-5"
+              className="grid size-7 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground active:cursor-grabbing sm:size-5"
             >
               <GripVertical className="size-3.5" />
             </button>
@@ -2848,7 +2848,7 @@ function TableRow({
                   e.stopPropagation();
                   onToggleExpand?.();
                 }}
-                className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-4"
+                className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground sm:size-4"
               >
                 <ChevronDown
                   className={cn('size-3.5 motion-safe:transition-transform', !expanded && '-rotate-90')}
@@ -2880,7 +2880,7 @@ function TableRow({
               type="button"
               onClick={onOpen}
               aria-label={`Открыть задачу «${taskTitle(task)}»`}
-              className="invisible ms-auto inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border bg-card px-2.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground opacity-0 shadow-sm transition-[background-color,color,opacity] hover:bg-accent hover:text-foreground focus:visible focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:min-h-11 [@media(hover:none)]:opacity-100"
+              className="invisible ms-auto inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md bg-raised px-2.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground opacity-0 shadow-card transition-[background-color,color,opacity] hover:bg-hover hover:text-foreground focus:visible focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:min-h-11 [@media(hover:none)]:opacity-100"
             >
               <PanelRight className="size-3" />
               Открыть
@@ -2972,7 +2972,7 @@ function DeadlineCell({
             type="button"
             disabled={readOnly}
             aria-label={`Изменить срок задачи «${taskTitle(task)}»`}
-            className="flex h-full min-h-9 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex h-full min-h-9 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
           >
             {/* Пустой срок — чистая ячейка (Notion). */}
             {task.deadline ? <DeadlineBadge deadline={task.deadline} status={task.status} /> : null}

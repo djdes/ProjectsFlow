@@ -119,7 +119,7 @@ export const SheetContent = React.forwardRef<
         {showClose && (
           <DialogPrimitive.Close
             data-pf-window-close=""
-            className="absolute end-4 inset-bs-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+            className="absolute end-3 inset-bs-3 grid size-7 place-items-center rounded-md text-muted-foreground ring-offset-background transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Закрыть</span>
@@ -153,7 +153,7 @@ export function SheetTitle({
 >): React.ReactElement {
   return (
     <DialogPrimitive.Title
-      className={cn('text-lg font-semibold text-foreground', className)}
+      className={cn('text-base font-semibold text-foreground', className)}
       {...props}
     />
   );

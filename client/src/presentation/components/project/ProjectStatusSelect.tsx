@@ -18,8 +18,8 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 };
 
 const STATUS_DOT: Record<ProjectStatus, string> = {
-  active: 'bg-emerald-500',
-  paused: 'bg-amber-500',
+  active: 'bg-done',
+  paused: 'bg-warning',
   archived: 'bg-muted-foreground/50',
 };
 

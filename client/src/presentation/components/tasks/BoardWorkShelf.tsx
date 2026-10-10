@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
+import { ManualIcon } from './inbox/InboxChrome';
 import { Check } from 'lucide-react';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
@@ -26,8 +27,9 @@ type Props = {
   className?: string;
 };
 
-// Полка «В работе» на доске проекта — та же тёплая зона, что во «Входящих», и тот же
-// статус 'manual'. На доске она ЗАМЕНЯЕТ колонку «Вручную»: одно место для «делаю руками»,
+// Полка «Вручную» на доске проекта — та же зона, что в колонке «Сейчас» «Входящих», и тот же
+// статус 'manual': нейтральная серая панель с янтарной меткой (дизайн C4 — цвет в метке, а
+// не в заливке). На доске она ЗАМЕНЯЕТ колонку «Вручную»: одно место для «делаю руками»,
 // без дублирования карточек в двух местах сразу.
 //
 // Дроп обрабатывает общий handleDragEnd доски: id и data совпадают с колонкой
@@ -66,23 +68,25 @@ export function BoardWorkShelf({
         ref={setNodeRef}
         data-pf-work-shelf
         className={cn(
-          'relative min-w-0 rounded-xl border border-amber-300/50 bg-amber-100/45 px-3 py-2.5 transition-colors duration-150',
-          'dark:border-amber-400/20 dark:bg-amber-400/[0.07]',
-          isOver && 'border-amber-400/80 bg-amber-200/60 dark:border-amber-300/50 dark:bg-amber-400/[0.16]',
+          'relative min-w-0 rounded-xl bg-panel p-[7px] transition-[background-color,outline-color] duration-150',
+          isOver && 'bg-manual-zone outline outline-2 -outline-offset-2 outline-primary',
           flash && 'pf-shelf-flash',
         )}
       >
-        <div className="mbe-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300/90">
-          <span className="min-w-0 truncate">{label}</span>
-          {tasks.length > 0 && <span className="tabular-nums opacity-70">{tasks.length}</span>}
+        <div className="mbe-[5px] flex h-7 min-w-0 items-center gap-1.5 px-[3px] text-ui">
+          <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-manual min-w-0">
+            <ManualIcon className="text-manual" />
+            <span className="truncate">{label}</span>
+          </span>
+          {tasks.length > 0 && <span className="tabular-nums text-muted-foreground">{tasks.length}</span>}
         </div>
         {tasks.length === 0 ? (
-          <p className="py-0.5 text-xs leading-5 text-amber-800/60 dark:text-amber-200/45">
-            Перетащите сюда задачу для работы.
-          </p>
+          <div className="grid h-8 place-items-center rounded-[7px] border border-dashed border-drop-line px-2 text-center text-xs text-muted-foreground">
+            Перетащите сюда задачу, которой заняты
+          </div>
         ) : (
           <SortableContext items={tasks.map((t) => t.id)}>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-[5px]">
               {tasks.map((t) => (
                 <ShelfCard
                   key={t.id}
@@ -132,7 +136,7 @@ function ShelfCard({
       // скругление карточки. Фона и рамки у обёртки нет.
       className={cn(
         // Mobile cards fit the bounded shelf; desktop keeps the compact card width.
-        'relative w-full min-w-0 max-w-full shrink-0 grow-0 rounded-xl sm:w-[17rem]',
+        'relative w-full min-w-0 max-w-full shrink-0 grow-0 rounded-lg sm:w-[17rem]',
         flashing && 'pf-card-flash',
       )}
       // Document-level жест сайдбара не должен перехватывать свайп карточки.
@@ -144,10 +148,8 @@ function ShelfCard({
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-0 flex items-center rounded-xl ps-3 text-sm font-medium transition-colors',
-            armed
-              ? 'bg-emerald-500/25 text-emerald-800 dark:text-emerald-300'
-              : 'bg-emerald-500/10 text-emerald-700/70 dark:text-emerald-300/70',
+            'pointer-events-none absolute inset-0 flex items-center rounded-lg ps-3 text-sm font-medium text-done-ink transition-colors',
+            armed ? 'bg-done-soft-hover' : 'bg-done-soft',
           )}
         >
           <Check className="me-1.5 size-4" />

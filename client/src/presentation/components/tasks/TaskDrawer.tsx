@@ -401,7 +401,9 @@ function DrawerShell({
         {...dragHandlers}
       >
         {dragOverlay}
-        <div className="flex h-11 shrink-0 items-center gap-2 px-3 sm:px-6">
+        {/* Задача отдельной страницей: строка крошек как у всех страниц (дизайн C4) —
+            44px с линией снизу. */}
+        <div className="flex h-11 shrink-0 items-center gap-2 border-be px-3 sm:px-6">
           {breadcrumbs}
           {topActions && (
             <div className="ms-auto flex shrink-0 items-center gap-0.5">{topActions}</div>
@@ -573,20 +575,21 @@ function TaskRalphModeChip({
   );
 }
 
-// Цвета статус-пилюли — в тон колонкам доски (kanbanColors): черновики stone,
-// вручную yellow, воркер blue, готово green; активные in_progress/awaiting — свои.
-const CUSTOM_STATUS_BADGE_COLOR =
-  'bg-slate-500/15 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300';
+// Цвета статус-пилюли — смыслы статусов дизайна C4 (тона .pf-tone-* в globals.css):
+// черновики серые, вручную янтарные, очередь воркера синяя (акцент), у воркера в работе —
+// синий Notion, на уточнении жёлтые, на утверждении фиолетовые, готово зелёное.
+const TONE_BADGE = 'bg-tone-bg text-tone-fg dark:text-tone';
+const CUSTOM_STATUS_BADGE_COLOR = `pf-tone-gray ${TONE_BADGE}`;
 const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
-  backlog: 'bg-stone-500/15 text-stone-600 dark:bg-stone-500/20 dark:text-stone-300',
-  manual: 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
-  todo: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
-  in_progress: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
-  awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
-  pending_approval: 'bg-violet-500/15 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
-  done: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+  backlog: `pf-tone-gray ${TONE_BADGE}`,
+  manual: `pf-tone-manual ${TONE_BADGE}`,
+  todo: `pf-tone-queue ${TONE_BADGE}`,
+  in_progress: `pf-tone-blue ${TONE_BADGE}`,
+  awaiting_clarification: `pf-tone-yellow ${TONE_BADGE}`,
+  pending_approval: `pf-tone-approval ${TONE_BADGE}`,
+  done: `pf-tone-done ${TONE_BADGE}`,
   // Кастомные колонки (db/154): цвет колонки настраивается на доске, но пилюля статуса
-  // общая для всех проектов — берём нейтральный slate, чтобы не спорить с встроенными.
+  // общая для всех проектов — берём нейтральный серый, чтобы не спорить с встроенными.
   custom_1: CUSTOM_STATUS_BADGE_COLOR,
   custom_2: CUSTOM_STATUS_BADGE_COLOR,
   custom_3: CUSTOM_STATUS_BADGE_COLOR,
@@ -660,7 +663,7 @@ function TaskStatusChip({
             type="button"
             disabled={saving}
             aria-label="Сменить статус"
-            className="inline-flex items-center border-s border-black/10 py-1 ps-1 pe-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 dark:border-white/15"
+            className="inline-flex items-center border-s border-foreground/10 py-1 ps-1 pe-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
           >
             <ChevronDown className="size-3.5 opacity-50" />
           </button>
@@ -2110,7 +2113,7 @@ export function TaskDrawer({
               {/* Заморозка приёмкой: объясняем, ПОЧЕМУ ничего не правится. Без плашки окно
                   выглядит просто сломанным — контролы есть, но ничего не меняется. */}
               {frozenByApproval && (
-                <div className="mx-[var(--pf-drawer-px)] mbe-2 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-800 dark:text-violet-200">
+                <div className="mx-[var(--pf-drawer-px)] mbe-2 flex items-start gap-2 rounded-lg bg-approval-soft px-3 py-2 text-xs text-approval-ink">
                   <Lock className="mbs-0.5 size-3.5 shrink-0" />
                   <span className="min-w-0 flex-1">
                     Задача на утверждении — до решения руководителя её нельзя ни изменить, ни
@@ -2123,7 +2126,7 @@ export function TaskDrawer({
                       type="button"
                       disabled={withdrawing}
                       onClick={() => void withdrawApproval()}
-                      className="shrink-0 self-center rounded-md border border-violet-500/40 px-2 py-1 text-2xs font-medium transition-colors hover:bg-violet-500/15 disabled:opacity-60"
+                      className="shrink-0 self-center rounded-md border border-approval/40 px-2 py-1 text-2xs font-medium transition-colors hover:bg-approval-zone disabled:opacity-60"
                       title="Забрать задачу с утверждения и продолжить работу"
                     >
                       {withdrawing ? 'Возвращаю…' : 'Забрать обратно'}
@@ -2390,7 +2393,7 @@ export function TaskDrawer({
                       <>
                         <span
                           aria-hidden
-                          className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_oklch(64.5%_0.215_16.44/0.7)]"
+                          className="size-1.5 rounded-full bg-destructive shadow-[0_0_6px_oklch(var(--destructive)/0.7)] motion-safe:animate-pulse"
                         />
                         <span className="sr-only">LIVE-сессия запущена</span>
                       </>
@@ -3056,7 +3059,7 @@ function CommentComposer({
               <button
                 type="button"
                 onClick={() => removeFile(pf.id)}
-                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
+                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
                 aria-label="Убрать"
               >
                 <Trash2 className="size-2.5" />

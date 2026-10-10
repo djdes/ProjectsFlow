@@ -57,7 +57,7 @@ export function PopoverContent({
           sideOffset={sideOffset}
           collisionPadding={collisionPadding}
           className={cn(
-            'z-50 max-h-[calc(100dvh-1.5rem)] w-72 overflow-y-auto overscroll-contain rounded-lg border bg-popover p-1 text-popover-foreground shadow-md outline-none',
+            'z-50 max-h-[calc(100dvh-1.5rem)] w-72 overflow-y-auto overscroll-contain rounded-lg bg-popover p-1 text-popover-foreground shadow-menu outline-none',
             'animate-in fade-in-0 motion-safe:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-safe:data-[state=closed]:zoom-out-95',
             'motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2',
             'motion-reduce:animate-none',

@@ -341,7 +341,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               type="button"
               aria-label="Свернуть"
               title="Свернуть"
-              className="grid size-8 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/panel:opacity-100"
+              className="grid size-8 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-hover hover:text-foreground focus-visible:opacity-100 group-hover/panel:opacity-100"
             >
               <ChevronsRight className="size-5" />
             </button>
@@ -453,11 +453,11 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                   </p>
                 </div>
                 {loadingAnalytics ? (
-                  <div className="flex h-44 items-center justify-center gap-2 rounded-2xl border text-sm text-muted-foreground">
+                  <div className="flex h-44 items-center justify-center gap-2 rounded-xl border text-sm text-muted-foreground">
                     <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка просмотров…
                   </div>
                 ) : !analytics ? (
-                  <div className="grid h-32 place-items-center rounded-2xl border px-6 text-center">
+                  <div className="grid h-32 place-items-center rounded-xl border px-6 text-center">
                     <p className="text-xs text-muted-foreground">
                       Не удалось загрузить аналитику просмотров.
                     </p>
@@ -475,7 +475,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               {analytics ? (
                 <section className="space-y-2.5">
                   <p className="text-sm font-medium">Зрители</p>
-                  <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/70 px-4 py-3">
                     <div className="min-w-0 space-y-0.5">
                       <p className="text-sm font-medium">Показывать историю ваших просмотров</p>
                       <p className="text-xs text-muted-foreground">
@@ -527,7 +527,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                   ) : (
                     <ul className="space-y-0.5">
                       {analytics.viewers.map((viewer) => (
-                        <li key={viewer.userId} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted/40">
+                        <li key={viewer.userId} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-hover">
                           <span className="grid size-7 shrink-0 place-items-center overflow-clip rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                             {viewer.avatarUrl ? (
                               <img src={viewer.avatarUrl} alt="" className="size-full object-cover" />

@@ -116,17 +116,18 @@ export function InboxCheckbox({
       }
       className={cn(
         'grid shrink-0 place-items-center transition-colors',
+        // Дизайн C4: «Готово» — зелёная галочка в плашке быстрых действий; уже выполненная —
+        // серая «вернуть». В списках — круглый чекбокс, заливка зелёным «Готово».
         variant === 'toolbar'
           ? cn(
-              'size-6 rounded text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600 max-sm:size-8 dark:hover:text-emerald-400',
-              isDone &&
-                'bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400',
+              'size-6 rounded-[5px] hover:bg-hover max-sm:size-8',
+              isDone ? 'text-muted-foreground hover:text-foreground' : 'text-done',
             )
           : cn(
-              'size-5 rounded-full border-2',
+              'size-[18px] rounded-full border-[1.5px]',
               isDone
-                ? 'border-emerald-500 bg-emerald-500 text-white'
-                : 'border-muted-foreground/40 hover:border-emerald-500',
+                ? 'border-done bg-done text-background'
+                : 'border-foreground/30 hover:border-done',
             ),
         (pending || disabled) && 'opacity-60',
         disabled && 'cursor-not-allowed',
@@ -137,7 +138,7 @@ export function InboxCheckbox({
       ) : variant === 'toolbar' && isDone ? (
         <Undo2 className="size-3.5" strokeWidth={2.25} />
       ) : isDone || variant === 'toolbar' ? (
-        <Check className="size-3" strokeWidth={3} />
+        <Check className={variant === 'toolbar' ? 'size-3.5' : 'size-3'} strokeWidth={variant === 'toolbar' ? 2.4 : 3} />
       ) : null}
     </button>
   );

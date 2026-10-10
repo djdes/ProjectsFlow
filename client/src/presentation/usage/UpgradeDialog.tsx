@@ -127,11 +127,12 @@ export function UpgradeDialog({
               <div
                 key={p.id}
                 className={cn(
-                  'flex flex-col rounded-2xl border p-5 transition-colors',
-                  tone === 'current' && 'border-border bg-muted/40',
-                  tone === 'recommended' && 'border-primary bg-primary/[0.04] shadow-sm ring-2 ring-primary/25',
-                  tone === 'vip' &&
-                    'border-violet-300/60 bg-violet-50/50 ring-1 ring-violet-300/40 dark:border-violet-400/25 dark:bg-violet-500/[0.07] dark:ring-violet-400/20',
+                  'flex flex-col rounded-xl border p-5 transition-colors',
+                  tone === 'current' && 'border-border bg-panel',
+                  tone === 'recommended' && 'border-primary bg-primary/[0.04] ring-2 ring-primary/25',
+                  // Премиум — фиолетовый тон Notion: контейнер нейтральный (C4), цвет живёт в
+                  // метке, галочках и главной кнопке (их классы берут --tone отсюда).
+                  tone === 'vip' && 'pf-tone-purple border-border bg-card',
                   tone === 'plain' && 'border-border bg-card',
                 )}
               >
@@ -148,7 +149,7 @@ export function UpgradeDialog({
                     </span>
                   )}
                   {tone === 'vip' && (
-                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-2xs font-medium text-violet-600 dark:text-violet-300">
+                    <span className="rounded-full bg-tone-bg px-2 py-0.5 text-2xs font-medium text-tone-fg dark:text-tone">
                       Максимум
                     </span>
                   )}
@@ -166,7 +167,7 @@ export function UpgradeDialog({
                 <ul className="mbs-1.5 flex-1 space-y-1.5 text-sm">
                   {prev && (
                     <li className="flex gap-2 font-medium text-foreground">
-                      <Check className={cn('mbs-0.5 size-4 shrink-0', tone === 'vip' ? 'text-violet-500' : 'text-primary')} />
+                      <Check className={cn('mbs-0.5 size-4 shrink-0', tone === 'vip' ? 'text-tone' : 'text-primary')} />
                       <span>Всё из «{prev}»</span>
                     </li>
                   )}
@@ -175,7 +176,7 @@ export function UpgradeDialog({
                       <Check
                         className={cn(
                           'mbs-0.5 size-4 shrink-0',
-                          tone === 'vip' ? 'text-violet-500/80' : 'text-primary/70',
+                          tone === 'vip' ? 'text-tone opacity-80' : 'text-primary/70',
                         )}
                       />
                       <span>{f}</span>
@@ -190,10 +191,11 @@ export function UpgradeDialog({
                         key={a.key}
                         className={cn(
                           'w-full',
-                          // VIP: фиолетовая заливка на основном действии — в тон премиум-карточке.
+                          // VIP: фиолетовая заливка на основном действии — в тон премиум-карточке
+                          // (тон --tone; текст цвета фона — белый в светлой теме, тёмный в тёмной).
                           tone === 'vip' &&
                             a.variant === 'default' &&
-                            'bg-violet-600 text-white hover:bg-violet-600/90 focus-visible:ring-violet-500',
+                            'bg-tone text-background hover:bg-tone hover:opacity-90 focus-visible:ring-tone',
                         )}
                         variant={a.variant}
                         disabled={a.disabled}

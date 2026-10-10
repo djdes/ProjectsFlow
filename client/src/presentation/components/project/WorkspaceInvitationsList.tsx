@@ -44,17 +44,17 @@ export function WorkspaceInvitationsList({ workspace, invites, projects, onChang
     finally { setBusy(null); }
   };
   return <section aria-label="Ожидают принятия" className="space-y-3">
-    <div className="flex items-center gap-2"><Clock3 className="size-4 text-amber-600 dark:text-amber-400" /><h3 className="text-sm font-semibold">Ожидают принятия</h3><span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs tabular-nums text-amber-800 dark:bg-amber-950 dark:text-amber-200">{invites.length}</span></div>
-    {invites.length === 0 ? <p className="rounded-lg bg-muted/40 px-3 py-3 text-xs leading-relaxed text-muted-foreground">Нет ожидающих приглашений. Отправленные появятся здесь и останутся до принятия или отзыва.</p> : <ul className="divide-y rounded-lg border border-amber-200/60 dark:border-amber-900/50">
+    <div className="flex items-center gap-2"><Clock3 className="size-4 text-warning" /><h3 className="text-sm font-semibold">Ожидают принятия</h3><span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs tabular-nums text-warning-ink">{invites.length}</span></div>
+    {invites.length === 0 ? <p className="rounded-lg bg-panel px-3 py-3 text-xs leading-relaxed text-muted-foreground">Нет ожидающих приглашений. Отправленные появятся здесь и останутся до принятия или отзыва.</p> : <ul className="divide-y rounded-lg border border-border">
       {invites.map(invite => {
         const expired = invite.expiresAt.getTime() <= now;
         const canManage = workspace.role === 'owner' || workspace.role === 'lead' || invite.createdByUserId === user?.id;
         const cooling = Boolean(invite.lastSentAt && now - invite.lastSentAt.getTime() < 60_000);
         const failed = Object.values(invite.delivery ?? {}).some(status => status === 'failed' || status === 'unavailable');
         return <li key={invite.id} className="space-y-2.5 p-3">
-          <div className="flex min-w-0 items-start gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"><Mail className="size-4" /></span><div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-warning-soft text-warning"><Mail className="size-4" /></span><div className="min-w-0 flex-1">
             <p className="break-all text-sm font-medium">{invite.email ?? 'Приглашение по ссылке'}</p>
-            <p className="mbs-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">{expired ? 'Приглашение не принято · срок истёк' : 'Приглашение ещё не принято'}</p>
+            <p className="mbs-0.5 text-xs font-medium text-warning">{expired ? 'Приглашение не принято · срок истёк' : 'Приглашение ещё не принято'}</p>
             <p className="mbs-1 text-xs text-muted-foreground">{WORKSPACE_ROLE_LABEL[invite.role]} · {expired ? 'Отправьте повторно, чтобы продлить срок' : `Действует до ${date(invite.expiresAt)}`}</p>
           </div></div>
           {invite.email && <div className="space-y-1 text-xs leading-relaxed text-muted-foreground">

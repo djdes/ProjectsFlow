@@ -235,7 +235,8 @@ export function AiComposer({
 
   return (
     <div className={cn(
-      'rounded-2xl border bg-card shadow-[0_12px_40px_oklch(20.77%_0.04_265.75/0.08)] transition focus-within:ring-2 focus-within:ring-ring',
+      // Поле ИИ — карточка C4: тень-кольцо вместо рамки, фокус — синее кольцо.
+      'rounded-xl bg-card shadow-card transition focus-within:ring-2 focus-within:ring-ring',
       compact ? 'pbe-2' : 'pbe-3',
     )}>
       {/* Выделенная зона — над полем ввода, как бейдж в отправленном пузыре. Показываем
@@ -309,7 +310,7 @@ export function AiComposer({
       )}
       <div className="mbs-2 flex items-center gap-1.5 px-2.5">
         <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.target.value = ''; }} />
-        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
+        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
         <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
         <div className="flex-1" />
         {/* Чистый тумблер: коробка кнопки не меняется, меняются только заливка/цвет и
@@ -324,7 +325,7 @@ export function AiComposer({
               'inline-flex h-7 shrink-0 items-center gap-[5px] rounded-md py-0 ps-1.5 pe-2 text-xs font-medium leading-4',
               'transition-colors duration-150',
               modeSwitch.mode === 'discuss'
-                ? 'bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300'
+                ? 'bg-primary-soft text-primary-ink'
                 : 'bg-muted text-muted-foreground hover:text-foreground',
             )}
           >
@@ -339,7 +340,7 @@ export function AiComposer({
             disabled={cancelling}
             aria-label="Остановить генерацию"
             title="Остановить генерацию"
-            className="grid size-9 place-items-center rounded-full bg-foreground text-background transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            className="grid size-9 place-items-center rounded-full bg-foreground text-background transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
           >
             <Square className="size-3.5 fill-current" />
           </button>
@@ -350,7 +351,7 @@ export function AiComposer({
             disabled={empty || sending}
             aria-label="Отправить"
             title="Отправить"
-            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:scale-100"
+            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:scale-100"
           >
             <ArrowUp className="size-4" />
           </button>

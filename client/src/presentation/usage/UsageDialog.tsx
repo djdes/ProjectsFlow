@@ -38,11 +38,11 @@ export function UsageDialog({
           <div className="space-y-5">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Ваш план</span>
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-semibold text-primary">
+              <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-sm font-semibold text-primary-ink">
                 {planNameRu(usage.plan)}
               </span>
               {trial && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-2xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                <span className="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-medium text-warning-ink">
                   пробный час
                 </span>
               )}

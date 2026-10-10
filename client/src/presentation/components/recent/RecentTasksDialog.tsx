@@ -63,7 +63,7 @@ function HistoryBody({ onClose }: { onClose: () => void }): React.ReactElement {
               navigate(`/projects/${item.projectId}?task=${item.taskId}`);
               onClose();
             }}
-            className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start transition-colors hover:bg-foreground/[0.05] dark:hover:bg-white/[0.06]"
+            className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start transition-colors hover:bg-hover"
           >
             <RecentTaskRow item={item} />
           </button>

@@ -409,7 +409,7 @@ export function TaskComposer({
               <button
                 type="button"
                 onClick={() => removeFile(pf.id)}
-                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
+                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
                 aria-label="Убрать"
               >
                 <X className="size-2.5" />

@@ -49,7 +49,7 @@ export function ProjectPage(): React.ReactElement {
     <>
       {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="sticky inset-bs-0 z-20 flex h-11 items-center justify-between gap-2 bg-background px-2.5">
+      <div className="sticky inset-bs-0 z-20 flex h-11 items-center justify-between gap-2 border-be bg-background px-2.5">
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}
@@ -61,7 +61,7 @@ export function ProjectPage(): React.ReactElement {
 
       {/* Тело: отступы как у Входящих/доски (px-6/14/24), контент — центрированная
           колонка max-w-4xl (Notion): на широких мониторах воздух по бокам симметричен. */}
-      <div className="px-6 pbe-12 pbs-1 sm:px-14 lg:px-24">
+      <div className="px-6 pbe-12 pbs-6 sm:px-14 lg:px-24">
         <div className="mx-auto w-full max-w-4xl space-y-6">
           <div className="space-y-3">
             <EditableProjectTitle projectId={data.id} name={data.name} />

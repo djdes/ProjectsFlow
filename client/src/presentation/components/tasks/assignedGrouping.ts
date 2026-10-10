@@ -59,6 +59,17 @@ export function ymd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Срок задачи относительно сегодняшнего дня — для фильтра-чипов «Просрочено / Сегодня /
+// Без срока» над доской «Входящих». 'future' отдельного чипа не имеет.
+export type DueKind = 'late' | 'today' | 'none' | 'future';
+
+export function dueKindOf(deadline: string | null | undefined, today: string): DueKind {
+  if (deadline === null || deadline === undefined || deadline === '') return 'none';
+  if (deadline < today) return 'late';
+  if (deadline === today) return 'today';
+  return 'future';
+}
+
 // Конец текущей недели (воскресенье) как YYYY-MM-DD. Если сегодня уже вс — следующее вс,
 // чтобы дата осталась в будущем (для перетаскивания в колонку «Будущее»).
 export function endOfWeekYmd(now: Date): string {

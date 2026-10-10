@@ -58,7 +58,7 @@ export function DropdownMenuSubTrigger({
       className={cn(
         // [&_svg]:size-4 — как у DropdownMenuItem: иначе иконка sub-триггера рендерится
         // дефолтными 24px (крупнее пунктов-соседей). shrink-0 — не даёт иконке тянуться.
-        'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[state=open]:bg-accent [&_svg]:size-4 [&_svg]:shrink-0',
+        'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none focus:bg-hover data-[state=open]:bg-hover sm:py-1 sm:text-ui [&_svg]:size-4 [&_svg]:shrink-0',
         inset && 'ps-8',
         className,
       )}
@@ -80,7 +80,7 @@ export function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-pf-motion-surface="menu"
       className={cn(
-        'z-50 min-w-[8rem] overflow-clip rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2',
+        'z-50 min-w-[8rem] overflow-clip rounded-lg bg-popover p-1 text-popover-foreground shadow-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2',
         className,
       )}
       {...props}
@@ -118,7 +118,7 @@ export function DropdownMenuContent({
           sideOffset={sideOffset}
           collisionPadding={collisionPadding}
           className={cn(
-            'z-50 max-h-[calc(100dvh-1.5rem)] min-w-[8rem] overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2 motion-reduce:animate-none',
+            'z-50 max-h-[calc(100dvh-1.5rem)] min-w-[8rem] overflow-y-auto overscroll-contain rounded-lg bg-popover p-1 text-popover-foreground shadow-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2 motion-reduce:animate-none',
             className,
           )}
           {...props}
@@ -152,7 +152,7 @@ export function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
+        'relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors focus:bg-hover focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 sm:py-1 sm:text-ui [&_svg]:size-4 [&_svg]:shrink-0',
         inset && 'ps-8',
         className,
       )}
@@ -223,7 +223,7 @@ export function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label
       className={cn(
-        'px-2 py-1.5 text-sm font-semibold',
+        'px-2 py-1 text-xs font-medium text-muted-foreground',
         inset && 'ps-8',
         className,
       )}
@@ -240,7 +240,7 @@ export function DropdownMenuSeparator({
 >): React.ReactElement {
   return (
     <DropdownMenuPrimitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-muted', className)}
+      className={cn('-mx-1 my-1 h-px bg-border', className)}
       {...props}
     />
   );

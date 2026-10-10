@@ -16,7 +16,7 @@ import { useSidebarCollapsed } from '@/presentation/layout/sidebarCollapsedConte
 
 // Тёмный тултип — как в Base44. Глобальный TooltipContent светлый (bg-popover) и трогать
 // его нельзя: он обслуживает ещё десяток мест. Поэтому красим точечно, здесь.
-const DARK_TOOLTIP = 'border-transparent bg-neutral-900 text-white';
+const DARK_TOOLTIP = 'border-transparent bg-foreground text-background';
 
 export function StudioChatPane({
   conversationId,
@@ -92,7 +92,7 @@ export function StudioChatPane({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex min-w-0 max-w-[calc(100%_-_116px)] items-center gap-1.5 rounded-md px-1.5 py-1.5 text-start text-sm font-semibold transition hover:bg-muted" aria-label={`Разделы проекта ${projectName}`}>
+                    <button type="button" className="flex min-w-0 max-w-[calc(100%_-_116px)] items-center gap-1.5 rounded-md px-1.5 py-1.5 text-start text-sm font-semibold transition hover:bg-hover" aria-label={`Разделы проекта ${projectName}`}>
                       <span className="grid size-5 shrink-0 place-items-center overflow-clip rounded-md bg-muted text-xs" aria-hidden>
                         {projectIcon ? <ProjectIconView icon={projectIcon} pixelSize={18} /> : (projectName.trim()[0] ?? '?').toUpperCase()}
                       </span>

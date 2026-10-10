@@ -8,6 +8,8 @@ import { useAuth } from '@/presentation/auth/AuthProvider';
 import { HttpError } from '@/lib/HttpError';
 import type { InvitePreview } from '@/domain/invite/InvitePreview';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
+import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
+import { ErrorNote } from '@/presentation/pages/PageScaffold';
 
 const ROLE_LABEL: Record<'editor' | 'viewer', string> = {
   editor: 'редактор',
@@ -86,83 +88,87 @@ export function InvitePage(): React.ReactElement {
     });
   };
 
+  // Тот же экран, что у входа и регистрации: приглашение открывают по ссылке до логина.
   return (
-    <div className="grid min-h-screen place-items-center p-6">
-      <div className="w-full max-w-md space-y-5 rounded-xl border bg-card p-7 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Приглашение</h1>
-
-        {state.status === 'loading' && (
-          <LoadingRegion label="Загружаем приглашение…"><div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="mbs-5 h-10 w-28" /></div></LoadingRegion>
-        )}
-
-        {state.status === 'error' && (
-          <div className="space-y-3">
-            <p className="text-sm text-destructive">{state.message}</p>
-            <Button asChild variant="outline">
-              <Link to="/">На&nbsp;главную</Link>
-            </Button>
+    <AuthFormCard title="Приглашение">
+      {state.status === 'loading' && (
+        <LoadingRegion label="Загружаем приглашение…">
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+            <Skeleton className="mbs-2 h-12 w-full sm:h-9" />
           </div>
-        )}
+        </LoadingRegion>
+      )}
 
-        {state.status === 'ready' && (
-          <>
-            <div className="space-y-2 text-sm">
-              <p>
-                Тебя приглашают в {state.preview.kind === 'workspace' ? 'пространство' : 'проект'}{' '}
-                <span className="font-semibold">«{state.preview.targetName}»</span> с правами{' '}
-                <span className="font-semibold">{ROLE_LABEL[state.preview.role]}</span>.
-              </p>
+      {state.status === 'error' && (
+        <div className="flex flex-col gap-4">
+          <ErrorNote>{state.message}</ErrorNote>
+          <Button asChild variant="outline" size="lg" className="w-full">
+            <Link to="/">На&nbsp;главную</Link>
+          </Button>
+        </div>
+      )}
+
+      {state.status === 'ready' && (
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">
+              Тебя приглашают в {state.preview.kind === 'workspace' ? 'пространство' : 'проект'}{' '}
+              <span className="font-semibold">«{state.preview.targetName}»</span> с правами{' '}
+              <span className="font-semibold">{ROLE_LABEL[state.preview.role]}</span>.
+            </p>
+            <div className="flex flex-col gap-1.5 rounded-xl bg-panel px-4 py-3 text-ui text-muted-foreground">
               {state.preview.kind === 'workspace' && (
-                <p className="text-muted-foreground">
+                <p>
                   Вам будут доступны выбранные для вас проекты пространства. Доступ меняет владелец или руководитель.
                 </p>
               )}
               {state.preview.inviterDisplayName && (
-                <p className="text-muted-foreground">
-                  Пригласил: {state.preview.inviterDisplayName}
-                </p>
+                <p>Пригласил: {state.preview.inviterDisplayName}</p>
               )}
               {state.preview.inviteEmail && (
-                <p className="text-muted-foreground">
-                  Email в приглашении: {state.preview.inviteEmail}
-                </p>
+                <p>Email в приглашении: {state.preview.inviteEmail}</p>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs">
                 Действительно до {state.preview.expiresAt.toLocaleString('ru-RU')}
               </p>
             </div>
+          </div>
 
-            {status === 'authenticated' ? (
+          {status === 'authenticated' ? (
+            <div className="flex gap-2">
+              <Button size="lg" className="flex-1" onClick={() => void accept()} disabled={accepting}>
+                {accepting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
+                Принять
+              </Button>
+              <Button variant="ghost" size="lg" asChild>
+                <Link to="/">Отказаться</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">
+                Чтобы принять приглашение, нужно войти или зарегистрироваться.
+              </p>
               <div className="flex gap-2">
-                <Button onClick={() => void accept()} disabled={accepting}>
-                  {accepting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
-                  Принять
+                <Button size="lg" className="flex-1" onClick={goToLogin}>
+                  Войти
                 </Button>
-                <Button variant="ghost" asChild>
-                  <Link to="/">Отказаться</Link>
+                <Button variant="outline" size="lg" className="flex-1" asChild>
+                  <Link
+                    to="/register"
+                    state={{ from: location.pathname }}
+                  >
+                    Регистрация
+                  </Link>
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Чтобы принять приглашение, нужно войти или зарегистрироваться.
-                </p>
-                <div className="flex gap-2">
-                  <Button onClick={goToLogin}>Войти</Button>
-                  <Button variant="outline" asChild>
-                    <Link
-                      to="/register"
-                      state={{ from: location.pathname }}
-                    >
-                      Регистрация
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+            </div>
+          )}
+        </div>
+      )}
+    </AuthFormCard>
   );
 }

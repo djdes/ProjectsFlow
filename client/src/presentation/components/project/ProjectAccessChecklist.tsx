@@ -31,7 +31,7 @@ export function ProjectAccessChecklist({ projects, hiddenIds, onChange, disabled
           <Checkbox className="size-4 shrink-0" checked={!hiddenIds.includes(p.id)} disabled={disabled} onCheckedChange={checked => onChange(p.id, checked === true)} aria-label={`${label}: ${p.name}`} />
           {p.icon && <span className="size-5 shrink-0"><ProjectIconView icon={p.icon} className="text-base" /></span>}
           <span className="min-w-0 flex-1 break-words">{p.name}</span>
-          {p.id === highlightProjectId && <span className="shrink-0 text-2xs text-primary">Этот проект</span>}
+          {p.id === highlightProjectId && <span className="shrink-0 text-2xs text-primary-ink">Этот проект</span>}
         </label>)}
         {!visible.length && <p className="p-2 text-xs text-muted-foreground">{projects.length ? 'Проекты не найдены.' : 'В пространстве пока нет проектов.'}</p>}
       </div>

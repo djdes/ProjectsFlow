@@ -98,7 +98,7 @@ export function KbSection({ project }: Props): React.ReactElement {
                 href={`https://github.com/${project.kbRepoFullName}`}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary hover:underline"
+                className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary-ink hover:underline"
               >
                 {project.kbRepoFullName}
                 <ExternalLink className="size-3.5 shrink-0" />
@@ -171,7 +171,7 @@ export function KbSection({ project }: Props): React.ReactElement {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-5 text-amber-500" />
+              <AlertTriangle className="size-5 text-warning" />
               Создать KB-репо в&nbsp;GitHub?
             </DialogTitle>
             <DialogDescription>

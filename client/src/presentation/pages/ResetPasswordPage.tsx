@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/presentation/auth/PasswordInput';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
+import { ErrorNote } from '@/presentation/pages/PageScaffold';
 import { useContainer } from '@/infrastructure/di/container';
 import { HttpError } from '@/lib/HttpError';
 
@@ -28,13 +29,11 @@ export function ResetPasswordPage(): React.ReactElement {
         title="Ссылка недействительна"
         description="В ссылке нет токена сброса. Запросите новую ссылку."
         footer={
-          <Link to="/forgot-password" className="font-medium text-primary hover:underline">
+          <Link to="/forgot-password" className="font-medium text-primary-ink hover:underline">
             Запросить сброс заново
           </Link>
         }
-      >
-        <></>
-      </AuthFormCard>
+      />
     );
   }
 
@@ -44,12 +43,12 @@ export function ResetPasswordPage(): React.ReactElement {
         title="Пароль обновлён"
         description="Теперь войдите с новым паролем."
         footer={
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-primary-ink hover:underline">
             Перейти ко входу
           </Link>
         }
       >
-        <Button className="w-full" onClick={() => navigate('/login', { replace: true })}>
+        <Button size="lg" className="w-full" onClick={() => navigate('/login', { replace: true })}>
           Войти
         </Button>
       </AuthFormCard>
@@ -87,13 +86,13 @@ export function ResetPasswordPage(): React.ReactElement {
       title="Новый пароль"
       description="Придумайте новый пароль для входа."
       footer={
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link to="/login" className="font-medium text-primary-ink hover:underline">
           Вернуться ко входу
         </Link>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="password">Новый пароль</Label>
           <PasswordInput
             id="password"
@@ -106,7 +105,7 @@ export function ResetPasswordPage(): React.ReactElement {
           />
           <p className="text-xs text-muted-foreground">Минимум 8 символов.</p>
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="confirm">Повторите пароль</Label>
           <PasswordInput
             id="confirm"
@@ -117,12 +116,8 @@ export function ResetPasswordPage(): React.ReactElement {
             onChange={(e) => setConfirm(e.target.value)}
           />
         </div>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
-        <Button type="submit" className="w-full" disabled={submitting}>
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           {submitting ? 'Сохраняем…' : 'Сменить пароль'}
         </Button>
       </form>

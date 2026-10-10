@@ -203,15 +203,16 @@ function AutomationCard({
   return (
     <section
       className={cn(
-        'rounded-lg border bg-card shadow-sm transition-colors',
-        isMaster && 'border-primary/40 bg-primary/[0.04]',
+        // Карточка C4 — тень-кольцо вместо рамки; главная (master) — синим кольцом.
+        'rounded-lg bg-card shadow-card transition-colors',
+        isMaster && 'bg-primary/[0.04] ring-1 ring-primary/40',
       )}
     >
       <div className="flex items-start gap-3 p-3.5">
         <span
           className={cn(
             'mbs-0.5 flex size-8 shrink-0 items-center justify-center rounded-md',
-            isMaster ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+            isMaster ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground',
           )}
         >
           <Icon className="size-4" />
@@ -681,7 +682,7 @@ export function AutomationDialog({
               }}
             >
               {!hasDispatcher ? (
-                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-snug text-amber-700 dark:text-amber-400">
+                <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-snug text-warning-ink">
                   У проекта не назначен диспетчер. Автоматизация сохранится, но задачи начнут
                   создаваться и выполняться только после назначения диспетчера в «Настройках».
                 </p>

@@ -137,7 +137,7 @@ export function TaskDrawerAttachmentRow({
                   type="button"
                   disabled={deleting}
                   onClick={() => handleDelete(att)}
-                  className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white disabled:opacity-50"
+                  className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
                   aria-label={`Удалить ${att.filename}`}
                   title="Удалить файл"
                 >
@@ -180,7 +180,7 @@ export function TaskDrawerAttachmentRow({
               <button
                 type="button"
                 onClick={() => onRemovePending(pf.id)}
-                className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
+                className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
                 aria-label={`Убрать ${pf.name}`}
                 title="Убрать файл"
               >
@@ -231,7 +231,7 @@ export function TaskDrawerAttachmentRow({
                 <button
                   type="button"
                   onClick={() => onCancelUpload(u.id)}
-                  className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
+                  className="grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
                   aria-label={`Отменить загрузку ${u.name}`}
                   title="Отменить загрузку"
                 >

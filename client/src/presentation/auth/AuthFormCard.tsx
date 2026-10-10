@@ -1,39 +1,60 @@
 import type { ReactNode } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 type Props = {
   title: string;
-  description: string;
-  children: ReactNode;
-  footer: ReactNode;
+  description?: ReactNode;
+  // Значок состояния над заголовком (успех, ошибка, ожидание) — встаёт вместо знака продукта.
+  icon?: ReactNode;
+  children?: ReactNode;
+  // Второстепенное действие под чертой: «Нет аккаунта? Зарегистрироваться» и т.п.
+  footer?: ReactNode;
 };
 
-/**
- * Общая карточка для /login и /register — одинаковый layout (центр экрана,
- * фикс. ширина, тёмная/светлая тема). Сами поля и кнопки приходят в children.
- */
-export function AuthFormCard({ title, description, children, footer }: Props): React.ReactElement {
+// Поля формы входа на десктопе выше обычных (36px против 32px) — вровень с главной кнопкой
+// size="lg"; на мобиле Input и так 44px.
+export const authFieldClass = 'sm:h-9 sm:px-3 sm:text-sm';
+
+// Знак продукта — монограмма «PF» на акцентной плашке (тот же знак, что на лендинге).
+export function ProductMark({ className }: { className?: string }): React.ReactElement {
   return (
-    <div className="grid min-h-dvh place-items-center bg-background p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span
-              className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
-              aria-hidden="true"
-            >
-              PF
-            </span>
-            <span className="text-sm font-semibold tracking-tight">ProjectsFlow</span>
-          </div>
-          <CardTitle className="text-2xl">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">{children}</CardContent>
-        <div className="border-bs px-6 py-4 text-center text-sm text-muted-foreground">
-          {footer}
-        </div>
-      </Card>
-    </div>
+    <span
+      aria-hidden="true"
+      className={cn(
+        'grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground',
+        className,
+      )}
+    >
+      PF
+    </span>
+  );
+}
+
+/**
+ * Экран входа, регистрации, сброса пароля, приглашения и подключения агента — дизайн C4
+ * в духе входа Notion: спокойный лист bg-background без карточки (одинаково ровно в светлой
+ * и тёмной теме), по центру колонка 384px — знак продукта, заголовок 22px, описание, поля.
+ * Отступы от краёв не меньше safe-area: страница входа — стартовая в PWA на iPhone.
+ */
+export function AuthFormCard({ title, description, icon, children, footer }: Props): React.ReactElement {
+  return (
+    <main className="flex min-h-dvh flex-col bg-background pbe-[max(2rem,env(safe-area-inset-bottom))] pbs-[max(2rem,env(safe-area-inset-top))] pe-[max(1rem,env(safe-area-inset-right))] ps-[max(1rem,env(safe-area-inset-left))]">
+      <div className="m-auto flex w-full max-w-sm flex-col gap-6">
+        <header className="flex flex-col gap-2">
+          {icon ? (
+            <div className="mbe-2">{icon}</div>
+          ) : (
+            <div className="mbe-3 flex items-center gap-2">
+              <ProductMark />
+              <span className="text-sm font-semibold">ProjectsFlow</span>
+            </div>
+          )}
+          <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">{title}</h1>
+          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        </header>
+        {children}
+        {footer && <div className="border-bs pbs-5 text-center text-ui text-muted-foreground">{footer}</div>}
+      </div>
+    </main>
   );
 }

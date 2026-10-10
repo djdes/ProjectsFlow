@@ -24,5 +24,5 @@ export function TaskTitleText({
   const bold = authoredBold
     ? '[&_strong]:font-semibold [&_b]:font-semibold'
     : '[&_strong]:[font-weight:inherit] [&_b]:[font-weight:inherit]';
-  return <Tag className={cn('text-sm leading-snug [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] [&_mark]:rounded-sm [&_mark]:bg-yellow-200/60 [&_mark]:text-inherit', bold, className)}><InlineMarkdown>{text}</InlineMarkdown></Tag>;
+  return <Tag className={cn('text-sm leading-snug [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] [&_mark]:rounded-sm [&_mark]:bg-manual-soft [&_mark]:text-inherit', bold, className)}><InlineMarkdown>{text}</InlineMarkdown></Tag>;
 }

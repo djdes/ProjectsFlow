@@ -27,6 +27,12 @@ type LogicalBlockGroups =
 const twMerge = extendTailwindMerge<LogicalBlockGroups>({
   extend: {
     classGroups: {
+      // Свои размеры текста (tailwind.config.ts → fontSize). Без этого tailwind-merge счёл бы
+      // `text-ui` цветом и выкинул бы стоящий рядом `text-muted-foreground`.
+      'font-size': [{ text: ['meta', 'ui', 'task', 'h1', 'title', 'display'] }],
+      // Свои тени (tailwind.config.ts → boxShadow): иначе `shadow-card` числится цветом тени,
+      // и `shadow-none`/`shadow-lg` из className её не перебивают.
+      shadow: [{ shadow: ['card', 'card-hover', 'float', 'menu'] }],
       mbs: [{ mbs: [anyValue] }],
       mbe: [{ mbe: [anyValue] }],
       pbs: [{ pbs: [anyValue] }],

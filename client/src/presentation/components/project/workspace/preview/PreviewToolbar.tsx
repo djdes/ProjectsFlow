@@ -83,7 +83,7 @@ export function PreviewToolbar({
                   return;
                 }
                 onMode(value);
-              }} className={cn('inline-flex h-7 items-center justify-center gap-1.5 rounded-[5px] text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted/60 hover:text-foreground', value === 'canvas' ? 'w-7 px-0' : 'px-2.5', mode === value && 'bg-muted text-foreground')}>
+              }} className={cn('inline-flex h-7 items-center justify-center gap-1.5 rounded-[5px] text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-hover hover:text-foreground', value === 'canvas' ? 'w-7 px-0' : 'px-2.5', mode === value && 'bg-muted text-foreground')}>
                 <Icon className="size-3.5" />{value === 'canvas' ? <span className="sr-only">{label}</span> : label}
               </button>
             </TooltipTrigger>
@@ -100,7 +100,7 @@ export function PreviewToolbar({
         <form className="flex h-8 items-center rounded-md border bg-background px-0.5 focus-within:border-foreground/25 focus-within:ring-1 focus-within:ring-ring/20" onSubmit={(event) => { event.preventDefault(); onApplyPath(draftPath); }}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Обновить Preview" onClick={onReload}><RefreshCw className="size-3.5" /></button>
+              <button type="button" className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-hover hover:text-foreground" aria-label="Обновить Preview" onClick={onReload}><RefreshCw className="size-3.5" /></button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className={DARK_TOOLTIP}>Обновить Preview</TooltipContent>
           </Tooltip>
@@ -110,15 +110,15 @@ export function PreviewToolbar({
           <input value={draftPath} onChange={(event) => { onDraftPath(event.target.value); onRouteMenu(true); }} onFocus={() => onRouteMenu(true)} onKeyDown={(event) => { if (event.key === 'Escape') onRouteMenu(false); }} role="combobox" aria-label="Путь страницы результата" aria-expanded={routeMenuOpen} aria-controls={listId} aria-autocomplete="list" className="h-7 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none" placeholder="/catalog" />
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label={deviceHint} onMouseDown={(event) => event.preventDefault()} onClick={() => onDevice(nextDevice.value)}><activeDevice.icon className="size-3.5" /></button>
+              <button type="button" className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-hover hover:text-foreground" aria-label={deviceHint} onMouseDown={(event) => event.preventDefault()} onClick={() => onDevice(nextDevice.value)}><activeDevice.icon className="size-3.5" /></button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className={DARK_TOOLTIP}>{deviceHint}</TooltipContent>
           </Tooltip>
         </form>
         {routeMenuOpen && (
-          <div id={listId} role="listbox" aria-label="Страницы результата" className="absolute start-0 end-0 inset-bs-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
+          <div id={listId} role="listbox" aria-label="Страницы результата" className="absolute start-0 end-0 inset-bs-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-lg bg-popover p-1 shadow-menu">
             {filteredRoutes.map((route) => (
-              <button key={route} type="button" role="option" aria-selected={route === path} className={cn('flex w-full items-center rounded-md px-2.5 py-2 text-start text-sm hover:bg-muted', route === path && 'bg-muted font-medium')} onClick={() => onApplyPath(route)}>{route}</button>
+              <button key={route} type="button" role="option" aria-selected={route === path} className={cn('flex w-full items-center rounded-md px-2.5 py-2 text-start text-sm hover:bg-hover', route === path && 'bg-muted font-medium')} onClick={() => onApplyPath(route)}>{route}</button>
             ))}
             {!filteredRoutes.length && <p className="px-2.5 py-2 text-sm text-muted-foreground">Ничего не найдено. Можно ввести путь вручную и нажать Enter.</p>}
           </div>

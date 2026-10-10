@@ -51,7 +51,7 @@ export function ScheduleDayPicker({
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               active
                 ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                : 'border-border bg-background text-muted-foreground hover:bg-hover hover:text-foreground',
               disabled && 'cursor-not-allowed opacity-50',
             )}
           >

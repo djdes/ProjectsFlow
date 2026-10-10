@@ -30,13 +30,17 @@ export function MemberListSkeleton({
   );
 }
 
+// Скелетон доски в форме дизайна C4: серые колонки (bg-panel) с белыми карточками. now —
+// закреплённая колонка «Сейчас» слева, как во «Входящих».
 export function BoardSkeleton({
   className,
   shelf = true,
+  now = false,
   columns = 3,
 }: {
   className?: string;
   shelf?: boolean;
+  now?: boolean;
   columns?: number;
 }): React.ReactElement {
   return (
@@ -45,28 +49,49 @@ export function BoardSkeleton({
       className={cn('min-w-0 space-y-4', className)}
     >
       {shelf && (
-        <div className="mbe-4 rounded-xl bg-muted/35 p-3">
-          <Skeleton className="mbe-3 h-3 w-20" />
-          <div className="max-w-72 rounded-lg border border-border/50 bg-background p-3">
+        <div className="mbe-4 rounded-xl bg-panel p-2">
+          <Skeleton className="mbe-2 h-5 w-20" />
+          <div className="max-w-72 rounded-lg bg-card p-2.5 shadow-card">
             <Skeleton className="h-3.5 w-4/5" />
             <Skeleton className="mbs-2 h-3 w-3/5" />
           </div>
         </div>
       )}
-      <div className="flex gap-3 overflow-hidden">
+      <div className="flex flex-col gap-2.5 overflow-hidden md:flex-row">
+        {now && (
+          <div className="w-full shrink-0 space-y-[5px] rounded-xl bg-panel p-[7px] md:w-[284px]">
+            {[0, 1].map((group) => (
+              <div key={group} className="space-y-[5px]">
+                <div className="flex h-7 items-center px-[3px]">
+                  <Skeleton className="h-5 w-28" />
+                </div>
+                {Array.from({ length: group === 0 ? 2 : 1 }, (_, row) => (
+                  <div key={row} className="space-y-2 rounded-lg bg-card p-2.5 shadow-card">
+                    <Skeleton className={cn('h-3.5', widths[row % 3])} />
+                    <Skeleton className="h-3 w-5/6" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 overflow-hidden">
         {Array.from({ length: columns }, (_, col) => (
           <div
             key={col}
-            className="w-full shrink-0 space-y-2 rounded-xl bg-muted/40 p-2 sm:w-[276px]"
+            className={cn(
+              'w-full shrink-0 space-y-[5px] rounded-xl bg-panel p-1.5',
+              now ? 'sm:w-64' : 'sm:w-[276px]',
+            )}
           >
-            <div className="flex h-9 items-center justify-between px-1">
-              <Skeleton className="h-5 w-24 rounded-full" />
+            <div className="flex h-7 items-center justify-between px-[3px]">
+              <Skeleton className="h-5 w-24" />
               <Skeleton className="size-4" />
             </div>
             {Array.from({ length: col === 1 ? 2 : 3 }, (_, row) => (
               <div
                 key={row}
-                className="space-y-2.5 rounded-lg border border-border/50 bg-background p-3"
+                className="space-y-2 rounded-lg bg-card p-2.5 shadow-card"
               >
                 <Skeleton className={cn('h-3.5', widths[(col + row) % 3])} />
                 <Skeleton className="h-3 w-5/6" />
@@ -77,9 +102,9 @@ export function BoardSkeleton({
                 </div>
               </div>
             ))}
-            <Skeleton className="my-2 h-8 w-full bg-muted/50" />
           </div>
         ))}
+        </div>
       </div>
     </LoadingRegion>
   );
@@ -300,14 +325,16 @@ export function PageSkeleton({
   const narrow = ['overview', 'task'].includes(layout);
   return (
     <div className="min-h-full min-w-0" data-pf-page-skeleton={layout}>
-      <div className="flex h-11 items-center gap-3 px-3">
+      <div className="flex h-11 items-center gap-3 border-be px-3">
         <Skeleton className="h-3 w-24" />
         <Skeleton className="h-3 w-32" />
       </div>
       <div
         className={cn(
-          'px-6 pbe-10 sm:px-14 lg:px-24',
-          layout === 'inbox' ? 'pbs-2' : layout === 'overview' ? 'pbs-1' : 'pbs-9',
+          'pbe-10',
+          // «Входящие» — плотные поля C4 (как InboxPage), остальные страницы — поля доски.
+          layout === 'inbox' ? 'px-4 pbs-3 sm:px-6 sm:pbs-4 lg:px-9' : 'px-6 sm:px-14 lg:px-24',
+          layout === 'overview' ? 'pbs-6' : layout !== 'inbox' && 'pbs-9',
         )}
       >
         <div className={cn('space-y-6', narrow && 'mx-auto max-w-4xl')}>
@@ -330,7 +357,7 @@ export function PageSkeleton({
             </div>
           </LoadingRegion>
           {(layout === 'board' || layout === 'inbox') && (
-            <BoardSkeleton shelf={layout !== 'inbox'} />
+            <BoardSkeleton shelf={layout !== 'inbox'} now={layout === 'inbox'} />
           )}
           {layout === 'table' && <TableSkeleton />}
           {layout === 'list' && <ListSkeleton />}

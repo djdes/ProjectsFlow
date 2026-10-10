@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bot, Check, Loader2 } from 'lucide-react';
+import { Check, CircleAlert, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { AuthFormCard, authFieldClass } from '@/presentation/auth/AuthFormCard';
 import { useContainer } from '@/infrastructure/di/container';
 import type {
   AgentDeviceRepository,
@@ -56,13 +57,12 @@ function ManualCodeEntry({ onSubmit }: { onSubmit: (code: string) => void }): Re
   };
 
   return (
-    <CenteredCard
-      icon={<Bot className="size-6 text-primary" />}
+    <AuthFormCard
       title="Подключение агента"
       description="Введи код, который показал Claude Code при запуске setup."
     >
-      <form onSubmit={handle} className="space-y-4">
-        <div className="space-y-1.5">
+      <form onSubmit={handle} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="device-code">Код</Label>
           <Input
             id="device-code"
@@ -71,17 +71,17 @@ function ManualCodeEntry({ onSubmit }: { onSubmit: (code: string) => void }): Re
             placeholder="ABCD-1234"
             autoFocus
             maxLength={9}
-            className="font-mono uppercase tracking-widest"
+            className={cn(authFieldClass, 'font-mono uppercase tracking-widest')}
           />
           <p className="text-xs text-muted-foreground">
             Код живёт 10&nbsp;минут с момента запуска setup.
           </p>
         </div>
-        <Button type="submit" className="w-full" disabled={value.trim().length < 8}>
+        <Button type="submit" size="lg" className="w-full" disabled={value.trim().length < 8}>
           Продолжить
         </Button>
       </form>
-    </CenteredCard>
+    </AuthFormCard>
   );
 }
 
@@ -127,8 +127,8 @@ function DeviceFlow({
 
   if (loadError) {
     return (
-      <CenteredCard
-        icon={<Bot className="size-6 text-destructive" />}
+      <AuthFormCard
+        icon={<StateIcon tone="error"><CircleAlert /></StateIcon>}
         title="Не получилось"
         description={loadError}
         footer={
@@ -136,21 +136,17 @@ function DeviceFlow({
             Ввести другой код
           </Button>
         }
-      >
-        <div />
-      </CenteredCard>
+      />
     );
   }
 
   if (!info) {
     return (
-      <CenteredCard
-        icon={<Loader2 className="size-6 motion-safe:animate-spin text-muted-foreground" />}
+      <AuthFormCard
+        icon={<StateIcon tone="neutral"><Loader2 className="motion-safe:animate-spin" /></StateIcon>}
         title="Проверяем код…"
-        description={userCode}
-      >
-        <div />
-      </CenteredCard>
+        description={<span className="font-mono tracking-widest">{userCode}</span>}
+      />
     );
   }
 
@@ -162,8 +158,8 @@ function DeviceFlow({
       expired: 'Срок действия кода истёк. Запроси новый в Claude Code.',
     };
     return (
-      <CenteredCard
-        icon={<Check className="size-6 text-emerald-500" />}
+      <AuthFormCard
+        icon={<StateIcon tone="done"><Check /></StateIcon>}
         title="Готово"
         description={map[info.status]}
         footer={
@@ -171,16 +167,14 @@ function DeviceFlow({
             <Link to="/">Вернуться на главную</Link>
           </Button>
         }
-      >
-        <div />
-      </CenteredCard>
+      />
     );
   }
 
   if (approved) {
     return (
-      <CenteredCard
-        icon={<Check className="size-6 text-emerald-500" />}
+      <AuthFormCard
+        icon={<StateIcon tone="done"><Check /></StateIcon>}
         title="Подключено"
         description="Возвращайся в терминал — Claude Code заберёт токен и завершит setup."
         footer={
@@ -188,9 +182,7 @@ function DeviceFlow({
             <Link to="/">На главную</Link>
           </Button>
         }
-      >
-        <div />
-      </CenteredCard>
+      />
     );
   }
 
@@ -215,8 +207,7 @@ function DeviceFlow({
   const minutesLeft = Math.max(0, Math.round((info.expiresAt.getTime() - mountedAt) / 60000));
 
   return (
-    <CenteredCard
-      icon={<Bot className="size-6 text-primary" />}
+    <AuthFormCard
       title="Подключить Claude Code?"
       description={
         <>
@@ -225,14 +216,14 @@ function DeviceFlow({
         </>
       }
     >
-      <form onSubmit={handleApprove} className="space-y-4">
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-center">
+      <form onSubmit={handleApprove} className="flex flex-col gap-4">
+        <div className="rounded-xl bg-panel px-4 py-3 text-center">
           <p className="font-mono text-lg tracking-widest text-foreground">{userCode}</p>
           <p className="text-xs text-muted-foreground">
             истекает через&nbsp;~{minutesLeft}&nbsp;мин
           </p>
         </div>
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="token-name">Название токена</Label>
           <Input
             id="token-name"
@@ -240,49 +231,46 @@ function DeviceFlow({
             onChange={(e) => setTokenName(e.target.value)}
             maxLength={120}
             autoFocus
+            className={authFieldClass}
           />
           <p className="text-xs text-muted-foreground">
             Полезно если у&nbsp;тебя несколько устройств — например, «MacBook» или «Рабочий ПК».
           </p>
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" className="flex-1" onClick={onReset}>
+          <Button type="button" variant="ghost" size="lg" className="flex-1" onClick={onReset}>
             Отмена
           </Button>
-          <Button type="submit" className="flex-1" disabled={submitting || tokenName.trim().length === 0}>
+          <Button type="submit" size="lg" className="flex-1" disabled={submitting || tokenName.trim().length === 0}>
             {submitting && <Loader2 className="size-4 motion-safe:animate-spin" />}
             Подключить
           </Button>
         </div>
       </form>
-    </CenteredCard>
+    </AuthFormCard>
   );
 }
 
-function CenteredCard({
-  icon,
-  title,
-  description,
+// Значок состояния над заголовком экрана: цвет = смысл (ошибка, готово, ожидание).
+const STATE_ICON_TONE = {
+  error: 'bg-destructive-soft text-destructive',
+  done: 'bg-done-soft text-done',
+  neutral: 'bg-panel text-muted-foreground',
+} as const;
+
+function StateIcon({
+  tone,
   children,
-  footer,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  description: React.ReactNode;
+  tone: keyof typeof STATE_ICON_TONE;
   children: React.ReactNode;
-  footer?: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="grid min-h-dvh place-items-center bg-background p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-2.5">
-          <div className="grid size-10 place-items-center rounded-md border bg-muted">{icon}</div>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent>{children}</CardContent>
-        {footer && <div className="border-bs px-6 py-3">{footer}</div>}
-      </Card>
-    </div>
+    <span
+      aria-hidden="true"
+      className={cn('grid size-10 place-items-center rounded-xl [&_svg]:size-5', STATE_ICON_TONE[tone])}
+    >
+      {children}
+    </span>
   );
 }

@@ -561,7 +561,7 @@ export function AiComposeDialog({
               </DialogDescription>
             </div>
             {phase === 'creating' && progress && (
-              <span className="mbs-0.5 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary">
+              <span className="mbs-0.5 shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold tabular-nums text-primary-ink">
                 {progress.done}/{progress.total}
               </span>
             )}
@@ -635,7 +635,7 @@ export function AiComposeDialog({
                       <button
                         type="button"
                         onClick={() => void loadAdvanced()}
-                        className="shrink-0 font-medium text-primary hover:underline"
+                        className="shrink-0 font-medium text-primary-ink hover:underline"
                       >
                         Повторить
                       </button>
@@ -645,14 +645,14 @@ export function AiComposeDialog({
 
                 {/* Переключатель режима — сегмент-контрол ВЫШЕ управляемой области */}
                 {canDistribute && (
-                  <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/50 p-1">
+                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-1">
                     <button
                       type="button"
                       onClick={() => setDistribute(false)}
                       className={cn(
                         'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]',
                         !distribute
-                          ? 'bg-background text-foreground shadow-sm'
+                          ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -665,7 +665,7 @@ export function AiComposeDialog({
                       className={cn(
                         'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow]',
                         distribute
-                          ? 'bg-background text-foreground shadow-sm'
+                          ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -674,7 +674,7 @@ export function AiComposeDialog({
                       <span
                         className={cn(
                           'rounded-full px-1.5 text-2xs font-semibold tabular-nums',
-                          distribute ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15',
+                          distribute ? 'bg-primary-soft text-primary-ink' : 'bg-foreground/10',
                         )}
                       >
                         {includedCount}
@@ -685,7 +685,7 @@ export function AiComposeDialog({
 
                 {/* Управляемая область */}
                 {!distribute ? (
-                  <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
+                  <div className="rounded-lg border bg-panel px-3 py-2.5">
                     <CommentBody body={joinedDoc(activeTab)} />
                   </div>
                 ) : (
@@ -702,7 +702,7 @@ export function AiComposeDialog({
                           className={cn(
                             'rounded-xl border p-2.5 transition-[color,background-color,border-color,box-shadow] duration-200',
                             row.include
-                              ? 'border-primary/40 bg-primary/[0.04] shadow-sm'
+                              ? 'border-primary/40 bg-primary/[0.04]'
                               : 'border-border bg-background opacity-60 hover:opacity-100',
                           )}
                         >
@@ -803,7 +803,7 @@ export function AiComposeDialog({
                                   <button
                                     type="button"
                                     onClick={() => toggleExpand(row.id)}
-                                    className="ms-1.5 mbs-1 inline-flex items-center gap-1 text-2xs font-medium text-primary hover:underline"
+                                    className="ms-1.5 mbs-1 inline-flex items-center gap-1 text-2xs font-medium text-primary-ink hover:underline"
                                   >
                                     <ChevronDown
                                       className={cn('size-3 motion-safe:transition-transform', isOpen && 'rotate-180')}

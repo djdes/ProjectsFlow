@@ -383,7 +383,7 @@ export function CalendarView({
                 onClick={() => onModeChange(m)}
                 className={cn(
                   'px-2 py-0.5 text-xs transition-colors',
-                  mode === m ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/50',
+                  mode === m ? 'bg-active font-medium text-foreground' : 'text-muted-foreground hover:bg-hover hover:text-foreground',
                 )}
               >
                 {label}
@@ -395,7 +395,7 @@ export function CalendarView({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <CalendarOff className="size-3.5" />
                   Без срока ({noDate.length})
@@ -502,7 +502,7 @@ export function CalendarView({
         </div>
         <DragOverlay dropAnimation={null}>
           {activeDrag ? (
-            <div className="pointer-events-none max-w-[12rem] truncate rounded-md border border-primary/40 bg-card px-2 py-1 text-xs shadow-lg ring-1 ring-primary/20">
+            <div className="pointer-events-none max-w-[12rem] truncate rounded-md bg-card px-2 py-1 text-xs shadow-float ring-1 ring-primary/40">
               {taskTitle(activeDrag)}
             </div>
           ) : null}
@@ -628,20 +628,21 @@ function DayCell({
       )}
     >
       {/* Notion-порядок: «+» слева при hover, число дня — в правом верхнем углу
-          (у 1-го числа — с месяцем), сегодня — красный кружок. */}
+          (у 1-го числа — с месяцем), сегодня — кружок цвета «срок сегодня» (today):
+          тот же смысл, что у бейджа срока на карточке. */}
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={onCreate}
           aria-label="Создать задачу в этот день"
-          className="grid size-5 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover/cell:opacity-100"
+          className="grid size-5 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-hover group-hover/cell:opacity-100"
         >
           <Plus className="size-3.5" />
         </button>
         <span
           className={cn(
             'inline-flex h-5 items-center justify-center rounded-full text-2xs',
-            isToday ? 'size-5 bg-red-500 font-semibold text-white' : 'text-muted-foreground',
+            isToday ? 'size-5 bg-today font-semibold text-background' : 'text-muted-foreground',
             monthAnchor && !isToday && 'px-1 font-medium text-foreground',
           )}
         >
@@ -667,7 +668,7 @@ function DayCell({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="rounded px-1 text-start text-2xs text-muted-foreground hover:bg-accent"
+                className="rounded px-1 text-start text-2xs text-muted-foreground hover:bg-hover"
               >
                 ещё {hidden}
               </button>
@@ -743,7 +744,7 @@ function TaskChip({
         {...attributes}
         onClick={onOpen}
         className={cn(
-          'flex cursor-pointer items-center gap-1 border bg-card px-1.5 py-0.5 text-xs transition-colors hover:bg-accent',
+          'flex cursor-pointer items-center gap-1 border bg-card px-1.5 py-0.5 text-xs transition-colors hover:bg-hover',
           // Сегменты полосы (Notion date range): скругление только на краях диапазона.
           seg === 'single' && 'rounded-md',
           seg === 'start' && '-me-1 rounded-s-md rounded-e-none border-e-0',

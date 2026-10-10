@@ -1,15 +1,22 @@
+import { FolderOpen } from 'lucide-react';
 import { NewProjectButton } from '@/presentation/components/forms/NewProjectButton';
+import { WorkspaceCrumbs } from '@/presentation/layout/InboxBreadcrumbs';
+import { PageTopBar } from '@/presentation/layout/PageChrome';
+import { PageMessage } from '@/presentation/pages/PageScaffold';
 
 export function HomePage(): React.ReactElement {
   return (
-    <div className="grid h-full place-items-center p-6">
-      <div className="max-w-md space-y-4 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Выберите проект</h1>
-        <p className="text-sm text-muted-foreground">
-          Откройте проект из&nbsp;сайдбара слева или&nbsp;создайте новый, чтобы начать.
-        </p>
+    <div className="flex min-h-full flex-col">
+      <PageTopBar className="hidden sm:flex">
+        <WorkspaceCrumbs icon={<FolderOpen className="size-3.5 shrink-0" />} label="Проекты" />
+      </PageTopBar>
+      <PageMessage
+        className="min-h-0 flex-1"
+        title="Выберите проект"
+        description={<>Откройте проект из&nbsp;сайдбара слева или&nbsp;создайте новый, чтобы начать.</>}
+      >
         <NewProjectButton className="gap-2" />
-      </div>
+      </PageMessage>
     </div>
   );
 }

@@ -3,48 +3,92 @@
 @tailwind utilities;
 
 @layer base {
-  /* Тёплые Notion-нейтрали: чернила oklch(32.89% 0.011 91.66), сероватые тёплые поверхности (hue 45)
-     вместо холодного slate (hue 240). --sidebar — отдельная подложка левой панели. */
+  /* Дизайн-система «C4 плотный» (docs/superpowers/specs/2026-10-10-redesign-c4-design.md).
+     Светлая тема — Notion: белый лист, тёплые нейтрали (#37352F текст, #6F6E69 вторичный,
+     #E9E9E7 линии, #F7F7F5 сайдбар и колонки), один синий акцент #2383E2. Карточка белая
+     на сером #F7F7F5 и держится тенью-кольцом, а не рамкой.
+     Цвет = смысл статуса, одинаковый во всём продукте: на утверждении — фиолетовый,
+     вручную — янтарный, очередь — синий акцент, готово/принять — зелёный, срок вышел —
+     красный. Контейнеры нейтральные: цвет живёт в точке, метке, счётчике и зоне броска.
+     Токены цвета — тройки OKLCH (`oklch(var(--x) / a)`); *-soft, --drop, тени, hover —
+     готовые значения со своей альфой (в тёмной теме это полупрозрачные тинты). */
   :root {
     color-scheme: light;
     --background: 100% 0 none;
     --foreground: 32.89% 0.011 91.66;
 
-    --muted: 95.56% 0.002 67.8;
-    --muted-foreground: 56.67% 0.005 78.28;
+    --muted: 95.76% 0.003 106.45;
+    --muted-foreground: 53.75% 0.008 97.45;
 
     --card: 100% 0 none;
     --card-foreground: 32.89% 0.011 91.66;
+    --card-hover: 100% 0 none;
 
     --popover: 100% 0 none;
     --popover-foreground: 32.89% 0.011 91.66;
 
-    --border: 92.76% 0.005 95.1;
-    --input: 92.76% 0.005 95.1;
-    --ring: 61.14% 0.166 252.49;
+    --border: 93.35% 0.003 106.45;
+    --input: 90.66% 0.004 91.45;
+    --ring: 56.67% 0.166 252.48;
 
-    /* Синий акцент Notion oklch(60.58% 0.167 252.7) (rgb 35,131,226) — см. план Phase 0/0.1. */
-    --primary: 60.34% 0.169 252.97;
+    /* Синий акцент Notion, на полтона темнее (#0F77D4 вместо #2383E2): белая подпись на
+       кнопке так проходит AA (4.6:1 против 3.9:1). --primary-ink — синий текст-ссылка
+       (#1B6CBD, AA и на белом, и на --primary-soft), --primary-soft — подложка выбранного
+       фильтра и статуса «в очереди». Те же значения у лендинга (landing/src/styles/tokens.css). */
+    --primary: 56.67% 0.166 252.48;
     --primary-foreground: 100% 0 none;
+    --primary-ink: 52.83% 0.147 252.93;
+    --primary-soft: oklch(95.36% 0.017 248.01);
 
-    --secondary: 95.56% 0.002 67.8;
+    --secondary: 95.76% 0.003 106.45;
     --secondary-foreground: 32.89% 0.011 91.66;
 
-    --accent: 94.93% 0.003 84.56;
+    --accent: 94.88% 0.001 106.42;
     --accent-foreground: 32.89% 0.011 91.66;
 
-    --destructive: 57.85% 0.214 27.17;
+    --destructive: 54.49% 0.183 26.91;
     --destructive-foreground: 100% 0 none;
+    --destructive-soft: oklch(93.52% 0.033 29.37);
 
-    --sidebar: 97.06% 0.002 67.8;
+    /* Зелёный Notion: «готово», «принять», добавить. */
+    --success: 55.79% 0.085 158.39;
+
+    /* Поверхности: сайдбар, колонка/панель (серый лист под белыми карточками), поле ввода,
+       приподнятая плашка (быстрые действия на карточке, тост). */
+    --sidebar: 97.56% 0.003 106.45;
+    --panel: 97.56% 0.003 106.45;
+    --panel-divider: 93.67% 0.005 95.1;
+    --field: 100% 0 none;
+    --raised: 100% 0 none;
+
+    /* Статусы задачи. --x — точка/иконка/счётчик, --x-soft — подложка метки и зона броска
+       при наведении, --x-ink — текст на подложке. */
+    --approval: 58.14% 0.12 309.5;
+    --approval-soft: oklch(91.32% 0.024 313.13);
+    --approval-zone: oklch(94.22% 0.017 308.26);
+    --approval-ink: 32.16% 0.088 310.25;
+    --manual: 62.55% 0.123 77.93;
+    --manual-soft: oklch(94.76% 0.05 85.71);
+    --manual-zone: oklch(95.61% 0.028 88.75);
+    --manual-ink: 31.22% 0.041 60.87;
+    --done: 55.79% 0.085 158.39;
+    --done-soft: oklch(92.78% 0.031 145.32);
+    --done-soft-hover: oklch(88.75% 0.047 148.09);
+    --done-ink: 31.34% 0.044 159.05;
+    /* Срок «сегодня» — тёплый оранжевый, «просрочено» — --destructive. */
+    --today: 55.57% 0.138 52.22;
+    /* Подсветка колонки под перетаскиваемой карточкой и штрих пустой зоны броска. */
+    --drop: oklch(96.3% 0.015 247.99);
+    --drop-line: 82.96% 0.009 91.5;
+    /* Тёмная плашка тоста-отмены поверх светлого листа. */
+    --toast: 30.11% 0.005 91.56;
+    --toast-foreground: 100% 0 none;
+    --toast-accent: 78% 0.09 250;
 
     /* Пузырь сообщения пользователя в ИИ-чате. Отдельный токен, а не --muted: пузырю
        нужна заметно более плотная и тёплая заливка, иначе на белом фоне ленты он
        читается как пустое место. Значение — замер с референса (rgb 233,230,224). */
     --message-bubble: 92.86% 0.009 84.57;
-
-    /* Зелёный акцент для действия «добавить» (кнопка добавления задачи и т.п.). */
-    --success: 63.68% 0.168 149.72;
 
     /* Фирменные цвета Claude — для рендера комментариев актора 'agent' (Ralph-диспетчер,
        worker, grillme, verify). HEX-литералы по гайду Anthropic; не привязываем к тёмной
@@ -54,66 +98,105 @@
     --claude-peach: oklch(97.08% 0.015 54.93);
     --claude-cream: oklch(98.18% 0.005 95.1);
 
+    /* Радиусы: 8px карточка (lg), 6px кнопка и поле (md), 4px метка (sm), 10px колонка
+       и панель (xl). */
     --radius: 0.5rem;
+
+    /* Тени. Карточка на светлом листе — кольцо 1px + мягкая тень вместо рамки (Notion);
+       при наведении тень глубже. float — плавающие плашки (тост, полоса броска),
+       menu — выпадающие меню и поповеры. */
+    --shadow-card: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 1px 3px oklch(16.84% 0 none / 0.06);
+    --shadow-card-hover: 0 0 0 1px oklch(16.84% 0 none / 0.1), 0 3px 8px oklch(16.84% 0 none / 0.12);
+    --shadow-float: 0 10px 30px oklch(16.84% 0 none / 0.18);
+    --shadow-menu: 0 0 0 1px oklch(16.84% 0 none / 0.05), 0 3px 6px oklch(16.84% 0 none / 0.1),
+      0 9px 24px oklch(16.84% 0 none / 0.2);
 
     /* Notion-style мягкие заливки интерактивных поверхностей (hover/active/выделение).
        Содержат собственную альфу; используются как bg-hover / bg-active и в ::selection. */
-    --hover: color-mix(in oklch, oklch(var(--foreground)) 6%, transparent);
-    --active: color-mix(in oklch, oklch(var(--foreground)) 8%, transparent);
+    --hover: color-mix(in oklch, oklch(var(--foreground)) 8%, transparent);
+    --active: color-mix(in oklch, oklch(var(--foreground)) 11%, transparent);
     --selection: color-mix(in oklch, oklch(60.58% 0.167 252.7) 14%, transparent);
   }
 
-  /* Тёмная тема — графит Notion с ЕДИНОЙ палитрой по всему сайту. Прежняя версия
-     ощущалась «мутной»: ступени поверхностей были слишком узкими (10/13/15/18%),
-     а бордер 18% почти не отделял карточки от фона — интерфейс выглядел плоским.
-     Здесь: (1) чуть шире шаг между слоями (фон 9 → сайдбар 11 → карточка 12 →
-     popover 14 → muted 16 → accent 18 → бордер 22) — поверхности читаемо
-     разнесены; (2) заметный бордер 22% — карточки/колонки перестают «слипаться»;
-     (3) едва уловимый холодный тон (hue 222, sat 5%) вместо мёртво-серого 0% —
-     графит остаётся нейтральным, но «живым»; (4) текст 88% для чуть большей резкости. */
+  /* Тёмная тема «C3 плотный» — для работы весь день: чернильный графит с лёгким холодным
+     оттенком (hue ~274), ступени поверхностей разнесены заметно: фон #16171B → сайдбар
+     #1A1B20 → колонка #1D1E23 → карточка #24262C → плашка/меню #2B2D35, линия #2E3038.
+     Акцент — светлый барвинок #7C8CFF с тёмным текстом на заливке; статусы — те же смыслы,
+     что в светлой, в светлых неоновых тонах. Карточка держится рамкой, без тени. */
   .dark {
     color-scheme: dark;
-    --background: 20.11% 0.004 286.04;
-    --foreground: 90.65% 0.003 264.54;
+    --background: 20.53% 0.008 274.52;
+    --foreground: 94.59% 0.003 264.54;
 
-    --muted: 27.7% 0.006 271.21;
-    --muted-foreground: 68.6% 0.011 267.32;
+    --muted: 29.85% 0.015 274.37;
+    --muted-foreground: 71.62% 0.015 272.62;
 
-    --card: 23.48% 0.004 264.49;
-    --card-foreground: 90.65% 0.003 264.54;
+    --card: 26.91% 0.012 270.96;
+    --card-foreground: 94.59% 0.003 264.54;
+    --card-hover: 28.59% 0.013 272.91;
 
-    --popover: 25.59% 0.004 264.5;
-    --popover-foreground: 90.65% 0.003 264.54;
+    --popover: 29.85% 0.015 274.37;
+    --popover-foreground: 94.59% 0.003 264.54;
 
-    --border: 33.64% 0.008 264.47;
-    --input: 33.64% 0.008 264.47;
-    --ring: 66.93% 0.143 250.8;
+    --border: 31.05% 0.015 274.41;
+    --input: 33.45% 0.016 275.59;
+    --ring: 68.09% 0.169 275.03;
 
-    /* В тёмной — Notion-синий чуть светлее, чтобы не резал на графите. */
-    --primary: 68.5% 0.139 250.8;
-    --primary-foreground: 100% 0 none;
+    --primary: 68.09% 0.169 275.03;
+    --primary-foreground: 19.65% 0.068 275.73;
+    --primary-ink: 78.95% 0.107 277.23;
+    --primary-soft: color-mix(in oklch, oklch(68.09% 0.169 275.03) 14%, transparent);
 
-    --secondary: 27.7% 0.006 271.21;
-    --secondary-foreground: 90.65% 0.003 264.54;
+    --secondary: 29.85% 0.015 274.37;
+    --secondary-foreground: 94.59% 0.003 264.54;
 
-    --accent: 29.73% 0.006 271.23;
-    --accent-foreground: 94.56% 0.002 247.84;
+    --accent: 29.85% 0.015 274.37;
+    --accent-foreground: 94.59% 0.003 264.54;
 
-    --destructive: 56.18% 0.196 26.22;
-    --destructive-foreground: 98.51% 0 none;
+    /* Светлый коралл: читается текстом на графите; на заливке — тёмный текст. */
+    --destructive: 73.45% 0.163 25.78;
+    --destructive-foreground: 20.53% 0.008 274.52;
+    --destructive-soft: color-mix(in oklch, oklch(73.45% 0.163 25.78) 16%, transparent);
 
-    /* В тёмной теме зелёный осветляем для читаемости на тёмном фоне. */
-    --success: 75.36% 0.18 151.18;
+    --success: 77.67% 0.143 155.36;
 
-    /* Тёмный аналог пузыря: ступень ВЫШЕ --muted — пузырь читается как приподнятая
-       плашка над фоном ленты, а не сливается с обычными muted-поверхностями. */
-    --message-bubble: 29.73% 0.006 271.23;
+    --sidebar: 22.32% 0.01 276.61;
+    --panel: 23.61% 0.01 276.66;
+    --panel-divider: 31.05% 0.015 274.41;
+    --field: 23.61% 0.01 276.66;
+    --raised: 29.85% 0.015 274.37;
 
-    --sidebar: 22.23% 0.006 271.14;
+    --approval: 73.68% 0.142 299.36;
+    --approval-soft: color-mix(in oklch, oklch(73.68% 0.142 299.36) 16%, transparent);
+    --approval-zone: color-mix(in oklch, oklch(73.68% 0.142 299.36) 6%, transparent);
+    --approval-ink: 80.5% 0.105 299.36;
+    --manual: 81.65% 0.14 80.1;
+    --manual-soft: color-mix(in oklch, oklch(81.65% 0.14 80.1) 16%, transparent);
+    --manual-zone: color-mix(in oklch, oklch(81.65% 0.14 80.1) 5%, transparent);
+    --manual-ink: 85% 0.115 80.1;
+    --done: 77.67% 0.143 155.36;
+    --done-soft: oklch(40.44% 0.069 157.52);
+    --done-soft-hover: oklch(47.72% 0.086 155.9);
+    --done-ink: 92.53% 0.054 158.39;
+    --today: 81.65% 0.14 80.1;
+    --drop: color-mix(in oklch, oklch(68.09% 0.169 275.03) 8%, transparent);
+    --drop-line: 42.12% 0.017 272.38;
+    --toast: 29.85% 0.015 274.37;
+    --toast-foreground: 94.59% 0.003 264.54;
+    --toast-accent: 78.95% 0.107 277.23;
 
-    --hover: color-mix(in oklch, oklch(100% 0 none) 5.5%, transparent);
-    --active: color-mix(in oklch, oklch(100% 0 none) 8%, transparent);
-    --selection: color-mix(in oklch, oklch(60.58% 0.167 252.7) 26%, transparent);
+    /* Тёмный аналог пузыря: ступень ВЫШЕ фона ленты — пузырь читается как приподнятая
+       плашка, а не сливается с обычными muted-поверхностями. */
+    --message-bubble: 29.85% 0.015 274.37;
+
+    --shadow-card: 0 0 0 1px oklch(31.05% 0.015 274.41);
+    --shadow-card-hover: 0 0 0 1px oklch(36.87% 0.018 272.29);
+    --shadow-float: 0 12px 32px oklch(0% 0 none / 0.5);
+    --shadow-menu: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 12px 32px oklch(0% 0 none / 0.5);
+
+    --hover: color-mix(in oklch, oklch(100% 0 none) 7%, transparent);
+    --active: color-mix(in oklch, oklch(100% 0 none) 10%, transparent);
+    --selection: color-mix(in oklch, oklch(68.09% 0.169 275.03) 30%, transparent);
   }
 
   * {
@@ -398,6 +481,70 @@
   }
 }
 
+/* Тона и переменные тостов — вне @layer: классы .pf-tone-<имя> собираются в коде
+   динамически (lib/tone.ts), а правила внутри слоёв Tailwind вырезает, если не нашёл
+   класс в исходниках буквально. */
+/* Тона-метки (Notion): проекты, люди, теги. Класс .pf-tone-<имя> задаёт пять значений,
+   утилиты берут их через bg-tone-bg / text-tone-fg / bg-tone (точка) / bg-tone-solid /
+   text-tone-on-solid. Светлая тема — пастельная подложка и тёмный текст; тёмная —
+   метка без подложки с цветной точкой (см. .pf-tag), аватар — яркая заливка. */
+.pf-tone-gray { --tone-bg: oklch(91.3% 0.003 84.56); --tone-fg: oklch(30.98% 0.008 84.59); --tone: oklch(68.62% 0.004 91.47); }
+.pf-tone-brown { --tone-bg: oklch(91.62% 0.017 44.8); --tone-fg: oklch(31.39% 0.044 45.46); --tone: oklch(57.66% 0.076 45.56); }
+.pf-tone-orange { --tone-bg: oklch(91.82% 0.042 59.1); --tone-fg: oklch(31.64% 0.062 57.69); --tone: oklch(65.94% 0.159 55.7); }
+.pf-tone-yellow { --tone-bg: oklch(94.76% 0.05 85.71); --tone-fg: oklch(31.22% 0.041 60.87); --tone: oklch(69.7% 0.13 76.04); }
+.pf-tone-green { --tone-bg: oklch(92.78% 0.031 145.32); --tone-fg: oklch(31.34% 0.044 159.05); --tone: oklch(55.79% 0.085 158.39); }
+.pf-tone-blue { --tone-bg: oklch(91.15% 0.024 231.86); --tone-fg: oklch(30.98% 0.049 242.64); --tone: oklch(56.56% 0.099 237.42); }
+.pf-tone-purple { --tone-bg: oklch(91.32% 0.024 313.13); --tone-fg: oklch(32.16% 0.088 310.25); --tone: oklch(58.14% 0.12 309.5); }
+.pf-tone-pink { --tone-bg: oklch(92.62% 0.026 349.76); --tone-fg: oklch(32% 0.068 351.01); --tone: oklch(58.97% 0.164 350.38); }
+.pf-tone-red { --tone-bg: oklch(93.52% 0.033 29.37); --tone-fg: oklch(32.27% 0.102 26.31); --tone: oklch(60.15% 0.172 25.79); }
+[class*='pf-tone-'] {
+  --tone-solid: var(--tone-bg);
+  --tone-on-solid: var(--tone-fg);
+}
+.dark .pf-tone-gray { --tone: oklch(70.97% 0.015 272.62); }
+.dark .pf-tone-brown { --tone: oklch(75.87% 0.094 71.94); }
+.dark .pf-tone-orange { --tone: oklch(75.14% 0.161 46.76); }
+.dark .pf-tone-yellow { --tone: oklch(81.65% 0.14 80.1); }
+.dark .pf-tone-green { --tone: oklch(80.03% 0.182 151.71); }
+.dark .pf-tone-blue { --tone: oklch(71.37% 0.143 254.62); }
+.dark .pf-tone-purple { --tone: oklch(73.68% 0.142 299.36); }
+.dark .pf-tone-pink { --tone: oklch(72.53% 0.175 349.76); }
+.dark .pf-tone-red { --tone: oklch(73.45% 0.163 25.78); }
+/* Тона статусов — та же механика, что у проектов: метка «На утверждении» = .pf-tag
+   .pf-tone-approval и т.д. Значения берутся из статусных токенов выше. */
+.pf-tone-approval { --tone-bg: var(--approval-soft); --tone-fg: oklch(var(--approval-ink)); --tone: oklch(var(--approval)); }
+.pf-tone-manual { --tone-bg: var(--manual-soft); --tone-fg: oklch(var(--manual-ink)); --tone: oklch(var(--manual)); }
+.pf-tone-done { --tone-bg: var(--done-soft); --tone-fg: oklch(var(--done-ink)); --tone: oklch(var(--done)); }
+.pf-tone-queue { --tone-bg: var(--primary-soft); --tone-fg: oklch(var(--primary-ink)); --tone: oklch(var(--primary)); }
+.dark [class*='pf-tone-'] {
+  --tone-bg: color-mix(in oklch, var(--tone) 14%, transparent);
+  --tone-fg: oklch(var(--foreground));
+  --tone-solid: var(--tone);
+  --tone-on-solid: oklch(20.53% 0.008 274.52);
+}
+
+/* Тосты sonner (richColors) — непрозрачные плашки из палитры статусов. */
+:root {
+  --sonner-success-bg: oklch(92.78% 0.031 145.32);
+  --sonner-success-fg: oklch(31.34% 0.044 159.05);
+  --sonner-error-bg: oklch(93.52% 0.033 29.37);
+  --sonner-error-fg: oklch(32.27% 0.102 26.31);
+  --sonner-info-bg: oklch(95.36% 0.017 248.01);
+  --sonner-info-fg: oklch(30.98% 0.049 242.64);
+  --sonner-warning-bg: oklch(94.76% 0.05 85.71);
+  --sonner-warning-fg: oklch(31.22% 0.041 60.87);
+}
+.dark {
+  --sonner-success-bg: oklch(40.44% 0.069 157.52);
+  --sonner-success-fg: oklch(92.53% 0.054 158.39);
+  --sonner-error-bg: oklch(37.84% 0.032 3.63);
+  --sonner-error-fg: oklch(83.9% 0.088 24.23);
+  --sonner-info-bg: oklch(37.21% 0.047 277.38);
+  --sonner-info-fg: oklch(85.69% 0.071 278.67);
+  --sonner-warning-bg: oklch(38.78% 0.02 73.34);
+  --sonner-warning-fg: oklch(88.71% 0.096 84.02);
+}
+
 /* Липкие слои страницы проекта при скролле остаются ПЛОСКИМИ — как в Notion: там шапка
    просто закреплена, а контент уезжает под неё без линии и без тени. Раньше здесь была
    двухслойная тень (бордер + мягкая подсветка вниз), и при скролле страница выглядела
@@ -521,6 +668,58 @@ html[data-pf-modality='pointer'] :focus-visible {
    Tailwind-arbitrary values — keyframe-анимация и :where-host для контейнера хотят
    нормальный CSS. Используется в TaskDialog CommentItem; см. spec comment-actor-kind.md. */
 @layer components {
+  /* Метка (проект, статус) дизайна C4. Светлая тема — пастельная подложка тона и тёмный
+     текст; тёмная (C3) — без подложки, с цветной точкой слева. Тон задаёт .pf-tone-<имя>.
+     Текст внутри оборачивают в <span class="truncate">, чтобы длинное имя резалось «…».
+     .pf-tag-lg — шапка колонки и панели, .pf-tag-plain — метка со своей иконкой (без точки). */
+  .pf-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    block-size: 1.125rem;
+    padding-inline: 0.375rem;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--tone-bg);
+    color: var(--tone-fg);
+    white-space: nowrap;
+  }
+  .pf-tag::before {
+    content: '';
+    display: none;
+    flex: none;
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    border-radius: 2px;
+    background: var(--tone);
+  }
+  .pf-tag-lg {
+    block-size: 1.375rem;
+    padding-inline: 0.4375rem;
+    border-radius: 5px;
+    font-weight: 600;
+  }
+  .pf-tag-lg::before {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 3px;
+  }
+  .dark .pf-tag {
+    background: transparent;
+    padding-inline: 0;
+  }
+  .dark .pf-tag-lg {
+    padding-inline: 0.125rem;
+  }
+  .dark .pf-tag::before {
+    display: inline-block;
+  }
+  .pf-tag.pf-tag-plain::before {
+    display: none;
+  }
+
   .pf-claude-agent-icon {
     color: var(--claude-orange);
     display: inline-block;

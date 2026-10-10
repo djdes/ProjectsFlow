@@ -244,7 +244,7 @@ export function ProjectVersionsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-black/70 backdrop-blur-[1px]"
-        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-[0_24px_80px_oklch(0%_0_none/0.55)] sm:rounded-xl"
+        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-float sm:rounded-xl"
       >
         <DialogHeader className="shrink-0 border-be px-5 py-4 pe-12">
           <DialogTitle className="flex items-center gap-2">
@@ -457,8 +457,8 @@ export function ProjectVersionsDialog({
                             'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-start text-sm transition-colors',
                             locked
                               ? 'cursor-not-allowed text-muted-foreground/60'
-                              : 'hover:bg-accent',
-                            version.id === selectedId && !locked && 'bg-accent',
+                              : 'hover:bg-hover',
+                            version.id === selectedId && !locked && 'bg-active',
                           )}
                         >
                           <span className="flex min-w-0 flex-1 flex-col gap-1">

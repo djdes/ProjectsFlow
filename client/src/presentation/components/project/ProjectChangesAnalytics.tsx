@@ -61,7 +61,7 @@ function ChangesChart({
   const visibleLabels = days.length <= 14 ? 4 : 5;
   const labelStep = Math.max(1, Math.floor((days.length - 1) / Math.max(1, visibleLabels - 1)));
   return (
-    <div className="rounded-2xl border border-border/70 px-3 pbe-2 pbs-4">
+    <div className="rounded-xl border border-border/70 px-3 pbe-2 pbs-4">
       <div className="flex h-32 items-end gap-1" aria-label="График изменений по дням">
         {days.map((day, index) => {
           const height = day.count === 0 ? 3 : Math.max(8, Math.round((day.count / max) * 112));
@@ -82,7 +82,7 @@ function ChangesChart({
               />
               {day.count > 0 ? (
                 <span
-                  className="pointer-events-none absolute start-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-2xs text-white group-hover:block"
+                  className="pointer-events-none absolute start-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-2xs text-background shadow-menu group-hover:block"
                   style={{ bottom: height + 6 }}
                 >
                   {day.count} · {dateLabel}
@@ -116,7 +116,7 @@ function MetricCard({
   icon: typeof FileClock;
 }): React.ReactElement {
   return (
-    <div className="min-w-0 rounded-2xl border border-border/70 bg-background p-4">
+    <div className="min-w-0 rounded-xl border border-border/70 bg-background p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-xs text-muted-foreground">{label}</span>
         <Icon className="size-4 shrink-0 text-muted-foreground" />
@@ -242,7 +242,7 @@ export function ProjectChangesAnalytics({
       {loading ? (
         <div className="grid grid-cols-2 gap-3" aria-label="Загрузка аналитики изменений">
           {[0, 1, 2, 3].map((value) => (
-            <div key={value} className="h-[108px] animate-pulse rounded-2xl border bg-muted/30" />
+            <div key={value} className="h-[108px] animate-pulse rounded-xl border bg-panel" />
           ))}
         </div>
       ) : (
@@ -250,7 +250,7 @@ export function ProjectChangesAnalytics({
           {error ? (
             <div
               role="alert"
-              className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3"
+              className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"
             >
               <p className="text-xs text-destructive">{error}</p>
               <Button variant="outline" size="sm" className="h-10 shrink-0 gap-1.5" onClick={onRetry}>
@@ -295,7 +295,7 @@ export function ProjectChangesAnalytics({
           ) : null}
 
           {breakdown.length > 0 ? (
-            <div className="rounded-2xl border border-border/70 p-4">
+            <div className="rounded-xl border border-border/70 p-4">
               <p className="mbe-3 text-xs font-medium text-muted-foreground">Что меняли</p>
               <div className="space-y-2.5">
                 {breakdown.slice(0, 6).map((item) => (
@@ -305,7 +305,7 @@ export function ProjectChangesAnalytics({
                     onClick={() => setCategory(item.category)}
                     className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 text-start"
                   >
-                    <span className="truncate text-xs group-hover:text-primary">
+                    <span className="truncate text-xs group-hover:text-primary-ink">
                       {PROJECT_CHANGE_CATEGORY_LABEL[item.category]}
                     </span>
                     <span className="text-xs tabular-nums text-muted-foreground">{item.count}</span>
@@ -400,7 +400,7 @@ export function ProjectChangesAnalytics({
             </div>
           </div>
 
-          <div role="table" aria-label="Изменения проекта" className="overflow-clip rounded-2xl border border-border/70">
+          <div role="table" aria-label="Изменения проекта" className="overflow-clip rounded-xl border border-border/70">
             <div
               role="row"
               className="sticky inset-bs-0 z-10 grid h-12 grid-cols-[minmax(0,1fr)_8.5rem] items-center border-be bg-background/95 px-4 text-xs font-medium text-muted-foreground backdrop-blur"
@@ -442,7 +442,7 @@ export function ProjectChangesAnalytics({
                     }}
                     className={`grid min-h-[52px] grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-3 border-be px-4 py-2.5 last:border-be-0 ${
                       taskId
-                        ? 'cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+                        ? 'cursor-pointer transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
                         : ''
                     }`}
                   >

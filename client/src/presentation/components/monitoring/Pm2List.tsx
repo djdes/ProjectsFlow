@@ -22,7 +22,7 @@ export function Pm2List({ pm2 }: { pm2: ReadonlyArray<Pm2ProcessSnapshot> }): Re
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Аптайм</span>
-                <span className={cn('tabular-nums', recent && 'font-medium text-amber-600 dark:text-amber-400')}>
+                <span className={cn('tabular-nums', recent && 'font-medium text-warning')}>
                   {fmtDuration(p.uptimeMs)}
                 </span>
               </div>

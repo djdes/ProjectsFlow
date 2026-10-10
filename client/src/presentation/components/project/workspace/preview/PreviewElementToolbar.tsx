@@ -49,7 +49,7 @@ export function PreviewElementToolbar({ element, styleOpen, onStyleOpen, onPatch
   }, [element.bounds.height, element.bounds.width, element.bounds.x, element.bounds.y]);
 
   return (
-    <div ref={ref} className="pointer-events-auto absolute z-40 flex max-w-[calc(100%-16px)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-background p-1 shadow-xl" style={{ left: pos.left, top: pos.top }} role="toolbar" aria-label={`Редактирование: ${element.label}`}>
+    <div ref={ref} className="pointer-events-auto absolute z-40 flex max-w-[calc(100%-16px)] items-center gap-0.5 overflow-x-auto rounded-lg bg-popover p-1 shadow-menu" style={{ left: pos.left, top: pos.top }} role="toolbar" aria-label={`Редактирование: ${element.label}`}>
       <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1.5" onClick={onAi}><Sparkles className="size-4" />Изменить с ИИ</Button>
       <StyleThemePopover open={styleOpen} onOpenChange={onStyleOpen} element={element} onPatch={onPatch} />
       <Popover>

@@ -32,8 +32,8 @@ function ShareTab({ project, onOpenPublic }: { project: Project; onOpenPublic: (
         <div className="min-w-0"><p className="text-sm">Ссылка на проект</p><p className="text-xs text-muted-foreground">Только для участников с доступом к этому проекту.</p></div>
         <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copyLink}><Link2 className="size-3.5" />Копировать</Button>
       </div>
-      <button type="button" onClick={onOpenPublic} className="mbs-2 flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-muted">
-        <span>Показать без входа — <span className="font-medium text-primary">Публичная доска</span></span><ChevronRight className="size-3.5 shrink-0" />
+      <button type="button" onClick={onOpenPublic} className="mbs-2 flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-hover">
+        <span>Показать без входа — <span className="font-medium text-primary-ink">Публичная доска</span></span><ChevronRight className="size-3.5 shrink-0" />
       </button>
     </div>
   </div>;

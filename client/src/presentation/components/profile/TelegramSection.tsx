@@ -205,7 +205,7 @@ export function TelegramSection(): React.ReactElement {
                   )}
                 </p>
                 {!status.tgStarted && status.botDeepLink && (
-                  <p className="mbs-0.5 text-xs text-amber-700 dark:text-amber-400">
+                  <p className="mbs-0.5 text-xs text-warning">
                     Нажми Start в боте, чтобы он мог писать тебе.
                   </p>
                 )}
@@ -262,13 +262,13 @@ export function TelegramSection(): React.ReactElement {
               type="button"
               onClick={startTelegramLogin}
               disabled={connecting}
-              className="pf-tg-login-btn group relative inline-flex items-center gap-2.5 overflow-clip rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 active:translate-y-0 active:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              className="pf-tg-login-btn group relative inline-flex items-center gap-2.5 overflow-clip rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-[transform,box-shadow] duration-300 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 motion-safe:active:translate-y-0 active:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="relative z-[1] flex items-center gap-2.5">
                 {connecting ? (
                   <Loader2 className="size-5 motion-safe:animate-spin" />
                 ) : (
-                  <TelegramGlyph className="size-5 motion-safe:transition-transform duration-300 ease-out group-hover:-rotate-12 group-hover:scale-110" />
+                  <TelegramGlyph className="size-5 motion-safe:transition-transform duration-300 ease-out group-hover:-rotate-12 motion-safe:group-hover:scale-110" />
                 )}
                 <span>{connecting ? 'Привязываем…' : 'Войти через Telegram'}</span>
               </span>

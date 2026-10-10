@@ -80,7 +80,7 @@ export function ChatMessageMenu({
     target.reactions.find((r) => r.emoji === emoji)?.userIds.includes(target.currentUserId) ?? false;
 
   const item =
-    'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-foreground/[0.06] dark:hover:bg-white/[0.06]';
+    'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover';
 
   return createPortal(
     <motion.div
@@ -89,7 +89,7 @@ export function ChatMessageMenu({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.12 }}
       style={{ position: 'fixed', left: pos.left, top: pos.top, transformOrigin: 'top left' }}
-      className="z-[60] w-52 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
+      className="z-[60] w-52 rounded-lg bg-popover p-1 text-popover-foreground shadow-menu"
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* быстрые реакции */}
@@ -105,7 +105,7 @@ export function ChatMessageMenu({
                 onClose();
               }}
               className={cn(
-                'grid size-8 place-items-center rounded-md text-lg motion-safe:transition-transform hover:scale-110',
+                'grid size-8 place-items-center rounded-md text-lg motion-safe:transition-transform motion-safe:hover:scale-110',
                 mine && 'bg-primary/10',
               )}
             >

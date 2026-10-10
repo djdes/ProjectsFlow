@@ -100,7 +100,7 @@ export function ChatComposer({
       {(replyTo || editing) && (
         <div className="mbe-1 flex items-center gap-2 rounded-md border-s-2 border-primary/60 bg-primary/5 px-2 py-1 text-xs">
           <div className="min-w-0 flex-1">
-            <div className="font-medium text-primary/90">
+            <div className="font-medium text-primary-ink/90">
               {editing ? 'Редактирование' : `Ответ ${replyTo?.authorDisplayName}`}
             </div>
             <div className="line-clamp-1 text-muted-foreground">
@@ -176,7 +176,7 @@ export function ChatComposer({
             'grid size-8 shrink-0 place-items-center rounded-md transition-[color,background-color,opacity]',
             busy || (!text.trim() && files.length === 0)
               ? 'cursor-not-allowed bg-foreground/[0.06] text-muted-foreground'
-              : 'bg-primary text-primary-foreground hover:opacity-90 active:scale-95',
+              : 'bg-primary text-primary-foreground hover:opacity-90 motion-safe:active:scale-95',
           )}
         >
           <SendHorizontal className="size-4" />
@@ -198,7 +198,7 @@ function FilePreviewChip({ file, onRemove }: { file: File; onRemove: () => void 
   }, [file]);
 
   return (
-    <span className="group/chip relative inline-flex max-w-full items-center gap-1 rounded bg-foreground/[0.05] text-xs dark:bg-white/[0.06]">
+    <span className="group/chip relative inline-flex max-w-full items-center gap-1 rounded bg-foreground/[0.05] text-xs">
       {url ? (
         <img src={url} alt={file.name} className="size-9 rounded object-cover" />
       ) : (
@@ -211,7 +211,7 @@ function FilePreviewChip({ file, onRemove }: { file: File; onRemove: () => void 
         className={cn(
           'text-muted-foreground hover:text-foreground',
           url
-            ? 'absolute -end-1 -inset-bs-1 grid size-4 place-items-center rounded-full bg-background/90 shadow-sm ring-1 ring-border'
+            ? 'absolute -end-1 -inset-bs-1 grid size-4 place-items-center rounded-full bg-raised/90 shadow-card'
             : 'pe-1.5',
         )}
       >

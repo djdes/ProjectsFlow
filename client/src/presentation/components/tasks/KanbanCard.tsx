@@ -19,7 +19,7 @@ import { AssigneeBadge } from './AssigneeBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
-import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
@@ -199,15 +199,19 @@ function KanbanCardImpl({
   // The first line uses safe inline Markdown; the body supports block Markdown.
   const { title, body } = splitTitleBody(task.description ?? '');
 
-  // Есть ли что показывать в нижнем мета-оверлее. Если нет (простая однострочная задача) —
-  // не затемняем текст и не рисуем пустую градиент-полосу на hover; кнопки действий
-  // (корзина/стрелка) сами маскируют свой угол сплошным фоном.
+  // Ответственного показываем, когда это не вы: на своей доске свой аватар на каждой
+  // карточке — шум (дизайн C4: «кто» — только когда это кто-то другой).
+  const showAssignee = !currentUserId || task.assignee.userId !== currentUserId;
+  // Есть ли что показывать в нижней строке мета. Нет — строки нет вовсе (простая задача
+  // остаётся карточкой из одного заголовка).
   const hasMeta = Boolean(
-    task.assignee ||
+    showAssignee ||
       checklist ||
       (task.commentCount ?? 0) > 0 ||
       (task.attachmentCount ?? 0) > 0 ||
       (task.ralphMode && task.ralphMode !== 'normal') ||
+      task.taskType ||
+      task.priority ||
       task.deadline ||
       task.status === 'in_progress' ||
       task.status === 'awaiting_clarification',
@@ -251,7 +255,7 @@ function KanbanCardImpl({
             variant="ghost"
             size="icon"
             className={cn(
-              'group/promote shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground',
+              'group/promote shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
               big ? 'size-9' : 'size-6',
             )}
             onClick={(e) => {
@@ -275,7 +279,7 @@ function KanbanCardImpl({
             size="icon"
             disabled={withdrawing}
             className={cn(
-              'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground',
+              'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
               big ? 'size-9' : 'size-6',
             )}
             onClick={(e) => {
@@ -293,7 +297,7 @@ function KanbanCardImpl({
             variant="ghost"
             size="icon"
             className={cn(
-              'shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
+              'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-destructive',
               big ? 'size-9' : 'size-6',
             )}
             onClick={(e) => {
@@ -308,16 +312,17 @@ function KanbanCardImpl({
       </>
     ) : null;
 
-  // Мета-бейджи (ответственный / чеклист / комменты / дедлайн / статус). Десктоп — нижний
-  // левый оверлей (по hover), мобила — тот же контент в статичном нижнем ряду.
+  // Мета-бейджи (срок / приоритет / чеклист / комменты / статус / ответственный) — нижняя
+  // строка карточки, видна всегда (дизайн C4: «снизу — срок и счётчики»).
   const metaInner = hasMeta ? (
-    <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
-      <AssigneeBadge assignee={task.assignee} />
+    <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
+      {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
+      {task.priority ? <PriorityBadge priority={task.priority} /> : null}
       {checklist && (
         <span
           className={cn(
             'flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums',
-            checklist.done === checklist.total && 'text-emerald-600 dark:text-emerald-400',
+            checklist.done === checklist.total && 'text-done',
           )}
           title="Чеклист в описании"
         >
@@ -350,17 +355,22 @@ function KanbanCardImpl({
           {TASK_TYPE_META[task.taskType].label}
         </span>
       )}
-      {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
+      {/* «В работе» у воркера — синий, цвет очереди и агента (дизайн C4). */}
       {task.status === 'in_progress' && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
-          <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-primary-ink">
+          <span aria-hidden className="size-1.5 rounded-full bg-primary" />
           {STATUS_LABEL.in_progress}
         </span>
       )}
       {task.status === 'awaiting_clarification' && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-amber-600 dark:text-amber-400">
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-warning">
           <ClaudeIcon className="size-3" />
           {STATUS_LABEL.awaiting_clarification}
+        </span>
+      )}
+      {showAssignee && (
+        <span className="ms-auto flex shrink-0 items-center">
+          <AssigneeBadge assignee={task.assignee} />
         </span>
       )}
     </span>
@@ -412,33 +422,29 @@ function KanbanCardImpl({
           // При hover — только маленькая корзина (оверлей ниже).
           // Мобила — колонка (текст сверху, ряд мета/действий снизу); десктоп — как было
           // (строка: чекбокс + текст, действия/мета плавающими оверлеями).
-          'group relative flex select-none flex-col gap-1.5 rounded-xl border border-transparent bg-card px-3 py-2.5 outline-none sm:flex-row sm:items-start sm:px-2.5 sm:py-2',
-          // Ключ к «нотионовскому» виду доски: карточка НЕ залита цветом колонки, а белая
-          // (bg-card) и приподнята над её слабой тонировкой. Отделяют её не бордер, а две
-          // мягкие тени + третий слой — цветное кольцо в 1px. Цвет кольца отдаёт колонка
-          // через --pf-card-ring (KanbanColumn), фолбэк — нейтральный: карточку могут
-          // отрисовать и вне доски. Бордер оставлен ПРОЗРАЧНЫМ намеренно — хайрлайн теперь
-          // рисует кольцо, но модификаторы ниже (done / open / selected / приоритет)
-          // продолжают красить бордер ровно как раньше.
-          'shadow-[0_4px_12px_oklch(21.34%_0_none/0.027),0_1px_2px_oklch(21.34%_0_none/0.02),0_0_0_1px_var(--pf-card-ring,oklch(23.78%_0.049_82.45/0.07))]',
-          // На графите мягкая светлая тень не читается — в тёмной теме тени плотнее,
-          // а кольцо, наоборот, светлое.
-          'dark:shadow-[0_4px_12px_oklch(0%_0_none/0.28),0_1px_2px_oklch(0%_0_none/0.2),0_0_0_1px_var(--pf-card-ring,oklch(100%_0_none/0.09))]',
+          // Дизайн C4: плотная карточка — радиус 8px, отступы 7×10px (на телефоне чуть больше
+          // для чтения), заголовок 13.5px.
+          'group relative flex select-none flex-col gap-1.5 rounded-lg border border-transparent bg-card px-3 py-2.5 outline-none sm:flex-row sm:items-start sm:px-2.5 sm:py-[7px]',
+          // Карточка НЕ залита цветом колонки, а белая (bg-card) над серым листом колонки.
+          // Отделяет её кольцо 1px + мягкая тень (светлая тема) или линия (тёмная). Цвет
+          // кольца отдаёт колонка через --pf-card-ring (KanbanColumn), фолбэк — нейтральный:
+          // карточку могут отрисовать и вне доски. Бордер ПРОЗРАЧНЫЙ: модификаторы ниже
+          // (done / open / selected) красят именно его.
+          'shadow-[0_0_0_1px_var(--pf-card-ring,oklch(16.84%_0_none/0.08)),0_1px_3px_oklch(16.84%_0_none/0.06)]',
+          'dark:shadow-[0_0_0_1px_var(--pf-card-ring,oklch(31.05%_0.015_274.41))]',
+          // Наведение: светлая — глубже тень, тёмная — карточка чуть светлеет.
+          !preview && 'hover:shadow-card-hover dark:hover:bg-card-hover dark:hover:shadow-card-hover',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
-          'transition-[border-color,opacity,background-color] duration-150 ease-out',
+          'transition-[border-color,opacity,background-color,box-shadow] duration-150 ease-out',
           // Done-карточка: только зелёный хайрлайн, БЕЗ заливки. Заливка тем же цветом, что
           // и колонка, — ровно то, от чего уходит редизайн (замеры Notion §4: белая карточка
           // на цветном кольце). Побочно: плашки мета/действий на hover'е красятся сплошным
           // bg-card, и на незалитой карточке они наконец сходятся с ней в цвете.
           doneCard && 'border-success/25 hover:border-success/45',
-          // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
-          // спокойный индикатор важности в стиле Todoist (меняется в дравере).
-          task.priority && cn('border-s-2', PRIORITY_META[task.priority].border),
+          // Приоритет — флажком в нижней строке, а не цветной полосой слева (дизайн C4: без
+          // полос-рамок; цвет живёт в метке).
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-          // Status-акцент: TODO — статичный тонкий янтарный ring «задача ждёт воркера».
-          // Стоит ДО selection-ring ниже, чтобы при выделении twMerge оставил ring выбора.
-          !preview && task.status === 'todo' && 'ring-1 ring-amber-400/40 dark:ring-amber-300/20',
           // Непрочитанная: синий неон по контуру. Стоит ДО состояний выбора/открытия —
           // те временные и должны перебивать подсветку, а не спорить с ней.
           unread && !urgent && 'pf-unread',
@@ -490,17 +496,15 @@ function KanbanCardImpl({
           <span
             aria-label="Воркер работает над задачей"
             title="Воркер работает над задачей"
-            className="absolute end-1.5 inset-bs-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_oklch(64.5%_0.215_16.44/0.7)] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"
+            className="absolute end-1.5 inset-bs-1.5 z-10 size-2 rounded-full bg-destructive shadow-[0_0_6px_oklch(var(--destructive)/0.7)] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0 motion-safe:animate-pulse"
           />
         )}
 
-        {/* Действия — ДЕСКТОП: плавающий оверлей в правом верхнем углу (по hover/focus).
-            На мобиле скрыт (max-sm:hidden) — там действия в статичном нижнем ряду (ниже),
-            чтобы не перекрывать текст задачи. Сплошной bg-card маскирует текст под кнопками.
-            top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки. */}
+        {/* Действия — ДЕСКТОП: плашка быстрых действий в правом верхнем углу (по hover/focus),
+            та же, что на карточках «Входящих». На мобиле скрыта — там действия в нижнем ряду. */}
         {showActions && (
           <div
-            className="pointer-events-none absolute end-2 inset-bs-4 z-20 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:ring-white/[0.08]"
+            className="pointer-events-none absolute end-[5px] inset-bs-[5px] z-20 hidden items-center gap-px rounded-[7px] bg-raised p-0.5 opacity-0 shadow-[0_2px_6px_oklch(16.84%_0_none/0.08)] ring-1 ring-border transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:flex dark:shadow-none"
             {...stopDragProps}
           >
             {renderActions(false)}
@@ -527,7 +531,7 @@ function KanbanCardImpl({
               // На мобиле показываем ВЕСЬ текст задачи (line-clamp-none): на телефоне карточка
               // и так почти во всю ширину, обрезать нечего — юзер хочет читать задачу целиком.
               // На десктопе оставляем компактный клэмп в 4 строки.
-              <div className="max-h-[calc(4lh+0.25rem)] overflow-hidden text-sm leading-snug max-sm:max-h-none">
+              <div className="max-h-[calc(4lh+0.25rem)] overflow-hidden text-task leading-snug max-sm:max-h-none">
                 {/* Иконка задачи (эмодзи/lucide/картинка) — перед заголовком, как в Notion. */}
                 {task.icon && (
                   <span className="me-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">
@@ -539,41 +543,29 @@ function KanbanCardImpl({
                 {body.trim() && <Markdown className={TASK_CARD_BODY_CLASS}>{body}</Markdown>}
               </div>
             ) : (
-              <p className="text-sm leading-snug text-muted-foreground">—</p>
+              <p className="text-task leading-snug text-muted-foreground">—</p>
             )}
           </div>
+          {/* Нижняя строка — срок, приоритет, счётчики, ответственный (если не вы). Видна
+              всегда, в потоке под текстом; в drag-превью — тоже, карточка узнаётся целиком.
+              На телефоне справа в ней же — кнопки действий (там нет наведения). */}
+          {!selecting && (hasMeta || showActions) && (
+            <div
+              className={cn(
+                'flex min-w-0 items-center gap-2 pbs-1.5 text-2xs text-muted-foreground',
+                // Без мета строка нужна только ради кнопок телефона.
+                !hasMeta && 'sm:hidden',
+              )}
+            >
+              {metaInner ?? <span className="flex-1" />}
+              {showActions && (
+                <span className="flex shrink-0 items-center gap-0.5 sm:hidden" {...stopDragProps}>
+                  {renderActions(true)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-        {/* Мета (чеклист/комменты/дедлайн/статус…) — ЛОКАЛЬНАЯ плашка снизу-слева со своим
-            сплошным фоном: маскирует только область под самими бейджами, текст карточки не
-            затемняется. Симметрична плашке действий сверху-справа. Не занимает высоту (absolute),
-            прячется в режиме выделения и drag-preview. pointer-events-none — чтобы невидимая
-            (opacity-0) плашка не перехватывала mousedown и не мешала начать drag. */}
-        {/* Мета — ДЕСКТОП: нижний левый оверлей (по hover). На мобиле скрыт (hidden),
-            вместо него — статичный ряд ниже. */}
-        {!selecting && !preview && hasMeta && (
-          <div
-            className={cn(
-              // Нейтральный bg-card + ring — один в один как плашка действий сверху-справа
-              // (она нормально смотрится на любой карточке, включая зелёную done).
-              'pointer-events-none absolute inset-be-1 start-1 hidden max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-clip rounded-md bg-card px-1.5 py-0.5 text-2xs text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 sm:flex dark:ring-white/[0.08]',
-            )}
-          >
-            {metaInner}
-          </div>
-        )}
-
-        {/* Мета/действия — МОБИЛА: статичный ряд, прижатый ПОД текстом задачи. Всегда виден
-            (не по hover), крупные кнопки, текст выше виден целиком. На десктопе скрыт (sm:hidden).
-            border-t мягко отделяет ряд от текста. */}
-        {!selecting && !preview && (hasMeta || showActions) && (
-          <div
-            className="mbs-1 flex items-center justify-between gap-2 border-bs border-border/60 pbs-1.5 text-2xs text-muted-foreground sm:hidden"
-            {...stopDragProps}
-          >
-            <span className="flex min-w-0 flex-1 items-center overflow-hidden">{metaInner}</span>
-            {showActions && <span className="flex shrink-0 items-center gap-1">{renderActions(true)}</span>}
-          </div>
-        )}
       </div>
     </Wrapper>
   );

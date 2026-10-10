@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/presentation/auth/PasswordInput';
 import { useAuth } from '@/presentation/auth/AuthProvider';
-import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
+import { AuthFormCard, authFieldClass } from '@/presentation/auth/AuthFormCard';
+import { ErrorNote } from '@/presentation/pages/PageScaffold';
 import { InvalidCredentialsError } from '@/domain/user/errors';
 import { goToPostAuthTarget, safeNextTarget } from '@/lib/authRedirect';
 
@@ -59,12 +60,15 @@ export function LoginPage(): React.ReactElement {
       description="Войди в ProjectsFlow, чтобы открыть свои проекты."
       footer={
         <>
-          Нет аккаунта? <Link to="/register" className="font-medium text-primary hover:underline">Зарегистрироваться</Link>
+          Нет аккаунта?{' '}
+          <Link to="/register" className="font-medium text-primary-ink hover:underline">
+            Зарегистрироваться
+          </Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -72,11 +76,12 @@ export function LoginPage(): React.ReactElement {
             autoComplete="email"
             autoFocus
             required
+            className={authFieldClass}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="password">Пароль</Label>
           <PasswordInput
             id="password"
@@ -86,16 +91,12 @@ export function LoginPage(): React.ReactElement {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
-        <Button type="submit" className="w-full" disabled={submitting}>
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           {submitting ? 'Входим…' : 'Войти'}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">
-          <Link to="/forgot-password" className="font-medium text-primary hover:underline">
+        <p className="text-center text-ui">
+          <Link to="/forgot-password" className="font-medium text-primary-ink hover:underline">
             Забыли пароль?
           </Link>
         </p>

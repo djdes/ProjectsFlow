@@ -300,7 +300,7 @@ function NewTokenRevealDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          <div className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-ink">
             ⚠️ Этот токен даёт доступ ко всем твоим credentials. Не публикуй его, храни в надёжном месте.
           </div>
 
@@ -316,7 +316,7 @@ function NewTokenRevealDialog({
                 className="h-7 gap-1.5"
                 onClick={() => handleCopy('prompt', claudePrompt, 'Промпт скопирован')}
               >
-                {copiedKey === 'prompt' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                {copiedKey === 'prompt' ? <Check className="size-3.5 text-done" /> : <Copy className="size-3.5" />}
                 Скопировать промпт
               </Button>
             </div>
@@ -339,7 +339,7 @@ function NewTokenRevealDialog({
                 className="h-7 gap-1.5"
                 onClick={() => handleCopy('cmd', installCommand, 'Команда скопирована')}
               >
-                {copiedKey === 'cmd' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                {copiedKey === 'cmd' ? <Check className="size-3.5 text-done" /> : <Copy className="size-3.5" />}
                 Скопировать команду
               </Button>
             </div>
@@ -367,7 +367,7 @@ function NewTokenRevealDialog({
                 onClick={() => handleCopy('token', plaintext ?? '', 'Токен скопирован')}
                 aria-label="Скопировать"
               >
-                {copiedKey === 'token' ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
+                {copiedKey === 'token' ? <Check className="size-4 text-done" /> : <Copy className="size-4" />}
               </Button>
             </div>
           </details>

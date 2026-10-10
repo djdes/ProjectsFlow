@@ -3,24 +3,50 @@ import { Navigate, useParams } from 'react-router-dom';
 import { Loader2, Lock, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/presentation/auth/AuthProvider';
+import { ProductMark } from '@/presentation/auth/AuthFormCard';
+import { PageTopBar } from '@/presentation/layout/PageChrome';
+import { PageMessage } from '@/presentation/pages/PageScaffold';
 import { useContainer } from '@/infrastructure/di/container';
 import { boardSlugFromHost, appOrigin } from '@/lib/publicBoardUrl';
 import { HttpError } from '@/lib/HttpError';
 import type { PublicTaskAccess } from '@/domain/public/PublicBoard';
 
+// Каркас гейта: строка шапки C4 со знаком продукта и сообщение по центру.
 function Shell({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="flex h-11 items-center justify-end border-be border-black/[0.06] px-4 dark:border-white/[0.06]">
+    <div className="flex min-h-dvh flex-col bg-background">
+      <PageTopBar>
         <a
           href="/"
-          className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="flex items-center gap-2 rounded-md px-1.5 py-1 text-ui font-semibold transition-colors hover:bg-hover"
         >
+          <ProductMark className="size-5 rounded-sm text-[9px]" />
           ProjectsFlow
         </a>
-      </div>
-      <div className="mx-auto max-w-md px-6 py-24 text-center">{children}</div>
+      </PageTopBar>
+      {children}
     </div>
+  );
+}
+
+// Ожидание (кто юзер / проверка доступа) — спиннер по центру.
+function Waiting(): React.ReactElement {
+  return (
+    <Shell>
+      <div className="grid flex-1 place-items-center" role="status">
+        <Loader2 className="size-5 motion-safe:animate-spin text-muted-foreground" />
+        <span className="sr-only">Загружаем…</span>
+      </div>
+    </Shell>
+  );
+}
+
+// Значок над заголовком сообщения — нейтральная плашка.
+function GateIcon({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <span className="grid size-12 place-items-center rounded-xl bg-panel text-muted-foreground [&_svg]:size-6">
+      {children}
+    </span>
   );
 }
 
@@ -62,13 +88,7 @@ export function PublicTaskGatePage(): React.ReactElement {
   }, [status, slug, taskId, publicBoardRepository, reloadKey]);
 
   // Пока выясняем, кто юзер.
-  if (status === 'loading') {
-    return (
-      <Shell>
-        <Loader2 className="mx-auto size-5 motion-safe:animate-spin text-muted-foreground" />
-      </Shell>
-    );
-  }
+  if (status === 'loading') return <Waiting />;
 
   // Аноним → регистрация. ВАЖНО: на поддомене доски (<slug>.projectsflow.ru) роутер знает
   // только `/`, `/t/:taskId` и `*` → относительный <Link to="/login"> матчился бы на `*` и
@@ -80,39 +100,34 @@ export function PublicTaskGatePage(): React.ReactElement {
     const registerUrl = `${appOrigin()}/register?next=${back}`;
     return (
       <Shell>
-        <UserPlus className="mx-auto mbe-3 size-8 text-muted-foreground" />
-        <h1 className="text-xl font-semibold text-foreground">Войдите, чтобы открыть задачу</h1>
-        <p className="mbs-2 text-sm text-muted-foreground">
-          Отдельная страница задачи доступна участникам проекта. Зарегистрируйтесь или войдите.
-        </p>
-        <div className="mbs-5 flex items-center justify-center gap-2">
+        <PageMessage
+          className="min-h-0 flex-1"
+          icon={<GateIcon><UserPlus /></GateIcon>}
+          title="Войдите, чтобы открыть задачу"
+          description="Отдельная страница задачи доступна участникам проекта. Зарегистрируйтесь или войдите."
+        >
           <Button asChild>
             <a href={registerUrl}>Зарегистрироваться</a>
           </Button>
           <Button asChild variant="outline">
             <a href={loginUrl}>Войти</a>
           </Button>
-        </div>
+        </PageMessage>
       </Shell>
     );
   }
 
   // Залогинен — ждём результат проверки членства.
-  if (access === 'loading') {
-    return (
-      <Shell>
-        <Loader2 className="mx-auto size-5 motion-safe:animate-spin text-muted-foreground" />
-      </Shell>
-    );
-  }
+  if (access === 'loading') return <Waiting />;
 
   if (access === 'notfound') {
     return (
       <Shell>
-        <h1 className="text-xl font-semibold text-foreground">Задача не найдена</h1>
-        <p className="mbs-2 text-sm text-muted-foreground">
-          Ссылка недействительна или проект больше не опубликован.
-        </p>
+        <PageMessage
+          className="min-h-0 flex-1"
+          title="Задача не найдена"
+          description="Ссылка недействительна или проект больше не опубликован."
+        />
       </Shell>
     );
   }
@@ -120,15 +135,15 @@ export function PublicTaskGatePage(): React.ReactElement {
   if (access === 'error') {
     return (
       <Shell>
-        <h1 className="text-xl font-semibold text-foreground">Не удалось загрузить</h1>
-        <p className="mbs-2 text-sm text-muted-foreground">
-          Проверьте соединение и попробуйте ещё раз.
-        </p>
-        <div className="mbs-5 flex justify-center">
+        <PageMessage
+          className="min-h-0 flex-1"
+          title="Не удалось загрузить"
+          description="Проверьте соединение и попробуйте ещё раз."
+        >
           <Button variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
             Повторить
           </Button>
-        </div>
+        </PageMessage>
       </Shell>
     );
   }
@@ -141,12 +156,12 @@ export function PublicTaskGatePage(): React.ReactElement {
   // Залогинен, но не участник → отказ доступа.
   return (
     <Shell>
-      <Lock className="mx-auto mbe-3 size-8 text-muted-foreground" />
-      <h1 className="text-xl font-semibold text-foreground">Вы не участник этого проекта</h1>
-      <p className="mbs-2 text-sm text-muted-foreground">
-        Открыть задачу отдельной страницей могут только участники проекта. Просмотреть её можно на
-        публичной доске.
-      </p>
+      <PageMessage
+        className="min-h-0 flex-1"
+        icon={<GateIcon><Lock /></GateIcon>}
+        title="Вы не участник этого проекта"
+        description="Открыть задачу отдельной страницей могут только участники проекта. Просмотреть её можно на публичной доске."
+      />
     </Shell>
   );
 }

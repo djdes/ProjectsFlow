@@ -90,7 +90,10 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
 - Новый репозиторий → `infrastructure/http/Http<Name>Repository.ts`, реализует порт
   из `application/`, регистрируется в `container.tsx`.
 - Дизайн-токены (цвета, скругления) — CSS-переменные в `client/src/styles/globals.css`,
-  Tailwind-маппинг в `client/tailwind.config.ts`. Палитра: тёплые нейтрали + один синий акцент.
+  Tailwind-маппинг в `client/tailwind.config.ts`. Дизайн-система «C4 плотный» (светлая — Notion,
+  тёмная — C3), общая для приложения и лендинга: `docs/superpowers/specs/2026-10-10-redesign-c4-design.md`.
+  Цвет = смысл статуса (`approval`/`manual`/`done`/`primary`/`destructive`), тона проектов и людей —
+  `lib/tone.ts` + `.pf-tone-*`/`.pf-tag`; палитру Tailwind (`violet-500`…) для смыслов не используем.
 - CSS пишем по скиллу good-css (`.claude/skills/good-css`, `npx skills add vojtaholik/good-css`):
   цвета — тройки OKLCH (`--x: L% C H`, в коде `oklch(var(--x) / a)`, производные — `color-mix`);
   стороны — логические утилиты (`ms/me/ps/pe/start/end`, блочные `mbs/mbe/pbs/pbe/inset-bs/be/

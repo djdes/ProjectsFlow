@@ -26,7 +26,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
         event.stopPropagation();
         deleteNode();
       }}
-      className="absolute end-2 inset-bs-2 hidden size-7 items-center justify-center rounded-md bg-background/85 text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-background hover:text-destructive group-hover/img:flex"
+      className="absolute end-2 inset-bs-2 hidden size-7 items-center justify-center rounded-md bg-raised/90 text-muted-foreground shadow-card backdrop-blur-sm transition-colors hover:bg-raised hover:text-destructive group-hover/img:flex"
     >
       <Trash2 className="size-4" />
     </button>
@@ -36,13 +36,13 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
     <NodeViewWrapper data-figure-image="" className="my-2 flex flex-col items-start">
       {uploading && !displaySrc ? (
         <div
-          className="flex w-full flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10"
+          className="flex w-full flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-panel px-6 py-10"
           contentEditable={false}
         >
           <ImageIcon className="size-7 text-muted-foreground/60" aria-hidden />
           <div className="h-1.5 w-full max-w-md overflow-clip rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+              className="h-full rounded-full bg-primary duration-200 ease-out motion-safe:transition-[width]"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -69,13 +69,13 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
           {uploading ? (
             <div className="absolute inset-x-3 inset-be-3 overflow-clip rounded-full bg-black/25 p-0.5 backdrop-blur-sm">
               <div
-                className="h-1.5 rounded-full bg-primary transition-[width] duration-200 ease-out"
+                className="h-1.5 rounded-full bg-primary duration-200 ease-out motion-safe:transition-[width]"
                 style={{ width: `${progress}%` }}
               />
             </div>
           ) : null}
           {uploadError ? (
-            <div className="absolute inset-x-2 inset-be-2 flex items-center gap-1.5 rounded-md bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground shadow-sm">
+            <div className="absolute inset-x-2 inset-be-2 flex items-center gap-1.5 rounded-md bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground shadow-card">
               <AlertTriangle className="size-3.5 shrink-0" />
               Не удалось загрузить изображение
             </div>

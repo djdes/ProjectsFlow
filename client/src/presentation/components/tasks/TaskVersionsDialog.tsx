@@ -49,18 +49,19 @@ import {
 } from './taskVersionLabels';
 
 // Цвета статус-пилюли — как в шапке задачи (зеркало STATUS_BADGE_COLOR из TaskDrawer),
-// чтобы превью версии выглядело один-в-один со «своим» окном задачи.
-const CUSTOM_STATUS_BADGE_COLOR =
-  'bg-slate-500/15 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300';
+// чтобы превью версии выглядело один-в-один со «своим» окном задачи. Цвет = смысл
+// статуса (дизайн C4): очередь и работа — синий акцент, вручную и «ждёт уточнения» —
+// янтарь, на утверждении — фиолетовый, готово — зелёный.
+const CUSTOM_STATUS_BADGE_COLOR = 'pf-tone-gray bg-tone-bg text-tone-fg';
 const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
-  backlog: 'bg-stone-500/15 text-stone-600 dark:bg-stone-500/20 dark:text-stone-300',
-  manual: 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
-  todo: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
-  in_progress: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
-  awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
-  pending_approval: 'bg-violet-500/15 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
-  done: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-400',
-  // Кастомные колонки (db/154) — нейтральный slate, как в шапке задачи.
+  backlog: 'bg-muted text-muted-foreground',
+  manual: 'bg-manual-soft text-manual-ink',
+  todo: 'bg-primary-soft text-primary-ink',
+  in_progress: 'bg-primary-soft text-primary-ink',
+  awaiting_clarification: 'bg-manual-soft text-manual-ink',
+  pending_approval: 'bg-approval-soft text-approval-ink',
+  done: 'bg-done-soft text-done-ink',
+  // Кастомные колонки (db/154) — нейтральный серый тон, как в шапке задачи.
   custom_1: CUSTOM_STATUS_BADGE_COLOR,
   custom_2: CUSTOM_STATUS_BADGE_COLOR,
   custom_3: CUSTOM_STATUS_BADGE_COLOR,
@@ -113,7 +114,7 @@ function DiffText({ oldText, newText }: { oldText: string; newText: string }): R
         p.added ? (
           <span
             key={idx}
-            className="rounded bg-blue-500/20 text-blue-700 dark:bg-blue-400/25 dark:text-blue-100"
+            className="rounded bg-primary-soft text-primary-ink"
           >
             {p.text}
           </span>
@@ -128,7 +129,7 @@ function DiffText({ oldText, newText }: { oldText: string; newText: string }): R
 // Обёртка значения свойства: синее кольцо, если оно изменилось относительно предыдущей версии.
 function ChangedMark({ changed, children }: { changed: boolean; children: React.ReactNode }): React.ReactElement {
   return (
-    <span className={cn('inline-flex items-center rounded', changed && 'ring-2 ring-blue-500/50 ring-offset-1 ring-offset-background')}>
+    <span className={cn('inline-flex items-center rounded', changed && 'ring-2 ring-primary/50 ring-offset-1 ring-offset-background')}>
       {children}
     </span>
   );
@@ -367,7 +368,7 @@ export function TaskVersionsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-black/70 backdrop-blur-[1px]"
-        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-[0_24px_80px_oklch(0%_0_none/0.55)] sm:rounded-xl"
+        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-float sm:rounded-xl"
       >
         {/* Заголовок + основное действие справа сверху (как в Notion Version history):
             кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4). */}
@@ -447,8 +448,8 @@ export function TaskVersionsDialog({
                         'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-start text-sm transition-colors',
                         locked
                           ? 'cursor-not-allowed text-muted-foreground/60'
-                          : 'hover:bg-accent',
-                        v.id === selectedId && !locked && 'bg-accent font-medium',
+                          : 'hover:bg-hover',
+                        v.id === selectedId && !locked && 'bg-active font-medium',
                       )}
                     >
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">

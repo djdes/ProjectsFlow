@@ -23,6 +23,7 @@ import { usePublicBoard } from '@/presentation/hooks/usePublicBoard';
 import { appOrigin, boardSlugFromHost, publicBoardUrl } from '@/lib/publicBoardUrl';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -32,12 +33,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { PublicBoard } from '@/domain/public/PublicBoard';
+import { PageTopBar } from '@/presentation/layout/PageChrome';
+import { PageMessage } from '@/presentation/pages/PageScaffold';
 import { PublicKanban } from './PublicKanban';
 import { PublicTaskPanel } from './PublicTaskPanel';
 
 // Общий класс тихой icon-кнопки/ссылки верхней полосы.
 const TOP_ICON_CLS =
-  'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]';
+  'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground';
 
 function TopIconButton({
   label,
@@ -54,7 +57,7 @@ function TopIconButton({
 // Мини-превью доски в поповере «Поделиться» (обложка + иконка + имя) — как карточка в Notion.
 function SharePreview({ board }: { board: PublicBoard | null }): React.ReactElement {
   return (
-    <div className="overflow-clip rounded-lg border bg-card">
+    <div className="overflow-clip rounded-lg bg-card shadow-card">
       <div
         className="h-12 w-full bg-muted"
         style={board?.coverUrl ? coverStyle(board.coverUrl, board.coverPosition) : undefined}
@@ -62,7 +65,9 @@ function SharePreview({ board }: { board: PublicBoard | null }): React.ReactElem
       />
       <div className="flex items-center gap-2 px-3 py-2.5">
         {board?.appearance.showIcon && board.icon && (
-          <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
+          <span className="grid size-5 shrink-0 place-items-center text-base leading-none">
+            <ProjectIconView icon={board.icon} pixelSize={18} />
+          </span>
         )}
         <span className="truncate text-sm font-semibold">{board?.name ?? 'Доска'}</span>
       </div>
@@ -102,13 +107,14 @@ function SharePopover({ board, url }: { board: PublicBoard | null; url: string }
         <p className="mbe-3 text-center text-sm font-semibold">Поделиться доской</p>
         <SharePreview board={board} />
         <div className="mbs-3 flex items-center gap-1.5">
-          <input
+          <Input
             readOnly
             value={url}
+            aria-label="Ссылка на доску"
             onFocus={(e) => e.currentTarget.select()}
-            className="h-9 min-w-0 flex-1 rounded-md border bg-muted/40 px-2.5 text-xs text-muted-foreground outline-none"
+            className="min-w-0 flex-1 text-xs text-muted-foreground"
           />
-          <Button size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => void copy()}>
+          <Button className="shrink-0 gap-1.5" onClick={() => void copy()}>
             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
             {copied ? 'Готово' : 'Копировать'}
           </Button>
@@ -122,7 +128,7 @@ function SharePopover({ board, url }: { board: PublicBoard | null; url: string }
               rel="noopener noreferrer"
               aria-label={s.label}
               title={s.label}
-              className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-active hover:text-foreground"
             >
               {s.icon}
             </a>
@@ -164,7 +170,7 @@ function ReportDialog({
         <DialogHeader>
           <DialogTitle>Почему вы жалуетесь на эту страницу?</DialogTitle>
         </DialogHeader>
-        <div className="rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+        <div className="rounded-lg bg-panel p-3 text-xs leading-relaxed text-muted-foreground">
           Страница размещена на ProjectsFlow. Эта форма — для жалоб на нарушение правил. Это не
           форма связи с автором страницы.
         </div>
@@ -174,9 +180,10 @@ function ReportDialog({
               key={r}
               type="button"
               onClick={() => setReason(r)}
+              aria-pressed={reason === r}
               className={cn(
-                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-accent',
-                reason === r && 'bg-accent',
+                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-hover',
+                reason === r && 'bg-active',
               )}
             >
               <span
@@ -195,11 +202,7 @@ function ReportDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Отмена
           </Button>
-          <Button
-            disabled={!reason}
-            onClick={submit}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
+          <Button variant="destructive" disabled={!reason} onClick={submit}>
             Пожаловаться
           </Button>
         </div>
@@ -282,7 +285,7 @@ function SearchModal({
         </div>
         <div className="flex h-[min(60vh,26rem)]">
           <div className="w-full overflow-y-auto border-e p-2 sm:w-1/2">
-            <p className="px-2 pbe-1 pbs-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            <p className="px-2 pbe-1 pbs-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Задачи
             </p>
             {results.length === 0 ? (
@@ -298,11 +301,13 @@ function SearchModal({
                     onClick={() => pick(t.id)}
                     className={cn(
                       'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors',
-                      active?.id === t.id ? 'bg-accent' : 'hover:bg-accent/60',
+                      active?.id === t.id ? 'bg-active' : 'hover:bg-hover',
                     )}
                   >
                     {t.icon ? (
-                      <ProjectIconView icon={t.icon} pixelSize={16} className="shrink-0 text-base leading-none" />
+                      <span className="grid size-4 shrink-0 place-items-center text-sm leading-none">
+                        <ProjectIconView icon={t.icon} pixelSize={16} />
+                      </span>
                     ) : (
                       <span className="size-4 shrink-0" />
                     )}
@@ -317,7 +322,7 @@ function SearchModal({
               <button
                 type="button"
                 onClick={() => pick(active.id)}
-                className="block w-full overflow-clip rounded-lg border text-start transition-shadow hover:shadow-md"
+                className="block w-full overflow-clip rounded-lg bg-card text-start shadow-card transition-[box-shadow,background-color] hover:shadow-card-hover dark:hover:bg-card-hover"
               >
                 <div
                   className="h-16 w-full bg-muted"
@@ -326,7 +331,9 @@ function SearchModal({
                 />
                 <div className="p-3">
                   {active.icon && (
-                    <ProjectIconView icon={active.icon} pixelSize={22} className="mbe-1 text-xl leading-none" />
+                    <span className="mbe-1 grid size-7 place-items-center text-xl leading-none">
+                      <ProjectIconView icon={active.icon} pixelSize={22} />
+                    </span>
                   )}
                   <p className="font-semibold leading-snug">
                     {splitTitleBody(active.description ?? '').title || 'Без названия'}
@@ -361,42 +368,54 @@ function PublicTopBar({
   const registerHref = `${appOrigin()}/register`;
 
   return (
-    <div className="flex h-11 items-center justify-between gap-2 border-be border-black/[0.06] px-3 dark:border-white/[0.06]">
-      <div className="flex min-w-0 items-center gap-1.5">
+    <PageTopBar
+      end={
+        <>
+          <div className="flex items-center gap-0.5">
+            <TopIconButton label="Поиск" onClick={() => setSearchOpen(true)}>
+              <Search className="size-4" />
+            </TopIconButton>
+            <SharePopover board={board} url={shareUrl} />
+            <a
+              href={`${appOrigin()}/duplicate?slug=${encodeURIComponent(slug)}`}
+              aria-label="Дублировать в свой ProjectsFlow"
+              title="Дублировать в свой ProjectsFlow"
+              className={TOP_ICON_CLS}
+            >
+              <Copy className="size-4" />
+            </a>
+            <MoreMenu onReport={() => setReportOpen(true)} />
+          </div>
+          {/* Цвет кнопки выбрал владелец доски (настройки публикации), поэтому он задан
+              стилем, а текст на нём — белый: тёмная тема не меняет выбранный им цвет. Пока
+              доски нет (грузится или не найдена) — обычная главная кнопка приложения. */}
+          <a
+            href={registerHref}
+            className={cn(
+              'inline-flex h-8 items-center rounded-md px-3 text-ui font-semibold transition-opacity hover:opacity-90',
+              board ? 'text-white' : 'bg-primary text-primary-foreground',
+            )}
+            style={board ? { backgroundColor: board.appearance.accentColor } : undefined}
+          >
+            Попробовать ProjectsFlow
+          </a>
+
+          <SearchModal open={searchOpen} onOpenChange={setSearchOpen} board={board} onOpenTask={onOpenTask} />
+          <ReportDialog open={reportOpen} onOpenChange={setReportOpen} url={shareUrl} />
+        </>
+      }
+    >
+      <div className="flex min-w-0 items-center gap-1.5 px-1.5">
+        {/* Квадрат под иконку обязателен: эмодзи в ProjectIconView занимает всю площадь
+            контейнера и без него растягивался на всю строку, пряча имя доски. */}
         {board?.icon && (
-          <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
+          <span className="grid size-5 shrink-0 place-items-center text-base leading-none">
+            <ProjectIconView icon={board.icon} pixelSize={18} />
+          </span>
         )}
-        <span className="truncate text-sm font-medium text-[oklch(32.89%_0.011_91.66/0.8)] dark:text-blue-100/80">
-          {board?.name ?? ''}
-        </span>
+        <span className="truncate text-ui font-medium text-foreground">{board?.name ?? ''}</span>
       </div>
-
-      <div className="flex shrink-0 items-center gap-0.5">
-        <TopIconButton label="Поиск" onClick={() => setSearchOpen(true)}>
-          <Search className="size-4" />
-        </TopIconButton>
-        <SharePopover board={board} url={shareUrl} />
-        <a
-          href={`${appOrigin()}/duplicate?slug=${encodeURIComponent(slug)}`}
-          aria-label="Дублировать в свой ProjectsFlow"
-          title="Дублировать в свой ProjectsFlow"
-          className={TOP_ICON_CLS}
-        >
-          <Copy className="size-4" />
-        </a>
-        <MoreMenu onReport={() => setReportOpen(true)} />
-        <a
-          href={registerHref}
-          className="ms-1 rounded-md px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: board?.appearance.accentColor ?? 'oklch(60.58% 0.167 252.7)' }}
-        >
-          Попробовать ProjectsFlow
-        </a>
-      </div>
-
-      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} board={board} onOpenTask={onOpenTask} />
-      <ReportDialog open={reportOpen} onOpenChange={setReportOpen} url={shareUrl} />
-    </div>
+    </PageTopBar>
   );
 }
 
@@ -444,15 +463,15 @@ function BoardView({
         {/* Шапка: иконка + имя + описание. */}
         <header className={board.appearance.showCover && board.coverUrl ? '-mbs-8' : 'mbs-8'}>
           {board.appearance.showIcon && board.icon && (
-            <div className="mbe-2 grid size-16 place-items-center rounded-xl bg-white text-[44px] leading-none shadow-[0_1px_3px_oklch(20.77%_0.04_265.75/0.12)] dark:bg-[oklch(24.35%_0_none)]">
+            <div className="mbe-2 grid size-16 place-items-center rounded-xl bg-card text-[44px] leading-none shadow-card">
               <ProjectIconView icon={board.icon} pixelSize={40} className="text-[40px]" />
             </div>
           )}
-          <h1 className="text-3xl font-bold tracking-tight text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50">
+          <h1 className="text-title font-bold leading-tight tracking-[-0.01em] text-foreground">
             {board.name}
           </h1>
           {board.appearance.showDescription && board.description && (
-            <p className="mbs-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[oklch(32.89%_0.011_91.66/0.8)] dark:text-blue-100/80">
+            <p className="mbs-2 whitespace-pre-wrap text-base leading-relaxed text-muted-foreground">
               {board.description}
             </p>
           )}
@@ -491,10 +510,7 @@ export function PublicBoardPage(): React.ReactElement {
   };
 
   return (
-    <div
-      className="min-h-dvh bg-background pbe-[calc(4rem+env(safe-area-inset-bottom,0px))]"
-      style={{ '--pf-public-accent': board?.appearance.accentColor ?? 'oklch(60.58% 0.167 252.7)' } as React.CSSProperties}
-    >
+    <div className="min-h-dvh bg-background pbe-[calc(4rem+env(safe-area-inset-bottom,0px))]">
       {/* Верхняя полоса — реплика публичной страницы Notion. */}
       <PublicTopBar board={board} slug={slug} onOpenTask={openTask} />
 
@@ -505,19 +521,19 @@ export function PublicBoardPage(): React.ReactElement {
       )}
 
       {status === 'notfound' && (
-        <div className="mx-auto max-w-md px-8 py-24 text-center">
-          <h1 className="text-xl font-semibold text-foreground">Доска не найдена</h1>
-          <p className="mbs-2 text-sm text-muted-foreground">
-            Ссылка недействительна или проект больше не опубликован.
-          </p>
-        </div>
+        <PageMessage
+          className="min-h-0 py-24"
+          title="Доска не найдена"
+          description="Ссылка недействительна или проект больше не опубликован."
+        />
       )}
 
       {status === 'error' && (
-        <div className="mx-auto max-w-md px-8 py-24 text-center">
-          <h1 className="text-xl font-semibold text-foreground">Не удалось загрузить</h1>
-          <p className="mbs-2 text-sm text-muted-foreground">Попробуйте обновить страницу позже.</p>
-        </div>
+        <PageMessage
+          className="min-h-0 py-24"
+          title="Не удалось загрузить"
+          description="Попробуйте обновить страницу позже."
+        />
       )}
 
       {status === 'ready' && board && <BoardView board={board} onOpenTask={openTask} />}

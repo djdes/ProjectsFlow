@@ -126,7 +126,7 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
       {commits !== null && commits.length > 0 && (
         <ul className="space-y-2">
           {commits.map((c) => (
-            <li key={c.sha} className="flex items-start gap-3 rounded-md p-2 hover:bg-muted/40">
+            <li key={c.sha} className="flex items-start gap-3 rounded-md p-2 hover:bg-hover">
               {c.authorAvatarUrl ? (
                 <img
                   src={c.authorAvatarUrl}

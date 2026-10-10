@@ -1,18 +1,28 @@
 import { Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { splitTitleBody } from '@/lib/taskTitleBody';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import type { TaskStatus } from '@/domain/task/Task';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { ColumnPreviewList } from '@/presentation/components/tasks/ColumnPreview';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import type { PublicColumn, PublicTask } from '@/domain/public/PublicBoard';
 
-// Цвет-точка приоритета (Todoist-style): 1=urgent…4=low. null = без точки.
-const PRIORITY_COLOR: Record<1 | 2 | 3 | 4, string> = {
-  1: 'oklch(63.68% 0.208 25.33)',
-  2: 'oklch(76.86% 0.1647 70.08)',
-  3: 'oklch(62.31% 0.188 259.81)',
-  4: 'oklch(71.07% 0.035 256.79)',
+// Тон метки статуса в шапке колонки — цвет = смысл, как на досках приложения: на утверждении
+// фиолетовый, вручную янтарный, очередь/в работе синий, готово зелёный, остальное серое.
+// Классы выписаны буквально, чтобы Tailwind их видел.
+const STATUS_TONE: Partial<Record<TaskStatus, string>> = {
+  pending_approval: 'pf-tone-approval',
+  manual: 'pf-tone-manual',
+  todo: 'pf-tone-queue',
+  in_progress: 'pf-tone-queue',
+  done: 'pf-tone-done',
 };
+
+export function publicStatusTone(status: TaskStatus): string {
+  return STATUS_TONE[status] ?? 'pf-tone-gray';
+}
 
 function fmtDeadline(iso: string): string {
   try {
@@ -33,33 +43,34 @@ function PublicCard({
 }): React.ReactElement {
   const { title } = splitTitleBody(task.description ?? '');
   return (
+    // Карточка C4 — как на досках приложения: белая на серой колонке, держится тенью-кольцом,
+    // при наведении тень глубже (в тёмной теме — ступень светлее).
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className="w-full overflow-clip rounded-lg border border-black/[0.06] bg-white text-start transition-colors hover:border-[var(--pf-public-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pf-public-accent)] dark:border-white/[0.08] dark:bg-white/[0.04]"
+      className="w-full overflow-clip rounded-lg bg-card text-start shadow-card transition-[box-shadow,background-color] hover:shadow-card-hover dark:hover:bg-card-hover"
     >
       {task.cover && (
         <div className="h-16 w-full" style={coverStyle(task.cover, task.coverPosition)} aria-hidden />
       )}
-      <div className="flex items-start gap-2 px-3 py-2.5">
+      <div className="flex items-start gap-2 px-2.5 py-[7px]">
         {task.icon && (
-          <span className="mbs-[1px] grid size-4 shrink-0 place-items-center text-[15px] leading-none">
+          <span className="mbs-px grid size-4 shrink-0 place-items-center text-sm leading-none">
             <ProjectIconView icon={task.icon} pixelSize={15} />
           </span>
         )}
-        <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-[oklch(32.89%_0.011_91.66)] dark:text-blue-50">
+        <span className="min-w-0 flex-1 break-words text-task leading-snug text-card-foreground">
           {title || 'Без названия'}
         </span>
         {showMeta && task.priority && (
           <span
-            className="mbs-[5px] size-2 shrink-0 rounded-full"
-            style={{ backgroundColor: PRIORITY_COLOR[task.priority] }}
+            className={cn('mbs-[5px] size-2 shrink-0 rounded-full', PRIORITY_META[task.priority].dotColor)}
             aria-hidden
           />
         )}
       </div>
       {showMeta && task.deadline && (
-        <div className="flex items-center gap-1 px-3 pbe-2.5 text-[11px] text-[oklch(32.89%_0.011_91.66/0.5)] dark:text-blue-100/50">
+        <div className="flex items-center gap-1 px-2.5 pbe-[7px] text-meta text-muted-foreground">
           <Calendar className="size-3" />
           {fmtDeadline(task.deadline)}
         </div>
@@ -88,14 +99,21 @@ export function PublicKanban({
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pbe-4">
+    <div className="flex items-start gap-3 overflow-x-auto overscroll-x-contain pbe-4">
       {visible.map((col) => (
-        <section key={col.status} className="flex w-64 shrink-0 flex-col gap-2">
-          <header className="flex items-center gap-2 px-1 text-[13px] font-medium text-[oklch(32.89%_0.011_91.66/0.7)] dark:text-blue-100/70">
-            <span>{STATUS_LABEL[col.status]}</span>
-            <span className="text-[oklch(32.89%_0.011_91.66/0.4)] dark:text-blue-100/40">{col.tasks.length}</span>
+        // Колонка C4: серая панель, шапка 28px — метка статуса цветом смысла и счётчик.
+        <section
+          key={col.status}
+          aria-label={STATUS_LABEL[col.status]}
+          className="flex w-64 shrink-0 flex-col gap-[5px] rounded-xl bg-panel p-1.5"
+        >
+          <header className="flex h-7 items-center gap-1.5 px-1">
+            <span className={cn('pf-tag pf-tag-lg', publicStatusTone(col.status))}>
+              <span className="truncate">{STATUS_LABEL[col.status]}</span>
+            </span>
+            <span className="text-meta tabular-nums text-muted-foreground">{col.tasks.length}</span>
           </header>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-[5px]">
             {/* Порциями по 4 + «Показать ещё» — как на внутренних досках. */}
             <ColumnPreviewList
               items={col.tasks}

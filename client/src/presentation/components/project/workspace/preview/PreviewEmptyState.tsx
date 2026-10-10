@@ -25,9 +25,9 @@ export function PreviewEmptyState({
 }): React.ReactElement {
   if (runtime?.kind === 'server_app') {
     return (
-      <div className="grid min-h-[440px] place-items-center rounded-xl border border-dashed bg-muted/10 px-6 py-10">
+      <div className="grid min-h-[440px] place-items-center rounded-xl border border-dashed bg-panel px-6 py-10">
         <div className="max-w-lg text-center">
-          <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-amber-500/10 text-amber-600">
+          <span className="mx-auto grid size-12 place-items-center rounded-xl bg-warning-soft text-warning">
             <ServerCog className="size-6" />
           </span>
           <h2 className="mbs-4 text-lg font-semibold">Проекту нужен собственный сервер</h2>
@@ -44,7 +44,7 @@ export function PreviewEmptyState({
             <ul className="mbs-2 space-y-1.5">
               {runtime.reasons.map((reason) => (
                 <li key={reason} className="flex gap-2 text-sm leading-6">
-                  <span aria-hidden className="mbs-2 size-1.5 shrink-0 rounded-full bg-amber-500" />
+                  <span aria-hidden className="mbs-2 size-1.5 shrink-0 rounded-full bg-warning" />
                   <span className="min-w-0 break-words">{reason}</span>
                 </li>
               ))}
@@ -64,9 +64,9 @@ export function PreviewEmptyState({
   }
 
   return (
-    <div className="grid min-h-[440px] place-items-center rounded-xl border border-dashed bg-muted/10 px-6">
+    <div className="grid min-h-[440px] place-items-center rounded-xl border border-dashed bg-panel px-6">
       <div className="max-w-md text-center">
-        <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-blue-500/10 text-blue-600">
+        <span className="mx-auto grid size-12 place-items-center rounded-xl bg-primary-soft text-primary">
           <Monitor className="size-6" />
         </span>
         <h2 className="mbs-4 text-lg font-semibold">Preview появится после первого запуска</h2>
@@ -120,7 +120,7 @@ function ConvertButton({ projectId }: { projectId: string }): React.ReactElement
     return (
       <a
         href={`/projects/${projectId}/tasks/${done}`}
-        className="mbs-5 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline"
+        className="mbs-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary-ink hover:underline"
       >
         Открыть задачу на перевод
         <ArrowRight className="size-4" />

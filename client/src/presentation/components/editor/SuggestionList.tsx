@@ -66,7 +66,7 @@ export const SuggestionList = React.forwardRef<SuggestionListHandle, SuggestionL
 
     if (!items.length) {
       return (
-        <div className="min-w-[12rem] rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
+        <div className="min-w-[12rem] rounded-lg bg-popover p-1 text-popover-foreground shadow-menu">
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Ничего не найдено</div>
         </div>
       );
@@ -76,7 +76,7 @@ export const SuggestionList = React.forwardRef<SuggestionListHandle, SuggestionL
     return (
       // relative-обёртка: список слева, превью-карточка активного пункта справа (Notion-style).
       <div className="relative flex items-start">
-        <div className="max-h-72 min-w-[14rem] overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
+        <div className="max-h-72 min-w-[14rem] overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-menu">
           {items.map((it, i) => (
             <button
               key={it.id}
@@ -103,15 +103,16 @@ export const SuggestionList = React.forwardRef<SuggestionListHandle, SuggestionL
             </button>
           ))}
         </div>
-        {/* Превью активного пункта — тёмная карточка справа: сверху пример рендера блока,
-            снизу подпись (что делает пункт). Показываем только если у пункта есть preview. */}
+        {/* Превью активного пункта — карточка справа на поверхности меню (как список слева):
+            сверху пример рендера блока на сером листе, снизу подпись (что делает пункт).
+            Показываем только если у пункта есть preview. */}
         {active?.preview ? (
-          <div className="pointer-events-none ms-2 hidden w-56 shrink-0 overflow-clip rounded-lg bg-neutral-900 shadow-xl ring-1 ring-black/20 sm:block">
-            <div className="min-h-[4.5rem] bg-neutral-800/60 px-3.5 py-3 text-neutral-100">
+          <div className="pointer-events-none ms-2 hidden w-56 shrink-0 overflow-clip rounded-lg bg-popover text-popover-foreground shadow-menu sm:block">
+            <div className="min-h-[4.5rem] border-be bg-panel px-3.5 py-3 text-foreground">
               {active.preview}
             </div>
             {active.description ? (
-              <div className="px-3.5 py-2.5 text-xs leading-snug text-neutral-400">
+              <div className="px-3.5 py-2.5 text-xs leading-snug text-muted-foreground">
                 {active.description}
               </div>
             ) : null}

@@ -19,7 +19,7 @@ export function AiPromptSheet({ open, onOpenChange, element, status, message, on
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
-        <SheetHeader className="border-be px-5 py-4 text-start"><SheetTitle className="flex items-center gap-2"><Sparkles className="size-4 text-blue-500" />Изменить с ИИ</SheetTitle><SheetDescription>{element ? `ИИ получит только выбранный ${element.locator.tagName.toLowerCase()}, ограниченный snapshot и ваш запрос.` : 'Выберите область, блок, кнопку, текст или изображение.'}</SheetDescription></SheetHeader>
+        <SheetHeader className="border-be px-5 py-4 text-start"><SheetTitle className="flex items-center gap-2"><Sparkles className="size-4 text-primary" />Изменить с ИИ</SheetTitle><SheetDescription>{element ? `ИИ получит только выбранный ${element.locator.tagName.toLowerCase()}, ограниченный snapshot и ваш запрос.` : 'Выберите область, блок, кнопку, текст или изображение.'}</SheetDescription></SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
           {element && <div className="rounded-lg border bg-muted/30 p-3 text-xs"><p className="font-medium">{element.label}</p><p className="mbs-1 truncate text-muted-foreground">{element.locator.selector}</p></div>}
           <label htmlFor="site-editor-ai-prompt" className="text-sm font-medium">Что изменить только в этом элементе?</label>

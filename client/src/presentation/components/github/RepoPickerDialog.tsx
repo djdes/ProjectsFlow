@@ -151,7 +151,7 @@ export function RepoPickerDialog({
                       type="button"
                       disabled={(!selectionOnly && saving) || isCurrent}
                       onClick={() => handlePick(repo)}
-                      className="group flex w-full flex-col items-start gap-1 rounded-md border bg-card p-3 text-start transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      className="group flex w-full flex-col items-start gap-1 rounded-md border bg-card p-3 text-start transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <div className="flex w-full items-center gap-2">
                         <span className="truncate font-mono text-sm font-medium">

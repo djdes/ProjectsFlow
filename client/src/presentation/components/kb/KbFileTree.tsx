@@ -61,7 +61,7 @@ export function KbFileTree({
                   aria-label="Быстрое создание credential"
                   title="Быстрое создание credential (paste KEY:VALUE)"
                   onClick={() => onBulkCreate(folder)}
-                  className="invisible rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground group-hover:visible"
+                  className="invisible rounded p-0.5 transition-colors hover:bg-hover hover:text-foreground group-hover:visible"
                 >
                   <KeyRound className="size-3" />
                 </button>
@@ -71,7 +71,7 @@ export function KbFileTree({
                   type="button"
                   aria-label={`Создать заметку в ${folder}`}
                   onClick={() => onNewFile(folder)}
-                  className="invisible rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground group-hover:visible"
+                  className="invisible rounded p-0.5 transition-colors hover:bg-hover hover:text-foreground group-hover:visible"
                 >
                   <Plus className="size-3" />
                 </button>
@@ -90,14 +90,14 @@ export function KbFileTree({
                       type="button"
                       onClick={() => onPick(d.path)}
                       className={cn(
-                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-muted',
-                        activePath === d.path && 'bg-accent text-accent-foreground',
+                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors hover:bg-hover',
+                        activePath === d.path && 'bg-active text-foreground',
                       )}
                     >
                       <span className="flex-1 truncate">{title}</span>
                       {d.validationErrors.length > 0 && (
                         <FileWarning
-                          className="size-3.5 shrink-0 text-amber-500"
+                          className="size-3.5 shrink-0 text-warning"
                           aria-label="invalid frontmatter"
                         />
                       )}

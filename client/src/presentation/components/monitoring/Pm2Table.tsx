@@ -34,7 +34,7 @@ export function Pm2Table({ pm2 }: { pm2: ReadonlyArray<Pm2ProcessSnapshot> }): R
                 <td
                   className={cn(
                     'py-1.5 pe-3 tabular-nums',
-                    recent && 'font-medium text-amber-600 dark:text-amber-400',
+                    recent && 'font-medium text-warning',
                   )}
                   title={recent ? 'Недавно перезапущен' : undefined}
                 >

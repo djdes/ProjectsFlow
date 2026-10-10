@@ -29,6 +29,7 @@ import {
 import { normalizePreviewPath } from '@/presentation/components/project/workspace/preview/path';
 import type { PreviewEditRequest, PreviewSelectionRequest } from '@/presentation/components/project/workspace/ProjectPreview';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
+import { PageMessage } from '@/presentation/pages/PageScaffold';
 
 type StudioData = {
   project: Project;
@@ -215,16 +216,19 @@ export function ProjectStudioPage({ projectId: projectIdProp }: { projectId?: st
     }
     if (error || !data) {
       return (
-        <div className="grid h-full place-items-center px-6 text-center">
-          <div className="max-w-md">
-            <AlertCircle className="mx-auto size-7 text-destructive" />
-            <h1 className="mbs-3 text-lg font-semibold">Project Studio не открылся</h1>
-            <p className="mbs-1.5 text-sm leading-6 text-muted-foreground">{error ?? 'Неизвестная ошибка.'}</p>
-            <Button type="button" variant="outline" className="mbs-4" onClick={() => setReload((value) => value + 1)}>
-              Повторить
-            </Button>
-          </div>
-        </div>
+        <PageMessage
+          icon={(
+            <span className="grid size-10 place-items-center rounded-xl bg-destructive-soft text-destructive">
+              <AlertCircle className="size-5" aria-hidden="true" />
+            </span>
+          )}
+          title="Project Studio не открылся"
+          description={error ?? 'Неизвестная ошибка.'}
+        >
+          <Button type="button" variant="outline" onClick={() => setReload((value) => value + 1)}>
+            Повторить
+          </Button>
+        </PageMessage>
       );
     }
     return null;

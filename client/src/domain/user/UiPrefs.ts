@@ -8,9 +8,10 @@
 export const ASSIGNED_GROUPINGS = ['project', 'created', 'deadline', 'priority', 'taskType'] as const;
 export type AssignedGrouping = (typeof ASSIGNED_GROUPINGS)[number];
 
-// Дефолт — «дедлайн»: блок ответственных открывается 3 колонками по времени (Без срока/
-// Сегодня/Будущее) с drag-переносом; проект/дата/приоритет — опциональные бордер-блоки.
-export const DEFAULT_ASSIGNED_GROUPING: AssignedGrouping = 'deadline';
+// Дефолт — «проект» (дизайн C4 «Одна доска»): «Входящие» открываются очередью по проектам
+// рядом с закреплённой колонкой «Сейчас»; срок/дата/приоритет/тип — по выбору в «Фильтрах».
+// Сохранённый выбор пользователя (users.ui_prefs) дефолт не перебивает.
+export const DEFAULT_ASSIGNED_GROUPING: AssignedGrouping = 'project';
 
 // Человекочитаемые подписи режимов — для дропдауна. Кириллица (пользовательские строки).
 export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {

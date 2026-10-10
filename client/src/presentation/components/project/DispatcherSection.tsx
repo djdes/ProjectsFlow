@@ -143,7 +143,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
                   </span>
                 </p>
               ) : (
-                <p className="text-amber-600 dark:text-amber-400">
+                <p className="text-warning">
                   Назначен юзер, который больше не подключён как ralph-кандидат — назначь
                   кого-то другого или сними.
                 </p>

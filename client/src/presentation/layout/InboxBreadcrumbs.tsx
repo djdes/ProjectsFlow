@@ -16,8 +16,8 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useSwitchWorkspace } from '@/presentation/hooks/useSwitchWorkspace';
 import { WorkspaceIcon } from './WorkspaceIcon';
 
-// Хлебные крошки «Входящих» в Notion-стиле: «<Пространство> ▾ · Входящие». Сегмент
-// пространства раскрывается ПРИ НАВЕДЕНИИ (как ProjectBreadcrumbs) и даёт быстро
+// Хлебные крошки страниц пространства в Notion-стиле: «<Пространство> ▾ › <Страница>».
+// Сегмент пространства раскрывается ПРИ НАВЕДЕНИИ (как ProjectBreadcrumbs) и даёт быстро
 // переключить пространство. Зеркалит хелпер hover-меню из ProjectBreadcrumbs (намеренно
 // дублируем малый код, чтобы не лезть в чужой файл и не ловить конфликт со встречной сессией).
 
@@ -46,17 +46,23 @@ function useHoverMenu(): {
   return { open, setOpen, openNow, closeSoon };
 }
 
-// Notion-style: hover — нейтральная заливка bg-hover; текущий сегмент — отчётливая мягкая
-// «пилюля» (более плотная заливка), чтобы текущая страница ясно читалась.
+// Дизайн C4: крошки — 13px, вторичный цвет; текущая страница — основным цветом без подложки,
+// у остальных сегментов мягкая подложка по наведению.
 const segmentClass = (current?: boolean): string =>
   cn(
-    'flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors',
-    current
-      ? 'bg-foreground/[0.08] font-medium text-foreground dark:bg-white/[0.10]'
-      : 'text-muted-foreground hover:bg-hover hover:text-foreground',
+    'flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors',
+    current ? 'text-foreground' : 'text-muted-foreground hover:bg-hover hover:text-foreground',
   );
 
-export function InboxBreadcrumbs(): React.ReactElement {
+// Крошки «<Пространство> ▾ › <иконка> <страница>» для разделов вне проекта: входящие,
+// профиль, настройки, администрирование, мониторинг.
+export function WorkspaceCrumbs({
+  icon,
+  label,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+}): React.ReactElement {
   const navigate = useNavigate();
   const { workspace } = useCurrentWorkspace();
   const { data: workspaces } = useWorkspaces();
@@ -74,7 +80,7 @@ export function InboxBreadcrumbs(): React.ReactElement {
     <nav
       // pf-burger-gap — маркер «здесь может стоять плавающий бургер свёрнутой панели».
       // Сам отступ и условие его появления задаёт globals.css по data-атрибуту AppShell.
-      className="pf-burger-gap flex min-w-0 items-center gap-0.5 text-sm"
+      className="pf-burger-gap flex min-w-0 items-center gap-0.5 text-ui"
       aria-label="Хлебные крошки"
     >
       {/* Сегмент пространства — hover-дропдаун для быстрого переключения между пространствами. */}
@@ -110,13 +116,19 @@ export function InboxBreadcrumbs(): React.ReactElement {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
 
-      {/* Текущая страница — «Входящие» (не кликается). */}
-      <span className={cn(segmentClass(true), 'pointer-events-none')}>
-        <AnimatedInbox active className="size-3.5 shrink-0" />
-        <span className="truncate">Входящие</span>
+      {/* Текущая страница (не кликается). */}
+      <span className={cn(segmentClass(true), 'pointer-events-none min-w-0')} aria-current="page">
+        {icon}
+        <span className="truncate">{label}</span>
       </span>
     </nav>
+  );
+}
+
+export function InboxBreadcrumbs(): React.ReactElement {
+  return (
+    <WorkspaceCrumbs icon={<AnimatedInbox active className="size-3.5 shrink-0" />} label="Входящие" />
   );
 }

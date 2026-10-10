@@ -325,9 +325,10 @@ export function KbDocumentViewer({ projectId, document, kbRepoFullName, onEdit, 
       <p className="font-mono text-xs text-muted-foreground">{document.path}</p>
 
       {document.validationErrors.length > 0 && (
-        <Card className="border-amber-500/40 bg-amber-500/10">
+        // Card держится тенью-кольцом (shadow-card): янтарное кольцо ring ложится поверх него.
+        <Card className="bg-warning/10 ring-1 ring-warning/40">
           <CardHeader>
-            <CardTitle className="text-base text-amber-600 dark:text-amber-400">
+            <CardTitle className="text-base text-warning">
               Frontmatter invalid
             </CardTitle>
           </CardHeader>

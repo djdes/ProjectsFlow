@@ -29,12 +29,14 @@ const CATEGORY_LABEL: Record<AppLogCategory, string> = {
   runtime: "Рантайм",
 };
 
+// Категория записи — без смысла статуса, поэтому тон Notion (метка: пастель в светлой
+// теме, цветной текст на тинте в тёмной).
 const CATEGORY_BADGE: Record<AppLogCategory, string> = {
-  data: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  auth: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  worker: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  publish: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  runtime: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  data: "pf-tone-blue bg-tone-bg text-tone-fg dark:text-tone",
+  auth: "pf-tone-yellow bg-tone-bg text-tone-fg dark:text-tone",
+  worker: "pf-tone-purple bg-tone-bg text-tone-fg dark:text-tone",
+  publish: "pf-tone-green bg-tone-bg text-tone-fg dark:text-tone",
+  runtime: "pf-tone-gray bg-tone-bg text-tone-fg dark:text-tone",
 };
 
 const OPERATION_LABEL: Record<string, string> = {
@@ -166,15 +168,15 @@ export function AppLogsPanel({
   return (
     <div className="overflow-clip rounded-xl border bg-background">
       <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
-        <div className="inline-flex rounded-lg bg-muted/50 p-0.5">
+        <div className="inline-flex rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5">
           <button
             type="button"
             onClick={() => setTab("app")}
             className={cn(
               "h-8 rounded-md px-3 text-sm",
               tab === "app"
-                ? "bg-background font-medium shadow-sm"
-                : "text-muted-foreground",
+                ? "font-medium bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Приложение
@@ -185,8 +187,8 @@ export function AppLogsPanel({
             className={cn(
               "h-8 rounded-md px-3 text-sm",
               tab === "project"
-                ? "bg-background font-medium shadow-sm"
-                : "text-muted-foreground",
+                ? "font-medium bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Проект
@@ -319,7 +321,7 @@ export function AppLogsPanel({
                   <button
                     type="button"
                     onClick={() => setExpanded(isExpanded ? null : entry.id)}
-                    className="grid min-h-14 w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-start text-sm hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[22px_minmax(140px,1fr)_minmax(96px,0.5fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] sm:py-0"
+                    className="grid min-h-14 w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-start text-sm hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[22px_minmax(140px,1fr)_minmax(96px,0.5fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] sm:py-0"
                   >
                     {isExpanded ? (
                       <ChevronDown className="size-3.5 text-muted-foreground" />

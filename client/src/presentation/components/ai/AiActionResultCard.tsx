@@ -34,7 +34,7 @@ export function AiActionResultCard({
         ) : undone ? (
           <Undo2 className="mbs-0.5 size-4 shrink-0 text-muted-foreground" />
         ) : (
-          <Check className="mbs-0.5 size-4 shrink-0 text-emerald-600" />
+          <Check className="mbs-0.5 size-4 shrink-0 text-done" />
         )}
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-normal leading-5">{rejected ? 'Отклонено' : undone ? 'Отменено' : 'Готово'}</h3>

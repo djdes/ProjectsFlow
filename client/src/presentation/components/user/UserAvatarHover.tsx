@@ -37,7 +37,7 @@ export function UserAvatarHover({
         side="top"
         align="center"
         sideOffset={8}
-        className="flex items-center gap-3 rounded-xl border-border/60 p-3 shadow-lg"
+        className="flex items-center gap-3 rounded-lg p-3"
       >
         <UserAvatar displayName={displayName} avatarUrl={avatarUrl} className="size-11 text-base" />
         <span className="pe-1 text-start">

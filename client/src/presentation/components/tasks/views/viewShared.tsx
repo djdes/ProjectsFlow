@@ -29,33 +29,36 @@ import type { MenuEntry } from './menuEntries';
 
 // Цветовая точка статуса (статичные цвета — пер-проектные переименования/цвета канбана
 // сюда не тянем, v1). Ключи включают невидимые статусы (живут в TODO на канбане).
+// Цвет = смысл статуса (дизайн C4): очередь и работа — синий акцент, вручную и «ждёт
+// уточнения» — янтарь, на утверждении — фиолетовый, готово — зелёный.
 export const STATUS_DOT: Record<TaskStatus, string> = {
   backlog: 'bg-muted-foreground/50',
-  manual: 'bg-amber-400',
-  todo: 'bg-blue-500',
-  in_progress: 'bg-blue-500',
-  awaiting_clarification: 'bg-amber-500',
-  pending_approval: 'bg-violet-500',
-  done: 'bg-emerald-500',
+  manual: 'bg-manual',
+  todo: 'bg-primary',
+  in_progress: 'bg-primary',
+  awaiting_clarification: 'bg-manual',
+  pending_approval: 'bg-approval',
+  done: 'bg-done',
   // Кастомные колонки (db/154): цвет колонки — пер-проектная настройка, а эти карты
-  // статичные (v1), поэтому нейтральный slate для всех слотов.
-  custom_1: 'bg-slate-400',
-  custom_2: 'bg-slate-400',
-  custom_3: 'bg-slate-400',
-  custom_4: 'bg-slate-400',
-  custom_5: 'bg-slate-400',
+  // статичные (v1), поэтому нейтральный серый тон для всех слотов.
+  custom_1: 'pf-tone-gray bg-tone',
+  custom_2: 'pf-tone-gray bg-tone',
+  custom_3: 'pf-tone-gray bg-tone',
+  custom_4: 'pf-tone-gray bg-tone',
+  custom_5: 'pf-tone-gray bg-tone',
 };
 
-// Цветные пилюли значений select-свойств (Notion: статус в таблице — pill с фоном).
-const CUSTOM_STATUS_PILL = 'bg-slate-100 text-slate-900 dark:bg-slate-500/15 dark:text-slate-300';
+// Цветные пилюли значений select-свойств (Notion: статус в таблице — pill с фоном):
+// мягкая подложка смысла и текст-«чернила» того же цвета.
+const CUSTOM_STATUS_PILL = 'pf-tone-gray bg-tone-bg text-tone-fg';
 export const STATUS_PILL: Record<TaskStatus, string> = {
   backlog: 'bg-muted text-foreground/70',
-  manual: 'bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300',
-  todo: 'bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300',
-  in_progress: 'bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300',
-  awaiting_clarification: 'bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300',
-  pending_approval: 'bg-violet-100 text-violet-900 dark:bg-violet-500/15 dark:text-violet-300',
-  done: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-300',
+  manual: 'bg-manual-soft text-manual-ink',
+  todo: 'bg-primary-soft text-primary-ink',
+  in_progress: 'bg-primary-soft text-primary-ink',
+  awaiting_clarification: 'bg-manual-soft text-manual-ink',
+  pending_approval: 'bg-approval-soft text-approval-ink',
+  done: 'bg-done-soft text-done-ink',
   custom_1: CUSTOM_STATUS_PILL,
   custom_2: CUSTOM_STATUS_PILL,
   custom_3: CUSTOM_STATUS_PILL,
@@ -63,10 +66,12 @@ export const STATUS_PILL: Record<TaskStatus, string> = {
   custom_5: CUSTOM_STATUS_PILL,
 };
 
+// Важность — шкала Todoist (срочно красный, высокий оранжевый, средний синий), цвета —
+// тона Notion. В тёмной теме текст цветной, как у статусных пилюль рядом.
 export const PRIORITY_PILL: Record<TaskPriority, string> = {
-  1: 'bg-red-100 text-red-900 dark:bg-red-500/15 dark:text-red-300',
-  2: 'bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-300',
-  3: 'bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300',
+  1: 'pf-tone-red bg-tone-bg text-tone-fg dark:text-tone',
+  2: 'pf-tone-orange bg-tone-bg text-tone-fg dark:text-tone',
+  3: 'pf-tone-blue bg-tone-bg text-tone-fg dark:text-tone',
   4: 'bg-muted text-foreground/70',
 };
 
@@ -379,28 +384,29 @@ export const RULE_COLOR_LABELS: Record<ViewRuleColor, string> = {
   gray: 'Серый',
 };
 
-// Фон строки по правилу (светлая/тёмная тема).
+// Фон строки по правилу. Цвета правил — те же тона Notion, что у меток проектов
+// (.pf-tone-* в globals.css): пастель в светлой теме, полупрозрачный тинт в тёмной.
 export const RULE_COLOR_ROW: Record<ViewRuleColor, string> = {
-  red: 'bg-red-50 dark:bg-red-500/10',
-  orange: 'bg-orange-50 dark:bg-orange-500/10',
-  yellow: 'bg-yellow-50 dark:bg-yellow-500/10',
-  green: 'bg-emerald-50 dark:bg-emerald-500/10',
-  blue: 'bg-blue-50 dark:bg-blue-500/10',
-  purple: 'bg-purple-50 dark:bg-purple-500/10',
-  pink: 'bg-pink-50 dark:bg-pink-500/10',
-  gray: 'bg-muted/60',
+  red: 'pf-tone-red bg-tone-bg',
+  orange: 'pf-tone-orange bg-tone-bg',
+  yellow: 'pf-tone-yellow bg-tone-bg',
+  green: 'pf-tone-green bg-tone-bg',
+  blue: 'pf-tone-blue bg-tone-bg',
+  purple: 'pf-tone-purple bg-tone-bg',
+  pink: 'pf-tone-pink bg-tone-bg',
+  gray: 'pf-tone-gray bg-tone-bg',
 };
 
 // Точка-превью цвета в меню.
 export const RULE_COLOR_DOT: Record<ViewRuleColor, string> = {
-  red: 'bg-red-400',
-  orange: 'bg-orange-400',
-  yellow: 'bg-yellow-400',
-  green: 'bg-emerald-400',
-  blue: 'bg-blue-400',
-  purple: 'bg-purple-400',
-  pink: 'bg-pink-400',
-  gray: 'bg-muted-foreground/50',
+  red: 'pf-tone-red bg-tone',
+  orange: 'pf-tone-orange bg-tone',
+  yellow: 'pf-tone-yellow bg-tone',
+  green: 'pf-tone-green bg-tone',
+  blue: 'pf-tone-blue bg-tone',
+  purple: 'pf-tone-purple bg-tone',
+  pink: 'pf-tone-pink bg-tone',
+  gray: 'pf-tone-gray bg-tone',
 };
 
 export function rowColorFor(task: Task, rules: readonly ViewColorRule[]): string | null {
@@ -757,7 +763,7 @@ export function ViewSearchInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder="Фильтр по тексту…"
         aria-label="Фильтр задач по тексту"
-        className="h-7 w-32 rounded-md bg-transparent ps-7 pe-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60 sm:w-44"
+        className="h-7 w-32 rounded-md bg-transparent ps-7 pe-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-hover focus:bg-hover sm:w-44"
       />
     </div>
   );
@@ -814,7 +820,7 @@ export function NewTaskRow({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+          'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
           className,
         )}
       >

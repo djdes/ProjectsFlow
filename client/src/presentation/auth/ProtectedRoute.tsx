@@ -26,9 +26,9 @@ export function ProtectedRoute({ children }: Props): React.ReactElement | null {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-6">
         <div role="alert" className="max-w-sm text-center">
-          <h1 className="text-xl font-semibold">Не удалось проверить соединение</h1>
+          <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">Не удалось проверить соединение</h1>
           <p className="mbs-2 text-sm text-muted-foreground">Проверьте интернет и попробуйте ещё раз. После восстановления сети проверим доступ снова.</p>
-          <Button className="mbs-5" onClick={() => { void retrySession(); }}>Повторить</Button>
+          <Button size="lg" className="mbs-5" onClick={() => { void retrySession(); }}>Повторить</Button>
         </div>
       </div>
     );

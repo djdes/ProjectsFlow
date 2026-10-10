@@ -20,7 +20,7 @@ export function UsageWindowBar({
   const pct = windowPercentUsed(w);
   const low =
     !free && w.capUsd != null && w.remainingUsd != null && w.remainingUsd <= w.capUsd * 0.1;
-  const indicator = w.isOver ? 'bg-destructive' : low ? 'bg-amber-500' : 'bg-primary';
+  const indicator = w.isOver ? 'bg-destructive' : low ? 'bg-warning' : 'bg-primary';
   const countdown = resetCountdown(w.resetsAt);
 
   return (
@@ -32,7 +32,7 @@ export function UsageWindowBar({
             <span
               className={cn(
                 'font-semibold tabular-nums',
-                w.isOver ? 'text-destructive' : low ? 'text-amber-600 dark:text-amber-500' : 'text-foreground',
+                w.isOver ? 'text-destructive' : low ? 'text-warning' : 'text-foreground',
               )}
             >
               {Math.round(pct)}%

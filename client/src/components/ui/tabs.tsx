@@ -73,7 +73,9 @@ export function TabsList({
     <TabsPrimitive.List
       ref={list}
       className={cn(
-        'pf-tabs relative isolate inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
+        // max-sm:h-auto — на телефоне вкладки-кнопки получают тач-высоту 44px (globals.css),
+        // и полоса растёт под них, а не обрезает.
+        'pf-tabs relative isolate inline-flex h-8 items-center justify-center rounded-lg bg-foreground/[0.06] p-0.5 text-muted-foreground max-sm:h-auto dark:border dark:border-border dark:bg-panel',
         className,
       )}
       {...props}
@@ -82,7 +84,7 @@ export function TabsList({
         <span
           aria-hidden="true"
           data-direction={indicator.direction}
-          className="pf-tab-indicator pointer-events-none absolute rounded-md bg-background shadow-sm"
+          className="pf-tab-indicator pointer-events-none absolute rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
           style={{
             left: indicator.left,
             right: indicator.right,
@@ -105,7 +107,7 @@ export function TabsTrigger({
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        'relative z-[1] inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground',
+        'relative z-[1] inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-ui font-medium ring-offset-background transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:font-semibold data-[state=active]:text-foreground',
         className,
       )}
       {...props}

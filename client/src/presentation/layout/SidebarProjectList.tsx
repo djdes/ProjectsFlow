@@ -55,7 +55,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { avatarColor } from './projectIcons';
+import { projectToneClass } from '@/lib/tone';
 import { RenameProjectDialog } from '@/presentation/components/project/RenameProjectDialog';
 import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { Project } from '@/domain/project/Project';
@@ -177,10 +177,11 @@ function SidebarProjectRow({
         {...(reorderable ? attributes : {})}
         className={({ isActive }) =>
           cn(
-            'relative flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors',
-            'hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
+            'relative flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
+            'hover:bg-hover',
             'cursor-pointer',
-            isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
+            // Дизайн C4: текущий проект — плотная подложка и полужирное имя.
+            isActive && 'bg-active font-semibold text-foreground',
             isArchived && 'opacity-50',
             // На active drag — grab-cursor, иначе обычная pointer-рука (это всё-таки ссылка).
             reorderable && isDragging && 'cursor-grabbing',
@@ -189,8 +190,8 @@ function SidebarProjectRow({
       >
         {() => (
           <>
-            {/* Иконка: эмодзи проекта (если задана) или фирменный чип — детерминированный
-                цвет проекта + первая буква имени (Notion-style). git-подключение —
+            {/* Иконка: эмодзи проекта (если задана) или плитка-буква в тоне проекта — тот же
+                цвет, что у метки проекта во «Входящих» (lib/tone.ts). git-подключение —
                 маленькая зелёная точка-индикатор поверх. */}
             <span className="relative shrink-0">
               {project.icon ? (
@@ -200,8 +201,8 @@ function SidebarProjectRow({
               ) : (
                 <span
                   className={cn(
-                    'grid size-5 place-items-center rounded-md text-xs font-semibold leading-none',
-                    avatarColor(project.name),
+                    'grid size-[18px] place-items-center rounded-[5px] bg-tone-bg text-[10px] font-bold leading-none text-tone-fg dark:text-tone',
+                    projectToneClass(project.id),
                   )}
                   aria-hidden
                 >
@@ -211,7 +212,7 @@ function SidebarProjectRow({
               {project.gitRepoUrl && (
                 <span
                   aria-hidden
-                  className="absolute -inset-be-0.5 -end-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar"
+                  className="absolute -inset-be-0.5 -end-0.5 size-1.5 rounded-full bg-done ring-2 ring-sidebar"
                 />
               )}
             </span>
@@ -258,7 +259,7 @@ function SidebarProjectRow({
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             className={cn(
-              'absolute end-1 inset-bs-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors duration-200 hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
+              'absolute end-1 inset-bs-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-active hover:text-foreground',
               'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
               menuOpen && 'opacity-100',
             )}

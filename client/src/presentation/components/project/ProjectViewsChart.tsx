@@ -2,11 +2,14 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectViewsPerDay } from '@/domain/project/ProjectAnalytics';
 
 // График просмотров проекта «как в Notion»: две области (всего — синяя, уникальные —
-// янтарная), подписи-дни с чёрточками по оси X, целочисленная ось Y, и чёрный тултип
-// при наведении (дата + всего + уникальных) с точкой и пунктирным перекрестием.
+// янтарная), подписи-дни с чёрточками по оси X, целочисленная ось Y, и тёмный тултип
+// (bg-foreground, как тёмные подписи к кнопкам) при наведении (дата + всего + уникальных) с
+// точкой и пунктирным перекрестием.
 
 const BLUE = 'oklch(var(--primary))';
-const AMBER = 'oklch(76.16% 0.137 78.88)';
+// Вторая серия — категория без смысла статуса, поэтому жёлтый тон Notion: --tone задаёт
+// класс pf-tone-yellow на корне графика.
+const AMBER = 'var(--tone)';
 
 // «26 июн» — короткая подпись дня под осью.
 function fmtTick(d: Date): string {
@@ -125,7 +128,7 @@ export function ProjectViewsChart({
   return (
     <div
       ref={wrapRef}
-      className="relative w-full select-none"
+      className="pf-tone-yellow relative w-full select-none"
       style={{ height: H }}
       onMouseMove={onMove}
       onMouseLeave={() => setHi(null)}
@@ -193,10 +196,10 @@ export function ProjectViewsChart({
         )}
       </svg>
 
-      {/* Чёрный тултип — дата + всего + уникальных, как в Notion */}
+      {/* Тёмный тултип — дата + всего + уникальных, как в Notion */}
       {hovered && hi !== null && (
         <div
-          className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs text-white shadow-lg"
+          className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md bg-foreground px-2.5 py-1.5 text-xs text-background shadow-menu"
           style={{
             left: x(hi),
             top: y(hovered.count),

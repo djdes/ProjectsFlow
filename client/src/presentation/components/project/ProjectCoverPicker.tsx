@@ -124,7 +124,7 @@ export function ProjectCoverPicker({
                   type="button"
                   onClick={() => pick(gradientToken(s.id))}
                   style={presetTileStyle(s.css)}
-                  className="h-14 rounded-md bg-cover bg-center ring-1 ring-black/5 motion-safe:transition-transform hover:scale-[1.03] dark:ring-white/10"
+                  className="h-14 rounded-md bg-cover bg-center ring-1 ring-foreground/10 motion-safe:transition-transform motion-safe:hover:scale-[1.03]"
                   aria-label={`Обложка ${s.id}`}
                 />
               ))}
@@ -141,7 +141,7 @@ export function ProjectCoverPicker({
                   type="button"
                   onClick={() => pick(gradientToken(g.id))}
                   style={presetTileStyle(g.css)}
-                  className="h-10 rounded-md ring-1 ring-black/5 motion-safe:transition-transform hover:scale-[1.04] dark:ring-white/10"
+                  className="h-10 rounded-md ring-1 ring-foreground/10 motion-safe:transition-transform motion-safe:hover:scale-[1.04]"
                   aria-label={`Градиент ${g.id}`}
                 />
               ))}

@@ -17,8 +17,8 @@ export function EmojiGrid({ value, onChange }: Props): React.ReactElement {
           type="button"
           onClick={() => onChange(value === e ? null : e)}
           className={cn(
-            'grid size-7 place-items-center rounded-md text-base transition-colors hover:bg-accent',
-            e === value && 'bg-accent ring-1 ring-primary/40',
+            'grid size-7 place-items-center rounded-md text-base transition-colors hover:bg-hover',
+            e === value && 'bg-primary-soft ring-1 ring-primary/40',
           )}
           aria-label={`Иконка ${e}`}
         >

@@ -209,7 +209,7 @@ export function ChatMessageList(props: Props): React.ReactElement {
         <button
           type="button"
           onClick={() => scrollToBottom('smooth')}
-          className="absolute inset-be-3 start-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-md motion-safe:transition-transform hover:scale-105"
+          className="absolute inset-be-3 start-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-float motion-safe:transition-transform motion-safe:hover:scale-105"
         >
           <ArrowDown className="size-3.5" />
           {newCount > 0 ? `${newCount} новых` : 'Вниз'}

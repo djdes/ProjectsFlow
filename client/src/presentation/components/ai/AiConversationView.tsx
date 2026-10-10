@@ -223,7 +223,7 @@ export function AiConversationView({
               <div className={cn('mx-auto flex min-h-full min-w-0 w-full flex-col gap-2.5 px-4 py-6', compact ? 'max-w-3xl' : 'max-w-4xl')}>
                 {state.messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-                    <div className="mbe-4 grid size-14 place-items-center rounded-2xl bg-foreground text-background shadow-lg"><Sparkles className="size-7" /></div>
+                    <div className="mbe-4 grid size-14 place-items-center rounded-xl bg-foreground text-background shadow-card"><Sparkles className="size-7" /></div>
                     <h2 className="text-xl font-semibold">{projectName ? `Работаем над «${projectName}»` : 'Чем помочь?'}</h2>
                     <p className="mbs-2 max-w-md text-sm leading-6 text-muted-foreground">
                       {projectName ? 'Обсуждайте код, интерфейс и данные проекта. Любое изменение сайта будет предложением и потребует явного подтверждения.' : 'Задайте вопрос, продумайте идею или разберите задачу. История сохранится здесь автоматически.'}
@@ -259,7 +259,7 @@ export function AiConversationView({
               aria-hidden={!showJumpToLatest}
               tabIndex={showJumpToLatest ? 0 : -1}
               className={cn(
-                'absolute inset-be-4 start-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background/95 text-muted-foreground shadow-lg backdrop-blur',
+                'absolute inset-be-4 start-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-raised/95 text-muted-foreground shadow-menu backdrop-blur',
                 'transition-opacity duration-300 hover:text-foreground',
                 showJumpToLatest ? 'opacity-100' : 'pointer-events-none opacity-0',
               )}

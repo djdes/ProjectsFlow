@@ -154,11 +154,11 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
         </div>
 
         {/* Мини-превью доски (обложка + иконка + имя) — как «окно» на скрине Notion. */}
-        <div className="mbs-3 overflow-clip rounded-lg border border-black/[0.08] shadow-sm dark:border-white/10">
-          <div className="flex h-7 items-center gap-1.5 border-be border-black/[0.06] bg-black/[0.02] px-2 dark:border-white/[0.06] dark:bg-white/[0.03]">
-            <span className="size-2 rounded-full bg-black/10 dark:bg-white/15" />
-            <span className="size-2 rounded-full bg-black/10 dark:bg-white/15" />
-            <span className="size-2 rounded-full bg-black/10 dark:bg-white/15" />
+        <div className="mbs-3 overflow-clip rounded-lg bg-card shadow-card">
+          <div className="flex h-7 items-center gap-1.5 border-be border-border bg-panel px-2">
+            <span className="size-2 rounded-full bg-foreground/15" />
+            <span className="size-2 rounded-full bg-foreground/15" />
+            <span className="size-2 rounded-full bg-foreground/15" />
           </div>
           <div
             className="h-16 w-full"
@@ -171,7 +171,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
                 <ProjectIconView icon={project.icon} pixelSize={22} />
               </span>
             )}
-            <span className="truncate text-lg font-bold text-[#37352f] dark:text-blue-50">
+            <span className="truncate text-lg font-bold text-foreground">
               {project.name}
             </span>
           </div>
@@ -200,15 +200,15 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
   return (
     <div className="px-3 py-3">
       {/* URL-строка: projectsflow.ru/p/<slug> + копирование. */}
-      <div className="flex items-center gap-1.5 rounded-md border border-black/[0.08] bg-black/[0.02] px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.03]">
-        <span className="min-w-0 flex-1 truncate text-sm text-blue-600 dark:text-blue-400">
+      <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel px-2.5 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-sm text-primary-ink">
           {slug ? publicBoardDisplayUrl(slug) : ''}
         </span>
         <button
           type="button"
           onClick={copyLink}
           aria-label="Скопировать ссылку"
-          className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/10"
+          className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-hover hover:text-foreground"
         >
           <Copy className="size-3.5" />
         </button>
@@ -219,7 +219,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
           type="button"
           onClick={() => setAppearanceOpen((open) => !open)}
           aria-expanded={appearanceOpen}
-          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm text-foreground transition-colors hover:bg-accent/60"
+          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm text-foreground transition-colors hover:bg-hover"
         >
           <Paintbrush className="size-4 shrink-0 opacity-70" />
           <span className="flex-1">Настроить оформление сайта</span>
@@ -230,7 +230,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
         </button>
 
         {appearanceOpen && (
-          <div className="mx-2 mbe-2 space-y-2 rounded-lg border bg-muted/20 p-3">
+          <div className="mx-2 mbe-2 space-y-2 rounded-lg border bg-panel p-3">
             <div>
               <p className="mbe-2 text-xs font-medium text-muted-foreground">Цвет акцента</p>
               <div className="flex flex-wrap items-center gap-2">
@@ -242,7 +242,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
                     onClick={() => void saveAppearance({ ...appearance, accentColor: color })}
                     aria-label={`Цвет ${color}`}
                     aria-pressed={appearance.accentColor.toLowerCase() === color}
-                    className="grid size-8 place-items-center rounded-full motion-safe:transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none"
+                    className="grid size-8 place-items-center rounded-full motion-safe:transition-transform motion-safe:hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none"
                     style={{ backgroundColor: color }}
                   >
                     {appearance.accentColor.toLowerCase() === color && (
@@ -316,7 +316,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
         />
         <StubRow icon={<Settings className="size-4" />} label="Управление сайтами и ссылками" />
 
-        <div className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.06]" />
+        <div className="my-1 h-px bg-border" />
 
         <StubRow icon={<Code2 className="size-4" />} label="Встроить эту страницу" />
         <StubRow icon={<Share2 className="size-4" />} label="Поделиться в соцсетях" />

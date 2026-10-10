@@ -69,7 +69,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
                 >
                   <NavLink
                     to={`/projects/${item.projectId}?task=${item.taskId}`}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors motion-safe:transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
+                    className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors motion-safe:transition-[color,background-color,transform] hover:translate-x-0.5 hover:bg-hover"
                   >
                     <RecentTaskRow item={item} />
                   </NavLink>
@@ -84,7 +84,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
                 aria-expanded={expanded}
-                className="mbs-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
+                className="mbs-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               >
                 <span className="grid size-5 shrink-0 place-items-center">
                   <ChevronDown

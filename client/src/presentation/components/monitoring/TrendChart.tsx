@@ -67,18 +67,20 @@ export function TrendChart({
         </span>
       </div>
       {path ? (
+        // Цвет — через style, а не SVG-атрибуты: в атрибутах var() (токены, --tone)
+        // поддерживается не во всех браузерах, в CSS-свойствах — везде.
         <svg viewBox={`0 0 ${W} ${H}`} className="h-11 w-full" preserveAspectRatio="none">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
+              <stop offset="0%" style={{ stopColor: color }} stopOpacity="0.25" />
+              <stop offset="100%" style={{ stopColor: color }} stopOpacity="0" />
             </linearGradient>
           </defs>
           {area && <path d={area} fill={`url(#${gradId})`} />}
-          <path d={path} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          <path d={path} fill="none" style={{ stroke: color }} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
         </svg>
       ) : (
-        <div className="grid h-11 place-items-center rounded bg-muted/40 text-[10px] text-muted-foreground">
+        <div className="grid h-11 place-items-center rounded-md bg-muted/60 text-2xs text-muted-foreground">
           нет данных
         </div>
       )}

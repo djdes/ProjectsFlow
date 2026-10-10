@@ -13,9 +13,9 @@ function uptimePct(points: { collectedAt: Date; status: string }[], sinceMs: num
 
 function pctClass(pct: number | null): string {
   if (pct === null) return 'text-muted-foreground';
-  if (pct >= 99.5) return 'text-emerald-600 dark:text-emerald-400';
-  if (pct >= 98) return 'text-amber-600 dark:text-amber-400';
-  return 'text-red-600 dark:text-red-400';
+  if (pct >= 99.5) return 'text-done';
+  if (pct >= 98) return 'text-warning';
+  return 'text-destructive';
 }
 
 function fmt(pct: number | null): string {

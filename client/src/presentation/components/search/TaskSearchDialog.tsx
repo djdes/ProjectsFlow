@@ -301,7 +301,7 @@ export function TaskSearchDialog({
                   onMouseEnter={() => setActiveIndex(i)}
                   className={cn(
                     'flex w-full items-center gap-2.5 px-4 py-2 text-start transition-colors',
-                    i === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted',
+                    i === activeIndex ? 'bg-hover text-foreground' : 'hover:bg-hover',
                   )}
                 >
                   <span className="grid size-5 shrink-0 place-items-center">{item.icon}</span>

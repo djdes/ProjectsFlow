@@ -39,7 +39,7 @@ export function CopyTaskButton({ description, disabled = false, className }: Pro
         className,
       )}
     >
-      {copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
+      {copied ? <Check className="size-4 text-done" /> : <Copy className="size-4" />}
     </button>
   );
 }

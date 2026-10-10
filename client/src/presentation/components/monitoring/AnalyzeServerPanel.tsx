@@ -139,7 +139,7 @@ export function AnalyzeServerPanel({
                 <span className="font-medium text-foreground">{TYPE_LABEL[a.analysisType]}</span>
                 <span>· {relativeTime(a.createdAt)}</span>
                 {a.costUsd != null && <span>· ${a.costUsd.toFixed(2)}</span>}
-                {a.status !== 'succeeded' && <span className="text-amber-600 dark:text-amber-400">· {a.status}</span>}
+                {a.status !== 'succeeded' && <span className="text-warning">· {a.status}</span>}
               </div>
               {a.status === 'succeeded' && a.resultMarkdown ? (
                 <CommentBody body={a.resultMarkdown} />

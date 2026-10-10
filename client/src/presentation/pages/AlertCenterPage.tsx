@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BellRing, ChevronRight } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { ArrowLeft, BellRing, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useContainer } from '@/infrastructure/di/container';
 import type { AlertCenter, AlertCenterEntry } from '@/domain/monitoring/Alert';
 import { SeverityBadge } from '@/presentation/components/monitoring/StatusBadge';
 import { relativeTime } from '@/lib/relativeTime';
+import { EmptyPanel, ErrorNote } from '@/presentation/pages/PageScaffold';
+import { SectionPage } from '@/presentation/pages/SectionPage';
 
 function AlertRow({ a, resolved }: { a: AlertCenterEntry; resolved?: boolean }): React.ReactElement {
   return (
     <Link
       to={`/projects/${a.projectId}/monitoring`}
-      className="flex items-start gap-3 rounded-md border border-border/60 p-3 transition-colors hover:border-foreground/30 hover:bg-muted/40"
+      className="flex items-start gap-3 rounded-lg bg-card p-3 shadow-card transition-[box-shadow,background-color] hover:shadow-card-hover dark:hover:bg-card-hover"
     >
       <SeverityBadge severity={a.severity} />
       <div className="min-w-0 flex-1">
@@ -64,47 +67,44 @@ export function AlertCenterPage(): React.ReactElement {
   const critical = data?.active.filter((a) => a.severity === 'critical') ?? [];
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pbs-3.5 sm:p-6 sm:pbs-4">
-      {/* pf-burger-gap — уступаем место плавающему бургеру свёрнутой панели. Маркер на группе
-          «иконка + заголовок», а не на всей строке: счётчик справа не должен ехать. */}
-      <div className="pf-burger-gap flex items-center gap-2.5">
-        <BellRing className="size-5 text-primary" />
-        <h1 className="text-xl font-semibold tracking-tight">Алерты — все проекты</h1>
-        {data && data.active.length > 0 && (
-          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-sm font-semibold text-white">
+    <SectionPage
+      icon={BellRing}
+      label="Алерты"
+      title="Алерты — все проекты"
+      titleAside={
+        data && data.active.length > 0 ? (
+          <span
+            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold tabular-nums text-destructive-foreground"
+            aria-label={`Активных алертов: ${data.active.length}`}
+          >
             {data.active.length}
           </span>
-        )}
-      </div>
-      <Link to="/monitoring" className="-mbs-2 text-sm text-muted-foreground hover:text-foreground">
-        ← Сводка по проектам
-      </Link>
+        ) : null
+      }
+    >
+      {/* Ссылка наверх, к сводке: в крошках раздела «Мониторинг» нет, путь назад — отсюда. */}
+      <Button asChild variant="ghost" size="sm" className="-mbs-2 -ms-3 gap-1 self-start text-muted-foreground hover:text-foreground">
+        <Link to="/monitoring">
+          <ArrowLeft />
+          Сводка по проектам
+        </Link>
+      </Button>
 
-      {error && (
-        <Card>
-          <CardContent className="py-4 text-sm text-red-600 dark:text-red-400">
-            Не удалось загрузить алерты: {error.message}
-          </CardContent>
-        </Card>
-      )}
+      {error && <ErrorNote>Не удалось загрузить алерты: {error.message}</ErrorNote>}
 
       {data === null ? (
-        <div className="space-y-2">
-          <div className="h-14 pf-skeleton rounded-lg bg-muted" />
-          <div className="h-14 pf-skeleton rounded-lg bg-muted" />
-        </div>
+        <LoadingRegion label="Загружаем алерты…" className="space-y-2">
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+        </LoadingRegion>
       ) : (
         <>
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-muted-foreground">
+            <h2 className="text-ui font-medium text-muted-foreground">
               Активные{critical.length > 0 ? ` · ${critical.length} critical` : ''}
             </h2>
             {data.active.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  Активных алертов нет — всё спокойно. 🎉
-                </CardContent>
-              </Card>
+              <EmptyPanel>Активных алертов нет — всё спокойно.</EmptyPanel>
             ) : (
               data.active.map((a) => <AlertRow key={a.id} a={a} />)
             )}
@@ -112,7 +112,7 @@ export function AlertCenterPage(): React.ReactElement {
 
           {data.recent.length > 0 && (
             <section className="space-y-2">
-              <h2 className="text-sm font-medium text-muted-foreground">Недавно решённые</h2>
+              <h2 className="text-ui font-medium text-muted-foreground">Недавно решённые</h2>
               {data.recent.map((a) => (
                 <div key={a.id} className="opacity-70">
                   <AlertRow a={a} resolved />
@@ -122,6 +122,6 @@ export function AlertCenterPage(): React.ReactElement {
           )}
         </>
       )}
-    </div>
+    </SectionPage>
   );
 }

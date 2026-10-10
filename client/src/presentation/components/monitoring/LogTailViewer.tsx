@@ -38,8 +38,8 @@ function classify(line: string): Severity {
 }
 
 const SEV_CLS: Record<Severity, string> = {
-  error: 'text-red-600 dark:text-red-400',
-  warn: 'text-amber-600 dark:text-amber-400',
+  error: 'text-destructive',
+  warn: 'text-warning',
   debug: 'text-muted-foreground',
   info: '',
 };
@@ -176,10 +176,11 @@ export function LogTailViewer({
             type="button"
             onClick={() => setKind(t.kind)}
             className={cn(
-              'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+              // Чип-фильтр C4: рамка-линия, выбранный — мягкий синий с синей рамкой.
+              'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
               kind === t.kind
-                ? 'bg-foreground text-background'
-                : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                ? 'border-primary bg-primary-soft text-primary-ink'
+                : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
           >
             {t.label}
@@ -196,10 +197,10 @@ export function LogTailViewer({
             type="button"
             onClick={() => setErrorsOnly((v) => !v)}
             className={cn(
-              'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+              'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
               errorsOnly
-                ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                ? 'border-destructive/40 bg-destructive-soft text-destructive'
+                : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
             title="Только ошибки"
           >
@@ -231,10 +232,10 @@ export function LogTailViewer({
       {nginxSummary && (
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="text-muted-foreground">в хвосте: {nginxSummary.total}</span>
-          <span className="text-emerald-600 dark:text-emerald-400">2xx: {nginxSummary.c2}</span>
-          <span className="text-sky-600 dark:text-sky-400">3xx: {nginxSummary.c3}</span>
-          <span className="text-amber-600 dark:text-amber-400">4xx: {nginxSummary.c4}</span>
-          <span className="text-red-600 dark:text-red-400">5xx: {nginxSummary.c5}</span>
+          <span className="text-done">2xx: {nginxSummary.c2}</span>
+          <span className="text-primary-ink">3xx: {nginxSummary.c3}</span>
+          <span className="text-warning">4xx: {nginxSummary.c4}</span>
+          <span className="text-destructive">5xx: {nginxSummary.c5}</span>
         </div>
       )}
 
@@ -260,10 +261,10 @@ export function LogTailViewer({
                 type="button"
                 onClick={() => setKind(t.kind)}
                 className={cn(
-                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                   kind === t.kind
-                    ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                    ? 'border-primary bg-primary-soft text-primary-ink'
+                    : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
                 )}
               >
                 {t.label}

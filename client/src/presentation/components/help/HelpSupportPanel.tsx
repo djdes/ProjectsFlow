@@ -112,7 +112,7 @@ export function HelpSupportPanel({
 
       <div
         className={cn(
-          'rounded-2xl border bg-card p-2.5 shadow-sm transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/25',
+          'rounded-xl border border-input bg-field p-2.5 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/25',
           overLimit &&
             'border-destructive/60 focus-within:border-destructive focus-within:ring-destructive/25',
         )}

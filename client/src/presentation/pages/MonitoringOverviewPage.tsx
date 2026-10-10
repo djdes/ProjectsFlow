@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, BellRing } from 'lucide-react';
+import { Activity, BellRing, CircleX, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import type { OverviewProject } from '@/domain/monitoring/Server';
 import { StatusBadge } from '@/presentation/components/monitoring/StatusBadge';
 import { relativeTime } from '@/lib/relativeTime';
+import { EmptyPanel, ErrorNote } from '@/presentation/pages/PageScaffold';
+import { SectionPage } from '@/presentation/pages/SectionPage';
 
 const STATUS_RANK: Record<string, number> = { down: 4, degraded: 3, stale: 2, unknown: 1, ok: 0 };
 const SEV_RANK: Record<string, number> = { critical: 3, warning: 2, info: 1 };
@@ -15,6 +18,10 @@ const SEV_RANK: Record<string, number> = { critical: 3, warning: 2, info: 1 };
 function hasProblem(p: OverviewProject): boolean {
   return p.activeAlerts > 0 || p.worstStatus === 'down' || p.worstStatus === 'degraded';
 }
+
+// Счётчик алертов — красная пилюля (цвет = смысл «горит»).
+const COUNT_BADGE_CLASS =
+  'inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold tabular-nums text-destructive-foreground';
 
 // Сводный дашборд «здоровье всех проектов» текущего юзера.
 export function MonitoringOverviewPage(): React.ReactElement {
@@ -69,44 +76,47 @@ export function MonitoringOverviewPage(): React.ReactElement {
   }, [projects, onlyProblems]);
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pbs-3.5 sm:p-6 sm:pbs-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* pf-burger-gap на группе с заголовком, а не на всей строке: кнопка «Алерты»
-            прижата вправо (justify-between) и под бургер не попадает. */}
-        <div className="pf-burger-gap flex items-center gap-2.5">
-          <Activity className="size-5 text-primary" />
-          <h1 className="text-xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
-        </div>
+    <SectionPage
+      icon={Activity}
+      label="Мониторинг"
+      title="Мониторинг — все проекты"
+      actions={
         <Button asChild variant="outline" size="sm">
           <Link to="/monitoring/alerts">
             <BellRing className="size-4" />
             Алерты
-            {totalAlerts > 0 && (
-              <span className="ms-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                {totalAlerts}
-              </span>
-            )}
+            {totalAlerts > 0 && <span className={cn('ms-1', COUNT_BADGE_CLASS)}>{totalAlerts}</span>}
           </Link>
         </Button>
-      </div>
-
+      }
+    >
       {projects && projects.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-be pbe-3 text-sm">
           <span className="font-medium">{projects.length} проект(ов)</span>
           {problemCount > 0 ? (
-            <span className="text-red-600 dark:text-red-400">⚠ {problemCount} с проблемами</span>
+            <span className="inline-flex items-center gap-1.5 text-destructive">
+              <TriangleAlert className="size-3.5" aria-hidden="true" />
+              {problemCount} с проблемами
+            </span>
           ) : (
-            <span className="text-emerald-600 dark:text-emerald-400">всё в норме</span>
+            <span className="text-done">всё в норме</span>
           )}
           {serversDown > 0 && (
-            <span className="text-red-600 dark:text-red-400">✕ {serversDown} down</span>
+            <span className="inline-flex items-center gap-1.5 text-destructive">
+              <CircleX className="size-3.5" aria-hidden="true" />
+              {serversDown} down
+            </span>
           )}
+          {/* Чип-фильтр C4: рамка border, выбранный — мягкая синяя подложка. */}
           <button
             type="button"
+            aria-pressed={onlyProblems}
             onClick={() => setOnlyProblems((v) => !v)}
             className={cn(
-              'ms-auto rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-              onlyProblems ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
+              'ms-auto inline-flex h-[26px] items-center rounded-md border px-2.5 text-meta font-medium transition-colors',
+              onlyProblems
+                ? 'border-primary bg-primary-soft text-primary-ink'
+                : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
           >
             {onlyProblems ? 'Показать все' : 'Только проблемные'}
@@ -114,53 +124,40 @@ export function MonitoringOverviewPage(): React.ReactElement {
         </div>
       )}
 
-      {error && (
-        <Card>
-          <CardContent className="py-4 text-sm text-red-600 dark:text-red-400">
-            Не удалось загрузить сводку: {error.message}
-          </CardContent>
-        </Card>
-      )}
+      {error && <ErrorNote>Не удалось загрузить сводку: {error.message}</ErrorNote>}
 
       {projects === null ? (
-        <div className="space-y-3">
-          <div className="h-24 pf-skeleton rounded-lg bg-muted" />
-          <div className="h-24 pf-skeleton rounded-lg bg-muted" />
-        </div>
+        <LoadingRegion label="Загружаем сводку…" className="space-y-3">
+          <Skeleton className="h-24 rounded-lg" />
+          <Skeleton className="h-24 rounded-lg" />
+        </LoadingRegion>
       ) : projects.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            Ни в одном из ваших проектов пока нет серверов мониторинга. Откройте проект → вкладка
-            «Мониторинг» → «Добавить сервер».
-          </CardContent>
-        </Card>
+        <EmptyPanel>
+          Ни в одном из ваших проектов пока нет серверов мониторинга. Откройте проект → вкладка
+          «Мониторинг» → «Добавить сервер».
+        </EmptyPanel>
       ) : view.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            Проблемных проектов нет — всё спокойно. 🎉
-          </CardContent>
-        </Card>
+        <EmptyPanel>Проблемных проектов нет — всё спокойно.</EmptyPanel>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {view.map((p) => (
-            <Link key={p.projectId} to={`/projects/${p.projectId}/monitoring`} className="block">
-              <Card
-                className={cn(
-                  'h-full transition-colors hover:border-foreground/30',
-                  p.worstStatus === 'down'
-                    ? 'border-red-500/50'
-                    : p.worstStatus === 'degraded'
-                      ? 'border-amber-500/50'
-                      : '',
-                )}
-              >
+            <Link key={p.projectId} to={`/projects/${p.projectId}/monitoring`} className="block rounded-lg">
+              {/* Контейнер нейтральный: худший статус — точкой у имени, а не цветной рамкой. */}
+              <Card className="h-full transition-[box-shadow,background-color] hover:shadow-card-hover dark:hover:bg-card-hover">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-                  <CardTitle className="truncate text-base">{p.projectName}</CardTitle>
-                  {p.activeAlerts > 0 && (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                      {p.activeAlerts}
-                    </span>
-                  )}
+                  <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+                    {(p.worstStatus === 'down' || p.worstStatus === 'degraded') && (
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'size-2 shrink-0 rounded-full',
+                          p.worstStatus === 'down' ? 'bg-destructive' : 'bg-warning',
+                        )}
+                      />
+                    )}
+                    <span className="truncate">{p.projectName}</span>
+                  </CardTitle>
+                  {p.activeAlerts > 0 && <span className={COUNT_BADGE_CLASS}>{p.activeAlerts}</span>}
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {p.servers.map((s) => (
@@ -180,6 +177,6 @@ export function MonitoringOverviewPage(): React.ReactElement {
           ))}
         </div>
       )}
-    </div>
+    </SectionPage>
   );
 }

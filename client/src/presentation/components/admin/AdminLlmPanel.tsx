@@ -240,7 +240,7 @@ export function AdminLlmPanel(): React.ReactElement {
           <p
             className={cn(
               'rounded-md px-3 py-2 text-sm',
-              test.ok ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-destructive/10 text-destructive',
+              test.ok ? 'bg-done-soft text-done-ink' : 'bg-destructive-soft text-destructive',
             )}
           >
             {test.ok
@@ -267,11 +267,12 @@ export function AdminLlmPanel(): React.ReactElement {
 function StatusPill({ status }: { status: LlmConnectionStatus | null }): React.ReactElement {
   const view =
     status === 'active'
-      ? { label: 'Подключено', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' }
+      ? { label: 'Подключено', className: 'bg-done-soft text-done-ink' }
       : status === 'reauth_required'
-        ? { label: 'Нужен вход по коду', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' }
+        ? { label: 'Нужен вход по коду', className: 'bg-warning-soft text-warning-ink' }
         : { label: 'Не подключено', className: 'bg-muted text-muted-foreground' };
-  return <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium', view.className)}>{view.label}</span>;
+  // Метка статуса C4: радиус 4px, мягкая подложка смысла.
+  return <span className={cn('shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium', view.className)}>{view.label}</span>;
 }
 
 function Field({
@@ -288,7 +289,7 @@ function Field({
   return (
     <div className={cn('min-w-0', wide && 'sm:col-span-2')}>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={cn('break-words', tone === 'warn' && 'text-amber-700 dark:text-amber-400')}>{value}</dd>
+      <dd className={cn('break-words', tone === 'warn' && 'text-warning')}>{value}</dd>
     </div>
   );
 }
@@ -317,7 +318,7 @@ function LoginCode({
       <ol className="list-decimal space-y-1 ps-5 text-sm">
         <li>
           Откройте{' '}
-          <a href={login.verificationUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline">
+          <a href={login.verificationUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-ink underline-offset-2 hover:underline">
             {login.verificationUrl.replace(/^https?:\/\//, '')} <ExternalLink className="size-3.5" />
           </a>{' '}
           и войдите в ChatGPT под аккаунтом с подпиской.

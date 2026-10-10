@@ -3,8 +3,8 @@ import { usePageRefresh } from '@/presentation/components/experience/usePageRefr
 import { useCallback, useEffect, useState } from 'react';
 import { ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
+import { PageTitle, PageTopBar } from '@/presentation/layout/PageChrome';
 import { HeaderCompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -13,11 +13,6 @@ import type { Task } from '@/domain/task/Task';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
 
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
-
-// Full-bleed канбана — те же значения, что и на доске проекта (px-6/14/24): ряд колонок
-// выносится за паддинг страницы, отступы от краёв совпадают с проектами.
-const KANBAN_BLEED_NEG = '-mx-6 sm:-mx-14 lg:-mx-24';
-const KANBAN_BLEED_PAD = 'ps-6 sm:ps-14 lg:ps-24';
 
 function loadHideDone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -34,9 +29,6 @@ export function InboxPage(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
-  // Слот в шапке для фильтров/сортировки блока ответственных: сам блок рендерит их сюда через
-  // portal (состояние остаётся в блоке, а визуально контролы стоят в строке с «Входящие»).
-  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // Режим выделения ВЕРХНЕГО блока (вкладки «Мои»/«Для всех»), включается кнопкой в шапке
   // страницы рядом с «Фильтрами». Нижняя доска живёт по-прежнему: там режим включается
   // по колонке из её шапки. Состояние здесь, а не в блоке, — кнопка снаружи блока.
@@ -102,7 +94,7 @@ export function InboxPage(): React.ReactElement {
     return (
       <div className="grid h-full place-items-center p-6">
         <div className="max-w-md space-y-4 text-center">
-          <h1 className="text-2xl font-semibold">Не получилось</h1>
+          <PageTitle className="justify-center">Не получилось</PageTitle>
           <p className="text-sm text-muted-foreground">{error ?? 'Inbox недоступен'}</p>
           <Button variant="outline" onClick={() => window.location.reload()}>
             Перезагрузить
@@ -118,50 +110,39 @@ export function InboxPage(): React.ReactElement {
     // проекта). Тогда закреплённый снизу горизонтальный скролл-бар доски (SyncedStickyScrollbar)
     // прилипает к низу вьюпорта так же, как на проектах, — а не к внутреннему скролл-порту.
     <div className="flex min-h-full flex-col">
-      {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие». Прячем на мобиле. */}
-      <div className="hidden h-11 items-center justify-between gap-2 px-2.5 sm:flex">
+      {/* Шапка страницы (дизайн C4): крошки «<Пространство> ▾ › Входящие» и счётчик
+          «сделано сегодня», линия снизу. На мобиле — своя шапка приложения. */}
+      <PageTopBar className="hidden sm:flex" end={<HeaderCompletedTodayPill />}>
         <InboxBreadcrumbs />
-        <HeaderCompletedTodayPill />
-      </div>
+      </PageTopBar>
 
-      {/* Тело страницы: отступы по краям — как на доске проекта (px-6/14/24). Только канбан. */}
-      <div className="flex flex-1 flex-col gap-1.5 px-6 pbe-3 pbs-2 sm:gap-4 sm:px-14 sm:pbe-6 sm:pbs-1 lg:px-24">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <div className="flex items-center gap-3">
-            <AnimatedInbox active className="size-5 text-primary" />
-            <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
-          </div>
-          {/* Сюда блок ответственных порталит единую кнопку «Фильтры» (сортировка +
-              скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим») — слева, сразу
-              за заголовком, чтобы не «летала» в одиночестве у правого края. */}
-          <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-1" />
-          {/* Выделение задач ВЕРХНЕГО блока: режим включается сразу во всех его колонках,
-              в шапке каждой появляются «Все»/«Очистить», снизу — панель действий. */}
-          <Button
-            type="button"
-            variant={selectionActive ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-8 gap-1.5 px-2 text-xs max-sm:h-9"
-            aria-pressed={selectionActive}
-            onClick={() => setSelectionActive((v) => !v)}
-          >
-            <ListChecks className="size-4" />
-            {selectionActive ? 'Отменить выделение' : 'Выделить'}
-          </Button>
-        </div>
-
-        {/* Единственный канбан страницы — блок ответственных. Свой DndContext он рендерит
-            сам (externalDnd не задан): отдельная нижняя доска инбокса убрана, объединять
-            больше нечего. */}
+      {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
+          ответственных: заголовок, вкладки, люди и поиск он ставит в одну строку сам. */}
+      <div className="flex flex-1 flex-col px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
         <AssignedToMeBlock
           boardTasks={boardTasks}
           inboxProjectId={project.id}
           onChanged={() => void reloadInboxTasks(project.id)}
-          toolbarSlot={toolbarSlot}
+          heading={<PageTitle className="me-1">Входящие</PageTitle>}
+          actions={
+            // Выделение задач блока: режим включается сразу во всех его колонках, в шапке
+            // каждой появляются «Все»/«Очистить», снизу — панель действий.
+            <Button
+              type="button"
+              variant={selectionActive ? 'secondary' : 'ghost'}
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              aria-pressed={selectionActive}
+              onClick={() => setSelectionActive((v) => !v)}
+            >
+              <ListChecks className="size-4" />
+              <span className="max-sm:sr-only">
+                {selectionActive ? 'Отменить выделение' : 'Выделить'}
+              </span>
+            </Button>
+          }
           hideDone={hideDone}
           onHideDoneChange={handleHideDoneChange}
-          bleedNegClass={KANBAN_BLEED_NEG}
-          bleedPadClass={KANBAN_BLEED_PAD}
           selectionActive={selectionActive}
           onSelectionActiveChange={setSelectionActive}
         />

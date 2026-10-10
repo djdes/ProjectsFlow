@@ -222,7 +222,7 @@ const FORMAT_BTNS: FormatBtn[] = [
     id: 'link',
     label: 'Ссылка · Ctrl+K',
     hint: 'Превратить выделение в гиперссылку.',
-    example: <span className="text-sm text-blue-600 underline dark:text-blue-400">текст ссылки</span>,
+    example: <span className="text-sm text-primary-ink underline">текст ссылки</span>,
     icon: Link2,
   },
   {
@@ -239,7 +239,8 @@ const FORMAT_BTNS: FormatBtn[] = [
     label: 'Выделение фоном',
     hint: 'Подсветить текст фоновой заливкой.',
     example: (
-      <span className="rounded bg-yellow-200 px-1 text-sm text-neutral-900">выделенный текст</span>
+      // Тот же <mark>, что рисует редактор (стиль — mark в globals.css, со своей тёмной темой).
+      <mark className="px-1 text-sm">выделенный текст</mark>
     ),
     icon: Highlighter,
   },
@@ -249,7 +250,7 @@ function ColorDot({ swatch, kind }: { swatch: ColorSwatch; kind: 'text' | 'bg' }
   if (kind === 'text') {
     return (
       <span
-        className="flex size-5 shrink-0 items-center justify-center rounded border text-[13px] font-medium"
+        className="flex size-5 shrink-0 items-center justify-center rounded border text-ui font-medium"
         style={{ color: swatch.value ?? undefined }}
         aria-hidden
       >
@@ -294,7 +295,7 @@ function MenuItemTooltip({
         className="z-[80] w-56 max-w-[calc(100vw-1rem)] overflow-hidden p-0"
       >
         {example != null && (
-          <div className="border-be bg-muted/40 px-3 py-2.5">{example}</div>
+          <div className="border-be bg-panel px-3 py-2.5">{example}</div>
         )}
         <div className="px-3 py-2 text-xs leading-snug text-muted-foreground">{description}</div>
       </TooltipContent>
@@ -400,7 +401,7 @@ export function FormatMenu({ editor, getRange, inline = false }: {
         {openSub && <div id={panelId} className="mbs-1 max-h-[min(22rem,45dvh)] overflow-y-auto border-bs pbs-2">
           {openSub === 'turn' && <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
             {TURN_INTO.map(item => <button key={item.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => selectBlock(item)}
-              aria-pressed={item.isActive(editor)} className={cn(ROW, 'min-h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', item.isActive(editor) && 'bg-primary/10 text-primary')}>
+              aria-pressed={item.isActive(editor)} className={cn(ROW, 'min-h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', item.isActive(editor) && 'bg-primary-soft text-primary-ink')}>
               <item.icon className="size-4 shrink-0" /><span className="flex-1">{item.label}</span>
             </button>)}
             <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { fire(() => editor.chain().focus().unsetAllMarks().clearNodes().run()); setOpenSub(null); }} className={cn(ROW, 'min-h-10 sm:col-span-2')}>
@@ -425,7 +426,7 @@ export function FormatMenu({ editor, getRange, inline = false }: {
             <input id={`${panelId}-url`} value={linkUrl} onChange={e => { setLinkUrl(e.target.value); setLinkError(''); }} placeholder="https://" autoFocus
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyLink(); } }}
               aria-invalid={!!linkError} aria-describedby={linkError ? `${panelId}-error` : undefined}
-              className="h-10 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              className="h-10 w-full rounded-md border border-input bg-field px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             {linkError && <p id={`${panelId}-error`} role="alert" className="text-xs text-destructive">{linkError}</p>}
             <div className="flex justify-end gap-2">
               {active.link && <button type="button" onClick={() => { fire(() => editor.chain().focus().unsetLink().run()); setOpenSub(null); }} className="rounded-md px-3 py-2 text-sm hover:bg-hover">Убрать ссылку</button>}

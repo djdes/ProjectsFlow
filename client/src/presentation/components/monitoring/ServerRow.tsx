@@ -47,7 +47,7 @@ export function ServerRow({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-start transition-colors hover:border-foreground/30 hover:bg-muted/40"
+      className="group flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-start transition-colors hover:border-foreground/30 hover:bg-hover"
     >
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -98,7 +98,7 @@ export function ServerRow({
         <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
           {latest ? relativeTime(latest.collectedAt) : '—'}
         </span>
-        <ChevronRight className="size-4 text-muted-foreground motion-safe:transition-transform group-hover:translate-x-0.5" />
+        <ChevronRight className="size-4 text-muted-foreground motion-safe:transition-transform motion-safe:group-hover:translate-x-0.5" />
       </div>
     </button>
   );

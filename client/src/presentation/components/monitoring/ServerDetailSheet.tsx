@@ -128,7 +128,7 @@ export function ServerDetailSheet({
               {latest ? `обновлено ${relativeTime(latest.collectedAt)}` : 'нет данных'}
               {server.host ? ` · ${server.host}` : ''}
               {isMuted && server.mutedUntil && (
-                <span className="ms-1 text-amber-600 dark:text-amber-400">
+                <span className="ms-1 text-warning">
                   · 🔕 тихо до{' '}
                   {server.mutedUntil.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -147,7 +147,7 @@ export function ServerDetailSheet({
                   Правка
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => void toggleMute()} disabled={busy}>
-                  {isMuted ? <BellOff className="size-4 text-amber-500" /> : <Bell className="size-4" />}
+                  {isMuted ? <BellOff className="size-4 text-warning" /> : <Bell className="size-4" />}
                   {isMuted ? 'Включить' : 'Заглушить'}
                 </Button>
                 <Button
@@ -155,7 +155,7 @@ export function ServerDetailSheet({
                   size="sm"
                   onClick={() => void remove()}
                   disabled={busy}
-                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                  className="text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="size-4" />
                   Удалить
@@ -230,7 +230,7 @@ export function ServerDetailSheet({
                 </div>
 
                 {latest?.errors && latest.errors.length > 0 && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                  <p className="text-xs text-warning">
                     Ошибки сбора: {latest.errors.join('; ')}
                   </p>
                 )}

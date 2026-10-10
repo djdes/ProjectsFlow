@@ -733,8 +733,8 @@ export function ProjectPreview({
     >
       <PreviewToolbar mode={state.mode} device={state.device} path={state.path} draftPath={state.draftPath} routes={routes} routeMenuOpen={state.routeMenuOpen} saveStatus={state.saveStatus} undoDepth={state.undoDepth} redoDepth={state.redoDepth} draftCount={state.draftCount} queuedCount={state.queuedCount} leading={toolbarLeading} trailing={toolbarTrailing} studioLayout={studioLayout} onMode={setMode} onDevice={(device) => dispatch({ type: 'SET_DEVICE', device })} onDraftPath={(path) => dispatch({ type: 'SET_DRAFT_PATH', path })} onApplyPath={applyPath} onRouteMenu={(open) => dispatch({ type: 'SET_ROUTE_MENU', open })} onReload={reload} onUndo={() => void changeHistory('undo')} onRedo={() => void changeHistory('redo')} onCode={() => dispatch({ type: 'SET_PANEL', panel: 'code', open: true })} onExitEdit={exitEditMode} onPublish={() => void publishDraft()} onReject={() => setRejectOpen(true)} />
       {(state.queuedCount > 0 || publishJob) && (
-        <div className="flex items-center gap-2 border-be bg-blue-500/5 px-3 py-2 text-sm" role="status" aria-live="polite">
-          {publishJob?.status === 'completed' ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600" /> : publishJob?.status === 'failed' ? <XCircle className="size-4 shrink-0 text-destructive" /> : <Loader2 className="size-4 shrink-0 motion-safe:animate-spin text-blue-600" />}
+        <div className="flex items-center gap-2 border-be bg-primary/5 px-3 py-2 text-sm" role="status" aria-live="polite">
+          {publishJob?.status === 'completed' ? <CheckCircle2 className="size-4 shrink-0 text-done" /> : publishJob?.status === 'failed' ? <XCircle className="size-4 shrink-0 text-destructive" /> : <Loader2 className="size-4 shrink-0 motion-safe:animate-spin text-primary" />}
           <span className="min-w-0 truncate">{publishJob?.status === 'completed' ? 'Новая версия опубликована.' : publishJob?.status === 'failed' ? (publishJob.error || 'Публикация не удалась — черновик восстановлен.') : (publishJob?.message || 'Диспетчер применяет изменения к исходному коду и публикует новую версию…')}</span>
         </div>
       )}

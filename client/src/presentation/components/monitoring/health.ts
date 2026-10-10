@@ -43,16 +43,17 @@ export function statusTone(status: ServerHealthStatus): HealthTone {
   }
 }
 
-// Заливка прогресс-бара. ok = нейтрально-активный sky (как было исторически), не зелёный —
-// чтобы «нормальная» полоса не выглядела как «успех-действие».
+// Заливка прогресс-бара. ok = нейтрально-активный синий акцент (primary), не зелёный —
+// чтобы «нормальная» полоса не выглядела как «успех-действие». Цвета — статусные токены
+// дизайна C4 (warning/destructive), одинаковые в светлой и тёмной теме по смыслу.
 export function barFillClass(tone: HealthTone): string {
   switch (tone) {
     case 'crit':
-      return 'bg-red-500';
+      return 'bg-destructive';
     case 'warn':
-      return 'bg-amber-500';
+      return 'bg-warning';
     case 'ok':
-      return 'bg-sky-500';
+      return 'bg-primary';
     default:
       return 'bg-muted-foreground/30';
   }
@@ -62,37 +63,37 @@ export function barFillClass(tone: HealthTone): string {
 export function metricTextClass(tone: HealthTone): string {
   switch (tone) {
     case 'crit':
-      return 'text-red-600 dark:text-red-400';
+      return 'text-destructive';
     case 'warn':
-      return 'text-amber-600 dark:text-amber-400';
+      return 'text-warning';
     default:
       return '';
   }
 }
 
-// Мягкая «таблетка» bg/15 + текст — для статус-бейджей и HTTP/SSL-чипов.
+// Мягкая «таблетка» (подложка *-soft + текст) — для статус-бейджей и HTTP/SSL-чипов.
 export function toneChipClass(tone: HealthTone): string {
   switch (tone) {
     case 'ok':
-      return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400';
+      return 'bg-done-soft text-done-ink';
     case 'warn':
-      return 'bg-amber-500/15 text-amber-600 dark:text-amber-400';
+      return 'bg-warning-soft text-warning-ink';
     case 'crit':
-      return 'bg-red-500/15 text-red-600 dark:text-red-400';
+      return 'bg-destructive-soft text-destructive';
     default:
       return 'bg-muted text-muted-foreground';
   }
 }
 
-// Severity у алертов имеет свою палитру: info = sky (а не зелёный ok).
+// Severity у алертов имеет свою палитру: info = синий акцент (а не зелёный ok).
 export function severityChipClass(severity: AlertSeverity): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-500/15 text-red-600 dark:text-red-400';
+      return 'bg-destructive-soft text-destructive';
     case 'warning':
-      return 'bg-amber-500/15 text-amber-600 dark:text-amber-400';
+      return 'bg-warning-soft text-warning-ink';
     default:
-      return 'bg-sky-500/15 text-sky-600 dark:text-sky-400';
+      return 'bg-primary-soft text-primary-ink';
   }
 }
 
@@ -100,11 +101,11 @@ export function severityChipClass(severity: AlertSeverity): string {
 export function statusDotClass(status: ServerHealthStatus): string {
   switch (statusTone(status)) {
     case 'ok':
-      return 'bg-emerald-500';
+      return 'bg-done';
     case 'warn':
-      return 'bg-amber-500';
+      return 'bg-warning';
     case 'crit':
-      return 'bg-red-500';
+      return 'bg-destructive';
     default:
       return 'bg-muted-foreground/40';
   }

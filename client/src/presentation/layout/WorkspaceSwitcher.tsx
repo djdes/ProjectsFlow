@@ -101,7 +101,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
         <DropdownMenuTrigger
           title={user.displayName}
           className={cn(
-            'group flex items-center rounded-md text-start text-sm transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/[0.06]',
+            'group flex items-center rounded-md text-start text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             compact ? 'justify-center p-1' : 'min-w-0 flex-1 gap-2 px-2 py-1.5',
           )}
         >

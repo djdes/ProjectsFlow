@@ -11,7 +11,8 @@ export type SegmentOption<T extends string> = {
 };
 
 // Сегментированный переключатель с плавно «переезжающей» активной пилюлей (spring, как rail).
-// Единая высота сегментов (h-8 desktop, ≥40px touch на мобайле) — чтобы кнопки были ровными.
+// Вид C4: серая подложка, выбранный сегмент — белая плашка с лёгкой тенью (в тёмной теме —
+// приподнятая графитовая). Единая высота сегментов (h-7 desktop, ≥40px touch на мобайле).
 // Анимация гейтится useMotion (+ pf-no-motion / reduced-motion → мгновенно).
 export function SegmentedControl<T extends string>({
   options,
@@ -28,13 +29,13 @@ export function SegmentedControl<T extends string>({
 }): React.ReactElement {
   const { animations } = useMotion();
   const layoutId = useId();
-  const seg = size === 'sm' ? 'h-7 px-2.5 max-sm:h-9' : 'h-8 px-3 max-sm:h-10';
+  const seg = size === 'sm' ? 'h-6 px-2 max-sm:h-9' : 'h-7 px-2.5 max-sm:h-10';
 
   return (
     <div
       role="tablist"
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg border bg-card p-0.5 text-xs',
+        'inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.06] p-0.5 text-ui dark:border dark:border-border dark:bg-panel',
         className,
       )}
     >
@@ -49,17 +50,17 @@ export function SegmentedControl<T extends string>({
             aria-label={opt.ariaLabel ?? opt.label}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'relative inline-flex items-center justify-center gap-1.5 rounded-md font-medium',
+              'relative inline-flex items-center justify-center gap-1.5 rounded-md',
               'transition-colors duration-150 active:scale-[0.96]',
               seg,
-              active ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+              active ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground hover:text-foreground',
             )}
           >
             {active && (
               <motion.span
                 aria-hidden
                 layoutId={animations ? `seg-${layoutId}` : undefined}
-                className="absolute inset-0 rounded-md bg-primary shadow-sm"
+                className="absolute inset-0 rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
                 transition={
                   animations ? { type: 'spring', stiffness: 460, damping: 34 } : { duration: 0 }
                 }

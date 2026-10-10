@@ -342,7 +342,7 @@ export function ListView({
                     type="button"
                     aria-label={collapsedGroups.has(g.key) ? 'Развернуть группу' : 'Свернуть группу'}
                     onClick={() => toggleGroup(g.key)}
-                    className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                    className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground"
                   >
                     <ChevronDown
                       className={cn('size-3.5 motion-safe:transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
@@ -363,7 +363,7 @@ export function ListView({
                           status: grouping === 'status' ? (g.key as Task['status']) : 'backlog',
                         })
                       }
-                      className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                      className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground"
                     >
                       <Plus className="size-3.5" />
                     </button>
@@ -448,7 +448,7 @@ export function ListView({
 
       <DragOverlay dropAnimation={null}>
         {dragTask ? (
-          <div className="pointer-events-none max-w-[16rem] truncate rounded-md border bg-card px-2 py-1 text-sm font-medium shadow-lg ring-1 ring-primary/20">
+          <div className="pointer-events-none max-w-[16rem] truncate rounded-md bg-card px-2 py-1 text-sm font-medium shadow-float ring-1 ring-primary/20">
             {taskTitle(dragTask)}
           </div>
         ) : null}
@@ -557,7 +557,7 @@ function ListRow({
           }}
           className={cn(
             // Notion list: компактная строка ровно 30px.
-            'group relative flex min-h-[30px] cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 transition-colors hover:bg-accent/50',
+            'group relative flex min-h-[30px] cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 transition-colors hover:bg-hover',
             rowColor,
             selected && 'bg-primary/5',
             isDragging && 'opacity-40',
@@ -583,7 +583,7 @@ function ListRow({
                 e.stopPropagation();
                 onToggleExpand?.();
               }}
-              className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground"
             >
               <ChevronDown className={cn('size-3.5 motion-safe:transition-transform', !expanded && '-rotate-90')} />
             </button>
@@ -603,7 +603,7 @@ function ListRow({
               aria-label="Добавить задачу ниже"
               title="Добавить задачу ниже"
               onClick={onInsertBelow}
-              className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground"
             >
               <Plus className="size-3.5" />
             </button>
@@ -623,7 +623,7 @@ function ListRow({
                     if (e.defaultPrevented) return;
                     setGripMenuOpen(true);
                   }}
-                  className="grid size-5 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing"
+                  className="grid size-5 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground active:cursor-grabbing"
                 >
                   <GripVertical className="size-3.5" />
                 </button>
@@ -673,7 +673,7 @@ function ListRow({
                   e.stopPropagation();
                   onStartEdit();
                 }}
-                className="grid size-5 shrink-0 place-items-center rounded border bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover:opacity-100"
+                className="grid size-5 shrink-0 place-items-center rounded bg-raised text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-foreground group-hover:opacity-100"
               >
                 <Pencil className="size-3" />
               </button>

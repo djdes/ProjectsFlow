@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
+import { WorkspaceCrumbs } from '@/presentation/layout/InboxBreadcrumbs';
+import { PageTopBar } from '@/presentation/layout/PageChrome';
 import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 import { AiComposer } from '@/presentation/components/ai/AiComposer';
@@ -64,19 +67,34 @@ export function AiPage(): React.ReactElement {
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+      {/* Шапка C4, как у остальных разделов пространства; на мобиле — шапка приложения. */}
+      <PageTopBar className="hidden sm:flex">
+        <WorkspaceCrumbs icon={<Sparkles className="size-3.5 shrink-0" />} label="ИИ" />
+      </PageTopBar>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-5 py-8 md:px-10 md:py-12">
-        <div className="flex flex-1 flex-col items-center justify-center py-8 text-center md:py-10">
-          <div className="mbe-6 grid size-16 place-items-center rounded-[22px] bg-foreground text-background shadow-[0_18px_60px_oklch(20.77%_0.04_265.75/0.2)]"><Sparkles className="size-8" /></div>
-          <h1 className="text-display font-semibold tracking-tight">ProjectsFlow ИИ</h1>
-          <p className="mbs-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
-          <div className="mbs-7 w-full max-w-2xl text-start">
-            <AiComposer conversationId={null} sending={busy} onSend={createAndSend} autoFocus />
-            <AiComposerPresets className="mbs-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
+        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-8 sm:px-6 md:py-12">
+          <div className="flex flex-1 flex-col items-center justify-center py-8 text-center md:py-10">
+            <div className="mbe-6 grid size-14 place-items-center rounded-xl bg-foreground text-background">
+              <Sparkles className="size-7" />
+            </div>
+            <h1 className="text-display font-semibold tracking-tight">ProjectsFlow ИИ</h1>
+            <p className="mbs-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
+            <div className="mbs-7 w-full max-w-2xl text-start">
+              <AiComposer conversationId={null} sending={busy} onSend={createAndSend} autoFocus />
+              <AiComposerPresets className="mbs-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void create()}
+              disabled={busy}
+              className="mbs-3 gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="size-4" />
+              Открыть пустой чат
+            </Button>
           </div>
-          <button type="button" onClick={() => void create()} disabled={busy} className="mbs-3 inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition hover:bg-hover hover:text-foreground disabled:opacity-50"><Plus className="size-4" />Открыть пустой чат</button>
         </div>
-      </div>
       </div>
     </main>
   );

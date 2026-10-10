@@ -1,4 +1,6 @@
 /* First paint before the application bundle. No account data is cached here. */
+/* Палитра — та же, что у приложения (дизайн C4/C3, styles/globals.css): белый лист и серые
+   колонки в светлой теме, графит #16171B с колонками #1D1E23 в тёмной. */
 /* Схема цвета холста и нативных контролов — до загрузки бандла (good-css «One set of color
    tokens»): тему выбирает пользователь, класс .dark ставит FOUC-скрипт в index.html. */
 :root {
@@ -19,8 +21,8 @@ body {
     Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
 }
 .dark #pf-boot {
-  color: oklch(94.91% 0 none);
-  background: oklch(21.34% 0 none);
+  color: oklch(94.59% 0.003 264.54);
+  background: oklch(20.53% 0.008 274.52);
 }
 #pf-boot .pf-boot-shell {
   display: grid;
@@ -29,12 +31,12 @@ body {
   overflow: hidden;
 }
 #pf-boot aside {
-  background: oklch(97.34% 0.003 84.56);
+  background: oklch(97.56% 0.003 106.45);
   padding: 14px 12px;
   overflow: hidden;
 }
 .dark #pf-boot aside {
-  background: oklch(24.35% 0 none);
+  background: oklch(22.32% 0.01 276.61);
 }
 #pf-boot i {
   position: relative;
@@ -45,7 +47,7 @@ body {
   height: 12px;
 }
 .dark #pf-boot i {
-  background: oklch(30.92% 0 none);
+  background: oklch(29.85% 0.015 274.37);
 }
 #pf-boot i::after {
   content: "";
@@ -92,6 +94,10 @@ body {
   align-items: center;
   gap: 12px;
   padding: 0 12px;
+  border-block-end: 1px solid oklch(93.35% 0.003 106.45);
+}
+.dark #pf-boot header {
+  border-block-end-color: oklch(31.05% 0.015 274.41);
 }
 #pf-boot header i {
   width: 100px;
@@ -128,8 +134,8 @@ body {
   box-sizing: border-box;
   padding: 12px;
   margin-block-end: 16px;
-  border-radius: 12px;
-  background: oklch(97.66% 0.002 67.8);
+  border-radius: 10px;
+  background: oklch(97.56% 0.003 106.45);
 }
 #pf-boot .pf-boot-shelf > i {
   width: 80px;
@@ -145,7 +151,7 @@ body {
   margin-block-start: 8px;
 }
 .dark #pf-boot .pf-boot-shelf {
-  background: oklch(25.2% 0 none);
+  background: oklch(23.61% 0.01 276.66);
 }
 html[data-pf-boot="narrow"] #pf-boot .pf-boot-shelf {
   display: none;
@@ -153,13 +159,13 @@ html[data-pf-boot="narrow"] #pf-boot .pf-boot-shelf {
 #pf-boot .pf-boot-column {
   width: 276px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 12px;
   box-sizing: border-box;
-  background: oklch(97.66% 0.002 67.8);
+  background: oklch(97.56% 0.003 106.45);
 }
 .dark #pf-boot .pf-boot-column {
-  background: oklch(25.2% 0 none);
+  background: oklch(23.61% 0.01 276.66);
 }
 #pf-boot .pf-boot-column > i {
   width: 96px;
@@ -168,15 +174,15 @@ html[data-pf-boot="narrow"] #pf-boot .pf-boot-shelf {
   margin-block-end: 18px;
 }
 #pf-boot .pf-boot-card {
-  border: 1px solid oklch(93.42% 0.003 84.56);
+  border: 1px solid oklch(93.35% 0.003 106.45);
   border-radius: 8px;
   padding: 14px;
   background: oklch(100% 0 none);
   margin-block-end: 8px;
 }
 .dark #pf-boot .pf-boot-card {
-  border-color: oklch(33.29% 0 none);
-  background: oklch(21.34% 0 none);
+  border-color: oklch(31.05% 0.015 274.41);
+  background: oklch(26.91% 0.012 270.96);
 }
 #pf-boot .pf-boot-card i + i {
   width: 65%;
@@ -300,12 +306,12 @@ html[data-pf-boot="calendar"] #pf-boot .pf-boot-column {
 }
 .dark #pf-boot .pf-boot-board,
 .dark #pf-boot .pf-boot-card {
-  border-color: oklch(33.29% 0 none);
+  border-color: oklch(31.05% 0.015 274.41);
 }
 .dark[data-pf-boot="calendar"] #pf-boot .pf-boot-board {
   background-image:
-    linear-gradient(to right, oklch(33.29% 0 none) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(33.29% 0 none) 1px, transparent 1px);
+    linear-gradient(to right, oklch(31.05% 0.015 274.41) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(31.05% 0.015 274.41) 1px, transparent 1px);
 }
 @keyframes pf-boot-sweep {
   to {

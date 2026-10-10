@@ -141,7 +141,7 @@ function FmField({ fieldKey, value, onChange }: FieldProps): React.ReactElement 
     // Object or other — readonly JSON display
     return (
       <div className="space-y-1.5">
-        <Label>{fieldKey} <span className="text-xs text-amber-500">(объект — только чтение)</span></Label>
+        <Label>{fieldKey} <span className="text-xs text-warning">(объект — только чтение)</span></Label>
         <pre className="rounded-md border bg-muted p-2 text-xs overflow-x-auto">{JSON.stringify(value, null, 2)}</pre>
       </div>
     );

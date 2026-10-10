@@ -413,14 +413,15 @@ function TaskListRow({
           // На таче (max-sm) и при фокусе внутри строки — всегда видна.
           <div className="mbs-1 flex items-center gap-2 text-2xs text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
             <AssigneeBadge assignee={task.assignee} />
+            {/* Счётчики нейтральные, как на карточке канбана: цвет в C4 — только у смысла статуса. */}
             {(task.commentCount ?? 0) > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
+              <span className="flex items-center gap-1">
                 <MessageSquare className="size-2.5" />
                 {task.commentCount}
               </span>
             )}
             {(task.attachmentCount ?? 0) > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
+              <span className="flex items-center gap-1">
                 <ImageIcon className="size-2.5" />
                 {task.attachmentCount}
               </span>

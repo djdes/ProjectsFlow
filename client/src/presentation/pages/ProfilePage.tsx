@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Activity, ArrowLeft, Monitor, Moon, Sun } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Activity, Monitor, Moon, Sun, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -13,6 +12,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ import { PlanAndUsageCard } from '@/presentation/components/profile/PlanAndUsage
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { CompletedStatsCard } from '@/presentation/components/profile/CompletedStatsCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SectionPage } from '@/presentation/pages/SectionPage';
 
 function PersonalDataCard(): React.ReactElement {
   const { user, loading } = useCurrentUser();
@@ -93,7 +95,7 @@ function PersonalDataCard(): React.ReactElement {
           <CardTitle>Личные данные</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-24 pf-skeleton rounded bg-muted" />
+          <Skeleton className="h-24" />
         </CardContent>
       </Card>
     );
@@ -148,7 +150,6 @@ function PersonalDataCard(): React.ReactElement {
               type="button"
               variant="outline"
               size="sm"
-              className="motion-safe:transition-transform active:scale-95"
               onClick={() => fileRef.current?.click()}
             >
               Загрузить аватар
@@ -244,6 +245,12 @@ function SecurityCard(): React.ReactElement {
   );
 }
 
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Светлая', icon: <Sun className="size-4" /> },
+  { value: 'dark', label: 'Тёмная', icon: <Moon className="size-4" /> },
+  { value: 'system', label: 'Система', icon: <Monitor className="size-4" /> },
+] as const;
+
 function PreferencesCard(): React.ReactElement {
   const { theme, setTheme } = useTheme();
   const { animations, setAnimations } = useMotion();
@@ -256,31 +263,14 @@ function PreferencesCard(): React.ReactElement {
       <CardContent className="space-y-6">
         <div className="space-y-3">
           <Label>Тема</Label>
-          {/* Сегмент-контрол вместо card-radio: одинаковые по размеру кнопки, единый
-              визуальный язык с остальными переключателями. */}
-          <div className="inline-flex w-full rounded-lg bg-muted p-0.5 sm:max-w-md">
-            {(['light', 'dark', 'system'] as const).map((value) => {
-              const Icon = value === 'light' ? Sun : value === 'dark' ? Moon : Monitor;
-              const active = theme === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setTheme(value)}
-                  aria-pressed={active}
-                  className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {value === 'light' ? 'Светлая' : value === 'dark' ? 'Тёмная' : 'Система'}
-                </button>
-              );
-            })}
-          </div>
+          {/* Общий переключатель вида (SegmentedControl) — тот же, что в остальных местах;
+              сетка из трёх равных колонок, чтобы сегменты были одного размера. */}
+          <SegmentedControl
+            className="grid w-full grid-cols-3 sm:max-w-md"
+            value={theme}
+            onChange={setTheme}
+            options={THEME_OPTIONS}
+          />
         </div>
 
         <div className="flex items-start justify-between gap-4 sm:max-w-md">
@@ -330,21 +320,7 @@ export function ProfilePage(): React.ReactElement {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pbe-12 pbs-3.5 sm:px-6">
-      {/* pf-burger-gap на ОБЁРТКЕ, а не на кнопке: правило даёт padding-left, и на ghost-кнопке
-          он раздул бы её ховер-подложку на всю ширину отступа и перебил -ml-3, которым кнопка
-          выровнена по тексту ниже. flex — чтобы не заводить строчный бокс со strut'ом. */}
-      <div className="pf-burger-gap flex">
-        <Button asChild variant="ghost" size="sm" className="-ms-3 gap-1">
-          <Link to="/">
-            <ArrowLeft />
-            Назад к&nbsp;проектам
-          </Link>
-        </Button>
-      </div>
-
-      <h1 className="text-xl font-semibold tracking-tight">Профиль</h1>
-
+    <SectionPage icon={User} label="Профиль" back={{ to: '/', label: 'Назад к\u00a0проектам' }} narrow>
       {/* Вкладка запоминается в адресе (?tab=stats): по ссылке на статистику попадаешь
           сразу в неё, а «назад» в браузере возвращает на настройки, а не на другую страницу. */}
       <Tabs value={tab} onValueChange={handleTabChange}>
@@ -353,26 +329,26 @@ export function ProfilePage(): React.ReactElement {
           <TabsTrigger value="stats">Статистика</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="stats" className="mbs-6 space-y-6">
+        <TabsContent value="stats" className="mbs-5 space-y-5">
           <CompletedStatsCard />
         </TabsContent>
 
-        <TabsContent value="settings" className="mbs-6 space-y-6">
-      <PersonalDataCard />
-      <PlanAndUsageCard />
-      <ProjectsShareCard />
-      <EmployeesCard />
-      <NotificationDefaultsCard />
-      <KanbanColorsCard />
-      <TelegramSection />
-      <GithubAccountSection />
-      <AgentAccessCard />
-      <SecurityCard />
-      <PreferencesCard />
-      <MonitoringCard />
-      <InstallAppPrompt variant="card" />
+        <TabsContent value="settings" className="mbs-5 space-y-5">
+          <PersonalDataCard />
+          <PlanAndUsageCard />
+          <ProjectsShareCard />
+          <EmployeesCard />
+          <NotificationDefaultsCard />
+          <KanbanColorsCard />
+          <TelegramSection />
+          <GithubAccountSection />
+          <AgentAccessCard />
+          <SecurityCard />
+          <PreferencesCard />
+          <MonitoringCard />
+          <InstallAppPrompt variant="card" />
         </TabsContent>
       </Tabs>
-    </div>
+    </SectionPage>
   );
 }

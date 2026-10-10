@@ -47,8 +47,8 @@ export function GithubAccountSection(): React.ReactElement {
           {loading ? (
             <div className="h-9 w-48 animate-pulse rounded bg-muted" />
           ) : connection ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
-              <CircleCheck className="size-5 shrink-0 text-emerald-500" />
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-done/30 bg-done/10 px-3 py-2">
+              <CircleCheck className="size-5 shrink-0 text-done" />
               <div className="flex-1">
                 <p className="text-sm">
                   Подключён как{' '}

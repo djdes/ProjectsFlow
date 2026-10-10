@@ -266,7 +266,8 @@ export function TasksPage(): React.ReactElement {
           вертикальном скролле строки рисуются ПОВЕРХ крошек/плашек. */}
       <div
         id="pf-project-crumbs"
-        className="pf-sticky-surface sticky inset-bs-0 z-40 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
+        // Дизайн C4: строка крошек 44px с линией снизу — как у всех страниц (PageTopBar).
+        className="pf-sticky-surface sticky inset-bs-0 z-40 hidden h-11 items-center justify-between gap-2 border-be bg-background px-2.5 sm:flex"
       >
         <ProjectBreadcrumbs
           projectId={data.id}

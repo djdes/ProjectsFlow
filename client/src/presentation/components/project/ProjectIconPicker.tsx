@@ -154,7 +154,7 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
             type="button"
             disabled={saving || disabled}
             aria-label="Добавить иконку проекта"
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:min-h-7 sm:rounded-md sm:py-0 sm:text-[13px] [&>svg]:shrink-0"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-50 sm:min-h-7 sm:rounded-md sm:py-0 sm:text-ui [&>svg]:shrink-0"
           >
             {saving ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <FolderIcon className="size-4" />}
             <span className="sm:hidden">Иконка</span>
@@ -206,7 +206,7 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
                 onClick={() => void choose(randomEmoji())}
                 aria-label="Случайная иконка"
                 title="Случайная иконка"
-                className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               >
                 <Shuffle className="size-4" />
               </button>
@@ -216,7 +216,7 @@ export function ProjectIconPicker({ projectId, icon, onChanged, disabled = false
                   onClick={() => void choose(null)}
                   aria-label="Убрать иконку"
                   title="Убрать иконку"
-                  className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="grid size-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -352,9 +352,9 @@ export function IconsPane({
                 aria-label={`Иконка ${name}`}
                 title={name}
                 className={cn(
-                  'grid aspect-square place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent',
+                  'grid aspect-square place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover',
                   !previewHex && 'hover:text-foreground',
-                  name === currentName && 'bg-accent ring-1 ring-primary/40',
+                  name === currentName && 'bg-primary-soft ring-1 ring-primary/40',
                 )}
               >
                 <Icon className="size-5" style={{ color: previewHex }} />
@@ -391,7 +391,7 @@ export function UploadPane({ onPick }: { onPick: (url: string) => void }): React
         type="button"
         disabled={busy}
         onClick={() => fileRef.current?.click()}
-        className="flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed py-8 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/50 disabled:opacity-60"
+        className="flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed py-8 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-hover disabled:opacity-60"
       >
         {busy ? <Loader2 className="size-5 motion-safe:animate-spin" /> : <ImageUp className="size-5" />}
         {busy ? 'Загрузка…' : 'Выбрать файл'}
@@ -472,8 +472,8 @@ function EmojiGridInner({
           onClick={() => onPick(e)}
           aria-label={`Иконка ${e}`}
           className={cn(
-            'grid aspect-square place-items-center rounded-md text-xl leading-none transition-colors hover:bg-accent',
-            e === current && 'bg-accent ring-1 ring-primary/40',
+            'grid aspect-square place-items-center rounded-md text-xl leading-none transition-colors hover:bg-hover',
+            e === current && 'bg-primary-soft ring-1 ring-primary/40',
           )}
         >
           <span aria-hidden>{e}</span>

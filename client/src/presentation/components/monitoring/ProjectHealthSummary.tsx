@@ -67,7 +67,7 @@ export function ProjectHealthSummary({
         </span>
       )}
       {alerts.length > 0 && (
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400">
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
           🔴 {plural(alerts.length, 'алерт', 'алерта', 'алертов')}
           {critical > 0 && <span className="text-muted-foreground">({critical} critical)</span>}
         </span>
@@ -77,7 +77,7 @@ export function ProjectHealthSummary({
       )}
 
       <div className="ms-auto flex items-center gap-2">
-        <div className="hidden items-center gap-0.5 rounded-md border bg-muted/50 p-0.5 lg:flex">
+        <div className="hidden items-center gap-0.5 rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel lg:flex">
           {(['compact', 'detailed'] as RowDensity[]).map((d) => (
             <button
               key={d}
@@ -85,7 +85,9 @@ export function ProjectHealthSummary({
               onClick={() => onDensityChange(d)}
               className={cn(
                 'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-                density === d ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                density === d
+                  ? 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {d === 'compact' ? 'Компактно' : 'Подробно'}

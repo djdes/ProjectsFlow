@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils';
 
 // Тёмный тултип — как в Base44. Глобальный TooltipContent светлый (bg-popover) и трогать
 // его нельзя: он обслуживает ещё десяток мест. Поэтому красим точечно, здесь.
-const DARK_TOOLTIP = 'max-w-[260px] border-transparent bg-neutral-900 text-white';
+// Тёмная подпись: общий тултип — светлая поверхность меню, тёмный вид включается явно.
+const DARK_TOOLTIP = 'max-w-[260px] border-transparent bg-foreground text-background';
 
 // В lucide 0.469 нет ни CloudCheck, ни CloudX, поэтому «облако с галочкой» и «облако с
 // крестиком» собираем сами: контур облака — из lucide (ISC, пакет уже в зависимостях),
@@ -115,7 +116,7 @@ export function SaveStatusIndicator({ state }: { state: StudioSaveState }): Reac
             // size-8, как у соседних кнопок хедера (тема, скрыть панель) — иначе
             // индикатор не встаёт с ними на одну линию.
             'grid size-8 shrink-0 place-items-center rounded-md',
-            tone === 'error' ? 'text-destructive' : tone === 'dirty' ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground',
+            tone === 'error' ? 'text-destructive' : tone === 'dirty' ? 'text-warning' : 'text-muted-foreground',
           )}
           role="status"
           aria-live="polite"
@@ -127,7 +128,7 @@ export function SaveStatusIndicator({ state }: { state: StudioSaveState }): Reac
       </TooltipTrigger>
       <TooltipContent side="bottom" className={DARK_TOOLTIP}>
         {label}
-        {hint ? <span className="mbs-0.5 block text-white/70">{hint}</span> : null}
+        {hint ? <span className="mbs-0.5 block text-background/70">{hint}</span> : null}
       </TooltipContent>
     </Tooltip>
   );

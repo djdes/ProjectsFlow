@@ -63,7 +63,7 @@ function reasonText(reason: string | null): string {
 }
 
 function statusIcon(status: CommentNotification['status']): React.ReactElement {
-  if (status === 'sent') return <Check className="size-3.5 text-emerald-600" />;
+  if (status === 'sent') return <Check className="size-3.5 text-done" />;
   if (status === 'failed') return <AlertCircle className="size-3.5 text-destructive" />;
   return <MinusCircle className="size-3.5 text-muted-foreground" />;
 }
@@ -230,7 +230,7 @@ export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Pro
                           <span
                             className={cn(
                               'ms-auto inline-flex items-center gap-1',
-                              r.status === 'sent' && 'text-emerald-600',
+                              r.status === 'sent' && 'text-done',
                               r.status === 'failed' && 'text-destructive',
                             )}
                           >

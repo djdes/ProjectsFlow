@@ -1,14 +1,14 @@
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   CalendarClock,
   ChevronDown,
   History,
   Loader2,
   RefreshCw,
   Send,
+  Settings,
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,9 +63,14 @@ import { WorkspaceMembersPanel } from '@/presentation/components/project/Workspa
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
 import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPicker';
+import { SectionPage } from '@/presentation/pages/SectionPage';
 
+// Нативный select в виде поля ввода (Input): bg-field, 44px на мобиле и 32px на десктопе.
 const ROLE_SELECT_CLASS =
-  'h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+  'h-11 rounded-md border border-input bg-field px-2 text-sm focus-visible:border-primary/70 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/20 disabled:opacity-50 sm:h-8 sm:text-ui';
+
+// Группа настроек внутри карточки — серая панель вместо рамки (дизайн C4).
+const GROUP_CLASS = 'rounded-lg bg-panel px-3';
 
 
 
@@ -86,40 +92,25 @@ export function WorkspaceSettingsPage(): React.ReactElement {
 
   if (!workspace) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 p-6">
-        {/* Обёртка ради pf-burger-gap: отступ должен двигать кнопку, не перекрывая её
-            -ml-3 (им она выровнена по тексту ниже) и не растягивая ghost-подложку. */}
-        <div className="pf-burger-gap flex">
-          <Button asChild variant="ghost" size="sm" className="-ms-3 gap-1">
-            <Link to="/">
-              <ArrowLeft />
-              На&nbsp;главную
-            </Link>
-          </Button>
-        </div>
+      <SectionPage icon={Settings} label="Настройки" back={{ to: '/', label: 'На\u00a0главную' }} narrow>
         <p className="text-muted-foreground">Пространство не&nbsp;найдено или у&nbsp;вас нет доступа.</p>
-      </div>
+      </SectionPage>
     );
   }
 
+  // Крошки — «Пространство › Настройки»; заголовок — имя настраиваемого пространства: его
+  // открывают и из переключателя для НЕтекущего пространства, и заголовок говорит, какого.
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pbe-12 pbs-3.5 sm:px-6">
-      {/* Обёртка ради pf-burger-gap — см. комментарий в ветке «пространство не найдено».
-          Заметно только на узком окне: шире max-w-2xl колонка отъезжает от бургера сама. */}
-      <div className="pf-burger-gap flex">
-        <Button asChild variant="ghost" size="sm" className="-ms-3 gap-1">
-          <Link to="/">
-            <ArrowLeft />
-            Назад
-          </Link>
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-9 text-base" />
-        <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
-      </div>
-
+    <SectionPage
+      icon={Settings}
+      label="Настройки"
+      title={workspace.name}
+      titleIcon={
+        <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-7 text-sm" iconPx={18} />
+      }
+      back={{ to: '/', label: 'Назад' }}
+      narrow
+    >
       <RenameCard
         workspaceId={workspace.id}
         initialName={workspace.name}
@@ -166,7 +157,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
           onDeleted={() => navigate('/')}
         />
       )}
-    </div>
+    </SectionPage>
   );
 }
 
@@ -283,7 +274,7 @@ function TaskApprovalCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+        <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
           <Switch
             checked={value}
             disabled={!canManage || saving}
@@ -354,7 +345,7 @@ function WorkerCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+        <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
           <Switch
             checked={value}
             disabled={!canManage || saving}
@@ -488,7 +479,7 @@ function KanbanColumnsCard({
             {columns.map((c) => (
               <li
                 key={c.label}
-                className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+                className={cn('flex flex-wrap items-center gap-2 py-2', GROUP_CLASS)}
               >
                 <span className="min-w-0 flex-1 truncate text-sm">{c.label}</span>
                 <span className="text-xs tabular-nums text-muted-foreground">
@@ -497,7 +488,7 @@ function KanbanColumnsCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-destructive hover:text-destructive"
+                  className="text-destructive hover:bg-destructive-soft hover:text-destructive"
                   disabled={!canManage || busy}
                   onClick={() => void deleteEverywhere(c.label)}
                 >
@@ -910,7 +901,7 @@ function AssigneeDigestCard({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2">
-              <CalendarClock className="size-5 text-primary" />
+              <CalendarClock className="size-5 text-muted-foreground" />
               Telegram-расписание пространства
             </CardTitle>
             <CardDescription>
@@ -923,7 +914,7 @@ function AssigneeDigestCard({
       </CardHeader>
       <CardContent className="space-y-5">
         {loading || !draft ? (
-          <div className="h-32 pf-skeleton rounded bg-muted" />
+          <Skeleton className="h-32" />
         ) : (
           <>
             <div className="space-y-2">
@@ -1041,7 +1032,7 @@ function AssigneeDigestCard({
                   }
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+              <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
                 <Switch
                   checked={draft.personalEnabled}
                   disabled={!canManage}
@@ -1055,7 +1046,7 @@ function AssigneeDigestCard({
                   для этого не нужна.
                 </span>
               </div>
-              <div className="space-y-3 rounded-md border px-3 py-3">
+              <div className={cn('space-y-3 py-3', GROUP_CLASS)}>
                 <div className="flex flex-wrap items-center gap-3">
                   <Label className="min-w-32">Сверка коммитов</Label>
                   <Input
@@ -1124,17 +1115,17 @@ function AssigneeDigestCard({
                       <label
                         key={option.value}
                         className={cn(
-                          'flex min-w-[13rem] flex-1 items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
+                          'flex min-w-[13rem] flex-1 items-start gap-2 rounded-md border bg-card px-3 py-2 text-sm transition-colors',
                           modeDraft === option.value
-                            ? 'border-primary bg-primary/5'
-                            : 'border-input hover:bg-accent',
+                            ? 'border-primary bg-primary-soft'
+                            : 'border-border hover:bg-hover',
                           canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
                         )}
                       >
                         <input
                           type="radio"
                           name={`commit-sync-action-${workspaceId}`}
-                          className="mbs-0.5"
+                          className="mbs-0.5 accent-primary"
                           checked={modeDraft === option.value}
                           disabled={!canManage}
                           onChange={() => {
@@ -1177,7 +1168,7 @@ function AssigneeDigestCard({
                         <div className="flex gap-3 text-xs">
                           <button
                             type="button"
-                            className="text-primary hover:underline"
+                            className="text-primary-ink hover:underline"
                             onClick={selectAllCommitProjects}
                           >
                             Выбрать все
@@ -1201,7 +1192,7 @@ function AssigneeDigestCard({
                             <label
                               key={project.id}
                               className={cn(
-                                'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                                'flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm',
                                 canManage ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
                               )}
                             >
@@ -1225,7 +1216,7 @@ function AssigneeDigestCard({
                   проект не&nbsp;нужно.
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+              <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
                 <Switch
                   checked={draft.eodReminderEnabled}
                   disabled={!canManage}
@@ -1269,7 +1260,7 @@ function AssigneeDigestCard({
                   напомнить обновить статусы в группе
                 </span>
               </div>
-              <div className="space-y-2 rounded-md border px-3 py-3">
+              <div className={cn('space-y-2 py-3', GROUP_CLASS)}>
                 <div>
                   <Label>Дни отправки</Label>
                   <p className="text-xs text-muted-foreground">
@@ -1291,6 +1282,7 @@ function AssigneeDigestCard({
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="radio"
+                    className="accent-primary"
                     name={`assignee-digest-projects-${workspaceId}`}
                     checked={draft.projectMode === 'all'}
                     disabled={!canManage}
@@ -1301,6 +1293,7 @@ function AssigneeDigestCard({
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="radio"
+                    className="accent-primary"
                     name={`assignee-digest-projects-${workspaceId}`}
                     checked={draft.projectMode === 'selected'}
                     disabled={!canManage}
@@ -1335,6 +1328,7 @@ function AssigneeDigestCard({
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="radio"
+                    className="accent-primary"
                     name={`assignee-digest-recipients-${workspaceId}`}
                     checked={draft.recipientMode === 'all'}
                     disabled={!canManage}
@@ -1345,6 +1339,7 @@ function AssigneeDigestCard({
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="radio"
+                    className="accent-primary"
                     name={`assignee-digest-recipients-${workspaceId}`}
                     checked={draft.recipientMode === 'selected'}
                     disabled={!canManage}
@@ -1438,7 +1433,7 @@ function ProjectsCard({ workspaceId }: { workspaceId: string }): React.ReactElem
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="h-16 pf-skeleton rounded bg-muted" />
+          <Skeleton className="h-16" />
         ) : (projects?.length ?? 0) === 0 ? (
           <p className="text-sm text-muted-foreground">В&nbsp;пространстве пока нет проектов.</p>
         ) : (
@@ -1512,7 +1507,7 @@ function DangerZoneCard({
   };
 
   return (
-    <Card className="border-destructive/40">
+    <Card>
       <CardHeader>
         <CardTitle className="text-destructive">Опасная зона</CardTitle>
         <CardDescription>Удаление пространства необратимо.</CardDescription>
@@ -1520,7 +1515,7 @@ function DangerZoneCard({
       <CardContent className="space-y-2">
         <Button
           variant="outline"
-          className={cn('gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive')}
+          className="gap-2 text-destructive hover:bg-destructive-soft hover:text-destructive"
           disabled={blockedReason !== null}
           onClick={() => setConfirmOpen(true)}
         >
@@ -1543,8 +1538,8 @@ function DangerZoneCard({
               Отмена
             </Button>
             <Button
-              variant="outline"
-              className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              variant="destructive"
+              className="gap-2"
               disabled={saving}
               onClick={() => void doDelete()}
             >

@@ -199,7 +199,7 @@ export function RepositoryCodeEditor({
 
   return (
     <div className="overflow-clip rounded-xl border bg-background">
-      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-be bg-muted/15 px-3 py-2">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-be bg-panel px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {tree?.fullName ?? "GitHub repository"}
@@ -235,14 +235,14 @@ export function RepositoryCodeEditor({
         </div>
       </div>
       {tree?.truncated && (
-        <div className="flex items-center gap-2 border-be border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+        <div className="flex items-center gap-2 border-be border-warning/20 bg-warning/5 px-3 py-2 text-xs text-warning-ink">
           <AlertTriangle className="size-3.5" />
           GitHub вернул неполное дерево очень большого репозитория.
         </div>
       )}
       <div className="grid min-h-[560px] lg:grid-cols-[290px_minmax(0,1fr)]">
         <aside
-          className="max-h-[680px] overflow-auto border-be bg-muted/5 p-2 lg:border-be-0 lg:border-e"
+          className="max-h-[680px] overflow-auto border-be bg-panel p-2 lg:border-be-0 lg:border-e"
           aria-label="Файлы репозитория"
         >
           {treeLoading && (
@@ -273,8 +273,8 @@ export function RepositoryCodeEditor({
                   }
                   title={entry.path}
                   className={cn(
-                    "flex h-8 w-full items-center gap-1.5 rounded-md pe-2 text-start text-xs hover:bg-muted/70",
-                    file?.path === entry.path && "bg-muted font-medium",
+                    "flex h-8 w-full items-center gap-1.5 rounded-md pe-2 text-start text-xs hover:bg-hover",
+                    file?.path === entry.path && "bg-active font-medium",
                   )}
                   style={{ paddingLeft: 8 + depth * 14 }}
                 >
@@ -287,9 +287,9 @@ export function RepositoryCodeEditor({
                         )}
                       />
                       {open ? (
-                        <FolderOpen className="size-3.5 text-amber-500" />
+                        <FolderOpen className="size-3.5 text-muted-foreground" />
                       ) : (
-                        <Folder className="size-3.5 text-amber-500" />
+                        <Folder className="size-3.5 text-muted-foreground" />
                       )}
                     </>
                   ) : (
@@ -312,28 +312,28 @@ export function RepositoryCodeEditor({
             <StateMessage text="Репозиторий пуст." />
           )}
         </aside>
-        <section className="flex min-w-0 flex-col bg-zinc-950 text-zinc-100">
-          <div className="flex min-h-12 flex-wrap items-center gap-2 border-be border-white/10 px-3 py-2">
+        <section className="flex min-w-0 flex-col text-foreground">
+          <div className="flex min-h-12 flex-wrap items-center gap-2 border-be px-3 py-2">
             <div className="min-w-0 flex-1">
-              <p className="truncate font-mono text-xs text-zinc-200">
+              <p className="truncate font-mono text-xs text-foreground">
                 {file?.path ?? "Выберите файл слева"}
               </p>
               {file && (
-                <p className="truncate font-mono text-2xs text-zinc-500">
+                <p className="truncate font-mono text-2xs text-muted-foreground">
                   sha {file.sha.slice(0, 12)} ·{" "}
                   {file.size.toLocaleString("ru-RU")} Б
                 </p>
               )}
             </div>
             {dirty && (
-              <span className="rounded-full bg-amber-400/15 px-2 py-1 text-2xs font-medium text-amber-300">
+              <span className="rounded-sm bg-warning-soft px-1.5 py-0.5 text-2xs font-medium text-warning-ink">
                 не сохранено
               </span>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 text-zinc-300 hover:bg-white/10 hover:text-white"
+              className="size-8 text-muted-foreground hover:text-foreground"
               onClick={() => void reloadFile()}
               disabled={!file || fileLoading || saving}
               aria-label="Перезагрузить файл"
@@ -356,13 +356,13 @@ export function RepositoryCodeEditor({
             </Button>
           </div>
           {fileError && (
-            <div className="border-be border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200">
+            <div className="border-be border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               {fileError}
             </div>
           )}
           <div className="relative min-h-0 flex-1">
             {fileLoading && (
-              <div className="absolute inset-0 z-10 grid place-items-center bg-zinc-950/70">
+              <div className="absolute inset-0 z-10 grid place-items-center bg-background/70">
                 <Loader2 className="size-5 motion-safe:animate-spin" />
               </div>
             )}
@@ -382,10 +382,10 @@ export function RepositoryCodeEditor({
                 readOnly={!canEdit}
                 spellCheck={false}
                 aria-label={`Редактор ${file.path}`}
-                className="min-h-[500px] w-full resize-none bg-transparent p-4 font-mono text-xs leading-6 text-zinc-100 outline-none"
+                className="min-h-[500px] w-full resize-none bg-transparent p-4 font-mono text-xs leading-6 text-foreground outline-none"
               />
             ) : (
-              <div className="grid min-h-[500px] place-items-center px-6 text-center text-sm text-zinc-500">
+              <div className="grid min-h-[500px] place-items-center px-6 text-center text-sm text-muted-foreground">
                 Выберите текстовый файл в дереве репозитория.
                 <br />
                 Секреты, бинарные и слишком большие файлы защищены сервером.
@@ -393,16 +393,16 @@ export function RepositoryCodeEditor({
             )}
           </div>
           {file && (
-            <div className="flex flex-wrap items-center gap-2 border-bs border-white/10 p-3">
+            <div className="flex flex-wrap items-center gap-2 border-bs p-3">
               <input
                 value={commitMessage}
                 onChange={(event) => setCommitMessage(event.target.value)}
                 maxLength={240}
                 disabled={!canEdit || saving}
                 placeholder={`Сообщение коммита (необязательно)`}
-                className="h-9 min-w-[240px] flex-1 rounded-md border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-blue-400"
+                className="h-9 min-w-[240px] flex-1 rounded-md border border-input bg-field px-3 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/70"
               />
-              <span className="text-2xs text-zinc-500">Ctrl/⌘ + S</span>
+              <span className="text-2xs text-muted-foreground">Ctrl/⌘ + S</span>
             </div>
           )}
         </section>

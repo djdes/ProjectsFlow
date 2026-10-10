@@ -35,7 +35,7 @@ export function AiAgentStepsBlock({
       )}
       {needsReview && (
         <p className="flex items-center gap-1.5 py-1 text-muted-foreground">
-          <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0 text-amber-500" />
+          <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
           Требуется подтверждение
         </p>
       )}

@@ -61,12 +61,14 @@ export function MobileBottomNav(): React.ReactElement {
   return (
     <nav
       aria-label="Основная навигация"
-      className="shrink-0 px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2"
+      // Дизайн C4: нижняя полоса с линией сверху (как линия под шапкой страниц), внутри —
+      // тот же переключатель, что «Мои / Все»: серая подложка и белая плашка выбранного.
+      className="shrink-0 border-bs bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2"
     >
       <div
         ref={innerRef}
         data-pf-no-edge-swipe
-        className="relative mx-auto flex max-w-md touch-pan-y select-none items-stretch rounded-[1.5rem] border border-border/80 bg-background p-1.5 shadow-[0_4px_20px_oklch(0%_0_none/0.07)] dark:shadow-[0_4px_20px_oklch(0%_0_none/0.3)]"
+        className="relative mx-auto flex max-w-md touch-pan-y select-none items-stretch rounded-xl bg-foreground/[0.05] p-1 dark:border dark:border-border dark:bg-panel"
         onPointerDown={(event) => {
           if (!event.isPrimary) {
             suppressClickRef.current = true;
@@ -159,9 +161,9 @@ export function MobileBottomNav(): React.ReactElement {
         <span
           ref={indicatorRef}
           aria-hidden
-          className="pf-nav-glass pointer-events-none absolute inset-y-1.5 start-1.5 rounded-[1.125rem] bg-primary/10 transition-[transform,opacity] duration-300 ease-out dark:bg-primary/15"
+          className="pf-nav-glass pointer-events-none absolute inset-y-1 start-1 rounded-lg bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] transition-[transform,opacity] duration-300 ease-out dark:bg-raised dark:shadow-none"
           style={{
-            width: `calc((100% - 0.75rem) / ${items.length})`,
+            width: `calc((100% - 0.5rem) / ${items.length})`,
             opacity: activeIndex < 0 ? 0 : 1,
             transform: `translateX(${Math.max(0, activeIndex) * 100}%)`,
           }}
@@ -175,10 +177,10 @@ export function MobileBottomNav(): React.ReactElement {
             aria-current={item.active ? 'page' : undefined}
             onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path)}
             className={cn(
-              'relative z-10 flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[1.125rem] px-2 py-1.5 text-2xs font-medium leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+              'relative z-10 flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-2xs leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
               item.active
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'font-semibold text-foreground'
+                : 'font-medium text-muted-foreground hover:text-foreground',
             )}
           >
             <span className="relative inline-flex">

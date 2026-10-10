@@ -69,16 +69,17 @@ export const PROPERTY_TYPE_ICONS: Record<TaskPropertyType, LucideIcon> = {
   person: Users,
 };
 
-// Пилюля опции select/multi_select — те же цвета, что у условного цвета строк.
+// Пилюля опции select/multi_select — те же тона Notion, что у условного цвета строк и меток
+// проектов (.pf-tone-* в globals.css).
 const OPTION_PILL: Record<string, string> = {
-  red: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
-  orange: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300',
-  yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
-  green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
-  purple: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
-  pink: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-300',
-  gray: 'bg-muted text-muted-foreground',
+  red: 'pf-tone-red bg-tone-bg text-tone-fg',
+  orange: 'pf-tone-orange bg-tone-bg text-tone-fg',
+  yellow: 'pf-tone-yellow bg-tone-bg text-tone-fg',
+  green: 'pf-tone-green bg-tone-bg text-tone-fg',
+  blue: 'pf-tone-blue bg-tone-bg text-tone-fg',
+  purple: 'pf-tone-purple bg-tone-bg text-tone-fg',
+  pink: 'pf-tone-pink bg-tone-bg text-tone-fg',
+  gray: 'pf-tone-gray bg-tone-bg text-tone-fg',
 };
 const OPTION_COLOR_CYCLE: ViewRuleColor[] = [
   'blue',
@@ -421,7 +422,7 @@ export function PropertyHeaderCell({
                   }
                 : undefined
             }
-            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
             <span className="truncate">{property.name}</span>
@@ -467,7 +468,7 @@ export function PropertyHeaderCell({
                   }
                 }}
                 aria-label="Имя свойства"
-                className="h-7 w-full min-w-0 rounded-md bg-accent/60 px-2 text-sm outline-none ring-primary/40 focus:ring-2"
+                className="h-7 w-full min-w-0 rounded-md bg-panel px-2 text-sm outline-none ring-primary/40 focus:ring-2"
               />
             ) : (
               <span className="min-w-0 flex-1 truncate px-2 text-sm font-medium">
@@ -682,7 +683,7 @@ export function NewPropertyForm({
             type="button"
             aria-label="Поиск типа"
             onClick={() => setSearchOpen(true)}
-            className="grid size-11 shrink-0 place-items-center rounded-[10px] text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="grid size-11 shrink-0 place-items-center rounded-[10px] text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Search className="size-3.5" />
           </button>
@@ -697,8 +698,8 @@ export function NewPropertyForm({
               type="button"
               onClick={() => onCreate(t, name)}
               className={cn(
-                'flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-start text-sm transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                currentType === t && 'bg-accent/60 text-foreground',
+                'flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-start text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                currentType === t && 'bg-active text-foreground',
               )}
             >
               <Icon className="size-4 text-muted-foreground" />
@@ -746,8 +747,8 @@ function VisibilityRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'group/vrow flex items-center gap-1.5 rounded-md px-1 py-1 text-sm transition-colors hover:bg-accent/50',
-        isDragging && 'z-10 bg-accent shadow-sm',
+        'group/vrow flex items-center gap-1.5 rounded-md px-1 py-1 text-sm transition-colors hover:bg-hover',
+        isDragging && 'z-10 bg-popover shadow-menu',
       )}
     >
       {draggable ? (
@@ -769,7 +770,7 @@ function VisibilityRow({
         type="button"
         aria-label={isHidden ? `Показать ${item.label}` : `Скрыть ${item.label}`}
         onClick={onToggle}
-        className="grid size-6 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+        className="grid size-6 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-hover hover:text-foreground"
       >
         {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
       </button>
@@ -836,7 +837,7 @@ export function PropertyVisibilityPanel({
               <button
                 type="button"
                 onClick={() => onSetHidden(items.map((it) => it.key))}
-                className="text-2xs text-primary transition-opacity hover:opacity-70"
+                className="text-2xs text-primary-ink transition-opacity hover:opacity-70"
               >
                 Скрыть все
               </button>
@@ -873,7 +874,7 @@ export function PropertyVisibilityPanel({
               <button
                 type="button"
                 onClick={() => onSetHidden([])}
-                className="text-2xs text-primary transition-opacity hover:opacity-70"
+                className="text-2xs text-primary-ink transition-opacity hover:opacity-70"
               >
                 Показать все
               </button>
@@ -919,7 +920,7 @@ function CreateOptionInput({
       }}
       placeholder="Создать опцию…"
       aria-label="Создать опцию"
-      className="mx-1 mbe-1 w-[calc(100%-0.5rem)] rounded bg-accent/60 px-2 py-1 text-xs outline-none placeholder:text-muted-foreground/60"
+      className="mx-1 mbe-1 w-[calc(100%-0.5rem)] rounded bg-panel px-2 py-1 text-xs outline-none placeholder:text-muted-foreground/60"
     />
   );
 }
@@ -992,7 +993,7 @@ export function PropertyValueCell({
               текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
               Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
               перенос строки в тексте), Esc — отмена. */}
-          <div className="absolute -start-px -inset-bs-px z-30 w-[calc(100%+1px)] overflow-clip rounded-[3px] bg-popover shadow-[0_0_0_1px_oklch(16.84%_0_none/0.12),0_3px_12px_oklch(16.84%_0_none/0.16)] dark:shadow-[0_0_0_1px_oklch(100%_0_none/0.14),0_3px_12px_oklch(0%_0_none/0.5)]">
+          <div className="absolute -start-px -inset-bs-px z-30 w-[calc(100%+1px)] overflow-clip rounded-[3px] bg-popover shadow-menu">
             {property.type === 'text' ? (
               <textarea
                 autoFocus
@@ -1060,13 +1061,13 @@ export function PropertyValueCell({
           setEditing(true);
         }}
         className={cn(
-          'relative min-h-9 min-w-0 border-be border-s px-2 py-1 text-start text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+          'relative min-h-9 min-w-0 border-be border-s px-2 py-1 text-start text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
           rangeClass,
         )}
       >
         {value ? (
           property.type === 'url' ? (
-            <span className="truncate text-primary underline-offset-2 hover:underline">{value}</span>
+            <span className="truncate text-primary-ink underline-offset-2 hover:underline">{value}</span>
           ) : (
             <span className="block truncate">{value}</span>
           )
@@ -1106,13 +1107,13 @@ export function PropertyValueCell({
             role="gridcell"
             disabled={readOnly}
             className={cn(
-              'relative flex min-h-9 min-w-0 items-center gap-2 border-be border-s px-2 py-1 text-start text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+              'relative flex min-h-9 min-w-0 items-center gap-2 border-be border-s px-2 py-1 text-start text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
               rangeClass,
             )}
           >
             {current ? (
               <>
-                <span className="grid size-4 shrink-0 place-items-center overflow-clip rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
+                <span className="grid size-4 shrink-0 place-items-center overflow-clip rounded-full bg-primary-soft text-[9px] font-semibold text-primary-ink">
                   {current.avatarUrl ? (
                     <img src={current.avatarUrl} alt="" className="size-full object-cover" />
                   ) : (
@@ -1134,7 +1135,7 @@ export function PropertyValueCell({
               className="gap-2"
               onSelect={() => onChange(value === m.id ? '' : m.id)}
             >
-              <span className="grid size-5 shrink-0 place-items-center overflow-clip rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+              <span className="grid size-5 shrink-0 place-items-center overflow-clip rounded-full bg-primary-soft text-[10px] font-semibold text-primary-ink">
                 {m.avatarUrl ? (
                   <img src={m.avatarUrl} alt="" className="size-full object-cover" />
                 ) : (
@@ -1183,7 +1184,7 @@ export function PropertyValueCell({
           role="gridcell"
           disabled={readOnly}
           className={cn(
-            'relative flex min-h-9 min-w-0 flex-wrap items-center gap-1 border-be border-s px-2 py-1 text-start transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+            'relative flex min-h-9 min-w-0 flex-wrap items-center gap-1 border-be border-s px-2 py-1 text-start transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
             rangeClass,
           )}
         >

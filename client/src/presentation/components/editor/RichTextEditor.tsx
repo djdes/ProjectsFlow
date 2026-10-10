@@ -789,7 +789,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
                 e.preventDefault();
                 openBlockMenu();
               }}
-              className="flex size-7 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
+              className="flex size-7 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-hover hover:text-muted-foreground"
             >
               <Plus className="size-[18px]" />
             </button>
@@ -797,7 +797,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
               type="button"
               aria-label="Переместить блок"
               title="Потяните, чтобы переместить блок"
-              className="flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+              className="flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-hover hover:text-muted-foreground active:cursor-grabbing"
             >
               <GripVertical className="size-5" />
             </button>

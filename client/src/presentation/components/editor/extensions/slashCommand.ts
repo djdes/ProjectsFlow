@@ -22,52 +22,53 @@ type SlashItem = SuggestionItem & { run: (editor: Editor, range: Range) => void 
 const ICON = 'size-4';
 const ce = createElement;
 
-// Превью-рендеры для карточки справа (Notion-style): как выглядит блок этого типа.
-const previewText = ce('div', { className: 'text-sm text-neutral-200' }, 'Просто начните писать текст.');
+// Превью-рендеры для карточки справа (Notion-style): как выглядит блок этого типа. Карточка —
+// поверхность меню (bg-popover), поэтому цвета — обычные токены текста.
+const previewText = ce('div', { className: 'text-sm text-foreground/80' }, 'Просто начните писать текст.');
 const previewHeading = (size: string, label: string): ReactElement =>
-  ce('div', { className: `${size} font-bold leading-tight text-white` }, label);
+  ce('div', { className: `${size} font-bold leading-tight text-foreground` }, label);
 const previewBullet = ce(
   'div',
-  { className: 'space-y-1 text-sm text-neutral-200' },
+  { className: 'space-y-1 text-sm text-foreground/80' },
   ce('div', { key: 'a' }, '•  Первый пункт'),
   ce('div', { key: 'b' }, '•  Второй пункт'),
 );
 const previewOrdered = ce(
   'div',
-  { className: 'space-y-1 text-sm text-neutral-200' },
+  { className: 'space-y-1 text-sm text-foreground/80' },
   ce('div', { key: 'a' }, '1.  Первый пункт'),
   ce('div', { key: 'b' }, '2.  Второй пункт'),
 );
 const previewTodo = ce(
   'div',
-  { className: 'space-y-1.5 text-sm text-neutral-200' },
+  { className: 'space-y-1.5 text-sm text-foreground/80' },
   ce(
     'div',
     { key: 'a', className: 'flex items-center gap-2' },
-    ce('span', { className: 'inline-block size-3.5 shrink-0 rounded-[3px] border border-neutral-500' }),
+    ce('span', { className: 'inline-block size-3.5 shrink-0 rounded-[3px] border border-foreground/35' }),
     'Сделать',
   ),
   ce(
     'div',
-    { key: 'b', className: 'flex items-center gap-2 text-neutral-400 line-through' },
-    ce('span', { className: 'inline-flex size-3.5 shrink-0 items-center justify-center rounded-[3px] bg-blue-500 text-[10px] text-white' }, '✓'),
+    { key: 'b', className: 'flex items-center gap-2 text-muted-foreground line-through' },
+    ce('span', { className: 'inline-flex size-3.5 shrink-0 items-center justify-center rounded-[3px] bg-primary text-[10px] text-primary-foreground' }, '✓'),
     'Готово',
   ),
 );
 const previewQuote = ce(
   'div',
-  { className: 'border-s-2 border-neutral-400 ps-2.5 text-sm italic text-neutral-300' },
+  { className: 'border-s-2 border-foreground/40 ps-2.5 text-sm italic text-foreground/75' },
   'Выделенная цитата.',
 );
 const previewCode = ce(
   'div',
-  { className: 'rounded-md bg-neutral-950 px-2.5 py-1.5 font-mono text-xs text-neutral-200' },
+  { className: 'rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs text-foreground/85' },
   'const x = 1;',
 );
 const previewDivider = ce(
   'div',
   { className: 'flex h-full items-center py-2' },
-  ce('div', { className: 'h-px w-full bg-neutral-500' }),
+  ce('div', { className: 'h-px w-full bg-border' }),
 );
 
 const SLASH_ITEMS: SlashItem[] = [

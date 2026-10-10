@@ -98,21 +98,18 @@ function ProjectChip({ name, icon }: { name: string; icon?: string | null }): Re
   );
 }
 
-// Общий вид сегмента-кнопки (триггер дропдауна). Notion-style: при hover нейтральная
-// заливка bg-hover; текущий сегмент — отчётливая мягкая «пилюля» (более плотная заливка),
-// чтобы текущая страница ясно читалась, а не выглядела чуть жирнее остальных.
+// Общий вид сегмента-кнопки (триггер дропдауна). Дизайн C4: крошки вторичным цветом,
+// текущий сегмент — основным цветом без подложки; у всех мягкая заливка по наведению
+// (текущий тоже открывает меню разделов, поэтому отклик на наведение у него есть).
 const segmentClass = (current?: boolean): string =>
   cn(
-    'flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors',
-    current
-      ? 'bg-foreground/[0.08] font-medium text-foreground dark:bg-white/[0.10]'
-      : 'text-muted-foreground hover:bg-hover hover:text-foreground',
+    'flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-hover',
+    current ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
   );
 
 // Подсветка ТЕКУЩЕГО пункта в выпадающих списках крошек — мягкая заливка (как в Notion),
 // а не просто жирный шрифт. data-[highlighted] (hover/keyboard) перекрывает её focus-bg'ом.
-const CURRENT_DROPDOWN_ITEM_CLASS =
-  'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/[0.08]';
+const CURRENT_DROPDOWN_ITEM_CLASS = 'bg-hover font-medium text-foreground';
 
 // Список разделов проекта рендерится в двух местах — в дропдауне сегмента проекта и во
 // вложенном подменю каждого проекта из списка «Проекты». Поэтому он компонент, а не
