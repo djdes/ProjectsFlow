@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import type { DueKind } from '../assignedGrouping';
 
 // Мелкие детали шапки и доски «Входящих» (дизайн C4 «Одна доска»): поиск, чипы срока,
@@ -13,12 +15,18 @@ export function InboxSearch({
   value,
   onChange,
   className,
+  autoFocus = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  // Телефон: поле появляется по кнопке-лупе и сразу получает фокус.
+  autoFocus?: boolean;
 }): React.ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
@@ -95,13 +103,20 @@ export function DueFilterChips({
   value,
   onChange,
   counts,
+  wrap = true,
 }: {
   value: DueKind | null;
   onChange: (value: DueKind | null) => void;
   counts: Readonly<Record<Exclude<DueKind, 'future'>, number>>;
+  // false — одна строка (на телефоне лента листается вбок, а не переносится).
+  wrap?: boolean;
 }): React.ReactElement {
   return (
-    <div role="group" aria-label="Срок" className="flex flex-wrap items-center gap-1.5">
+    <div
+      role="group"
+      aria-label="Срок"
+      className={cn('flex items-center gap-1.5', wrap ? 'flex-wrap' : 'shrink-0 flex-nowrap')}
+    >
       {DUE_CHIPS.map((chip) => {
         const on = value === chip.key;
         return (
@@ -111,7 +126,7 @@ export function DueFilterChips({
             aria-pressed={on}
             onClick={() => onChange(on ? null : chip.key)}
             className={cn(
-              'inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors sm:h-[26px] sm:text-meta',
+              'inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm transition-colors sm:h-[26px] sm:text-meta',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
                 : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
@@ -180,5 +195,130 @@ export function ManualIcon({ className }: { className?: string }): React.ReactEl
       <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.4" />
       <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" />
     </svg>
+  );
+}
+
+// Переключатель разделов «Входящих» на телефоне: «Сейчас» (решить и делаю) и «Очередь».
+// На узком экране две колонки рядом не помещаются, а стопкой «Сейчас» уводит очередь далеко
+// вниз — поэтому один раздел за раз, с числом задач в каждом. Липнет к верху при прокрутке.
+export type InboxSection = 'now' | 'queue';
+
+export function InboxSectionSwitch({
+  value,
+  onChange,
+  nowCount,
+  queueCount,
+  nowAttention,
+}: {
+  value: InboxSection;
+  onChange: (value: InboxSection) => void;
+  nowCount: number;
+  queueCount: number;
+  // В «Сейчас» есть сданная работа, которую ждут решения, — фиолетовая точка на разделе.
+  nowAttention: boolean;
+}): React.ReactElement {
+  const item = (key: InboxSection, label: string, count: number, attention = false): React.ReactElement => {
+    const on = value === key;
+    return (
+      <button
+        type="button"
+        data-pf-inbox-section-switch={key}
+        aria-pressed={on}
+        onClick={() => onChange(key)}
+        className={cn(
+          'relative flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm transition-colors',
+          on
+            ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
+            : 'font-medium text-muted-foreground',
+        )}
+      >
+        {label}
+        <span className="tabular-nums text-muted-foreground">{count}</span>
+        {attention && (
+          <span aria-hidden className="size-1.5 rounded-full bg-approval" />
+        )}
+      </button>
+    );
+  };
+  return (
+    <div
+      role="group"
+      aria-label="Раздел"
+      className="flex rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel"
+    >
+      {item('now', 'Сейчас', nowCount, nowAttention)}
+      {item('queue', 'Очередь', queueCount)}
+    </div>
+  );
+}
+
+// Свайп карточки вправо на тач-экране — «дальше по процессу» (из очереди в работу, из
+// «Вручную» в готово или на утверждение, на полке приёмки — принять). Под карточкой
+// проступает подложка с действием цветом его статуса; за порогом она становится плотной —
+// отпустите, и действие выполнится. Мышью жест не срабатывает: на десктопе есть плашка.
+export type SwipeAction = {
+  readonly label: string;
+  readonly tone: 'manual' | 'done' | 'approval';
+  readonly onCommit: () => void;
+};
+
+const SWIPE_TONE: Record<SwipeAction['tone'], { readonly soft: string; readonly armed: string }> = {
+  manual: { soft: 'bg-manual-soft text-manual-ink', armed: 'bg-manual text-background' },
+  done: { soft: 'bg-done-soft text-done-ink', armed: 'bg-done text-background' },
+  approval: { soft: 'bg-approval-soft text-approval-ink', armed: 'bg-approval text-background' },
+};
+
+// Функция, а не таблица элементов: JSX на уровне модуля исполнялся бы при импорте (в том
+// числе в node-тестах, где нет React-рантайма).
+function swipeIcon(tone: SwipeAction['tone']): React.ReactElement {
+  if (tone === 'manual') return <Play className="size-3.5 fill-current" />;
+  if (tone === 'done') return <Check className="size-4" strokeWidth={2.6} />;
+  return <ShieldCheck className="size-4" />;
+}
+
+export function SwipeToAct({
+  action,
+  disabled = false,
+  children,
+}: {
+  action: SwipeAction;
+  disabled?: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const { animations } = useMotion();
+  const { ref, offset, armed } = useCardSwipe({ disabled, onCommit: action.onCommit });
+  const tone = SWIPE_TONE[action.tone];
+  return (
+    // data-pf-no-edge-swipe — свайп карточки не должен открывать боковое меню. Обрезаем
+    // уехавшую карточку только во время жеста: в покое её свечение (непрочитанная,
+    // срочная) должно выходить за край.
+    <div
+      ref={ref}
+      data-pf-no-edge-swipe
+      className={cn('relative rounded-lg', offset > 0 && 'overflow-hidden')}
+    >
+      {offset > 0 && (
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-0 flex items-center gap-1.5 rounded-lg ps-3 text-meta font-semibold transition-colors duration-150',
+            armed ? tone.armed : tone.soft,
+          )}
+        >
+          {swipeIcon(action.tone)}
+          {action.label}
+        </div>
+      )}
+      <div
+        className="relative"
+        style={{
+          transform: offset > 0 ? `translateX(${offset}px)` : undefined,
+          // Возврат на место — только когда палец отпущен и анимации не выключены.
+          transition: offset === 0 && animations ? 'transform 180ms ease-out' : undefined,
+        }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }

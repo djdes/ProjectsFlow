@@ -58,11 +58,14 @@ export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
     let claimed = false;
     let active = false;
     let dx = 0;
+    // Был ли порог пройден на прошлом шаге — вибрируем только на входе за порог.
+    let armedOnce = false;
 
     const reset = (): void => {
       active = false;
       claimed = false;
       dx = 0;
+      armedOnce = false;
       setOffset(0);
     };
 
@@ -77,6 +80,7 @@ export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
       active = true;
       claimed = false;
       dx = 0;
+      armedOnce = false;
     };
 
     const onTouchMove = (e: TouchEvent): void => {
@@ -98,6 +102,16 @@ export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
       // Тянем только вправо: «дальше по процессу». Влево — ничего, чтобы жест не
       // читался как «отменить» и не требовал второго смысла.
       setOffset(Math.max(0, dx));
+      // Порог пройден — короткий отклик вибрацией (Android; где API нет — молча ничего).
+      const nowArmed = dx >= COMMIT_PX;
+      if (nowArmed && !armedOnce) {
+        try {
+          navigator.vibrate?.(10);
+        } catch {
+          /* ignore */
+        }
+      }
+      armedOnce = nowArmed;
     };
 
     const onTouchEnd = (): void => {

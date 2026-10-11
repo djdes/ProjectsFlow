@@ -255,13 +255,19 @@ export function BulkActionBar({
           initial={animations ? { y: 18, scale: 0.95, opacity: 0 } : false}
           animate={{ y: 0, scale: 1, opacity: 1 }}
           transition={animations ? { type: 'spring', stiffness: 440, damping: 30 } : { duration: 0 }}
-          className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80"
+          // Телефон: в одну строку с переносами панель разъезжалась на четыре ряда и закрывала
+          // пол-экрана. Там две строки: «Выбрано N» и крестик сверху, действия — лентой вбок;
+          // фон плотный — сквозь полупрозрачный проступал размытый текст карточек.
+          className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:grid max-sm:w-full max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-y-0.5 max-sm:bg-card max-sm:supports-[backdrop-filter]:bg-card"
         >
-        <span className="px-2 text-xs font-medium tabular-nums">
+        <span className="px-2 text-xs font-medium tabular-nums max-sm:text-sm max-sm:font-semibold">
           {disabled ? <Loader2 className="inline size-3.5 motion-safe:animate-spin" /> : `Выбрано ${count}`}
         </span>
-        <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
+        <span className="mx-0.5 h-5 w-px bg-border max-sm:hidden" aria-hidden />
 
+        {/* Действия. На десктопе обёртка не участвует в раскладке (contents) — кнопки идут
+            в общем ряду; на телефоне это вторая строка, которая листается вбок. */}
+        <div className="contents pf-scrollbar-hide max-sm:col-span-2 max-sm:row-start-2 max-sm:-mx-1.5 max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:overflow-x-auto max-sm:overscroll-x-contain max-sm:px-1.5 max-sm:[&>*]:shrink-0">
         {/* Назначить ответственного */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -444,7 +450,7 @@ export function BulkActionBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
+        <span className="mx-0.5 h-5 w-px bg-border max-sm:hidden" aria-hidden />
 
         {/* Экспорт: копировать / на почту / в Telegram */}
         <Button
@@ -481,7 +487,7 @@ export function BulkActionBar({
           В Telegram
         </Button>
 
-        <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
+        <span className="mx-0.5 h-5 w-px bg-border max-sm:hidden" aria-hidden />
 
         {/* Удалить */}
         <Button
@@ -494,12 +500,13 @@ export function BulkActionBar({
           <Trash2 className="size-3.5" />
           Удалить
         </Button>
+        </div>
 
-        <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
+        <span className="mx-0.5 h-5 w-px bg-border max-sm:hidden" aria-hidden />
         <Button
           variant="ghost"
           size="icon"
-          className="size-8"
+          className="size-8 max-sm:col-start-2 max-sm:row-start-1 max-sm:size-10"
           onClick={onExit}
           aria-label="Выйти из режима выделения"
           title="Выйти (Esc)"
