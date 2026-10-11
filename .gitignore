@@ -38,3 +38,6 @@ reference/
 
 # Subagent-driven-development scratch (ledger, briefs, review packages). Local only.
 .superpowers/
+
+# Smoke-test failure screenshots and logs (npm run test:smoke).
+e2e/smoke/.artifacts/

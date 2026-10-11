@@ -40,6 +40,24 @@ jobs:
       - name: Build client
         run: npm run build:client
 
+      # Смоук-тесты собранного клиента (e2e/smoke): браузер с подменённым /api проходит
+      # ключевые страницы на десктопе и телефоне. Красный смоук останавливает выкладку,
+      # как и серверные тесты. Chrome на ubuntu-latest предустановлен; если его не окажется,
+      # SMOKE_ALLOW_SKIP пропускает шаг с предупреждением, а не роняет деплой.
+      - name: Smoke tests
+        run: npm run test:smoke
+        env:
+          SMOKE_ALLOW_SKIP: '1'
+
+      - name: Upload smoke artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: e2e/smoke/.artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build landing
         run: npm run build:landing
 

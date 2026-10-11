@@ -26,6 +26,7 @@
     "test": "npm run test -w @projectsflow/client && npm run test -w @projectsflow/server",
     "test:client": "npm run test -w @projectsflow/client",
     "test:server": "npm run test -w @projectsflow/server",
+    "test:smoke": "node e2e/smoke/run.mjs",
     "start": "node server/dist/index.js",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
