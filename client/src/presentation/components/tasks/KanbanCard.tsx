@@ -235,87 +235,103 @@ function KanbanCardImpl({
 
   // Кнопки действий рендерятся в ДВУХ раскладках: десктоп — плавающий оверлей в правом
   // верхнем углу (по hover), мобила — статичный ряд, прижатый под текстом (всегда виден).
-  // big=true → тач-размер (size-9), иначе компактный десктопный (size-6).
-  const renderActions = (big: boolean): React.ReactNode =>
-    showActions ? (
-      <>
-        {checkboxVisible && (
-          <InboxCheckbox
-            task={task}
-            lastDoneTaskId={lastDoneTaskId}
-            lastTodoTaskId={lastTodoTaskId}
-            onChanged={onTaskChanged}
-            variant="toolbar"
-            doneTitle={awaitingApproval ? 'Принять работу' : undefined}
-            move={onMove ? (input) => onMove(task.id, input) : undefined}
-          />
-        )}
-        {onQuickPromote && promoteNext && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'group/promote shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
-              big ? 'size-9' : 'size-6',
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onQuickPromote(task);
-            }}
-            aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-            title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-          >
-            <ArrowRight
-              className={cn(
-                'motion-safe:transition-transform duration-150 group-hover/promote:translate-x-0.5',
-                big ? 'size-4' : 'size-3',
-              )}
-            />
-          </Button>
-        )}
-        {canWithdraw && (
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={withdrawing}
-            className={cn(
-              'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
-              big ? 'size-9' : 'size-6',
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              void withdraw();
-            }}
-            aria-label="Забрать с утверждения"
-            title="Забрать с утверждения и продолжить работу"
-          >
-            <Undo2 className={big ? 'size-4' : 'size-3'} />
-          </Button>
-        )}
-        {!frozenByApproval && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-destructive',
-              big ? 'size-9' : 'size-6',
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(task);
-            }}
-            aria-label="Удалить"
-          >
-            <Trash2 className={big ? 'size-4' : 'size-3'} />
-          </Button>
-        )}
-      </>
+  // big=true → тач-размер, иначе компактный десктопный (size-6). На телефоне все кнопки ряда
+  // одного размера — 40px: вариант icon у Button давал 44px, а чекбокс-кнопка — 32px, и
+  // ряд выглядел разнокалиберным, а в 32px пальцем промахивались.
+  const bigAction = 'size-9 max-sm:size-10';
+  const renderActions = (big: boolean): React.ReactNode => {
+    if (!showActions) return null;
+    const complete = checkboxVisible ? (
+      // contents — обёртка не участвует в раскладке; через неё доводим чекбокс-кнопку
+      // (общий компонент со «Входящими») до тач-размера только в мобильном ряду.
+      <span key="complete" className={cn('contents', big && 'max-sm:[&>button]:size-10')}>
+        <InboxCheckbox
+          task={task}
+          lastDoneTaskId={lastDoneTaskId}
+          lastTodoTaskId={lastTodoTaskId}
+          onChanged={onTaskChanged}
+          variant="toolbar"
+          doneTitle={awaitingApproval ? 'Принять работу' : undefined}
+          move={onMove ? (input) => onMove(task.id, input) : undefined}
+        />
+      </span>
     ) : null;
+    const promote =
+      onQuickPromote && promoteNext ? (
+        <Button
+          key="promote"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'group/promote shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
+            big ? bigAction : 'size-6',
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onQuickPromote(task);
+          }}
+          aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+          title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+        >
+          <ArrowRight
+            className={cn(
+              'motion-safe:transition-transform duration-150 group-hover/promote:translate-x-0.5',
+              big ? 'size-4' : 'size-3',
+            )}
+          />
+        </Button>
+      ) : null;
+    const withdrawButton = canWithdraw ? (
+      <Button
+        key="withdraw"
+        variant="ghost"
+        size="icon"
+        disabled={withdrawing}
+        className={cn(
+          'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
+          big ? bigAction : 'size-6',
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          void withdraw();
+        }}
+        aria-label="Забрать с утверждения"
+        title="Забрать с утверждения и продолжить работу"
+      >
+        <Undo2 className={big ? 'size-4' : 'size-3'} />
+      </Button>
+    ) : null;
+    const remove = !frozenByApproval ? (
+      <Button
+        key="remove"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-destructive',
+          big ? bigAction : 'size-6',
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(task);
+        }}
+        aria-label="Удалить"
+      >
+        <Trash2 className={big ? 'size-4' : 'size-3'} />
+      </Button>
+    ) : null;
+    // Телефон: порядок зеркальный — «выполнено» у правого края, ближе всего к середине
+    // карточки — корзина. На узкой карточке ряд кнопок доходит почти до её центра, и тап
+    // «по середине» попадал в «выполнено»: задача закрывалась вместо того, чтобы открыться.
+    // Корзина же только спрашивает подтверждение — промах по ней ничего не ломает.
+    return big ? [remove, withdrawButton, promote, complete] : [complete, promote, withdrawButton, remove];
+  };
 
   // Мета-бейджи (срок / приоритет / чеклист / комменты / статус / ответственный) — нижняя
   // строка карточки, видна всегда (дизайн C4: «снизу — срок и счётчики»).
+  // На телефоне мета переносится на вторую строку: справа в том же ряду стоят кнопки
+  // действий, и в одну строку чипы обрезались посередине («Фи…» вместо «Фича»).
   const metaInner = hasMeta ? (
-    <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
+    <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden max-sm:flex-wrap max-sm:gap-y-1">
       {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
       {task.priority ? <PriorityBadge priority={task.priority} /> : null}
       {checklist && (
@@ -369,7 +385,9 @@ function KanbanCardImpl({
         </span>
       )}
       {showAssignee && (
-        <span className="ms-auto flex shrink-0 items-center">
+        // На телефоне мета переносится, и прижатый вправо аватар уезжал один на третью
+        // строку — там он идёт в общем потоке за остальными бейджами.
+        <span className="ms-auto flex shrink-0 items-center max-sm:ms-0">
           <AssigneeBadge assignee={task.assignee} />
         </span>
       )}
@@ -559,7 +577,9 @@ function KanbanCardImpl({
             >
               {metaInner ?? <span className="flex-1" />}
               {showActions && (
-                <span className="flex shrink-0 items-center gap-0.5 sm:hidden" {...stopDragProps}>
+                // Без зазоров между кнопками: ряд из трёх 40px-кнопок и так занимает почти
+                // половину узкой карточки и не должен заходить за её середину (см. renderActions).
+                <span className="flex shrink-0 items-center sm:hidden" {...stopDragProps}>
                   {renderActions(true)}
                 </span>
               )}

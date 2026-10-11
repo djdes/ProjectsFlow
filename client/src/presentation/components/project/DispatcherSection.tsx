@@ -168,6 +168,8 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
                     ) : (
                       <Button
                         size="sm"
+                        // Имя кандидата делает подпись длинной: на телефоне — перенос и вся ширина.
+                        className="max-sm:h-auto max-sm:min-h-10 max-sm:w-full max-sm:whitespace-normal max-sm:py-2"
                         onClick={() => void save(candidates[0]!.userId)}
                         disabled={saving}
                       >
@@ -184,7 +186,10 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
                       value={pendingChoice ?? ''}
                       onChange={(e) => setPendingChoice(e.target.value || null)}
                       disabled={saving}
-                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                      // Ширину нативного select задаёт самая длинная опция («— ручной режим (нет
+                      // диспетчера) —»): на 320px он вылезал за экран. max-w-full держит его в
+                      // строке, на телефоне — во всю ширину, «Сохранить» переносится ниже.
+                      className="h-9 min-w-0 max-w-full rounded-md border bg-background px-2 text-sm max-sm:w-full"
                     >
                       <option value="">— ручной режим (нет диспетчера) —</option>
                       {candidates.map((c) => (

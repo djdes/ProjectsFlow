@@ -105,17 +105,24 @@ export function InstallAppPrompt({
     if (dismissed) return null;
     return (
       <>
-        <div className="flex shrink-0 items-center gap-2 border-be bg-primary/5 px-3 py-2 text-sm">
+        {/* Одна строка 40px вместе с линией снизу: полоса висит под шапкой на каждой странице,
+            и на 320×640 прежние 46px заметно отъедали экран. Крестик — полноценная тач-цель
+            44px: -my-1 прячет лишние 4px в соседей, высоту строки он не раздувает. */}
+        <div className="flex min-h-10 shrink-0 items-center gap-2 border-be bg-primary/5 pe-0.5 ps-3 text-ui">
           <span
             aria-hidden
-            className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground"
+            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-[9px] font-bold text-primary-foreground"
           >
             PF
           </span>
           <span className="min-w-0 flex-1 truncate text-muted-foreground">
             Установить на телефон
           </span>
-          <Button size="sm" className="h-7 shrink-0 gap-1 px-2.5" onClick={() => void handleInstall()}>
+          <Button
+            size="sm"
+            className="h-8 shrink-0 gap-1 px-2.5 text-ui"
+            onClick={() => void handleInstall()}
+          >
             <Plus className="size-3.5" />
             Установить
           </Button>
@@ -123,7 +130,7 @@ export function InstallAppPrompt({
             type="button"
             onClick={dismiss}
             aria-label="Скрыть"
-            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="-my-1 grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           >
             <X className="size-4" />
           </button>

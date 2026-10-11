@@ -242,7 +242,11 @@ export function TasksPage(): React.ReactElement {
     // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её родительский
     // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
     <div className="flex min-h-full min-w-0 flex-col" data-pf-project-page>
-      <div id="pf-project-mobile-header" className="pf-sticky-surface sticky inset-bs-0 z-40 flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
+      {/* Мобильная строка проекта (имя + активность/Поделиться/⋯) НЕ закреплена: над ней и так
+          висит шапка приложения, а при листании доски сверху закрепляется шапка колонки —
+          третья липкая полоса отнимала у карточек ещё 48px экрана. Строка уезжает вместе со
+          страницей и возвращается при прокрутке вверх. */}
+      <div id="pf-project-mobile-header" className="flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
         <div className="min-w-0 truncate text-sm font-medium">
           {data.icon ? `${data.icon} ` : ''}
           {data.name}
@@ -310,10 +314,15 @@ export function TasksPage(): React.ReactElement {
           плашки»: его высоту наблюдают ResizeObserver'ы липких офсетов (useBoardStickyTop,
           TableView). Если убрать сам узел, наблюдатели потеряли бы цель и шапки колонок
           остались бы на старом офсете. Пустой контейнер честно даёт высоту 0. */}
+      {/* На телефоне плашки НЕ закреплены — уезжают вместе со страницей: закреплённая плашка
+          в 120–140px вместе с шапками оставляла доске меньше половины экрана. Липкие офсеты
+          считают плашку, только когда она реально sticky (stickyStackHeight).
+          bg-background — непрозрачная подложка под полупрозрачными плашками: иначе на
+          десктопе уезжающие под закреплённую плашку карточки просвечивали сквозь её текст. */}
       <div
         id="pf-sticky-banners"
         className={cn(
-          'sticky inset-bs-11 z-[35] isolate',
+          'relative z-[35] isolate bg-background sm:sticky sm:inset-bs-11',
           // pf-sticky-surface рисует тень при скролле — у пустого (0px) контейнера она
           // выродилась бы в лишнюю линию под крошками, поэтому класс только когда есть контент.
           !bannersHidden && 'pf-sticky-surface',

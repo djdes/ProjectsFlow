@@ -1,5 +1,24 @@
 import { useEffect, useState } from 'react';
 
+// Высота элемента, только если он реально закреплён (position: sticky) и виден.
+function stickyHeight(id: string): number {
+  const el = document.getElementById(id);
+  if (!el || getComputedStyle(el).position !== 'sticky') return 0;
+  return el.offsetHeight;
+}
+
+// Высота собственного липкого «стека» страницы проекта внутри <main>: строка крошек
+// (#pf-project-crumbs) или её мобильная замена (#pf-project-mobile-header) плюс плашки
+// (#pf-sticky-banners). Каждый слой считается, только пока он реально закреплён: на телефоне
+// мобильная строка проекта и плашки обычные (уезжают со страницей), и прибавлять их высоту
+// к линии закрепления значило бы прятать шапки колонок/таблицы ниже, чем нужно.
+export function stickyStackHeight(): number {
+  return (
+    Math.max(stickyHeight('pf-project-crumbs'), stickyHeight('pf-project-mobile-header')) +
+    stickyHeight('pf-sticky-banners')
+  );
+}
+
 // Вертикальный офсет (в координатах вьюпорта), на котором закрепляются шапки колонок
 // канбана при скролле страницы.
 //
@@ -15,12 +34,8 @@ export function useBoardStickyTop(): number {
     const main = document.querySelector('main');
     const measure = (): void => {
       // Элементы читаем на каждом замере: плашки закрываются, крошки прячутся на мобиле.
-      const crumbs = document.getElementById('pf-project-crumbs');
-      const mobileHeader = document.getElementById('pf-project-mobile-header');
-      const banners = document.getElementById('pf-sticky-banners');
       const mainTop = main ? Math.max(0, main.getBoundingClientRect().top) : 0;
-      const headerHeight = Math.max(crumbs?.offsetHeight ?? 0, mobileHeader?.offsetHeight ?? 0);
-      setTop(Math.round(mainTop + headerHeight + (banners?.offsetHeight ?? 0)));
+      setTop(Math.round(mainTop + stickyStackHeight()));
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);

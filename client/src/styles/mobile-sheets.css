@@ -105,6 +105,11 @@
     pointer-events: auto;
     animation: pf-content-reveal 220ms var(--pf-ease);
   }
+  /* Тёмная тема: лист того же цвета, что страница, и 16% чёрного на графите не видно —
+     край листа терялся, казалось, что меню «врезано» в страницу. Затемняем заметнее. */
+  .dark [data-pf-mobile-backdrop='true'] {
+    background: oklch(0% 0 none / 0.5);
+  }
   .pf-sheet-handle {
     position: absolute;
     inset-block-start: 0;
@@ -120,6 +125,18 @@
     touch-action: none;
     user-select: none;
     transform: translateY(var(--pf-sheet-handle-scroll, 0px));
+    background: oklch(var(--background));
+  }
+  /* Длинный диалог листается целиком, и ручка едет за прокруткой. Подложкой была только её
+     96px-плашка: по бокам из-под неё выглядывали обрезанные строки и поля. Сплошная полоса
+     во всю ширину листа (скругление верхних углов срезает её по форме листа) — как шапка. */
+  .pf-sheet-handle::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(48px - 50vw);
+    inline-size: 100vw;
+    z-index: -1;
     background: oklch(var(--background));
   }
   .pf-sheet-handle:active {

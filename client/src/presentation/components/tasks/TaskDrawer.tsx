@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -663,7 +663,9 @@ function TaskStatusChip({
             type="button"
             disabled={saving}
             aria-label="Сменить статус"
-            className="inline-flex items-center border-s border-foreground/10 py-1 ps-1 pe-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
+            // На телефоне шеврон шире (40px): в 27px палец попадал в «шаг вперёд» соседней
+            // половины пилюли и переводил задачу вместо того, чтобы открыть список.
+            className="inline-flex items-center border-s border-foreground/10 py-1 ps-1 pe-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 max-sm:min-w-10 max-sm:justify-center max-sm:px-2.5"
           >
             <ChevronDown className="size-3.5 opacity-50" />
           </button>
@@ -1583,6 +1585,7 @@ export function TaskDrawer({
 
   // Закрытие шторки — двойная стрелка вправо (как «свернуть» у левой панели): окно
   // «уезжает» обратно за правый край. Стоит слева в шапке, крестика справа больше нет.
+  // На телефоне окно — нижний лист, «уехать вправо» ему некуда: там обычный крестик.
   const renderCloseButton = (): React.ReactElement => (
     <Button
       type="button"
@@ -1593,7 +1596,11 @@ export function TaskDrawer({
       aria-label="Закрыть"
       title="Закрыть"
     >
-      <ChevronsRight className="size-3.5 motion-safe:transition-transform duration-200 group-hover/x:translate-x-0.5" />
+      {isDesktop || asPage ? (
+        <ChevronsRight className="size-3.5 motion-safe:transition-transform duration-200 group-hover/x:translate-x-0.5" />
+      ) : (
+        <X className="size-4" />
+      )}
     </Button>
   );
 
@@ -2199,8 +2206,8 @@ export function TaskDrawer({
                     />
                   </div>
                   {/* Действия по правому краю ряда плюсиков: Копировать / Переработка / План
-                      (раньше были в шапке Row A). */}
-                  <div className="flex shrink-0 items-center gap-0.5">
+                      (раньше были в шапке Row A). На телефоне — тач-цели 40px вместо 32px. */}
+                  <div className="flex shrink-0 items-center gap-0.5 max-sm:[&>button]:size-10">
                     <CopyTaskButton description={editDescription || (task.description ?? '')} />
                     {/* AI переехала сюда (из плавающей таблетки над телом) — компактная,
                         в один ряд с Копировать/Переработать/План. */}
@@ -2462,9 +2469,13 @@ export function TaskDrawer({
                   // элементов создаёт лишний неявный flex-ребёнок и ломает раскладку.
                   // В narrow (общий скролл) композер липнет к низу окна, чтобы оставаться
                   // под рукой; в split — обычный футер колонки.
+                  // Свой отступ под home-indicator здесь не нужен: на телефоне окно — нижний
+                  // лист, и safe-area уже даёт его нижний паддинг (mobile-sheets.css), а
+                  // отдельная страница задачи стоит над нижней навигацией. Вдвоём они
+                  // оставляли под полем комментария пустую полосу ~70px.
                   <div
                     className={cn(
-                      'shrink-0 pbe-[env(safe-area-inset-bottom,0px)] sm:pbe-0',
+                      'shrink-0',
                       !isSplit && 'sticky inset-be-0 z-10 bg-background',
                     )}
                   >
@@ -2699,7 +2710,8 @@ export function TaskDrawer({
               </form>
 
               {/* Футер: AI слева, Отмена/Создать справа. */}
-              <div className="flex flex-col gap-2 border-bs bg-background px-3 pbe-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pbs-3 sm:flex-row sm:items-center sm:justify-between sm:pbe-3">
+              {/* safe-area снизу даёт сам нижний лист (mobile-sheets.css) — здесь только 12px. */}
+              <div className="flex flex-col gap-2 border-bs bg-background px-3 pbe-3 pbs-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <AiImproveButton
                     text={description}
@@ -3278,10 +3290,13 @@ function CommentItem({
         {/* Шапка строки коммента — высотой с аватар (min-h-7, items-center), чтобы ник/
             время были по центру относительно аватара (раньше items-baseline «ронял» аву). */}
         <div className="flex min-h-7 items-center gap-2">
+          {/* Телефон: имя и время — в две строки (время под именем). В одну строку рядом
+              с кнопками действий имя резалось до «Денис В…», а время переносилось. */}
+          <div className="flex min-w-0 items-center gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-0">
           {isAgent ? (
             // Notion-style: плоский комментарий без тонированной плиты; идентичность
             // агента — peach-аватар ✻ + имя цветом Claude + модель приглушённо.
-            <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className="flex min-w-0 max-w-full items-baseline gap-1.5">
               <span className="pf-claude-agent-title truncate">
                 {agentMeta(comment.agentName).name}
               </span>
@@ -3294,18 +3309,21 @@ function CommentItem({
               ⚙ Система
             </span>
           ) : (
-            <span className="truncate text-sm font-medium">{displayName}</span>
+            <span className="max-w-full truncate text-sm font-medium">{displayName}</span>
           )}
-          <span className="text-2xs text-muted-foreground/70">
+          <span className="whitespace-nowrap text-2xs text-muted-foreground/70">
             {formatCommentTime(comment.createdAt)}
             {isEdited && <span className="ms-1 opacity-70">· изменён</span>}
           </span>
+          </div>
           {/* Действия — ровный ряд size-6 кнопок (карандаш + три точки). Удаление
               переехало в меню три-точки. Native title — подпись при наведении.
-              На задаче в очереди приёмки ряда нет: тред заморожен. */}
+              На задаче в очереди приёмки ряда нет: тред заморожен.
+              На сенсорных экранах наведения нет: ряд виден всегда (раньше кнопки были
+              прозрачными, но нажимались и занимали место у имени), на телефоне — 40px. */}
           <div
             className={cn(
-              'ms-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+              'ms-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100',
               frozen && 'hidden',
             )}
           >
@@ -3314,7 +3332,7 @@ function CommentItem({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-6"
+                className="size-6 max-sm:size-10"
                 // onMouseDown (не onClick): успеваем считать выделение ДО его схлопывания.
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -3323,19 +3341,19 @@ function CommentItem({
                 aria-label="Ответить"
                 title="Ответить (выдели текст для цитаты)"
               >
-                <Reply className="size-3" />
+                <Reply className="size-3 max-sm:size-4" />
               </Button>
             )}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-6"
+              className="size-6 max-sm:size-10"
               onClick={enterEdit}
               aria-label="Редактировать"
               title="Редактировать"
             >
-              <Pencil className="size-3" />
+              <Pencil className="size-3 max-sm:size-4" />
             </Button>
             <CommentActionsMenu
               projectId={projectId}

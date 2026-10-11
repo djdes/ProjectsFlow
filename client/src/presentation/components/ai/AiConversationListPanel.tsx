@@ -140,7 +140,8 @@ export function AiConversationListPanel(): React.ReactElement {
         >
           <Plus className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-start">Новый чат</span>
-          <kbd className="shrink-0 rounded border bg-muted px-1.5 py-0.5 font-sans text-2xs font-normal text-muted-foreground">{NEW_CHAT_HINT}</kbd>
+          {/* Подсказка горячей клавиши на сенсорном экране ни к чему — там нет клавиатуры. */}
+          <kbd className="shrink-0 rounded border bg-muted px-1.5 py-0.5 font-sans text-2xs font-normal text-muted-foreground [@media(pointer:coarse)]:hidden">{NEW_CHAT_HINT}</kbd>
         </button>
       </div>
     </div>

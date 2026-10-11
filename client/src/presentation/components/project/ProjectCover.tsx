@@ -146,21 +146,25 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         className={cn(
-          'h-48 w-full bg-muted sm:h-64',
+          // На телефоне обложка — узкая полоса (112px): прежние 192px вместе с шапками
+          // и плашками уводили первую карточку доски за пределы первого экрана.
+          'h-28 w-full bg-muted sm:h-64',
           repositioning && !isGradient && 'cursor-grab touch-none active:cursor-grabbing',
         )}
       />
 
       {/* Панель управления — в правом ВЕРХНЕМ углу обложки (как в Notion). Видна сразу, как
-          только есть обложка (без наведения) — 3 кнопки: Поменять / Переместить / Скачать. */}
+          только есть обложка (без наведения) — 3 кнопки: Поменять / Переместить / Скачать.
+          На телефоне — квадратные иконки 40px с подписью для скринридера: три пилюли с
+          текстом занимали полосу обложки целиком. */}
       {canEdit && !repositioning && (
-        <div className="pointer-events-none absolute inset-x-0 inset-bs-0 flex justify-end p-3">
+        <div className="pointer-events-none absolute inset-x-0 inset-bs-0 flex justify-end p-2 sm:p-3">
           <div className="pointer-events-auto flex items-center gap-1.5">
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
-                <CoverButton>
+                <CoverButton compactOnMobile>
                   <ImageIcon className="size-3.5" />
-                  Поменять
+                  <span className="max-sm:sr-only">Поменять</span>
                 </CoverButton>
               </PopoverTrigger>
               <PopoverContent
@@ -180,11 +184,16 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
               </PopoverContent>
             </Popover>
             {/* Переместить: реально двигает только фото (у градиента позиция не важна). */}
-            <CoverButton onClick={startReposition} disabled={isGradient} aria-label="Переместить">
+            <CoverButton
+              compactOnMobile
+              onClick={startReposition}
+              disabled={isGradient}
+              aria-label="Переместить"
+            >
               <MoveVertical className="size-3.5" />
-              Переместить
+              <span className="max-sm:sr-only">Переместить</span>
             </CoverButton>
-            <CoverButton onClick={() => void download()} aria-label="Скачать">
+            <CoverButton compactOnMobile onClick={() => void download()} aria-label="Скачать">
               <Download className="size-3.5" />
             </CoverButton>
           </div>
@@ -218,17 +227,22 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
 }
 
 // Полупрозрачная тёмная «пилюля» поверх обложки (читается на любом фоне).
+// compactOnMobile — на телефоне квадрат 40px только с иконкой (подпись остаётся для
+// скринридера через max-sm:sr-only у вызывающего). Класс с `size-` заодно выводит кнопку
+// из глобального правила min-height 44px, которое растягивало пилюли по высоте.
 function CoverButton({
   children,
   className,
+  compactOnMobile = false,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>): React.ReactElement {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { compactOnMobile?: boolean }): React.ReactElement {
   return (
     <button
       type="button"
       className={cn(
         'inline-flex items-center gap-1 rounded-md bg-black/55 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-sm transition-colors',
         'hover:bg-black/70 disabled:opacity-50',
+        compactOnMobile && 'max-sm:size-10 max-sm:justify-center max-sm:rounded-lg max-sm:p-0 max-sm:[&>svg]:size-4',
         className,
       )}
       {...props}

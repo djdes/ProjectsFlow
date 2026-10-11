@@ -605,8 +605,11 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           {/* Панель действий (разделитель-линия сразу под «+ Подзадача/+ Файл»):
               слева — выбор проекта + icon-кнопки (Приоритет, Дедлайн, Ответственный,
               Режим воркера, AI-перефразировка); справа по краю — Отмена/Добавить. */}
+          {/* Телефон: инструменты — одна строка (при нехватке места листается вбок), под ней
+              «Добавить» во всю ширину, под большой палец. Раньше ряд переносился на две
+              строки, а «Добавить» висела третьей строкой у правого края. */}
           <div className="max-sm:flex-shrink-0 flex flex-col gap-2 border-bs pbs-2 sm:pbs-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1 max-sm:-mx-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-1 max-sm:[&>*]:shrink-0 pf-scrollbar-hide">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -684,7 +687,12 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               >
                 Отмена
               </Button>
-              <Button type="submit" size="sm" className="h-8 px-3 text-xs" disabled={disabled}>
+              <Button
+                type="submit"
+                size="sm"
+                className="h-8 px-3 text-xs max-sm:h-11 max-sm:flex-1 max-sm:text-sm"
+                disabled={disabled}
+              >
                 {saving ? 'Добавляем…' : 'Добавить'}
               </Button>
             </div>

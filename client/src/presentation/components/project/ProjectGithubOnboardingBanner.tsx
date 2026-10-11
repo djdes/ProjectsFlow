@@ -131,22 +131,37 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
       : isRetry
         ? 'Запустить повторно'
         : 'Запустить проект';
+  // Та же подпись короче — для телефона, где плашка в одну строку.
+  const shortActionLabel = loading
+    ? 'Проверяем…'
+    : activeLaunchTask
+      ? activeLaunchTask.status === 'in_progress'
+        ? 'Запускается'
+        : activeLaunchTask.status === 'awaiting_clarification'
+          ? 'Нужен ответ'
+          : 'Отправлено'
+      : isRetry
+        ? 'Повторить'
+        : 'Запустить';
 
   return (
     <>
-      <div data-pf-project-setup className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 sm:px-8 sm:pe-24">
-        <ProjectBannerDismissButton className="end-1 inset-bs-1 size-11 rounded-lg sm:end-16 sm:inset-bs-2 sm:size-7" />
+      {/* Телефон: плашка в одну строку 60px — «Код подключён», кнопка, крестик. Пояснение
+          и иконка там прячутся: плашка стоит над доской, и в две-три строки (~120px) она
+          вместе с обложкой и заголовком уводила первую карточку за первый экран. */}
+      <div data-pf-project-setup className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-2.5 sm:px-8 sm:py-3 sm:pe-24">
+        <ProjectBannerDismissButton className="end-1 inset-bs-2 size-11 rounded-lg sm:end-16 sm:size-7" />
         <div
-          className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-6 gap-y-2 pe-7 transition-[margin] duration-300"
+          className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-6 gap-y-2 pe-7 transition-[margin] duration-300 max-sm:flex-nowrap max-sm:gap-x-3 max-sm:pe-11"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
         >
-          <div className="flex min-w-0 basis-full items-center gap-3 sm:flex-1 sm:basis-64">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex min-w-0 basis-full items-center gap-3 max-sm:flex-1 max-sm:basis-auto sm:flex-1 sm:basis-64">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary max-sm:hidden">
               <Rocket className="size-4" />
             </span>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-foreground">Код подключён</div>
-              <p className="mbs-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+              <div className="truncate text-sm font-semibold text-foreground">Код подключён</div>
+              <p className="mbs-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground max-sm:hidden">
                 Воркер проверит проект и опубликует результат.
               </p>
             </div>
@@ -155,7 +170,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
             size="sm"
             disabled={loading || Boolean(activeLaunchTask)}
             onClick={() => setLaunchOpen(true)}
-            className="group ms-12 min-h-11 shrink-0 gap-2 px-3 text-xs sm:ms-0 sm:min-h-9"
+            className="group min-h-10 shrink-0 gap-2 px-3 text-xs sm:min-h-9"
           >
             {loading || activeLaunchTask?.status === 'in_progress' ? (
               <Loader2 className="size-4 motion-safe:animate-spin" />
@@ -164,9 +179,10 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
             ) : (
               <Play className="size-4 fill-current" />
             )}
-            {actionLabel}
+            <span className="sm:hidden">{shortActionLabel}</span>
+            <span className="hidden sm:inline">{actionLabel}</span>
             {!loading && !activeLaunchTask && (
-              <ArrowRight className="size-3.5 opacity-60 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-60 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             )}
           </Button>
         </div>
@@ -325,33 +341,37 @@ export function ProjectGithubOnboardingBanner({
               ))}
             </div>
           </div>
-          <div className="grid shrink-0 gap-2 sm:grid-cols-3">
+          {/* Телефон: три способа — плитками в один ряд (иконка над подписью), а не тремя
+              кнопками во всю ширину друг под другом: так плашка была выше экрана. */}
+          <div className="grid shrink-0 grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setIntro('create')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
             >
               <Github className="size-4" />
               Создать на GitHub
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             </button>
             <button
               type="button"
               onClick={() => setIntro('import')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-3.5 text-xs font-semibold text-foreground transition-colors hover:bg-hover"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-3.5 text-xs font-semibold text-foreground transition-colors hover:bg-hover max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
             >
               <Archive className="size-4" />
-              Импортировать ZIP
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
+              {/* «Импортировать» одним словом не помещалось в плитку на 320px. */}
+              <span className="sm:hidden">Импорт ZIP</span>
+              <span className="hidden sm:inline">Импортировать ZIP</span>
+              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             </button>
             <button
               type="button"
               onClick={() => setIntro('link')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-primary/20 bg-background px-3.5 text-xs font-semibold text-primary-ink transition-colors hover:border-primary/35 hover:bg-hover"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-primary/20 bg-background px-3.5 text-xs font-semibold text-primary-ink transition-colors hover:border-primary/35 hover:bg-hover max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
             >
               <Link2 className="size-4" />
               Привязать репозиторий
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             </button>
           </div>
         </div>

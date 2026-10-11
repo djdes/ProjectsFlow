@@ -56,16 +56,18 @@ type PendingFile = {
 
 // Единый минималистичный icon-кнопка (size-7 ghost) — мелкие, одного размера, чтобы
 // всё умещалось в один ряд. Иконки внутри — size-3.5 (см. ICON_GLYPH).
+// На телефоне ряд тот же, но кнопки — 40px тач-цели (в 28px пальцем попадали в соседа);
+// шесть кнопок по 40px помещаются в колонку и на 320px.
 const ICON_BTN =
-  'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40';
-const ICON_GLYPH = 'size-3.5';
+  'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40 max-sm:size-10';
+const ICON_GLYPH = 'size-3.5 max-sm:size-4';
 // I2: пикеры (режим/приоритет/дедлайн/ответственный) делим общую «пилюлю» с plain-кнопками —
 // size-7, rounded-md, тот же нейтральный hover-фон (bg-hover), чтобы нижний ряд был ровным.
 // Цвет иконки НЕ форсим (у пикеров он свой — приоритет/дедлайн бывают цветными).
 const ICON_BTN_ANIM =
-  'rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
+  'rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 max-sm:[&_svg]:size-4 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
 const ICON_BTN_PICKER =
-  'size-7 shrink-0 rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
+  'size-7 shrink-0 rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 max-sm:size-10 max-sm:[&_svg]:size-4 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
 
 type Props = {
   // Колбэк создания задачи. Передаёт выбранный/форсированный status.
@@ -336,7 +338,7 @@ export function TaskComposer({
       ralphMode={ralphMode}
       disabled={submitting}
       iconOnly
-      className="size-8"
+      className="size-8 max-sm:size-10"
     />
   );
   // Кнопка отправки (inline) — чистая accent-кнопка size-8, в одном ряду с AI справа от поля.
@@ -348,7 +350,7 @@ export function TaskComposer({
       disabled={!canSubmit}
       title="Отправить (Ctrl+Enter)"
       aria-label="Отправить"
-      className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100"
+      className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100 max-sm:size-10"
     >
       {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Send className="size-4" />}
     </button>
@@ -524,7 +526,7 @@ export function TaskComposer({
           disabled={submitting}
           variant="ghost"
           iconOnly
-          className={cn('!size-7 shrink-0 !p-0', ICON_BTN_ANIM)}
+          className={cn('!size-7 shrink-0 !p-0 max-sm:!size-10', ICON_BTN_ANIM)}
         />
         <PrioritySelect
           value={priority}
@@ -538,7 +540,7 @@ export function TaskComposer({
           onChange={setDeadline}
           disabled={submitting}
           iconOnly
-          className={cn('h-7', ICON_BTN_ANIM, deadline === null ? 'w-7 px-0' : 'px-2')}
+          className={cn('h-7 max-sm:h-10', ICON_BTN_ANIM, deadline === null ? 'w-7 px-0 max-sm:w-10' : 'px-2')}
         />
         <div className="ms-auto flex items-center gap-1">
           {/* В floating AI живёт здесь (в inline — рядом с отправкой сверху). */}

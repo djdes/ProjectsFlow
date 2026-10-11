@@ -332,7 +332,9 @@ export function ListView({
         onDragEnd={handleRowDragEnd}
         onDragCancel={() => setDragTask(null)}
       >
-      <div className="flex flex-col ps-12">
+      {/* ps-12 — поле под hover-контролы строки (Notion). На телефоне наведения нет, контролы
+          там скрыты (см. ListRow), и поле в 48px только отнимало ширину у названий. */}
+      <div className="flex flex-col ps-12 max-sm:ps-0">
         {(grouping && groups
           ? (groups.flatMap((g) => {
               const sample = g.tasks[0];
@@ -558,6 +560,9 @@ function ListRow({
           className={cn(
             // Notion list: компактная строка ровно 30px.
             'group relative flex min-h-[30px] cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 transition-colors hover:bg-hover',
+            // Телефон: свойства уходят второй строкой под название — в одну строку они
+            // забирали всю ширину, и от названия оставалось «Со…» или ничего.
+            'max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-2',
             rowColor,
             selected && 'bg-primary/5',
             isDragging && 'opacity-40',
@@ -590,10 +595,12 @@ function ListRow({
           ) : (
             depth > 0 && <span className="size-4 shrink-0" aria-hidden />
           )}
-          {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (клик-меню/drag) и чекбокс. */}
+          {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (клик-меню/drag) и чекбокс.
+              На телефоне их нет: без наведения они были невидимыми, но нажимались. Меню
+              задачи там открывается долгим нажатием на строку. */}
           <div
             className={cn(
-              'absolute -start-14 inset-bs-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
+              'absolute -start-14 inset-bs-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100 max-sm:hidden',
               anySelected || selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             )}
             onClick={(e) => e.stopPropagation()}
@@ -655,7 +662,9 @@ function ListRow({
             <>
               <span
                 className={cn(
-                  'min-w-0 truncate text-sm font-medium',
+                  // max-sm:flex-1 — на телефоне название держится в одной строке с иконкой и
+                  // режется «…», а не перескакивает целиком на строку ниже.
+                  'min-w-0 truncate text-sm font-medium max-sm:flex-1',
                   task.status === 'done' &&
                     'text-muted-foreground line-through decoration-muted-foreground/40',
                   // Notion: безымянная страница — серый плейсхолдер.
@@ -673,15 +682,16 @@ function ListRow({
                   e.stopPropagation();
                   onStartEdit();
                 }}
-                className="grid size-5 shrink-0 place-items-center rounded bg-raised text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-foreground group-hover:opacity-100"
+                className="grid size-5 shrink-0 place-items-center rounded bg-raised text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-foreground group-hover:opacity-100 max-sm:hidden"
               >
                 <Pencil className="size-3" />
               </button>
-              <span className="min-w-0 flex-1" />
+              <span className="min-w-0 flex-1 max-sm:hidden" />
             </>
           )}
-          {/* Тихие свойства справа: срок / приоритет / статус / ответственный. */}
-          <span className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground">
+          {/* Тихие свойства справа: срок / приоритет / статус / ответственный.
+              На телефоне — вторая строка, под названием (отступ = иконка + зазор). */}
+          <span className="flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground max-sm:w-full max-sm:flex-wrap max-sm:ps-[1.375rem]">
             {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
             {task.priority !== null &&
               task.priority !== undefined &&

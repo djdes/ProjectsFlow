@@ -51,7 +51,9 @@ export function ConfirmDeleteDialog({
             )}
           </DialogDescription>
         </div>
-        <div className="flex gap-2 border-bs bg-muted/30 px-4 py-3">
+        {/* На телефоне окно — нижний лист со своим нижним отступом под home-indicator:
+            серая подложка подвала обрывалась над ним белой полосой, поэтому там она прозрачная. */}
+        <div className="flex gap-2 border-bs bg-muted/30 px-4 py-3 max-md:bg-transparent">
           <Button
             type="button"
             variant="outline"

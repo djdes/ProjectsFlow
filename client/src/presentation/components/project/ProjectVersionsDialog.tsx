@@ -256,7 +256,7 @@ export function ProjectVersionsDialog({
 
         <div className="shrink-0 space-y-2 border-be bg-muted/20 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-56 flex-1">
+            <div className="relative min-w-56 flex-1 max-sm:min-w-full">
               <Search className="pointer-events-none absolute start-3 inset-bs-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
@@ -266,6 +266,10 @@ export function ProjectVersionsDialog({
               />
             </div>
 
+            {/* Телефон: четыре фильтра — одной строкой с прокруткой вбок под поиском (раньше
+                они переносились в три строки и съедали треть листа). На десктопе обёртка
+                прозрачна (sm:contents) — кнопки стоят в общем ряду, как раньше. */}
+            <div className="flex items-center gap-2 max-sm:w-full max-sm:overflow-x-auto max-sm:[&>*]:shrink-0 pf-scrollbar-hide sm:contents">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -367,6 +371,7 @@ export function ProjectVersionsDialog({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -381,7 +386,9 @@ export function ProjectVersionsDialog({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 bg-muted/10">
+        {/* Телефон: список версий сверху (до ~40% высоты), превью — под ним; рядом
+            320px-колонка списка не оставляла превью места. */}
+        <div className="flex min-h-0 flex-1 bg-muted/10 max-sm:flex-col-reverse">
           {loading ? (
             <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка истории…
@@ -399,7 +406,7 @@ export function ProjectVersionsDialog({
             </div>
           ) : (
             <>
-              <div className="min-w-0 flex-1 overflow-y-auto bg-background px-8 py-6 sm:px-12 sm:py-8">
+              <div className="min-w-0 flex-1 overflow-y-auto bg-background px-8 py-6 max-sm:px-4 max-sm:py-4 sm:px-12 sm:py-8">
                 {selected ? (
                   <>
                     <div className="mx-auto mbe-6 flex max-w-2xl items-center justify-between gap-3 border-be pbe-4">
@@ -443,7 +450,7 @@ export function ProjectVersionsDialog({
                 )}
               </div>
 
-              <div className="flex w-80 shrink-0 flex-col border-s bg-background xl:w-96">
+              <div className="flex w-80 shrink-0 flex-col border-s bg-background max-sm:max-h-[40%] max-sm:w-full max-sm:border-be max-sm:border-s-0 xl:w-96">
                 <ol className="min-h-0 flex-1 overflow-y-auto p-1.5">
                   {visibleVersions.map((version) => {
                     const locked = isLocked(version);

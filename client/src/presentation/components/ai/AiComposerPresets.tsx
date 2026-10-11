@@ -1,4 +1,5 @@
 import { BrainCircuit, Code2, FileSearch, ListChecks } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export const AI_COMPOSER_PRESETS = [
   { icon: BrainCircuit, title: 'Продумать решение', prompt: 'Помоги продумать решение. Сначала задай важные уточняющие вопросы.' },
@@ -21,12 +22,12 @@ export function AiComposerPresets({
   className?: string;
 }): React.ReactElement {
   return (
-    <div className={className}>
+    <div className={cn('[container-type:inline-size]', className)}>
       {/* Адаптив по ширине КОНТЕЙНЕРА, а не вьюпорта (lg:grid-cols-4 ломал ряд в узкой
-          боковой панели студии: viewport ≥1024 → всегда 4 колонки в 280–360px). auto-fit +
-          minmax(7rem) сам подбирает число колонок под доступную ширину: узкая панель — 2,
-          широкая страница — до 4. Работает и на ПК, и на мобиле. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
+          боковой панели студии: viewport ≥1024 → всегда 4 колонки в 280–360px). Четыре
+          пресета раскладываются только 2×2 или 4×1: прежний auto-fit давал на телефоне
+          (контейнер ~360px) три колонки и одинокую четвёртую карточку во втором ряду. */}
+      <div className="grid grid-cols-2 gap-2 [@container(min-width:34rem)]:grid-cols-4">
         {AI_COMPOSER_PRESETS.map(({ icon: Icon, title, prompt }) => (
           <button
             key={title}

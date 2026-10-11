@@ -118,9 +118,12 @@ export function NotificationDefaultsCard(): React.ReactElement {
           ))}
         </div>
 
+        {/* На 320px длинная подпись не влезала в одну строку и вылезала за край карточки —
+            на телефоне кнопка во всю ширину и переносит текст. */}
         <Button
           variant="outline"
           size="sm"
+          className="max-sm:h-auto max-sm:min-h-10 max-sm:w-full max-sm:whitespace-normal max-sm:py-2"
           onClick={() => void applyAll()}
           disabled={loading || applying}
         >

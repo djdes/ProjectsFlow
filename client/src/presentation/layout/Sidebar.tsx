@@ -167,7 +167,12 @@ export function Sidebar({
       icon: <Plus className="size-5" />,
       animatedIcon: false,
       variant: 'action',
-      onAction: openAddTask,
+      // Мобильный drawer закрываем: иначе окно задачи открывалось поверх меню, а меню
+      // оставалось висеть под ним (onNavigate на десктопе не передан — там ничего не меняется).
+      onAction: () => {
+        openAddTask();
+        onNavigate?.();
+      },
     },
     {
       key: 'inbox',
@@ -184,7 +189,10 @@ export function Sidebar({
       label: 'Поиск',
       icon: <AnimatedSearch className="size-5" />,
       variant: 'action',
-      onAction: openSearch,
+      onAction: () => {
+        openSearch();
+        onNavigate?.();
+      },
     },
   ];
   // Клик по вкладке-переключателю (только Главная/Чат) — ТОЛЬКО переключает нижнюю область
@@ -253,7 +261,9 @@ export function Sidebar({
   }
 
   return (
-    <aside className="group/sidebar grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pbe-3">
+    // Низ панели — над home-indicator iPhone: в мобильном drawer'е (PWA, viewport-fit=cover)
+    // «Администрирование» иначе уходило под полоску. На десктопе инсет 0 → прежние 12px.
+    <aside className="group/sidebar grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pbe-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
       {/* Шапка: переключатель пространства + тоггл панели. Высота строки = min-h-11 (44px)
           с вертикальным центрированием — ровно как верхняя строка крошек на страницах
           (Notion-style: свитчер пространства и топбар на одной горизонтали). Уведомления
@@ -353,13 +363,17 @@ export function Sidebar({
           >
             <Sparkles className="size-5 shrink-0" />
             <span className="min-w-0 truncate">Новый чат</span>
-            <kbd className="shrink-0 rounded-[4px] bg-hover px-1 py-0.5 text-xs font-medium text-muted-foreground/80">
+            {/* Сочетание клавиш на сенсорном экране ни к чему — там нет клавиатуры. */}
+            <kbd className="shrink-0 rounded-[4px] bg-hover px-1 py-0.5 text-xs font-medium text-muted-foreground/80 [@media(pointer:coarse)]:hidden">
               Ctrl+O
             </kbd>
           </button>
           <button
             type="button"
-            onClick={openNewProject}
+            onClick={() => {
+              openNewProject();
+              onNavigate?.();
+            }}
             aria-label="Новый проект"
             title="Новый проект"
             className={cn(

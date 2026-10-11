@@ -178,6 +178,9 @@ function SidebarProjectRow({
         className={({ isActive }) =>
           cn(
             'relative flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
+            // Телефон/планшет (drawer): строка — тач-цель 44px; справа всегда видны число
+            // задач и «три точки», имя обрезается до них, а не уезжает под них.
+            'max-md:min-h-11 max-md:pe-[4.5rem]',
             'hover:bg-hover',
             'cursor-pointer',
             // Дизайн C4: текущий проект — плотная подложка и полужирное имя.
@@ -240,7 +243,7 @@ function SidebarProjectRow({
         <span
           aria-label={`Задач: ${project.taskCount}`}
           className={cn(
-            'pointer-events-none absolute end-8 inset-bs-1/2 -translate-y-1/2 text-xs leading-5 tabular-nums text-muted-foreground',
+            'pointer-events-none absolute end-8 inset-bs-1/2 -translate-y-1/2 text-xs leading-5 tabular-nums text-muted-foreground max-md:end-11',
             'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
             actionsActive && 'opacity-100',
           )}
@@ -259,7 +262,8 @@ function SidebarProjectRow({
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             className={cn(
-              'absolute end-1 inset-bs-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-active hover:text-foreground',
+              // На телефоне — 40px (в 28px пальцем попадали в саму строку и открывали проект).
+              'absolute end-1 inset-bs-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-active hover:text-foreground max-md:end-0.5 max-md:size-10',
               'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
               menuOpen && 'opacity-100',
             )}

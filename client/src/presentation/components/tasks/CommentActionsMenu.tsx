@@ -148,11 +148,11 @@ export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Pro
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:size-10"
             aria-label="Действия с комментарием"
             title="Ещё"
           >
-            <MoreHorizontal className="size-3.5" />
+            <MoreHorizontal className="size-3.5 max-sm:size-4" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[230px]">

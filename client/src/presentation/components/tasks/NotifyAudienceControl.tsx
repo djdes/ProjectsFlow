@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, ChevronDown, Users } from 'lucide-react';
+import { Bell, BellOff, ChevronDown, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import type { NotifyAudience } from '@/domain/task/TaskComment';
 import { useContainer } from '@/infrastructure/di/container';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
 type Props = {
   projectId: string;
@@ -30,6 +31,11 @@ function initials(name: string): string {
 
 // Контрол адресации уведомления для композера: переключатель «Уведомить / Никто» +
 // выпадающий список участников (мультивыбор; по умолчанию «Все»). Эмитит NotifyAudience.
+//
+// На телефоне — одна кнопка «🔔 Денис Волков ▾» (или «🔕 Никто»), а «Никого не уведомлять»
+// живёт первым пунктом её меню (меню там открывается нижним листом). Переключатель и
+// выпадашка рядом не помещались: в ряду со скрепкой и отправкой на 320px от имени
+// получателя оставалось многоточие, а на 390px — «Денис В…».
 export function NotifyAudienceControl({
   projectId,
   excludeUserId,
@@ -40,6 +46,7 @@ export function NotifyAudienceControl({
 }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [fetched, setFetched] = useState<ProjectMember[]>([]);
+  const compact = useMediaQuery('(max-width: 639px)');
 
   useEffect(() => {
     // Если участники переданы пропом — не дёргаем сеть.
@@ -85,11 +92,12 @@ export function NotifyAudienceControl({
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1',
+        'inline-flex min-w-0 items-center gap-1',
         disabled && 'pointer-events-none opacity-50',
       )}
     >
-      <div className="inline-flex items-center rounded-lg bg-muted p-0.5">
+      {!compact && (
+      <div className="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5">
         <button
           type="button"
           aria-pressed={notifyOn}
@@ -120,21 +128,47 @@ export function NotifyAudienceControl({
           Никто
         </button>
       </div>
+      )}
 
-      {notifyOn && (
+      {(notifyOn || compact) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
+            {/* Имя получателя режется «…», а не переносится: на телефоне «Денис Волков»
+                ломалось на две строки и раздувало нижний ряд композера. */}
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Кого уведомить"
+              aria-label={compact ? `Кого уведомить: ${notifyOn ? triggerLabel : 'никого'}` : undefined}
             >
-              <Users className="size-3" />
-              {triggerLabel}
-              <ChevronDown className="size-3" />
+              {!compact ? (
+                <Users className="size-3 shrink-0" />
+              ) : notifyOn ? (
+                <Bell className="size-3.5 shrink-0" />
+              ) : (
+                <BellOff className="size-3.5 shrink-0" />
+              )}
+              <span className="min-w-0 truncate">{notifyOn ? triggerLabel : 'Никто'}</span>
+              <ChevronDown className="size-3 shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto">
+            {compact && (
+              <>
+                <DropdownMenuCheckboxItem
+                  checked={!notifyOn}
+                  onSelect={() => onChange({ mode: 'none' })}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span className="grid size-5 place-items-center rounded-full bg-muted">
+                      <BellOff className="size-3" />
+                    </span>
+                    Никого не уведомлять
+                  </span>
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuCheckboxItem
               checked={value.mode === 'all'}
               onSelect={(e) => {

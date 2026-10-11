@@ -310,7 +310,7 @@ export function AiComposer({
       )}
       <div className="mbs-2 flex items-center gap-1.5 px-2.5">
         <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.target.value = ''; }} />
-        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
+        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" aria-label="Прикрепить файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-10" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
         <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
         <div className="flex-1" />
         {/* Чистый тумблер: коробка кнопки не меняется, меняются только заливка/цвет и
@@ -340,7 +340,7 @@ export function AiComposer({
             disabled={cancelling}
             aria-label="Остановить генерацию"
             title="Остановить генерацию"
-            className="grid size-9 place-items-center rounded-full bg-foreground text-background transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            className="grid size-9 place-items-center rounded-full bg-foreground text-background transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 max-sm:size-10"
           >
             <Square className="size-3.5 fill-current" />
           </button>
@@ -351,7 +351,7 @@ export function AiComposer({
             disabled={empty || sending}
             aria-label="Отправить"
             title="Отправить"
-            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:scale-100"
+            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:scale-100 max-sm:size-10"
           >
             <ArrowUp className="size-4" />
           </button>

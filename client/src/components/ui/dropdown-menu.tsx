@@ -11,7 +11,8 @@ import {
 const MobileMenuContext = React.createContext<{
   mobile: boolean;
   close: () => void;
-}>({ mobile: false, close: () => {} });
+  toggle: () => void;
+}>({ mobile: false, close: () => {}, toggle: () => {} });
 export function DropdownMenu({
   open,
   defaultOpen = false,
@@ -24,22 +25,62 @@ export function DropdownMenu({
 }): React.ReactElement {
   const mobile = useMobileSheet(mobileSheet);
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
+  const isOpen = open ?? internalOpen;
   const change = (next: boolean): void => {
     if (open === undefined) setInternalOpen(next);
     onOpenChange?.(next);
   };
   return (
-    <MobileMenuContext.Provider value={{ mobile, close: () => change(false) }}>
+    <MobileMenuContext.Provider
+      value={{ mobile, close: () => change(false), toggle: () => change(!isOpen) }}
+    >
       <DropdownMenuPrimitive.Root
         {...props}
         modal={mobile || modal}
-        open={open ?? internalOpen}
+        open={isOpen}
         onOpenChange={change}
       />
     </MobileMenuContext.Provider>
   );
 }
-export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+
+/**
+ * Radix открывает меню уже на pointerdown — для мыши это правильно (нажал, повёл, отпустил
+ * на пункте). Но на телефоне меню — нижний лист, и он появляется ПОД пальцем ещё до того,
+ * как палец оторвался: click того же тапа прилетал в пункт листа (тап по «Сроку» сам
+ * выставлял «Завтра» и сохранял задачу) или в подложку (лист закрывался, не успев открыться).
+ * Поэтому в режиме листа палец и стилус открывают меню по click — после тапа, а не посреди
+ * него. Мышь и клавиатура работают как раньше. Заодно начатая на кнопке прокрутка больше не
+ * открывает меню: у скролла нет click.
+ */
+export const DropdownMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(function DropdownMenuTrigger({ onPointerDown, onClick, ...props }, ref) {
+  const { mobile, toggle } = React.useContext(MobileMenuContext);
+  const touchPress = React.useRef(false);
+  return (
+    <DropdownMenuPrimitive.Trigger
+      ref={ref}
+      {...props}
+      onPointerDown={(event) => {
+        onPointerDown?.(event);
+        touchPress.current = false;
+        if (event.defaultPrevented || !mobile || event.pointerType === 'mouse') return;
+        touchPress.current = true;
+        // Отменённый pointerdown Radix пропускает — открытие переезжает в onClick ниже.
+        event.preventDefault();
+      }}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!touchPress.current) return;
+        touchPress.current = false;
+        if (event.defaultPrevented || props.disabled) return;
+        toggle();
+      }}
+    />
+  );
+});
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 export const DropdownMenuSub = DropdownMenuPrimitive.Sub;

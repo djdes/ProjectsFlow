@@ -267,7 +267,10 @@ export function AiConversationView({
               <ArrowDown className="size-4" />
             </button>
           </div>
-          <div className="shrink-0 border-bs bg-background/95 px-3 pbe-[max(12px,env(safe-area-inset-bottom,0px))] pbs-3 backdrop-blur">
+          {/* Нижний safe-area — только от md: на телефоне под композером всегда есть
+              кто-то, кто его уже учёл (нижняя навигация приложения или нижний лист панели
+              ИИ/студии), и второй инсет давал пустую полосу ~34px над навигацией. */}
+          <div className="shrink-0 border-bs bg-background/95 px-3 pbe-3 pbs-3 backdrop-blur md:pbe-[max(12px,env(safe-area-inset-bottom,0px))]">
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
               {/* Подсказки живут НАД композером и приезжают из metadata последнего ответа.
                   Своего генератора у нас нет: сервер не прислал — блок не рендерится. */}
@@ -544,9 +547,13 @@ function MessageActions({
     ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(createdAt)
     : '';
   return (
+    // На сенсорных экранах наведения нет: ряд «время · копировать · оценка» виден всегда —
+    // раньше кнопки были прозрачными, но нажимались, и скопировать ответ было «вслепую».
+    // На телефоне кнопки — 36px вместо 24px.
     <div className={cn(
       'flex w-full items-center gap-2 text-xs text-muted-foreground',
-      'opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/chat-bubble:opacity-100',
+      'opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/chat-bubble:opacity-100 [@media(hover:none)]:opacity-100',
+      'max-sm:[&_button]:size-9',
       user ? 'justify-end' : 'justify-start',
     )}>
       {Number.isFinite(createdAt) && (

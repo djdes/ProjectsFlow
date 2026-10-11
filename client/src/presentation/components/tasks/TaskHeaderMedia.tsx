@@ -203,13 +203,16 @@ export function TaskHeaderMedia({
             )}
           />
           {canEdit && !repositioning && (
-            <div className="pointer-events-none absolute inset-x-0 inset-bs-0 flex justify-end p-2.5">
-              <div className="pointer-events-auto flex items-center gap-1.5 opacity-0 transition-opacity group-hover/cover:opacity-100">
+            // На сенсорных экранах наведения нет: кнопки обложки видны всегда (раньше они были
+            // невидимыми, но нажимались — тап по углу обложки открывал выбор вслепую). На
+            // телефоне они ещё и компактны — квадраты 40px с подписью для скринридера.
+            <div className="pointer-events-none absolute inset-x-0 inset-bs-0 flex justify-end p-2 sm:p-2.5">
+              <div className="pointer-events-auto flex items-center gap-1.5 opacity-0 transition-opacity group-hover/cover:opacity-100 [@media(hover:none)]:opacity-100">
                 <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                   <PopoverTrigger asChild>
-                    <CoverButton>
+                    <CoverButton compactOnMobile>
                       <ImageIcon className="size-3.5" />
-                      Поменять
+                      <span className="max-sm:sr-only">Поменять</span>
                     </CoverButton>
                   </PopoverTrigger>
                   <PopoverContent
@@ -228,11 +231,16 @@ export function TaskHeaderMedia({
                     />
                   </PopoverContent>
                 </Popover>
-                <CoverButton onClick={startReposition} disabled={isGradient} aria-label="Переместить">
+                <CoverButton
+                  compactOnMobile
+                  onClick={startReposition}
+                  disabled={isGradient}
+                  aria-label="Переместить"
+                >
                   <MoveVertical className="size-3.5" />
-                  Переместить
+                  <span className="max-sm:sr-only">Переместить</span>
                 </CoverButton>
-                <CoverButton onClick={() => void download()} aria-label="Скачать">
+                <CoverButton compactOnMobile onClick={() => void download()} aria-label="Скачать">
                   <Download className="size-3.5" />
                 </CoverButton>
               </div>
@@ -280,6 +288,8 @@ export function TaskHeaderMedia({
               hovered ? 'sm:opacity-100' : 'sm:opacity-0',
             )}
           >
+            {/* На телефоне подписи короткие («Иконка», «Обложка» — как в шапке проекта):
+                полные «Добавить …» на 320px переносились на две строки каждая. */}
             {!localIcon && (
               <IconPicker
                 value={null}
@@ -287,7 +297,8 @@ export function TaskHeaderMedia({
                 trigger={
                   <HeadToolButton>
                     <Smile className="size-4" />
-                    Добавить иконку
+                    <span className="sm:hidden">Иконка</span>
+                    <span className="hidden sm:inline">Добавить иконку</span>
                   </HeadToolButton>
                 }
               />
@@ -295,7 +306,8 @@ export function TaskHeaderMedia({
             {!localCover && (
               <HeadToolButton onClick={addRandomCover}>
                 <ImageIcon className="size-4" />
-                Добавить обложку
+                <span className="sm:hidden">Обложка</span>
+                <span className="hidden sm:inline">Добавить обложку</span>
               </HeadToolButton>
             )}
           </div>
@@ -329,17 +341,21 @@ export function TaskHeaderMedia({
 }
 
 // Полупрозрачная тёмная «пилюля» поверх обложки (читается на любом фоне).
+// compactOnMobile — на телефоне квадрат 40px только с иконкой (класс с `size-` заодно
+// выводит кнопку из глобального правила min-height 44px).
 function CoverButton({
   children,
   className,
+  compactOnMobile = false,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>): React.ReactElement {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { compactOnMobile?: boolean }): React.ReactElement {
   return (
     <button
       type="button"
       className={cn(
         'inline-flex items-center gap-1 rounded-md bg-black/55 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-sm transition-colors',
         'hover:bg-black/70 disabled:opacity-50',
+        compactOnMobile && 'max-sm:size-10 max-sm:justify-center max-sm:rounded-lg max-sm:p-0 max-sm:[&>svg]:size-4',
         className,
       )}
       {...props}
@@ -358,7 +374,7 @@ const HeadToolButton = ({
   <button
     type="button"
     className={cn(
-      'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+      'inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
       className,
     )}
     {...props}

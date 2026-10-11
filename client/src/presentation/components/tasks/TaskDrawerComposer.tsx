@@ -117,6 +117,32 @@ export function TaskDrawerComposer({
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<RichTextEditorHandle>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Телефон: пока в композере фокус, его карточка целиком над клавиатурой. Браузер сам
+  // докручивает только строку с кареткой, и ряд с кнопкой «Отправить» оставался под
+  // клавиатурой. Клавиатура открывается после фокуса — ловим и сам фокус, и сжатие
+  // visualViewport, когда она выехала.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const viewport = window.visualViewport;
+    let frame = 0;
+    const reveal = (): void => {
+      // Только телефон: на десктопе клавиатуры поверх нет, а лишняя докрутка двигала бы окно.
+      if (!window.matchMedia('(max-width: 639px)').matches) return;
+      if (!root.contains(document.activeElement)) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => root.scrollIntoView({ block: 'nearest' }));
+    };
+    root.addEventListener('focusin', reveal);
+    viewport?.addEventListener('resize', reveal);
+    return () => {
+      cancelAnimationFrame(frame);
+      root.removeEventListener('focusin', reveal);
+      viewport?.removeEventListener('resize', reveal);
+    };
+  }, []);
   // После успешной отправки редактор на миг становится disabled (теряет фокус).
   // Возвращаем фокус, когда submit завершился — чтобы можно было сразу печатать дальше.
   const refocusAfterSendRef = useRef(false);
@@ -268,7 +294,7 @@ export function TaskDrawerComposer({
   // для position:fixed и зажимал бы плавающее меню форматирования внутри overflow-hidden
   // карточки композера.
   return (
-    <div className="bg-background/95 px-3 pbe-3 pbs-2">
+    <div ref={rootRef} className="bg-background/95 px-3 pbe-3 pbs-2">
       <div className="overflow-clip rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
         {replyDraft && (
           <div className="flex items-center gap-1.5 border-be bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">

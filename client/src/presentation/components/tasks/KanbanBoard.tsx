@@ -96,6 +96,7 @@ import {
 import { KanbanAddColumnButton } from './KanbanAddColumnButton';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { BoardWorkShelf } from './BoardWorkShelf';
+import { BoardColumnTabs } from './BoardColumnTabs';
 import { KanbanCard } from './KanbanCard';
 import { plainTaskTitle } from '@/lib/taskTitleBody';
 import type { ViewCreateRequest } from './views/ProjectBoardViews';
@@ -1091,6 +1092,22 @@ export function KanbanBoard({
   const shownStatuses: TaskStatus[] = approvalColumnMounted
     ? visibleStatuses.flatMap((s) => (s === 'done' ? ['pending_approval' as TaskStatus, s] : [s]))
     : visibleStatuses;
+  // Подпись колонки и её видимые задачи — общие для самой колонки и для навигации по
+  // колонкам на телефоне (BoardColumnTabs): счётчик в чипе обязан совпадать с колонкой.
+  const columnLabelFor = (status: TaskStatus): string => {
+    const perColumn =
+      status === 'pending_approval' ? undefined : settings?.[status as KanbanColumnStatus];
+    return resolveColumnLabel(perColumn, resolveStatusLabel(settings, status));
+  };
+  const columnTasksFor = (status: TaskStatus): Task[] =>
+    filterTasks(hideDone && status === 'done' ? [] : grouped[status]).filter((t) =>
+      matchesTypeFilter(t.taskType, typeFilterFor(status)),
+    );
+  const columnTabs = shownStatuses.map((status) => ({
+    status,
+    label: columnLabelFor(status),
+    count: columnTasksFor(status).length,
+  }));
   // 'manual' исключён и здесь: колонки больше нет, и пункт «показать» в меню скрытых
   // колонок был бы мёртвым — вернуть её всё равно некуда.
   const hiddenColumns = boardStatuses.filter(
@@ -1261,6 +1278,9 @@ export function KanbanBoard({
           className="min-w-0 pbe-3"
         />
 
+        {/* Телефон: чипы колонок над рядом — где ты сейчас и быстрый переход (см. компонент). */}
+        <BoardColumnTabs columns={columnTabs} scrollerRef={boardScrollRef} className="min-w-0 sm:hidden" />
+
         <div
           ref={boardScrollRef}
           data-pf-kanban-scroll
@@ -1289,11 +1309,9 @@ export function KanbanBoard({
                   defaults?.[status as VisibleKanbanStatus],
                   status as KanbanColumnStatus,
                 );
-            const label = resolveColumnLabel(perColumn, resolveStatusLabel(settings, status));
+            const label = columnLabelFor(status);
             const typeFilter = typeFilterFor(status);
-            const columnTasks = filterTasks(
-              hideDone && status === 'done' ? [] : grouped[status],
-            ).filter((t) => matchesTypeFilter(t.taskType, typeFilter));
+            const columnTasks = columnTasksFor(status);
             // Без key здесь: key принадлежит ровно ОДНОМУ элементу массива — либо самой
             // колонке (ветка «без обёртки» ниже), либо схлопывающему врапперу поверх неё
             // (approval-ветка). Дублировать его на KanbanColumn и на обёртке одновременно

@@ -371,10 +371,13 @@ export function TaskVersionsDialog({
         className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-float sm:rounded-xl"
       >
         {/* Заголовок + основное действие справа сверху (как в Notion Version history):
-            кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4). */}
-        <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-be px-5 py-3 pe-12">
+            кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4).
+            Телефон: заголовок отдельной строкой (рядом с крестиком листа), фильтр и
+            «Восстановить» — второй строкой на всю ширину: в одну строку кнопки наезжали
+            на крестик, а заголовок ломался на два слова. */}
+        <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-be px-5 py-3 pe-12 max-sm:flex-wrap max-sm:gap-2 max-sm:px-4">
           <DialogTitle>История версий</DialogTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-sm:w-full max-sm:[&>*]:flex-1">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -420,9 +423,12 @@ export function TaskVersionsDialog({
             </Button>
           </div>
         </DialogHeader>
-        <div className="flex min-h-0 flex-1">
+        {/* Телефон: список версий сверху (до ~40% высоты), под ним — превью выбранной.
+            Справа в 320px-колонке список не помещался: превью оставалось ~70px, и даже
+            «Версий пока нет» ложилось в столбик по букве. */}
+        <div className="flex min-h-0 flex-1 max-sm:flex-col-reverse">
           {/* Превью выбранной версии — просторная колонка с отступами, как в окне задачи. */}
-          <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12">
+          <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8 max-sm:px-4 max-sm:py-5 sm:px-12">
             {loading ? (
               <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка…
@@ -434,7 +440,7 @@ export function TaskVersionsDialog({
             )}
           </div>
           {/* Список версий */}
-          <div className="flex w-80 shrink-0 flex-col border-s xl:w-96">
+          <div className="flex w-80 shrink-0 flex-col border-s max-sm:max-h-[40%] max-sm:w-full max-sm:border-be max-sm:border-s-0 xl:w-96">
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {visibleVersions.map((v) => {
                 const locked = isLocked(v.createdAt);

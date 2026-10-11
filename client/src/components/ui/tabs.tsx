@@ -75,7 +75,10 @@ export function TabsList({
       className={cn(
         // max-sm:h-auto — на телефоне вкладки-кнопки получают тач-высоту 44px (globals.css),
         // и полоса растёт под них, а не обрезает.
-        'pf-tabs relative isolate inline-flex h-8 items-center justify-center rounded-lg bg-foreground/[0.06] p-0.5 text-muted-foreground max-sm:h-auto dark:border dark:border-border dark:bg-panel',
+        // Телефон: не шире экрана и листается вбок. Пять вкладок админки вылезали за правый
+        // край, а <main> обрезает горизонталь — «Email» и «ИИ» было не достать. justify-start:
+        // у центрированного переполненного ряда начало уходит за левый край без прокрутки.
+        'pf-tabs relative isolate inline-flex h-8 items-center justify-center rounded-lg bg-foreground/[0.06] p-0.5 text-muted-foreground max-sm:h-auto max-sm:max-w-full max-sm:justify-start max-sm:overflow-x-auto pf-scrollbar-hide dark:border dark:border-border dark:bg-panel',
         className,
       )}
       {...props}

@@ -109,6 +109,7 @@ import {
 } from './viewShared';
 import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
 import { ConfirmDeleteDialog } from '../ConfirmDeleteDialog';
+import { stickyStackHeight } from '../useBoardStickyTop';
 import {
   navigateTableRange,
   primaryPointerActivatesCell,
@@ -227,14 +228,20 @@ export function TableView({
   const headScrollRef = useRef<HTMLDivElement | null>(null);
   const [headerTop, setHeaderTop] = useState(0);
   useEffect(() => {
-    const els = ['pf-project-crumbs', 'pf-sticky-banners']
+    // Мобильная шапка проекта тоже липкая, а плашки на телефоне — нет: высоту стека
+    // считает общий stickyStackHeight (иначе на телефоне шапка таблицы пряталась под плашкой).
+    const els = ['pf-project-crumbs', 'pf-project-mobile-header', 'pf-sticky-banners']
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
-    const measure = (): void => setHeaderTop(els.reduce((s, el) => s + el.offsetHeight, 0));
+    const measure = (): void => setHeaderTop(stickyStackHeight());
     measure();
     const ro = new ResizeObserver(measure);
     els.forEach((el) => ro.observe(el));
-    return () => ro.disconnect();
+    window.addEventListener('resize', measure, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, []);
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;

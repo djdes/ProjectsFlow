@@ -360,10 +360,16 @@ export function FormatMenu({ editor, getRange, inline = false }: {
   return (
     <TooltipProvider delayDuration={650}>
       <div className={cn(inline ? 'w-full' : 'w-[19rem] max-w-[calc(100vw-2rem)]')}>
+        {/* Панель над полем (inline) на телефоне — ОДНА строка с горизонтальной прокруткой:
+            раньше 7 кнопок растягивались на всю ширину, «Тип блока» и цвет уходили во вторую
+            строку, и панель съедала ~90px над текстом задачи. */}
         <div
           role="toolbar"
           aria-label="Форматирование текста"
-          className={cn('flex flex-wrap items-center gap-0.5', inline && 'py-1')}
+          className={cn(
+            'flex flex-wrap items-center gap-0.5',
+            inline && 'py-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:overscroll-x-contain pf-scrollbar-hide',
+          )}
           onMouseDown={e => e.preventDefault()}
           onKeyDown={e => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
@@ -375,20 +381,20 @@ export function FormatMenu({ editor, getRange, inline = false }: {
             buttons[next]?.focus();
           }}
         >
-          <div className={cn('grid max-w-full grid-cols-7 gap-0.5', inline ? 'max-sm:w-full' : 'w-full')}>
+          <div className={cn('grid max-w-full grid-cols-7 gap-0.5', inline ? 'max-sm:flex max-sm:max-w-none max-sm:shrink-0' : 'w-full')}>
             {FORMAT_BTNS.map(b => (
               <MenuItemTooltip key={b.id} side="top" description={b.label}>
                 <button type="button" aria-label={b.label} aria-pressed={active[b.id]}
                   onClick={() => toggleFormat(b.id)}
-                  className={cn('grid shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:h-10 max-sm:w-full [&_svg]:size-4', inline ? 'size-8' : 'h-9 w-full', active[b.id] && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}
+                  className={cn('grid shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:h-10 [&_svg]:size-4', inline ? 'size-8 max-sm:w-10' : 'h-9 w-full', active[b.id] && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}
                 ><b.icon /></button>
               </MenuItemTooltip>
             ))}
           </div>
-          <div className={cn('flex items-center gap-1', inline ? 'ms-auto' : 'w-full border-bs pbs-1')}>
+          <div className={cn('flex items-center gap-1', inline ? 'ms-auto max-sm:ms-0 max-sm:shrink-0' : 'w-full border-bs pbs-1')}>
             <button type="button" aria-label="Тип блока" aria-expanded={openSub === 'turn'} aria-controls={panelId}
               onClick={() => setOpenSub(openSub === 'turn' ? null : 'turn')}
-              className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10">
+              className={cn('flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10', inline && 'max-sm:flex-none')}>
               <Type className="size-4 shrink-0" /><span className="truncate">{active.blockLabel}</span><ChevronDown className="size-3.5" />
             </button>
             <button type="button" aria-label="Цвет текста и фона" aria-expanded={openSub === 'color'} aria-controls={panelId}

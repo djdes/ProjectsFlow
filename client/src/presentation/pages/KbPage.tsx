@@ -128,10 +128,8 @@ export function KbPage(): React.ReactElement {
           onUpdated={() => { reload(); }}
         />
       ))}
-      {!activePath && (
-        <p className="text-sm text-muted-foreground">
-          {isDesktop ? 'Выбери файл слева.' : 'Нажми кнопку слева, чтобы открыть дерево файлов.'}
-        </p>
+      {!activePath && isDesktop && (
+        <p className="text-sm text-muted-foreground">Выбери файл слева.</p>
       )}
     </div>
   );
@@ -150,13 +148,18 @@ export function KbPage(): React.ReactElement {
         <div className="flex h-full flex-col">
           {/* На мобиле дерево файлов — в выезжающей панели; кнопка открывает её слева, рядом
               с крошками («Проекты › проект › База знаний» заменили подпись «проект / KB»). */}
+          {/* Пока файл не выбран, дерево — сама страница (как список в мобильных приложениях):
+              раньше экран был пустым с подсказкой «нажми кнопку слева». Выбрал файл — открылся
+              документ, а дерево переехало в панель за кнопкой. */}
           <PageTopBar>
-            <Button variant="ghost" size="icon" className="-ms-1.5 shrink-0" onClick={() => setDrawerOpen(true)} aria-label="Открыть дерево файлов">
-              <PanelLeft className="size-4" />
-            </Button>
+            {activePath && (
+              <Button variant="ghost" size="icon" className="-ms-1.5 shrink-0" onClick={() => setDrawerOpen(true)} aria-label="Открыть дерево файлов">
+                <PanelLeft className="size-4" />
+              </Button>
+            )}
             {breadcrumbs}
           </PageTopBar>
-          {mainContent}
+          {activePath ? mainContent : <div className="min-h-0 flex-1">{sidebarContent}</div>}
           <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
             <SheetContent side="left" mobileSheet={false} className="w-72 p-0">
               {sidebarContent}
