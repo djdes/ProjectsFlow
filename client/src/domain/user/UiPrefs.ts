@@ -9,7 +9,7 @@ export const ASSIGNED_GROUPINGS = ['project', 'created', 'deadline', 'priority',
 export type AssignedGrouping = (typeof ASSIGNED_GROUPINGS)[number];
 
 // Дефолт — «проект» (дизайн C4 «Одна доска»): «Входящие» открываются очередью по проектам
-// рядом с закреплённой колонкой «Сейчас»; срок/дата/приоритет/тип — по выбору в «Фильтрах».
+// рядом с закреплённой колонкой «В работе»; срок/дата/приоритет/тип — по выбору в «Фильтрах».
 // Сохранённый выбор пользователя (users.ui_prefs) дефолт не перебивает.
 export const DEFAULT_ASSIGNED_GROUPING: AssignedGrouping = 'project';
 
@@ -22,19 +22,19 @@ export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {
   taskType: 'Тип',
 };
 
-// Ключи строк-свойств в окне задачи. Порядок ниже — дефолтный (как было исторически;
-// новые ключи normalizeTaskPropertyOrder дописывает в конец сохранённого порядка).
+// Ключи строк-свойств в окне задачи. Порядок ниже — дефолтный;
+// новые ключи normalizeTaskPropertyOrder дописывает в конец сохранённого порядка.
 export const TASK_PROPERTY_KEYS = [
+  'status',
+  'project',
   'assignee',
-  // «Утверждающий» — вычисляемый read-only ряд (lead/owner пространства). Стоит сразу за
-  // ответственным: оба отвечают на вопрос «кто по этой задаче люди».
+  // «Кто утверждает» — справочный ряд с lead/owner пространства, рядом с исполнителем.
   'approver',
   'deadline',
   'priority',
   'taskType',
   'mode',
   'files',
-  'created',
 ] as const;
 export type TaskPropertyKey = (typeof TASK_PROPERTY_KEYS)[number];
 
@@ -54,6 +54,17 @@ export function normalizeTaskPropertyOrder(saved: readonly string[] | undefined)
     if (!seen.has(k)) out.push(k);
   }
   return out;
+}
+
+export function reorderTaskProperties(
+  order: readonly TaskPropertyKey[], from: TaskPropertyKey, to: TaskPropertyKey,
+): TaskPropertyKey[] {
+  const next = [...order];
+  const source = next.indexOf(from);
+  const target = next.indexOf(to);
+  if (source < 0 || target < 0 || source === target) return next;
+  next.splice(target, 0, next.splice(source, 1)[0]);
+  return next;
 }
 
 export type UiPrefs = {

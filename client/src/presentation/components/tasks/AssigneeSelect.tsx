@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserRoundCheck } from 'lucide-react';
+import { ChevronDown, UserRoundCheck } from 'lucide-react';
+import { PROPERTY_CARET_CLASS } from './PropertyRow';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -91,7 +92,7 @@ export function AssigneeSelect({
 
   const effectiveValue = value ?? user?.id ?? null;
   const selected = members.find((member) => member.id === effectiveValue) ?? null;
-  const title = selected ? `Ответственный: ${selected.displayName}` : 'Выбрать ответственного';
+  const title = selected ? `Исполнитель: ${selected.displayName}` : 'Выбрать исполнителя';
   const inPropertyRow = (className ?? '').includes('justify-start');
 
   return (
@@ -115,6 +116,7 @@ export function AssigneeSelect({
             ) : (
               'Загрузка…'
             )}
+            {!disabled && <ChevronDown className={PROPERTY_CARET_CLASS} />}
           </Button>
         ) : (
           <Button

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { FileText, Loader2, Plus, X } from 'lucide-react';
+import { ChevronDown, FileText, Loader2, Plus, X } from 'lucide-react';
+import { PROPERTY_CARET_CLASS, PROPERTY_VALUE_CLASS } from './PropertyRow';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -83,10 +84,12 @@ export function TaskDrawerAttachmentRow({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="-ms-1.5 inline-flex h-7 items-center rounded-md px-1.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          className={cn(PROPERTY_VALUE_CLASS, 'text-muted-foreground')}
           title="Прикрепить файл (или Ctrl+V в комментарий)"
+          aria-label="Выбрать файлы"
         >
-          Выбрать файл…
+          Выбрать…
+          <ChevronDown className={PROPERTY_CARET_CLASS} />
         </button>
         {fileInput}
       </>

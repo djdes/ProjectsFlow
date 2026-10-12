@@ -3,6 +3,8 @@ import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useProject } from '@/presentation/hooks/useProject';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { canEditReadableTask } from '@/domain/task/taskEditorOptions';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { PageTopBar } from '@/presentation/layout/PageChrome';
@@ -26,6 +28,7 @@ export function TaskDetailPage(): React.ReactElement {
   const navigate = useNavigate();
   const { data: project } = useProject(projectId ?? '');
   const { taskRepository } = useContainer();
+  const { user } = useCurrentUser();
   const [task, setTask] = useState<Task | null>(null);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +131,7 @@ export function TaskDetailPage(): React.ReactElement {
       breadcrumbs={breadcrumbs}
       highlightField={searchParams.get('hl')}
       state={{ mode: 'edit', task }}
+      canEdit={canEditReadableTask(project, task, user?.id ?? null)}
       onClose={() => navigate(`/projects/${projectId}`)}
       // onSubmit нужен только в create-mode; на странице задача уже существует.
       onSubmit={async () => task}
@@ -139,12 +143,13 @@ export function TaskDetailPage(): React.ReactElement {
       isShared={(project?.memberCount ?? 0) > 1}
       aiProjectId={projectId}
       onMove={async (tid, targetStatus) => {
-        await taskRepository.move(projectId, tid, {
+        const updated = await taskRepository.move(projectId, tid, {
           targetStatus,
           beforeTaskId: null,
           afterTaskId: null,
         });
-        setTask((prev) => (prev ? { ...prev, status: targetStatus } : prev));
+        setTask(updated);
+        return updated;
       }}
     />
   );

@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { PROPERTY_CARET_CLASS } from './PropertyRow';
 
 type Props = {
   value: string | null;          // 'YYYY-MM-DD' или null
@@ -95,13 +96,13 @@ export function DeadlinePicker({
     }
   };
 
-  const placeholder = emptyLabel ?? (inPropertyRow ? 'Выбрать дедлайн…' : 'Дедлайн');
+  const placeholder = emptyLabel ?? (inPropertyRow ? 'Выбрать…' : 'Срок до');
   const label = value ? formatShort(value) : placeholder;
   // Ведущую иконку прячем только в ряду свойств (не в icon-only/обычном виде).
   const showLeadingIcon = iconOnly || !inPropertyRow;
 
   return (
-    <span className="inline-flex items-center">
+    <span className={cn('inline-flex items-center', inPropertyRow && 'w-full min-w-0')}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -118,8 +119,8 @@ export function DeadlinePicker({
             aria-label={value ? `Срок: ${value}` : 'Срок выполнения'}
           >
             {showLeadingIcon && <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />}
-            {(!iconOnly || value !== null) && label}
-            {!iconOnly && !inPropertyRow && <ChevronDown className="size-3" />}
+            {(!iconOnly || value !== null) && <span className="min-w-0 truncate">{label}</span>}
+            {!iconOnly && !disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : 'size-3'} />}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-44">

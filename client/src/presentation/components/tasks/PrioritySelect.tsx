@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { PROPERTY_CARET_CLASS } from './PropertyRow';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { TASK_PRIORITIES, type TaskPriority } from '@/domain/task/Task';
 
@@ -79,6 +80,7 @@ export function PrioritySelect({
             meta && meta.textColor,
           )}
           title="Приоритет задачи"
+          aria-label="Приоритет задачи"
         >
           {/* В ряду свойств — без ведущего значка (ни дота, ни флажка), чтобы значение
               начиналось ровно на одной вертикали с остальными пунктами. */}
@@ -88,8 +90,8 @@ export function PrioritySelect({
             ) : (
               <Flag className="size-3.5" />
             ))}
-          {meta ? meta.label : inPropertyRow ? 'Выбрать приоритет…' : 'Без приоритета'}
-          {!inPropertyRow && <ChevronDown className="size-3" />}
+          <span className="min-w-0 truncate">{meta ? meta.label : inPropertyRow ? 'Выбрать…' : 'Без приоритета'}</span>
+          {!disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : 'size-3'} />}
         </Button>
       </DropdownMenuTrigger>
       <PriorityMenuContent value={value} onChange={onChange} />

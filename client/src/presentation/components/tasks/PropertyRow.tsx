@@ -18,14 +18,14 @@ interface PropertyRowProps {
 
 export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRowProps): React.ReactElement {
   return (
-    <div className="group/prop -mx-1.5 flex min-h-8 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-hover">
+    <div className="group/prop -mx-1.5 flex min-h-11 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors [@media(hover:hover)_and_(pointer:fine)]:hover:bg-hover sm:min-h-9">
       {/* -mx-1.5 гасит собственный px-1.5 в раскладке: иконка свойства встаёт ровно на левый
           край контента — вровень с «+ Подзадача» — а мягкая hover-подложка всё равно шире. */}
-      <span className="flex w-[130px] shrink-0 items-center gap-1.5 text-sm text-muted-foreground sm:w-[150px]">
+      <span className="flex w-[clamp(7.5rem,38%,9.5rem)] shrink-0 items-center gap-1.5 text-ui text-muted-foreground">
         {handle ? (
           <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-            <Icon className="size-4 transition-opacity group-hover/prop:opacity-0" aria-hidden />
-            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/prop:opacity-100">
+            <Icon className="size-4 transition-opacity group-hover/prop:opacity-0 group-focus-within/prop:opacity-0" aria-hidden />
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/prop:opacity-100 group-focus-within/prop:opacity-100">
               {handle}
             </span>
           </span>
@@ -37,7 +37,7 @@ export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRow
       {/* Значение — flex-контейнер: одинаковая вертикаль у всех контролов (chip/inline-flex
           типа Режима больше не «съезжает» по baseline). Перенос на 2-ю строку (напр.
           Ответственный + «Перенести в проект») разрешён. */}
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" data-pf-property-value>{children}</div>
     </div>
   );
 }
@@ -53,8 +53,11 @@ export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRow
 // у каждого пикера левый край значения «уезжал» по-своему. Дублируем sm:-оверрайды,
 // чтобы все значения начинались строго на одной вертикали, единым шрифтом.
 export const PROPERTY_VALUE_CLASS =
-  '-ms-1.5 h-7 max-w-full justify-start gap-1.5 rounded-md border-0 bg-transparent px-1.5 ' +
-  'text-sm font-normal shadow-none hover:bg-hover sm:h-7 sm:px-1.5 sm:text-sm';
+  '-ms-1.5 inline-flex min-h-11 h-auto w-full min-w-0 max-w-full items-center justify-start gap-1.5 rounded-md border-0 bg-transparent px-1.5 ' +
+  'text-sm font-normal shadow-none transition-colors active:bg-active [@media(hover:hover)_and_(pointer:fine)]:hover:bg-hover ' +
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-8 sm:h-auto sm:px-1.5 sm:text-sm';
+
+export const PROPERTY_CARET_CLASS = 'ms-auto !size-3 shrink-0 text-muted-foreground';
 
 // Тихий muted-плейсхолдер «Пусто» / «Никто» для свойств без редактирования.
 export function EmptyValue({ children = 'Пусто' }: { children?: React.ReactNode }): React.ReactElement {

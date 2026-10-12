@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { MetaChip } from './MetaChip';
+import { PROPERTY_CARET_CLASS } from './PropertyRow';
 import { RALPH_MODE_META, RALPH_MODES, type RalphMode } from '@/domain/task/Task';
 
 // Селектор режима Ralph — нейтрально стилизованный dropdown с двустрочными элементами
@@ -85,7 +86,7 @@ export function RalphModeSelect({
             ) : (
               <>
                 <span className="truncate">{meta.label}</span>
-                {!inPropertyRow && <ChevronDown className="size-4 shrink-0 opacity-60" />}
+                {!disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : 'size-4 shrink-0 opacity-60'} />}
               </>
             )}
           </Button>

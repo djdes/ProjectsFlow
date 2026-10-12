@@ -1532,17 +1532,17 @@ export function KanbanBoard({
         onPrev={drawerPrev ? () => setDialog({ mode: 'edit', task: drawerPrev }) : undefined}
         onNext={drawerNext ? () => setDialog({ mode: 'edit', task: drawerNext }) : undefined}
         onMove={async (taskId, targetStatus) => {
+          let result: Task | undefined;
           await move(taskId, {
             targetStatus,
             beforeTaskId: null,
             // В начало целевой колонки — в видимую порцию (см. topAnchorFor).
             afterTaskId: topAnchorFor(targetStatus),
+          }, (updated) => {
+            result = updated;
+            setDialog((prev) => prev?.mode === 'edit' && prev.task.id === taskId ? { mode: 'edit', task: updated } : prev);
           });
-          // Обновляем dialog-state чтобы drawer показывал новый статус сразу.
-          setDialog((prev) => {
-            if (prev?.mode !== 'edit' || prev.task.id !== taskId) return prev;
-            return { mode: 'edit', task: { ...prev.task, status: targetStatus } };
-          });
+          return result;
         }}
       />
 

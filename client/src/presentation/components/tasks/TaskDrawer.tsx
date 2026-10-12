@@ -10,28 +10,16 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { normalizeTaskPropertyOrder, type TaskPropertyKey } from '@/domain/user/UiPrefs';
+import type { TaskPropertyKey } from '@/domain/user/UiPrefs';
+import { TaskProperties, type TaskProperty } from './TaskProperties';
+import { TaskStatusField } from './TaskStatusField';
+import { TaskProjectField } from './TaskProjectField';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -70,9 +58,7 @@ import {
 import { paceAppend, runFilesLimited } from '@/presentation/components/attachments/pace';
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode, TaskStatus } from '@/domain/task/Task';
-import { TASK_STATUSES } from '@/domain/task/Task';
 import { AssigneeSelect } from './AssigneeSelect';
-import type { Project } from '@/domain/project/Project';
 import { AssigneeTaskButton } from './AssigneeTaskButton';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
@@ -95,7 +81,7 @@ import { TaskHeaderMedia, type TaskMediaPatch } from './TaskHeaderMedia';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
-import { STATUS_LABEL, ADVANCE_NEXT } from './statusLabels';
+import { STATUS_LABEL } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useMobileSheet } from '@/components/ui/mobile-sheet';
 import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
@@ -225,8 +211,8 @@ type Props = {
   isShared?: boolean;
   // projectId для AI-кнопки. null = inbox/дефолтный диспетчер; UUID = диспетчер проекта.
   aiProjectId?: string | null;
-  // Колбэк для смены статуса задачи (move). Если передан — статус-бейдж кликабелен.
-  onMove?: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
+  // Колбэк для смены статуса с обновлением родительского списка. Без него поле вызывает API.
+  onMove?: (taskId: string, targetStatus: TaskStatus) => Promise<Task | void>;
   // Гейт редактирования содержимого (title/body/свойства/чекбоксы). false — read-only
   // просмотр (например, viewer открыл чужую пару из вкладки «Другим»); комментарии
   // этим НЕ гейтятся. Дефолт true — прежнее поведение всех существующих вызовов.
@@ -468,64 +454,6 @@ function DrawerShell({
 
 // Chip-селектор режима Ralph в edit-mode шапки. Показывает текущий режим бейджем;
 // клик раскрывает dropdown для смены — PATCH идёт сразу же (best-effort, error → toast).
-// Иконки и подписи строк-свойств по ключу (task 11) — единый источник для порядка.
-const PROP_ICON: Record<TaskPropertyKey, LucideIcon> = {
-  assignee: UserPlus,
-  approver: ShieldCheck,
-  deadline: CalendarClock,
-  priority: Flag,
-  taskType: Tag,
-  mode: Bot,
-  files: Paperclip,
-  created: Clock,
-};
-const PROP_LABEL: Record<TaskPropertyKey, string> = {
-  assignee: 'Ответственный',
-  approver: 'Утверждающий',
-  deadline: 'Дедлайн',
-  priority: 'Приоритет',
-  taskType: 'Тип',
-  mode: 'Режим',
-  files: 'Файлы',
-  created: 'Создано',
-};
-
-// Сортируемая строка свойства (task 11): обёртка dnd-kit вокруг PropertyRow. На hover
-// вместо иконки показывается ручка-grip (6 точек), за которую перетаскивают строку.
-function SortablePropertyRow({
-  id,
-  icon,
-  label,
-  children,
-}: {
-  id: TaskPropertyKey;
-  icon: LucideIcon;
-  label: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
-  const handle = (
-    <button
-      type="button"
-      className="grid size-4 cursor-grab touch-none place-items-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
-      aria-label={`Переместить «${label}»`}
-      title="Перетащите, чтобы изменить порядок"
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-3.5" />
-    </button>
-  );
-  return (
-    <div ref={setNodeRef} style={style} className={cn(isDragging && 'relative z-10 opacity-80')}>
-      <PropertyRow icon={icon} label={label} handle={handle}>
-        {children}
-      </PropertyRow>
-    </div>
-  );
-}
-
 function TaskRalphModeChip({
   task,
   onChanged,
@@ -597,160 +525,6 @@ const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
   custom_5: CUSTOM_STATUS_BADGE_COLOR,
 };
 
-// Chip-селектор статуса задачи в edit-mode шапки. Показывает текущий статус
-// цветным бейджем; клик раскрывает dropdown для смены — move идёт сразу (optimistic).
-function TaskStatusChip({
-  task,
-  onMove,
-  onChanged,
-}: {
-  task: Task;
-  onMove: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
-  onChanged: () => void;
-}): React.ReactElement {
-  const [status, setStatus] = useState<TaskStatus>(task.status);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setStatus(task.status);
-  }, [task.status]);
-
-  const change = async (next: TaskStatus): Promise<void> => {
-    if (next === status || saving) return;
-    const prev = status;
-    setStatus(next); // optimistic
-    setSaving(true);
-    try {
-      await onMove(task.id, next);
-      onChanged();
-      toast.success(`Передано: ${STATUS_LABEL[next]}`);
-    } catch (err) {
-      setStatus(prev);
-      toast.error(`Не удалось сменить статус: ${(err as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const next = ADVANCE_NEXT[status];
-  return (
-    // Сплит-пилюля статуса: левая часть — шаг на следующий статус (если есть), правая
-    // (шеврон) — выпадашка с любым статусом. Одна цельная «таблетка» в тон колонке.
-    <div
-      className={cn(
-        'inline-flex shrink-0 items-center overflow-clip rounded-full text-xs font-medium',
-        STATUS_BADGE_COLOR[status],
-        saving && 'opacity-50',
-      )}
-    >
-      {next ? (
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => void change(next)}
-          title={`Передать в «${STATUS_LABEL[next]}»`}
-          className="inline-flex items-center gap-1 py-1 ps-2.5 pe-1.5 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
-        >
-          {STATUS_LABEL[status]}
-          <ArrowRight className="size-3 opacity-60" />
-        </button>
-      ) : (
-        <span className="py-1 ps-2.5 pe-1.5">{STATUS_LABEL[status]}</span>
-      )}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            disabled={saving}
-            aria-label="Сменить статус"
-            // На телефоне шеврон шире (40px): в 27px палец попадал в «шаг вперёд» соседней
-            // половины пилюли и переводил задачу вместо того, чтобы открыть список.
-            className="inline-flex items-center border-s border-foreground/10 py-1 ps-1 pe-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 max-sm:min-w-10 max-sm:justify-center max-sm:px-2.5"
-          >
-            <ChevronDown className="size-3.5 opacity-50" />
-          </button>
-        </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[180px]">
-        <DropdownMenuRadioGroup value={status} onValueChange={(v) => void change(v as TaskStatus)}>
-          {TASK_STATUSES.map((s) => (
-            <DropdownMenuRadioItem key={s} value={s} className="py-1.5">
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium',
-                  STATUS_BADGE_COLOR[s],
-                )}
-              >
-                {STATUS_LABEL[s]}
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
-// Подменю «Перенести в проект» внутри ⋯-меню задачи (раньше было отдельной пилюлей в шапке —
-// теперь убрано в меню, чтобы не загромождать кластер кнопок). Сервер: MoveTaskToProject
-// (из именованного — move_task, из инбокса — owner); ответственный сохраняется, если допустим.
-function MoveToProjectSubmenu({
-  task,
-  onMoved,
-}: {
-  task: Task;
-  onMoved: () => void;
-}): React.ReactElement {
-  const { projectRepository, taskRepository } = useContainer();
-  const [projects, setProjects] = useState<Project[] | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const load = (): void => {
-    if (projects !== null) return;
-    projectRepository
-      .list()
-      .then((list) => setProjects(list.filter((p) => !p.isInbox)))
-      .catch(() => setProjects([]));
-  };
-
-  const move = async (target: Project): Promise<void> => {
-    if (saving || target.id === task.projectId) return;
-    if (!window.confirm(`Перенести задачу в «${target.name}»?`)) return;
-    setSaving(true);
-    try {
-      await taskRepository.assignToProject(task.projectId, task.id, target.id);
-      toast.success(`Задача перенесена в «${target.name}»`);
-      onMoved();
-    } catch (e) {
-      toast.error(`Не удалось перенести: ${(e as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <DropdownMenuSub onOpenChange={(open) => open && load()}>
-      <DropdownMenuSubTrigger>
-        <FolderKanban className="text-muted-foreground" /> Перенести в проект
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="max-h-72 min-w-[220px] overflow-y-auto">
-        {projects === null ? (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">Загрузка…</div>
-        ) : projects.length === 0 ? (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">Нет проектов</div>
-        ) : (
-          projects.map((p) => (
-            <DropdownMenuItem key={p.id} disabled={p.id === task.projectId || saving} onClick={() => void move(p)}>
-              <span className="truncate">{p.name}</span>
-              {p.id === task.projectId && <Check className="ms-auto size-3.5 shrink-0 opacity-60" />}
-            </DropdownMenuItem>
-          ))
-        )}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
-}
-
 export function TaskDrawer({
   state,
   onClose,
@@ -770,7 +544,7 @@ export function TaskDrawer({
   highlightField = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
-  const { taskRepository, recordTaskView, userRepository } = useContainer();
+  const { taskRepository, recordTaskView } = useContainer();
   // Флеш-подсветка тела при переходе из ленты активности (?hl=<поле>): мигаем ~1.8с.
   const [flashBody, setFlashBody] = React.useState(false);
   React.useEffect(() => {
@@ -830,35 +604,6 @@ export function TaskDrawer({
       /* localStorage недоступен — режим действует только на эту сессию */
     }
   }, []);
-  // Task 11: порядок строк-свойств — за пользователем (ui_prefs), один на все проекты.
-  const [propertyOrder, setPropertyOrder] = useState<TaskPropertyKey[]>(() =>
-    normalizeTaskPropertyOrder(undefined),
-  );
-  useEffect(() => {
-    let cancelled = false;
-    void userRepository
-      .getUiPrefs()
-      .then((p) => {
-        if (!cancelled) setPropertyOrder(normalizeTaskPropertyOrder(p.taskPropertyOrder));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [userRepository]);
-  const propSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const handlePropDragEnd = (e: DragEndEvent): void => {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    setPropertyOrder((prev) => {
-      const from = prev.indexOf(active.id as TaskPropertyKey);
-      const to = prev.indexOf(over.id as TaskPropertyKey);
-      if (from < 0 || to < 0) return prev;
-      const next = arrayMove(prev, from, to);
-      void userRepository.setUiPrefs({ taskPropertyOrder: next }).catch(() => {});
-      return next;
-    });
-  };
   const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
   // (доска, личный верхний блок, блок «Недавнее»). Только edit-mode с реальной задачей; раз на
@@ -1020,7 +765,7 @@ export function TaskDrawer({
   }, [state, taskRepository]);
 
   const editTaskId = state?.mode === 'edit' ? state.task.id : null;
-  const { description: editDescription, saving: editSaving, onChange: handleDescriptionChange, commit: commitDescription } = useTaskDescriptionDraft(
+  const { description: editDescription, saving: editSaving, onChange: handleDescriptionChange, commit: commitDescription, flush: flushDescription } = useTaskDescriptionDraft(
     state?.mode === 'edit' ? state.task : null, taskRepository, notifyChanged,
   );
   const bodyContainerRef = useRef<HTMLDivElement>(null);
@@ -1762,7 +1507,13 @@ export function TaskDrawer({
     );
   };
 
-  const task = state?.mode === 'edit' ? state.task : null;
+  const sourceTask = state?.mode === 'edit' ? state.task : null;
+  const [statusResult, setStatusResult] = useState<Task | null>(null);
+  // Inbox can retain the initial task prop. Keep the acknowledged status until the
+  // parent supplies a newer version; approval may change the requested target.
+  const task = sourceTask && statusResult?.id === sourceTask.id && statusResult.updatedAt >= sourceTask.updatedAt
+    ? { ...sourceTask, status: statusResult.status, statusBeforeDone: statusResult.statusBeforeDone }
+    : sourceTask;
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
   // композером-футером (плашка «в ответ …») и уходит в createComment. db/080.
@@ -1780,7 +1531,8 @@ export function TaskDrawer({
     if (!t || withdrawing) return;
     setWithdrawing(true);
     try {
-      await taskRepository.withdrawApproval(t.projectId, t.id);
+      const updated = await taskRepository.withdrawApproval(t.projectId, t.id);
+      setStatusResult(updated);
       forgetCompleted(t.id);
       toast.success('Задача снова в работе');
       notifyChanged();
@@ -1894,24 +1646,10 @@ export function TaskDrawer({
   // окна-оверлея (шапка) и отдельной страницы (строка хлебных крошек) — единый источник.
   const statusShareMore = task ? (
     <>
-      {/* Проект-пилюля убрана из шапки (загромождала кластер) — «Перенести в проект» теперь
-          в ⋯-меню (MoveToProjectSubmenu). В шапке остаётся только статус + Поделиться + ⋯. */}
-      {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
-      {onMove ? (
-        <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
-      ) : (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium',
-            STATUS_BADGE_COLOR[task.status],
-          )}
-        >
-          {STATUS_LABEL[task.status]}
-        </span>
-      )}
-      {/* Поделиться = копировать ссылку на задачу (U3): раньше кнопка была без onClick
-          (мёртвая), а «Копировать ссылку» дублировалось в ⋯. Теперь Share копирует, а
-          дубль из меню убран. Async-copy с await+catch — корректный success/failure. */}
+      <span className={cn('inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-2xs font-medium', STATUS_BADGE_COLOR[task.status])}>
+        {STATUS_LABEL[task.status]}
+      </span>
+      {/* Копирование ссылки подтверждаем после успешной записи в буфер обмена. */}
       <Button
         variant="ghost"
         size="sm"
@@ -1930,9 +1668,9 @@ export function TaskDrawer({
           })();
         }}
       >
-        <Share2 className="size-4" />
+        <Link2 className="size-4" />
         {/* На телефонах — только иконка: вместе с парой пилюль текст не влезает. */}
-        <span className="hidden text-sm sm:inline">Поделиться</span>
+        <span className="hidden text-sm sm:inline">Копировать ссылку</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -1946,21 +1684,14 @@ export function TaskDrawer({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[200px]">
-          {/* Перенос задачи в другой проект — переехал сюда из шапки. На утверждении скрыт:
-              сервер отклоняет перенос (409), он уводил бы задачу из очереди руководителя. */}
-          {onMove && !frozenByApproval && (
-            <MoveToProjectSubmenu
-              task={task}
-              onMoved={() => {
-                notifyChanged();
-                handleClose();
-              }}
-            />
-          )}
           {/* История версий — все изменения этой задачи (снимки на create/update/move/restore). */}
           <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
             <Clock className="text-muted-foreground" /> История версий
           </DropdownMenuItem>
+          <div className="mbs-1 border-bs border-border px-2 py-3">
+            <p className="mbe-1.5 text-meta text-muted-foreground">Создано</p>
+            <TaskCreatedValue task={task} dateLabel={formatTaskCreated(task.createdAt)} className="flex-wrap gap-y-1 [&_time]:text-meta" />
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
       <TaskVersionsDialog
@@ -2238,8 +1969,14 @@ export function TaskDrawer({
               <div className="px-[var(--pf-drawer-px)] pbe-2.5 pbs-1">
                 {(() => {
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
+                    status: <TaskStatusField task={task} disabled={!canEditProp || !currentUser} beforeChange={flushDescription} onMove={onMove} onChanged={(updated) => { setStatusResult(updated); notifyChanged(); }} />,
+                    project: <TaskProjectField task={task} projectName={projectName} isInbox={isInbox} disabled={!canEditProp || !currentUser} beforeChange={flushDescription} onMoved={(updated) => {
+                      notifyChanged();
+                      handleClose();
+                      if (asPage) navigate(`/projects/${updated.projectId}/tasks/${updated.id}`);
+                    }} />,
                     assignee: (
-                      <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+                      <div className="flex min-h-7 w-full min-w-0 items-center">
                         <AssigneeTaskButton
                           task={task}
                           onChanged={() => notifyChanged()}
@@ -2252,9 +1989,8 @@ export function TaskDrawer({
                         />
                       </div>
                     ),
-                    // Read-only: утверждающий вычисляется из ролей пространства, а не
-                    // хранится на задаче. Ряд сам скрывается, когда приёмка выключена.
-                    approver: <TaskApproverRow />,
+                    // Кто утверждает — справочный список участников с правом приёмки.
+                    approver: <TaskApproverRow projectId={task.projectId} />,
                     deadline: (
                       <TaskDeadlineChip
                         task={task}
@@ -2302,43 +2038,19 @@ export function TaskDrawer({
                         />
                       </div>
                     ),
-                    created: (
-                      <TaskCreatedValue
-                        task={task}
-                        dateLabel={formatTaskCreated(task.createdAt)}
-                        className="min-h-7"
-                      />
-                    ),
                   };
-                  const propVisible: Record<TaskPropertyKey, boolean> = {
-                    // Ответственный — показываем ВСЕГДА (даже solo-проект: доступен только «Я»).
-                    assignee: true,
-                    // Ряд решает сам, показываться ли (приёмка выключена → null),
-                    // поэтому здесь он всегда «видим».
-                    approver: true,
-                    deadline: true,
-                    priority: true,
-                    taskType: true,
-                    mode: true,
-                    files: true,
-                    created: true,
+                  const props: Record<TaskPropertyKey, TaskProperty> = {
+                    status: { icon: Activity, label: 'Статус', value: propValues.status },
+                    project: { icon: FolderKanban, label: 'Проект', value: propValues.project },
+                    assignee: { icon: UserPlus, label: 'Исполнитель', value: propValues.assignee },
+                    approver: { icon: ShieldCheck, label: 'Кто утверждает', value: propValues.approver },
+                    deadline: { icon: CalendarClock, label: 'Срок до', value: propValues.deadline },
+                    priority: { icon: Flag, label: 'Приоритет', value: propValues.priority },
+                    taskType: { icon: Tag, label: 'Тип', value: propValues.taskType },
+                    mode: { icon: Bot, label: 'Режим', value: propValues.mode },
+                    files: { icon: Paperclip, label: 'Файлы', value: propValues.files },
                   };
-                  const visibleKeys = propertyOrder.filter((k) => propVisible[k]);
-                  return (
-                    <DndContext
-                      sensors={propSensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={handlePropDragEnd}
-                    >
-                      <SortableContext items={visibleKeys} strategy={verticalListSortingStrategy}>
-                        {visibleKeys.map((key) => (
-                          <SortablePropertyRow key={key} id={key} icon={PROP_ICON[key]} label={PROP_LABEL[key]}>
-                            {propValues[key]}
-                          </SortablePropertyRow>
-                        ))}
-                      </SortableContext>
-                    </DndContext>
-                  );
+                  return <TaskProperties taskId={task.id} items={props} />;
                 })()}
               </div>
             </div>
@@ -2639,7 +2351,7 @@ export function TaskDrawer({
                 {/* Ряд свойств (как в edit): Ответственный / Дедлайн / Приоритет / Режим /
                     Файлы. Без «Создано» и статуса — их нет до создания. */}
                 <div className="px-3 pbe-2.5 pbs-1">
-                  <PropertyRow icon={UserPlus} label="Ответственный">
+                  <PropertyRow icon={UserPlus} label="Исполнитель">
                     <div className="flex min-h-7 flex-wrap items-center gap-1.5">
                       <AssigneeSelect
                         value={createAssigneeUserId}
@@ -2651,7 +2363,7 @@ export function TaskDrawer({
                     </div>
                   </PropertyRow>
 
-                  <PropertyRow icon={CalendarClock} label="Дедлайн">
+                  <PropertyRow icon={CalendarClock} label="Срок до">
                     <DeadlinePicker
                       value={createDeadline}
                       onChange={setCreateDeadline}

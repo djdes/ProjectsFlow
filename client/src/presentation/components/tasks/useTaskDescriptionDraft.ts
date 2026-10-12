@@ -35,11 +35,13 @@ export function useTaskDescriptionDraft(task: Task | null, repository: TaskRepos
   }, [taskId, repository, report]);
 
   const onChange = useCallback((value: string) => sessionRef.current?.change(value), []);
+  // Status/project changes must wait for text edits and abort if saving fails.
+  const flush = useCallback(async (): Promise<void> => { await sessionRef.current?.commit(); }, []);
   const commit = useCallback(async (value?: string): Promise<void> => {
     const session = sessionRef.current;
     if (!session) return;
     if (value !== undefined) session.change(value);
     try { await session.commit(); } catch (error) { report(error); }
   }, [report]);
-  return { ...state, onChange, commit };
+  return { ...state, onChange, commit, flush };
 }

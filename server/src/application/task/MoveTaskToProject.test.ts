@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TargetProjectIsInboxError } from '../../domain/task/errors.js';
+import { InboxOwnerRequiredError, TargetProjectIsInboxError } from '../../domain/task/errors.js';
 import { MoveTaskToProject } from './MoveTaskToProject.js';
 
 const ME = 'u-me';
@@ -80,3 +80,39 @@ test('moving to somebody else\'s Inbox is forbidden', async () => {
   );
   assert.equal(h.moves.length, 0);
 });
+
+test('personal task moves to a writable project with its assignee preserved', async () => {
+  const h = personalMoveHarness('owner', ME);
+  const moved = await h.move.execute('personal-task', 'destination', ME);
+  assert.equal(moved.projectId, 'destination');
+  assert.deepEqual(h.moves, [OTHER]);
+});
+
+test('personal task cannot be moved by someone other than its owner', async () => {
+  const h = personalMoveHarness('owner', OTHER);
+  await assert.rejects(h.move.execute('personal-task', 'destination', ME), InboxOwnerRequiredError);
+  assert.deepEqual(h.moves, []);
+});
+
+test('personal task transfer is denied when the destination only grants viewing', async () => {
+  const h = personalMoveHarness('viewer', ME);
+  await assert.rejects(h.move.execute('personal-task', 'destination', ME));
+  assert.deepEqual(h.moves, []);
+});
+
+function personalMoveHarness(targetRole: string, inboxOwner: string) {
+  const moves: string[] = [];
+  const sourceTask = { id: 'personal-task', projectId: MY_INBOX, assignee: { userId: OTHER } };
+  const move = new MoveTaskToProject({
+    projects: { getById: async (id: string) => ({ id, isInbox: id === MY_INBOX, ownerId: id === MY_INBOX ? inboxOwner : OTHER }) } as never,
+    members: { findForProject: async (_id: string, userId: string) => ({ role: userId === ME ? targetRole : 'editor' }) } as never,
+    tasks: {
+      getById: async () => sourceTask,
+      moveToProject: async (_id: string, projectId: string, assigneeUserId: string) => {
+        moves.push(assigneeUserId);
+        return { ...sourceTask, projectId, assignee: { userId: assigneeUserId } };
+      },
+    } as never,
+  });
+  return { moves, move };
+}

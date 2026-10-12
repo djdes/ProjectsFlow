@@ -14,6 +14,7 @@ import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { META_CHIP_CLASS } from './MetaChip';
+import { PROPERTY_CARET_CLASS } from './PropertyRow';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import type { Task } from '@/domain/task/Task';
 
@@ -110,13 +111,13 @@ export function AssigneeTaskButton({
       await taskRepository.assign(task.projectId, task.id, target.id);
       toast.success(
         target.id === user?.id
-          ? 'Теперь вы ответственный'
-          : `Ответственный — ${target.displayName}`,
+          ? 'Теперь вы исполнитель'
+          : `Исполнитель — ${target.displayName}`,
       );
       onChanged();
     } catch (error) {
       setAssignee(prev);
-      toast.error(`Не удалось сменить ответственного: ${(error as Error).message}`);
+      toast.error(`Не удалось сменить исполнителя: ${(error as Error).message}`);
     } finally {
       setSubmitting(false);
     }
@@ -135,7 +136,8 @@ export function AssigneeTaskButton({
             inPropertyRow ? 'text-foreground hover:text-foreground' : META_CHIP_CLASS,
             className,
           )}
-          title="Ответственный за задачу. Нажмите, чтобы изменить."
+          title="Исполнитель задачи. Нажмите, чтобы изменить."
+          aria-label={`Исполнитель: ${assignee.displayName}`}
         >
           {submitting ? (
             <Loader2 className="size-3.5 shrink-0 motion-safe:animate-spin" />
@@ -143,7 +145,7 @@ export function AssigneeTaskButton({
             <MiniAvatar name={assignee.displayName} avatarUrl={assignee.avatarUrl} />
           )}
           <span className="min-w-0 truncate">{assignee.displayName}</span>
-          {!disabled && <ChevronDown className="!size-3 shrink-0 opacity-60" />}
+          {!disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : '!size-3 shrink-0 opacity-60'} />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">

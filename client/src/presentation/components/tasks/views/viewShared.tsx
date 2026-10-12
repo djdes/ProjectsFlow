@@ -890,7 +890,9 @@ export function ViewTaskDrawer({
       onMove={
         canEdit
           ? async (taskId, targetStatus) => {
-              await tasksApi.move(taskId, { targetStatus, beforeTaskId: null, afterTaskId: null });
+              let result: Task | undefined;
+              await tasksApi.move(taskId, { targetStatus, beforeTaskId: null, afterTaskId: null }, (updated) => { result = updated; });
+              return result;
             }
           : undefined
       }

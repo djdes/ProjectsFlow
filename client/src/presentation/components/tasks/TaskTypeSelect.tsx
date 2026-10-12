@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { PROPERTY_CARET_CLASS } from './PropertyRow';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { TASK_TYPES, type TaskType } from '@/domain/task/Task';
 
@@ -47,6 +48,7 @@ export function TaskTypeSelect({
             meta && meta.textColor,
           )}
           title="Тип задачи"
+          aria-label="Тип задачи"
         >
           {!inPropertyRow &&
             (meta ? (
@@ -54,8 +56,8 @@ export function TaskTypeSelect({
             ) : (
               <Tag className="size-3.5" />
             ))}
-          {meta ? meta.label : inPropertyRow ? 'Выбрать тип…' : 'Без типа'}
-          {!inPropertyRow && <ChevronDown className="size-3" />}
+          <span className="min-w-0 truncate">{meta ? meta.label : inPropertyRow ? 'Выбрать…' : 'Без типа'}</span>
+          {!disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : 'size-3'} />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[180px]">
