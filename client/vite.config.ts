@@ -19,6 +19,10 @@ export default defineConfig({
     },
   }],
   resolve: {
+    // Dialog and Popover must share the layer/focus stacks even when their Radix
+    // dependencies resolve to different patch versions. Otherwise Escape in a
+    // nested picker closes its parent task drawer as well.
+    dedupe: ['@radix-ui/react-dismissable-layer', '@radix-ui/react-focus-scope'],
     alias: {
       '@': path.resolve(__dirname, './src'),
     },

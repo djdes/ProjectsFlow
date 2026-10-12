@@ -638,6 +638,40 @@ export const scenarios = [
   },
 
   {
+    id: 'task-drawer-pickers',
+    title: 'Окно задачи: вложенные шторки, порядок строк и перенос',
+    matrix: [['phone', 'light'], ['narrow', 'dark']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto(`/projects/${BOARD_PROJECT_ID}`, { ready: () => page.locator(card('t-home')) });
+      await page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).tap();
+      const properties = page.locator('[data-pf-task-properties]');
+      await t.visible(properties, 'свойства в окне задачи');
+      await t.step('закрытие вложенной шторки сохраняет окно задачи', async () => {
+        await properties.getByRole('button', { name: 'Кто утверждает', exact: true }).tap();
+        const picker = page.getByRole('dialog', { name: 'Кто утверждает' });
+        await t.visible(picker.getByText('Анна Смирнова', { exact: true }), 'имя утверждающего');
+        await page.keyboard.press('Escape');
+        await t.hidden(picker, 'закрытая шторка утверждающих');
+        await t.visible(properties, 'окно задачи после закрытия шторки');
+      });
+      await t.step('долгий тап меняет порядок внутри окна, не закрывая его', async () => {
+        await touchLongDrag(t, properties.locator('[data-pf-task-property="status"]'), properties.locator('[data-pf-task-property="assignee"]'));
+        await t.waitForMutation((m) => m.path === '/me/ui-prefs', 'порядок не сохранён');
+        await t.visible(properties, 'окно задачи после перестановки');
+      });
+      await t.step('перенос через вложенную шторку убирает задачу из исходной доски', async () => {
+        await properties.getByRole('button', { name: 'Сменить проект', exact: true }).tap();
+        await page.getByRole('dialog', { name: 'Выбор проекта' }).getByRole('option', { name: 'Личные задачи', exact: true }).tap();
+        await t.waitForMutation((m) => m.path.endsWith('/t-home/assign-to-project'), 'перенос не отправлен');
+        await t.hidden(properties, 'окно закрылось после переноса');
+        await expectGone(t, card('t-home'), 'задача осталась на исходной доске');
+      });
+      await t.pageChecks('доска после переноса');
+    },
+  },
+
+  {
     id: 'mobile-nav',
     title: 'Телефон: нижняя навигация и меню',
     matrix: [
