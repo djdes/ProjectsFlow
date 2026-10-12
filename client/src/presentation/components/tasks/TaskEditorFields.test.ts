@@ -30,6 +30,8 @@ const workspace = { id: 'ws', isCurrent: true, workerEnabled: false, requireTask
 async function mount(t: TestContext, element: React.ReactElement, options: {
   move?: (status: string) => Promise<Task>;
   transfer?: () => Promise<Task>;
+  getTask?: () => Promise<Task>;
+  getProject?: (id: string) => Promise<Project>;
   prefs?: UiPrefs;
   savePrefs?: (prefs: UiPrefs) => Promise<UiPrefs>;
 } = {}) {
@@ -48,7 +50,8 @@ async function mount(t: TestContext, element: React.ReactElement, options: {
       patched.current = true;
       t.mock.method(c.authRepository, 'getCurrentOrNull', async () => ({ id: 'me' } as User));
       t.mock.method(c.listWorkspaces, 'execute', async () => [workspace]);
-      t.mock.method(c.projectRepository, 'getById', async (id: string) => id === 'inbox' ? inbox : destination);
+      t.mock.method(c.projectRepository, 'getById', async (id: string) => options.getProject ? options.getProject(id) : id === 'inbox' ? inbox : destination);
+      t.mock.method(c.taskRepository, 'get', async () => options.getTask?.() ?? { ...task, canTransferProject: true });
       t.mock.method(c.projectRepository, 'getKanbanSettings', async () => ({}));
       t.mock.method(c.projectRepository, 'list', async () => [destination, { ...destination, id: 'viewer', role: 'viewer', name: 'Только просмотр' }]);
       t.mock.method(c.projectRepository, 'getInbox', async () => inbox);
@@ -125,6 +128,34 @@ test('failed text saving prevents project transfer and keeps the selector open',
     assert.equal(transfers, 0);
     assert.ok(document.querySelector('[aria-label="Выбор проекта"]'));
   } finally { await view.close(); }
+});
+
+test('personal task project picker uses task access without reading a private inbox project', async (t) => {
+  let transfers = 0;
+  let projectReads = 0;
+  const personal = { ...task, context: { projectName: 'Личные задачи', isInbox: true, canReadProject: false, workspaceId: 'ws' } };
+  const view = await mount(t, React.createElement(TaskProjectField, {
+    task: personal, isInbox: true, disabled: false, beforeChange: async () => {}, onMoved: () => {},
+  }), {
+    getTask: async () => ({ ...personal, canTransferProject: true }),
+    getProject: async () => { projectReads++; throw new Error('private inbox'); },
+    transfer: async () => { transfers++; return { ...task, projectId: 'project' }; },
+  });
+  try {
+    await click(view.host.querySelector('button'));
+    await click(document.querySelector('[role="option"][aria-selected="false"]'));
+    assert.equal(transfers, 1);
+    assert.equal(projectReads, 0);
+  } finally { await view.close(); }
+});
+
+test('task transfer remains disabled when the server denies it', async (t) => {
+  const view = await mount(t, React.createElement(TaskProjectField, {
+    task: { ...task, canEdit: true, canTransferProject: false }, isInbox: true,
+    disabled: false, beforeChange: async () => {}, onMoved: () => {},
+  }));
+  try { assert.equal(view.host.querySelector('button')?.disabled, true); }
+  finally { await view.close(); }
 });
 
 test('approver sheet exposes full names and roles, excluding ordinary editors', async (t) => {

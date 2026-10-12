@@ -113,6 +113,19 @@ export async function requireTaskModifyAccess(
   return { project, isAssignee: false };
 }
 
+// Personal task participants may transfer their task without access to the whole
+// inbox. Named projects still require the project-level move permission.
+export async function requireTaskTransferAccess(
+  deps: TaskAccessDeps,
+  projectId: string,
+  taskId: string,
+  userId: string,
+): Promise<TaskAccessResult> {
+  const access = await requireTaskModifyAccess(deps, projectId, taskId, userId, 'move_task');
+  if (!access.project.isInbox) await requireProjectAccess(deps, projectId, userId, 'move_task');
+  return access;
+}
+
 // Read-операции (комментарии, вложения, коммиты) — та же inbox-aware семантика, что и
 // modify: для inbox разрешён owner ИЛИ assignee, для именованного проекта —
 // обычный requireProjectAccess('read_project'). Ответственный личной задачи не состоит в

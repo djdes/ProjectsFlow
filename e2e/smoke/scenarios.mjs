@@ -644,6 +644,53 @@ export const scenarios = [
         await t.waitForMutation((m) => m.path === '/projects/private-inbox/tasks/t-home/move' && m.body?.targetStatus === 'done', 'принятие задачи не сохранено');
       });
       await t.pageChecks('личная задача по прямой ссылке');
+      await t.check('руководитель переносит личную задачу в проект через шторку', async () => {
+        await t.page.getByRole('button', { name: 'Сменить проект', exact: true }).tap();
+        const sheet = t.page.getByRole('dialog', { name: 'Выбор проекта' });
+        t.assert(await sheet.getAttribute('data-pf-mobile-sheet') === 'true', 'выбор проекта открылся не шторкой');
+        const project = t.state.projects.find(item => item.id === BOARD_PROJECT_ID);
+        await sheet.getByRole('option', { name: project.name, exact: true }).tap();
+        await t.waitForMutation(m => m.path === '/projects/private-inbox/tasks/t-home/assign-to-project' && m.body?.targetProjectId === BOARD_PROJECT_ID, 'перенос личной задачи не сохранён');
+        await t.waitFor(() => new URL(t.page.url()).pathname === `/projects/${BOARD_PROJECT_ID}/tasks/t-home`, 'новая карточка не открылась');
+        await t.waitFor(async () => (await t.page.getByRole('button', { name: 'Сменить проект', exact: true }).innerText()).includes(project.name), 'название проекта не обновилось');
+      });
+      await t.pageChecks('перенесённая личная задача');
+    },
+  },
+
+  {
+    id: 'task-personal-project',
+    title: 'Личная задача: перенос в проект и обратно',
+    matrix: [['desktop', 'light'], ['phone', 'light'], ['narrow', 'dark']],
+    async run(t) {
+      const { page } = t;
+      const press = locator => t.isMobile ? locator.tap() : locator.click();
+      const task = t.state.tasks.find(item => item.id === 't-domain');
+      const inboxId = task.projectId;
+      const project = t.state.projects.find(item => item.id === BOARD_PROJECT_ID);
+      await t.goto('/', { ready: () => page.locator('[data-pf-task-id]:visible') });
+      if (t.isMobile) await press(page.locator('[data-pf-inbox-section-switch="queue"]').first());
+      await press(page.locator(card(task.id)).getByText(taskTitle(t.state, task.id), { exact: true }));
+      await t.visible(page.locator('[data-pf-task-properties]'), 'карточка личной задачи');
+      await t.check('из личных задач доступен выбор проекта', async () => {
+        await press(page.getByRole('button', { name: 'Сменить проект', exact: true }));
+        const sheet = page.getByRole('dialog', { name: 'Выбор проекта' });
+        if (t.isMobile) t.assert(await sheet.getAttribute('data-pf-mobile-sheet') === 'true', 'выбор открылся не шторкой');
+        await press(sheet.getByRole('option', { name: project.name, exact: true }));
+        await t.waitForMutation(m => m.path === `/projects/${inboxId}/tasks/${task.id}/assign-to-project` && m.body?.targetProjectId === BOARD_PROJECT_ID, 'проект не сохранён');
+        await t.hidden(page.locator('[data-pf-task-properties]'), 'окно закрылось после переноса');
+      });
+      await t.check('проект сохраняется после повторного открытия; можно вернуть в личные', async () => {
+        await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/${task.id}`, { ready: () => page.locator('[data-pf-task-properties]') });
+        await page.reload();
+        const picker = page.getByRole('button', { name: 'Сменить проект', exact: true });
+        await t.waitFor(async () => (await picker.innerText()).includes(project.name), 'проект потерялся после обновления');
+        await press(picker);
+        await press(page.getByRole('dialog', { name: 'Выбор проекта' }).getByRole('option', { name: 'Личные задачи', exact: true }));
+        await t.waitForMutation(m => m.path === `/projects/${BOARD_PROJECT_ID}/tasks/${task.id}/assign-to-project` && m.body?.targetProjectId === inboxId, 'возврат в личные задачи не сохранён');
+        await t.waitFor(() => new URL(page.url()).pathname === `/projects/${inboxId}/tasks/${task.id}`, 'адрес личной задачи не открыт');
+      });
+      await t.pageChecks('смена проекта у личной задачи');
     },
   },
 

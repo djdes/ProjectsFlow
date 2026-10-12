@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { InboxOwnerRequiredError, TargetProjectIsInboxError } from '../../domain/task/errors.js';
+import { TargetProjectIsInboxError } from '../../domain/task/errors.js';
+import { ProjectNotFoundError, InsufficientProjectRoleError } from '../../domain/project/errors.js';
 import { MoveTaskToProject } from './MoveTaskToProject.js';
 
 const ME = 'u-me';
@@ -12,6 +13,7 @@ function makeHarness(opts: {
   inboxOwnerId: string;
   assigneeUserId: string;
   sharedUsers?: string[];
+  sourceRole?: string;
 }) {
   const moves: { projectId: string; assigneeUserId: string }[] = [];
   const move = new MoveTaskToProject({
@@ -44,7 +46,7 @@ function makeHarness(opts: {
     } as never,
     members: {
       findForProject: async (_projectId: string, userId: string) =>
-        userId === ME ? { role: 'editor' } : null,
+        userId === ME ? { role: opts.sourceRole ?? 'editor' } : null,
       listSharedUsers: async () =>
         (opts.sharedUsers ?? []).map((id) => ({ id })),
     } as never,
@@ -88,9 +90,9 @@ test('personal task moves to a writable project with its assignee preserved', as
   assert.deepEqual(h.moves, [OTHER]);
 });
 
-test('personal task cannot be moved by someone other than its owner', async () => {
+test('unrelated colleague cannot move a personal task even with destination write access', async () => {
   const h = personalMoveHarness('owner', OTHER);
-  await assert.rejects(h.move.execute('personal-task', 'destination', ME), InboxOwnerRequiredError);
+  await assert.rejects(h.move.execute('personal-task', 'destination', ME), ProjectNotFoundError);
   assert.deepEqual(h.moves, []);
 });
 
@@ -100,12 +102,42 @@ test('personal task transfer is denied when the destination only grants viewing'
   assert.deepEqual(h.moves, []);
 });
 
-function personalMoveHarness(targetRole: string, inboxOwner: string) {
+test('personal task can be transferred by its assignee, delegating author or workspace approver', async () => {
+  for (const access of [{ assignee: ME }, { creator: ME, sharedUsers: [OTHER] }, { approvers: [ME] }]) {
+    const h = personalMoveHarness('editor', OTHER, access);
+    const moved = await h.move.execute('personal-task', 'destination', ME);
+    assert.equal(moved.projectId, 'destination');
+    assert.deepEqual(h.moves, [access.assignee ?? OTHER]);
+  }
+});
+
+test('approver cannot transfer into a read-only project or from an excluded inbox', async () => {
+  const readOnly = personalMoveHarness('viewer', OTHER, { approvers: [ME] });
+  await assert.rejects(readOnly.move.execute('personal-task', 'destination', ME), InsufficientProjectRoleError);
+  const hidden = personalMoveHarness('editor', OTHER, { approvers: [ME], hidden: true });
+  await assert.rejects(hidden.move.execute('personal-task', 'destination', ME), ProjectNotFoundError);
+  assert.deepEqual([...readOnly.moves, ...hidden.moves], []);
+});
+
+test('assigned viewer cannot transfer a named project task out of its project', async () => {
+  const h = makeHarness({ inboxOwnerId: ME, assigneeUserId: ME, sourceRole: 'viewer' });
+  await assert.rejects(h.move.execute('t1', MY_INBOX, ME), InsufficientProjectRoleError);
+  assert.deepEqual(h.moves, []);
+});
+
+function personalMoveHarness(targetRole: string, inboxOwner: string, access: {
+  assignee?: string; creator?: string; sharedUsers?: string[]; approvers?: string[]; hidden?: boolean;
+} = {}) {
   const moves: string[] = [];
-  const sourceTask = { id: 'personal-task', projectId: MY_INBOX, assignee: { userId: OTHER } };
+  const sourceTask = { id: 'personal-task', projectId: MY_INBOX, createdBy: access.creator, assignee: { userId: access.assignee ?? OTHER } };
   const move = new MoveTaskToProject({
     projects: { getById: async (id: string) => ({ id, isInbox: id === MY_INBOX, ownerId: id === MY_INBOX ? inboxOwner : OTHER }) } as never,
-    members: { findForProject: async (_id: string, userId: string) => ({ role: userId === ME ? targetRole : 'editor' }) } as never,
+    members: {
+      findForProject: async (_id: string, userId: string) => ({ role: userId === ME ? targetRole : 'editor' }),
+      listApproverUserIdsForProject: async () => access.approvers ?? [],
+      listSharedUsers: async () => (access.sharedUsers ?? []).map(id => ({ id })),
+      isProjectHidden: async () => access.hidden ?? false,
+    } as never,
     tasks: {
       getById: async () => sourceTask,
       moveToProject: async (_id: string, projectId: string, assigneeUserId: string) => {

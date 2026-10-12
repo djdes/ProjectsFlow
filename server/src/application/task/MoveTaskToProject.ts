@@ -1,5 +1,4 @@
 import {
-  InboxOwnerRequiredError,
   TargetProjectIsInboxError,
   TargetProjectNotFoundError,
   TaskNotFoundError,
@@ -9,6 +8,7 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
+import { requireTaskTransferAccess } from './taskAuthorization.js';
 
 type Deps = {
   readonly tasks: TaskRepository;
@@ -25,12 +25,7 @@ export class MoveTaskToProject {
     const task = await this.deps.tasks.getById(taskId);
     if (!task) throw new TaskNotFoundError(taskId);
 
-    const sourceProject = await this.deps.projects.getById(task.projectId);
-    if (sourceProject?.isInbox) {
-      if (sourceProject.ownerId !== userId) throw new InboxOwnerRequiredError();
-    } else {
-      await requireProjectAccess(this.deps, task.projectId, userId, 'move_task');
-    }
+    await requireTaskTransferAccess(this.deps, task.projectId, taskId, userId);
     if (task.projectId === targetProjectId) return task;
 
     const targetProject = await this.deps.projects.getById(targetProjectId);

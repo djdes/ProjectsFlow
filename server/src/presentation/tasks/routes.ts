@@ -510,7 +510,7 @@ export function tasksRouter(deps: Deps): Router {
   });
 
   // POST /:taskId/assign-to-project — перенос задачи в другой проект (из инбокса —
-  // owner, из именованного — move_task; права гейтит use-case по task.projectId).
+  // участник задачи, из именованного — move_task; права гейтит use-case по task.projectId).
   // Ответственный сохраняется, если он состоит в целевом проекте; иначе им становится caller.
   router.post(
     '/:taskId/assign-to-project',

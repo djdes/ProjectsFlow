@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import type { Project } from '@/domain/project/Project';
 import type { Task } from '@/domain/task/Task';
-import { canTransferProject, taskProjectOptions } from '@/domain/task/taskEditorOptions';
+import { taskProjectOptions } from '@/domain/task/taskEditorOptions';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { PROPERTY_CARET_CLASS, PROPERTY_VALUE_CLASS } from './PropertyRow';
@@ -21,7 +21,7 @@ export function TaskProjectField({ task, projectName, isInbox, disabled, beforeC
 }): React.ReactElement {
   const { projectRepository, taskRepository } = useContainer();
   const { user } = useCurrentUser();
-  const [source, setSource] = useState<Project | null>(null);
+  const [source, setSource] = useState<Task | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -31,11 +31,12 @@ export function TaskProjectField({ task, projectName, isInbox, disabled, beforeC
   useEffect(() => {
     let cancelled = false;
     setSource(null);
-    if (task.context?.canReadProject === false) return;
-    void projectRepository.getById(task.projectId).then((value) => { if (!cancelled) setSource(value); }).catch(() => {});
+    if (task.canTransferProject !== undefined) return;
+    void taskRepository.get(task.projectId, task.id).then((value) => { if (!cancelled) setSource(value); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [projectRepository, task.projectId, task.context?.canReadProject]);
-  const canMove = !disabled && !!source && !!user && canTransferProject(source, user.id);
+  }, [taskRepository, task.projectId, task.id, task.canTransferProject]);
+  const currentSource = source?.id === task.id && source.projectId === task.projectId ? source : null;
+  const canMove = !disabled && !!user && (task.canTransferProject ?? currentSource?.canTransferProject ?? false);
   const load = async (): Promise<void> => {
     setError(false);
     setProjects(null);
@@ -59,7 +60,8 @@ export function TaskProjectField({ task, projectName, isInbox, disabled, beforeC
     } catch (e) { toast.error(`Не удалось перенести задачу: ${(e as Error).message}`); }
     finally { busy.current = false; setSaving(false); }
   };
-  const name = isInbox || source?.isInbox ? 'Личные задачи' : source?.name ?? projectName ?? 'Проект';
+  const context = task.context ?? currentSource?.context;
+  const name = isInbox || context?.isInbox ? 'Личные задачи' : context?.projectName ?? projectName ?? 'Проект';
   const filtered = projects?.filter((p) => (p.isInbox ? 'Личные задачи' : p.name).toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru').trim()));
   return (
     <Popover open={open} onOpenChange={(next) => { if (saving) return; setOpen(next); if (next) { setQuery(''); void load(); } }}>

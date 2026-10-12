@@ -378,7 +378,7 @@ function getRoutes(state) {
     }],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)$/, ([, projectId, taskId]) => {
       const task = state.tasks.find((t) => t.id === taskId && t.projectId === projectId);
-      return task ? json({ task }) : json({ error: 'not_found' }, 404);
+      return task ? json({ task: { canTransferProject: true, ...task } }) : json({ error: 'not_found' }, 404);
     }],
     [/^\/projects\/([^/]+)\/tasks$/, ([, id]) =>
       json({ tasks: state.tasks.filter((t) => t.projectId === id) })],
@@ -548,7 +548,7 @@ function mutate(state, method, path, body) {
     }
     if (method === 'POST' && rest === '/approval/withdraw') return touch({ status: 'manual' });
     if (method === 'POST' && rest === '/assign-to-project') {
-      return touch({ projectId: body?.targetProjectId ?? task.projectId });
+      return touch({ projectId: body?.targetProjectId ?? task.projectId, context: undefined });
     }
   }
 

@@ -25,9 +25,10 @@ test('direct task notification URL authorizes approvers without exposing the inb
   try {
     const allowed = await fetch(`${base}/private-inbox/tasks/t1`, { headers: { 'x-test-user': 'lead' } });
     assert.equal(allowed.status, 200);
-    const body = await allowed.json() as { task: { id: string; canEdit: boolean; createdBy?: string } };
+    const body = await allowed.json() as { task: { id: string; canEdit: boolean; canTransferProject: boolean; createdBy?: string } };
     assert.equal(body.task.id, 't1');
     assert.equal(body.task.canEdit, true);
+    assert.equal(body.task.canTransferProject, true);
     assert.equal(body.task.createdBy, undefined);
     const denied = await fetch(`${base}/private-inbox/tasks/t1`, { headers: { 'x-test-user': 'colleague' } });
     assert.equal(denied.status, 404);

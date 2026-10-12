@@ -146,7 +146,7 @@ export function TaskDetailPage(): React.ReactElement {
           beforeTaskId: null,
           afterTaskId: null,
         });
-        const current = { ...updated, context: task.context, canEdit: task.canEdit };
+        const current = { ...updated, context: task.context, canEdit: task.canEdit, canTransferProject: task.canTransferProject };
         setTask(current);
         return current;
       }}

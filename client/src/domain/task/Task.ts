@@ -88,6 +88,7 @@ export const RALPH_MODE_META: Record<RalphMode, { label: string; description: st
 export type Task = {
   // Task-scoped capability returned by the direct task endpoint.
   readonly canEdit?: boolean;
+  readonly canTransferProject?: boolean;
   readonly context?: {
     readonly projectName: string;
     readonly workspaceId: string;

@@ -23,6 +23,8 @@ test('workspace owner and approver can open, edit and complete/delete the indivi
     const result = await new GetTask(deps).execute('p1', actor, 't1');
     assert.equal(result.id, 't1');
     assert.equal(result.canEdit, true);
+    assert.equal(result.canTransferProject, true);
+    assert.equal(result.context.canReadProject, false);
     await requireTaskModifyAccess(deps, 'p1', 't1', actor, 'move_task');
     await requireTaskDeleteAccess(deps, 'p1', 't1', actor, 'delete_task');
   }
@@ -41,6 +43,15 @@ test('explicit project exclusion overrides the approver role', async () => {
 test('named project viewer can read but cannot edit somebody else task', async () => {
   const result = await new GetTask(harness(false)).execute('p1', 'colleague', 't1');
   assert.equal(result.canEdit, false);
+  assert.equal(result.canTransferProject, false);
+});
+
+test('personal owner may transfer while a named-project assigned viewer may only edit', async () => {
+  const personal = await new GetTask(harness()).execute('p1', 'worker', 't1');
+  assert.equal(personal.canTransferProject, true);
+  const assignedViewer = await new GetTask(harness(false)).execute('p1', 'worker', 't1');
+  assert.equal(assignedViewer.canEdit, true);
+  assert.equal(assignedViewer.canTransferProject, false);
 });
 
 test('task-scoped URL cannot be used with another project id', async () => {
