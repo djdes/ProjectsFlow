@@ -1,9 +1,10 @@
 -- Personal inboxes belong to exactly one owner in one workspace.
 -- Existing tasks stay in their existing workspace; nothing is reassigned implicitly.
 ALTER TABLE projects
-  ADD COLUMN inbox_owner_id CHAR(36)
-    GENERATED ALWAYS AS (CASE WHEN is_inbox = 1 THEN owner_id ELSE NULL END) VIRTUAL,
-  ADD UNIQUE INDEX uq_workspace_inbox_owner (workspace_id, inbox_owner_id);
+  -- Keep foreign-key columns out of the generated expression (MariaDB 10.11).
+  ADD COLUMN inbox_owner_marker TINYINT
+    GENERATED ALWAYS AS (CASE WHEN is_inbox = 1 THEN 1 ELSE NULL END) VIRTUAL,
+  ADD UNIQUE INDEX uq_workspace_inbox_owner (workspace_id, owner_id, inbox_owner_marker);
 
 -- Persist the event's workspace, including after a task/project is moved or deleted.
 ALTER TABLE notifications
