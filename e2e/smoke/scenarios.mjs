@@ -144,6 +144,9 @@ async function touchSwipeRight(t, locator, distance = 150) {
 // appears only once the drag has started (the dock of drop targets).
 async function touchLongDrag(t, locator, target) {
   await locator.first().scrollIntoViewIfNeeded();
+  // CDP touch events skip Playwright's actionability checks. A sheet that has just
+  // closed can still block pointer events until its exit transition finishes.
+  await locator.first().tap({ trial: true });
   const from = await touchPoint(locator);
   const cdp = await t.page.context().newCDPSession(t.page);
   const move = (x, y) => cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
@@ -589,26 +592,28 @@ export const scenarios = [
     async run(t) {
       const { page } = t;
       const properties = page.locator('[data-pf-task-properties]');
+      const press = (locator) => t.isMobile ? locator.tap() : locator.click();
       await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => properties });
       await t.check('подписи свойств и «Создано» в меню', async () => {
         for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Кто утверждает']) {
           await t.visible(properties.getByText(label, { exact: true }), label);
         }
         t.assert(await properties.getByText('Создано', { exact: true }).count() === 0, 'метаданные остались среди свойств');
-        await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+        await press(page.getByRole('button', { name: 'Ещё', exact: true }));
         await t.visible(page.getByRole('menu').getByText('Создано', { exact: true }), 'дата создания в меню');
         await page.keyboard.press('Escape');
       });
       await t.check('выбор статуса сохраняет ручную работу', async () => {
-        await page.getByRole('button', { name: 'Сменить статус', exact: true }).click();
-        const menu = page.getByRole('menu', { name: 'Статус задачи' });
+        await press(page.getByRole('button', { name: 'Сменить статус', exact: true }));
+        const menu = page.getByRole('menu');
+        await t.visible(menu.getByText('Статус задачи', { exact: true }), 'заголовок выбора статуса');
         if (t.isMobile) t.assert(await menu.getAttribute('data-pf-mobile-sheet') === 'true', 'статус открылся не нижней шторкой');
-        await menu.getByRole('menuitemradio', { name: 'Вручную', exact: true }).click();
+        await press(menu.getByRole('menuitemradio', { name: 'Вручную', exact: true }));
         await t.waitForMutation((m) => m.path.endsWith('/t-home/move') && m.body?.targetStatus === 'manual', 'статус не сохранён');
         await t.waitFor(async () => (await page.getByRole('button', { name: 'Сменить статус', exact: true }).innerText()).includes('Вручную'), 'статус не обновился');
       });
       await t.check('список утверждающих открывается с полными именами', async () => {
-        await properties.getByRole('button', { name: 'Кто утверждает', exact: true }).click();
+        await press(properties.getByRole('button', { name: 'Кто утверждает', exact: true }));
         const sheet = page.getByRole('dialog', { name: 'Кто утверждает' });
         await t.visible(sheet.getByText('Анна Смирнова', { exact: true }), 'имя владельца');
         await t.visible(sheet.getByText('Борис Котов', { exact: true }), 'имя руководителя');
@@ -620,11 +625,11 @@ export const scenarios = [
         await t.waitForMutation((m) => m.path === '/me/ui-prefs' && Array.isArray(m.body?.prefs?.taskPropertyOrder), 'порядок не сохранён');
       });
       await t.check('смена проекта переносит задачу и открывает её новый адрес', async () => {
-        await page.getByRole('button', { name: 'Сменить проект', exact: true }).click();
+        await press(page.getByRole('button', { name: 'Сменить проект', exact: true }));
         const sheet = page.getByRole('dialog', { name: 'Выбор проекта' });
         await t.visible(sheet, 'выбор проекта');
         if (t.isMobile) t.assert(await sheet.getAttribute('data-pf-mobile-sheet') === 'true', 'проекты открылись не нижней шторкой');
-        await sheet.getByRole('option', { name: 'Личные задачи', exact: true }).click();
+        await press(sheet.getByRole('option', { name: 'Личные задачи', exact: true }));
         await t.waitForMutation((m) => m.path.endsWith('/t-home/assign-to-project'), 'перенос не отправлен');
         await t.waitFor(() => new URL(page.url()).pathname.endsWith('/p-inbox-anna/tasks/t-home'), 'не открыт новый адрес задачи');
       });
