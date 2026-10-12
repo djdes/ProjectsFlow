@@ -34,6 +34,7 @@ export type CreateWorkspaceInviteInput = {
 };
 
 export interface WorkspaceRepository {
+  setRequestWorkspace(workspaceId: string | null): void;
   getProjectAccess(workspaceId: string): Promise<WorkspaceProjectAccess>;
   setProjectAccess(workspaceId: string, projectId: string, userId: string, visible: boolean): Promise<void>;
   list(): Promise<Workspace[]>;

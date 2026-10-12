@@ -52,7 +52,7 @@ export class ChangeTaskAssignee {
       // Ответственным личной задачи может стать владелец инбокса либо его коллега по
       // общему пространству (тот же круг, что видит эту доску).
       if (assigneeUserId !== project.ownerId) {
-        const shared = await this.deps.members.listSharedUsers(project.ownerId);
+        const shared = await this.deps.members.listSharedUsersInWorkspace(project.ownerId, project.workspaceId);
         if (!shared.some((u) => u.id === assigneeUserId)) {
           throw new AssigneeNotSharedMemberError();
         }
@@ -66,7 +66,7 @@ export class ChangeTaskAssignee {
     if (task.assignee.userId === assigneeUserId) return task;
     // One committed mutation (including the inbox move), hence one notification.
     const targetInbox = project.isInbox && assigneeUserId !== project.ownerId
-      ? await this.deps.projects.findInboxByOwner(assigneeUserId) : null;
+      ? await this.deps.projects.findInboxByOwner(assigneeUserId, project.workspaceId) : null;
     const updated = targetInbox && targetInbox.id !== project.id
       ? await this.deps.tasks.moveToProject(taskId, targetInbox.id, assigneeUserId, actorUserId)
       : await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);

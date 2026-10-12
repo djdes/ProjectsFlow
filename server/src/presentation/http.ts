@@ -321,6 +321,7 @@ import { llmGatewayRouter } from './llm/gatewayRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
+  readonly workspaceScope?: RequestHandler;
   readonly emailActions: {
     readonly service: EmailActionService;
     readonly appUrl: string;
@@ -539,6 +540,8 @@ type AppDeps = {
     readonly getProjectFinance: GetProjectFinance;
   };
   readonly notifications: {
+    readonly resolveActiveWorkspace: import('../application/workspace/activeWorkspace.js').ResolveActiveWorkspace;
+    readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
     readonly tasks: TaskRepository;
     readonly list: ListNotifications;
     readonly countUnread: CountUnreadNotifications;
@@ -882,6 +885,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Каждый запрос проходит через session-resolver. Не делает auth обязательным —
   // только прикладывает req.user, если cookie валиден.
   app.use(sessionFromCookie(deps.auth.getCurrentUser));
+  if (deps.workspaceScope) app.use('/api', deps.workspaceScope);
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });

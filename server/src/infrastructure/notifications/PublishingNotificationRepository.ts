@@ -22,24 +22,24 @@ export class PublishingNotificationRepository implements NotificationRepository 
 
   listByUser(
     userId: string,
-    opts: { limit: number; unreadOnly: boolean },
+    opts: { limit: number; unreadOnly: boolean; before?: Date; workspaceId?: string; actionableOnly?: boolean },
   ): Promise<Notification[]> {
     return this.inner.listByUser(userId, opts);
   }
 
-  countUnread(userId: string): Promise<number> {
-    return this.inner.countUnread(userId);
+  countUnread(userId: string, workspaceId?: string): Promise<number> {
+    return this.inner.countUnread(userId, workspaceId);
   }
 
-  countActionableUnread(userId: string): Promise<number> {
-    return this.inner.countActionableUnread(userId);
+  countActionableUnread(userId: string, workspaceId?: string): Promise<number> {
+    return this.inner.countActionableUnread(userId, workspaceId);
   }
 
-  markRead(id: string, userId: string, readAt: Date): Promise<boolean> {
-    return this.inner.markRead(id, userId, readAt);
+  markRead(id: string, userId: string, readAt: Date, workspaceId?: string): Promise<boolean> {
+    return this.inner.markRead(id, userId, readAt, workspaceId);
   }
 
-  markAllRead(userId: string, readAt: Date): Promise<number> {
-    return this.inner.markAllRead(userId, readAt);
+  markAllRead(userId: string, readAt: Date, workspaceId?: string): Promise<number> {
+    return this.inner.markAllRead(userId, readAt, workspaceId);
   }
 }

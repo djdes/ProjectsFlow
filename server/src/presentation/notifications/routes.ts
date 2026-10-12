@@ -7,8 +7,11 @@ import { notificationTaskId, type Notification } from '../../domain/notification
 import type { RealtimeEvent } from '../../domain/realtime/RealtimeEvent.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import type { ResolveActiveWorkspace } from '../../application/workspace/activeWorkspace.js';
 
 type Deps = {
+  readonly resolveActiveWorkspace: ResolveActiveWorkspace;
+  readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
   readonly tasks: TaskRepository;
   readonly list: ListNotifications;
   readonly countUnread: CountUnreadNotifications;
@@ -68,7 +71,13 @@ export function notificationsRouter(deps: Deps): Router {
   // SSE-поток real-time-уведомлений. Клиент (EventSource) держит коннект; при создании
   // любого уведомления для этого юзера — push'им event 'notification'. X-Accel-Buffering:no
   // отключает буферизацию nginx (иначе события копятся и не доходят сразу).
-  router.get('/stream', (req: Request, res: Response) => {
+  router.get('/stream', async (req: Request, res: Response, next: NextFunction) => {
+    let workspace;
+    try { workspace = await deps.resolveActiveWorkspace(req.user!.id); }
+    catch (error) { next(error); return; }
+    if (!workspace) { res.status(404).json({ error: 'workspace_not_found' }); return; }
+    const workspaceId = workspace.id;
+    let closed = false;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -78,6 +87,7 @@ export function notificationsRouter(deps: Deps): Router {
     res.write('retry: 5000\n\n');
 
     const send = (n: Notification): void => {
+      if (closed || n.workspaceId !== workspaceId) return;
       res.write(`event: notification\ndata: ${JSON.stringify(toDto(n, NO_DELETED_TASKS))}\n\n`);
     };
     const unsubscribe = deps.subscribe(req.user!.id, send);
@@ -85,7 +95,11 @@ export function notificationsRouter(deps: Deps): Router {
     // «Тихие» события: тот же коннект, отдельный event-тип 'realtime'. Клиент по ним
     // рефетчит данные (без toast).
     const sendRealtime = (e: RealtimeEvent): void => {
-      res.write(`event: realtime\ndata: ${JSON.stringify(e)}\n\n`);
+      const scope = 'workspaceId' in e ? Promise.resolve(e.workspaceId)
+        : deps.getProjectWorkspaceId(e.projectId);
+      void scope.then((id) => {
+        if (!closed && id === workspaceId) res.write(`event: realtime\ndata: ${JSON.stringify(e)}\n\n`);
+      }).catch(() => { /* Do not deliver events whose scope could not be verified. */ });
     };
     const unsubscribeRealtime = deps.subscribeRealtime(req.user!.id, sendRealtime);
 
@@ -93,6 +107,7 @@ export function notificationsRouter(deps: Deps): Router {
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
 
     req.on('close', () => {
+      closed = true;
       clearInterval(heartbeat);
       unsubscribe();
       unsubscribeRealtime();

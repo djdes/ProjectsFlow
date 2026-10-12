@@ -1,6 +1,8 @@
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { RecentTaskViewRepository } from './RecentTaskViewRepository.js';
 
 type Deps = {
+  readonly resolveActiveWorkspace: ResolveActiveWorkspace;
   readonly views: RecentTaskViewRepository;
 };
 
@@ -17,7 +19,9 @@ export class ListUnreadTasks {
   constructor(private readonly deps: Deps) {}
 
   async execute(userId: string, now: Date = new Date()): Promise<string[]> {
+    const workspace = await this.deps.resolveActiveWorkspace(userId);
+    if (!workspace) return [];
     const since = new Date(now.getTime() - UNREAD_WINDOW_DAYS * 24 * 3600_000);
-    return this.deps.views.listUnreadAssignedTaskIds(userId, since);
+    return this.deps.views.listUnreadAssignedTaskIds(userId, since, workspace.id);
   }
 }

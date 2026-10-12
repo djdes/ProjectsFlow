@@ -1,3 +1,4 @@
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import { hasOwnerRights } from '../../domain/project/permissions.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
@@ -33,6 +34,7 @@ const OPEN_STATUSES = new Set<TaskStatus>([
 ]);
 
 type Deps = {
+  readonly resolveActiveWorkspace?: ResolveActiveWorkspace;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
   readonly members: ProjectMemberRepository;
@@ -103,7 +105,13 @@ export async function prepareComposeContext(
 ): Promise<ComposeContext | null> {
   let projects;
   try {
-    projects = await deps.members.listProjectsForUser(userId);
+    if (deps.resolveActiveWorkspace) {
+      const workspace = await deps.resolveActiveWorkspace(userId);
+      if (!workspace) return null;
+      projects = await deps.members.listProjectsForUserInWorkspace(userId, workspace.id);
+    } else {
+      projects = await deps.members.listProjectsForUser(userId);
+    }
   } catch {
     return null;
   }

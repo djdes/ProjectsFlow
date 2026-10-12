@@ -104,7 +104,7 @@ export class DrizzleActivityRepository implements ActivityRepository {
   // Считаем РАЗНЫЕ задачи, а не события. Иначе счётчик фармится циклом «выполнил →
   // забрал с утверждения → выполнил снова»: каждый проход писал бы новое событие, и одна
   // задача накручивала бы ранг сколько угодно раз.
-  async countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number> {
+  async countTasksCompletedByActorSince(actorUserId: string, since: Date, workspaceId: string): Promise<number> {
     const rows = await this.db
       .select({ n: countDistinct(tasks.id) })
       .from(activityEvents)
@@ -119,6 +119,7 @@ export class DrizzleActivityRepository implements ActivityRepository {
       .where(
         and(
           eq(activityEvents.actorUserId, actorUserId),
+          eq(activityEvents.workspaceId, workspaceId),
           eq(activityEvents.kind, 'task_status_changed'),
           gte(activityEvents.createdAt, since),
           sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')`,

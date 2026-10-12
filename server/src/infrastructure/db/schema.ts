@@ -649,6 +649,7 @@ export const notifications = mysqlTable(
   'notifications',
   {
     id: id(),
+    workspaceId: char('workspace_id', { length: 36 }),
     userId: char('user_id', { length: 36 }).notNull(),
     type: varchar('type', { length: 50 }).notNull(),
     payload: json('payload').notNull(),

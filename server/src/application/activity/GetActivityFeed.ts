@@ -22,7 +22,7 @@ export type GetActivityFeedQuery = {
 type NotificationsPort = {
   listByUser(
     userId: string,
-    opts: { limit: number; unreadOnly: boolean; before?: Date },
+    opts: { limit: number; unreadOnly: boolean; before?: Date; workspaceId?: string; actionableOnly?: boolean },
   ): Promise<Notification[]>;
 };
 
@@ -43,6 +43,8 @@ export class GetActivityFeed {
       const notifs = await this.deps.notifications.listByUser(userId, {
         limit: query.limit,
         unreadOnly: true,
+        workspaceId,
+        actionableOnly: true,
         before: query.before,
       });
       return notifs
@@ -62,6 +64,7 @@ export class GetActivityFeed {
       this.deps.notifications.listByUser(userId, {
         limit: query.limit,
         unreadOnly: false,
+        workspaceId,
         before: query.before,
       }),
     ]);

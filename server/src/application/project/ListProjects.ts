@@ -4,11 +4,7 @@ import type {
   ProjectWithRole,
 } from './ProjectMemberRepository.js';
 
-// Multi-tenancy с дефолт-хабом:
-//  • Активное пространство kind='default' (личный хаб) → возвращаем ВСЕ проекты юзера
-//    (свои + куда приглашён), независимо от их workspace_id. Это «всё моё» представление.
-//  • Активное пространство kind='team' → срез: только проекты этого пространства, где юзер состоит.
-// В обоих случаях — его role + read-model счётчики (members/tasks).
+// Both personal and team workspaces contain only their own accessible projects.
 export type { ProjectWithRole };
 
 type ActiveWorkspace = { readonly id: string; readonly kind: WorkspaceKind };
@@ -25,10 +21,6 @@ export class ListProjects {
   async execute(userId: string): Promise<ProjectWithRole[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
-    if (ws.kind === 'default') {
-      // Дефолт-хаб агрегирует все проекты юзера (любое пространство).
-      return this.deps.members.listProjectsForUser(userId);
-    }
     return this.deps.members.listProjectsForUserInWorkspace(userId, ws.id);
   }
 }

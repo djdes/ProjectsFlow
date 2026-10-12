@@ -284,12 +284,16 @@ const json = (body, status = 200) => ({ status, body });
 const noContent = () => ({ status: 204, body: null });
 
 // GET handlers: [pattern, (match, ctx) => response | undefined]. Order matters.
-function getRoutes(state) {
+function getRoutes(state, workspaceId = WORKSPACE_ID) {
+  const scopedProjects = () => state.projects.filter((p) => p.workspaceId === workspaceId);
+  const scopedTasks = () => state.tasks.filter((t) => (state.projects.find((p) => p.id === t.projectId)?.workspaceId ?? WORKSPACE_ID) === workspaceId);
+  const scopedMembers = () => state.membersByWorkspace?.[workspaceId] ?? COLLEAGUES;
+
   const projectById = (id) => state.projects.find((p) => p.id === id);
   return [
     [/^\/auth\/me$/, () => json({ user: state.user })],
     [/^\/auth\/me\/usage$/, () => json(usageDto())],
-    [/^\/workspaces$/, () => json({ workspaces: [workspaceDto()] })],
+    [/^\/workspaces$/, () => json({ workspaces: (state.workspaces ?? [workspaceDto()]).map((w) => ({ ...w, isCurrent: w.id === (state.activeWorkspaceId ?? WORKSPACE_ID) })) })],
     [/^\/workspaces\/chat\/rooms$/, () =>
       json({
         rooms: [
@@ -370,8 +374,8 @@ function getRoutes(state) {
     [/^\/workspaces\/([^/]+)\/chat\/messages$/, () => json({ messages: [] })],
     [/^\/workspaces\/([^/]+)\/feed$/, () => json({ items: state.feed ?? [], nextBefore: null })],
 
-    [/^\/projects$/, () => json({ projects: state.projects })],
-    [/^\/inbox$/, () => json({ project: projectById(INBOX_ID) })],
+    [/^\/projects$/, () => json({ projects: scopedProjects() })],
+    [/^\/inbox$/, () => json({ project: scopedProjects().find((p) => p.isInbox && p.ownerId === ME.id) })],
     [/^\/projects\/([^/]+)$/, ([, id]) => {
       const project = projectById(id);
       return project ? json({ project }) : json({ error: 'not_found' }, 404);
@@ -444,35 +448,35 @@ function getRoutes(state) {
     [/^\/projects\/([^/]+)\/git-token-delegation$/, () =>
       json({ mine: { enabled: false, grantedAt: null, revokedAt: null }, all: [] })],
 
-    [/^\/me\/shared-members$/, () => json({ members: COLLEAGUES.map(sharedMember) })],
+    [/^\/me\/shared-members$/, () => json({ members: scopedMembers().map(sharedMember) })],
     [/^\/me\/ui-prefs$/, () => json({ prefs: state.uiPrefs })],
     [/^\/me\/kanban-colors$/, () => json({ colors: {} })],
     [/^\/me\/notification-prefs$/, () => json({ prefs: NOTIFICATION_PREFS })],
     [/^\/me\/unread-tasks$/, () => json({ taskIds: [] })],
-    [/^\/me\/stats\/completed-today$/, () => json({ count: 2 })],
+    [/^\/me\/stats\/completed-today$/, () => json({ count: state.completedByWorkspace?.[workspaceId] ?? 2 })],
     [/^\/me\/stats\/completed-by-workspace$/, () => json({ workspaces: [] })],
 
     [/^\/assignees\/mine$/, () =>
       json({
-        items: state.tasks
+        items: scopedTasks()
           .filter((t) => t.assignee.userId === ME.id && !isInboxProject(state, t.projectId))
           .map((t) => assignedItem(state, t)),
       })],
     [/^\/assignees\/others$/, () =>
       json({
-        items: state.tasks
+        items: scopedTasks()
           .filter((t) => t.assignee.userId !== ME.id && !isInboxProject(state, t.projectId))
           .map((t) => assignedItem(state, t)),
       })],
     [/^\/assignees\/personal$/, () =>
       json({
-        items: state.tasks
+        items: scopedTasks()
           .filter((t) => t.projectId === VERA_INBOX_ID)
           .map((t) => assignedItem(state, t)),
       })],
     [/^\/assignees\/member\/([^/]+)$/, ([, memberId]) =>
       json({
-        items: state.tasks
+        items: scopedTasks()
           .filter((t) => t.assignee.userId === decodeURIComponent(memberId) && t.status !== 'done')
           .map((t) => assignedItem(state, t)),
       })],
@@ -592,7 +596,7 @@ function mutate(state, method, path, body) {
   if (method === 'PUT' && path === '/me/kanban-colors') return json({ colors: body?.colors ?? {} });
   if (method === 'POST' && /^\/notifications\/[^/]+\/read$/.test(path)) return noContent();
   if (method === 'POST' && path === '/recent-task-views') return noContent();
-  if (method === 'PUT' && path === '/workspaces/current') return noContent();
+  if (method === 'PUT' && path === '/workspaces/current') { state.activeWorkspaceId = body.workspaceId; return noContent(); }
   if (method === 'POST' && path === '/auth/logout') return noContent();
   if (method === 'POST' && path === '/telemetry/actions') return noContent();
   return undefined;
@@ -613,13 +617,13 @@ export function createApiRouter({ authenticated = true } = {}) {
     unknown: [],
     // Aborted SSE/stream requests.
     streams: [],
+    streamWorkspaces: [],
+    expectedErrors: [],
     // Exceptions inside the router itself (a bug in the fixtures, not in the app).
     routerErrors: [],
   };
-  const routes = getRoutes(state);
-
-  function resolveGet(path) {
-    for (const [pattern, handler] of routes) {
+  function resolveGet(path, workspaceId) {
+    for (const [pattern, handler] of getRoutes(state, workspaceId)) {
       const match = path.match(pattern);
       if (!match) continue;
       const res = handler(match);
@@ -654,9 +658,13 @@ export function createApiRouter({ authenticated = true } = {}) {
     const url = new URL(request.url());
     const path = url.pathname.replace(/^\/api/, '') || '/';
     const method = request.method();
+    const workspaceId = request.headers()['x-workspace-id'] ?? state.activeWorkspaceId ?? WORKSPACE_ID;
+    journal.reads ??= [];
+    if (method === 'GET') journal.reads.push({ path, workspaceId });
 
     if (request.resourceType() === 'eventsource' || STREAM_PATH.test(path)) {
       journal.streams.push(path);
+      journal.streamWorkspaces.push(url.searchParams.get('workspaceId'));
       return route.abort('aborted');
     }
 
@@ -665,7 +673,14 @@ export function createApiRouter({ authenticated = true } = {}) {
     }
 
     if (method === 'GET' || method === 'HEAD') {
-      const res = resolveGet(path);
+      const failure = state.failReads?.[`${workspaceId}:${path}`];
+      if (failure) {
+        journal.expectedErrors.push({ url: request.url(), status: failure.status });
+        return fulfill(route, json({ error: failure.error }, failure.status));
+      }
+      const res = resolveGet(path, workspaceId);
+      const delay = state.delays?.[`${workspaceId}:${path}`] ?? 0;
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       if (res) return fulfill(route, res);
       journal.unknown.push(`GET /api${path}`);
       return fulfill(route, json({}));
@@ -673,6 +688,14 @@ export function createApiRouter({ authenticated = true } = {}) {
 
     const body = parseBody(request);
     journal.mutations.push({ method, path, body });
+    if (path === '/workspaces/current') {
+      if (state.switchDelay) await new Promise((resolve) => setTimeout(resolve, state.switchDelay));
+      if (state.failNextSwitch) {
+        state.failNextSwitch = false;
+        journal.expectedErrors.push({ url: request.url(), status: 409 });
+        return fulfill(route, json({ error: 'switch_failed' }, 409));
+      }
+    }
     const res = mutate(state, method, path, body);
     if (res) return fulfill(route, res);
     journal.unknown.push(`${method} /api${path}`);
@@ -684,3 +707,20 @@ export function createApiRouter({ authenticated = true } = {}) {
 
 // Helpers for scenarios: titles and expectations derived from the same fixture data.
 export const firstLine = (task) => task.description.split('\n')[0];
+
+// Extra workspaces exist only in isolation scenarios; ordinary scenarios retain their
+// single-space data. The same user belongs to both teams, with different colleagues.
+export function addIsolationWorkspaces(state) {
+  state.workspaces = [workspaceDto(),
+    { ...workspaceDto(), id: 'ws-other', name: 'Другая команда', isCurrent: false },
+    { ...workspaceDto(), id: 'ws-personal', name: 'Личное пространство', kind: 'default', isCurrent: false },
+  ];
+  state.membersByWorkspace = { [WORKSPACE_ID]: COLLEAGUES, 'ws-other': [COLLEAGUES[2]], 'ws-personal': [] };
+  state.completedByWorkspace = { [WORKSPACE_ID]: 2, 'ws-other': 7, 'ws-personal': 0 };
+  for (const ws of ['ws-other', 'ws-personal']) {
+    state.projects.push(projectDto({ id: `inbox-${ws}`, name: `Входящие ${ws}` }, { isInbox: true, workspaceId: ws }));
+    state.projects.push(projectDto({ id: `project-${ws}`, name: ws === 'ws-other' ? 'Дизайн второй команды' : 'Мой личный проект' }, { workspaceId: ws }));
+    state.tasks.push(taskDto({ id: `manual-${ws}`, projectId: `inbox-${ws}`, title: `Работа ${ws}`, status: 'manual', deadline: moscowDate(-1) }));
+    state.tasks.push(taskDto({ id: `queue-${ws}`, projectId: `project-${ws}`, title: `Очередь ${ws}`, status: 'backlog', deadline: moscowDate(-1) }));
+  }
+}

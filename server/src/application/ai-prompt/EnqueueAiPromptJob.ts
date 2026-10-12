@@ -1,3 +1,4 @@
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { AiPromptJob, AiPromptJobMode } from '../../domain/ai-prompt/AiPromptJob.js';
 import {
   AiPromptDispatcherNotConfiguredError,
@@ -30,6 +31,7 @@ export class AiPromptRateLimitedError extends Error {
 }
 
 type Deps = {
+  readonly resolveActiveWorkspace?: ResolveActiveWorkspace;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly aiPromptJobs: AiPromptJobRepository;

@@ -25,11 +25,11 @@ test('team workspace passes its id to the repo (scoped)', async () => {
   assert.deepEqual(calls, [{ limit: 5, workspaceId: 'ws-team' }]);
 });
 
-test('default hub passes no workspaceId (all my recents)', async () => {
+test('default workspace scopes recent tasks too', async () => {
   const { list, calls } = makeList({ id: 'hub', kind: 'default' });
   await list.execute('me');
   // limit по умолчанию — 3.
-  assert.deepEqual(calls, [{ limit: 3, workspaceId: undefined }]);
+  assert.deepEqual(calls, [{ limit: 3, workspaceId: 'hub' }]);
 });
 
 test('no active workspace yields empty list without hitting the repo', async () => {

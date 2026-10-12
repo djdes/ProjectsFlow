@@ -53,14 +53,14 @@ function makeList(input: {
     members: {
       listSharedUsers: async (): Promise<SharedUser[]> => toShared(input.colleagues),
       listSharedUsersInWorkspace: async (): Promise<SharedUser[]> =>
-        toShared(input.workspaceColleagues ?? []),
+        toShared(input.workspaceColleagues ?? input.colleagues),
     } as never,
     projects: {
       listInboxesByOwners: async (ownerIds: readonly string[]) => {
         askedOwners.push([...ownerIds]);
         return input.inboxes
           .filter((p) => ownerIds.includes(p.ownerId))
-          .map((p) => ({ ...p, isInbox: true }));
+          .map((p) => ({ ...p, workspaceId: activeWorkspace?.id, isInbox: true }));
       },
     } as never,
     tasks: {

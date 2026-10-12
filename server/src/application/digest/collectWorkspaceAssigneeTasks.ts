@@ -75,7 +75,7 @@ export async function collectWorkspaceAssigneeTasks(
     }
   }
 
-  const delegated = await loadDelegatedInboxTasks(deps, members.map((m) => m.userId));
+  const delegated = await loadDelegatedInboxTasks(deps, members.map((m) => m.userId), settings.workspaceId);
   for (const { inbox, tasks } of delegated) {
     const open = tasks.filter(isOpen);
     if (open.length === 0 || !allowedRecipients.has(inbox.ownerId)) continue;
@@ -103,11 +103,12 @@ async function loadDelegatedInboxTasks(
     readonly tasks: Pick<TaskRepository, 'listByProject'>;
   },
   memberIds: readonly string[],
+  workspaceId: string,
 ): Promise<Array<{ inbox: { id: string; ownerId: string }; tasks: Task[] }>> {
   if (memberIds.length === 0) return [];
-  const inboxes = await deps.projects.listInboxesByOwners(memberIds).catch(() => []);
+  const inboxes = await deps.projects.listInboxesByOwners(memberIds, workspaceId).catch(() => []);
   return Promise.all(
-    inboxes.map(async (inbox) => ({
+    inboxes.filter((inbox) => inbox.workspaceId === workspaceId).map(async (inbox) => ({
       inbox,
       tasks: (await deps.tasks.listByProject(inbox.id)).filter(
         (task) =>

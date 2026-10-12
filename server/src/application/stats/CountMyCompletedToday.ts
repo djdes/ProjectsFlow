@@ -1,6 +1,8 @@
+import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { ActivityRepository } from '../activity/ActivityRepository.js';
 
 type Deps = {
+  readonly resolveActiveWorkspace: ResolveActiveWorkspace;
   readonly activity: ActivityRepository;
 };
 
@@ -15,9 +17,12 @@ export class CountMyCompletedToday {
   constructor(private readonly deps: Deps) {}
 
   async execute(userId: string, since: Date, now: Date = new Date()): Promise<number> {
+    const workspace = await this.deps.resolveActiveWorkspace(userId);
+    if (!workspace) return 0;
     return this.deps.activity.countTasksCompletedByActorSince(
       userId,
       clampSince(since, now),
+      workspace.id,
     );
   }
 }

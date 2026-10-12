@@ -289,6 +289,9 @@ function allowedConsoleError(entry, run) {
   }
   if (/^\[vite\]/.test(text) || /WebSocket connection to '.*' failed/.test(text)) return 'HMR дев-сервера Vite';
   if (networkError && run.blockedUrls.has(url)) return 'внешний запрос заблокирован смоуком';
+  if (networkError && run.journal.expectedErrors?.some((e) => e.url === url && text.includes(String(e.status)))) {
+    return 'ошибка сети, явно заданная сценарием для проверки восстановления';
+  }
   if (!run.authenticated && /\/api\/auth\/me(\?|$)/.test(url) && /\b401\b/.test(text)) {
     return 'проверка сессии без входа (401 — ожидаемо)';
   }

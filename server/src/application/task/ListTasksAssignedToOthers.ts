@@ -19,7 +19,6 @@ type Deps = {
 };
 
 // Все видимые caller'у задачи, где ответственный — другой человек. Источник назначения
-// и автор задачи не имеют значения. Охват — как в ListProjects: дефолт-хаб → все
 // пространства юзера; team → срез по активному пространству; нет пространства → пусто.
 export class ListTasksAssignedToOthers {
   constructor(private readonly deps: Deps) {}
@@ -27,10 +26,7 @@ export class ListTasksAssignedToOthers {
   async execute(userId: string): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
-    const projects =
-      ws.kind === 'default'
-        ? await this.deps.members.listProjectsForUser(userId)
-        : await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id);
+    const projects = await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id);
     const rows = await Promise.all(
       projects.map(async (project) => ({
         project,

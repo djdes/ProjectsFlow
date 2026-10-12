@@ -47,7 +47,7 @@ function makeHarness(opts: {
     members: {
       findForProject: async (_projectId: string, userId: string) =>
         userId === ME ? { role: opts.sourceRole ?? 'editor' } : null,
-      listSharedUsers: async () =>
+      listSharedUsersInWorkspace: async () =>
         (opts.sharedUsers ?? []).map((id) => ({ id })),
     } as never,
   });
@@ -135,7 +135,7 @@ function personalMoveHarness(targetRole: string, inboxOwner: string, access: {
     members: {
       findForProject: async (_id: string, userId: string) => ({ role: userId === ME ? targetRole : 'editor' }),
       listApproverUserIdsForProject: async () => access.approvers ?? [],
-      listSharedUsers: async () => (access.sharedUsers ?? []).map(id => ({ id })),
+      listSharedUsersInWorkspace: async () => (access.sharedUsers ?? []).map(id => ({ id })),
       isProjectHidden: async () => access.hidden ?? false,
     } as never,
     tasks: {

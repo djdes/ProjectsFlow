@@ -31,7 +31,7 @@ function fakeProject(): Project {
 }
 
 // role=null симулирует admin-bypass (getProject прошёл, но membership отсутствует) → 'owner'.
-function buildApp(role: ProjectRole | null) {
+function buildApp(role: ProjectRole | null, onImplicitSwitch: () => void) {
   const app = express();
   app.use(express.json());
   app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -40,7 +40,7 @@ function buildApp(role: ProjectRole | null) {
   });
   const deps = {
     getProject: { execute: async () => fakeProject() },
-    setActiveWorkspaceForProject: async () => {},
+    setActiveWorkspaceForProject: async () => onImplicitSwitch(),
     members: {
       findForProject: async (): Promise<ProjectMembership | null> =>
         role ? { projectId: 'p1', userId: FAKE_USER.id, role, joinedAt: new Date(0) } : null,
@@ -52,8 +52,8 @@ function buildApp(role: ProjectRole | null) {
   return app;
 }
 
-async function withServer(role: ProjectRole | null, fn: (baseUrl: string) => Promise<void>) {
-  const server = http.createServer(buildApp(role));
+async function withServer(role: ProjectRole | null, fn: (baseUrl: string) => Promise<void>, onImplicitSwitch = () => {}) {
+  const server = http.createServer(buildApp(role, onImplicitSwitch));
   await new Promise<void>((resolve) => server.listen(0, resolve));
   try {
     const { port } = server.address() as AddressInfo;
@@ -83,4 +83,13 @@ test('GET /:id — admin-bypass (membership отсутствует) → fallback
     const body = (await res.json()) as { project: { role: string } };
     assert.equal(body.project.role, 'owner');
   });
+});
+
+test('GET /:id with a workspace header never rewrites the current workspace preference', async () => {
+  let switches = 0;
+  await withServer('editor', async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/projects/p1`, { headers: { 'X-Workspace-Id': 'old-workspace' } });
+    assert.equal(res.status, 200);
+    assert.equal(switches, 0);
+  }, () => { switches += 1; });
 });

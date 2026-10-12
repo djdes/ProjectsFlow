@@ -27,11 +27,11 @@ function makeList(input: {
   return { list, askedWorkspace };
 }
 
-test('default hub returns all shared users across workspaces', async () => {
-  const { list, askedWorkspace } = makeList({ hub: ['bob', 'carol'] });
+test('default workspace excludes members from other workspaces', async () => {
+  const { list, askedWorkspace } = makeList({ hub: ['bob', 'carol'], inWorkspace: ['bob'] });
   const users = await list.execute('me');
-  assert.deepEqual(users.map((u) => u.id), ['bob', 'carol']);
-  assert.deepEqual(askedWorkspace, []);
+  assert.deepEqual(users.map((u) => u.id), ['bob']);
+  assert.deepEqual(askedWorkspace, ['ws']);
 });
 
 test('team workspace returns only that workspace co-members', async () => {

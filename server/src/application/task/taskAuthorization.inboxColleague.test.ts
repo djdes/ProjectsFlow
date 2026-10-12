@@ -44,7 +44,7 @@ function makeDeps(options: {
     } as never,
     members: {
       // Круг коллег формирует сервер: участники общих пространств, без самого caller'а.
-      async listSharedUsers(userId: string) {
+      async listSharedUsersInWorkspace(userId: string) {
         return (colleaguesOf[userId] ?? []).map((id) => ({ id, displayName: id }));
       },
       async findForProject() {

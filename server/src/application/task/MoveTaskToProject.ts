@@ -39,7 +39,7 @@ export class MoveTaskToProject {
     let assigneeUserId = task.assignee.userId;
     if (targetProject.isInbox) {
       if (assigneeUserId !== targetProject.ownerId) {
-        const shared = await this.deps.members.listSharedUsers(targetProject.ownerId);
+        const shared = await this.deps.members.listSharedUsersInWorkspace(targetProject.ownerId, targetProject.workspaceId);
         if (!shared.some((member) => member.id === assigneeUserId)) assigneeUserId = userId;
       }
     } else {

@@ -44,7 +44,7 @@ function makeList(input: {
       listProjectsForUser: async () => input.hubProjects,
       listProjectsForUserInWorkspace: async (_userId: string, workspaceId: string) => {
         askedWorkspace.push(workspaceId);
-        return input.workspaceProjects ?? [];
+        return input.workspaceProjects ?? input.hubProjects;
       },
     } as never,
     tasks: {
@@ -58,7 +58,7 @@ function makeList(input: {
   return { list, askedWorkspace };
 }
 
-test('default hub aggregates other-assignee tasks across all projects', async () => {
+test('default workspace requests only its own projects for other assignees', async () => {
   const { list, askedWorkspace } = makeList({
     hubProjects: [{ id: 'p1', name: 'Проект', isInbox: false, role: 'editor' }],
     tasksByProject: { p1: [task('t1', 'p1', 'bob'), task('t2', 'p1', 'me')] },
@@ -68,7 +68,7 @@ test('default hub aggregates other-assignee tasks across all projects', async ()
   // Задача bob видна, своя (me) — нет: это вкладка «за другими».
   assert.deepEqual(items.map((i) => i.task.id), ['t1']);
   // Дефолт-хаб не скоупит по конкретному пространству.
-  assert.deepEqual(askedWorkspace, []);
+  assert.deepEqual(askedWorkspace, ['ws']);
 });
 
 test('team workspace only looks at that workspace projects', async () => {

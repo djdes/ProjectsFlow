@@ -18,7 +18,6 @@ export type SearchTasksDeps = {
 
 // Глобальный поиск по задачам. Скоуп: admin (isAdmin) — все задачи; иначе — проекты, где
 // юзер member, дополнительно изолированные по активному пространству, если задан
-// resolveActiveWorkspace (дефолт-хаб → все мои; team → срез; нет пространства → пусто).
 export class SearchTasks {
   constructor(private readonly deps: SearchTasksDeps) {}
 
@@ -31,16 +30,16 @@ export class SearchTasks {
     // Слишком короткий запрос — пустой результат, не грузим БД одно-символьными LIKE'ами.
     if (query.length < MIN_QUERY_LENGTH) return [];
     let workspaceId: string | undefined;
-    if (!opts?.isAdmin && this.deps.resolveActiveWorkspace) {
+    if (this.deps.resolveActiveWorkspace) {
       const ws = await this.deps.resolveActiveWorkspace(userId);
       if (!ws) return [];
-      workspaceId = ws.kind === 'team' ? ws.id : undefined;
+      workspaceId = ws.id;
     }
     const batches = await Promise.all(
       keyboardLayoutQueryVariants(query).map((variant) => this.deps.search.search({
         userId,
         query: variant,
-        includeAllProjects: opts?.isAdmin ?? false,
+        includeAllProjects: !this.deps.resolveActiveWorkspace && (opts?.isAdmin ?? false),
         workspaceId,
         limit: DEFAULT_LIMIT,
       })),

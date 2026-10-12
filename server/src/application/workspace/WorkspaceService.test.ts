@@ -279,7 +279,7 @@ test('addMember: adds existing user by email', async () => {
   assert.equal((await repo.getMembership('w1', 'u2'))?.role, 'editor');
 });
 
-test('addMember: сливает пустой дефолт-хаб добавленного юзера в это пространство (durability)', async () => {
+test('addMember: сохраняет личное пространство и входящие участника', async () => {
   const { service, repo, absorbCalls } = makeFakes({
     workspaces: [
       { id: 'w1', ownerUserId: 'u1', kind: 'team' },
@@ -291,9 +291,9 @@ test('addMember: сливает пустой дефолт-хаб добавле�
     current: { u2: 'hub-2' },
   });
   await service.addMember('w1', 'u1', 'u2@x', 'editor');
-  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
-  assert.equal(await repo.getById('hub-2'), null, 'хаб удалён');
-  assert.equal(await repo.getCurrentWorkspaceId('u2'), 'w1', 'current переставлен на команду');
+  assert.deepEqual(absorbCalls, []);
+  assert.notEqual(await repo.getById('hub-2'), null, 'личное пространство сохранено');
+  assert.equal(await repo.getCurrentWorkspaceId('u2'), 'hub-2', 'активное личное пространство не изменилось');
 });
 
 test('addMember: хаб с НЕ-inbox проектом — не сливаем (safety), хаб остаётся', async () => {
@@ -307,18 +307,18 @@ test('addMember: хаб с НЕ-inbox проектом — не сливаем (
     users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
   });
   await service.addMember('w1', 'u1', 'u2@x', 'editor');
-  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+  assert.deepEqual(absorbCalls, []);
   assert.notEqual(await repo.getById('hub-2'), null, 'хаб цел — приватный проект не раскрываем');
 });
 
-test('addMember: у добавленного юзера нет дефолт-хаба — absorb вызван, но no-op', async () => {
+test('addMember: вступление без личного пространства не вызывает переносы', async () => {
   const { service, absorbCalls } = makeFakes({
     workspaces: [{ id: 'w1', ownerUserId: 'u1', kind: 'team' }],
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
   });
   await service.addMember('w1', 'u1', 'u2@x', 'editor');
-  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+  assert.deepEqual(absorbCalls, []);
 });
 
 test('delete: workspace with projects rejected', async () => {

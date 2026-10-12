@@ -33,7 +33,7 @@ export interface ActivityRepository {
    * показывал бы ноль. Возврат работы счётчик не уменьшает — это журнал событий, а не
    * состояние доски.
    */
-  countTasksCompletedByActorSince(actorUserId: string, since: Date): Promise<number>;
+  countTasksCompletedByActorSince(actorUserId: string, since: Date, workspaceId: string): Promise<number>;
   /**
    * То же, но с разбивкой по пространствам: «сколько я закрыл за окно и где». Журнал
    * чистится через 30 дней (см. sweepActivity в index.ts) — окно шире отдаст те же цифры,

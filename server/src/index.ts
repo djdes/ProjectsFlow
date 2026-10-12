@@ -1,3 +1,5 @@
+import { RequestWorkspaceContext } from './infrastructure/workspace/RequestWorkspaceContext.js';
+import { workspaceScope } from './presentation/middleware/workspaceScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
 import { resolve as resolvePath } from 'node:path';
@@ -449,13 +451,16 @@ const workspaceService = new WorkspaceService({
 });
 // Воркер пространства (db/152): одна политика на все двери в статус 'todo'.
 const workerPolicy = new WorkerPolicy({ projects: projectRepo, workspaces: workspaceRepo });
-// Активное пространство юзера (current ?? первое доступное), с уводом новых проектов
-// из личного дефолт-хаба в единственное командное пространство юзера — чтобы «единое
-// пространство» не разъезжалось (см. resolveWorkspaceForNewProject). Кидает если
-// пространств нет — для create-проекта/inbox это инвариант (после миграции у каждого
-// есть личное пространство).
-const resolveWorkspaceId = async (userId: string): Promise<string> =>
-  resolveWorkspaceForNewProject(
+// HTTP requests keep a validated workspace snapshot. Background jobs resolve the
+// explicit actor preference; creating a project never redirects to another team.
+const requestWorkspaceContext = new RequestWorkspaceContext();
+const resolveWorkspaceId = async (userId: string): Promise<string> => {
+  const scope = requestWorkspaceContext.get(userId);
+  if (scope) {
+    if (!scope.workspace) throw new Error('workspace_not_found');
+    return scope.workspace.id;
+  }
+  return resolveWorkspaceForNewProject(
     {
       getCurrentWorkspaceId: (uid) => workspaceRepo.getCurrentWorkspaceId(uid),
       getWorkspaceKind: async (workspaceId) => (await workspaceRepo.getById(workspaceId))?.kind ?? null,
@@ -464,11 +469,14 @@ const resolveWorkspaceId = async (userId: string): Promise<string> =>
     },
     userId,
   );
+};
 // Активное пространство для листинга проектов: id + kind (null = нет пространств → пустой список).
-// kind решает охват: 'default' → ВСЕ мои проекты (хаб), 'team' → срез по workspace_id (см. ListProjects).
+// Both kinds use the request workspace snapshot; there is no cross-workspace hub.
 const resolveActiveWorkspace = async (
   userId: string,
 ): Promise<{ id: string; kind: WorkspaceKind } | null> => {
+  const scope = requestWorkspaceContext.get(userId);
+  if (scope) return scope.workspace;
   const current = await workspaceRepo.getCurrentWorkspaceId(userId);
   const id = current ?? (await workspaceRepo.findAnotherForUser(userId, ''));
   if (!id) return null;
@@ -476,8 +484,7 @@ const resolveActiveWorkspace = async (
   return ws ? { id: ws.id, kind: ws.kind } : null;
 };
 // Создаёт пространство по умолчанию новому юзеру + делает активным (для Register).
-// Имя — «Пространство <имя аккаунта>». Это его дефолт-хаб (kind='default'): один на юзера,
-// неудаляем, агрегирует все его проекты.
+// Личное пространство (kind='default') содержит только собственные проекты и задачи.
 const createDefaultWorkspace = async (userId: string, displayName: string): Promise<void> => {
   await workspaceService.create(userId, {
     name: `Пространство ${displayName}`,
@@ -485,21 +492,14 @@ const createDefaultWorkspace = async (userId: string, displayName: string): Prom
     kind: 'default',
   });
 };
-// Deep-link авто-switch: открыли проект → делаем его пространство активным.
-// В новой модели в ЧУЖОЙ дефолт-хаб не переключаемся (он скрыт из свитчера, см. listForUser) —
-// проект и так виден в собственном дефолт-хабе юзера (агрегация). В этом случае переключаем
-// на СВОЙ дефолт, чтобы проект гарантированно отображался. Команды и свой хаб — как раньше.
+// Legacy clients without an explicit request workspace can still follow deep links.
 const setActiveWorkspaceForProject = async (userId: string, projectId: string): Promise<void> => {
   const wsId = await projectRepo.getWorkspaceId(projectId);
   if (!wsId) return;
   const ws = await workspaceRepo.getById(wsId);
   if (!ws) return;
   const current = await workspaceRepo.getCurrentWorkspaceId(userId);
-  if (ws.kind === 'default' && ws.ownerUserId !== userId) {
-    const ownHub = await workspaceRepo.findDefaultForOwner(userId);
-    if (ownHub && current !== ownHub) await workspaceRepo.setCurrentWorkspace(userId, ownHub);
-    return;
-  }
+
   if (current === wsId) return;
   const membership = await workspaceRepo.getMembership(wsId, userId);
   if (membership) await workspaceRepo.setCurrentWorkspace(userId, wsId);
@@ -1104,6 +1104,7 @@ const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
 // переиспользуются HTTP-роутами ниже (см. createApp). Best-effort — если AI недоступен,
 // конструктор откатывается на ручной флоу.
 const enqueueAiPromptJob = new EnqueueAiPromptJob({
+  resolveActiveWorkspace,
   projects: projectRepo,
   members: projectMemberRepo,
   aiPromptJobs: aiPromptJobRepo,
@@ -2075,6 +2076,7 @@ const aiActionBatchService = new AiActionBatchService({
 });
 
 const { app, devProxyUpgrade } = createApp({
+  workspaceScope: workspaceScope({ workspaces: workspaceRepo, run: (userId, workspace, next) => requestWorkspaceContext.run(userId, workspace, next) }),
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
   telegramDigestActions: { service: telegramDigestActionService },
   auth: {
@@ -2362,11 +2364,13 @@ const { app, devProxyUpgrade } = createApp({
     tasks: taskRepo,
   },
   notifications: {
+    resolveActiveWorkspace,
+    getProjectWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
     tasks: taskRepo,
-    list: new ListNotifications({ repo: notificationRepo }),
-    countUnread: new CountUnreadNotifications({ repo: notificationRepo }),
-    markRead: new MarkNotificationRead({ repo: notificationRepo, now }),
-    markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now }),
+    list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace }),
+    countUnread: new CountUnreadNotifications({ repo: notificationRepo, resolveActiveWorkspace }),
+    markRead: new MarkNotificationRead({ repo: notificationRepo, now, resolveActiveWorkspace }),
+    markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now, resolveActiveWorkspace }),
     subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),
     subscribeRealtime: (userId, fn) => realtimeHub.subscribe(userId, fn),
     projectNotifier,
@@ -2874,13 +2878,13 @@ const { app, devProxyUpgrade } = createApp({
     repo: productTelemetryRepo,
   },
   meStats: {
-    countMyCompletedToday: new CountMyCompletedToday({ activity: activityRepo }),
+    countMyCompletedToday: new CountMyCompletedToday({ activity: activityRepo, resolveActiveWorkspace }),
     getMyCompletedStats: new GetMyCompletedStats({
       tasks: taskRepo,
       activity: activityRepo,
       workspaces: workspaceRepo,
     }),
-    listUnreadTasks: new ListUnreadTasks({ views: recentTaskViewRepo }),
+    listUnreadTasks: new ListUnreadTasks({ views: recentTaskViewRepo, resolveActiveWorkspace }),
   },
   assignees: {
     listAssignedToMe: new ListTasksAssignedToMe({

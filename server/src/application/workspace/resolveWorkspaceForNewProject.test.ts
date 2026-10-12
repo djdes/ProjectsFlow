@@ -40,14 +40,14 @@ test('current — команда → берём current как есть', async 
   assert.equal(id, 'w-team');
 });
 
-test('current — личный дефолт-хаб + РОВНО одно team-пространство → уводим в team', async () => {
+test('личное пространство остаётся местом создания даже при единственной команде', async () => {
   const { deps } = makeDeps({
     current: 'w-default',
     kinds: { 'w-default': 'default' },
     soleTeam: 'w-team-1',
   });
   const id = await resolveWorkspaceForNewProject(deps, 'u1');
-  assert.equal(id, 'w-team-1');
+  assert.equal(id, 'w-default');
 });
 
 test('current — личный дефолт-хаб, нет team-пространств (соло-юзер) → остаёмся в хабе', async () => {

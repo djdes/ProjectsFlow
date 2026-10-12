@@ -291,11 +291,12 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const project = await deps.getProject.execute(id, req.user!.id);
       if (!project) throw new ProjectNotFoundError();
-      // Deep-link из другого пространства → делаем его активным (best-effort, не роняем ответ).
-      try {
-        await deps.setActiveWorkspaceForProject(req.user!.id, id);
-      } catch {
-        // авто-switch не критичен для отдачи проекта
+      // Scoped clients switch explicitly after the current navigation resolves. A late
+      // project GET must not overwrite a newer workspace preference from another tab.
+      if (!req.get('X-Workspace-Id')) {
+        try {
+          await deps.setActiveWorkspaceForProject(req.user!.id, id);
+        } catch { /* Legacy deep links: preference sync is best effort. */ }
       }
       // Реальная роль юзера в проекте, а не захардкоженный 'owner': иначе editor/viewer
       // по прямой ссылке видели бы danger zone. getProject уже подтвердил read-доступ, значит

@@ -51,7 +51,7 @@ function makeHarness(
               joinedAt: new Date(0),
             },
       // Оба тестовых юзера — коллеги по общему проекту (отношение симметрично).
-      listSharedUsers: async (userId: string) => [
+      listSharedUsersInWorkspace: async (userId: string) => [
         { id: userId === OWNER_ID ? OTHER_ID : OWNER_ID },
       ],
     } as never,

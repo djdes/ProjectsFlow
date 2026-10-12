@@ -148,7 +148,7 @@ function makeHarness(options: HarnessOptions = {}) {
           ? { projectId, userId, role, joinedAt: new Date('2026-01-01T00:00:00.000Z') }
           : null;
       },
-      listSharedUsers: async (ownerUserId: string) => {
+      listSharedUsersInWorkspace: async (ownerUserId: string) => {
         calls.sharedLookups.push(ownerUserId);
         return sharedUserIds.map((id) => ({
           id,

@@ -7,6 +7,11 @@ import { InFlightReads } from './InFlightReads';
 import { fetchWithDeadline } from './fetchWithDeadline';
 
 const reads = new InFlightReads();
+let requestWorkspace: string | null = null;
+export function setRequestWorkspace(workspaceId: string | null): void {
+  if (requestWorkspace !== workspaceId) reads.invalidate();
+  requestWorkspace = workspaceId;
+}
 
 // Re-export для удобства infrastructure-слоя; presentation должен импортировать из '@/lib/HttpError'.
 export { HttpError };
@@ -22,7 +27,9 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
   const init: RequestInit = {
     method: opts.method ?? 'GET',
     credentials: 'include',
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json',
+      ...(requestWorkspace && !/^\/(auth|workspaces)(\/|$)/.test(path) ? { 'X-Workspace-Id': requestWorkspace } : {}),
+    },
   };
 
   if (opts.body !== undefined) {
@@ -79,7 +86,7 @@ async function mutate<T>(path: string, opts: Options): Promise<T> {
 
 export const httpClient = {
   get: <T>(path: string, options?: Pick<Options, 'timeoutMs'>) =>
-    reads.get(`${path}:${options?.timeoutMs ?? 45000}`, () => request<T>(path, options)),
+    reads.get(`${requestWorkspace ?? 'account'}:${path}:${options?.timeoutMs ?? 45000}`, () => request<T>(path, options)),
   post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),

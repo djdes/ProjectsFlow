@@ -98,15 +98,18 @@ function toastFor(payload: StreamPayload): void {
 
 // SSE-подписка на уведомления. При событии — toast + сигнал на refresh бейджа.
 // EventSource сам переподключается при обрыве. Mount один раз на authenticated-сессию.
-export function useNotificationStream(): void {
+export function useNotificationStream(workspaceId: string): void {
   useEffect(() => {
-    const source = new EventSource('/api/notifications/stream', { withCredentials: true });
+    let closed = false;
+    const source = new EventSource(`/api/notifications/stream?workspaceId=${encodeURIComponent(workspaceId)}`, { withCredentials: true });
 
     source.addEventListener('open', () => {
+      if (closed) return;
       window.dispatchEvent(new Event(REALTIME_CONNECTED_EVENT));
     });
 
     source.addEventListener('notification', (event) => {
+      if (closed) return;
       try {
         const data = JSON.parse((event as MessageEvent).data) as { payload: StreamPayload };
         toastFor(data.payload);
@@ -119,6 +122,7 @@ export function useNotificationStream(): void {
     // «Тихие» доменные события — ретранслируем как window CustomEvent с projectId.
     // Страницы/провайдеры по ним рефетчат данные.
     source.addEventListener('realtime', (event) => {
+      if (closed) return;
       try {
         const data = JSON.parse((event as MessageEvent).data) as RealtimeEvent;
         if (data.kind === 'live_session_changed') {
@@ -169,6 +173,6 @@ export function useNotificationStream(): void {
       }
     });
 
-    return () => source.close();
-  }, []);
+    return () => { closed = true; source.close(); };
+  }, [workspaceId]);
 }

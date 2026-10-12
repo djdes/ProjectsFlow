@@ -218,9 +218,7 @@ export class WorkspaceService {
     const user = await this.deps.users.getByEmail(email.trim());
     if (!user) throw new UserNotFoundByEmailError(email);
     await this.deps.repo.addMember(workspaceId, user.id, role);
-    // Мёржим личный дефолт-хаб добавленного юзера в это командное пространство (durability,
-    // см. AcceptWorkspaceInvite для того же вызова на пути accept-invite). Идемпотентно.
-    await this.deps.repo.absorbDefaultHubInto(user.id, workspaceId);
+    // Membership does not transfer personal tasks between workspaces.
     const m = await this.deps.repo.getMembership(workspaceId, user.id);
     if (!m) throw new WorkspaceNotFoundError();
     return m;
@@ -286,7 +284,7 @@ export class WorkspaceService {
 
   async deleteWorkspace(workspaceId: string, userId: string): Promise<void> {
     await requireWorkspaceOwner(this.deps.repo, workspaceId, userId);
-    // Дефолт-хаб неудаляем — это «всё моё» представление, всегда должно существовать.
+    // Личное пространство по умолчанию всегда должно существовать.
     const ws = await this.deps.repo.getById(workspaceId);
     if (ws?.kind === 'default') throw new CannotDeleteDefaultWorkspaceError();
     const projects = await this.deps.repo.projectCount(workspaceId);

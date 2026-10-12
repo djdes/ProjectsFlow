@@ -187,7 +187,7 @@ test('workspace assignee digest adds a delegated column from personal inboxes', 
         return [];
       },
       async listInboxesByOwners() {
-        return [{ id: 'inbox-u1', name: 'Входящие', ownerId: 'u1', isInbox: true }];
+        return [{ id: 'inbox-u1', name: 'Входящие', ownerId: 'u1', workspaceId: 'w1', isInbox: true }];
       },
     } as never,
     tasks: {
@@ -278,7 +278,7 @@ function approvalHarness() {
         return [{ id: 'p-yes', name: 'Yesbeat', icon: null }];
       },
       async listInboxesByOwners() {
-        return [{ id: 'inbox-benzin', name: 'inbox:u-benzin', ownerId: 'u-benzin', isInbox: true }];
+        return [{ id: 'inbox-benzin', name: 'inbox:u-benzin', ownerId: 'u-benzin', workspaceId: 'w1', isInbox: true }];
       },
     } as never,
     tasks: {

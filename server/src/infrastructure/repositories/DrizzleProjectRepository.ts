@@ -105,11 +105,11 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return row ? toProject(row) : null;
   }
 
-  async findInboxByOwner(ownerId: string): Promise<Project | null> {
+  async findInboxByOwner(ownerId: string, workspaceId: string): Promise<Project | null> {
     const rows = await this.db
       .select()
       .from(projects)
-      .where(and(eq(projects.ownerId, ownerId), eq(projects.isInbox, true)))
+      .where(and(eq(projects.ownerId, ownerId), eq(projects.workspaceId, workspaceId), eq(projects.isInbox, true)))
       .limit(1);
     const row = rows[0];
     return row ? toProject(row) : null;
@@ -123,12 +123,12 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return rows.map((r) => r.name);
   }
 
-  async listInboxesByOwners(ownerIds: readonly string[]): Promise<Project[]> {
+  async listInboxesByOwners(ownerIds: readonly string[], workspaceId: string): Promise<Project[]> {
     if (ownerIds.length === 0) return [];
     const rows = await this.db
       .select()
       .from(projects)
-      .where(and(inArray(projects.ownerId, [...ownerIds]), eq(projects.isInbox, true)));
+      .where(and(inArray(projects.ownerId, [...ownerIds]), eq(projects.workspaceId, workspaceId), eq(projects.isInbox, true)));
     return rows.map(toProject);
   }
 

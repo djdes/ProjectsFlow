@@ -63,7 +63,7 @@ test('team-пространство передаёт workspaceId в поиск (
   assert.deepEqual([...new Set(seen)], ['ws-team']);
 });
 
-test('дефолт-хаб ищет без workspaceId (по всем моим проектам)', async () => {
+test('личное пространство ограничивает поиск своими задачами', async () => {
   const seen: (string | undefined)[] = [];
   const repository: TaskSearchRepository = {
     async search(q: TaskSearchQuery): Promise<TaskSearchResult[]> {
@@ -77,7 +77,7 @@ test('дефолт-хаб ищет без workspaceId (по всем моим п
   }).execute('user-1', 'docs');
 
   assert.ok(seen.length > 0);
-  assert.deepEqual([...new Set(seen)], [undefined]);
+  assert.deepEqual([...new Set(seen)], ['hub']);
 });
 
 test('нет активного пространства → пустой результат, БД не трогаем', async () => {
@@ -97,7 +97,7 @@ test('нет активного пространства → пустой рез
   assert.equal(called, false);
 });
 
-test('admin ищет по всем проектам без workspace-скоупа даже при резолвере', async () => {
+test('admin в обычном интерфейсе также ограничен выбранным пространством', async () => {
   const seen: { all: boolean; ws: string | undefined }[] = [];
   const repository: TaskSearchRepository = {
     async search(q: TaskSearchQuery): Promise<TaskSearchResult[]> {
@@ -111,5 +111,5 @@ test('admin ищет по всем проектам без workspace-скоуп�
   }).execute('admin-1', 'docs', { isAdmin: true });
 
   assert.ok(seen.length > 0);
-  assert.ok(seen.every((s) => s.all === true && s.ws === undefined));
+  assert.ok(seen.every((s) => s.all === false && s.ws === 'ws-team'));
 });

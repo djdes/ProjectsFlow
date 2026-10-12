@@ -311,22 +311,22 @@ test('accept: уже участник — роль не меняется, ток
   assert.ok((await invitesRepo.getById('inv-1'))?.acceptedAt);
 });
 
-test('accept: мёржит личный дефолт-хаб юзера в целевое пространство (durability)', async () => {
+test('accept: не переносит личные входящие в команду', async () => {
   const { accept, absorbCalls } = makeFakes({ invites: [pendingInvite()] });
   await accept.execute('t'.repeat(64), 'u2');
-  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+  assert.deepEqual(absorbCalls, []);
 });
 
-test('accept: absorb вызывается даже если юзер уже был участником (чинит вступивших до фичи)', async () => {
+test('accept: повторное вступление не перемещает личные задачи', async () => {
   const { accept, absorbCalls } = makeFakes({
     members: [{ workspaceId: 'w1', userId: 'u2', role: 'owner' }],
     invites: [pendingInvite({ role: 'viewer' })],
   });
   await accept.execute('t'.repeat(64), 'u2');
-  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+  assert.deepEqual(absorbCalls, []);
 });
 
-test('accept: результат absorb (true/false) не влияет на успех accept — no-op тоже ок', async () => {
+test('accept: вступление сохраняется без объединения пространств', async () => {
   const { accept, invitesRepo } = makeFakes({
     invites: [pendingInvite()],
     absorbResult: false,

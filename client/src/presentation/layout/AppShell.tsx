@@ -1,3 +1,4 @@
+import { WorkspaceBoundary, WorkspaceNotifications } from './WorkspaceBoundary';
 import { NavigationProgress } from '@/presentation/components/experience/NavigationProgress';
 import { useAppNavigation } from '@/presentation/components/experience/useAppNavigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,7 +31,6 @@ import { AppExperience } from '@/presentation/components/experience/AppExperienc
 import { WorkspaceIcon } from './WorkspaceIcon';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
-import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
@@ -53,6 +53,10 @@ import { useEdgeSwipe } from '@/presentation/hooks/useEdgeSwipe';
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 
 export function AppShell(): React.ReactElement {
+  return <WorkspacesProvider><WorkspaceBoundary><WorkspaceShell /></WorkspaceBoundary></WorkspacesProvider>;
+}
+
+function WorkspaceShell(): React.ReactElement {
   const navigate = useNavigate();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -223,7 +227,6 @@ export function AppShell(): React.ReactElement {
 
   // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
   // которой и является AppShell (рендерится внутри ProtectedRoute).
-  useNotificationStream();
 
   // ProjectsProvider — внутри ProtectedRoute (этот компонент рендерится только для authenticated),
   // поэтому не делает 401-запросов когда пользователь не залогинен.
@@ -248,7 +251,7 @@ export function AppShell(): React.ReactElement {
   return (
     <SidebarCollapsedContext.Provider value={isDesktop && collapsed}>
     <SidebarResizingContext.Provider value={sidebarDragging}>
-    <WorkspacesProvider>
+    <WorkspaceNotifications />
     <ProjectsProvider>
     {/* Счётчик «выполнено сегодня» — над роутером, чтобы цифра не сбрасывалась при переходах
         между страницами. Внутри AppShell (а не в main.tsx): запрос требует авторизации. */}
@@ -488,7 +491,6 @@ export function AppShell(): React.ReactElement {
     </UnreadTasksProvider>
     </CompletedTodayProvider>
     </ProjectsProvider>
-    </WorkspacesProvider>
     </SidebarResizingContext.Provider>
     </SidebarCollapsedContext.Provider>
   );

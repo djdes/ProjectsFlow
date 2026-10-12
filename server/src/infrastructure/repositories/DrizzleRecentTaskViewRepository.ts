@@ -49,12 +49,13 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
       .onDuplicateKeyUpdate({ set: { viewedAt: sql`CURRENT_TIMESTAMP` } });
   }
 
-  async listUnreadAssignedTaskIds(userId: string, since: Date): Promise<string[]> {
+  async listUnreadAssignedTaskIds(userId: string, since: Date, workspaceId: string): Promise<string[]> {
     // LEFT JOIN + IS NULL: «моя задача, для которой строки просмотра нет». Индексы
     // idx_tasks_assignee_deleted и PK (user_id, task_id) закрывают оба условия.
     const rows = await this.db
       .select({ id: tasks.id })
       .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
       .leftJoin(
         recentTaskViews,
         and(eq(recentTaskViews.taskId, tasks.id), eq(recentTaskViews.userId, userId)),
@@ -62,6 +63,7 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
       .where(
         activeTasks(
           eq(tasks.assigneeUserId, userId),
+          eq(projects.workspaceId, workspaceId),
           gte(tasks.createdAt, since),
           ne(tasks.status, 'done'),
           isNull(recentTaskViews.taskId),

@@ -34,8 +34,7 @@ export function InboxPage(): React.ReactElement {
   // по колонке из её шапки. Состояние здесь, а не в блоке, — кнопка снаружи блока.
   const [selectionActive, setSelectionActive] = useState(false);
   // Снимок задач своего инбокса. Нижней доски на странице больше нет (канбан ровно один —
-  // блок ответственных), но снимок всё равно нужен: в team-пространстве «назначено мне» не
-  // отдаёт личный inbox (он живёт в хабе), и без этой выборки личные задачи пропали бы.
+  // блок ответственных); зеркало ускоряет обновление личных задач после локальных действий.
   // null = ещё грузится, отличается от честного пустого инбокса.
   const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(null);
   const reloadInboxTasks = useCallback(
@@ -61,10 +60,9 @@ export function InboxPage(): React.ReactElement {
       .then((p) => {
         if (!cancelled) setProject(p);
       })
-      .catch((e: unknown) => {
-        const msg = (e as Error).message ?? 'Не удалось загрузить «Входящие»';
-        if (!cancelled) setError(msg);
-        toast.error(msg);
+      .catch(() => {
+        const msg = 'Не удалось загрузить «Входящие» этого пространства. Повторите попытку.';
+        if (!cancelled) { setError(msg); toast.error(msg); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -131,7 +129,7 @@ export function InboxPage(): React.ReactElement {
               type="button"
               variant={selectionActive ? 'secondary' : 'ghost'}
               size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
               aria-pressed={selectionActive}
               onClick={() => setSelectionActive((v) => !v)}
             >

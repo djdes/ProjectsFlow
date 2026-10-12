@@ -1,4 +1,5 @@
-import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { selectInboxView } from './inbox/selectInboxView';
+import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -95,7 +96,6 @@ import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import {
-  dueKindOf,
   endOfMonthYmd,
   endOfWeekYmd,
   groupAssignedByTime,
@@ -146,7 +146,6 @@ import {
   canSendToApproval,
   selectApprovalTasks,
   selectBoardTasks,
-  type AssignedInboxBlockTask,
   type InboxBlockTask,
 } from './inboxBlockTasks';
 
@@ -358,7 +357,12 @@ export function AssignedToMeBlock({
   // Доска сотрудника (клик по кубику руководителем) — отдельный источник: ВСЕ его
   // незавершённые задачи по всем проектам пространства, включая те, где сам руководитель
   // не участник (см. BUG D). Личных инбоксов colleaguePersonalTasks для этого мало.
-  const [focusedMemberTasks, setFocusedMemberTasks] = useState<AssignedTask[]>([]);
+  const [focusedResult, setFocusedResult] = useState<{ memberId: string; items: AssignedTask[] } | null>(null);
+  const focusedMemberTasks = useMemo(() => focusedResult?.memberId === focusedMemberId ? focusedResult.items : [], [focusedResult, focusedMemberId]);
+  const [focusedError, setFocusedError] = useState<string | null>(null);
+  const [focusRetry, setFocusRetry] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+  const focusedLoading = focusedMemberId !== null && focusedResult?.memberId !== focusedMemberId && !focusedError;
   const [tab, setTab] = useState<AssigneeTab>(() => readStoredTab() ?? 'toMe');
   // Зафиксирован ли стартовый выбор вкладки: сохранённый выбор фиксирует его сразу,
   // иначе авто-переключение выполняется один раз после загрузки обоих источников.
@@ -553,17 +557,20 @@ export function AssignedToMeBlock({
           : Promise.resolve<AssignedTask[]>([]),
       ]);
       if (generation !== refreshGeneration.current) return;
+      setLoadError(false);
       setTasks(mine);
       setByMeTasks(byMe);
       setColleaguePersonalTasks(personal);
       // Пишем focusedMemberTasks только если доска всё ещё открыта на ТОГО ЖЕ сотрудника —
       // иначе устаревший ответ перезаписал бы уже актуальные данные другого/пустого фокуса.
       if (focusedAtStart && focusedMemberIdRef.current === focusedAtStart && focusedRequest === focusedGeneration.current) {
-        setFocusedMemberTasks(focused);
+        setFocusedResult({ memberId: focusedAtStart, items: focused });
       }
     } catch (e) {
+      if (generation !== refreshGeneration.current) return;
       if (propagateError) throw e;
-      toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
+      setLoadError(true);
+      toast.error('Не удалось загрузить задачи. Повторите попытку.');
     } finally {
       // Штампуем ещё раз ПОСЛЕ применения ответа, не только в начале запроса: на медленной
       // сети (ответ дольше 400мс) эхо этой же мутации от SSE прилетает уже за пределами
@@ -581,25 +588,26 @@ export function AssignedToMeBlock({
   // реагирует на смену focusedMemberId, а refresh остаётся стабильным между кликами.
   useEffect(() => {
     const generation = ++focusedGeneration.current;
+    setFocusedError(null);
     if (!focusedMemberId) {
-      setFocusedMemberTasks([]);
+      setFocusedResult(null);
       return;
     }
     let cancelled = false;
     taskAssigneeRepository
       .listMemberTasks(focusedMemberId)
       .then((items) => {
-        if (!cancelled && generation === focusedGeneration.current) setFocusedMemberTasks(items);
+        if (!cancelled && generation === focusedGeneration.current) setFocusedResult({ memberId: focusedMemberId, items });
       })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          toast.error(`Не удалось загрузить задачи сотрудника: ${(e as Error).message}`);
+      .catch(() => {
+        if (!cancelled && generation === focusedGeneration.current) {
+          setFocusedError('Не удалось загрузить задачи сотрудника');
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [focusedMemberId, taskAssigneeRepository]);
+  }, [focusedMemberId, taskAssigneeRepository, focusRetry]);
 
   // Пришли по ссылке из плашки «вам назначили задачу» — подсвечиваем карточку.
   useSpotlightTask(!loading && boardTasks !== null, refresh);
@@ -657,8 +665,8 @@ export function AssignedToMeBlock({
         // (Была session-only «точка 4» — юзер передумал 2026-07-11.)
         if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
       })
-      .catch((e: unknown) => {
-        if (!cancelled) toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
+      .catch(() => {
+        if (!cancelled) { setLoadError(true); toast.error('Не удалось загрузить задачи. Повторите попытку.'); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -668,6 +676,8 @@ export function AssignedToMeBlock({
     window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
+      refreshGeneration.current += 1;
+      focusedGeneration.current += 1;
       window.removeEventListener('focus', onFocus);
     };
   }, [taskAssigneeRepository, userRepository, refresh]);
@@ -709,7 +719,7 @@ export function AssignedToMeBlock({
       const insert = (items: AssignedTask[]): AssignedTask[] => [saved, ...items.filter((t) => t.id !== saved.id)];
       if (assigneeUserId === user.id) setTasks(insert);
       else setByMeTasks(insert);
-      if (focusedMemberIdRef.current === assigneeUserId) setFocusedMemberTasks(insert);
+      if (focusedMemberIdRef.current === assigneeUserId) setFocusedResult((prev) => ({ memberId: assigneeUserId, items: insert(prev?.memberId === assigneeUserId ? prev.items : []) }));
       // A new draft can fail a deadline/search filter or belong to «Мои» while the
       // composer was opened in «Для всех». Reveal its actual destination after save.
       setQuery('');
@@ -812,7 +822,7 @@ export function AssignedToMeBlock({
   // Фильтры «ответственный / проект» — только вкладка «Другим», поверх hide-done.
   // Предикат вынесен: им же различаем причину пустоты (фильтры vs скрытые done).
   const matchesByMeFilters = useCallback(
-    (t: AssignedInboxBlockTask): boolean =>
+    (t: InboxBlockTask): boolean =>
       (!filterTo || t.assignee.userId === filterTo) &&
       (!filterProject || t.projectId === filterProject),
     [filterTo, filterProject],
@@ -905,23 +915,6 @@ export function AssignedToMeBlock({
     () => (normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks),
     [visibleTasks, normalizedQuery],
   );
-  const filteredTasks = useMemo(
-    () => (due ? queriedTasks.filter((t) => dueKindOf(t.deadline, today) === due) : queriedTasks),
-    [queriedTasks, due, today],
-  );
-  const dueCounts = useMemo(() => {
-    const counts = { late: 0, today: 0, none: 0 };
-    for (const t of queriedTasks) {
-      if (t.status === 'pending_approval' || t.status === 'done') continue;
-      const kind = dueKindOf(t.deadline, today);
-      if (kind !== 'future') counts[kind] += 1;
-    }
-    return counts;
-  }, [queriedTasks, today]);
-  const inProgressTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === 'manual'),
-    [filteredTasks],
-  );
   // Приёмка руководителем (db/150). Состав полки зависит от роли, и это не косметика:
   //
   //  - ПРИНИМАЮЩИЙ видит очередь целиком — сумму обоих направлений, а не активной вкладки.
@@ -940,9 +933,14 @@ export function AssignedToMeBlock({
       selectApprovalTasks({ toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover }),
     [toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover],
   );
-  const approvalTasks = useMemo(
-    () => approvalTasksAll.filter((t) => matchesInboxQuery(t, normalizedQuery)),
-    [approvalTasksAll, normalizedQuery],
+  const approvalQueried = useMemo(
+    () => approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
+      && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !task.isInbox)))),
+    [approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal],
+  );
+  const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
+    () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide }),
+    [queriedTasks, approvalQueried, today, due, mobileSection, isWide],
   );
   // У кого из людей есть сданная работа — фиолетовая точка на их аватаре (только тому,
   // кто принимает: исполнителю чужая очередь ни о чём не говорит).
@@ -950,7 +948,6 @@ export function AssignedToMeBlock({
     () => new Set(isApprover ? approvalTasksAll.map((t) => t.assignee.userId) : []),
     [approvalTasksAll, isApprover],
   );
-  const groupedTasks = useMemo(() => selectBoardTasks(filteredTasks), [filteredTasks]);
   // Канонический порядок проектов (как в сайдбаре) — чтобы колонки project-группировки
   // стояли на месте и не переезжали, когда задача уходит с доски.
   const projectOrder = useMemo(() => (allProjects ?? []).map((p) => p.id), [allProjects]);
@@ -971,7 +968,7 @@ export function AssignedToMeBlock({
   // assignedGrouping.ts) выбрасывают опустевшую группу из массива сразу — колонка исчезала
   // скачком, соседние колонки прыгали влево. Держим её ещё EXIT_MS с exiting:true, схлопывая
   // CSS-ом (см. рендер ниже), а не framer-layout (на тач отключён осознанно).
-  const displayGroups = useExitingListItems(groups, (g) => g.key, EXIT_MS);
+  const displayGroups = useExitingListItems(groups, (g) => g.key, EXIT_MS, `${tab}:${focusedMemberId ?? ''}:${grouping}`);
   // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
   const kanbanGroups = useMemo(
@@ -1157,6 +1154,7 @@ export function AssignedToMeBlock({
   // Кубики людей: все участники проектов пространства (shared-members) — цель для
   // drag-назначения. Грузим один раз; себя список уже не содержит (сервер исключает).
   const [members, setMembers] = useState<SharedMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     projectRepository
@@ -1165,8 +1163,8 @@ export function AssignedToMeBlock({
         if (!cancelled) setMembers(m);
       })
       .catch(() => {
-        /* тихо: кубики просто не покажем, drag-срок и остальное работают */
-      });
+        /* The task list remains usable when members are unavailable. */
+      }).finally(() => { if (!cancelled) setMembersLoading(false); });
     return () => {
       cancelled = true;
     };
@@ -1175,10 +1173,10 @@ export function AssignedToMeBlock({
   // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
   useEffect(() => {
     if (focusedMemberId === null) return;
-    if (!isWorkspaceLead || (members.length > 0 && !members.some((m) => m.id === focusedMemberId))) {
+    if (!isWorkspaceLead || (!membersLoading && !members.some((m) => m.id === focusedMemberId))) {
       setFocusedMember(null);
     }
-  }, [focusedMemberId, isWorkspaceLead, members, setFocusedMember]);
+  }, [focusedMemberId, isWorkspaceLead, members, membersLoading, setFocusedMember]);
 
   // === Дроп карточек ДОСКИ в колонки-группы (план inbox-grouped-dnd) ===
   // Идёт drag именно с нижней доски: общий контекст активен, а карточка не наша.
@@ -1551,11 +1549,10 @@ export function AssignedToMeBlock({
 
   // Пока грузится — заголовок страницы уже на месте, под ним скелетон доски: при появлении
   // данных строка заголовка не «прыгает».
-  if (loading || boardTasks === null) {
+  if (loading || membersLoading || boardTasks === null) {
     return (
       <section id="assigned-to-me" className="flex flex-col gap-3">
-        <div className="flex min-h-9 items-center gap-3">{heading}</div>
-        <BoardSkeleton shelf={false} now className="pbs-[42px]" />
+        <InboxLoadingLayout heading={heading} />
       </section>
     );
   }
@@ -1563,6 +1560,11 @@ export function AssignedToMeBlock({
   // Быстрое действие карточки очереди: «Взять в работу» — то же, что перетащить её в
   // «Вручную» (статус 'manual', агент такие не берёт). Не предлагаем там, где задачей уже
   // занят воркер (в работе / ждёт уточнения), и для закрытой или сданной.
+  if (loadError) return <section className="space-y-4">{heading}
+    <p className="text-sm text-muted-foreground">Не удалось загрузить задачи этого пространства.</p>
+    <Button variant="outline" onClick={() => { setLoading(true); void refresh().finally(() => setLoading(false)); }}>Повторить</Button>
+  </section>;
+
   const canTake = (item: InboxBlockTask): boolean =>
     item.canModify &&
     item.status !== 'manual' &&
@@ -1647,6 +1649,18 @@ export function AssignedToMeBlock({
     (isWorkspaceLead && members.length > 0);
   // Единая кнопка «Фильтры»: сортировка (когда есть задачи) + скрыть-выполненные (всегда) +
   // фильтры ответственного/проекта (только вкладка «Для всех»).
+  const hasLocalFilters =
+    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null;
+  const resetFilters = (): void => {
+    setQuery('');
+    setSearchOpen(false);
+    setDue(null);
+    setFilterTo(null);
+    setFilterProject(null);
+  };
+  // Колонка «В работе» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
+  // это единственная цель дропа для «сдать первую задачу» жестом. В режиме выделения пустые
+  // полки прячем: тащить в них нечего, а подсказка «перетащите сюда» врала бы.
   const filtersPopover = (
     <InboxFiltersPopover
       showSort={hasAny}
@@ -1700,7 +1714,7 @@ export function AssignedToMeBlock({
   const tabsOrFocus = focusedMember ? (
     // Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для всех»
     // тут не про что — показывается одна конкретная доска. Возврат — ×.
-    <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-lg bg-primary-soft py-1 pe-1 ps-2.5">
+    <div className="flex h-12 min-w-0 items-center gap-1 rounded-lg bg-primary-soft pe-1 ps-2 sm:h-auto">
       <span className="min-w-0 truncate text-ui font-semibold">Задачи · {focusedMember.displayName}</span>
       <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{focusedVisible.length}</span>
       <button
@@ -1708,7 +1722,7 @@ export function AssignedToMeBlock({
         onClick={() => setFocusedMember(null)}
         aria-label="Вернуться к своим входящим"
         title="Вернуться к своим входящим"
-        className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:size-6"
+        className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:size-6"
       >
         <X className="size-3.5" />
       </button>
@@ -1786,13 +1800,17 @@ export function AssignedToMeBlock({
       <div className="flex min-h-10 items-center gap-1">
         {heading}
         <span className="flex-1" />
+        {hasLocalFilters && <button type="button" onClick={resetFilters} aria-label="Сбросить фильтры" title="Сбросить фильтры"
+          className="grid size-11 shrink-0 place-items-center rounded-lg text-primary-ink transition-colors hover:bg-hover active:bg-active">
+          <RotateCcw className="size-4" />
+        </button>}
         {filtersPopover}
         {actions}
       </div>
       {hasAny && (
-        <div className="-mx-4 flex items-center gap-2.5 overflow-x-auto overscroll-x-contain px-4 pf-scrollbar-hide sm:-mx-6 sm:px-6">
-          {tabsOrFocus}
-          {people}
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0 max-w-[55%] shrink-0">{tabsOrFocus}</div>
+          <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1 px-1 pf-scrollbar-hide">{people}</div>
         </div>
       )}
     </div>
@@ -1807,18 +1825,6 @@ export function AssignedToMeBlock({
     );
   }
 
-  const hasLocalFilters =
-    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null;
-  const resetFilters = (): void => {
-    setQuery('');
-    setSearchOpen(false);
-    setDue(null);
-    setFilterTo(null);
-    setFilterProject(null);
-  };
-  // Колонка «В работе» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
-  // это единственная цель дропа для «сдать первую задачу» жестом. В режиме выделения пустые
-  // полки прячем: тащить в них нечего, а подсказка «перетащите сюда» врала бы.
   const showApprovalZone = approvalTasks.length > 0 || (approvalEnabled && !selectionActive);
   const showManualZone = inProgressTasks.length > 0 || !selectionActive;
   const showNow = showApprovalZone || showManualZone;
@@ -1849,7 +1855,6 @@ export function AssignedToMeBlock({
   // Телефон: какой раздел показан. Пока задач в «В работе» нет совсем, а пользователь раздел
   // не выбирал, сразу открываем очередь — пустой первый экран ничего не даёт.
   const nowCount = approvalTasks.length + inProgressTasks.length;
-  const section: InboxSection = mobileSection ?? (nowCount === 0 && queueShown > 0 ? 'queue' : 'now');
 
   // Смысл группы очереди (колонка на десктопе, группа на телефоне): куда её можно бросить,
   // какая метка в шапке, можно ли создать в ней задачу, ключ сворачивания.
@@ -2284,7 +2289,7 @@ export function AssignedToMeBlock({
                 if (searchVisible) setQuery('');
               }}
               className={cn(
-                'grid size-11 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                'grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                 searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
               )}
             >
@@ -2300,12 +2305,12 @@ export function AssignedToMeBlock({
       <div
         className={cn(
           'flex items-center gap-x-2 gap-y-1.5',
-          // Телефон: чипы одной лентой, листаются вбок.
-          isWide ? 'flex-wrap' : '-mx-4 overflow-x-auto overscroll-x-contain px-4 pf-scrollbar-hide sm:-mx-6 sm:px-6',
+          // Телефон: три равные колонки, все фильтры доступны без прокрутки.
+          isWide ? 'flex-wrap' : 'min-w-0',
         )}
       >
         <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
-        {hasLocalFilters && (
+        {isWide && hasLocalFilters && (
           <button
             type="button"
             onClick={resetFilters}
@@ -2318,7 +2323,11 @@ export function AssignedToMeBlock({
         {isWide && <span className="hidden text-meta text-muted-foreground lg:inline">{subtitleBase}</span>}
       </div>
 
-      {isWide ? (
+      {focusedError ? (
+        <div role="alert" className="space-y-3 rounded-xl border p-4 text-sm">
+          <p>{focusedError}</p><Button variant="outline" onClick={() => { setFocusedError(null); setFocusRetry((n) => n + 1); }}>Повторить</Button>
+        </div>
+      ) : focusedLoading ? <BoardSkeleton shelf={false} now columns={isWide ? 2 : 0} /> : isWide ? (
         <div className="flex flex-row items-start gap-2.5">
           {showNow &&
             (nowExpanded ? (
@@ -3743,7 +3752,7 @@ function UserCube({
           : undefined
       }
       className={cn(
-        'relative grid shrink-0 rounded-[28%] transition-shadow',
+        'relative grid size-11 shrink-0 place-items-center rounded-lg transition-shadow md:size-auto',
         clickable && 'cursor-pointer',
         filterActive && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
       )}
@@ -4043,7 +4052,7 @@ function TabButton({
       onClick={onClick}
       className={cn(
         // min-w-0 — на 320px подпись ужимается truncate'ом, а не вылезает из бокса.
-        'inline-flex h-9 min-w-0 items-center gap-1.5 rounded-md px-2.5 text-ui transition-colors sm:h-7',
+        'inline-flex h-11 min-w-0 items-center justify-center gap-1 rounded-md px-2 text-ui transition-colors md:h-7',
         active
           ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
           : 'font-medium text-muted-foreground hover:text-foreground',
@@ -4107,7 +4116,7 @@ function InboxFiltersPopover({
           type="button"
           aria-label="Фильтры"
           className={cn(
-            'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:h-8 sm:px-2 sm:text-ui',
+            'inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-lg px-2 text-ui text-muted-foreground transition-colors hover:bg-hover hover:text-foreground md:h-8 md:min-w-8',
             badgeCount > 0 && 'bg-hover text-foreground',
           )}
         >

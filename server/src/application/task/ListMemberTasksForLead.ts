@@ -67,7 +67,7 @@ export class ListMemberTasksForLead {
       projectIds.map(async (id) => [id, await this.deps.projects.getById(id)] as const),
     );
     const projectById = new Map(
-      projectEntries.filter((e): e is [string, Project] => e[1] !== null),
+      projectEntries.filter((e): e is [string, Project] => e[1] !== null && e[1].workspaceId === ws.id),
     );
     // Личные задачи сотрудника — только поставленные самим руководителем (личное приватно).
     const visible = taskList.filter((t) => {

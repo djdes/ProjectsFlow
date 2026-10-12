@@ -33,15 +33,7 @@ export class AcceptWorkspaceInvite {
       inviteId: invite.id, acceptedAt: now, acceptedByUserId: userId,
     });
 
-    // Мёржим личный дефолт-хаб юзера в команду при вступлении (durability, "слить, не
-    // скрыть"). Вызываем БЕЗУСЛОВНО (идемпотентно, no-op если хаба нет) — чинит и тех, кто
-    // вступил до появления этой фичи и всё ещё видит два «Пространства».
-    await this.deps.workspaces.absorbDefaultHubInto(userId, invite.workspaceId).catch((error: unknown) => {
-      // Membership is already durable; a housekeeping failure must not turn a used
-      // invitation into an apparent failure for the recipient.
-      console.error('[ws-invite] hub merge failed', error);
-    });
-
+    // Joining a workspace never moves personal projects or tasks.
     return { workspaceId: invite.workspaceId };
   }
 }

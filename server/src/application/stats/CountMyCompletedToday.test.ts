@@ -7,6 +7,7 @@ const NOW = new Date('2026-07-30T12:00:00.000Z');
 function make() {
   const calls: { userId: string; since: Date }[] = [];
   const uc = new CountMyCompletedToday({
+    resolveActiveWorkspace: async () => ({ id: 'ws', kind: 'team' }),
     activity: {
       countTasksCompletedByActorSince: async (userId: string, since: Date) => {
         calls.push({ userId, since });

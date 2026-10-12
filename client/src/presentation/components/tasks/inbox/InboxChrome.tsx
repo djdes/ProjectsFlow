@@ -118,7 +118,7 @@ export function DueFilterChips({
     <div
       role="group"
       aria-label="Срок"
-      className={cn('flex items-center gap-1.5', wrap ? 'flex-wrap' : 'shrink-0 flex-nowrap')}
+      className={cn('items-center gap-1.5', wrap ? 'flex flex-wrap' : 'grid w-full min-w-0 grid-cols-3')}
     >
       {DUE_CHIPS.map((chip) => {
         const on = value === chip.key;
@@ -129,15 +129,15 @@ export function DueFilterChips({
             aria-pressed={on}
             onClick={() => onChange(on ? null : chip.key)}
             className={cn(
-              'inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm transition-colors sm:h-[26px] sm:text-meta',
+              'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
                 : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
           >
-            <span aria-hidden className={cn('size-1.5 rounded-full', chip.dot)} />
+            <span aria-hidden className={cn('hidden size-1.5 shrink-0 rounded-full min-[360px]:inline-block', chip.dot)} />
             {chip.label}
-            <span className="tabular-nums text-muted-foreground">{counts[chip.key]}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground" data-pf-due-count={chip.key}>{counts[chip.key]}</span>
           </button>
         );
       })}
@@ -231,7 +231,7 @@ export function InboxSectionSwitch({
         aria-pressed={on}
         onClick={() => onChange(key)}
         className={cn(
-          'relative flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active',
+          'relative flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active',
           on
             ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
             : 'font-medium text-muted-foreground',
@@ -249,7 +249,7 @@ export function InboxSectionSwitch({
     <div
       role="group"
       aria-label="Раздел"
-      className={cn('flex rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel', className)}
+      className={cn('flex h-12 rounded-lg border border-transparent bg-foreground/[0.06] p-0.5 dark:border-border dark:bg-panel', className)}
     >
       {item('now', 'В работе', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}

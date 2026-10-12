@@ -86,7 +86,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
   const handleSwitch = (id: string): void => {
     setOpen(false);
     if (id === current.id) return;
-    void switchTo(id);
+    void switchTo(id).catch(() => toast.error('Не удалось переключить пространство. Попробуйте ещё раз.'));
     navigate('/');
   };
 

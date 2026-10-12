@@ -15,11 +15,10 @@ export class ListRecentTaskViews {
 
   async execute(userId: string, limit?: number): Promise<RecentTaskView[]> {
     const clamped = Math.max(1, Math.min(limit || DEFAULT_LIMIT, MAX_LIMIT));
-    // Изоляция по активному пространству, как ListProjects: дефолт-хаб → все мои недавние;
     // team → только этого пространства; нет пространства → пусто.
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
-    const workspaceId = ws.kind === 'team' ? ws.id : undefined;
+    const workspaceId = ws.id;
     return this.deps.repo.listRecent(userId, clamped, workspaceId);
   }
 }

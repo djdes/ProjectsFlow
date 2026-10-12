@@ -1254,7 +1254,7 @@ export class TelegramComposerService {
       const inboxOwnerId = delegateUserId ?? userId;
       const delegatedInbox = !draft.projectId && inboxOwnerId !== userId;
       const targetId =
-        draft.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId)).id;
+        draft.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId, userId)).id;
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
@@ -2452,7 +2452,7 @@ export class TelegramComposerService {
         const inboxOwnerId = assigneeUserId ?? userId;
         const delegatedInbox = !seg.projectId && inboxOwnerId !== userId;
         const targetId =
-          seg.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId)).id;
+          seg.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId, userId)).id;
         const task = await this.deps.createTask.execute({
           projectId: targetId,
           ownerUserId: userId,

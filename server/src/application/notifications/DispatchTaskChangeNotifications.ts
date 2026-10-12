@@ -128,6 +128,6 @@ export class DispatchTaskChangeNotifications {
     if (!project.isInbox) return !!(await this.deps.members.findForProject(project.id, userId));
     if (project.ownerId === userId || task.assignee.userId === userId || approvers.includes(userId)) return true;
     return task.createdBy === userId
-      && (await this.deps.members.listSharedUsers(userId)).some((member) => member.id === project.ownerId);
+      && (await this.deps.members.listSharedUsersInWorkspace(userId, project.workspaceId)).some((member) => member.id === project.ownerId);
   }
 }

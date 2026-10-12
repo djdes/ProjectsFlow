@@ -19,7 +19,7 @@ import type {
   WorkspaceAssigneeDigestSendResult,
   WorkspaceAssigneeDigestSettings,
 } from '@/domain/workspace/WorkspaceAssigneeDigest';
-import { httpClient } from './httpClient';
+import { httpClient, setRequestWorkspace } from './httpClient';
 import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
 
 type WorkspaceDto = {
@@ -119,6 +119,7 @@ function memberFromDto(dto: MemberDto): WorkspaceMember {
 }
 
 export class HttpWorkspaceRepository implements WorkspaceRepository {
+  setRequestWorkspace(workspaceId: string | null): void { setRequestWorkspace(workspaceId); }
   getProjectAccess(workspaceId: string): Promise<WorkspaceProjectAccess> {
     return httpClient.get(`/workspaces/${workspaceId}/project-access`);
   }

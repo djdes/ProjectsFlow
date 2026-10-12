@@ -41,17 +41,13 @@ export class ListTasksAssignedToMe {
   async execute(userId: string): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
-    // Дефолт-хаб → все мои задачи; team → только задачи проектов активного пространства
-    // (личный inbox живёт в хабе, поэтому в team-срез не попадает — как и в сайдбаре).
-    const taskList =
-      ws.kind === 'default'
-        ? await this.deps.tasks.listAssignedTo(userId)
-        : await this.deps.tasks.listAssignedToInWorkspace(userId, ws.id);
+    // Named projects and personal inboxes are scoped to the same active workspace.
+    const taskList = await this.deps.tasks.listAssignedToInWorkspace(userId, ws.id);
     const projectIds = [...new Set(taskList.map((t) => t.projectId))];
     const contexts = await Promise.all(
       projectIds.map(async (projectId) => {
         const project = await this.deps.projects.getById(projectId);
-        if (!project) return null;
+        if (!project || project.workspaceId !== ws.id) return null;
         const membership = project.isInbox
           ? null
           : await this.deps.members.findForProject(projectId, userId);

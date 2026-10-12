@@ -40,21 +40,17 @@ export class ListPersonalTasksOfColleagues {
   async execute(userId: string): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
-    // Круг коллег изолируем по активному пространству: дефолт-хаб → все общие пространства;
     // team → только со-участники этого пространства (их личные доски и покажем).
-    const colleagues =
-      ws.kind === 'default'
-        ? await this.deps.members.listSharedUsers(userId)
-        : await this.deps.members.listSharedUsersInWorkspace(userId, ws.id);
+    const colleagues = await this.deps.members.listSharedUsersInWorkspace(userId, ws.id);
     const colleagueIds = colleagues.map((c) => c.id).filter((id) => id !== userId);
     if (colleagueIds.length === 0) return [];
 
-    const inboxes = await this.deps.projects.listInboxesByOwners(colleagueIds);
+    const inboxes = await this.deps.projects.listInboxesByOwners(colleagueIds, ws.id);
     // Defense in depth: repo-фильтр по ownerId уже отсёк чужих, но повторная проверка
     // делает невозможной утечку при будущей правке запроса.
     const allowed = new Set(colleagueIds);
     const visibleInboxes = inboxes.filter(
-      (p) => p.isInbox && p.ownerId !== userId && allowed.has(p.ownerId),
+      (p) => p.workspaceId === ws.id && p.isInbox && p.ownerId !== userId && allowed.has(p.ownerId),
     );
     if (visibleInboxes.length === 0) return [];
 

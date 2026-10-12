@@ -103,7 +103,7 @@ export class CreateTask {
     // а создавать чужой проект здесь мы не вправе (тот же компромисс, что и при смене).
     let targetProject = project;
     if (project.isInbox && assigneeUserId !== project.ownerId) {
-      const assigneeInbox = await this.deps.projects.findInboxByOwner(assigneeUserId);
+      const assigneeInbox = await this.deps.projects.findInboxByOwner(assigneeUserId, project.workspaceId);
       if (assigneeInbox) targetProject = assigneeInbox;
     }
     const targetProjectId = targetProject.id;
@@ -217,7 +217,7 @@ export class CreateTask {
         candidate.ownerId !== input.ownerUserId &&
         input.assigneeUserId === candidate.ownerId
       ) {
-        const shared = await this.deps.members.listSharedUsers(input.ownerUserId);
+        const shared = await this.deps.members.listSharedUsersInWorkspace(input.ownerUserId, candidate.workspaceId);
         if (shared.some((u) => u.id === candidate.ownerId)) return candidate;
       }
     }
@@ -233,7 +233,7 @@ export class CreateTask {
   private async validateAssignee(project: Project, assigneeUserId: string): Promise<void> {
     if (project.isInbox) {
       if (assigneeUserId === project.ownerId) return;
-      const shared = await this.deps.members.listSharedUsers(project.ownerId);
+      const shared = await this.deps.members.listSharedUsersInWorkspace(project.ownerId, project.workspaceId);
       if (!shared.some((u) => u.id === assigneeUserId)) {
         throw new AssigneeNotSharedMemberError();
       }

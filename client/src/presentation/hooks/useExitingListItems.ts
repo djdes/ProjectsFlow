@@ -61,7 +61,9 @@ export function useExitingListItems<T>(
   items: readonly T[],
   getId: (item: T) => string,
   ms: number,
+  scopeKey = '',
 ): ExitingListEntry<T>[] {
+  const [savedScope, setSavedScope] = useState(scopeKey);
   const [orderedIds, setOrderedIds] = useState<string[]>(() => items.map(getId));
   const [itemById, setItemById] = useState<Map<string, T>>(
     () => new Map(items.map((it) => [getId(it), it])),
@@ -70,6 +72,14 @@ export function useExitingListItems<T>(
 
   useEffect(() => {
     const nextIds = items.map(getId);
+    if (savedScope !== scopeKey) {
+      timersRef.current.forEach((timer) => window.clearTimeout(timer));
+      timersRef.current.clear();
+      setOrderedIds(nextIds);
+      setItemById(new Map(items.map((item) => [getId(item), item])));
+      setSavedScope(scopeKey);
+      return;
+    }
 
     // Свежее содержимое живых id (призраков не трогаем — их последний вид уже сохранён).
     setItemById((prev) => {
@@ -119,7 +129,7 @@ export function useExitingListItems<T>(
     // длительность — это перестанет быть безопасным, и `ms` придётся вернуть в deps (ценой
     // перезапуска эффекта на каждое изменение ms).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [items, scopeKey]);
 
   useEffect(() => {
     const timers = timersRef.current;
@@ -129,12 +139,17 @@ export function useExitingListItems<T>(
     };
   }, []);
 
-  const liveIds = new Set(items.map(getId));
+  // A different person/tab is a new collection, not an animated deletion. Never
+  // render the old collection while the effect is still waiting to reset its state.
+  if (savedScope !== scopeKey) return items.map((item) => ({ item, exiting: false }));
+  const liveById = new Map(items.map((item) => [getId(item), item]));
   const result: ExitingListEntry<T>[] = [];
-  for (const id of orderedIds) {
-    const item = itemById.get(id);
+  for (const id of mergeOrderedIds(orderedIds, [...liveById.keys()])) {
+    // Keep snapshots only for exiting items. A live group must always carry its
+    // current tasks, even on the first render before effects update the cache.
+    const item = liveById.get(id) ?? itemById.get(id);
     if (!item) continue;
-    result.push({ item, exiting: !liveIds.has(id) });
+    result.push({ item, exiting: !liveById.has(id) });
   }
   return result;
 }

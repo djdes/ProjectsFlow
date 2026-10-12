@@ -217,6 +217,7 @@ export type NotificationPayload =
   | CloseProposalPayload;
 
 export type Notification = {
+  readonly workspaceId?: string | null;
   readonly id: string;
   readonly userId: string;
   readonly payload: NotificationPayload;

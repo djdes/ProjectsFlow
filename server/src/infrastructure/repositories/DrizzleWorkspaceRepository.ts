@@ -67,7 +67,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
               SELECT 1 FROM workspace_project_exclusions x
               WHERE x.workspace_id = p.workspace_id AND x.project_id = p.id AND x.user_id = ${userId}
             ))
-            AND (${workspaces.kind} = 'default' OR p.workspace_id = ${workspaces.id})
+            AND p.workspace_id = ${workspaces.id}
         )`,
         // Сколько всего участников в пространстве.
         memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id = ${workspaces.id})`,
@@ -77,7 +77,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       .where(
         and(
           eq(workspaceMembers.userId, userId),
-          sql`NOT (${workspaces.kind} = 'default' AND ${workspaces.ownerUserId} <> ${userId})`,
         ),
       )
       .orderBy(asc(workspaces.kind), asc(workspaces.createdAt));

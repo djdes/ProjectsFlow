@@ -19,5 +19,5 @@ export interface RecentTaskViewRepository {
    * Выполненные не возвращаем: подсветка зовёт обратить внимание, а закрытая задача
    * внимания уже не требует.
    */
-  listUnreadAssignedTaskIds(userId: string, since: Date): Promise<string[]>;
+  listUnreadAssignedTaskIds(userId: string, since: Date, workspaceId: string): Promise<string[]>;
 }

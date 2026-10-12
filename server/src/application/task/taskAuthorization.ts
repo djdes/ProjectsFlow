@@ -61,10 +61,11 @@ async function isDelegatingColleague(
   deps: TaskAccessDeps,
   userId: string,
   inboxOwnerId: string,
+  workspaceId: string,
   task: Pick<Task, 'createdBy'>,
 ): Promise<boolean> {
   if (task.createdBy !== userId) return false;
-  const colleagues = await deps.members.listSharedUsers(userId);
+  const colleagues = await deps.members.listSharedUsersInWorkspace(userId, workspaceId);
   return colleagues.some((c) => c.id === inboxOwnerId);
 }
 
@@ -98,7 +99,7 @@ export async function requireTaskModifyAccess(
     }
     // Коллега, поставивший эту задачу: он видит её во «Входящих», значит может и перевести
     // её в другую колонку.
-    if (await isDelegatingColleague(deps, userId, project.ownerId, task)) {
+    if (await isDelegatingColleague(deps, userId, project.ownerId, project.workspaceId, task)) {
       return { project, isAssignee: false };
     }
     throw new ProjectNotFoundError();
@@ -151,7 +152,7 @@ export async function requireTaskReadAccess(
     if (task.assignee.userId === userId) return { project, isAssignee: true };
     // Тот же круг, что и для правки: раз задача видна в списке, карточку надо уметь открыть.
     // Иначе получилось бы полуфункциональное состояние — статус меняется, а по клику 404.
-    if (await isDelegatingColleague(deps, userId, project.ownerId, task)) {
+    if (await isDelegatingColleague(deps, userId, project.ownerId, project.workspaceId, task)) {
       return { project, isAssignee: false };
     }
     throw new ProjectNotFoundError();
@@ -182,7 +183,7 @@ export async function requireTaskDeleteAccess(
     const task = options.includeDeleted
       ? await deps.tasks.getByIdIncludingDeleted(taskId)
       : await deps.tasks.getById(taskId);
-    if (task && task.projectId === projectId && (await isDelegatingColleague(deps, userId, project.ownerId, task))) {
+    if (task && task.projectId === projectId && (await isDelegatingColleague(deps, userId, project.ownerId, project.workspaceId, task))) {
       return { project, isAssignee: false };
     }
     throw new ProjectNotFoundError();

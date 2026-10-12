@@ -9,6 +9,27 @@ import {
 
 const widths = ['w-3/4', 'w-1/2', 'w-2/3'];
 
+// Match the inbox toolbar rows, so loading data does not move the first task panel.
+export function InboxLoadingLayout({ heading }: { heading?: React.ReactNode }): React.ReactElement {
+  return <div className="min-w-0 space-y-3" data-pf-inbox-loading>
+    <div className="flex min-h-11 items-center gap-2">
+      {heading ?? <Skeleton className="h-6 w-32" />}
+      <span className="flex-1" /><Skeleton className="size-11 rounded-lg md:size-8" /><Skeleton className="size-11 rounded-lg md:size-8" />
+    </div>
+    <div className="flex h-12 items-center gap-2">
+      <Skeleton className="h-12 w-[48%] max-w-52 rounded-lg" />
+      <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
+        {[0, 1, 2].map((i) => <Skeleton key={i} className="size-9 shrink-0 rounded-lg" />)}
+      </div>
+    </div>
+    <div className="flex h-12 gap-2 md:hidden"><Skeleton className="h-full flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" /></div>
+    <div className="grid grid-cols-3 gap-2 md:max-w-sm">
+      {[0, 1, 2].map((i) => <Skeleton key={i} className="h-11 rounded-lg md:h-7" />)}
+    </div>
+    <BoardSkeleton shelf={false} now />
+  </div>;
+}
+
 export function MemberListSkeleton({
   rows = 3,
 }: {
@@ -322,6 +343,10 @@ export function PageSkeleton({
         <TableSkeleton rows={5} />
       </div>
     );
+  if (layout === 'inbox') return <div className="min-h-full min-w-0" data-pf-page-skeleton="inbox">
+    <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex"><Skeleton className="h-3 w-40" /></div>
+    <div className="px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9"><InboxLoadingLayout /></div>
+  </div>;
   const narrow = ['overview', 'task'].includes(layout);
   return (
     <div className="min-h-full min-w-0" data-pf-page-skeleton={layout}>
@@ -333,8 +358,8 @@ export function PageSkeleton({
         className={cn(
           'pbe-10',
           // «Входящие» — плотные поля C4 (как InboxPage), остальные страницы — поля доски.
-          layout === 'inbox' ? 'px-4 pbs-3 sm:px-6 sm:pbs-4 lg:px-9' : 'px-6 sm:px-14 lg:px-24',
-          layout === 'overview' ? 'pbs-6' : layout !== 'inbox' && 'pbs-9',
+          'px-6 sm:px-14 lg:px-24',
+          layout === 'overview' ? 'pbs-6' : 'pbs-9',
         )}
       >
         <div className={cn('space-y-6', narrow && 'mx-auto max-w-4xl')}>
@@ -343,7 +368,7 @@ export function PageSkeleton({
               <Skeleton
                 className={cn(
                   'w-2/3 max-w-sm',
-                  layout === 'inbox' ? 'h-6' : 'h-9',
+                  'h-9',
                 )}
               />
               <Skeleton className="h-3.5 w-1/2 max-w-xs" />
@@ -356,8 +381,8 @@ export function PageSkeleton({
               </div>
             </div>
           </LoadingRegion>
-          {(layout === 'board' || layout === 'inbox') && (
-            <BoardSkeleton shelf={layout !== 'inbox'} now={layout === 'inbox'} />
+          {layout === 'board' && (
+            <BoardSkeleton />
           )}
           {layout === 'table' && <TableSkeleton />}
           {layout === 'list' && <ListSkeleton />}

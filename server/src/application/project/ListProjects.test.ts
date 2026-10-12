@@ -51,12 +51,12 @@ function withActive(kind: WorkspaceKind | null, id = 'ws1') {
   return async (_userId: string) => (kind ? { id, kind } : null);
 }
 
-test('default hub → aggregates ALL my projects (ignores workspace_id)', async () => {
+test('default workspace uses the same strict boundary as a team', async () => {
   const { repo, calls } = makeMembers();
   const uc = new ListProjects({ members: repo, resolveActiveWorkspace: withActive('default') });
   const out = await uc.execute('u1');
-  assert.deepEqual(calls, ['all:u1']);
-  assert.equal(out[0]?.id, 'aggregated');
+  assert.deepEqual(calls, ['ws:u1:ws1']);
+  assert.equal(out[0]?.id, 'scoped');
 });
 
 test('team workspace → slice scoped to that workspace', async () => {

@@ -3,6 +3,7 @@ import type { Project } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjectsContext } from './ProjectsProvider';
 import { PROJECT_CHANGED_EVENT } from './useNotificationStream';
+import { useWorkspacesContext } from './WorkspacesProvider';
 
 type RequestState = {
   id: string;
@@ -20,6 +21,7 @@ export function useProject(id: string): {
 } {
   const { getProject } = useContainer();
   const { data: list, loading: listLoading } = useProjectsContext();
+  const { current: workspace, data: workspaces, switchTo } = useWorkspacesContext();
   const fromList = list?.find((project) => project.id === id) ?? null;
   const [request, setRequest] = useState<RequestState>({
     id: '',
@@ -44,9 +46,19 @@ export function useProject(id: string): {
     }));
     getProject
       .execute(id)
-      .then((data) => {
-        if (!cancelled)
-          setRequest({
+      .then(async (data) => {
+        if (cancelled) return;
+        if (data?.workspaceId && data.workspaceId !== workspace?.id) {
+          if (workspaces?.some((item) => item.id === data.workspaceId)) {
+            // Keep the route, but replace the complete workspace tree before rendering
+            // a project reached through a direct link from another workspace.
+            await switchTo(data.workspaceId);
+            return;
+          }
+          setRequest({ id, data: null, status: 'missing', error: null });
+          return;
+        }
+        setRequest({
             id,
             data,
             status: data ? 'ready' : 'missing',
@@ -59,7 +71,7 @@ export function useProject(id: string): {
     return () => {
       cancelled = true;
     };
-  }, [getProject, id, fromList, listLoading, revision]);
+  }, [getProject, id, fromList, listLoading, revision, workspace?.id, workspaces, switchTo]);
   // Never render a previous project's fallback for even one frame after navigation.
   const current = request.id === id ? request : null;
   const data = fromList ?? current?.data ?? null;

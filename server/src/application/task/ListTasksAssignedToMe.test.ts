@@ -42,10 +42,10 @@ function makeList(input: {
   return new ListTasksAssignedToMe({
     tasks: {
       listAssignedTo: async () => input.tasks,
-      listAssignedToInWorkspace: async () => input.workspaceTasks ?? [],
+      listAssignedToInWorkspace: async () => input.workspaceTasks ?? input.tasks,
     } as never,
     projects: {
-      getById: async (id: string) => input.projects[id] ?? null,
+      getById: async (id: string) => input.projects[id] ? { ...input.projects[id], workspaceId: activeWorkspace?.id } : null,
     } as never,
     users: {
       getById: async (id: string) => ({ id, displayName: `Юзер ${id}` }),
