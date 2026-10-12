@@ -168,6 +168,9 @@ async function touchLongDrag(t, locator, target) {
     }
     await t.page.waitForTimeout(150);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    // dnd-kit keeps its click guard for 50ms after release. A new human tap happens
+    // after that guard; fast CI must not send the next gesture into it.
+    await t.page.waitForTimeout(100);
   } finally {
     await cdp.detach().catch(() => {});
   }

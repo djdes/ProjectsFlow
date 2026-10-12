@@ -55,6 +55,7 @@ jobs:
         with:
           name: smoke-artifacts
           path: e2e/smoke/.artifacts/
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
 
