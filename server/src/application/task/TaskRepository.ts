@@ -138,7 +138,7 @@ export interface TaskRepository {
    * комментарии, версии, привязанные коммиты и внешние ссылки переживают откат.
    * null, если задачи нет или она не была удалена.
    */
-  restore(taskId: string): Promise<Task | null>;
+  restore(taskId: string, actorUserId?: string | null): Promise<Task | null>;
   // Физическое удаление одной строки. Осталось для purge-сценариев; обычное удаление
   // задачи — softDelete.
   delete(taskId: string): Promise<boolean>;

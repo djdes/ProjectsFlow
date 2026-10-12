@@ -1503,22 +1503,6 @@ export class HandleTelegramWebhook {
     // SSE: коммент мгновенно у всех участников.
     this.deps.notifyCommentAdded(input.projectId, input.taskId, comment.id, input.senderUserId, 'user', null);
     // Email + Telegram участникам — как HTTP-роут (tasks/routes.ts). Best-effort.
-    void this.deps.dispatchCommentNotifications
-      .execute({
-        projectId: input.projectId,
-        actorUserId: input.senderUserId,
-        source: 'team',
-        audience: { mode: 'all' },
-        comment: {
-          id: comment.id,
-          taskId: input.taskId,
-          body: input.text,
-          actorKind: 'user',
-          agentName: null,
-          replyToCommentId: comment.replyToCommentId,
-        },
-      })
-      .catch((e: unknown) => console.warn('[tg-webhook] dispatchCommentNotifications failed:', e));
     return { ok: true };
   }
 

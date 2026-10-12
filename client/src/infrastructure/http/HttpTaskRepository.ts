@@ -242,6 +242,10 @@ function taskVersionsFromDto(res: TaskVersionsDto): TaskVersionsResult {
 }
 
 export class HttpTaskRepository implements TaskRepository {
+  async get(projectId: string, taskId: string): Promise<Task> {
+    const { task } = await httpClient.get<{ task: TaskDto }>(`/projects/${projectId}/tasks/${taskId}`);
+    return { ...fromDto(task), canEdit: task.canEdit };
+  }
   async list(projectId: string): Promise<Task[]> {
     const { tasks } = await httpClient.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);
     return tasks.map(fromDto);
@@ -303,7 +307,7 @@ export class HttpTaskRepository implements TaskRepository {
       `/projects/${projectId}/tasks/${taskId}/versions/${versionId}/restore`,
       {},
     );
-    return fromDto(task);
+    return { ...fromDto(task), canEdit: task.canEdit };
   }
   async listCommits(projectId: string, taskId: string): Promise<TaskCommit[]> {
     const { commits } = await httpClient.get<{ commits: CommitDto[] }>(

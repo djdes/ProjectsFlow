@@ -1,6 +1,8 @@
 // Зеркало серверного домена: пер-участниковые настройки email-оповещений по проекту.
 export type NotifEventType =
   | 'task_created'
+  | 'task_updated'
+  | 'task_deleted'
   | 'task_done'
   | 'status_changed'
   | 'comment_created'
@@ -26,6 +28,8 @@ export function resolvePref(
 // Подписи для UI «Мои уведомления». Порядок = порядок отображения.
 export const NOTIF_EVENT_LABELS: ReadonlyArray<{ type: NotifEventType; label: string }> = [
   { type: 'task_created', label: 'Создание задачи' },
+  { type: 'task_updated', label: 'Срок, исполнитель и свойства задачи' },
+  { type: 'task_deleted', label: 'Удаление задачи' },
   { type: 'task_done', label: 'Задача выполнена' },
   { type: 'status_changed', label: 'Изменение статуса задачи' },
   { type: 'comment_created', label: 'Новый комментарий' },

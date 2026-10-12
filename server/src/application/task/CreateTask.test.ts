@@ -112,7 +112,7 @@ test('without an explicit assignee, the creator becomes the only assignee', asyn
   assert.equal(h.counters.emails, 0);
 });
 
-test('an Inbox task can be created for a shared user and notifies the assignee', async () => {
+test('an Inbox task can be created for a shared user without a duplicate caller notification', async () => {
   const h = makeHarness();
   const task = await h.create.execute({
     projectId: 'p1',
@@ -124,8 +124,8 @@ test('an Inbox task can be created for a shared user and notifies the assignee',
   await flushAsync();
 
   assert.equal(task.assignee.userId, OTHER_ID);
-  assert.equal(h.counters.notifications, 1);
-  assert.equal(h.counters.emails, 1);
+  assert.equal(h.counters.notifications, 0);
+  assert.equal(h.counters.emails, 0);
 });
 
 // --- Дефолтный срок «сегодня» ---

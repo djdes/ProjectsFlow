@@ -38,7 +38,7 @@ function makeBroadcast(seed: Seed): {
       },
     },
     members: {
-      async listLeadUserIdsForProject() {
+      async listApproverUserIdsForProject() {
         return seed.leadUserIds ?? [];
       },
     },

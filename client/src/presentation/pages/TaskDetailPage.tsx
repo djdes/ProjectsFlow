@@ -26,10 +26,10 @@ export function TaskDetailPage(): React.ReactElement {
   const { projectId, taskId } = useParams<{ projectId: string; taskId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { data: project } = useProject(projectId ?? '');
   const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
   const [task, setTask] = useState<Task | null>(null);
+  const { data: project } = useProject(task?.projectId === projectId && task?.context?.canReadProject !== false ? projectId ?? '' : '');
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -42,11 +42,9 @@ export function TaskDetailPage(): React.ReactElement {
     if (!projectId || !taskId) return;
     setLoadError(false);
     const sequence = ++loadSequence.current;
-    void taskRepository
-      .list(projectId)
-      .then((tasks) => {
+    void taskRepository.get(projectId, taskId).then(async (found) => {
+        const tasks = found.context?.canReadProject === false ? [found] : await taskRepository.list(projectId).catch(() => []);
         if (sequence !== loadSequence.current) return;
-        const found = tasks.find((t) => t.id === taskId) ?? null;
         setTask(found);
         setAllTasks(tasks);
         setNotFound(!found);
@@ -95,7 +93,7 @@ export function TaskDetailPage(): React.ReactElement {
           <PageTopBar>
             <ProjectBreadcrumbs
               projectId={projectId}
-              projectName={project?.name ?? '…'}
+              projectName={project?.name ?? task?.context?.projectName ?? '…'}
               projectIcon={project?.icon}
               view="board"
             />
@@ -118,7 +116,7 @@ export function TaskDetailPage(): React.ReactElement {
   const breadcrumbs = (
     <ProjectBreadcrumbs
       projectId={projectId}
-      projectName={project?.name ?? '…'}
+      projectName={project?.name ?? task?.context?.projectName ?? '…'}
       projectIcon={project?.icon}
       view="board"
       task={{ taskId: task.id, title: taskTitle(task), recent: recentTasks }}
@@ -131,15 +129,15 @@ export function TaskDetailPage(): React.ReactElement {
       breadcrumbs={breadcrumbs}
       highlightField={searchParams.get('hl')}
       state={{ mode: 'edit', task }}
-      canEdit={canEditReadableTask(project, task, user?.id ?? null)}
+      canEdit={task.canEdit ?? canEditReadableTask(project, task, user?.id ?? null)}
       onClose={() => navigate(`/projects/${projectId}`)}
       // onSubmit нужен только в create-mode; на странице задача уже существует.
       onSubmit={async () => task}
       onCommitsChange={load}
       // «…» — как у крошек выше: чип проекта в шапке не мигает плейсхолдером «Проект».
-      projectName={project?.name ?? '…'}
+      projectName={project?.name ?? task?.context?.projectName ?? '…'}
       // Inbox-задача, открытая страницей, — чип рисует «Входящие» с иконкой инбокса.
-      isInbox={project?.isInbox ?? false}
+      isInbox={project?.isInbox ?? task.context?.isInbox ?? false}
       isShared={(project?.memberCount ?? 0) > 1}
       aiProjectId={projectId}
       onMove={async (tid, targetStatus) => {
@@ -148,8 +146,9 @@ export function TaskDetailPage(): React.ReactElement {
           beforeTaskId: null,
           afterTaskId: null,
         });
-        setTask(updated);
-        return updated;
+        const current = { ...updated, context: task.context, canEdit: task.canEdit };
+        setTask(current);
+        return current;
       }}
     />
   );

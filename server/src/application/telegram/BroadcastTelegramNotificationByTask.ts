@@ -52,7 +52,7 @@ type Deps = {
   readonly tasks: Pick<TaskRepository, 'getById'>;
   readonly send: Pick<SendAgentTelegramNotification, 'execute'>;
   // Руководители пространства — вторая (и единственная кроме ответственного) аудитория.
-  readonly members: Pick<ProjectMemberRepository, 'listLeadUserIdsForProject'>;
+  readonly members: Pick<ProjectMemberRepository, 'listApproverUserIdsForProject'>;
 };
 
 // Какие события пересылаются руководителю. Всё остальное (новая задача, комментарии,
@@ -158,7 +158,7 @@ export class BroadcastTelegramNotificationByTask {
     skipped: { userId: string; reason: string; detail?: string }[],
   ): Promise<void> {
     if (!TEAM_FORWARD_KINDS.has(cmd.kind)) return;
-    const leadIds = await this.deps.members.listLeadUserIdsForProject(task.projectId);
+    const leadIds = await this.deps.members.listApproverUserIdsForProject(task.projectId);
     const recipients = [...new Set(leadIds)].filter(
       (id) => id !== task.assignee.userId && id !== cmd.skipUserId,
     );

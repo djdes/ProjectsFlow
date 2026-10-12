@@ -589,6 +589,65 @@ export const scenarios = [
   },
 
   {
+    id: 'task-notifications',
+    title: 'Уведомление об изменении срока и переход в задачу',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      const task = state.tasks.find((item) => item.id === 't-home');
+      const createdAt = new Date().toISOString();
+      state.feed = [{ type: 'notification', createdAt, notification: {
+        id: 'deadline-notification', userId: ME.id, createdAt, readAt: null, taskDeleted: false,
+        payload: { type: 'task_changed', action: 'updated', title: 'Задача изменена',
+          taskId: task.id, projectId: task.projectId, projectName: 'Сайт компании',
+          taskExcerpt: firstLine(task), actorUserId: 'lead', actorDisplayName: 'Руководитель',
+          detail: 'Срок до: 12.10.2026 → 20.10.2026', taskAvailable: true },
+      } }];
+      await page.addInitScript(() => {
+        localStorage.setItem('pf_sidebar_rail', 'chat');
+        localStorage.setItem('pf_comm_tab', 'all');
+      });
+      await t.goto('/', { ready: () => page.locator(NOW) });
+      if (t.isMobile) await page.getByRole('button', { name: 'Открыть меню', exact: true }).tap();
+      await t.step('уведомление показывает событие и обе даты', async () => {
+        await t.visible(page.getByText('Задача изменена', { exact: true }), 'заголовок уведомления');
+        await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'прежний и новый срок');
+      });
+      await t.step('клик помечает прочитанным и открывает конкретную задачу', async () => {
+        const notice = page.getByText('Задача изменена', { exact: true });
+        if (t.isMobile) await notice.tap(); else await notice.click();
+        await t.waitForMutation((m) => m.path === '/notifications/deadline-notification/read', 'уведомление не прочитано');
+        await t.waitFor(() => page.url().includes(`/tasks/${task.id}`), 'нет перехода к задаче');
+        await t.visible(page.locator('[data-pf-task-properties]'), 'открытая задача');
+      });
+      await t.pageChecks('задача из уведомления');
+    },
+  },
+
+  {
+    id: 'task-notification-private',
+    title: 'Личная задача из уведомления: доступ только к карточке',
+    matrix: [['phone', 'light']],
+    async run(t) {
+      const task = t.state.tasks.find((item) => item.id === 't-home');
+      task.projectId = 'private-inbox';
+      task.assignee = { userId: 'worker-personal', displayName: 'Исполнитель', avatarUrl: null };
+      task.canEdit = true;
+      task.context = { projectName: 'Личные задачи исполнителя', workspaceId: WORKSPACE_ID, isInbox: true, canReadProject: false };
+      await t.goto('/projects/private-inbox/tasks/t-home', { ready: () => t.page.locator('[data-pf-task-properties]') });
+      await t.check('задача редактируется без открытия приватного проекта', async () => {
+        const status = t.page.getByRole('button', { name: 'Сменить статус', exact: true });
+        t.assert(await status.isEnabled(), 'у принимающего нет действия смены статуса');
+        await t.visible(t.page.getByText('Личные задачи', { exact: true }), 'личная задача');
+        await status.tap();
+        await t.page.getByRole('menuitemradio', { name: 'Готово', exact: true }).tap();
+        await t.waitForMutation((m) => m.path === '/projects/private-inbox/tasks/t-home/move' && m.body?.targetStatus === 'done', 'принятие задачи не сохранено');
+      });
+      await t.pageChecks('личная задача по прямой ссылке');
+    },
+  },
+
+  {
     id: 'task-properties',
     title: 'Свойства задачи: шторки, статус, проект и порядок строк',
     matrix: [['desktop', 'light'], ['phone', 'light'], ['narrow', 'dark']],

@@ -29,12 +29,13 @@ export function TaskStatusField({ task, disabled, beforeChange, onMove, onChange
     let cancelled = false;
     setSettings(null);
     setProject(null);
+    if (task.context?.canReadProject === false) return;
     void Promise.all([projectRepository.getKanbanSettings(task.projectId), projectRepository.getById(task.projectId)])
       .then(([board, current]) => { if (!cancelled) { setSettings(board); setProject(current); } })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [projectRepository, task.projectId]);
-  const workspace = workspaces?.find((w) => project?.workspaceId ? w.id === project.workspaceId : w.isCurrent);
+  }, [projectRepository, task.projectId, task.context?.canReadProject]);
+  const workspace = workspaces?.find((w) => (task.context?.workspaceId ?? project?.workspaceId) ? w.id === (task.context?.workspaceId ?? project?.workspaceId) : w.isCurrent);
   const options = taskStatusOptions(settings, workspace?.workerEnabled ?? false, workspace?.requireTaskApproval ?? false, task.status);
   const change = async (next: TaskStatus): Promise<void> => {
     if (disabled || busy.current || next === task.status) return;

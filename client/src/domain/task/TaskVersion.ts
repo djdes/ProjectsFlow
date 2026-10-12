@@ -4,6 +4,8 @@ import type { TaskAssignee } from './TaskAssignee';
 
 export type TaskVersionField =
   | 'created'
+  | 'deleted'
+  | 'restored'
   | 'description'
   | 'status'
   | 'assignee'

@@ -171,7 +171,7 @@ function makeHarness(options: HarnessOptions = {}) {
         assigneeUserId: string,
       ) => {
         calls.projectMoves.push({ taskId, targetProjectId, assigneeUserId });
-        task = { ...task, projectId: targetProjectId };
+        task = { ...makeTask(assigneeUserId), projectId: targetProjectId };
         return task;
       },
     } as never,
@@ -258,9 +258,9 @@ test('inbox: the owner can assign a task to a shared user', async () => {
 
   assert.equal(result.assignee.userId, TARGET_ID);
   assert.deepEqual(h.calls.sharedLookups, [OWNER_ID]);
-  assert.deepEqual(h.calls.updates, [
-    { taskId: TASK_ID, patch: { assigneeUserId: TARGET_ID } },
-  ]);
+  assert.deepEqual(h.calls.updates, []);
+  assert.equal(h.calls.projectMoves.length, 1);
+  assert.equal(h.calls.projectMoves[0]?.assigneeUserId, TARGET_ID);
 });
 
 test('inbox: the current assignee can return the task to the owner', async () => {
@@ -288,9 +288,9 @@ test('inbox: a colleague who put the task can reassign it', async () => {
   const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
 
   assert.equal(result.assignee.userId, TARGET_ID);
-  assert.deepEqual(h.calls.updates, [
-    { taskId: TASK_ID, patch: { assigneeUserId: TARGET_ID } },
-  ]);
+  assert.deepEqual(h.calls.updates, []);
+  assert.equal(h.calls.projectMoves.length, 1);
+  assert.equal(h.calls.projectMoves[0]?.assigneeUserId, TARGET_ID);
 });
 
 test('inbox: a user with no shared workspace with the owner cannot reassign', async () => {
@@ -343,31 +343,14 @@ test('assigning the current assignee is idempotent and has no side effects', asy
   assert.deepEqual(h.calls.activities, []);
 });
 
-test('assigning another user emits one notification, email and activity event', async () => {
+test('assigning another user records activity and leaves delivery to the committed change stream', async () => {
   const h = makeHarness();
 
   await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
   await flushBackgroundWork();
 
-  assert.deepEqual(h.calls.notifications, [
-    {
-      id: 'notification-1',
-      userId: TARGET_ID,
-      payload: {
-        type: 'task_assignee_changed',
-        taskId: TASK_ID,
-        projectId: PROJECT_ID,
-        projectName: 'Roadmap',
-        isInbox: false,
-        taskExcerpt: 'Ship the launch plan',
-        actorUserId: VIEWER_ID,
-        actorDisplayName: 'Vera Viewer',
-      },
-    },
-  ]);
-  assert.equal(h.calls.emails.length, 1);
-  assert.equal(h.calls.emails[0]?.to, `${TARGET_ID}@example.test`);
-  assert.match(h.calls.emails[0]?.text ?? '', /https:\/\/projectsflow\.test\/projects\/project-1/u);
+  assert.deepEqual(h.calls.notifications, []);
+  assert.deepEqual(h.calls.emails, []);
   assert.deepEqual(h.calls.activities, [
     {
       projectId: PROJECT_ID,

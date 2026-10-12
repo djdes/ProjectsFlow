@@ -4,6 +4,8 @@
 
 export type NotifEventType =
   | 'task_created'
+  | 'task_updated'
+  | 'task_deleted'
   | 'task_done'
   | 'status_changed'
   | 'comment_created'
@@ -14,6 +16,8 @@ export type NotifEventType =
 
 export const NOTIF_EVENT_TYPES: readonly NotifEventType[] = [
   'task_created',
+  'task_updated',
+  'task_deleted',
   'task_done',
   'status_changed',
   'comment_created',

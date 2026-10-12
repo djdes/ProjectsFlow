@@ -22,6 +22,7 @@ type Deps = {
   readonly idGen: () => string;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
+  readonly onCreated?: (input: CreateTaskCommentCommand, comment: TaskComment) => Promise<void>;
 };
 
 export type CreateTaskCommentCommand = {
@@ -36,6 +37,7 @@ export type CreateTaskCommentCommand = {
   // Режим адресации уведомления (из композера). По умолчанию 'all'. Сохраняется на
   // комментарии для меню ⋮ «Кто уведомлён». Сама рассылка — в DispatchCommentNotifications.
   readonly notifyMode?: CommentNotifyMode;
+  readonly notifyUserIds?: readonly string[];
   // Ответ/цитата (db/080). NULL по умолчанию.
   readonly replyToCommentId?: string | null;
   readonly quotedText?: string | null;
@@ -131,6 +133,11 @@ export class CreateTaskComment {
       console.warn('[CreateTaskComment] mention-notification failed:', err);
     }
 
+    if (this.deps.onCreated) {
+      void this.deps.onCreated(input, comment).catch((error: unknown) => {
+        console.warn('[comments] dispatch failed:', error);
+      });
+    }
     return comment;
   }
 }

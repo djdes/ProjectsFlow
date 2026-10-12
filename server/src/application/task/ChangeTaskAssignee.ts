@@ -6,12 +6,8 @@ import {
 } from '../../domain/task/errors.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
-import type { EmailSender } from '../notifications/EmailSender.js';
-import { renderTaskAssigneeEmail } from '../notifications/emails/taskAssigneeEmail.js';
-import type { NotificationRepository } from '../notifications/NotificationRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import type { UserRepository } from '../user/UserRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 
@@ -21,11 +17,6 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  readonly users: UserRepository;
-  readonly notifications: NotificationRepository;
-  readonly email: EmailSender;
-  readonly idGen: () => string;
-  readonly appUrl: string;
   readonly activityRecorder?: ActivityRecorder;
 };
 
@@ -73,29 +64,13 @@ export class ChangeTaskAssignee {
     }
 
     if (task.assignee.userId === assigneeUserId) return task;
-    let updated = await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);
+    // One committed mutation (including the inbox move), hence one notification.
+    const targetInbox = project.isInbox && assigneeUserId !== project.ownerId
+      ? await this.deps.projects.findInboxByOwner(assigneeUserId) : null;
+    const updated = targetInbox && targetInbox.id !== project.id
+      ? await this.deps.tasks.moveToProject(taskId, targetInbox.id, assigneeUserId, actorUserId)
+      : await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);
     if (!updated) throw new TaskNotFoundError(taskId);
-
-    // Правило «я ответственный ⇒ задача в моих личных»: личная задача всегда лежит во
-    // входящих СВОЕГО ответственного. Назначили коллегу — запись переезжает в его inbox,
-    // иначе она осталась бы чужой записью в его колонках (карточка «Личные · <чужое имя>»
-    // в собственных «Черновиках» читается как ошибка). Поставивший задачу не теряет её из
-    // виду: поручения коллегам видны ему во вкладке «Для всех» (ListPersonalTasksOfColleagues).
-    // Задачи именованных проектов не трогаем — они живут на доске своего проекта.
-    if (project.isInbox && assigneeUserId !== project.ownerId) {
-      const targetInbox = await this.deps.projects.findInboxByOwner(assigneeUserId);
-      // Нет inbox'а (юзер ещё ни разу его не открывал) — оставляем запись на месте:
-      // назначение важнее, а создавать чужой проект здесь мы не вправе.
-      if (targetInbox && targetInbox.id !== project.id) {
-        const moved = await this.deps.tasks.moveToProject(
-          taskId,
-          targetInbox.id,
-          assigneeUserId,
-          actorUserId,
-        );
-        if (moved) updated = moved;
-      }
-    }
 
     void this.deps.activityRecorder?.record({
       projectId,
@@ -114,50 +89,7 @@ export class ChangeTaskAssignee {
       },
     });
 
-    if (assigneeUserId !== actorUserId) {
-      void this.notify(updated, actorUserId, project.name, project.isInbox).catch(
-        (err: unknown) => console.error('[task:assignee] notify failed:', err),
-      );
-    }
     return updated;
   }
 
-  private async notify(
-    task: Task,
-    actorUserId: string,
-    projectName: string,
-    isInbox: boolean,
-  ): Promise<void> {
-    const [assignee, actor] = await Promise.all([
-      this.deps.users.getById(task.assignee.userId),
-      this.deps.users.getById(actorUserId),
-    ]);
-    if (!assignee) return;
-    const actorDisplayName = actor?.displayName ?? 'Кто-то';
-    const taskExcerpt = (task.description ?? '').slice(0, 120);
-    await this.deps.notifications.create({
-      id: this.deps.idGen(),
-      userId: assignee.id,
-      payload: {
-        type: 'task_assignee_changed',
-        taskId: task.id,
-        projectId: task.projectId,
-        projectName,
-        isInbox,
-        taskExcerpt,
-        actorUserId,
-        actorDisplayName,
-      },
-    });
-    const base = this.deps.appUrl.replace(/\/$/u, '');
-    const taskUrl = isInbox ? `${base}/inbox` : `${base}/projects/${task.projectId}`;
-    await this.deps.email.send(
-      renderTaskAssigneeEmail({
-        to: assignee.email,
-        actorDisplayName,
-        taskExcerpt,
-        taskUrl,
-      }),
-    );
-  }
 }

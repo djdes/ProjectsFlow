@@ -9,6 +9,8 @@ import type { TaskStatus } from '../../domain/task/Task.js';
 //  ссылки внутри самого сообщения, а не большая inline-клавиатура под ним. task_digest_card —
 //  карточка личной сводки пространства (db/161): кнопки и reply→комментарий как у уведомлений.
 export const TASK_ACTION_KINDS: ReadonlySet<string> = new Set([
+  'task_changed',
+  'team_task_changed',
   'comment',
   'comment_on_my_task',
   'mention',

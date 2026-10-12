@@ -163,14 +163,6 @@ export class MoveTask {
     }, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
 
-    // Попала в очередь приёмки — сообщаем тем, кто принимает. best-effort: сбой
-    // уведомления не должен отменять уже выполненный перенос.
-    if (updated.status === 'pending_approval' && task.status !== 'pending_approval') {
-      void this.deps.approval
-        .notifyApprovalRequested({ task: updated, project, actorUserId: input.ownerUserId })
-        .catch((err: unknown) => console.error('[task:approval] notify failed:', err));
-    }
-
     // Лента действий: только при реальной смене статуса (не при reorder внутри колонки).
     if (updated.status !== task.status) {
       void this.deps.activityRecorder?.record({

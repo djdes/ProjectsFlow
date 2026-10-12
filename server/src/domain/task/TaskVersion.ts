@@ -3,6 +3,8 @@ import type { TaskAssignee } from './TaskAssignee.js';
 
 export type TaskVersionField =
   | 'created'
+  | 'deleted'
+  | 'restored'
   | 'description'
   | 'status'
   | 'assignee'

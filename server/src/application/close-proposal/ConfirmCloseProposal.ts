@@ -63,11 +63,7 @@ export class ConfirmCloseProposal {
         { status: target, statusBeforeDone: task.status },
         input.userId,
       );
-      if (project && updated && target === 'pending_approval') {
-        void this.deps.approval
-          .notifyApprovalRequested({ task: updated, project, actorUserId: input.userId })
-          .catch((err: unknown) => console.error('[task:approval] notify failed:', err));
-      }
+
     }
 
     try {

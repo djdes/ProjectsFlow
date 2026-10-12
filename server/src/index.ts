@@ -126,6 +126,7 @@ import { ManageKanbanColumns } from './application/kanban/ManageKanbanColumns.js
 import { BulkManageWorkspaceKanbanColumns } from './application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
+import { DispatchTaskChangeNotifications } from './application/notifications/DispatchTaskChangeNotifications.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { DispatchCommentNotifications } from './application/notifications/DispatchCommentNotifications.js';
 import { GetCommentNotifications } from './application/task/GetCommentNotifications.js';
@@ -267,6 +268,7 @@ import { ApproveAgentDeviceCode } from './application/agent/ApproveAgentDeviceCo
 import { PollAgentDeviceToken } from './application/agent/PollAgentDeviceToken.js';
 import { GetAgentDeviceCodeInfo } from './application/agent/GetAgentDeviceCodeInfo.js';
 import { randomBytes, createHash } from 'node:crypto';
+import { GetTask } from './application/task/GetTask.js';
 import { ListTasks } from './application/task/ListTasks.js';
 import { ExportTasksDigest } from './application/task/ExportTasksDigest.js';
 import { DrizzleDigestSettingsRepository } from './infrastructure/repositories/DrizzleDigestSettingsRepository.js';
@@ -641,11 +643,6 @@ const appBaseUrl =
 // закрытия задач (close-proposal, commit-sync, Telegram-композер).
 const taskApprovalService = new TaskApprovalService({
   workspaces: workspaceRepo,
-  users: userRepo,
-  notifications: notificationRepo,
-  email: emailSender,
-  idGen: idGenerator,
-  appUrl: appBaseUrl,
 });
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
@@ -663,7 +660,9 @@ const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskVersionRepo = new DrizzleTaskVersionRepository(db);
+let taskChangeNotifications: DispatchTaskChangeNotifications | undefined;
 const taskVersionRecorder = new TaskVersionRecorder({
+  onChanged: (change) => taskChangeNotifications?.execute(change) ?? Promise.resolve(),
   versions: taskVersionRepo,
   idGen: idGenerator,
   onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
@@ -956,6 +955,8 @@ const getTelegramStatus = new GetTelegramStatus({
 // v2: добавлены ralph_answer_accepted/comment_on_my_task/task_blocked + task_done
 // перемаплен на statusChange (а не taskDone) по spec multi-user-telegram-...-v2-delta.
 const TG_KIND_TO_PREF = {
+  task_changed: 'statusChange',
+  team_task_changed: 'teamStatusChange',
   comment: 'commentOnMyTask',
   comment_on_my_task: 'commentOnMyTask',
   mention: 'mention',
@@ -998,6 +999,12 @@ const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   idGen: idGenerator,
   kindToPref: TG_KIND_TO_PREF,
 });
+taskChangeNotifications = new DispatchTaskChangeNotifications({
+  projects: projectRepo, members: projectMemberRepo, users: userRepo,
+  notifications: notificationRepo, email: emailSender, telegram: sendAgentTelegramNotification,
+  appUrl: appBaseUrl, idGen: idGenerator,
+});
+
 
 const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
   invites: workspaceInviteRepo, workspaces: workspaceRepo, users: userRepo,
@@ -1017,10 +1024,33 @@ const submitSupportTicket = new SubmitSupportTicket({
   notifications: notificationRepo,
   idGen: idGenerator,
 });
+// Журнал доставки уведомлений по комментарию + оркестратор (email + TG адресно).
+// Единый источник «кто уведомлён» — питает меню ⋮ у комментария.
+const commentNotificationLogRepo = new DrizzleCommentNotificationLogRepository(db);
+const dispatchCommentNotifications = new DispatchCommentNotifications({
+  notifications: notificationRepo,
+  users: userRepo,
+  members: projectMemberRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  comments: taskCommentRepo,
+  email: emailSender,
+  tgSend: sendAgentTelegramNotification,
+  log: commentNotificationLogRepo,
+  idGen: idGenerator,
+  appUrl: appBaseUrl,
+});
+
 // CreateTaskComment + MaybeReopenForClarification используются и в HTTP-роутерах (см. ниже),
 // и в HandleTelegramWebhook (reply→ralph-answer ветка). Один экземпляр на оба чтобы не
 // дублировать конструкцию и не разъезжаться по поведению.
 const createTaskCommentUseCase = new CreateTaskComment({
+  onCreated: (input, comment) => dispatchCommentNotifications.execute({
+    projectId: input.projectId, actorUserId: input.ownerUserId,
+    source: input.actorKind === 'agent' ? 'mcp' : 'team',
+    audience: { mode: input.notifyMode ?? 'all', userIds: input.notifyUserIds },
+    comment,
+  }),
   approval: taskApprovalService,
   projects: projectRepo,
   members: projectMemberRepo,
@@ -1129,11 +1159,7 @@ const telegramComposer = new TelegramComposerService({
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    email: emailSender,
     idGen: idGenerator,
-    appUrl: appBaseUrl,
     activityRecorder,
   }),
   getOrCreateInbox: new GetOrCreateInbox({
@@ -1207,20 +1233,6 @@ workflowEffects.sendTelegram = async (_projectId, message, taskId) => {
 workflowEffects.triggerWebhook = async (projectId, event) => {
   await dispatchWebhook.dispatch(projectId, event, { source: 'workflow' });
 };
-// Журнал доставки уведомлений по комментарию + оркестратор (email + TG адресно).
-// Единый источник «кто уведомлён» — питает меню ⋮ у комментария.
-const commentNotificationLogRepo = new DrizzleCommentNotificationLogRepository(db);
-const dispatchCommentNotifications = new DispatchCommentNotifications({
-  members: projectMemberRepo,
-  projects: projectRepo,
-  tasks: taskRepo,
-  comments: taskCommentRepo,
-  email: emailSender,
-  tgSend: sendAgentTelegramNotification,
-  log: commentNotificationLogRepo,
-  idGen: idGenerator,
-  appUrl: appBaseUrl,
-});
 // Собирается после composer + dispatchCommentNotifications — зависит от обоих.
 // --- Предложения закрыть задачу (db/101, EOD Фаза 1) ---
 const closeProposalRepo = new DrizzleCloseProposalRepository(db);
@@ -2176,11 +2188,7 @@ const { app, devProxyUpgrade } = createApp({
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
-        users: userRepo,
-        notifications: notificationRepo,
-        email: emailSender,
         idGen: idGenerator,
-        appUrl: appBaseUrl,
         activityRecorder,
       }),
       packageJson: projectPackageJsonReader,
@@ -2196,11 +2204,7 @@ const { app, devProxyUpgrade } = createApp({
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
-        users: userRepo,
-        notifications: notificationRepo,
-        email: emailSender,
         idGen: idGenerator,
-        appUrl: appBaseUrl,
         activityRecorder,
       }),
       // Best-effort: даёт брифу предупредить о проекте со своим серверным процессом.
@@ -2455,11 +2459,7 @@ const { app, devProxyUpgrade } = createApp({
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
-        users: userRepo,
-        notifications: notificationRepo,
-        email: emailSender,
         idGen: idGenerator,
-        appUrl: appBaseUrl,
         activityRecorder,
       }),
     }),
@@ -2630,6 +2630,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
   },
   tasks: {
+    getTask: new GetTask({ projects: projectRepo, members: projectMemberRepo, tasks: taskRepo }),
     listTasks: new ListTasks({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -2644,11 +2645,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
       idGen: idGenerator,
-      appUrl: appBaseUrl,
       activityRecorder,
     }),
     updateTask: new UpdateTask({
@@ -2935,11 +2932,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
       activityRecorder,
     }),
   },
@@ -3026,11 +3018,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
       idGen: idGenerator,
-      appUrl: appBaseUrl,
       activityRecorder,
     }),
     createComment: createTaskCommentUseCase,

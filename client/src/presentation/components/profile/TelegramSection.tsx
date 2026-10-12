@@ -22,7 +22,7 @@ import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 const PREF_LABELS: ReadonlyArray<{ key: keyof TelegramPrefs; label: string; hint?: string }> = [
   { key: 'commentOnMyTask', label: 'Комментарии на моих задачах' },
   { key: 'mention', label: 'Упоминания @me' },
-  { key: 'statusChange', label: 'Смена статуса моих задач' },
+  { key: 'statusChange', label: 'Изменения моих задач', hint: 'Срок, описание, исполнитель, статус, удаление и восстановление' },
   { key: 'ralphQuestion', label: 'Вопросы от Ralph-агента' },
   {
     key: 'ralphAnswer',
@@ -36,8 +36,8 @@ const PREF_LABELS: ReadonlyArray<{ key: keyof TelegramPrefs; label: string; hint
 // роль есть хотя бы в одном пространстве — остальным настройка ничего не даёт.
 const LEAD_PREF: { key: keyof TelegramPrefs; label: string; hint: string } = {
   key: 'teamStatusChange',
-  label: 'Состояния задач всей команды',
-  hint: 'Роль «Руководитель»: события по задачам всех участников — только вам в личный чат',
+  label: 'Изменения задач команды',
+  hint: 'Для руководителей и владельца: изменения и утверждение задач в личном чате с ботом',
 };
 
 declare global {
@@ -71,7 +71,7 @@ export function TelegramSection(): React.ReactElement {
   const { telegramRepository } = useContainer();
   // Тоггл командного потока показываем только руководителю (роль хотя бы в одном пространстве).
   const { data: workspaces } = useWorkspaces();
-  const isLead = (workspaces ?? []).some((w) => w.role === 'lead');
+  const isLead = (workspaces ?? []).some((w) => w.role === 'lead' || w.role === 'owner');
   const prefRows = isLead ? [...PREF_LABELS, LEAD_PREF] : PREF_LABELS;
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [loading, setLoading] = useState(true);

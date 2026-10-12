@@ -661,22 +661,14 @@ test('+неоднозначный проект → пикер, выбор кно
   assert.equal(h.createTaskCalls[0]!.projectId, 'p2');
 });
 
-test('+Проект текст @ответственный → задача сразу в проекте, ответственному карточка действий', async () => {
+test('+Проект текст @ответственный → задача сразу в проекте, без дублирующей рассылки из композера', async () => {
   const h = makeHarness();
   await h.service.startFromMessage(111, 500, '+Альфа Обнови билд @Вася');
   const draftId = [...h.drafts.keys()][0]!;
   await h.service.handleCallback(cq(`tc:${draftId}`));
   assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // сразу в проект, без переноса-на-accept
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
-  assert.equal(h.assigneeMessages.length, 1);
-  assert.equal(h.assigneeMessages[0]!.userId, 'u2');
-  assert.equal(h.assigneeMessages[0]!.kind, 'task_assignee_changed');
-  // Кнопки действий по задаче, НЕ «Принять/Отказать».
-  assert.ok(h.assigneeMessages[0]!.buttons.includes('nd:t1'));
-  assert.ok(h.assigneeMessages[0]!.buttons.includes('nc:t1'));
-  assert.ok(!h.assigneeMessages[0]!.buttons.includes('da:'));
-  // Эррата #6: обязательна url-кнопка «Открыть в ProjectsFlow» (регрессия «кнопку убрали»).
-  assert.ok(h.assigneeMessages[0]!.buttons.includes('Открыть в ProjectsFlow'));
+  assert.equal(h.assigneeMessages.length, 0); // Delivery belongs to the shared task-change stream.
   const d = h.drafts.get(draftId)!;
   assert.equal(d.status, 'confirmed');
   assert.equal(d.assigneeUserId, 'u2');
@@ -924,7 +916,7 @@ test('AI: правка проекта сегмента кнопкой → соз
   assert.equal(h.createTaskCalls[0]!.projectId, 'p2');
 });
 
-test('AI: сегмент с ответственным → задача в проекте + уведомление с кнопками', async () => {
+test('AI: сегмент с ответственным → задача в проекте, уведомление через общий обработчик', async () => {
   const h = makeHarness({
     projects: [{ id: 'p1', name: 'Альфа' }],
     shared: [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }],
@@ -948,11 +940,7 @@ test('AI: сегмент с ответственным → задача в пр�
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // в проекте, не в inbox
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
-  assert.equal(h.assigneeMessages.length, 1);
-  assert.ok(h.assigneeMessages[0]!.buttons.includes('nd:t1'));
-  assert.ok(!h.assigneeMessages[0]!.buttons.includes('da:'));
-  // Эррата #6: обязательна url-кнопка «Открыть в ProjectsFlow» (регрессия «кнопку убрали»).
-  assert.ok(h.assigneeMessages[0]!.buttons.includes('Открыть в ProjectsFlow'));
+  assert.equal(h.assigneeMessages.length, 0); // Delivery belongs to the shared task-change stream.
 });
 
 // Реальный случай с прода: модель вернула ИМЯ ответственного и не вернула его id
@@ -982,7 +970,7 @@ test('AI: имя ответственного без id → сопоставля
 
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
-  assert.equal(h.assigneeMessages.length, 1); // ответственному ушло уведомление
+  assert.equal(h.assigneeMessages.length, 0); // Delivery belongs to the shared task-change stream.
 });
 
 // Правка формулировки: AI не всегда попадает в смысл, а поправить текст было нечем —
@@ -1230,7 +1218,7 @@ test('AI: сегмент без проекта, но с ответственны
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
   assert.equal(h.createTaskCalls[0]!.allowInboxDelegation, true);
   assert.deepEqual(h.inboxUserIds, ['u2']);
-  assert.equal(h.assigneeMessages.length, 1); // ответственному уходит карточка
+  assert.equal(h.assigneeMessages.length, 0); // Delivery belongs to the shared task-change stream.
 });
 
 test('AI: сегмент без проекта и без ответственного → инбокс создателя (регрессия)', async () => {

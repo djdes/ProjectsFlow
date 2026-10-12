@@ -47,6 +47,7 @@ type RealtimeEvent =
   | { kind: 'workspace_chat_changed'; workspaceId: string };
 
 type StreamPayload =
+  | { type: 'task_changed'; title: string; detail: string; projectName: string; actorDisplayName: string }
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
   | { type: 'workspace_invite'; workspaceName: string; actorDisplayName: string }
@@ -65,6 +66,9 @@ type StreamPayload =
 
 function toastFor(payload: StreamPayload): void {
   switch (payload.type) {
+    case 'task_changed':
+      toast(payload.title, { description: `${payload.actorDisplayName} · ${payload.projectName}${payload.detail ? `\n${payload.detail}` : ''}` });
+      break;
     case 'project_invite':
       toast(`${payload.actorDisplayName} пригласил вас в «${payload.projectName}»`);
       break;

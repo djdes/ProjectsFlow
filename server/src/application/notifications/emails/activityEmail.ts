@@ -4,7 +4,7 @@ import { escapeHtml, renderEmailLayout } from './layout.js';
 
 export type ActivityEmailInput = {
   readonly to: string;
-  readonly type: NotifEventType;
+  readonly type: Exclude<NotifEventType, 'task_updated' | 'task_deleted'>;
   readonly projectName: string;
   readonly actorDisplayName: string;
   // Контекст события (любой текст; обрезается и экранируется внутри). Опционален.

@@ -1971,9 +1971,13 @@ export function TaskDrawer({
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     status: <TaskStatusField task={task} disabled={!canEditProp || !currentUser} beforeChange={flushDescription} onMove={onMove} onChanged={(updated) => { setStatusResult(updated); notifyChanged(); }} />,
                     project: <TaskProjectField task={task} projectName={projectName} isInbox={isInbox} disabled={!canEditProp || !currentUser} beforeChange={flushDescription} onMoved={(updated) => {
-                      notifyChanged();
-                      handleClose();
-                      if (asPage) navigate(`/projects/${updated.projectId}/tasks/${updated.id}`);
+                      if (asPage) {
+                        markViewedOnEdit();
+                        navigate(`/projects/${updated.projectId}/tasks/${updated.id}`);
+                      } else {
+                        notifyChanged();
+                        handleClose();
+                      }
                     }} />,
                     assignee: (
                       <div className="flex min-h-7 w-full min-w-0 items-center">
@@ -1990,7 +1994,7 @@ export function TaskDrawer({
                       </div>
                     ),
                     // Кто утверждает — справочный список участников с правом приёмки.
-                    approver: <TaskApproverRow projectId={task.projectId} />,
+                    approver: <TaskApproverRow projectId={task.projectId} workspaceId={task.context?.workspaceId} />,
                     deadline: (
                       <TaskDeadlineChip
                         task={task}
@@ -2134,6 +2138,7 @@ export function TaskDrawer({
                   <TaskCommentsSection
                     projectId={task.projectId}
                     taskId={task.id}
+                    canReadProject={task.context?.canReadProject}
                     onCommentCreatedRef={onCommentCreatedRef}
                     onFirstLoad={scrollBodyToBottom}
                     onCountChange={setCommentCount}
@@ -2475,6 +2480,7 @@ function TaskCommentsSection({
   // skips the inline `CommentComposer` and exposes `handleCreated` via this
   // ref so the parent's composer can push newly created comments into the list.
   onCommentCreatedRef,
+  canReadProject = true,
   // Дёргается один раз после первой успешной загрузки комментариев — drawer
   // использует это, чтобы скроллнуть body вниз (к последнему сообщению).
   onFirstLoad,
@@ -2489,6 +2495,7 @@ function TaskCommentsSection({
 }: {
   projectId: string;
   taskId: string;
+  canReadProject?: boolean;
   onCommentCreatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
   onFirstLoad?: () => void;
   onCountChange?: (count: number) => void;
@@ -2520,8 +2527,7 @@ function TaskCommentsSection({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    projectRepository
-      .listMembers(projectId)
+    (canReadProject ? projectRepository.listMembers(projectId) : Promise.resolve([]))
       .then((list) => {
         if (!cancelled) setMembers(list);
       })
@@ -2531,7 +2537,7 @@ function TaskCommentsSection({
     return () => {
       cancelled = true;
     };
-  }, [projectId, taskId, taskRepository, projectRepository, onFirstLoad]);
+  }, [projectId, taskId, taskRepository, projectRepository, onFirstLoad, canReadProject]);
 
   // Deep-link из письма/TG: ?task=X#comment-Y → скроллим к комментарию и подсвечиваем.
   // id приходит пропом (KanbanBoard ловит его из hash до того как очистит ?task=).

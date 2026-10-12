@@ -30,6 +30,7 @@ type Harness = {
   sentEmails: { to: string; subject: string }[];
   recorded: { recipientUserId: string; channel: string; status: string; reason: string | null }[];
   tgCalls: string[];
+  site: string[];
   tgSends: { userId: string; kind: string }[];
 };
 
@@ -37,6 +38,7 @@ function makeHarness(opts: {
   members: Member[];
   tgResults?: Record<string, { status: string; messageId?: number; chatId?: number; description?: string }>;
   failEmailFor?: string;
+  approvers?: string[];
   // Ответственный по задаче. undefined → 'B' (дефолт для большинства кейсов),
   // null → задача без ответственного.
   assigneeUserId?: string | null;
@@ -46,6 +48,7 @@ function makeHarness(opts: {
   const sentEmails: Harness['sentEmails'] = [];
   const recorded: Harness['recorded'] = [];
   const tgCalls: string[] = [];
+  const site: string[] = [];
   const tgSends: Harness['tgSends'] = [];
   let counter = 0;
 
@@ -56,7 +59,8 @@ function makeHarness(opts: {
       : { id: 't1', description: 'описание задачи', assignee: { userId: assigneeUserId } };
 
   const service = new DispatchCommentNotifications({
-    members: { listByProject: async () => opts.members } as never,
+    notifications: { create: async (input: { userId: string }) => { site.push(input.userId); } } as never,
+    members: { listByProject: async () => opts.members, listApproverUserIdsForProject: async () => opts.approvers ?? [] } as never,
     projects: { getById: async () => ({ id: 'p1', name: 'Проект' }) } as never,
     tasks: { getById: async () => task } as never,
     comments: {
@@ -85,7 +89,7 @@ function makeHarness(opts: {
     appUrl: 'https://app.example',
   });
 
-  return { service, sentEmails, recorded, tgCalls, tgSends };
+  return { service, sentEmails, recorded, tgCalls, tgSends, site };
 }
 
 const baseComment = {
@@ -302,4 +306,20 @@ test('сбой email → строка failed, не роняет dispatch', async
   });
   const emailRow = h.recorded.find((r) => r.channel === 'email' && r.recipientUserId === 'B');
   assert.equal(emailRow?.status, 'failed');
+});
+
+
+test('executor comment reaches all approvers on site, email and Telegram', async () => {
+  const h = makeHarness({ members: [member('A', 'Исполнитель'), member('B', 'Владелец'), member('C', 'Руководитель'), member('D', 'Посторонний')], assigneeUserId: 'A', approvers: ['B', 'C'] });
+  await h.service.execute({ projectId: 'p1', actorUserId: 'A', source: 'team', audience: { mode: 'all' }, comment: baseComment });
+  assert.deepEqual(h.site.sort(), ['B', 'C']);
+  assert.deepEqual(h.tgCalls.sort(), ['B', 'C']);
+  assert.deepEqual(h.sentEmails.map((m) => m.to).sort(), ['B@example.com', 'C@example.com']);
+});
+
+test('manager comment reaches executor and other approver, with no duplicate site mention', async () => {
+  const h = makeHarness({ members: [member('A', 'Владелец'), member('B', 'Боб'), member('C', 'Руководитель')], assigneeUserId: 'B', approvers: ['A', 'C'] });
+  await h.service.execute({ projectId: 'p1', actorUserId: 'A', source: 'team', audience: { mode: 'all' }, comment: { ...baseComment, body: '@Боб доработай' } });
+  assert.deepEqual(h.site, ['C']); // B gets the existing mention from CreateTaskComment.
+  assert.deepEqual(h.tgCalls.sort(), ['B', 'C']);
 });

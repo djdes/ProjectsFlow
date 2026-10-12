@@ -48,14 +48,9 @@ const DRAWER_TARGETS_NO_WORKER = DRAWER_TARGETS.filter((t) => t.value !== 'worke
 
 type ReplyDraft = { commentId: string; authorName: string; quotedText: string | null };
 
-// Дефолтная адресация уведомления: только ответственный за задачу. Комментарий — это почти
-// всегда обращение к тому, кто задачу делает, а не рассылка всему воркспейсу. Если
-// ответственный — сам автор комментария, уведомлять его бессмысленно: откатываемся на 'all'
-// (сервер сузит до реально причастных — автора родительского коммента и упомянутых).
-function defaultNotify(task: Task, currentUserId: string | null): NotifyAudience {
-  const assigneeId = task.assignee?.userId ?? null;
-  if (!assigneeId || assigneeId === currentUserId) return { mode: 'all' };
-  return { mode: 'selected', userIds: [assigneeId] };
+// The server resolves this to assignee + approvers + reply author, excluding the actor.
+function defaultNotify(): NotifyAudience {
+  return { mode: 'all' };
 }
 
 type Props = {
@@ -100,7 +95,7 @@ export function TaskDrawerComposer({
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
   // Адресация уведомления (по умолчанию — только ответственный за задачу).
   const [notify, setNotify] = useState<NotifyAudience>(() =>
-    defaultNotify(task, currentUser?.id ?? null),
+    defaultNotify(),
   );
   // На awaiting_clarification дефолт = «Воркеру»: юзер отвечает на ralph-question и
   // ожидаемое действие — продолжить работу. На остальных статусах берём из localStorage'а.
@@ -163,16 +158,14 @@ export function TaskDrawerComposer({
   const assigneeId = task.assignee?.userId ?? null;
   const currentUserId = currentUser?.id ?? null;
   useEffect(() => {
-    setNotify(defaultNotify(task, currentUserId));
+    setNotify(defaultNotify());
     // Пересчитываем именно по этим трём входам: реакция на весь `task` сбрасывала бы
     // ручной выбор автора на любом фоновом обновлении задачи.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id, assigneeId, currentUserId]);
 
   useEffect(() => {
     let cancelled = false;
-    projectRepository
-      .listMembers(task.projectId)
+    (task.context?.canReadProject === false ? Promise.resolve([]) : projectRepository.listMembers(task.projectId))
       .then((list) => {
         if (!cancelled) setMembers(list);
       })
@@ -182,7 +175,7 @@ export function TaskDrawerComposer({
     return () => {
       cancelled = true;
     };
-  }, [task.projectId, projectRepository]);
+  }, [task.projectId, projectRepository, task.context?.canReadProject]);
 
   // Кандидаты в @-упоминания — все участники кроме автора.
   const mentionMembers: MentionMember[] = members

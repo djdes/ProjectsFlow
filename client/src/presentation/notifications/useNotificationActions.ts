@@ -61,7 +61,12 @@ export function useNotificationActions(opts?: {
       }
       const p = n.payload;
       // Дип-линк к задаче + конкретному комментарию (KanbanBoard ловит ?task=, TaskDrawer — #comment-).
-      if (p.type === 'comment_mention')
+      if (p.type === 'task_changed') {
+        if (p.taskAvailable) navigate(`/projects/${p.projectId}/tasks/${p.taskId}${p.commentId ? `#comment-${p.commentId}` : ''}`);
+        else toast.info(p.action === 'deleted' ? 'Задача удалена' : 'Доступ к задаче изменился');
+      }
+      else if (p.type === 'task_approval_requested') navigate(`/projects/${p.projectId}/tasks/${p.taskId}`);
+      else if (p.type === 'comment_mention')
         navigate(`/projects/${p.projectId}?task=${p.taskId}#comment-${p.commentId}`);
       else if (p.type === 'join_request') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'task_assignee_changed')

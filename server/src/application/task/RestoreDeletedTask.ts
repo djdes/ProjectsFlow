@@ -33,7 +33,7 @@ export class RestoreDeletedTask {
     // повторный клик «Отменить» не падал ошибкой (идемпотентность Undo).
     if (!trashed.deletedAt) return trashed;
 
-    const restored = await this.deps.tasks.restore(taskId);
+    const restored = await this.deps.tasks.restore(taskId, actorUserId);
     if (!restored) throw new TaskNotFoundError(taskId);
     return restored;
   }

@@ -10,10 +10,6 @@ import type { WorkerPolicy } from '../workspace/WorkerPolicy.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
-import type { UserRepository } from '../user/UserRepository.js';
-import type { NotificationRepository } from '../notifications/NotificationRepository.js';
-import type { EmailSender } from '../notifications/EmailSender.js';
-import { renderTaskAssigneeEmail } from '../notifications/emails/taskAssigneeEmail.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import type { Project } from '../../domain/project/Project.js';
 import { moscowDateOnly } from '../../domain/time/moscowDate.js';
@@ -26,12 +22,8 @@ type Deps = {
   // Воркер пространства (db/152). Опционален: старые сборки/тесты работают как раньше.
   readonly workerPolicy?: WorkerPolicy;
   readonly tasks: TaskRepository;
-  readonly users: UserRepository;
-  readonly notifications: NotificationRepository;
-  readonly email: EmailSender;
   readonly idGen: () => string;
   // Base URL для ссылки на задачу в уведомлении.
-  readonly appUrl: string;
   // Лента действий (best-effort). Опционально — старые caller'ы/тесты не ломаются.
   readonly activityRecorder?: ActivityRecorder;
   // Источник времени для дефолтного срока «сегодня». Опционален, чтобы не переписывать
@@ -186,11 +178,6 @@ export class CreateTask {
       kind: 'task_created',
       payload: { taskId: task.id, taskExcerpt: description.slice(0, 120) },
     });
-    if (assigneeUserId !== input.ownerUserId) {
-      void this.notifyAssigned(task, input.ownerUserId, targetProject).catch((err: unknown) => {
-        console.error('[task:assignee:create] notify failed:', err);
-      });
-    }
     return task;
   }
 
@@ -258,43 +245,4 @@ export class CreateTask {
     if (!membership) throw new AssigneeNotProjectMemberError();
   }
 
-  private async notifyAssigned(
-    task: Task,
-    actorUserId: string,
-    project: Project,
-  ): Promise<void> {
-    const [assignee, actor] = await Promise.all([
-      this.deps.users.getById(task.assignee.userId),
-      this.deps.users.getById(actorUserId),
-    ]);
-    if (!assignee) return;
-
-    const taskExcerpt = (task.description ?? '').slice(0, 120);
-    const actorDisplayName = actor?.displayName ?? 'Кто-то';
-    const base = this.deps.appUrl.replace(/\/$/u, '');
-    const taskUrl = project.isInbox ? `${base}/inbox` : `${base}/projects/${project.id}`;
-
-    await this.deps.notifications.create({
-      id: this.deps.idGen(),
-      userId: assignee.id,
-      payload: {
-        type: 'task_assignee_changed',
-        taskId: task.id,
-        projectId: project.id,
-        projectName: project.name,
-        isInbox: project.isInbox,
-        taskExcerpt,
-        actorUserId,
-        actorDisplayName,
-      },
-    });
-
-    const message = renderTaskAssigneeEmail({
-      to: assignee.email,
-      actorDisplayName,
-      taskExcerpt,
-      taskUrl,
-    });
-    await this.deps.email.send(message);
-  }
 }

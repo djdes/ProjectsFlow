@@ -12,6 +12,8 @@ import { renderActivityEmail } from './emails/activityEmail.js';
 import { buildTaskUrl } from './taskUrl.js';
 import { parseMentions } from '../task/parseMentions.js';
 import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
+import type { NotificationRepository } from './NotificationRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
 
 export type DispatchCommentAudience = {
   readonly mode: CommentNotifyMode;
@@ -46,6 +48,8 @@ type Deps = {
   readonly log: CommentNotificationLogRepository;
   readonly idGen: () => string;
   readonly appUrl: string;
+  readonly notifications?: NotificationRepository;
+  readonly users?: UserRepository;
 };
 
 function escapeTgHtml(s: string): string {
@@ -72,12 +76,27 @@ export class DispatchCommentNotifications {
 
   async execute(input: DispatchCommentInput): Promise<void> {
     const { comment } = input;
-    const [project, members, task] = await Promise.all([
+    const [project, projectMembers, task] = await Promise.all([
       this.deps.projects.getById(input.projectId),
       this.deps.members.listByProject(input.projectId),
       this.deps.tasks.getById(comment.taskId),
     ]);
     if (!project) return;
+
+    const approverIds = await this.deps.members.listApproverUserIdsForProject?.(input.projectId) ?? [];
+    const members = [...projectMembers];
+    // Inbox membership contains only its owner; approvers and a delegated assignee
+    // are task-scoped participants, resolved separately without broadening the project.
+    if (project.isInbox && this.deps.users) {
+      const involved = new Set([...approverIds, ...(task?.assignee?.userId ? [task.assignee.userId] : [])]);
+      for (const userId of involved) {
+        if (members.some((m) => m.userId === userId)) continue;
+        if (await this.deps.members.isProjectHidden?.(project.id, userId)) continue;
+        const user = await this.deps.users.getById(userId);
+        if (user) members.push({ projectId: project.id, userId, role: 'viewer', joinedAt: new Date(), user,
+          notificationPrefs: await this.deps.members.getNotificationPrefs(project.id, userId) });
+      }
+    }
 
     const projectName = project.name;
     const actorName =
@@ -89,10 +108,11 @@ export class DispatchCommentNotifications {
 
     // Упомянутые (@mention) — всегда получают email, даже если не в base и при pref-off.
     const mentionedIds = new Set(parseMentions(comment.body, members, input.actorUserId));
+    const siteMentionedIds = new Set(parseMentions(comment.body, projectMembers, input.actorUserId));
 
     // База адресации (для обоих каналов) по выбору автора. Assignee типизирован как
     // обязательный, но задача могла не найтись (удалена) — оптчейн вместо падения рассылки.
-    const base = await this.resolveBase(nonActor, input, task?.assignee?.userId ?? null);
+    const base = await this.resolveBase(nonActor, input, task?.assignee?.userId ?? null, approverIds);
     const baseIds = new Set(base.map((m) => m.userId));
 
     const url = buildTaskUrl(this.deps.appUrl, input.projectId, comment.taskId, comment.id);
@@ -102,6 +122,23 @@ export class DispatchCommentNotifications {
     const emailTargets = new Map<string, ProjectMemberWithUser>();
     for (const m of base) emailTargets.set(m.userId, m);
     for (const m of nonActor) if (mentionedIds.has(m.userId)) emailTargets.set(m.userId, m);
+
+    // Mentions already have a site notification from CreateTaskComment. The other
+    // participants now receive the same event on the site as by email/Telegram.
+    await Promise.all(base.filter((m) => !siteMentionedIds.has(m.userId)).map(async (m) => {
+      try {
+        await this.deps.notifications?.create({
+          id: this.deps.idGen(), userId: m.userId,
+          payload: {
+            type: 'task_changed', action: 'commented', title: 'Новый комментарий',
+            projectId: project.id, projectName, taskId: comment.taskId,
+            taskExcerpt: (task?.description ?? '').slice(0, 240),
+            detail: comment.body.slice(0, 500), commentId: comment.id,
+            actorUserId: input.actorUserId, actorDisplayName: actorName, taskAvailable: true,
+          },
+        });
+      } catch (error) { console.warn('[comments] site notification failed:', error); }
+    }));
 
     for (const m of emailTargets.values()) {
       const forced = mentionedIds.has(m.userId);
@@ -149,6 +186,7 @@ export class DispatchCommentNotifications {
           taskId: comment.taskId,
           // projectId → инлайн «Завершить/Комментировать» + reply-комментарий на уведомление.
           projectId: input.projectId,
+          skipDedupCheck: true,
         });
         rows.push(this.tgRow(comment.id, m.userId, r));
       } catch (e) {
@@ -181,6 +219,7 @@ export class DispatchCommentNotifications {
           kind: 'mention',
           taskId: comment.taskId,
           projectId: input.projectId,
+          skipDedupCheck: true,
         });
         rows.push(this.tgRow(comment.id, m.userId, r));
       } catch (e) {
@@ -205,8 +244,8 @@ export class DispatchCommentNotifications {
   // who have nothing to do with the task. Same regression that was fixed for status changes
   // in BroadcastTelegramNotificationByTask.
   //
-  // 'all' now means "everyone actually involved in this comment": the task assignee plus the
-  // author of the comment being replied to. Mentioned users are added on top of the base by
+  // 'all' means the task assignee, workspace approvers and the author of a reply's parent.
+  // Mentioned users are added on top of the base by
   // each channel separately (e-mail: forced; Telegram: its own kind 'mention'), so they are
   // deliberately NOT part of the base here. The comment author is always excluded (nonActor).
   // An empty result is legitimate (unassigned task, no reply) and must not break the dispatch.
@@ -214,6 +253,7 @@ export class DispatchCommentNotifications {
     nonActor: readonly ProjectMemberWithUser[],
     input: DispatchCommentInput,
     assigneeUserId: string | null,
+    approverIds: readonly string[],
   ): Promise<ProjectMemberWithUser[]> {
     const audience = input.audience;
     if (audience.mode === 'none') return [];
@@ -222,7 +262,7 @@ export class DispatchCommentNotifications {
       return nonActor.filter((m) => want.has(m.userId));
     }
 
-    const involved = new Set<string>();
+    const involved = new Set<string>(approverIds);
     if (assigneeUserId) involved.add(assigneeUserId);
     const replyToAuthorId = await this.replyToAuthorId(input.comment.replyToCommentId ?? null);
     if (replyToAuthorId) involved.add(replyToAuthorId);

@@ -158,7 +158,23 @@ export type SupportTicketPayload = {
   readonly submitterDisplayName: string | null;
 };
 
+export type TaskChangedPayload = {
+  readonly type: 'task_changed';
+  readonly commentId?: string;
+  readonly taskId: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly taskExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+  readonly action: string;
+  readonly title: string;
+  readonly detail: string;
+  readonly taskAvailable: boolean;
+};
+
 export type NotificationPayload =
+  | TaskChangedPayload
   | CommentMentionPayload
   | ProjectInvitePayload
   | WorkspaceInvitePayload

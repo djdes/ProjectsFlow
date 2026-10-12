@@ -1286,9 +1286,6 @@ export class TelegramComposerService {
           projectId: targetId,
         });
       }
-      if (draft.assigneeUserId && draft.assigneeUserId !== userId) {
-        await this.notifyAssignee(draft.assigneeUserId, draft.projectId, task.id, targetId, userId, text);
-      }
 
       const projName = await this.projNameOf(draft.projectId);
       const assigneeSuffix = draft.assigneeUserId
@@ -1328,48 +1325,6 @@ export class TelegramComposerService {
           showAlert: true,
         });
       }
-    }
-  }
-
-  // TG-карточка новому ответственному: кнопки действий по задаче. Reply на карточку =
-  // комментарий (существующий механизм telegram_task_messages).
-  private async notifyAssignee(
-    assigneeUserId: string,
-    // draft.projectId (null = «Входящие») — только для строки-контекста «Проект: …».
-    sourceProjectId: string | null,
-    taskId: string,
-    projectId: string,
-    creatorUserId: string,
-    text: string,
-  ): Promise<void> {
-    const creator = await this.deps.users.getById(creatorUserId);
-    const creatorName = creator?.displayName ?? 'Коллега';
-    const projName = sourceProjectId
-      ? ((await this.deps.projects.getById(sourceProjectId))?.name ?? null)
-      : null;
-    const ctx = projName ? ` Проект: <b>${escapeHtml(projName)}</b>.` : ' (во «Входящие»).';
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> назначил(а) тебя ответственным:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
-    const openBtn = [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }];
-    const res = await this.deps.sendNotification.execute({
-      userId: assigneeUserId,
-      text: msg,
-      parseMode: 'HTML',
-      kind: 'task_assignee_changed',
-      taskId,
-      replyMarkup: {
-        inline_keyboard: [...taskActionKeyboard(taskId).inline_keyboard, openBtn],
-      },
-      skipPrefsCheck: true, // важное — должно дойти независимо от prefs
-      skipDedupCheck: true,
-    });
-    if (res.status === 'ok') {
-      await this.deps.taskMessages.upsert({
-        tgChatId: res.chatId,
-        tgMessageId: res.messageId,
-        recipientUserId: assigneeUserId,
-        taskId,
-        projectId,
-      });
     }
   }
 
@@ -2524,9 +2479,6 @@ export class TelegramComposerService {
         lastTaskId = task.id;
         lastProjectId = targetId;
         const projName = await this.projNameOf(seg.projectId);
-        if (assigneeUserId) {
-          await this.notifySegmentAssignee(seg, task.id, targetId, userId, description);
-        }
         summary.push(`✅ ${escapeHtml(title || excerpt(body, 40))} → <b>${escapeHtml(projName)}</b>`);
       } catch (err) {
         console.warn('[tg-composer] finalizeSegments: segment failed:', err);
@@ -2687,45 +2639,6 @@ export class TelegramComposerService {
       (s) => `- [${mdLinkLabel(s.label)}](${base}/projects/${s.projectId}?task=${s.taskId})`,
     );
     return `**Связанные задачи из этого же сообщения:**\n\n${lines.join('\n')}`;
-  }
-
-  // TG-уведомление ответственному сегмента: кнопки Завершить/Комментировать.
-  private async notifySegmentAssignee(
-    seg: TelegramDraftSegment,
-    taskId: string,
-    projectId: string,
-    creatorUserId: string,
-    description: string,
-  ): Promise<void> {
-    if (!seg.assigneeUserId) return;
-    const creator = await this.deps.users.getById(creatorUserId);
-    const creatorName = creator?.displayName ?? 'Коллега';
-    const projName = await this.projNameOf(seg.projectId);
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> назначил(а) тебя ответственным:\n📝 <i>${markdownToTelegramHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
-    const res = await this.deps.sendNotification.execute({
-      userId: seg.assigneeUserId,
-      text: msg,
-      parseMode: 'HTML',
-      kind: 'task_assignee_changed',
-      taskId,
-      replyMarkup: {
-        inline_keyboard: [
-          ...taskActionKeyboard(taskId).inline_keyboard,
-          [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }],
-        ],
-      },
-      skipPrefsCheck: true,
-      skipDedupCheck: true,
-    });
-    if (res.status === 'ok') {
-      await this.deps.taskMessages.upsert({
-        tgChatId: res.chatId,
-        tgMessageId: res.messageId,
-        recipientUserId: seg.assigneeUserId,
-        taskId,
-        projectId,
-      });
-    }
   }
 
   // Telegram files become ordinary task attachments. Native photos also remain figure blocks in

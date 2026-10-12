@@ -16,18 +16,19 @@ import { PROPERTY_CARET_CLASS, PROPERTY_VALUE_CLASS } from './PropertyRow';
  * и владелец пространства (TaskApprovalService.canApprove). По нажатию открывается
  * справочный список с именами и ролями. Если приёмка выключена, показываем «Не требуется».
  */
-export function TaskApproverRow({ projectId }: { projectId: string }): React.ReactElement {
+export function TaskApproverRow({ projectId, workspaceId: knownWorkspaceId }: { projectId: string; workspaceId?: string }): React.ReactElement {
   const { workspaceRepository, projectRepository } = useContainer();
   const { data: workspaces } = useWorkspaces();
   const [projectWorkspaceId, setProjectWorkspaceId] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    setProjectWorkspaceId(null);
+    setProjectWorkspaceId(knownWorkspaceId ?? null);
+    if (knownWorkspaceId) return;
     void projectRepository.getById(projectId).then((p) => {
       if (!cancelled) setProjectWorkspaceId(p?.workspaceId ?? null);
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [projectRepository, projectId]);
+  }, [projectRepository, projectId, knownWorkspaceId]);
   const workspace = (workspaces ?? []).find((w) => projectWorkspaceId ? w.id === projectWorkspaceId : w.isCurrent) ?? null;
   const workspaceId = workspace?.id ?? null;
   const enabled = workspace?.requireTaskApproval ?? false;

@@ -59,6 +59,14 @@ export function NotificationItem({
       </span>
       {/* Компактные action-кнопки внутри карточки: меньше высота/паддинги/шрифт. */}
       <div className="space-y-0.5 [&_button]:h-7 [&_button]:gap-1 [&_button]:px-2.5 [&_button]:text-xs">
+        {payload.type === 'task_changed' && (
+          <>
+            <p className="text-sm font-medium leading-tight">{payload.title}</p>
+            <p className="text-xs text-muted-foreground">{payload.actorDisplayName} · {payload.projectName}</p>
+            <p className="line-clamp-2 text-sm">{payload.taskExcerpt}</p>
+            {payload.detail && <p className="whitespace-pre-line text-xs text-muted-foreground">{payload.detail}</p>}
+          </>
+        )}
         {payload.type === 'comment_mention' && (
           <>
             <p className="text-sm leading-tight">

@@ -4,6 +4,8 @@ export const VERSION_FIELD_OPTIONS: ReadonlyArray<{
   readonly field: TaskVersionField;
   readonly label: string;
 }> = [
+  { field: 'deleted', label: 'Удаление' },
+  { field: 'restored', label: 'Восстановление' },
   { field: 'created', label: 'Создание задачи' },
   { field: 'status', label: 'Статус' },
   { field: 'deadline', label: 'Дедлайн и даты' },

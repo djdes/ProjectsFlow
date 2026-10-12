@@ -93,6 +93,7 @@ export type TaskDigestResult = {
 };
 
 export interface TaskRepository {
+  get(projectId: string, taskId: string): Promise<Task>;
   list(projectId: string): Promise<Task[]>;
   create(projectId: string, input: CreateTaskInput): Promise<Task>;
   update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task>;

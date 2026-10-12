@@ -997,7 +997,6 @@ export function agentApiRouter(deps: Deps): Router {
           priority: body.priority ?? null,
           taskType: body.taskType ?? null,
         });
-        void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'mcp').catch(() => {});
         // taskToDto ожидает Task с commitCount, но из CreateTask он не приходит — оборачиваем
         // вручную с нулевым счётчиком; в БД у новой задачи коммитов нет по определению.
         res.status(201).json({ task: taskToDto({ ...task, commitCount: 0 }) });
@@ -1117,22 +1116,6 @@ export function agentApiRouter(deps: Deps): Router {
         // Адресные уведомления (email + TG) + журнал доставки, источник 'mcp'.
         // Для mcp дефолт comment_created — off: спама нет, но журнал зафиксирует
         // skipped/pref_off, а упомянутые (@mention) получат email принудительно.
-        void deps.dispatchCommentNotifications
-          .execute({
-            projectId,
-            actorUserId: req.user!.id,
-            source: 'mcp',
-            audience: { mode: 'all' },
-            comment: {
-              id: comment.id,
-              taskId,
-              body: body.body,
-              actorKind: comment.actorKind,
-              agentName: comment.agentName,
-              replyToCommentId: comment.replyToCommentId,
-            },
-          })
-          .catch((err) => console.warn('[agent/comment-dispatch] failed:', err));
         deps.notifyCommentAdded(
           projectId,
           taskId,
@@ -1232,9 +1215,6 @@ export function agentApiRouter(deps: Deps): Router {
         if (before && before.status !== task.status) {
           deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
         }
-        if (body.targetStatus === 'done') {
-          void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'mcp').catch(() => {});
-        }
         res.json({ task: taskToDto(task) });
       } catch (e) {
         next(e);
@@ -1283,7 +1263,6 @@ export function agentApiRouter(deps: Deps): Router {
           taskId,
           sha: body.sha,
         });
-        void deps.notifier.onCommitLinked(projectId, req.user!.id, taskId, 'mcp').catch(() => {});
         res.status(201).json({ commit: commitToDto(commit) });
       } catch (e) {
         next(e);

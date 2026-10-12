@@ -86,6 +86,14 @@ export const RALPH_MODE_META: Record<RalphMode, { label: string; description: st
 };
 
 export type Task = {
+  // Task-scoped capability returned by the direct task endpoint.
+  readonly canEdit?: boolean;
+  readonly context?: {
+    readonly projectName: string;
+    readonly workspaceId: string;
+    readonly isInbox: boolean;
+    readonly canReadProject: boolean;
+  };
   readonly id: string;
   readonly projectId: string;
   // Исторический автор. Показывается только рядом с датой в свойстве «Создано» и

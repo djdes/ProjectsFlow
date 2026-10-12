@@ -77,7 +77,7 @@ export function NotifyAudienceControl({
     selectedIds.size === 1 ? members.find((m) => selectedIds.has(m.userId)) : undefined;
   const triggerLabel =
     value.mode !== 'selected'
-      ? `Все (${members.length})`
+      ? 'По задаче'
       : (soleSelected?.user.displayName ?? `Выбрано: ${selectedIds.size}`);
 
   const toggleMember = (userId: string): void => {
@@ -180,7 +180,7 @@ export function NotifyAudienceControl({
                 <span className="grid size-5 place-items-center rounded-full bg-muted">
                   <Users className="size-3" />
                 </span>
-                Все ({members.length})
+                Участники задачи
               </span>
             </DropdownMenuCheckboxItem>
             {members.length > 0 && <DropdownMenuSeparator />}

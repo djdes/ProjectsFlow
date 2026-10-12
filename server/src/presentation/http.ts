@@ -111,6 +111,7 @@ import type { GetKbDocument } from '../application/kb/GetKbDocument.js';
 import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
+import type { GetTask } from '../application/task/GetTask.js';
 import type { ListTasks } from '../application/task/ListTasks.js';
 import type { AttachmentStorage } from '../application/task/AttachmentStorage.js';
 import type { TaskVersionRepository } from '../application/task/TaskVersionRepository.js';
@@ -601,6 +602,7 @@ type AppDeps = {
   };
   readonly tasks: {
     readonly listTasks: ListTasks;
+    readonly getTask: GetTask;
     readonly createTask: CreateTask;
     readonly updateTask: UpdateTask;
     readonly moveTask: MoveTask;

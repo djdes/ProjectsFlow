@@ -37,11 +37,18 @@ export type TaskAccessResult = {
   readonly isAssignee: boolean;
 };
 
+// Approvers act on individual tasks in their workspace. This does not grant access
+// to the personal inbox project or expose it in the project list.
+async function isInboxApprover(deps: TaskAccessDeps, project: Project, userId: string): Promise<boolean> {
+  if (await deps.members.isProjectHidden?.(project.id, userId)) return false;
+  return (await deps.members.listApproverUserIdsForProject?.(project.id) ?? []).includes(userId);
+}
+
 /**
  * Личные задачи приватны. Чужую личную задачу (во «Входящих» коллеги) кроме владельца и
- * ответственного видит и меняет только тот, кто её поставил, — пока он остаётся коллегой
- * владельца (участник общего пространства). Так поручение коллеге не теряется из виду, а
- * собственные личные задачи коллеги остаются только его.
+ * ответственного видит и меняет поставивший её коллега и принимающие работу руководители
+ * этого пространства. Руководитель получает доступ к конкретной задаче из уведомления,
+ * а не к приватному проекту входящих. Остальные коллеги чужие личные задачи не видят.
  *
  * Раньше любой участник общего пространства видел, двигал и удалял ВСЕ личные задачи коллег:
  * после приглашения в пространство чужие «на сегодня» оказывались у всех во «Входящих».
@@ -80,6 +87,9 @@ export async function requireTaskModifyAccess(
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
+    if (await isInboxApprover(deps, project, userId)) {
+      return { project, isAssignee: task.assignee.userId === userId };
+    }
     if (project.ownerId === userId) {
       return { project, isAssignee: task.assignee.userId === userId };
     }
@@ -119,6 +129,9 @@ export async function requireTaskReadAccess(
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
+    if (await isInboxApprover(deps, project, userId)) {
+      return { project, isAssignee: task.assignee.userId === userId };
+    }
     if (project.ownerId === userId) {
       return { project, isAssignee: task.assignee.userId === userId };
     }
@@ -151,6 +164,7 @@ export async function requireTaskDeleteAccess(
   if (!project) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
+    if (await isInboxApprover(deps, project, userId)) return { project, isAssignee: false };
     if (project.ownerId === userId) return { project, isAssignee: false };
     const task = options.includeDeleted
       ? await deps.tasks.getByIdIncludingDeleted(taskId)

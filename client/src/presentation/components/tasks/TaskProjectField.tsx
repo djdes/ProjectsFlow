@@ -31,9 +31,10 @@ export function TaskProjectField({ task, projectName, isInbox, disabled, beforeC
   useEffect(() => {
     let cancelled = false;
     setSource(null);
+    if (task.context?.canReadProject === false) return;
     void projectRepository.getById(task.projectId).then((value) => { if (!cancelled) setSource(value); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [projectRepository, task.projectId]);
+  }, [projectRepository, task.projectId, task.context?.canReadProject]);
   const canMove = !disabled && !!source && !!user && canTransferProject(source, user.id);
   const load = async (): Promise<void> => {
     setError(false);

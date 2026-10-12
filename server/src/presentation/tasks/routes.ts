@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import type { ListTasks, TaskWithCounts } from '../../application/task/ListTasks.js';
+import type { GetTask } from '../../application/task/GetTask.js';
 import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { UpdateTask } from '../../application/task/UpdateTask.js';
 import type { GetTaskVersions } from '../../application/task/GetTaskVersions.js';
@@ -30,7 +31,6 @@ import type { MoveTaskToProject } from '../../application/task/MoveTaskToProject
 import type { ChangeTaskAssignee } from '../../application/task/ChangeTaskAssignee.js';
 import type { ExportTasksDigest } from '../../application/task/ExportTasksDigest.js';
 import type { Task } from '../../domain/task/Task.js';
-import { STATUS_LABEL as TASK_STATUS_LABEL } from '../../domain/task/statusLabels.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
@@ -42,7 +42,6 @@ import type { GetCommentNotifications } from '../../application/task/GetCommentN
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
-import { markdownToTelegramHtml } from '../../application/telegram/telegramMarkdown.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import {
   assignToProjectSchema,
@@ -59,6 +58,7 @@ import {
 
 type Deps = {
   readonly listTasks: ListTasks;
+  readonly getTask: GetTask;
   readonly createTask: CreateTask;
   readonly updateTask: UpdateTask;
   readonly moveTask: MoveTask;
@@ -210,39 +210,7 @@ function attachmentToDto(att: TaskAttachment): AttachmentDto {
   };
 }
 
-// Статус-лейблы для TG-сообщений. Своей копии больше нет: у неё уже успело разъехаться
-// написание ('В ручную' против 'Вручную' в сводках). Единый источник — domain/task/statusLabels.
-const TG_STATUS_LABEL: Record<string, string> = TASK_STATUS_LABEL;
 
-function tgExcerpt(text: string | null, limit = 100): string {
-  const s = (text ?? '').trim().replace(/\s+/g, ' ');
-  return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
-}
-
-// Best-effort Telegram broadcast. Ошибки не влияют на HTTP-ответ.
-function fireTgBroadcast(
-  deps: Pick<Deps, 'broadcastTelegram' | 'projectRepo'>,
-  taskId: string,
-  projectId: string,
-  skipUserId: string,
-  buildText: (projectName: string) => string,
-  kind: string,
-): void {
-  void (async () => {
-    const project = await deps.projectRepo.getById(projectId);
-    const projectName = project?.name ?? 'проект';
-    await deps.broadcastTelegram.execute({
-      taskId,
-      text: buildText(projectName),
-      kind,
-      parseMode: 'HTML',
-      respectPrefs: true,
-      skipUserId,
-    });
-  })().catch((err) => {
-    console.warn('[tasks/tg-broadcast] failed:', err);
-  });
-}
 
 export function tasksRouter(deps: Deps): Router {
   const router = Router({ mergeParams: true });
@@ -299,11 +267,6 @@ export function tasksRouter(deps: Deps): Router {
         taskType: body.taskType ?? null,
       });
       deps.notifyTaskChanged(projectId);
-      void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
-      fireTgBroadcast(deps, task.id, projectId, req.user!.id, (pn) =>
-        `📋 Новая задача в «${pn}»:\n<i>${markdownToTelegramHtml(tgExcerpt(task.description))}</i>`,
-        'comment_on_my_task',
-      );
       res.status(201).json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -429,9 +392,6 @@ export function tasksRouter(deps: Deps): Router {
         deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         if (before && before.status !== task.status) {
           deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
-          void deps.notifier
-            .onStatusChanged(projectId, req.user!.id, task, before.status, task.status, 'team')
-            .catch(() => {});
         }
         // commentId наружу: клиент догружает в этот комментарий вложения («что доделать»
         // скриншотом) отдельными multipart-запросами.
@@ -459,9 +419,6 @@ export function tasksRouter(deps: Deps): Router {
         deps.notifyTaskChanged(projectId, [task.assignee.userId]);
         if (before && before.status !== task.status) {
           deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
-          void deps.notifier
-            .onStatusChanged(projectId, req.user!.id, task, before.status, task.status, 'team')
-            .catch(() => {});
         }
         res.json({ task: toDto(task) });
       } catch (e) {
@@ -490,17 +447,7 @@ export function tasksRouter(deps: Deps): Router {
       deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       if (before && before.status !== task.status) {
         deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
-        if (body.targetStatus === 'done') {
-          void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'team').catch(() => {});
-        } else {
-          void deps.notifier.onStatusChanged(projectId, req.user!.id, task, before.status, task.status, 'team').catch(() => {});
-        }
-        const oldLabel = TG_STATUS_LABEL[before.status] ?? before.status;
-        const newLabel = TG_STATUS_LABEL[task.status] ?? task.status;
-        fireTgBroadcast(deps, taskId, projectId, req.user!.id, (pn) =>
-          `🔄 Статус задачи изменён в «${pn}» (${oldLabel} → ${newLabel}):\n<i>${markdownToTelegramHtml(tgExcerpt(task.description))}</i>`,
-          'status_change',
-        );
+
       }
       res.json({ task: toDto(task) });
     } catch (e) {
@@ -665,7 +612,6 @@ export function tasksRouter(deps: Deps): Router {
         taskId,
         sha: body.sha,
       });
-      void deps.notifier.onCommitLinked(projectId, req.user!.id, taskId, 'team').catch(() => {});
       res.status(201).json({ commit: commitToDto(commit) });
     } catch (e) {
       next(e);
@@ -807,6 +753,7 @@ export function tasksRouter(deps: Deps): Router {
         // Все человеческие роуты — actorKind='user' (default, но явно для читаемости).
         actorKind: 'user',
         notifyMode: audience.mode,
+        notifyUserIds: audience.userIds,
         replyToCommentId: body.replyToCommentId ?? null,
         quotedText: body.quotedText ?? null,
       });
@@ -840,25 +787,6 @@ export function tasksRouter(deps: Deps): Router {
       } catch (err) {
         console.warn('[auto-reopen] failed for task', taskId, err);
       }
-      // Адресные уведомления (email + Telegram) + журнал доставки. Один оркестратор
-      // вместо раздельных onComment/fireTgBroadcast — единый источник «кто уведомлён».
-      // Fire-and-forget: ошибки рассылки не влияют на ответ.
-      void deps.dispatchCommentNotifications
-        .execute({
-          projectId,
-          actorUserId: req.user!.id,
-          source: 'team',
-          audience,
-          comment: {
-            id: comment.id,
-            taskId,
-            body: body.body,
-            actorKind: comment.actorKind,
-            agentName: comment.agentName,
-            replyToCommentId: comment.replyToCommentId,
-          },
-        })
-        .catch((err) => console.warn('[tasks/comment-dispatch] failed:', err));
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {
       next(e);
@@ -950,5 +878,11 @@ export function tasksRouter(deps: Deps): Router {
     },
   );
 
+  router.get('/:taskId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const task = await deps.getTask.execute(req.params['projectId'] as string, req.user!.id, req.params['taskId'] as string);
+      res.json({ task: toDto(task) });
+    } catch (error) { next(error); }
+  });
   return router;
 }

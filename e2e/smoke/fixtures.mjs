@@ -368,13 +368,17 @@ function getRoutes(state) {
     [/^\/workspaces\/([^/]+)\/chat\/participants$/, () =>
       json({ participants: PEOPLE.map((p) => ({ userId: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl })) })],
     [/^\/workspaces\/([^/]+)\/chat\/messages$/, () => json({ messages: [] })],
-    [/^\/workspaces\/([^/]+)\/feed$/, () => json({ items: [], nextBefore: null })],
+    [/^\/workspaces\/([^/]+)\/feed$/, () => json({ items: state.feed ?? [], nextBefore: null })],
 
     [/^\/projects$/, () => json({ projects: state.projects })],
     [/^\/inbox$/, () => json({ project: projectById(INBOX_ID) })],
     [/^\/projects\/([^/]+)$/, ([, id]) => {
       const project = projectById(id);
       return project ? json({ project }) : json({ error: 'not_found' }, 404);
+    }],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)$/, ([, projectId, taskId]) => {
+      const task = state.tasks.find((t) => t.id === taskId && t.projectId === projectId);
+      return task ? json({ task }) : json({ error: 'not_found' }, 404);
     }],
     [/^\/projects\/([^/]+)\/tasks$/, ([, id]) =>
       json({ tasks: state.tasks.filter((t) => t.projectId === id) })],
@@ -586,6 +590,7 @@ function mutate(state, method, path, body) {
     return json({ prefs: state.uiPrefs });
   }
   if (method === 'PUT' && path === '/me/kanban-colors') return json({ colors: body?.colors ?? {} });
+  if (method === 'POST' && /^\/notifications\/[^/]+\/read$/.test(path)) return noContent();
   if (method === 'POST' && path === '/recent-task-views') return noContent();
   if (method === 'PUT' && path === '/workspaces/current') return noContent();
   if (method === 'POST' && path === '/auth/logout') return noContent();

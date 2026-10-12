@@ -164,15 +164,7 @@ export class CompleteCommitSyncJob {
         { status: target, statusBeforeDone: task.status },
         job.dispatcherUserId,
       );
-      if (project && updated && target === 'pending_approval') {
-        void this.deps.approval
-          .notifyApprovalRequested({
-            task: updated,
-            project,
-            actorUserId: job.dispatcherUserId,
-          })
-          .catch((err: unknown) => console.error('[task:approval] notify failed:', err));
-      }
+
       handledTasks.add(task.id);
       moved.push(m);
       await this.tryLinkCommit(job.projectId, job.dispatcherUserId, task, m.commitSha);

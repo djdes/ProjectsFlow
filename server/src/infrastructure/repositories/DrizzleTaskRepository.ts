@@ -311,6 +311,7 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async softDelete(taskId: string, deletedByUserId: string | null): Promise<boolean> {
+    const before = this.history ? await this.getById(taskId) : null;
     // Идемпотентно: повторный клик «Удалить» (двойной клик / ретрай запроса) не должен
     // переписывать deleted_at — иначе окно Undo и порядок в корзине уезжают.
     // Подзадачи НЕ отвязываем (в отличие от физического deleteWithChildren): parent_task_id
@@ -320,16 +321,20 @@ export class DrizzleTaskRepository implements TaskRepository {
       .set({ deletedAt: sql`CURRENT_TIMESTAMP`, deletedBy: deletedByUserId })
       .where(activeTasks(eq(tasks.id, taskId)));
     const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+    if (affected > 0 && before) await this.history?.record(before, deletedByUserId, before, ['deleted']);
     return affected > 0;
   }
 
-  async restore(taskId: string): Promise<Task | null> {
+  async restore(taskId: string, actorUserId: string | null = null): Promise<Task | null> {
+    const before = this.history ? await this.getByIdIncludingDeleted(taskId) : null;
     // Снимаем метку и читаем задачу обратно — тот же id, те же комментарии/версии/коммиты.
     await this.db
       .update(tasks)
       .set({ deletedAt: null, deletedBy: null })
       .where(and(eq(tasks.id, taskId), taskDeleted()));
-    return this.getById(taskId);
+    const restored = await this.getById(taskId);
+    if (restored && before?.deletedAt) await this.history?.record(restored, actorUserId, before, ['restored']);
+    return restored;
   }
 
   async delete(taskId: string): Promise<boolean> {

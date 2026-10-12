@@ -1,3 +1,4 @@
+import type { TaskChange } from '../../domain/notifications/TaskChange.js';
 import type { Task } from '../../domain/task/Task.js';
 import {
   changedTaskFields,
@@ -8,6 +9,7 @@ import type { TaskVersionRepository } from './TaskVersionRepository.js';
 
 type Deps = {
   readonly versions: TaskVersionRepository;
+  readonly onChanged?: (change: TaskChange) => Promise<void>;
   readonly idGen: () => string;
   readonly onRecorded?: (event: {
     readonly projectId: string;
@@ -37,6 +39,13 @@ export class TaskVersionRecorder {
       snapshot,
     );
     if (changedFields.length === 0) return;
+    // The task is already committed. A history-storage failure must not suppress
+    // business notifications, and transport latency must not block task editing.
+    if (this.deps.onChanged) {
+      void Promise.resolve().then(() => this.deps.onChanged!({
+        task, previous, actorUserId, changedFields,
+      })).catch((error: unknown) => console.warn('[task-notifications] dispatch failed', error));
+    }
     const createdAt = new Date();
     try {
       await this.deps.versions.create({

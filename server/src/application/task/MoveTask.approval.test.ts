@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Task, TaskStatus } from '../../domain/task/Task.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
+import { DispatchTaskChangeNotifications } from '../notifications/DispatchTaskChangeNotifications.js';
+import { TaskVersionRecorder } from './TaskVersionRecorder.js';
 import { MoveTask } from './MoveTask.js';
 import { TaskApprovalService } from './TaskApprovalService.js';
 
@@ -65,19 +67,18 @@ function makeMove(input: {
     listMembers: async () => [{ workspaceId: WORKSPACE_ID, userId: 'boss', role: 'lead' }],
   } as never;
 
-  const approval = new TaskApprovalService({
-    workspaces: workspacesFake,
+  const approval = new TaskApprovalService({ workspaces: workspacesFake });
+  const dispatcher = new DispatchTaskChangeNotifications({
+    projects: { getById: async () => ({ id: PROJECT_ID, name: 'Проект', workspaceId: WORKSPACE_ID }) } as never,
+    members: { listApproverUserIdsForProject: async () => ['boss'], findForProject: async () => ({}), getNotificationPrefs: async () => null } as never,
     users: { getById: async (id: string) => ({ id, email: `${id}@x`, displayName: id }) } as never,
-    notifications: {
-      create: async (i: { userId: string }) => {
-        notified.push(i.userId);
-        return {} as never;
-      },
-    } as never,
-    email: { send: async () => {} },
-    idGen: () => 'n1',
-    appUrl: 'https://pf.test/',
+    notifications: { create: async (i: { userId: string }) => { notified.push(i.userId); } } as never,
+    email: { send: async () => {} }, telegram: { execute: async () => ({ status: 'not_connected' }) },
+    idGen: () => 'n1', appUrl: 'https://pf.test',
   });
+  const recorder = new TaskVersionRecorder({ versions: { create: async () => {} } as never,
+    idGen: () => 'v1', onChanged: (change) => dispatcher.execute(change) });
+
 
   const move = new MoveTask({
     projects: {
@@ -99,9 +100,11 @@ function makeMove(input: {
     tasks: {
       getById: async () => task,
       getPositionBounds: async () => ({ min: 0, max: 2048 }),
-      update: async (_id: string, patch: { status?: TaskStatus; statusBeforeDone?: TaskStatus | null }) => {
+      update: async (_id: string, patch: { status?: TaskStatus; statusBeforeDone?: TaskStatus | null }, actor: string) => {
         saved = { status: patch.status ?? task.status, statusBeforeDone: patch.statusBeforeDone };
-        return { ...task, status: patch.status ?? task.status };
+        const updated = { ...task, status: patch.status ?? task.status };
+        await recorder.record(updated, actor, task);
+        return updated;
       },
     } as never,
     approval,
@@ -206,13 +209,13 @@ test('попадание в очередь приёмки уведомляет �
   assert.deepEqual(h.notified(), ['boss']);
 });
 
-test('руководитель, закрывший задачу сам, уведомление не получает', async () => {
+test('руководитель, закрывший задачу сам, уведомляет исполнителя, но не себя', async () => {
   const h = makeMove({ requireTaskApproval: true, actorRole: 'lead' });
 
   await h.move.execute({ ...done, ownerUserId: 'boss' });
   await new Promise<void>((resolve) => setImmediate(resolve));
 
-  assert.deepEqual(h.notified(), []);
+  assert.deepEqual(h.notified(), ['employee']);
 });
 
 // Заморозка на время приёмки (db/150): пока работа висит на утверждении, исполнитель её не

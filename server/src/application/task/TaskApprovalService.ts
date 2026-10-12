@@ -1,18 +1,9 @@
 import type { Project } from '../../domain/project/Project.js';
-import type { Task, TaskStatus } from '../../domain/task/Task.js';
-import type { EmailSender } from '../notifications/EmailSender.js';
-import { renderTaskApprovalEmail } from '../notifications/emails/taskApprovalEmail.js';
-import type { NotificationRepository } from '../notifications/NotificationRepository.js';
-import type { UserRepository } from '../user/UserRepository.js';
+import type { TaskStatus } from '../../domain/task/Task.js';
 import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 
 type Deps = {
   readonly workspaces: WorkspaceRepository;
-  readonly users: UserRepository;
-  readonly notifications: NotificationRepository;
-  readonly email: EmailSender;
-  readonly idGen: () => string;
-  readonly appUrl: string;
 };
 
 // Минимальный контракт, который нужен гейту задачных операций (taskAuthorization): только
@@ -63,54 +54,4 @@ export class TaskApprovalService {
     return !(await this.canApprove(project, actorUserId));
   }
 
-  // Уведомить тех, кто принимает работу. Задача, попавшая в очередь приёмки, иначе ждёт,
-  // пока руководитель сам заглянет в неё, — а это ровно та слепая зона, из-за которой
-  // приёмку и заводили. Best-effort: падение уведомления не должно ломать перенос задачи.
-  async notifyApprovalRequested(input: {
-    task: Task;
-    project: Project;
-    actorUserId: string;
-  }): Promise<void> {
-    const { task, project, actorUserId } = input;
-    const members = await this.deps.workspaces.listMembers(project.workspaceId);
-    const approverIds = members
-      .filter((m) => m.role === 'lead' || m.role === 'owner')
-      // Себе не пишем: если работу отправил сам руководитель, уведомление бессмысленно.
-      .filter((m) => m.userId !== actorUserId)
-      .map((m) => m.userId);
-    if (approverIds.length === 0) return;
-
-    const actor = await this.deps.users.getById(actorUserId);
-    const actorDisplayName = actor?.displayName ?? 'Участник';
-    const taskExcerpt = (task.description ?? '').slice(0, 120);
-    const base = this.deps.appUrl.replace(/\/$/u, '');
-    const taskUrl = `${base}/projects/${project.id}`;
-
-    for (const userId of approverIds) {
-      await this.deps.notifications.create({
-        id: this.deps.idGen(),
-        userId,
-        payload: {
-          type: 'task_approval_requested',
-          taskId: task.id,
-          projectId: project.id,
-          projectName: project.name,
-          taskExcerpt,
-          actorUserId,
-          actorDisplayName,
-        },
-      });
-      const approver = await this.deps.users.getById(userId);
-      if (!approver) continue;
-      await this.deps.email.send(
-        renderTaskApprovalEmail({
-          to: approver.email,
-          actorDisplayName,
-          projectName: project.name,
-          taskExcerpt,
-          taskUrl,
-        }),
-      );
-    }
-  }
 }
