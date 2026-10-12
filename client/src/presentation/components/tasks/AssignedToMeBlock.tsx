@@ -119,6 +119,7 @@ import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogP
 import { COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard } from './KanbanColumn';
+import { matchesInboxQuery } from './inbox/searchTasks';
 import { BulkActionBar } from './BulkActionBar';
 import {
   nextAnchor,
@@ -264,7 +265,7 @@ function readStoredTab(): AssigneeTab | null {
   }
 }
 
-// Свёрнутая колонка «Сейчас» и свёрнутые колонки очереди (дизайн C4) — запоминаем за
+// Свёрнутая колонка «В работе» и свёрнутые колонки очереди (дизайн C4) — запоминаем за
 // браузером: это раскладка рабочего места, серверу она не нужна.
 const NOW_COLLAPSED_KEY = 'pf.inbox.nowCollapsed';
 const MOBILE_SECTION_KEY = 'pf.inbox.mobileSection';
@@ -293,15 +294,6 @@ function readStoredSet(key: string): ReadonlySet<string> {
   } catch {
     return new Set();
   }
-}
-
-// Поиск по задаче: текст задачи и имя проекта, без регистра.
-function matchesInboxQuery(t: InboxBlockTask, q: string): boolean {
-  if (!q) return true;
-  return (
-    (t.description ?? '').toLowerCase().includes(q) ||
-    (t.projectName ?? '').toLowerCase().includes(q)
-  );
 }
 
 // Шаг листания ряда колонок кнопками ‹ › — ширина колонки (256px) и зазор.
@@ -403,7 +395,7 @@ export function AssignedToMeBlock({
   // Сворачивать колонки имеет смысл только на широком экране: на телефоне колонка и так
   // одна на экран, а полоска 38px только мешала бы листать.
   const canCollapse = useMediaQuery('(min-width: 768px)');
-  // Широкий экран — доска «Сейчас + очередь» рядом; уже — разделы по одному (телефон).
+  // Широкий экран — доска «В работе + очередь» рядом; уже — разделы по одному (телефон).
   const isWide = canCollapse;
   // Раздел на телефоне: выбор пользователя (запоминаем) или null — решим по данным.
   const [mobileSection, setMobileSectionState] = useState<InboxSection | null>(() =>
@@ -536,11 +528,15 @@ export function AssignedToMeBlock({
   // + getUiPrefs и заново мигнул скелетоном на КАЖДЫЙ клик по кубику — не то, ради чего он
   // существует). Читаем актуальное значение через ref в момент вызова.
   const focusedMemberIdRef = useRef(focusedMemberId);
+  const refreshGeneration = useRef(0);
+  const focusedGeneration = useRef(0);
   useEffect(() => {
     focusedMemberIdRef.current = focusedMemberId;
   }, [focusedMemberId]);
 
   const refresh = useCallback(async (propagateError = false): Promise<void> => {
+    const generation = ++refreshGeneration.current;
+    const focusedRequest = ++focusedGeneration.current;
     lastRefreshAtRef.current = Date.now();
     // Снимок на момент старта запроса — сверяем с актуальным ПОСЛЕ await (см. ниже), а не
     // просто читаем ref второй раз: доска могла закрыться и открыться на ДРУГОГО сотрудника
@@ -556,12 +552,13 @@ export function AssignedToMeBlock({
           ? taskAssigneeRepository.listMemberTasks(focusedAtStart)
           : Promise.resolve<AssignedTask[]>([]),
       ]);
+      if (generation !== refreshGeneration.current) return;
       setTasks(mine);
       setByMeTasks(byMe);
       setColleaguePersonalTasks(personal);
       // Пишем focusedMemberTasks только если доска всё ещё открыта на ТОГО ЖЕ сотрудника —
       // иначе устаревший ответ перезаписал бы уже актуальные данные другого/пустого фокуса.
-      if (focusedAtStart && focusedMemberIdRef.current === focusedAtStart) {
+      if (focusedAtStart && focusedMemberIdRef.current === focusedAtStart && focusedRequest === focusedGeneration.current) {
         setFocusedMemberTasks(focused);
       }
     } catch (e) {
@@ -583,6 +580,7 @@ export function AssignedToMeBlock({
   // при повторном открытии другого сотрудника. Отдельный эффект (не refresh()): именно он
   // реагирует на смену focusedMemberId, а refresh остаётся стабильным между кликами.
   useEffect(() => {
+    const generation = ++focusedGeneration.current;
     if (!focusedMemberId) {
       setFocusedMemberTasks([]);
       return;
@@ -591,7 +589,7 @@ export function AssignedToMeBlock({
     taskAssigneeRepository
       .listMemberTasks(focusedMemberId)
       .then((items) => {
-        if (!cancelled) setFocusedMemberTasks(items);
+        if (!cancelled && generation === focusedGeneration.current) setFocusedMemberTasks(items);
       })
       .catch((e: unknown) => {
         if (!cancelled) {
@@ -638,6 +636,7 @@ export function AssignedToMeBlock({
 
   useEffect(() => {
     let cancelled = false;
+    const generation = ++refreshGeneration.current;
     setLoading(true);
     // Обе вкладки + сохранённую группировку грузим вместе и гейтим первый рендер на всё —
     // блок не «мигает» дефолтной группировкой/счётчиками перед применением реальных.
@@ -649,9 +648,11 @@ export function AssignedToMeBlock({
     ])
       .then(([mine, byMe, personal, prefs]) => {
         if (cancelled) return;
-        setTasks(mine);
-        setByMeTasks(byMe);
-        setColleaguePersonalTasks(personal);
+        if (generation === refreshGeneration.current) {
+          setTasks(mine);
+          setByMeTasks(byMe);
+          setColleaguePersonalTasks(personal);
+        }
         // Сортировка ПЕРСИСТИТСЯ за аккаунтом (users.ui_prefs) — при перезагрузке та же.
         // (Была session-only «точка 4» — юзер передумал 2026-07-11.)
         if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
@@ -684,28 +685,42 @@ export function AssignedToMeBlock({
     onChanged?.();
   };
 
-  // #2 (задача af1ebf44): инлайн-создание в колонке-проекте верхнего блока. Только вкладка
-  // «Для меня» + группировка по проекту (колонка = реальный проект). Открытый композер держим
-  // по projectId колонки; создаём задачу в backlog проекта, назначенную на текущего юзера, —
-  // тогда карточка сразу попадает в эту же колонку. Без модального окна (как «+» на доске).
+  // Keep the inline composer in its project column. New tasks are drafts assigned
+  // to the focused/filtered colleague, or to the current user when no one is selected.
   const [composingProject, setComposingProject] = useState<string | null>(null);
-  // Создаёт задачу в проекте на текущего юзера (backlog) и возвращает её — сигнатура под
-  // InlineNewCard (тот же композер, что и в нижних канбанах: Enter создаёт и оставляет поле
-  // для следующей, иконки, blur-commit). refresh() подтягивает свежую карточку в колонку.
+  // Publish the acknowledged task before refreshing, so a delayed GET cannot hide it.
   const createInProjectColumn = useCallback(
     async (projectId: string, name: string, icon: string | null): Promise<Task | null> => {
       if (!user) return null;
+      const assigneeUserId = focusedMemberId ?? (tab === 'byMe' ? filterTo : null) ?? user.id;
       const created = await taskRepository.create(projectId, {
         description: name,
         status: 'backlog',
         icon,
-        assigneeUserId: user.id,
+        assigneeUserId,
       });
-      await refresh();
+      // Show the acknowledged write immediately. A pre-save GET must never remove it.
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      const projectName = allProjects?.find((p) => p.id === projectId)?.name
+        ?? [...tasks, ...byMeTasks, ...focusedMemberTasks].find((t) => t.projectId === projectId)?.projectName
+        ?? 'Проект';
+      const saved: AssignedTask = { ...created, projectName, isInbox: false, canModify: true };
+      const insert = (items: AssignedTask[]): AssignedTask[] => [saved, ...items.filter((t) => t.id !== saved.id)];
+      if (assigneeUserId === user.id) setTasks(insert);
+      else setByMeTasks(insert);
+      if (focusedMemberIdRef.current === assigneeUserId) setFocusedMemberTasks(insert);
+      // A new draft can fail a deadline/search filter or belong to «Мои» while the
+      // composer was opened in «Для всех». Reveal its actual destination after save.
+      setQuery('');
+      setDue(null);
+      if (!focusedMemberId && assigneeUserId === user.id) handleTabChange('toMe');
+      setMobileSection('queue');
+      void refresh();
       onChanged?.();
       return created;
     },
-    [user, taskRepository, refresh, onChanged],
+    [user, focusedMemberId, tab, filterTo, taskRepository, allProjects, tasks, byMeTasks, focusedMemberTasks, handleTabChange, setMobileSection, refresh, onChanged],
   );
 
   // Удаление карточки блока — через тот же стильный диалог, что и на досках проектов
@@ -1771,33 +1786,9 @@ export function AssignedToMeBlock({
       <div className="flex min-h-10 items-center gap-1">
         {heading}
         <span className="flex-1" />
-        {hasAny && (
-          <button
-            type="button"
-            onClick={() => {
-              if (searchVisible) {
-                setQuery('');
-                setSearchOpen(false);
-              } else {
-                setSearchOpen(true);
-              }
-            }}
-            aria-label={searchVisible ? 'Закрыть поиск' : 'Найти задачу'}
-            aria-pressed={searchVisible}
-            className={cn(
-              'grid size-10 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
-              searchVisible && 'bg-hover text-foreground',
-            )}
-          >
-            {searchVisible ? <X className="size-4" /> : <Search className="size-4" />}
-          </button>
-        )}
         {filtersPopover}
         {actions}
       </div>
-      {hasAny && searchVisible && (
-        <InboxSearch value={query} onChange={setQuery} className="w-full" autoFocus={searchOpen} />
-      )}
       {hasAny && (
         <div className="-mx-4 flex items-center gap-2.5 overflow-x-auto overscroll-x-contain px-4 pf-scrollbar-hide sm:-mx-6 sm:px-6">
           {tabsOrFocus}
@@ -1825,20 +1816,20 @@ export function AssignedToMeBlock({
     setFilterTo(null);
     setFilterProject(null);
   };
-  // Колонка «Сейчас» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
+  // Колонка «В работе» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
   // это единственная цель дропа для «сдать первую задачу» жестом. В режиме выделения пустые
   // полки прячем: тащить в них нечего, а подсказка «перетащите сюда» врала бы.
   const showApprovalZone = approvalTasks.length > 0 || (approvalEnabled && !selectionActive);
   const showManualZone = inProgressTasks.length > 0 || !selectionActive;
   const showNow = showApprovalZone || showManualZone;
-  // Свёрнутая «Сейчас» раскрывается сама на время перетаскивания — иначе некуда бросить.
+  // Свёрнутая «В работе» раскрывается сама на время перетаскивания — иначе некуда бросить.
   const nowExpanded = !nowCollapsed || dragActive || !canCollapse;
   const collapseNowButton = canCollapse ? (
     <button
       type="button"
       onClick={toggleNowCollapsed}
-      aria-label="Свернуть «Сейчас»"
-      title="Свернуть «Сейчас»"
+      aria-label="Свернуть «В работе»"
+      title="Свернуть «В работе»"
       className={cn(COLUMN_ACTION_CLASS, 'ms-auto')}
     >
       <ChevronsLeft className="size-3.5" />
@@ -1855,7 +1846,7 @@ export function AssignedToMeBlock({
     activeDrag !== null && activeDrag.canModify && activeDrag.status !== 'done' && !selectionActive;
   const doneLabel =
     approvalEnabled && !isApprover ? 'Бросьте сюда, чтобы сдать на утверждение' : 'Бросьте сюда, чтобы отметить готовой';
-  // Телефон: какой раздел показан. Пока задач в «Сейчас» нет совсем, а пользователь раздел
+  // Телефон: какой раздел показан. Пока задач в «В работе» нет совсем, а пользователь раздел
   // не выбирал, сразу открываем очередь — пустой первый экран ничего не даёт.
   const nowCount = approvalTasks.length + inProgressTasks.length;
   const section: InboxSection = mobileSection ?? (nowCount === 0 && queueShown > 0 ? 'queue' : 'now');
@@ -1914,10 +1905,10 @@ export function AssignedToMeBlock({
       />
     ) : null;
 
-  // «Сейчас»: полка приёмки сверху, «Вручную» снизу — одна серая панель.
+  // «В работе»: полка приёмки сверху, «Вручную» снизу — одна серая панель.
   const nowPanel = (
     <section
-      aria-label="Сейчас"
+      aria-label="В работе"
       className="flex w-full shrink-0 flex-col rounded-xl bg-panel md:w-[284px]"
     >
       {showApprovalZone && (
@@ -2261,7 +2252,7 @@ export function AssignedToMeBlock({
     );
 
   // Тело блока (дизайн C4 «Одна доска»): строка управления, строка сроков, затем доска —
-  // закреплённая колонка «Сейчас» и очередь по проектам, которая листается вбок. На телефоне
+  // закреплённая колонка «В работе» и очередь по проектам, которая листается вбок. На телефоне
   // вместо доски — переключатель разделов и один раздел на всю ширину.
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
@@ -2273,14 +2264,36 @@ export function AssignedToMeBlock({
       {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-2.5" />}
       {!isWide && (
         // Липнет к верху при прокрутке: раздел переключается, не возвращаясь наверх.
-        <div className="sticky inset-bs-0 z-20 -mx-4 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
-          <InboxSectionSwitch
-            value={section}
-            onChange={setMobileSection}
-            nowCount={nowCount}
-            queueCount={queueShown}
-            nowAttention={isApprover && approvalTasks.some((t) => t.assignee.userId !== user?.id)}
-          />
+        <div className="sticky inset-bs-0 z-20 -mx-4 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <InboxSectionSwitch
+              className="min-w-0 flex-1"
+              value={section}
+              onChange={setMobileSection}
+              nowCount={nowCount}
+              queueCount={queueShown}
+              nowAttention={isApprover && approvalTasks.some((t) => t.assignee.userId !== user?.id)}
+            />
+            <button
+              type="button"
+              aria-label={searchVisible ? 'Закрыть поиск' : 'Поиск по проектам и задачам'}
+              aria-expanded={searchVisible}
+              aria-controls="inbox-mobile-search"
+              onClick={() => {
+                setSearchOpen(!searchVisible);
+                if (searchVisible) setQuery('');
+              }}
+              className={cn(
+                'grid size-11 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
+              )}
+            >
+              {searchVisible ? <X className="size-4" /> : <Search className="size-4" />}
+            </button>
+          </div>
+          {searchVisible && (
+            <InboxSearch id="inbox-mobile-search" value={query} onChange={setQuery} autoFocus={searchOpen} />
+          )}
         </div>
       )}
 
@@ -2314,11 +2327,11 @@ export function AssignedToMeBlock({
               <button
                 type="button"
                 onClick={toggleNowCollapsed}
-                aria-label="Развернуть «Сейчас»"
-                title="Развернуть «Сейчас»"
+                aria-label="Развернуть «В работе»"
+                title="Развернуть «В работе»"
                 className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
               >
-                <span className="[writing-mode:vertical-rl]">Сейчас</span>
+                <span className="[writing-mode:vertical-rl]">В работе</span>
                 <span className="tabular-nums text-approval">{approvalTasks.length}</span>
                 <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
               </button>
@@ -2341,7 +2354,7 @@ export function AssignedToMeBlock({
         ) : (
           // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
           <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
-            В «Сейчас» выбирать нечего
+            В «В работе» выбирать нечего
           </p>
         )
       ) : (
@@ -2356,7 +2369,7 @@ export function AssignedToMeBlock({
 
       {/* Цели броска на время перетаскивания своей карточки. Десктоп — полоса «Готово» внизу
           (остальные цели и так на экране). Телефон — док «В работу» / «Готово» над нижней
-          навигацией: на экране один раздел, и полки «Сейчас» могут быть скрыты. */}
+          навигацией: на экране один раздел, и полки «В работе» могут быть скрыты. */}
       {canDropToDone &&
         (isWide ? (
           <DoneDropBar label={doneLabel} />
@@ -2802,7 +2815,7 @@ function MobileQueueGroup({
 }
 
 // Док целей на время перетаскивания на телефоне — над нижней навигацией. На экране один
-// раздел, и полки «Сейчас» могут быть скрыты; здесь цели всегда под пальцем.
+// раздел, и полки «В работе» могут быть скрыты; здесь цели всегда под пальцем.
 const DOCK_KIND = {
   manual: { border: 'border-manual', icon: 'text-manual' },
   approval: { border: 'border-approval', icon: 'text-approval' },
@@ -3190,7 +3203,7 @@ function RejectApprovalDialog({
 }
 
 // Полка «На утверждении» (db/150): очередь приёмки руководителя — верхняя часть колонки
-// «Сейчас». Нейтральная зона с фиолетовой меткой (цвет статуса), карточки стопкой; при
+// «В работе». Нейтральная зона с фиолетовой меткой (цвет статуса), карточки стопкой; при
 // перетаскивании своей готовой работы зона подсвечивается как цель.
 function ApprovalShelf({
   items,
@@ -3240,7 +3253,7 @@ function ApprovalShelf({
   selecting?: boolean;
   selectedIds?: ReadonlySet<string>;
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
-  // Кнопка в правом конце шапки (свернуть колонку «Сейчас»).
+  // Кнопка в правом конце шапки (свернуть колонку «В работе»).
   headerEnd?: React.ReactNode;
   className?: string;
 }): React.ReactElement {
@@ -3450,7 +3463,7 @@ function ApprovalItemCard({
   );
 }
 
-// Полка «Вручную»: нижняя часть колонки «Сейчас», куда перетаскивают задачи, которыми
+// Полка «Вручную»: нижняя часть колонки «В работе», куда перетаскивают задачи, которыми
 // занимаются сами (статус manual — агент такие не берёт). Подсвечивается при наведении
 // драга; внизу всегда штриховая подсказка-цель «перетащите сюда».
 function InProgressShelf({

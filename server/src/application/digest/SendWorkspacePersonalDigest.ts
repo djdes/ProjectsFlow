@@ -1,6 +1,7 @@
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
+import type { TelegramMessageTaskRepository } from '../telegram/TelegramMessageTaskRepository.js';
 import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 import type { InlineKeyboardMarkup } from '../telegram/TelegramClient.js';
 import type {
@@ -33,6 +34,7 @@ type Deps = {
   readonly comments: Pick<TaskCommentRepository, 'countsByTasks'>;
   // Личка с ботом: проверка привязки/«Start», аудит, маппинг reply→комментарий на карточке.
   readonly telegram: { execute(cmd: SendAgentNotificationCommand): Promise<SendAgentNotificationResult> };
+  readonly messageTasks: Pick<TelegramMessageTaskRepository, 'attach'>;
   readonly appUrl: string;
   // Пауза между повтором после 429 (тесты подменяют, чтобы не ждать).
   readonly sleep?: (ms: number) => Promise<void>;
@@ -46,8 +48,7 @@ export type WorkspacePersonalDigestSendResult = {
   readonly skippedRecipientUserIds: string[];
 };
 
-// Карточек на человека за утро: дальше — ссылкой в приложение, чтобы не засыпать чат.
-// Порядок по срочности, поэтому за лимитом остаётся наименее важное.
+// Cards per page; the recipient can request the next page in Telegram.
 export const PERSONAL_DIGEST_CARD_LIMIT = 15;
 const TITLE_LIMIT = 160;
 const DESCRIPTION_EXCERPT_LIMIT = 600;
@@ -67,10 +68,9 @@ export type PersonalDigestItem = {
   readonly isInbox: boolean;
 };
 
-// Личная сводка в бота: каждому участнику — его открытые задачи по всему пространству.
-// Заголовок с итогами и по карточке на задачу с кнопками «Завершить / Комментировать /
-// Посмотреть / Открыть»; ответ (reply) на карточку — комментарий к задаче. Набор задач тот же,
-// что в групповой таблице по ответственным (collectWorkspaceAssigneeTasks).
+// Each assignee receives open tasks grouped by project, with work/done/comment/delete
+// actions and pagination. A reply to a card becomes a comment on that task. The task
+// selection matches the workspace group digest (collectWorkspaceAssigneeTasks).
 export class SendWorkspacePersonalDigest {
   constructor(private readonly deps: Deps) {}
 
@@ -78,8 +78,10 @@ export class SendWorkspacePersonalDigest {
   // (тест уходит только нажавшему, а не всей команде).
   async execute(
     workspaceId: string,
-    opts: { force?: boolean; onlyUserId?: string } = {},
+    opts: { force?: boolean; onlyUserId?: string; taskIds?: readonly string[] } = {},
   ): Promise<WorkspacePersonalDigestSendResult> {
+    if (opts.taskIds && !opts.onlyUserId) return EMPTY_RESULT;
+    const requestedIds = opts.taskIds ? new Set(opts.taskIds) : null;
     const settings = await this.deps.settings.get(workspaceId);
     if (!opts.force && !settings.personalEnabled) return EMPTY_RESULT;
 
@@ -102,8 +104,11 @@ export class SendWorkspacePersonalDigest {
     let taskCount = 0;
     const skippedRecipientUserIds: string[] = [];
     for (const [userId, groups] of recipients) {
-      const items = sortPersonalDigestItems(flattenGroups(groups), now);
-      const sent = await this.sendTo(userId, items, commentCounts, now);
+      // Keep each project together; urgency only changes the order inside it.
+      const items = groups.flatMap((group) => sortPersonalDigestItems(flattenGroups([group]), now))
+        .filter((item) => !requestedIds || requestedIds.has(item.task.id));
+      if (items.length === 0) continue;
+      const sent = await this.sendTo(workspaceId, userId, items, commentCounts, now);
       if (!sent) {
         skippedRecipientUserIds.push(userId);
         continue;
@@ -116,6 +121,7 @@ export class SendWorkspacePersonalDigest {
 
   // false — личка недоступна (заголовок не ушёл), карточки тогда не шлём.
   private async sendTo(
+    workspaceId: string,
     userId: string,
     items: readonly PersonalDigestItem[],
     commentCounts: ReadonlyMap<string, number>,
@@ -151,17 +157,30 @@ export class SendWorkspacePersonalDigest {
       if (result.status === 'forbidden') break;
     }
 
-    const rest = items.length - PERSONAL_DIGEST_CARD_LIMIT;
+    const remaining = items.slice(PERSONAL_DIGEST_CARD_LIMIT);
+    const rest = remaining.length;
     if (rest > 0) {
-      await this.send({
+      const footer = await this.send({
         userId,
         text:
           `… и ещё ${pluralTasksRu(rest)} — ` +
           `<a href="${escapeHtml(`${base}/`)}">открыть в ProjectsFlow</a>`,
         parseMode: 'HTML',
         kind: 'task_digest',
+        replyMarkup: { inline_keyboard: [[{
+          text: `Показать ещё ${Math.min(rest, PERSONAL_DIGEST_CARD_LIMIT)}`,
+          callback_data: `np:${workspaceId}`,
+        }]] },
         skipDedupCheck: true,
       });
+      if (footer.status === 'ok') {
+        // Snapshot remaining IDs, not an offset into a changing list: completing or
+        // deleting a card on page one must not skip tasks on page two.
+        await this.deps.messageTasks.attach({
+          chatId: footer.chatId, messageId: footer.messageId,
+          tasks: remaining.map((item) => ({ taskId: item.task.id, projectId: item.project.id })),
+        }).catch((error) => console.warn('[workspace-personal-digest] remember next page failed', error));
+      }
     }
     return true;
   }
@@ -302,7 +321,7 @@ export function buildPersonalDigestCard(
     text: lines.join('\n'),
     keyboard: {
       inline_keyboard: [
-        ...taskActionKeyboard(task.id).inline_keyboard,
+        ...taskActionKeyboard(task.id, task.status).inline_keyboard,
         [{ text: '↗ Открыть в ProjectsFlow', url }],
       ],
     },

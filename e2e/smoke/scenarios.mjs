@@ -45,7 +45,7 @@ const INBOX_SECTION_SWITCH_REQUIRED = true;
 
 // ---------------------------------------------------------------- helpers ----
 
-const NOW = 'section[aria-label="Сейчас"]';
+const NOW = 'section[aria-label="В работе"]';
 const QUEUE = 'section[aria-label="Очередь"]';
 const card = (id) => `[data-pf-task-id="${id}"]`;
 
@@ -256,7 +256,7 @@ export const scenarios = [
 
   {
     id: 'inbox',
-    title: 'Входящие: «Сейчас» и «Очередь»',
+    title: 'Входящие: «В работе» и «Очередь»',
     matrix: [
       ['desktop', 'light'],
       ['desktop', 'dark'],
@@ -268,12 +268,12 @@ export const scenarios = [
       await t.check('заголовок «Входящие»', () =>
         t.visible(page.getByRole('heading', { name: 'Входящие', level: 1 }), 'h1 «Входящие»'),
       );
-      await t.check('«Сейчас»: полки «На утверждении» и «Вручную» с карточками', async () => {
+      await t.check('«В работе»: полки «На утверждении» и «Вручную» с карточками', async () => {
         const now = page.locator(NOW);
-        await t.visible(now, 'колонка «Сейчас»');
+        await t.visible(now, 'колонка «В работе»');
         await t.visible(now.getByText('На утверждении', { exact: true }), 'полка «На утверждении»');
         await t.visible(now.getByText('Вручную', { exact: true }), 'полка «Вручную»');
-        await expectCards(t, NOW, [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id), '«Сейчас»');
+        await expectCards(t, NOW, [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id), '«В работе»');
       });
       await t.check('«Очередь»: колонки проектов и все мои задачи', async () => {
         const queue = page.locator(QUEUE);
@@ -294,7 +294,7 @@ export const scenarios = [
       const { page, state } = t;
       await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
       const all = myQueueTasks(state).map((x) => x.id);
-      const search = page.getByRole('searchbox', { name: 'Найти задачу' });
+      const search = page.getByRole('searchbox', { name: 'Поиск по проектам и задачам' });
 
       await t.check('«/» ставит курсор в поиск', async () => {
         await page.evaluate(() => {
@@ -353,7 +353,7 @@ export const scenarios = [
           'нет POST /api/projects/p-shop/tasks/t-pay/move с targetStatus "manual"',
         );
         const nowCard = page.locator(`${NOW} ${card('t-pay')}`);
-        await t.visible(nowCard, 'карточка в «Сейчас»');
+        await t.visible(nowCard, 'карточка в «В работе»');
         await t.waitFor(
           async () => (await nowCard.locator('button[aria-label="Вернуть в очередь"]').count()) > 0,
           'у карточки нет действия «Вернуть в очередь» — она не на полке «Вручную»',
@@ -399,14 +399,14 @@ export const scenarios = [
       const switches = page.locator('[data-pf-inbox-section-switch]');
       if (!INBOX_SECTION_SWITCH_REQUIRED && (await switches.count()) === 0) {
         const why = 'в вёрстке ещё нет кнопок [data-pf-inbox-section-switch] — их добавляет мобильная доработка «Входящих»';
-        t.expected('переключатель «Сейчас»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', why);
-        t.expected('«Сейчас» и «Очередь» показываются по одному', why);
-        await t.check('карточки «Сейчас» и «Очередь» видны', async () => {
-          await expectCards(t, NOW, nowIds, '«Сейчас»');
+        t.expected('переключатель «В работе»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', why);
+        t.expected('«В работе» и «Очередь» показываются по одному', why);
+        await t.check('карточки «В работе» и «Очередь» видны', async () => {
+          await expectCards(t, NOW, nowIds, '«В работе»');
           await expectCards(t, QUEUE, queueIds, '«Очередь»');
         });
       } else {
-        await t.check('переключатель «Сейчас»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', async () => {
+        await t.check('переключатель «В работе»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', async () => {
           const found = await switches.evaluateAll((els) =>
             els.map((el) => ({
               value: el.getAttribute('data-pf-inbox-section-switch'),
@@ -419,7 +419,7 @@ export const scenarios = [
           t.assert(pressed.length === 1, `aria-pressed="true" у: ${pressed.join(', ') || 'ни одной'}`);
         });
         for (const [value, shown, other, label, ids] of [
-          ['now', NOW, QUEUE, 'Сейчас', nowIds],
+          ['now', NOW, QUEUE, 'В работе', nowIds],
           ['queue', QUEUE, NOW, 'Очередь', queueIds],
         ]) {
           await t.check(`переключатель → «${label}»: виден только этот раздел, все его карточки`, async () => {
@@ -461,12 +461,12 @@ export const scenarios = [
         await expectGone(t, `${QUEUE} ${card('t-home')}`, 'карточка осталась в очереди');
       });
       if (swiped) {
-        await t.check('взятая задача — в разделе «Сейчас»', async () => {
+        await t.check('взятая задача — в разделе «В работе»', async () => {
           await showSection(t, 'now');
-          await t.visible(page.locator(`${NOW} ${card('t-home')}`), 'карточка в «Сейчас»');
+          await t.visible(page.locator(`${NOW} ${card('t-home')}`), 'карточка в «В работе»');
         });
       } else {
-        t.skip('взятая задача — в разделе «Сейчас»', 'свайп не сработал');
+        t.skip('взятая задача — в разделе «В работе»', 'свайп не сработал');
       }
 
       await t.check('долгий тап и бросок на «Готово» в доке закрывает задачу (POST move → done)', async () => {
@@ -489,8 +489,8 @@ export const scenarios = [
 
       await t.check('лупа раскрывает поиск, «домен» оставляет одну задачу, крестик закрывает', async () => {
         await showSection(t, 'queue');
-        await page.getByRole('button', { name: 'Найти задачу' }).tap();
-        const search = page.getByRole('searchbox', { name: 'Найти задачу' });
+        await page.getByRole('button', { name: 'Поиск по проектам и задачам' }).tap();
+        const search = page.getByRole('searchbox', { name: 'Поиск по проектам и задачам' });
         await t.waitFor(() => search.evaluate((el) => el === document.activeElement), 'фокус не в поле поиска');
         await search.fill('домен');
         await expectCards(t, QUEUE, ['t-domain'], 'очередь после поиска');
@@ -502,6 +502,51 @@ export const scenarios = [
         );
       });
       await t.pageChecks('Входящие после жестов', { bottomNav: false });
+    },
+  },
+
+  {
+    id: 'inbox-create',
+    title: 'Входящие: создание в черновиках при активных фильтрах',
+    matrix: [['desktop', 'light'], ['phone', 'light'], ['narrow', 'dark']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto('/', { ready: () => page.locator('[data-pf-task-id]:visible') });
+      if (t.isMobile) await showSection(t, 'queue');
+      const searchLabel = 'Поиск по проектам и задачам';
+      if (t.isMobile) {
+        const toggle = page.getByRole('button', { name: searchLabel });
+        const switchBox = await page.getByRole('group', { name: 'Раздел', exact: true }).boundingBox();
+        const searchBox = await toggle.boundingBox();
+        t.assert(switchBox && searchBox && searchBox.x >= switchBox.x + switchBox.width, 'поиск не справа от разделов');
+        await toggle.click();
+      }
+      const search = page.getByRole('searchbox', { name: searchLabel });
+      await t.check('название проекта фильтрует его задачи', async () => {
+        await search.fill('Сайт клиники');
+        await expectCards(t, QUEUE, myQueueTasks(state).filter((task) => task.projectId === BOARD_PROJECT_ID).map((task) => task.id), 'поиск проекта');
+      });
+      await search.fill('блок акций');
+      await expectCards(t, QUEUE, ['t-home'], 'поиск по содержанию');
+      await page.getByRole('group', { name: 'Срок', exact: true }).getByRole('button', { name: /^Просрочено/ }).click();
+      const create = page.locator(QUEUE).getByRole('button', { name: 'Создать задачу в проекте' }).first();
+      await create.click();
+      const field = page.getByRole('textbox', { name: 'Название задачи', exact: true });
+      await field.fill('Новая задача из входящих');
+      if (t.isMobile) {
+        t.assert(await field.evaluate((el) => parseFloat(getComputedStyle(el).fontSize) >= 16), 'поле запускает автозум');
+        t.assert(await search.evaluate((el) => parseFloat(getComputedStyle(el).fontSize) >= 16), 'поиск запускает автозум');
+      }
+      await t.check('Enter создаёт один черновик в выбранном проекте и оставляет карточку', async () => {
+        await field.press('Enter');
+        await t.waitForMutation((m) => m.method === 'POST' && m.path === `/projects/${BOARD_PROJECT_ID}/tasks` && m.body?.status === 'backlog', 'создание не в черновиках проекта');
+        const saved = state.tasks.find((task) => task.description === 'Новая задача из входящих');
+        t.assert(saved?.assignee.userId === ME.id, 'неверный ответственный');
+        await t.visible(page.locator(`${QUEUE} ${card(saved.id)}`), 'сохранённая карточка');
+        t.assert((await search.inputValue()) === '', 'скрывающий фильтр не сброшен');
+        t.assert(t.journal.mutations.filter((m) => m.method === 'POST' && m.path === `/projects/${BOARD_PROJECT_ID}/tasks`).length === 1, 'дубликат создания');
+      });
+      await t.pageChecks('Входящие после создания');
     },
   },
 

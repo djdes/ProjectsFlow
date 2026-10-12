@@ -8,6 +8,7 @@ import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
 const noReflowStrategy: SortingStrategy = () => null;
 import { FileText, ListChecks, PanelRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { cn } from '@/lib/utils';
@@ -858,6 +859,7 @@ export function InlineNewCard({
   const [value, setValue] = useState('');
   const [icon, setIcon] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const savingRef = useRef(false);
   // Идёт ли взаимодействие с поповером иконки — пока да, блёр textarea НЕ коммитит/не
   // закрывает карточку (иначе клик по эмодзи в пикере убивал бы карточку до выбора).
   // Держим флаг ещё ~200мс после закрытия, чтобы отложенный blur-commit его увидел.
@@ -905,11 +907,16 @@ export function InlineNewCard({
   // blur/«открыть справа» его НЕ передают: по пустому полю там просто закрываем без создания.
   const create = async (defaultName?: string): Promise<Task | null> => {
     const name = value.trim() || defaultName?.trim() || '';
-    if (!name || busy) return null;
+    if (!name || savingRef.current) return null;
+    savingRef.current = true;
     setBusy(true);
     try {
       return await onCreate(name, icon);
+    } catch (error) {
+      toast.error(`Не удалось создать задачу: ${(error as Error).message}`);
+      return null;
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   };
@@ -940,22 +947,34 @@ export function InlineNewCard({
   // пропускаем, если фокус ушёл в поповер иконки (взаимодействие с пикером, не выход).
   const onBlurCommit = (): void => {
     window.setTimeout(() => {
-      if (closingRef.current || pickingRef.current) return;
+      if (closingRef.current || pickingRef.current || savingRef.current) return;
       // Только что был Enter — блёр от сохранения/сдвига карточки, НЕ выход. Не закрываем.
       if (justEnteredRef.current) return;
       const active = document.activeElement;
       // Фокус вернулся в само поле (сдвиг карточки в DOM после Enter) — это НЕ выход, не закрываем.
       if (active === ref.current) return;
       if (active && active.closest('[data-radix-popper-content-wrapper], .bg-popover')) return;
-      void create().then(() => onClose());
+      if (!value.trim()) {
+        onClose();
+        return;
+      }
+      void create().then((task) => {
+        if (task) onClose();
+      });
     }, 0);
   };
   // «Открыть справа» → создать и открыть в окне справа.
   const openFull = async (): Promise<void> => {
+    if (savingRef.current) return;
     closingRef.current = true;
     const t = await create();
-    onClose();
-    if (t) onOpenFull(t);
+    if (t) {
+      onClose();
+      onOpenFull(t);
+    } else {
+      closingRef.current = false;
+      if (!value.trim()) onClose();
+    }
   };
 
   // Радиус 10px — как у обычной карточки (замеры Notion), чтобы карточка создания
@@ -1022,7 +1041,9 @@ export function InlineNewCard({
           onBlur={onBlurCommit}
           rows={1}
           placeholder="Название задачи…"
-          disabled={busy}
+          readOnly={busy}
+          aria-busy={busy}
+          aria-label="Название задачи"
           className="min-h-[1.25rem] w-full resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none placeholder:text-muted-foreground/70"
         />
         <button

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HandleTelegramWebhook, type TelegramUpdate } from './HandleTelegramWebhook.js';
+import { MoveTask } from '../task/MoveTask.js';
+import { DeleteTask } from '../task/DeleteTask.js';
 
 // Фокусный тест: гейт групповых чатов (бот реагирует только на обращение к нему).
 // Минимальные in-memory стабы (tsx + node:test).
@@ -629,7 +631,10 @@ test('личка: композер БЕЗ groupCtx (undefined)', async () => {
 
 // --- Инлайн-действия задачных уведомлений (nd/nc/nu) ---
 
-function makeCbHarness(opts?: { userId?: string | null; task?: any }) {
+function makeCbHarness(opts?: {
+  userId?: string | null; task?: any; role?: 'editor' | 'viewer' | null;
+  isInbox?: boolean; ownerId?: string; approval?: boolean;
+}) {
   const answers: { id: string; text?: string; showAlert?: boolean }[] = [];
   const edits: { text: string; replyMarkup: any }[] = [];
   const sent: { chatId: number; text: string; replyMarkup: any }[] = [];
@@ -637,19 +642,40 @@ function makeCbHarness(opts?: { userId?: string | null; task?: any }) {
   const upserts: any[] = [];
   const statusNotifs: string[] = [];
   const composerCallbacks: string[] = [];
+  const deleted: string[] = [];
+  const pages: unknown[][] = [];
   const userId = opts && 'userId' in opts ? opts.userId! : 'u1';
-  const task =
+  let task =
     opts?.task !== undefined
-      ? opts.task
-      : { id: 't1', projectId: 'p1', status: 'todo', statusBeforeDone: null, description: 'починить парсер' };
+      ? opts.task && { assignee: { userId: 'u1' }, ...opts.task }
+      : { id: 't1', projectId: 'p1', status: 'backlog', statusBeforeDone: null, description: 'починить парсер', assignee: { userId: 'u1' } };
+  const projects = { async getById() { return { id: 'p1', ownerId: opts?.ownerId ?? 'u1', isInbox: opts?.isInbox ?? false }; } };
+  const members = {
+    async findForProject() { return userId && opts?.role !== null ? { role: opts?.role ?? 'editor' } : null; },
+    async listSharedUsers() { return []; },
+  };
+  const tasks = {
+    async getById() { return task; },
+    async getPositionBounds() { return { min: 0, max: 1024 }; },
+    async update(_id: string, patch: any) { task = { ...task, ...patch }; return task; },
+    async softDelete(id: string) { deleted.push(id); task = null; return true; },
+  };
+  const move = new MoveTask({
+    projects, members, tasks,
+    approval: {
+      async resolveTargetStatus(_project: unknown, _actor: unknown, status: string) {
+        return opts?.approval && status === 'done' ? 'pending_approval' : status;
+      },
+      async notifyApprovalRequested() {},
+    },
+  } as never);
 
   const deps = {
     users: {
       async findUserIdByTelegramUserId() { return userId; },
       async getById() { return { id: 'u1', displayName: 'Ярослав' }; },
     },
-    members: { async findForProject() { return userId ? { role: 'editor' } : null; } },
-    tasks: { async getById() { return task; } },
+    projects, members, tasks,
     client: {
       async sendMessage(i: any) { sent.push({ chatId: i.chatId, text: i.text, replyMarkup: i.replyMarkup }); return { kind: 'ok' as const, messageId: 77 }; },
       async answerCallbackQuery(id: string, o?: any) { answers.push({ id, ...(o ?? {}) }); },
@@ -660,7 +686,9 @@ function makeCbHarness(opts?: { userId?: string | null; task?: any }) {
     ralphQuestionMessages: { async findByMessage() { return null; }, async upsert() {} },
     taskMessages: { async findByMessage() { return null; }, async upsert(i: any) { upserts.push(i); } },
     createComment: {},
-    moveTask: { async execute(i: any) { moves.push(i); return { ...task, status: i.targetStatus }; } },
+    moveTask: { async execute(i: any) { const result = await move.execute(i); moves.push(i); return result; } },
+    deleteTask: new DeleteTask({ projects, members, tasks, comments: {} } as never),
+    async sendPersonalDigestPage(...args: unknown[]) { pages.push(args); return { sentCount: 1, taskCount: 3, skippedRecipientUserIds: [] }; },
     dispatchCommentNotifications: {},
     composer: {
       async handleCallback(cq: any) {
@@ -674,7 +702,7 @@ function makeCbHarness(opts?: { userId?: string | null; task?: any }) {
     notifyCommentAdded() {},
     notifyStatusChanged(_p: string, _t: string, _o: string, n: string) { statusNotifs.push(n); },
   };
-  return { h: new HandleTelegramWebhook(deps as any), answers, edits, sent, moves, upserts, statusNotifs, composerCallbacks };
+  return { h: new HandleTelegramWebhook(deps as any), answers, edits, sent, moves, upserts, statusNotifs, composerCallbacks, deleted, pages };
 }
 
 function cbUpdate(data: string): TelegramUpdate {
@@ -745,4 +773,92 @@ test('легаси da:/dd: коллбэки не роутятся отдельн
   await h.h.execute(cbUpdate('dd:del1'));
   assert.equal(h.moves.length, 0);
   assert.deepEqual(h.composerCallbacks, ['da:del1', 'dd:del1']);
+});
+
+test('Telegram assignee takes work manually, completes it and restores the same status', async () => {
+  const h = makeCbHarness();
+  await h.h.execute(cbUpdate('nw:t1'));
+  assert.equal(h.moves[0].targetStatus, 'manual');
+  assert.match(h.edits.at(-1)!.text, /В работе/);
+  await h.h.execute(cbUpdate('nw:t1'));
+  assert.equal(h.moves.length, 1, 'taking work twice is idempotent');
+  await h.h.execute(cbUpdate('nd:t1'));
+  await h.h.execute(cbUpdate('nu:t1'));
+  assert.deepEqual(h.statusNotifs, ['manual', 'done', 'manual']);
+});
+
+test('Telegram reports approval instead of falsely reporting completion', async () => {
+  const h = makeCbHarness({ approval: true });
+  await h.h.execute(cbUpdate('nd:t1'));
+  assert.deepEqual(h.statusNotifs, ['pending_approval']);
+  assert.match(h.edits[0]!.text, /На утверждении/);
+  assert.doesNotMatch(h.edits[0]!.text, /Завершено/);
+  assert.ok(h.answers.some((a) => a.text?.includes('на утверждение')));
+});
+
+test('Telegram delete requires confirmation and uses the existing soft-delete service', async () => {
+  const h = makeCbHarness();
+  await h.h.execute(cbUpdate('nx:t1'));
+  assert.deepEqual(h.deleted, []);
+  assert.ok(h.sent[0]!.replyMarkup.inline_keyboard.flat().some((b: any) => b.callback_data === 'nx:y:t1'));
+  await h.h.execute(cbUpdate('nx:n:t1'));
+  assert.deepEqual(h.deleted, []);
+  await h.h.execute(cbUpdate('nx:y:t1'));
+  assert.deepEqual(h.deleted, ['t1']);
+  assert.match(h.edits.at(-1)!.text, /В корзине/);
+  await h.h.execute(cbUpdate('nx:y:t1'));
+  assert.deepEqual(h.deleted, ['t1'], 'a stale button cannot delete twice');
+});
+
+test('a viewer assignee can work but cannot delete, including a forged confirm callback', async () => {
+  const h = makeCbHarness({ role: 'viewer' });
+  await h.h.execute(cbUpdate('nw:t1'));
+  assert.equal(h.moves.length, 1);
+  await h.h.execute(cbUpdate('nx:y:t1'));
+  assert.deepEqual(h.deleted, []);
+  assert.ok(h.answers.at(-1)!.showAlert);
+});
+
+test('Telegram actions do not bypass removed membership or viewer permissions', async () => {
+  for (const role of [null, 'viewer'] as const) {
+    const h = makeCbHarness({ role, task: { id: 't1', projectId: 'p1', status: 'backlog', assignee: { userId: 'another' } } });
+    for (const action of ['nw:', 'nd:', 'nx:y:']) await h.h.execute(cbUpdate(`${action}t1`));
+    assert.deepEqual(h.moves, []);
+    assert.deepEqual(h.deleted, []);
+    assert.ok(h.answers.every((a) => a.showAlert));
+  }
+});
+
+test('personal inbox actions use task access even without project membership', async () => {
+  const h = makeCbHarness({ role: null, isInbox: true });
+  await h.h.execute(cbUpdate('nw:t1'));
+  await h.h.execute(cbUpdate('nc:t1'));
+  await h.h.execute(cbUpdate('nx:y:t1'));
+  assert.equal(h.moves.length, 1);
+  assert.equal(h.upserts[0].taskId, 't1');
+  assert.deepEqual(h.deleted, ['t1']);
+});
+
+test('private inbox access does not leak to an unrelated project member', async () => {
+  const h = makeCbHarness({ isInbox: true, ownerId: 'another', task: {
+    id: 't1', projectId: 'p1', status: 'backlog', createdBy: 'another', assignee: { userId: 'another' },
+  } });
+  await h.h.execute(cbUpdate('nw:t1'));
+  await h.h.execute(cbUpdate('nc:t1'));
+  await h.h.execute(cbUpdate('nx:y:t1'));
+  assert.deepEqual(h.moves, []);
+  assert.deepEqual(h.sent, []);
+  assert.deepEqual(h.deleted, []);
+});
+
+test('Telegram next-page callback uses the current actor and the source message', async () => {
+  const workspaceId = '22222222-2222-4222-8222-222222222222';
+  const h = makeCbHarness();
+  await h.h.execute(cbUpdate(`np:${workspaceId}`));
+  assert.deepEqual(h.pages, [[workspaceId, 'u1', 500, 10]]);
+  await h.h.execute(cbUpdate('np:invalid'));
+  assert.equal(h.pages.length, 1);
+  const anonymous = makeCbHarness({ userId: null });
+  await anonymous.h.execute(cbUpdate(`np:${workspaceId}`));
+  assert.deepEqual(anonymous.pages, []);
 });

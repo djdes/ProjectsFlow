@@ -16,10 +16,12 @@ export function InboxSearch({
   onChange,
   className,
   autoFocus = false,
+  id,
 }: {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  id?: string;
   // Телефон: поле появляется по кнопке-лупе и сразу получает фокус.
   autoFocus?: boolean;
 }): React.ReactElement {
@@ -54,9 +56,10 @@ export function InboxSearch({
       />
       <input
         ref={inputRef}
+        id={id}
         type="search"
-        aria-label="Найти задачу"
-        placeholder="Найти задачу"
+        aria-label="Поиск по проектам и задачам"
+        placeholder="Проект или текст задачи"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
@@ -65,7 +68,7 @@ export function InboxSearch({
             onChange('');
           }
         }}
-        className="h-11 w-full rounded-md border border-input bg-field pe-9 ps-8 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground/80 focus-visible:border-primary/70 focus-visible:ring-[3px] focus-visible:ring-primary/20 sm:h-8 sm:text-ui [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 min-w-0 w-full rounded-md border border-input bg-field pe-11 ps-8 text-base transition-colors placeholder:text-muted-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-8 md:pe-9 md:text-ui [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? (
         <button
@@ -75,7 +78,7 @@ export function InboxSearch({
             inputRef.current?.focus();
           }}
           aria-label="Очистить поиск"
-          className="absolute end-1.5 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground"
+          className="absolute end-0 grid size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active md:end-1 md:size-6"
         >
           <X className="size-3.5" />
         </button>
@@ -198,8 +201,8 @@ export function ManualIcon({ className }: { className?: string }): React.ReactEl
   );
 }
 
-// Переключатель разделов «Входящих» на телефоне: «Сейчас» (решить и делаю) и «Очередь».
-// На узком экране две колонки рядом не помещаются, а стопкой «Сейчас» уводит очередь далеко
+// Переключатель разделов «Входящих» на телефоне: «В работе» (решить и делаю) и «Очередь».
+// На узком экране две колонки рядом не помещаются, а стопкой «В работе» уводит очередь далеко
 // вниз — поэтому один раздел за раз, с числом задач в каждом. Липнет к верху при прокрутке.
 export type InboxSection = 'now' | 'queue';
 
@@ -209,13 +212,15 @@ export function InboxSectionSwitch({
   nowCount,
   queueCount,
   nowAttention,
+  className,
 }: {
   value: InboxSection;
   onChange: (value: InboxSection) => void;
   nowCount: number;
   queueCount: number;
-  // В «Сейчас» есть сданная работа, которую ждут решения, — фиолетовая точка на разделе.
+  // В «В работе» есть сданная работа, которую ждут решения, — фиолетовая точка на разделе.
   nowAttention: boolean;
+  className?: string;
 }): React.ReactElement {
   const item = (key: InboxSection, label: string, count: number, attention = false): React.ReactElement => {
     const on = value === key;
@@ -226,7 +231,7 @@ export function InboxSectionSwitch({
         aria-pressed={on}
         onClick={() => onChange(key)}
         className={cn(
-          'relative flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm transition-colors',
+          'relative flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active',
           on
             ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
             : 'font-medium text-muted-foreground',
@@ -244,9 +249,9 @@ export function InboxSectionSwitch({
     <div
       role="group"
       aria-label="Раздел"
-      className="flex rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel"
+      className={cn('flex rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel', className)}
     >
-      {item('now', 'Сейчас', nowCount, nowAttention)}
+      {item('now', 'В работе', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}
     </div>
   );

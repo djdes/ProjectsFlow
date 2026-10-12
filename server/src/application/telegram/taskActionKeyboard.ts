@@ -1,4 +1,5 @@
 import type { InlineKeyboardMarkup } from './TelegramClient.js';
+import type { TaskStatus } from '../../domain/task/Task.js';
 
 // Kinds задачных TG-уведомлений, к которым автоматически прицепляем инлайн-действия
 // «Завершить/Комментировать» и регистрируем reply→комментарий. НЕ включаем:
@@ -16,19 +17,30 @@ export const TASK_ACTION_KINDS: ReadonlySet<string> = new Set([
   'task_digest_card',
 ]);
 
-// callback_data ≤ 64 байт: 'nd:'/'nc:'/'nu:' (3) + UUID(36) = 39 байт. Префиксы nd/nc/nu
-// (notification: done/comment/undo) НЕ пересекаются с конструктором (tp/td/tc/tx/da/dd/…)
-// и browse (bt:) — роутинг в HandleTelegramWebhook разводит их до фолбэка на композер.
-export function taskActionKeyboard(taskId: string): InlineKeyboardMarkup {
+// Callback data stays below Telegram's 64-byte limit: prefix + UUID is at most 41
+// bytes, including delete confirmation. Notification actions are routed before the
+// composer (tp/td/tc/tx/da/dd/...) and browse (bt:) callbacks.
+export function taskActionKeyboard(taskId: string, status?: TaskStatus): InlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
-        { text: '✅ Завершить', callback_data: `nd:${taskId}` },
+        ...(status === 'manual' ? [] : [{ text: '▶️ В работу', callback_data: `nw:${taskId}` }]),
+        { text: '✅ Готово', callback_data: `nd:${taskId}` },
+      ],
+      [
         { text: '💬 Комментировать', callback_data: `nc:${taskId}` },
+        { text: '🗑 Удалить', callback_data: `nx:${taskId}` },
       ],
       [{ text: '👁 Посмотреть задачу', callback_data: `bt:t:${taskId}` }],
     ],
   };
+}
+
+export function taskDeleteKeyboard(taskId: string): InlineKeyboardMarkup {
+  return { inline_keyboard: [[
+    { text: '🗑 Да, в корзину', callback_data: `nx:y:${taskId}` },
+    { text: 'Оставить', callback_data: `nx:n:${taskId}` },
+  ]] };
 }
 
 // Клавиатура после завершения — только «Отменить» (персистентно, до нажатия).

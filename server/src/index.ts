@@ -1262,6 +1262,7 @@ const dismissCloseProposal = new DismissCloseProposal({
 
 const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
+  projects: projectRepo,
   members: projectMemberRepo,
   tasks: taskRepo,
   attachments: taskAttachmentRepo,
@@ -1275,6 +1276,16 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   messageTasks: telegramMessageTaskRepo,
   groupOwners: telegramGroupOwnerRepo,
   createComment: createTaskCommentUseCase,
+  deleteTask: new DeleteTask({
+    projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
+    comments: taskCommentRepo, activityRecorder,
+  }),
+  sendPersonalDigestPage: async (workspaceId, userId, chatId, messageId) => {
+    const remaining = await telegramMessageTaskRepo.listByMessage(chatId, messageId);
+    return sendWorkspacePersonalDigest.execute(workspaceId, {
+      force: true, onlyUserId: userId, taskIds: remaining.map((task) => task.taskId),
+    });
+  },
   // Инлайн «Завершить/Отменить» на задачных уведомлениях (nd:/nu: callback).
   moveTask: new MoveTask({
     projects: projectRepo,
@@ -1974,6 +1985,7 @@ const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
   tasks: taskRepo,
   comments: taskCommentRepo,
   telegram: sendAgentTelegramNotification,
+  messageTasks: telegramMessageTaskRepo,
   appUrl: appBaseUrl,
 });
 const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({

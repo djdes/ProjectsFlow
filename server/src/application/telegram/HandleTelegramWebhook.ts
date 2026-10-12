@@ -19,6 +19,11 @@ import type { TaskAttachmentRepository } from '../task/TaskAttachmentRepository.
 import type { AttachmentStorage } from '../task/AttachmentStorage.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
+import type { DeleteTask } from '../task/DeleteTask.js';
+import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { SendWorkspacePersonalDigest } from '../digest/SendWorkspacePersonalDigest.js';
+import type { Task } from '../../domain/task/Task.js';
+import { requireTaskReadAccess, requireTaskDeleteAccess } from '../task/taskAuthorization.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
 import {
   buildAssigneeMenu,
@@ -34,6 +39,7 @@ import {
 import {
   taskActionKeyboard,
   taskCompletedKeyboard,
+  taskDeleteKeyboard,
   closeProposalResolvedKeyboard,
 } from './taskActionKeyboard.js';
 import type { DispatchCommentNotifications } from '../notifications/DispatchCommentNotifications.js';
@@ -314,6 +320,7 @@ type Deps = {
   readonly users: UserRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  readonly projects: ProjectRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly attachmentStorage: Pick<AttachmentStorage, 'read'>;
   readonly client: TelegramClient;
@@ -333,6 +340,8 @@ type Deps = {
   readonly createComment: CreateTaskComment;
   // Инлайн «✅ Завершить» / «↩️ Отменить» на задачных уведомлениях (nd:/nu: callback).
   readonly moveTask: MoveTask;
+  readonly deleteTask: Pick<DeleteTask, 'execute'>;
+  readonly sendPersonalDigestPage: (workspaceId: string, userId: string, chatId: number, messageId: number) => ReturnType<SendWorkspacePersonalDigest['execute']>;
   // Инлайн «✅ Закрыть» / «✕ Не она» на предложениях закрыть (pd:/px: callback, db/101).
   readonly confirmCloseProposal: ConfirmCloseProposal;
   readonly dismissCloseProposal: DismissCloseProposal;
@@ -393,6 +402,9 @@ export class HandleTelegramWebhook {
       const data = cq.data ?? '';
       // Действия задачных уведомлений (nd/nc/nu) — до фолбэка на композер.
       if (data.startsWith('nd:')) return this.handleTaskDone(cq, data.slice(3));
+      if (data.startsWith('nw:')) return this.handleTaskWork(cq, data.slice(3));
+      if (data.startsWith('nx:')) return this.handleTaskDelete(cq, data.slice(3));
+      if (data.startsWith('np:')) return this.handlePersonalDigestPage(cq, data.slice(3));
       if (data.startsWith('dg:')) return this.handleDigestTaskDone(cq, data.slice(3));
       if (data.startsWith('nc:')) return this.handleTaskCommentPrompt(cq, data.slice(3));
       if (data.startsWith('rc:')) return this.handleReplyCommentChoice(cq, data.slice(3));
@@ -800,8 +812,11 @@ export class HandleTelegramWebhook {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Задача удалена.', showAlert: true });
       return null;
     }
-    const membership = await this.deps.members.findForProject(task.projectId, userId);
-    if (!membership) {
+    try {
+      // The HTTP task gate also handles personal/delegated inbox tasks. Membership
+      // alone incorrectly rejects an assignee who is not a member of a private inbox.
+      await requireTaskReadAccess(this.deps, task.projectId, task.id, userId);
+    } catch {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к задаче.', showAlert: true });
       return null;
     }
@@ -809,14 +824,14 @@ export class HandleTelegramWebhook {
   }
 
   // Карточка задачи (после «Отменить» / для повторного показа действий).
-  private async renderTaskCard(chatId: number, messageId: number, task: { description: string | null }, taskId: string): Promise<void> {
+  private async renderTaskCard(chatId: number, messageId: number, task: Pick<Task, 'description' | 'status'>, taskId: string): Promise<void> {
     await this.deps.client.editMessageText({
       chatId,
       messageId,
-      text: `📌 ${escapeHtml(excerptShort(task.description, 300))}`,
+      text: `${task.status === 'manual' ? '▶️ <b>В работе</b>\n' : '📌 '}${escapeHtml(excerptShort(task.description, 300))}`,
       parseMode: 'HTML',
       disableWebPagePreview: true,
-      replyMarkup: taskActionKeyboard(taskId),
+      replyMarkup: taskActionKeyboard(taskId, task.status),
     });
   }
 
@@ -827,19 +842,107 @@ export class HandleTelegramWebhook {
     description: string | null,
     name: string | null,
     taskId: string,
+    awaitingApproval = false,
   ): Promise<void> {
     const who = name ? ` · ${escapeHtml(name)}` : '';
     await this.deps.client.editMessageText({
       chatId,
       messageId,
-      text: `✅ <b>Завершено</b>${who}\n${escapeHtml(excerptShort(description, 300))}`,
+      text: `${awaitingApproval ? '📨 <b>На утверждении</b>' : '✅ <b>Завершено</b>'}${who}\n${escapeHtml(excerptShort(description, 300))}`,
       parseMode: 'HTML',
       disableWebPagePreview: true,
-      replyMarkup: taskCompletedKeyboard(taskId),
+      replyMarkup: awaitingApproval
+        ? { inline_keyboard: [[{ text: '💬 Комментировать', callback_data: `nc:${taskId}` }]] }
+        : taskCompletedKeyboard(taskId),
     });
   }
 
-  // «✅ Завершить»: помечаем задачу done, перерисовываем сообщение + кнопку «Отменить».
+  private async handlePersonalDigestPage(cq: TelegramCallbackQuery, data: string): Promise<void> {
+    if (!/^[0-9a-f-]{36}$/i.test(data) || !cq.message) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Эта кнопка устарела.', showAlert: true });
+      return;
+    }
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!userId) return this.answerNeedsLink(cq.id);
+    // Only the actor's tasks, delivered to their linked DM, even for forwarded buttons.
+    await this.deps.client.answerCallbackQuery(cq.id, { text: 'Загружаю следующие задачи…' });
+    const result = await this.deps.sendPersonalDigestPage(data, userId, cq.message.chat.id, cq.message.message_id);
+    if (result.sentCount === 0) await this.reply(cq.from.id, 'Больше доступных задач в этой сводке нет.');
+  }
+
+  private async handleTaskWork(cq: TelegramCallbackQuery, taskId: string): Promise<void> {
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { userId, task } = ctx;
+    if (task.status === 'manual') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Уже в работе.' });
+      return;
+    }
+    if (task.status === 'done' || task.status === 'pending_approval') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Задача уже сдана. Откройте её актуальную карточку.', showAlert: true });
+      return;
+    }
+    let updated: Task;
+    try {
+      updated = await this.deps.moveTask.execute({
+        projectId: task.projectId, ownerUserId: userId, taskId,
+        // Human work must never enter the worker's todo/in_progress pipeline.
+        targetStatus: 'manual', beforeTaskId: null, afterTaskId: null,
+      });
+    } catch {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Не удалось взять задачу в работу.', showAlert: true });
+      return;
+    }
+    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, updated.status, userId);
+    this.deps.notifyTaskChanged(task.projectId);
+    await this.deps.client.answerCallbackQuery(cq.id, { text: '▶️ В работе' });
+    if (cq.message) await this.renderTaskCard(cq.message.chat.id, cq.message.message_id, updated, taskId);
+  }
+
+  private async handleTaskDelete(cq: TelegramCallbackQuery, data: string): Promise<void> {
+    const confirmed = data.startsWith('y:');
+    const cancelled = data.startsWith('n:');
+    const taskId = confirmed || cancelled ? data.slice(2) : data;
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { task, userId } = ctx;
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    if (cancelled) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Задача оставлена.' });
+      if (cq.message) await this.renderTaskCard(chatId, cq.message.message_id, task, taskId);
+      return;
+    }
+    try {
+      await requireTaskDeleteAccess(this.deps, task.projectId, taskId, userId, 'delete_task');
+    } catch {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет права удалять эту задачу.', showAlert: true });
+      return;
+    }
+    if (!confirmed) {
+      await this.deps.client.answerCallbackQuery(cq.id);
+      await this.deps.client.sendMessage({
+        chatId, parseMode: 'HTML',
+        text: `Переместить в корзину «${escapeHtml(excerptShort(task.description, 160))}»?`,
+        replyMarkup: taskDeleteKeyboard(taskId),
+      });
+      return;
+    }
+    try {
+      await this.deps.deleteTask.execute(task.projectId, userId, taskId);
+    } catch {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Не удалось удалить задачу.', showAlert: true });
+      return;
+    }
+    this.deps.notifyTaskChanged(task.projectId);
+    await this.deps.client.answerCallbackQuery(cq.id, { text: '🗑 В корзине' });
+    if (cq.message) await this.deps.client.editMessageText({
+      chatId, messageId: cq.message.message_id, parseMode: 'HTML',
+      text: `🗑 <b>В корзине</b>\n${escapeHtml(excerptShort(task.description, 300))}`,
+      replyMarkup: { inline_keyboard: [] },
+    });
+  }
+
+  // Completion follows the same approval policy as the web app.
   private async handleTaskDone(cq: TelegramCallbackQuery, taskId: string): Promise<void> {
     const chatId = cq.message?.chat.id ?? cq.from.id;
     const messageId = cq.message?.message_id ?? null;
@@ -851,8 +954,9 @@ export class HandleTelegramWebhook {
       if (messageId !== null) await this.renderCompleted(chatId, messageId, task.description, null, taskId);
       return;
     }
+    let updated: Task;
     try {
-      await this.deps.moveTask.execute({
+      updated = await this.deps.moveTask.execute({
         projectId: task.projectId,
         ownerUserId: userId,
         taskId,
@@ -865,11 +969,12 @@ export class HandleTelegramWebhook {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Не удалось завершить.', showAlert: true });
       return;
     }
-    await this.deps.client.answerCallbackQuery(cq.id, { text: '✅ Завершено' });
-    const name = (await this.deps.users.getById(userId).catch(() => null))?.displayName ?? null;
-    if (messageId !== null) await this.renderCompleted(chatId, messageId, task.description, name, taskId);
-    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, 'done', userId);
+    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, updated.status, userId);
     this.deps.notifyTaskChanged(task.projectId);
+    const awaitingApproval = updated.status === 'pending_approval';
+    await this.deps.client.answerCallbackQuery(cq.id, { text: awaitingApproval ? '📨 Отправлено на утверждение' : '✅ Завершено' });
+    const name = (await this.deps.users.getById(userId).catch(() => null))?.displayName ?? null;
+    if (messageId !== null) await this.renderCompleted(chatId, messageId, task.description, name, taskId, awaitingApproval);
   }
 
   // Compact daily-digest action. Unlike a single-task notification, a digest contains many
@@ -885,8 +990,9 @@ export class HandleTelegramWebhook {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Уже завершена.' });
       return;
     }
+    let updated: Task;
     try {
-      await this.deps.moveTask.execute({
+      updated = await this.deps.moveTask.execute({
         projectId: task.projectId,
         ownerUserId: userId,
         taskId,
@@ -902,8 +1008,8 @@ export class HandleTelegramWebhook {
       });
       return;
     }
-    await this.deps.client.answerCallbackQuery(cq.id, { text: '✓ Задача завершена' });
-    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, 'done', userId);
+    await this.deps.client.answerCallbackQuery(cq.id, { text: updated.status === 'pending_approval' ? 'Отправлено на утверждение' : '✓ Задача завершена' });
+    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, updated.status, userId);
     this.deps.notifyTaskChanged(task.projectId);
   }
 
@@ -920,8 +1026,9 @@ export class HandleTelegramWebhook {
       return;
     }
     const target = task.statusBeforeDone ?? 'todo';
+    let updated: Task;
     try {
-      await this.deps.moveTask.execute({
+      updated = await this.deps.moveTask.execute({
         projectId: task.projectId,
         ownerUserId: userId,
         taskId,
@@ -936,8 +1043,8 @@ export class HandleTelegramWebhook {
       return;
     }
     await this.deps.client.answerCallbackQuery(cq.id, { text: '↩️ Возвращено' });
-    if (messageId !== null) await this.renderTaskCard(chatId, messageId, task, taskId);
-    this.deps.notifyStatusChanged(task.projectId, taskId, 'done', target, userId);
+    if (messageId !== null) await this.renderTaskCard(chatId, messageId, updated, taskId);
+    this.deps.notifyStatusChanged(task.projectId, taskId, 'done', updated.status, userId);
     this.deps.notifyTaskChanged(task.projectId);
   }
 

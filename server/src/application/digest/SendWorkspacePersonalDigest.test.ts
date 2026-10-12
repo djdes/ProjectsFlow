@@ -70,6 +70,7 @@ function harness(opts: {
   telegram?: (cmd: SendAgentNotificationCommand) => SendAgentNotificationResult;
 }) {
   const sent: SendAgentNotificationCommand[] = [];
+  const remembered: Array<{ chatId: number; messageId: number; tasks: readonly { taskId: string; projectId: string }[] }> = [];
   const digest = new SendWorkspacePersonalDigest({
     settings: {
       async get() {
@@ -89,15 +90,18 @@ function harness(opts: {
     },
     projects: {
       async listByWorkspace() {
-        return [{ id: 'project-a', name: 'DocsFlow', icon: null }];
+        return [
+          { id: 'project-a', name: 'DocsFlow', icon: null },
+          { id: 'project-b', name: 'ScanFlow', icon: null },
+        ];
       },
       async listInboxesByOwners() {
         return [];
       },
     },
     tasks: {
-      async listByProject() {
-        return opts.tasks;
+      async listByProject(id: string) {
+        return opts.tasks.filter((t) => t.projectId === id);
       },
     },
     comments: {
@@ -111,10 +115,11 @@ function harness(opts: {
         return opts.telegram?.(cmd) ?? { status: 'ok', messageId: sent.length, chatId: 1 };
       },
     },
+    messageTasks: { async attach(input) { remembered.push(input); } },
     appUrl: 'https://projectsflow.ru/',
     sleep: async () => undefined,
   });
-  return { digest, sent };
+  return { digest, sent, remembered };
 }
 
 test('personal digest card shows task details and action buttons', () => {
@@ -139,7 +144,7 @@ test('personal digest card shows task details and action buttons', () => {
   const buttons = card.keyboard.inline_keyboard.flat();
   assert.deepEqual(
     buttons.map((b) => b.callback_data ?? b.url),
-    ['nd:t1', 'nc:t1', 'bt:t:t1', 'https://projectsflow.ru/projects/project-a?task=t1'],
+    ['nw:t1', 'nd:t1', 'nc:t1', 'nx:t1', 'bt:t:t1', 'https://projectsflow.ru/projects/project-a?task=t1'],
   );
 });
 
@@ -250,17 +255,30 @@ test('personal digest skips members without a reachable bot chat', async () => {
   assert.equal(sent.filter((cmd) => cmd.userId === OLGA).length, 1);
 });
 
-test('personal digest caps cards and links the rest to the app', async () => {
+test('personal digest paginates remaining cards in Telegram without losing tasks after completion', async () => {
   const many = Array.from({ length: PERSONAL_DIGEST_CARD_LIMIT + 3 }, (_, i) =>
     task(`t${i}`, `Задача ${i}`),
   );
-  const { digest, sent } = harness({ tasks: many });
+  const { digest, sent, remembered } = harness({ tasks: many });
   await digest.execute('w1');
   assert.equal(
     sent.filter((cmd) => cmd.kind === PERSONAL_DIGEST_CARD_KIND).length,
     PERSONAL_DIGEST_CARD_LIMIT,
   );
   assert.match(sent.at(-1)!.text, /… и ещё 3 задачи — <a href="https:\/\/projectsflow\.ru\/">/);
+  assert.equal((sent.at(-1)!.replyMarkup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard[0]![0]!.callback_data, 'np:w1');
+  const taskIds = remembered[0]!.tasks.map((t) => t.taskId);
+  assert.deepEqual(taskIds, ['t15', 't16', 't17']);
+  // Closing page-one tasks shrinks the live list. The recorded IDs still select all
+  // of page two; an offset into the new list would incorrectly drop t15 and t16.
+  many[0] = { ...many[0]!, status: 'done' };
+  many[1] = { ...many[1]!, status: 'done' };
+  sent.length = 0;
+  await digest.execute('w1', { force: true, onlyUserId: DENIS, taskIds });
+  assert.deepEqual(sent.filter((cmd) => cmd.kind === PERSONAL_DIGEST_CARD_KIND).map((cmd) => cmd.taskId), taskIds);
+  sent.length = 0;
+  await digest.execute('w1', { force: true, onlyUserId: OLGA, taskIds });
+  assert.equal(sent.length, 0, 'a forwarded button never sends another assignee’s tasks');
 });
 
 test('personal digest retries once after a Telegram rate limit', async () => {
@@ -276,4 +294,25 @@ test('personal digest retries once after a Telegram rate limit', async () => {
   });
   await digest.execute('w1');
   assert.equal(sent.filter((cmd) => cmd.kind === PERSONAL_DIGEST_CARD_KIND).length, 2);
+});
+
+test('personal digest keeps projects together and sorts urgency within each project', async () => {
+  const { digest, sent } = harness({ tasks: [
+    task('a-later', 'Первая', { priority: 4 }),
+    task('a-urgent', 'Срочная', { priority: 1 }),
+    task('b-urgent', 'Другой проект', { projectId: 'project-b', priority: 1 }),
+  ] });
+  await digest.execute('w1');
+  const cards = sent.filter((cmd) => cmd.kind === PERSONAL_DIGEST_CARD_KIND);
+  assert.deepEqual(cards.map((cmd) => cmd.taskId), ['a-urgent', 'a-later', 'b-urgent']);
+  assert.match(sent[0]!.text, /DocsFlow — 2\n📁 ScanFlow — 1/);
+});
+
+test('a task already in manual work keeps done, comment and delete actions', () => {
+  const card = buildPersonalDigestCard(item(task('t1', 'Делаю', { status: 'manual' })), {
+    appUrl: 'https://projectsflow.ru', commentCount: 0, now: NOW,
+  });
+  const callbacks = card.keyboard.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(!callbacks.includes('nw:t1'));
+  for (const action of ['nd:t1', 'nc:t1', 'nx:t1']) assert.ok(callbacks.includes(action));
 });
