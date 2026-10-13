@@ -13,7 +13,7 @@ import type { GetKbDocument } from '../kb/GetKbDocument.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
 import { prepareKbContext } from './prepareKbContext.js';
-import { prepareComposeContext } from './prepareComposeContext.js';
+import { prepareComposeContext, type ComposeProjectScope } from './prepareComposeContext.js';
 
 const RATE_LIMIT_PER_HOUR = 60;
 // compose тяжелее (2 прохода opus + KB многих проектов) — отдельный, более строгий лимит.
@@ -32,6 +32,10 @@ export class AiPromptRateLimitedError extends Error {
 
 type Deps = {
   readonly resolveActiveWorkspace?: ResolveActiveWorkspace;
+  // Подписи пространств у проектов-кандидатов compose при projectScope='all'.
+  readonly listWorkspacesForUser?: (
+    userId: string,
+  ) => Promise<readonly { readonly id: string; readonly name: string }[]>;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly aiPromptJobs: AiPromptJobRepository;
@@ -63,6 +67,9 @@ export type EnqueueAiPromptJobInput = {
   // 'improve' (legacy, default) | 'compose' (pass-1) | 'compose-advanced' (ленивый pass-2)
   // | 'assistant' (очередь ИИ-ассистентов продуктов, только agent-API).
   readonly mode?: AiPromptJobMode;
+  // compose: проекты-кандидаты активного пространства (по умолчанию, веб) или всех
+  // пространств пользователя ('all' — Telegram-бот). См. ComposeProjectScope.
+  readonly projectScope?: ComposeProjectScope;
 };
 
 export class EnqueueAiPromptJob {
@@ -144,7 +151,12 @@ export class EnqueueAiPromptJob {
     if (mode === 'compose') {
       // Дайджесты всех проектов-кандидатов пользователя (для разбивки + классификации).
       // Best-effort: если KB/проектов нет — compose всё равно отработает (без заземления).
-      const ctx = await prepareComposeContext(input.userId, this.deps, input.text);
+      const ctx = await prepareComposeContext(
+        input.userId,
+        this.deps,
+        input.text,
+        input.projectScope ?? 'active',
+      );
       kbContext = ctx?.block ?? null;
     }
 

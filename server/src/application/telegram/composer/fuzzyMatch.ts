@@ -45,23 +45,28 @@ export function fuzzyMatch<T>(
 // «<проект> <текст>»: `+Ралф core Обнови билд` → проект «Ралф core», остаток «Обнови билд».
 // Самое длинное подходящее имя выигрывает. null если ни одно имя не префикс — тогда caller
 // откатывается на fuzzyMatch (одно-токенный query + пикер).
+//
+// ties — все проекты с этим же именем (без регистра). Одноимённые проекты бывают в разных
+// пространствах; больше одного — выбор за человеком (пикер), а не за порядком в списке.
 export function greedyProjectPrefix<T>(
   segment: string,
   items: readonly T[],
   getName: (item: T) => string,
-): { readonly item: T; readonly remainder: string } | null {
+): { readonly item: T; readonly remainder: string; readonly ties: readonly T[] } | null {
   const seg = segment.trim();
   const segLow = seg.toLowerCase();
-  let best: { item: T; nameLen: number } | null = null;
+  let best: { item: T; nameLen: number; nameLow: string } | null = null;
   for (const it of items) {
     const name = getName(it).trim();
     if (name.length === 0) continue;
     const nameLow = name.toLowerCase();
     // Точное совпадение или словесный префикс (имя + пробел), чтобы «Ралф» не матчил «Ралфмен».
     if (segLow === nameLow || segLow.startsWith(nameLow + ' ')) {
-      if (!best || name.length > best.nameLen) best = { item: it, nameLen: name.length };
+      if (!best || name.length > best.nameLen) best = { item: it, nameLen: name.length, nameLow };
     }
   }
   if (!best) return null;
-  return { item: best.item, remainder: seg.slice(best.nameLen).trim() };
+  const bestName = best.nameLow;
+  const ties = items.filter((it) => getName(it).trim().toLowerCase() === bestName);
+  return { item: best.item, remainder: seg.slice(best.nameLen).trim(), ties };
 }

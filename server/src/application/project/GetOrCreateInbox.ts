@@ -3,6 +3,7 @@ import type { Project } from '../../domain/project/Project.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import { ProjectNameAlreadyExistsError } from '../../domain/project/errors.js';
+import { NotWorkspaceMemberError } from '../../domain/workspace/errors.js';
 
 type Deps = {
   readonly repo: ProjectRepository;
@@ -10,6 +11,9 @@ type Deps = {
   readonly idGen: () => string;
   // Активное пространство владельца — inbox создаётся в нём (projects.workspace_id NOT NULL).
   readonly resolveWorkspaceId: (ownerId: string) => Promise<string>;
+  // Проверка членства для явно названного пространства (см. execute). Без неё явное
+  // пространство берётся как есть — так устроены тесты, где пространство одно.
+  readonly isWorkspaceMember?: (userId: string, workspaceId: string) => Promise<boolean>;
 };
 
 // Лениво находит или создаёт inbox-проект пользователя. Идемпотентно: если уже есть —
@@ -23,12 +27,20 @@ type Deps = {
 export class GetOrCreateInbox {
   constructor(private readonly deps: Deps) {}
 
-  // workspaceId — явное пространство вместо активного у инициатора. Нужен фоновым
-  // путям без веб-запроса (Telegram-бот): там «активное» — просто вкладка, которую
-  // отправитель последней открыл в браузере, и делегированная задача уезжала в
-  // свежесозданные «Входящие» ответственного там, куда он не смотрит.
+  // workspaceId — явное пространство вместо активного у инициатора. Нужен фоновым путям без
+  // веб-запроса (Telegram-бот): там «активное» — просто вкладка, которую отправитель последней
+  // открыл в браузере. Пространство решает бот или выбирает автор кнопками (см.
+  // resolveDraftWorkspace); без него — активное пространство автора, как в веб-интерфейсе.
   async execute(ownerId: string, actorUserId = ownerId, workspaceId?: string): Promise<Project> {
-    workspaceId ??= await this.deps.resolveWorkspaceId(actorUserId);
+    if (workspaceId === undefined) {
+      workspaceId = await this.deps.resolveWorkspaceId(actorUserId);
+    } else if (actorUserId === ownerId && this.deps.isWorkspaceMember) {
+      // Свои «Входящие» — только в пространстве, где ты участник. Для чужих ниже та же
+      // проверка идёт через список коллег пространства.
+      if (!(await this.deps.isWorkspaceMember(actorUserId, workspaceId))) {
+        throw new NotWorkspaceMemberError();
+      }
+    }
     if (actorUserId !== ownerId) {
       const colleagues = await this.deps.members.listSharedUsersInWorkspace(actorUserId, workspaceId);
       if (!colleagues.some((member) => member.id === ownerId)) throw new AssigneeNotSharedMemberError();

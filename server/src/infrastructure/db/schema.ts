@@ -183,6 +183,11 @@ export const telegramTaskDrafts = mysqlTable(
     // Какой сегмент ждёт новый текст от пользователя (правка формулировки). NULL — не ждём,
     // -1 — ручной черновик без сегментов. См. db/140.
     awaitingTextSeg: int('awaiting_text_seg'),
+    // Пространство для задач черновика без проекта (их «Входящие»). NULL — не решено или
+    // черновик старше db/164 (тогда прежнее поведение). См. db/164.
+    workspaceId: char('workspace_id', { length: 36 }),
+    // Бот не смог решить пространство сам и ждёт выбора кнопкой. См. db/164.
+    workspacePending: boolean('workspace_pending').notNull().default(false),
     status: mysqlEnum('status', ['composing', 'confirming', 'confirmed', 'cancelled', 'expired'])
       .notNull()
       .default('composing'),
@@ -200,6 +205,19 @@ export const telegramTaskDrafts = mysqlTable(
 );
 
 export type TelegramTaskDraftRow = typeof telegramTaskDrafts.$inferSelect;
+
+// Последний выбор пространства пользователем в Telegram-чате (кнопками конструктора задач).
+// См. db/164.
+export const telegramChatWorkspaces = mysqlTable(
+  'telegram_chat_workspaces',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    chosenAt: timestamp('chosen_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [primaryKey({ columns: [t.tgChatId, t.userId] })],
+);
 
 // Маппинг task-сообщений бота → task_id, для reply→комментарий (обобщение
 // telegram_ralph_question_messages). См. db/049.

@@ -31,6 +31,13 @@ import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
 import { endOfWeekDeadline } from './defaultDeadline.js';
 import {
+  allowedWorkspaces,
+  resolveDraftWorkspace,
+  sortWorkspaceOptions,
+  type ComposerWorkspaceDeps,
+  type WorkspaceOption,
+} from './resolveDraftWorkspace.js';
+import {
   VISIBLE_KANBAN_STATUSES,
   type VisibleKanbanStatus,
   type KanbanBoardSettings,
@@ -98,6 +105,35 @@ type Deps = {
   // Проверка сегментов-дополнений (existingTaskId). Опционально: без него такие сегменты
   // деградируют в обычные новые задачи.
   readonly tasks?: Pick<TaskRepository, 'getById'>;
+  // Выбор пространства для задач без проекта (см. resolveDraftWorkspace): бот решает сам, а
+  // не может — спрашивает кнопками. Опционально: без него «Входящие» берутся в активном
+  // пространстве автора, как раньше.
+  readonly workspaces?: ComposerWorkspaceDeps;
+};
+
+// Пространство задач черновика без проекта — для карточки и создания.
+//  off      — решать нечего: нет задач без проекта, нет пространств или черновик старый
+//             (тогда «Входящие» в активном пространстве автора, как раньше);
+//  decided  — current известно (выбрано, вычислено или пространство единственное);
+//  pending  — бот не решил, ждём кнопку.
+type WorkspaceView = {
+  readonly mode: 'off' | 'decided' | 'pending';
+  readonly current: WorkspaceOption | null;
+  // Из чего можно выбрать (с учётом ответственного задачи без проекта).
+  readonly options: readonly WorkspaceOption[];
+  // Пространств у автора больше одного — показываем строку и кнопку «Пространство».
+  readonly multiple: boolean;
+  // Куда положить задачу без выбора при авто-создании: личное пространство, если оно среди
+  // вариантов (оно приватное — ничего не утечёт в команду). null — ждём выбора.
+  readonly fallback: WorkspaceOption | null;
+};
+
+const WORKSPACE_OFF: WorkspaceView = {
+  mode: 'off',
+  current: null,
+  options: [],
+  multiple: false,
+  fallback: null,
 };
 
 // composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
@@ -151,6 +187,19 @@ function escapeHtml(s: string): string {
 function excerpt(text: string, limit = EXCERPT_LIMIT): string {
   const s = text.trim().replace(/\s+/g, ' ');
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
+}
+
+// Кнопка пространства: иконка (или 🗂) и имя; текущее отмечено галочкой.
+function workspaceButtonText(workspace: WorkspaceOption, current: boolean): string {
+  const icon = workspace.icon?.trim() || '🗂';
+  return `${current ? '✓ ' : ''}${icon} ${excerpt(workspace.name, 30)}`;
+}
+
+// Подпись проекта в кнопке пикера: имя и, если пространств несколько, пространство — иначе
+// одноимённые проекты разных пространств неотличимы. Укладываемся в ~40 символов.
+function projectButtonText(project: { readonly name: string; readonly space?: string | null }): string {
+  if (!project.space) return project.name.slice(0, 40);
+  return `${excerpt(project.name, 24)} · ${excerpt(project.space, 14)}`;
 }
 
 // Отказ CreateTask, который повтор не исправит, — причина для карточки. null — сбой временный
@@ -217,6 +266,13 @@ type ManStatusSel =
   | { readonly type: 'open' }
   | { readonly type: 'pick'; readonly status: VisibleKanbanStatus }
   | { readonly type: 'back' };
+// ws:<d>:? — пикер пространств, ws:<d>:b — назад к карточке, ws:<d>:<uuid> — выбор. UUID
+// пространства целиком (12 + 36 + 4 = 52 байта < 64): индекс в списке ненадёжен — список
+// пространств может поменяться между показом кнопки и нажатием.
+type WorkspaceSel =
+  | { readonly type: 'open' }
+  | { readonly type: 'back' }
+  | { readonly type: 'pick'; readonly workspaceId: string };
 type ParsedCallback =
   | { readonly kind: 'project'; readonly draftId: string; readonly sel: ProjectSel }
   | { readonly kind: 'assignee'; readonly draftId: string; readonly sel: AssigneeSel }
@@ -238,6 +294,7 @@ type ParsedCallback =
   | { readonly kind: 'seg-assignee'; readonly draftId: string; readonly seg: number; readonly sel: AiAssigneeSel }
   | { readonly kind: 'seg-status'; readonly draftId: string; readonly seg: number; readonly sel: AiStatusSel }
   | { readonly kind: 'man-status'; readonly draftId: string; readonly sel: ManStatusSel }
+  | { readonly kind: 'workspace'; readonly draftId: string; readonly sel: WorkspaceSel }
   | { readonly kind: 'file-open'; readonly draftId: string; readonly file: number; readonly page: number }
   | {
       readonly kind: 'file-toggle';
@@ -324,6 +381,13 @@ function parseCallback(data: string | undefined): ParsedCallback {
       const [draftId, sel] = rest.split(':');
       if (!draftId || sel === undefined) return null;
       return { kind: 'man-status', draftId, sel: parseManStatusSel(sel) };
+    }
+    case 'ws': {
+      const [draftId, sel] = rest.split(':');
+      if (!draftId || !sel) return null;
+      const parsed: WorkspaceSel =
+        sel === '?' ? { type: 'open' } : sel === 'b' ? { type: 'back' } : { type: 'pick', workspaceId: sel };
+      return { kind: 'workspace', draftId, sel: parsed };
     }
     case 'fs': {
       const [draftId, fileStr, pageStr] = rest.split(':');
@@ -627,7 +691,7 @@ export class TelegramComposerService {
       return;
     }
 
-    let hint: { projectId: string | null; taskText: string };
+    let hint: { projectId: string | null; taskText: string; ambiguous?: boolean };
     try {
       hint = await this.resolveProjectHint(userId, parsedEff);
     } catch (err) {
@@ -642,6 +706,11 @@ export class TelegramComposerService {
         options.sourceKey ?? null,
         forceStatus,
       );
+      return;
+    }
+    if (hint.ambiguous) {
+      await this.manualFlow(userId, chatId, effectiveRaw, undefined, attachments, undefined,
+        options.sourceKey ?? null, forceStatus);
       return;
     }
     const aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
@@ -679,7 +748,11 @@ export class TelegramComposerService {
     // creator of that row starts AI/card work; the retry is now safely acknowledged as duplicate.
     if (draft.id !== draftId) return;
 
-    const enrichment = this.enrichDraft(draft, userId, chatId, effectiveRaw, parsedEff, hint, aiText, forceStatus);
+    // Пространство решаем сразу, по сырому черновику: если долгий AI проиграет авто-созданию,
+    // задача без проекта всё равно ляжет в решённое пространство, а не в «активное» браузера.
+    // После разбора на задачи решение уточняется (см. enrichDraft).
+    const decided = await this.decideWorkspace(draft);
+    const enrichment = this.enrichDraft(decided, userId, chatId, effectiveRaw, parsedEff, hint, aiText, forceStatus);
     if (options.background) {
       void enrichment.catch((err) => console.warn('[tg-composer] background enrichment failed:', err));
       return;
@@ -708,6 +781,9 @@ export class TelegramComposerService {
         text: aiText,
         projectId: hint.projectId,
         mode: 'compose',
+        // Сообщение может быть про любой проект пользователя, а не только про пространство,
+        // открытое в браузере.
+        projectScope: 'all',
       });
       const beforeWait = await this.deps.drafts.getById(draft.id);
       if (!beforeWait || beforeWait.status !== 'composing') return;
@@ -723,13 +799,21 @@ export class TelegramComposerService {
         }
         stopSpinner = null;
       }
-      const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus);
-      const updated = await this.deps.drafts.patchComposing(draft.id, {
+      const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
+        parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null);
+      const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
       });
-      if (!updated) return;
-      const card = await this.renderSegmentsCard(updated);
+      if (!patched) return;
+      // Задачи разобраны — теперь известно, есть ли среди них задачи без проекта и кому они:
+      // решаем, в какое пространство их положить (или спросим кнопками).
+      const unchangedDelegates = this.inboxTargets(draft).delegates.join(',') === this.inboxTargets(patched).delegates.join(',');
+      // An explicit choice made while AI was running still belongs to this assignment.
+      // A newly recognized delegate must trigger a fresh decision instead.
+      const updated = unchangedDelegates && patched.workspaceId && !patched.workspacePending
+        ? patched : await this.decideWorkspace(patched);
+      const card = await this.mainCard(updated);
       const tgMessageId = await this.respond(chatId, waitMsgId, card.text, card.replyMarkup);
       if (tgMessageId !== null) await this.deps.drafts.patch(updated.id, { tgMessageId });
     } catch (err) {
@@ -786,7 +870,10 @@ export class TelegramComposerService {
     if (body.length === 0) return;
     let receipt: TelegramTaskDraft | null = null;
     try {
-      const inbox = await this.deps.getOrCreateInbox.execute(ownerUserId);
+      // Пространство — по привязке группы или прошлому выбору владельца в этой группе; иначе
+      // как раньше (активное пространство владельца).
+      const workspaceId = await this.ownerInboxWorkspace(ownerUserId, chatId);
+      const inbox = await this.deps.getOrCreateInbox.execute(ownerUserId, ownerUserId, workspaceId);
       if (sourceKey) {
         receipt = await this.deps.drafts.findBySourceKey(sourceKey);
         if (receipt) {
@@ -891,15 +978,17 @@ export class TelegramComposerService {
       const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
       const greedy = greedyProjectPrefix(segment, all, (p) => p.name);
       if (greedy) {
-        projectId = greedy.item.id;
         taskText = greedy.remainder.trim();
+        // Одноимённые проекты (обычно — в разных пространствах): какой из них, решает человек.
+        if (greedy.ties.length > 1) offeredProjects = await this.offeredProjects(userId, greedy.ties);
+        else projectId = greedy.item.id;
       } else {
         const r = fuzzyMatch(parsed.projectQuery, all, (p) => p.name);
         if (r.unique) {
           projectId = r.unique.id;
         } else {
           const list = r.matches.length > 0 ? r.matches : all;
-          offeredProjects = list.map((p) => ({ id: p.id, name: p.name }));
+          offeredProjects = await this.offeredProjects(userId, list);
         }
       }
     }
@@ -925,6 +1014,19 @@ export class TelegramComposerService {
         const list = r.matches.length > 0 ? r.matches : candidates;
         offeredMembers = list.map((u) => ({ id: u.id, displayName: u.displayName }));
       }
+    }
+
+    if (offeredProjects && assigneeUserId && assigneeUserId !== userId && this.deps.workspaces) {
+      const all = await this.deps.members.listProjectsForUser(userId);
+      const allowed = await Promise.all(offeredProjects.map(async (choice) => {
+        const project = all.find((p) => p.id === choice.id);
+        return project && await this.deps.workspaces!.isMember(project.workspaceId, assigneeUserId!);
+      }));
+      const shared = offeredProjects.filter((_p, idx) => allowed[idx]);
+      if (shared.length === 1) {
+        projectId = shared[0]!.id;
+        offeredProjects = undefined;
+      } else if (shared.length > 1) offeredProjects = shared;
     }
 
     const offered: TelegramDraftOffered | null =
@@ -963,7 +1065,8 @@ export class TelegramComposerService {
     // this delivery is already durable and can be acknowledged without sending a duplicate card.
     if (!existingDraft && draft.id !== draftId) return;
 
-    const card = await this.nextCard(draft);
+    const decided = await this.decideWorkspace(draft);
+    const card = await this.nextCard(decided);
     const tgMessageId = await this.respond(chatId, waitMsgId ?? null, card.text, card.replyMarkup);
     if (tgMessageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId });
   }
@@ -1081,10 +1184,14 @@ export class TelegramComposerService {
         return this.onProjectSel(cq, draft, userId, cb.sel, chatId, messageId);
       case 'assignee':
         return this.onAssigneeSel(cq, draft, cb.sel, chatId, messageId);
+      case 'workspace':
+        return this.onWorkspaceSel(cq, draft, userId, cb.sel, chatId, messageId);
       case 'confirm':
+        if (await this.blockedByWorkspace(cq, draft, chatId, messageId)) return;
         return this.finalize(draft, userId, chatId, messageId, cq.id);
       // --- AI-сегменты (compose) ---
       case 'seg-create':
+        if (await this.blockedByWorkspace(cq, draft, chatId, messageId)) return;
         return this.finalizeSegments(draft, userId, chatId, messageId, cq.id);
       case 'seg-edit':
         return this.onSegEdit(cq, draft, cb.seg, chatId, messageId);
@@ -1160,7 +1267,7 @@ export class TelegramComposerService {
       const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
       const offered: TelegramDraftOffered = {
         ...(draft.offered?.members ? { members: draft.offered.members } : {}),
-        projects: all.map((p) => ({ id: p.id, name: p.name })),
+        projects: await this.offeredProjects(userId, all),
       };
       const updated = await this.deps.drafts.patch(draft.id, { offered });
       if (updated && messageId) {
@@ -1174,11 +1281,17 @@ export class TelegramComposerService {
     if (sel.type === 'inbox') {
       projectId = null;
     } else {
-      projectId = draft.offered?.projects?.[sel.idx]?.id ?? null;
+      const picked = draft.offered?.projects?.[sel.idx];
+      if (!picked) {
+        await this.deps.client.answerCallbackQuery(cq.id, { text: 'Выбор проекта устарел. Открой список снова.', showAlert: true });
+        return;
+      }
+      projectId = picked.id;
     }
     const updated = await this.deps.drafts.patch(draft.id, {
       projectId,
       offered: clearProjects(draft.offered),
+      ...(draft.autoCreateAt === null ? { autoCreateSeconds: AUTO_CREATE_SECONDS } : {}),
     });
     await this.advance(cq, updated ?? draft, chatId, messageId);
   }
@@ -1203,6 +1316,8 @@ export class TelegramComposerService {
     const updated = await this.deps.drafts.patch(draft.id, {
       assigneeUserId,
       offered: clearMembers(draft.offered),
+      ...(this.deps.workspaces && !draft.projectId && assigneeUserId !== draft.assigneeUserId
+        ? { workspaceId: null, workspacePending: true } : {}),
     });
     await this.advance(cq, updated ?? draft, chatId, messageId);
   }
@@ -1238,6 +1353,11 @@ export class TelegramComposerService {
     }
     draft = claimed;
     messageId ??= draft.tgMessageId ?? undefined;
+    if (draft.offered?.projects?.length) {
+      await this.holdForWorkspace(draft, chatId, messageId, cqId, opts.automatic === true,
+        'Сначала выбери проект — его пространство подписано на кнопке.');
+      return;
+    }
     const text = (draft.taskText ?? '').trim();
     if (text.length === 0) {
       await this.deps.drafts.patch(draft.id, { status: 'cancelled' });
@@ -1250,6 +1370,18 @@ export class TelegramComposerService {
       return;
     }
 
+    // Без проекта задача ляжет во «Входящие» — в пространство, которое решил бот или выбрал
+    // человек. Не решено и положить некуда — ждём выбора, ничего не создаём.
+    let inboxWorkspaceId: string | undefined;
+    if (!draft.projectId) {
+      const workspace = await this.workspaceForInbox(draft, opts.automatic === true);
+      if (workspace === 'blocked') {
+        await this.holdForWorkspace(draft, chatId, messageId, cqId, opts.automatic === true);
+        return;
+      }
+      inboxWorkspaceId = workspace;
+    }
+
     try {
       // Same rule as finalizeSegments: no project + a delegate → the assignee's inbox.
       const delegateUserId =
@@ -1257,7 +1389,7 @@ export class TelegramComposerService {
       const inboxOwnerId = delegateUserId ?? userId;
       const delegatedInbox = !draft.projectId && inboxOwnerId !== userId;
       const targetId =
-        draft.projectId ?? (await this.inboxFor(inboxOwnerId, userId)).id;
+        draft.projectId ?? (await this.inboxFor(inboxOwnerId, userId, inboxWorkspaceId)).id;
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
@@ -1290,7 +1422,11 @@ export class TelegramComposerService {
         });
       }
 
-      const projName = await this.projNameOf(draft.projectId);
+      const projName = await this.destinationLabel(
+        draft.projectId,
+        inboxWorkspaceId,
+        await this.spaceNames(userId),
+      );
       const assigneeSuffix = draft.assigneeUserId
         ? ` Ответственный — <b>${escapeHtml((await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? 'участник')}</b>.`
         : '';
@@ -1331,6 +1467,320 @@ export class TelegramComposerService {
     }
   }
 
+  // ========================= Пространство задач без проекта =========================
+
+  // Задачи черновика, которые лягут во «Входящие» (без проекта), и их ответственные, если
+  // это не автор: «Входящие» такой задачи — у ответственного, и пространство должно быть общим.
+  private inboxTargets(draft: TelegramTaskDraft): { any: boolean; delegates: string[] } {
+    const delegatesOf = (ids: readonly (string | null)[]): string[] => [
+      ...new Set(ids.filter((id): id is string => !!id && id !== draft.creatorUserId)),
+    ];
+    if (draft.segments) {
+      const inbox = draft.segments.filter((segment) => segment.included && !segment.projectId);
+      return { any: inbox.length > 0, delegates: delegatesOf(inbox.map((s) => s.assigneeUserId)) };
+    }
+    if (draft.projectId) return { any: false, delegates: [] };
+    return { any: true, delegates: delegatesOf([draft.assigneeUserId]) };
+  }
+
+  // Первичное решение по пространству — когда содержимое черновика известно (после AI или в
+  // ручном флоу). Ошибка справочника оставляет черновик ждать выбора.
+  private async decideWorkspace(draft: TelegramTaskDraft): Promise<TelegramTaskDraft> {
+    const deps = this.deps.workspaces;
+    if (!deps) return draft;
+    try {
+      const decision = await resolveDraftWorkspace(deps, {
+        userId: draft.creatorUserId,
+        chatId: draft.tgChatId,
+        delegateIds: this.inboxTargets(draft).delegates,
+        now: this.now(),
+      });
+      if (!decision) return draft;
+      const patch =
+        decision.kind === 'resolved'
+          ? { workspaceId: decision.workspaceId, workspacePending: false }
+          : { workspaceId: null, workspacePending: true };
+      return (await this.deps.drafts.patchComposing(draft.id, patch)) ?? draft;
+    } catch (err) {
+      console.warn('[tg-composer] workspace decision failed:', err);
+      return this.inboxTargets(draft).any
+        ? (await this.deps.drafts.patchComposing(draft.id, { workspaceId: null, workspacePending: true })) ?? draft
+        : draft;
+    }
+  }
+
+  // Состояние пространства на момент показа/создания. Пересчитывается каждый раз: пользователь
+  // мог поменять проект или ответственного сегмента, и выбранное раньше пространство могло
+  // перестать подходить (ответственный там не состоит) — тогда снова спрашиваем.
+  private async workspaceView(draft: TelegramTaskDraft): Promise<WorkspaceView> {
+    const deps = this.deps.workspaces;
+    if (!deps) return WORKSPACE_OFF;
+    const targets = this.inboxTargets(draft);
+    if (!targets.any) return WORKSPACE_OFF;
+    // Черновик старше выбора пространства (ни решения, ни ожидания) — прежнее поведение.
+    if (draft.workspaceId === null && !draft.workspacePending && targets.delegates.length === 0) return WORKSPACE_OFF;
+    try {
+      const mine = sortWorkspaceOptions(await deps.listForUser(draft.creatorUserId));
+      if (mine.length === 0) return { mode: 'pending', current: null, options: [], multiple: true, fallback: null };
+      const options = await allowedWorkspaces(deps, mine, targets.delegates);
+      const current =
+        options.find((workspace) => workspace.id === draft.workspaceId) ??
+        (options.length === 1 ? options[0]! : null);
+      return {
+        mode: current ? 'decided' : 'pending',
+        current,
+        options,
+        multiple: mine.length > 1 || !current,
+        fallback: targets.delegates.length === 0
+          ? options.find((workspace) => workspace.kind === 'default') ?? null : null,
+      };
+    } catch (err) {
+      console.warn('[tg-composer] workspace view failed:', err);
+      return { mode: 'pending', current: null, options: [], multiple: true, fallback: null };
+    }
+  }
+
+  // Пространство для getOrCreateInbox. undefined — прежнее поведение (активное пространство);
+  // 'blocked' — не выбрано, а положить задачу некуда (ждём кнопку).
+  private async workspaceForInbox(
+    draft: TelegramTaskDraft,
+    automatic: boolean,
+  ): Promise<string | undefined | 'blocked'> {
+    const view = await this.workspaceView(draft);
+    if (view.mode === 'off') return undefined;
+    if (view.current) return view.current.id;
+    // Авто-создание без выбора: в личное пространство — приватное, ничего не утечёт в команду.
+    // Личного среди вариантов нет — не угадываем, ждём человека.
+    if (automatic && view.fallback) return view.fallback.id;
+    return 'blocked';
+  }
+
+  // Захваченный черновик создать нельзя: пространство не выбрано, а положить без выбора некуда.
+  // Возвращаем его в работу. После авто-тика — без таймера (иначе тик молотил бы его вечно);
+  // после нажатия — с обычным таймером. Таймер снова заводит выбор кнопкой.
+  private async holdForWorkspace(
+    draft: TelegramTaskDraft,
+    chatId: number,
+    messageId: number | undefined,
+    cqId: string | null,
+    automatic: boolean,
+    prompt = 'Сначала выбери пространство — кнопки в карточке.',
+  ): Promise<void> {
+    if (automatic) await this.deps.drafts.parkConfirmation(draft.id);
+    else await this.deps.drafts.releaseConfirmation(draft.id, AUTO_CREATE_SECONDS);
+    const current = (await this.deps.drafts.getById(draft.id)) ?? draft;
+    if (messageId) {
+      const card = await this.mainCard(current);
+      await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    if (cqId) {
+      await this.deps.client.answerCallbackQuery(cqId, {
+        text: prompt,
+        showAlert: true,
+      });
+    }
+  }
+
+  // Куда легла задача — для итогового сообщения: проект (с пространством, если их несколько)
+  // или «Входящие · ответственный · пространство» (ответственный — у делегированных).
+  private async destinationLabel(
+    projectId: string | null,
+    inboxWorkspaceId: string | undefined,
+    spaces: ReadonlyMap<string, string> | null,
+    inboxOwnerName?: string,
+  ): Promise<string> {
+    if (projectId) return this.projNameOf(projectId, spaces);
+    const space = inboxWorkspaceId && spaces ? spaces.get(inboxWorkspaceId) : undefined;
+    return ['Входящие', inboxOwnerName, space].filter(Boolean).join(' · ');
+  }
+
+  // «Создать» при невыбранном пространстве: не создаём, подсказываем кнопки. true — нажатие
+  // поглощено.
+  private async blockedByWorkspace(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<boolean> {
+    const view = await this.workspaceView(draft);
+    if (view.mode !== 'pending') return false;
+    if (messageId) {
+      const card = await this.mainCard(draft);
+      await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, {
+      text: 'Сначала выбери пространство — кнопки в карточке.',
+      showAlert: true,
+    });
+    return true;
+  }
+
+  private async onWorkspaceSel(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    userId: string,
+    sel: WorkspaceSel,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    if (sel.type === 'back') {
+      if (messageId) {
+        const card = await this.mainCard(draft);
+        await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const view = await this.workspaceView(draft);
+    if (sel.type === 'open') {
+      if (messageId) {
+        const card = this.renderWorkspacePicker(draft, view);
+        await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const picked = view.options.find((workspace) => workspace.id === sel.workspaceId);
+    if (!picked) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Это пространство сейчас недоступно — выбери другое.',
+        showAlert: true,
+      });
+      return;
+    }
+    const updated =
+      (await this.deps.drafts.patch(draft.id, {
+        workspaceId: picked.id,
+        workspacePending: false,
+        // Черновик ждал выбора без таймера (авто-создание было некуда) — заводим его снова.
+        ...(draft.autoCreateAt === null ? { autoCreateSeconds: AUTO_CREATE_SECONDS } : {}),
+      })) ?? draft;
+    // Запоминаем выбор для этого чата: следующие задачи отсюда уйдут туда же без вопроса.
+    await this.deps.workspaces?.chats
+      .saveChoice(draft.tgChatId, userId, picked.id)
+      .catch((err: unknown) => console.warn('[tg-composer] save workspace choice failed:', err));
+    if (messageId) {
+      const card = await this.mainCard(updated);
+      await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, { text: `Пространство: ${picked.name}` });
+  }
+
+  // Карточка черновика верхнего уровня: AI-сегменты или ручной флоу.
+  private async mainCard(draft: TelegramTaskDraft): Promise<Card> {
+    const idx = draft.segments?.findIndex((segment) => segment.included && segment.projectChoices !== undefined) ?? -1;
+    if (idx >= 0) {
+      const offered = { ...draft.offered, projects: draft.segments![idx]!.projectChoices };
+      const updated = await this.deps.drafts.patch(draft.id, { offered });
+      return this.renderAiProjectPicker(updated ?? { ...draft, offered }, idx, 0);
+    }
+    return draft.segments ? this.renderSegmentsCard(draft) : this.nextCard(draft);
+  }
+
+  // Кнопки-варианты пространств, по два в ряд.
+  private workspaceOptionRows(
+    draft: TelegramTaskDraft,
+    view: WorkspaceView,
+  ): { text: string; callback_data: string }[][] {
+    const rows: { text: string; callback_data: string }[][] = [];
+    for (let i = 0; i < view.options.length; i += 2) {
+      rows.push(
+        view.options.slice(i, i + 2).map((workspace) => ({
+          text: workspaceButtonText(workspace, workspace.id === view.current?.id),
+          callback_data: `ws:${draft.id}:${workspace.id}`,
+        })),
+      );
+    }
+    return rows;
+  }
+
+  private renderWorkspacePicker(draft: TelegramTaskDraft, view: WorkspaceView): Card {
+    const rows = this.workspaceOptionRows(draft, view);
+    rows.push([{ text: '⬅️ Назад', callback_data: `ws:${draft.id}:b` }]);
+    return {
+      text: '🗂 <b>В какое пространство?</b>\nЗадачи без проекта лягут во «Входящие» выбранного пространства.',
+      replyMarkup: { inline_keyboard: rows },
+    };
+  }
+
+  // Строка «Пространство» карточки + подсказка, если не выбрано. Пусто, когда выбирать нечего.
+  private workspaceLines(view: WorkspaceView, label = 'Пространство'): string[] {
+    if (view.mode === 'off') return [];
+    if (view.current) return [`🗂 ${label}: <b>${escapeHtml(view.current.name)}</b>`];
+    if (view.options.length === 0) return ['🗂 Нет общего пространства автора и исполнителей. Измени исполнителя или выбери проект.'];
+    return [`🗂 ${label}: <b>не выбрано</b> — не понял, куда положить. Выбери кнопкой ниже.`];
+  }
+
+  // Кнопки пространства для карточки: пока не выбрано — сами варианты (одно нажатие); после
+  // выбора — «🗂 Пространство», чтобы передумать.
+  private workspaceRows(
+    draft: TelegramTaskDraft,
+    view: WorkspaceView,
+  ): { text: string; callback_data: string }[][] {
+    if (view.mode === 'off' || !view.multiple) return [];
+    if (view.mode === 'pending') return this.workspaceOptionRows(draft, view);
+    if (view.options.length < 2) return [];
+    return [[{ text: '🗂 Пространство', callback_data: `ws:${draft.id}:?` }]];
+  }
+
+  // Подвал карточки: когда создам сам. Пока пространство не выбрано — честно куда.
+  private autoCreateFooter(view: WorkspaceView, verb = 'создам'): string {
+    if (view.mode === 'pending' && view.multiple) {
+      return view.fallback
+        ? `⏱ Не выберешь — через 10 минут положу во «Входящие» пространства «${escapeHtml(view.fallback.name)}».`
+        : '⏸ Пока пространство не выбрано, задачу не создам.';
+    }
+    return `⏱ Без нажатия ${verb} автоматически через 10 минут.`;
+  }
+
+  // Имена пространств пользователя для подписей проектов — только если их больше одного:
+  // одноимённые проекты разных пространств иначе неотличимы. null — подписывать незачем.
+  private async spaceNames(userId: string): Promise<ReadonlyMap<string, string> | null> {
+    const deps = this.deps.workspaces;
+    if (!deps) return null;
+    try {
+      const mine = await deps.listForUser(userId);
+      return mine.length > 1 ? new Map(mine.map((workspace) => [workspace.id, workspace.name])) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Варианты проектов для пикера: имя + пространство в подписи кнопки.
+  private async offeredProjects(
+    userId: string,
+    projects: readonly { readonly id: string; readonly name: string; readonly workspaceId?: string }[],
+  ): Promise<NonNullable<TelegramDraftOffered['projects']>> {
+    const spaces = await this.spaceNames(userId);
+    return projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      ...(spaces && p.workspaceId && spaces.has(p.workspaceId)
+        ? { space: spaces.get(p.workspaceId) ?? null }
+        : {}),
+    }));
+  }
+
+  // Пространство для «Входящих» владельца группы (сообщение от непривязанного участника). Здесь
+  // некого спросить: без кнопок, только по группе и прошлому выбору владельца в этом чате, иначе —
+  // как раньше.
+  private async ownerInboxWorkspace(ownerUserId: string, chatId: number): Promise<string | undefined> {
+    const deps = this.deps.workspaces;
+    if (!deps) return undefined;
+    try {
+      const decision = await resolveDraftWorkspace(deps, {
+        userId: ownerUserId,
+        chatId,
+        delegateIds: [],
+        now: this.now(),
+      });
+      return decision?.kind === 'resolved' ? decision.workspaceId : undefined;
+    } catch (err) {
+      console.warn('[tg-composer] owner inbox workspace failed:', err);
+      return undefined;
+    }
+  }
+
   // --- Рендеринг карточек ---
   private async nextCard(draft: TelegramTaskDraft): Promise<Card> {
     if (draft.offered?.projects?.length) return this.renderProjectPicker(draft, 0);
@@ -1341,7 +1791,7 @@ export class TelegramComposerService {
   private renderProjectPicker(draft: TelegramTaskDraft, page: number): Card {
     const all = draft.offered?.projects ?? [];
     const rows = this.pageButtons(all.length, page, (absIdx) => ({
-      text: all[absIdx]?.name.slice(0, 40) ?? '?',
+      text: all[absIdx] ? projectButtonText(all[absIdx]) : '?',
       callback_data: `tp:${draft.id}:${absIdx}`,
     }));
     rows.push(...this.navRow(all.length, page, (p) => `tp:${draft.id}:p${p}`));
@@ -1374,9 +1824,11 @@ export class TelegramComposerService {
   }
 
   private async renderConfirm(draft: TelegramTaskDraft): Promise<Card> {
-    const projName = draft.projectId
-      ? ((await this.deps.projects.getById(draft.projectId))?.name ?? 'проект')
-      : 'Входящие';
+    const view = await this.workspaceView(draft);
+    const projName = await this.projNameOf(
+      draft.projectId,
+      await this.spaceNames(draft.creatorUserId),
+    );
     const assigneeName = draft.assigneeUserId
       ? ((await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? null)
       : null;
@@ -1384,6 +1836,7 @@ export class TelegramComposerService {
     const lines = [
       '🆕 <b>Новая задача</b>',
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+      ...this.workspaceLines(view),
       `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
     ];
     lines.push(`👤 Ответственный: <b>${escapeHtml(assigneeName ?? 'Вы')}</b>`);
@@ -1391,12 +1844,14 @@ export class TelegramComposerService {
     if (draft.attachments.length > 0) {
       lines.push(`📎 Вложения: <b>${draft.attachments.length}</b>`);
     }
-    lines.push('', '⏱ Без нажатия создам автоматически через 10 минут.');
+    lines.push('', this.autoCreateFooter(view));
     const createLabel = '✅ Создать';
     return {
       text: lines.join('\n'),
       replyMarkup: {
         inline_keyboard: [
+          // Пока пространство не выбрано — варианты сверху: это первое, что нужно сделать.
+          ...(view.mode === 'pending' ? this.workspaceRows(draft, view) : []),
           [
             { text: createLabel, callback_data: `tc:${draft.id}` },
             { text: '✖️ Отмена', callback_data: `tx:${draft.id}` },
@@ -1405,6 +1860,7 @@ export class TelegramComposerService {
             { text: '📁 Сменить проект', callback_data: `tp:${draft.id}:?` },
             { text: '📊 Колонка', callback_data: `ts:${draft.id}:?` },
           ],
+          ...(view.mode === 'decided' ? this.workspaceRows(draft, view) : []),
         ],
       },
     };
@@ -1449,12 +1905,14 @@ export class TelegramComposerService {
   private async resolveProjectHint(
     userId: string,
     parsed: { projectQuery: string | null; taskText: string },
-  ): Promise<{ projectId: string | null; taskText: string }> {
+  ): Promise<{ projectId: string | null; taskText: string; ambiguous?: boolean }> {
     const taskText = parsed.taskText.trim();
     if (parsed.projectQuery === null) return { projectId: null, taskText };
     const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
     const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
     const greedy = greedyProjectPrefix(segment, all, (p) => p.name);
+    // Одноимённые проекты выбирает автор кнопкой с названием пространства.
+    if (greedy && greedy.ties.length > 1) return { projectId: null, taskText, ambiguous: true };
     if (greedy) return { projectId: greedy.item.id, taskText: greedy.remainder.trim() };
     const r = fuzzyMatch(parsed.projectQuery, all, (p) => p.name);
     if (r.unique) return { projectId: r.unique.id, taskText };
@@ -1555,21 +2013,37 @@ export class TelegramComposerService {
     creatorUserId: string,
     // «Готово»-режим: колонка каждого сегмента фиксируется в 'done' (см. startFromMessage).
     forceStatus: VisibleKanbanStatus | null = null,
+    hintAssigneeUserId: string | null = null,
   ): Promise<TelegramDraftSegment[]> {
     const out: TelegramDraftSegment[] = [];
     const projects = hintProjectId
       ? []
       : (await this.deps.members.listProjectsForUser(creatorUserId)).filter((p) => !p.isInbox);
     for (const s of parsed) {
-      const project = hintProjectId ? null : this.matchSegmentProject(s, projects);
+      let project = hintProjectId ? null : this.matchSegmentProject(s, projects);
+      // An explicit @assignee is a human instruction for the whole message. AI must
+      // not replace it with the author or omit it when choosing a workspace/project.
+      const assigneeUserId = hintAssigneeUserId ?? await this.resolveSegmentAssignee(s, null, creatorUserId);
+      const name = (project?.name ?? s.projectName)?.trim().toLocaleLowerCase('ru');
+      let choices = name ? projects.filter((p) => p.name.trim().toLocaleLowerCase('ru') === name) : [];
+      let projectChoices: TelegramDraftSegment['projectChoices'];
+      if (!hintProjectId && choices.length > 1) {
+        if (assigneeUserId && assigneeUserId !== creatorUserId && this.deps.workspaces) {
+          const allowed = await Promise.all(choices.map((p) => this.deps.workspaces!.isMember(p.workspaceId, assigneeUserId)));
+          choices = choices.filter((_p, idx) => allowed[idx]);
+        }
+        project = choices.length === 1 ? choices[0]! : null;
+        if (choices.length !== 1) projectChoices = await this.offeredProjects(creatorUserId, choices);
+      }
       const projectId = hintProjectId ?? project?.id ?? null;
       out.push({
         title: s.title,
         body: s.body,
         projectId,
         projectName: hintProjectId ? null : (project?.name ?? s.projectName),
-        assigneeUserId: await this.resolveSegmentAssignee(s, projectId, creatorUserId),
-        assigneeName: s.assigneeName,
+        ...(projectChoices !== undefined ? { projectChoices } : {}),
+        assigneeUserId: hintAssigneeUserId ?? (projectId ? await this.resolveSegmentAssignee(s, projectId, creatorUserId) : assigneeUserId),
+        assigneeName: hintAssigneeUserId ? null : s.assigneeName,
         // Срока нет — ставим конец недели ЗДЕСЬ, а не при создании: так он попадает в карточку,
         // пользователь его видит и может поменять пресетом до подтверждения. Оставить пустым
         // нельзя — CreateTask тогда проставит «сегодня», и задача из чата сразу просрочена.
@@ -1579,7 +2053,7 @@ export class TelegramComposerService {
         // приходит из «Готово»-режима и ставит все сегменты сразу в «Готово».
         targetStatus: forceStatus,
         taskType: s.taskType,
-        existingTaskId: s.existingTaskId,
+        existingTaskId: projectChoices !== undefined ? null : s.existingTaskId,
         sourceExcerpt: s.sourceExcerpt,
       });
     }
@@ -1635,23 +2109,33 @@ export class TelegramComposerService {
     }
   }
 
-  // «Входящие» владельца. При делегировании пространство — ответственного (если отправитель
-  // там тоже состоит), а не вкладка, которую отправитель последней открыл в браузере.
-  private async inboxFor(ownerUserId: string, actorUserId: string) {
-    const workspaceId =
-      ownerUserId !== actorUserId && this.deps.resolveDelegatedInboxWorkspace
+  // «Входящие» владельца. Пространство — решённое для черновика (workspaceForInbox). Не решено
+  // (старый черновик или зависимость не задана) — при делегировании пространство
+  // ответственного (если отправитель там тоже состоит), а не вкладка, которую отправитель
+  // последней открыл в браузере.
+  private async inboxFor(ownerUserId: string, actorUserId: string, workspaceId?: string) {
+    const delegated =
+      workspaceId === undefined && ownerUserId !== actorUserId && this.deps.resolveDelegatedInboxWorkspace
         ? await this.deps.resolveDelegatedInboxWorkspace(ownerUserId, actorUserId).catch(() => null)
         : null;
-    return this.deps.getOrCreateInbox.execute(ownerUserId, actorUserId, workspaceId ?? undefined);
+    return this.deps.getOrCreateInbox.execute(ownerUserId, actorUserId, workspaceId ?? delegated ?? undefined);
   }
 
   private taskUrl(projectId: string, taskId: string): string {
     return `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}`;
   }
 
-  private async projNameOf(projectId: string | null): Promise<string> {
+  // spaces — имена пространств (см. spaceNames): у проекта подписываем его пространство,
+  // когда их у пользователя несколько.
+  private async projNameOf(
+    projectId: string | null,
+    spaces: ReadonlyMap<string, string> | null = null,
+  ): Promise<string> {
     if (!projectId) return 'Входящие';
-    return (await this.deps.projects.getById(projectId))?.name ?? 'проект';
+    const project = await this.deps.projects.getById(projectId);
+    if (!project) return 'проект';
+    const space = spaces && project.workspaceId ? spaces.get(project.workspaceId) : undefined;
+    return space ? `${project.name} · ${space}` : project.name;
   }
 
   // --- Колонки канбана конкретного проекта ---
@@ -1720,7 +2204,8 @@ export class TelegramComposerService {
   private async renderSingleSegment(draft: TelegramTaskDraft): Promise<Card> {
     const seg = draft.segments?.[0];
     if (!seg) return this.renderConfirm(draft); // защитный фолбэк
-    const projName = await this.projNameOf(seg.projectId);
+    const view = await this.workspaceView(draft);
+    const projName = await this.projNameOf(seg.projectId, await this.spaceNames(draft.creatorUserId));
     const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
     const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
     // Сегмент-дополнение (B3): показываем это ДО подтверждения, чтобы юзер успел отменить,
@@ -1729,6 +2214,7 @@ export class TelegramComposerService {
     const lines = [
       append ? '➕ <b>Дополню существующую задачу</b>' : '🆕 <b>Новая задача</b>',
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+      ...this.workspaceLines(view),
     ];
     if (append) lines.push(`🎯 Задача: <b>${escapeHtml(excerpt(append.excerpt, 60))}</b>`);
     lines.push(`👤 Ответственный: <b>${escapeHtml(assignee)}</b>`);
@@ -1739,16 +2225,18 @@ export class TelegramComposerService {
     if (draft.attachments.length > 0) {
       lines.push(`📎 Вложения: <b>${draft.attachments.length}</b>`);
     }
-    lines.push('', '⏱ Без нажатия создам автоматически через 10 минут.');
+    lines.push('', this.autoCreateFooter(view));
     return {
       text: lines.join('\n'),
       replyMarkup: {
         inline_keyboard: [
+          ...(view.mode === 'pending' ? this.workspaceRows(draft, view) : []),
           [
             { text: '✅ Создать задачу', callback_data: `ac:${draft.id}` },
             { text: '✖️ Отменить', callback_data: `tx:${draft.id}` },
           ],
           [{ text: '✏️ Изменить', callback_data: `ae:${draft.id}:0` }],
+          ...(view.mode === 'decided' ? this.workspaceRows(draft, view) : []),
         ],
       },
     };
@@ -1757,6 +2245,8 @@ export class TelegramComposerService {
   private async renderMultiSegment(draft: TelegramTaskDraft): Promise<Card> {
     const segs = draft.segments ?? [];
     const includedCount = segs.filter((s) => s.included).length;
+    const view = await this.workspaceView(draft);
+    const spaces = await this.spaceNames(draft.creatorUserId);
     const lines = [`🆕 <b>Распознал задач: ${segs.length}</b>`, ''];
     // Кэш kanban-настроек в пределах ОДНОГО рендера (function-local, без гонок при
     // конкурентной обработке) — дедупит getKanbanSettings для сегментов одного проекта.
@@ -1769,7 +2259,7 @@ export class TelegramComposerService {
     for (let i = 0; i < segs.length; i++) {
       const seg = segs[i];
       if (!seg) continue;
-      const projName = await this.projNameOf(seg.projectId);
+      const projName = await this.projNameOf(seg.projectId, spaces);
       const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
       const colStatus = seg.targetStatus ?? DEFAULT_COLUMN;
       const columnName = resolveColumnLabel((await settingsFor(seg.projectId))?.[colStatus], colStatus);
@@ -1789,7 +2279,10 @@ export class TelegramComposerService {
     if (draft.attachments.length > 0) {
       lines.push('', ...this.attachmentAssignmentSummary(draft));
     }
+    const workspaceLines = this.workspaceLines(view, 'Задачи без проекта — в пространство');
+    if (workspaceLines.length > 0) lines.push('', ...workspaceLines);
     const rows: { text: string; callback_data: string }[][] = [
+      ...(view.mode === 'pending' ? this.workspaceRows(draft, view) : []),
       [
         { text: `✅ Создать все (${includedCount})`, callback_data: `ac:${draft.id}` },
         { text: '✖️ Отменить', callback_data: `tx:${draft.id}` },
@@ -1812,7 +2305,8 @@ export class TelegramComposerService {
         },
       ]);
     }
-    lines.push('', '⏱ Без нажатия создам автоматически через 10 минут.');
+    if (view.mode === 'decided') rows.push(...this.workspaceRows(draft, view));
+    lines.push('', this.autoCreateFooter(view));
     return { text: lines.join('\n'), replyMarkup: { inline_keyboard: rows } };
   }
 
@@ -1982,12 +2476,15 @@ export class TelegramComposerService {
     const seg = segs[idx];
     if (!seg) return this.renderSegmentsCard(draft);
     const multi = segs.length > 1;
-    const projName = await this.projNameOf(seg.projectId);
+    const projName = await this.projNameOf(seg.projectId, await this.spaceNames(draft.creatorUserId));
     const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
     const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
+    // Пространство важно только задаче без проекта: у проекта оно своё.
+    const workspaceLines = seg.projectId ? [] : this.workspaceLines(await this.workspaceView(draft));
     const lines = [
       `✏️ <b>Задача ${idx + 1}</b>`,
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+      ...workspaceLines,
       `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
       `👤 Ответственный: <b>${escapeHtml(assignee)}</b>`,
       `📅 Срок: <b>${seg.deadline ? escapeHtml(seg.deadline) : '—'}</b>`,
@@ -2027,7 +2524,7 @@ export class TelegramComposerService {
   private renderAiProjectPicker(draft: TelegramTaskDraft, idx: number, page: number): Card {
     const all = draft.offered?.projects ?? [];
     const rows = this.pageButtons(all.length, page, (absIdx) => ({
-      text: all[absIdx]?.name.slice(0, 40) ?? '?',
+      text: all[absIdx] ? projectButtonText(all[absIdx]) : '?',
       callback_data: `ap:${draft.id}:${idx}:${absIdx}`,
     }));
     rows.push(...this.navRow(all.length, page, (p) => `ap:${draft.id}:${idx}:p${p}`));
@@ -2035,7 +2532,10 @@ export class TelegramComposerService {
       { text: '📥 Во «Входящие»', callback_data: `ap:${draft.id}:${idx}:i` },
       { text: '⬅️ Назад', callback_data: `ae:${draft.id}:${idx}` },
     ]);
-    return { text: `📁 Проект для задачи ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
+    const ambiguous = draft.segments?.[idx]?.projectChoices !== undefined;
+    return { text: ambiguous
+      ? `📁 <b>Выбери проект для задачи ${idx + 1}</b>\nОдноимённые проекты есть в разных пространствах. Пространство подписано на кнопке.\n\n${escapeHtml(excerpt(draft.segments![idx]!.title, 180))}\n\n⏸ До выбора задачу не создам.`
+      : `📁 Проект для задачи ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
   }
 
   private renderAiMemberPicker(draft: TelegramTaskDraft, idx: number, page: number): Card {
@@ -2204,7 +2704,7 @@ export class TelegramComposerService {
       const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
       const offered: TelegramDraftOffered = {
         ...(draft.offered?.members ? { members: draft.offered.members } : {}),
-        projects: all.map((p) => ({ id: p.id, name: p.name })),
+        projects: await this.offeredProjects(userId, all),
       };
       const updated = await this.deps.drafts.patch(draft.id, { offered });
       if (messageId) {
@@ -2232,13 +2732,18 @@ export class TelegramComposerService {
         projectName = null;
       } else {
         const picked = draft.offered?.projects?.[sel.idx];
-        projectId = picked?.id ?? seg.projectId;
-        projectName = picked?.name ?? seg.projectName;
+        if (!picked || (seg.projectChoices !== undefined && !seg.projectChoices.some((p) => p.id === picked.id))) {
+          await this.deps.client.answerCallbackQuery(cq.id, { text: 'Выбор проекта устарел. Открой список снова.', showAlert: true });
+          return;
+        }
+        projectId = picked.id;
+        projectName = picked.name;
       }
-      segs[idx] = { ...seg, projectId, projectName };
+      segs[idx] = { ...seg, projectId, projectName, projectChoices: undefined };
       const updated = await this.deps.drafts.patch(draft.id, {
         segments: segs,
         offered: clearProjects(draft.offered),
+        ...(draft.autoCreateAt === null ? { autoCreateSeconds: AUTO_CREATE_SECONDS } : {}),
       });
       const card = await this.renderSegmentEdit(updated ?? draft, idx);
       if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
@@ -2300,6 +2805,8 @@ export class TelegramComposerService {
       const updated = await this.deps.drafts.patch(draft.id, {
         segments: segs,
         offered: clearMembers(draft.offered),
+        ...(this.deps.workspaces && !seg.projectId && assigneeUserId !== seg.assigneeUserId
+          ? { workspaceId: null, workspacePending: true } : {}),
       });
       const card = await this.renderSegmentEdit(updated ?? draft, idx);
       if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
@@ -2396,6 +2903,11 @@ export class TelegramComposerService {
     }
     draft = claimed;
     messageId ??= draft.tgMessageId ?? undefined;
+    if (draft.segments?.some((segment) => segment.included && segment.projectChoices !== undefined)) {
+      await this.holdForWorkspace(draft, chatId, messageId, cqId, opts.automatic === true,
+        'Сначала выбери проект — его пространство подписано на кнопке.');
+      return;
+    }
     const segmentEntries = (draft.segments ?? [])
       .map((segment, index) => ({ segment, index }))
       .filter(({ segment }) => segment.included);
@@ -2409,6 +2921,18 @@ export class TelegramComposerService {
       }
       return;
     }
+    // Задачи без проекта лягут во «Входящие» решённого или выбранного пространства. Не решено и
+    // положить некуда — не создаём ни одной: карточка ждёт выбора целиком.
+    let inboxWorkspaceId: string | undefined;
+    if (segmentEntries.some(({ segment }) => !segment.projectId)) {
+      const workspace = await this.workspaceForInbox(draft, opts.automatic === true);
+      if (workspace === 'blocked') {
+        await this.holdForWorkspace(draft, chatId, messageId, cqId, opts.automatic === true);
+        return;
+      }
+      inboxWorkspaceId = workspace;
+    }
+    const spaces = await this.spaceNames(userId);
     let created = 0;
     // Сегменты, ушедшие комментарием в существующую задачу (B3), считаем отдельно:
     // «создано» про них врало бы, но и провалом это не является.
@@ -2469,7 +2993,7 @@ export class TelegramComposerService {
         const inboxOwnerId = assigneeUserId ?? userId;
         const delegatedInbox = !seg.projectId && inboxOwnerId !== userId;
         const targetId =
-          seg.projectId ?? (await this.inboxFor(inboxOwnerId, userId)).id;
+          seg.projectId ?? (await this.inboxFor(inboxOwnerId, userId, inboxWorkspaceId)).id;
         const task = await this.deps.createTask.execute({
           projectId: targetId,
           ownerUserId: userId,
@@ -2495,9 +3019,13 @@ export class TelegramComposerService {
         });
         lastTaskId = task.id;
         lastProjectId = targetId;
-        const projName = delegatedInbox
-          ? `Входящие · ${task.assignee?.displayName ?? 'ответственного'}`
-          : await this.projNameOf(seg.projectId);
+        // У делегированных — чьи это «Входящие»: иначе «→ Входящие» читается как свои.
+        const projName = await this.destinationLabel(
+          seg.projectId,
+          inboxWorkspaceId,
+          spaces,
+          delegatedInbox ? (task.assignee?.displayName ?? 'ответственного') : undefined,
+        );
         summary.push(
           `✅ <a href="${this.taskUrl(targetId, task.id)}">${escapeHtml(title || excerpt(body, 40))}</a> → <b>${escapeHtml(projName)}</b>`,
         );

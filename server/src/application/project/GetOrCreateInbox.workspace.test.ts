@@ -4,6 +4,7 @@ import { GetOrCreateInbox } from './GetOrCreateInbox.js';
 import { ProjectNameAlreadyExistsError } from '../../domain/project/errors.js';
 import type { Project } from '../../domain/project/Project.js';
 import { AssigneeNotSharedMemberError } from '../../domain/task/errors.js';
+import { NotWorkspaceMemberError } from '../../domain/workspace/errors.js';
 
 test('delegation uses the actor workspace even when the executor is viewing another workspace', async () => {
   const inbox = new GetOrCreateInbox({
@@ -76,4 +77,31 @@ test('a simultaneous inbox creation returns the database winner instead of 409',
     } as never,
   });
   assert.equal((await inbox.execute('me')).id, 'winner');
+});
+
+test('явное пространство (выбор в Telegram) важнее активного в браузере', async () => {
+  const projects: Project[] = [];
+  const inbox = new GetOrCreateInbox({
+    resolveWorkspaceId: async () => { assert.fail('active workspace must not be used'); },
+    isWorkspaceMember: async (userId, workspaceId) => userId === 'me' && workspaceId === 'team',
+    idGen: () => 'team-inbox',
+    members: { listProjectsForUser: async () => projects } as never,
+    repo: {
+      findInboxByOwner: async () => null,
+      listProjectNamesInWorkspace: async () => [],
+      createWithOwnerMembership: async (p: Project) => { projects.push(p); return p; },
+    } as never,
+  });
+  assert.equal((await inbox.execute('me', 'me', 'team')).workspaceId, 'team');
+});
+
+test('явное пространство, где автор не участник, — отказ, а не «Входящие» в чужом пространстве', async () => {
+  const inbox = new GetOrCreateInbox({
+    resolveWorkspaceId: async () => 'mine',
+    isWorkspaceMember: async () => false,
+    idGen: () => 'unused',
+    members: {} as never,
+    repo: { findInboxByOwner: async () => { assert.fail('must reject before reading inboxes'); } } as never,
+  });
+  await assert.rejects(inbox.execute('me', 'me', 'foreign'), NotWorkspaceMemberError);
 });

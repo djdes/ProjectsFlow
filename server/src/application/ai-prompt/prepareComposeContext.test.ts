@@ -85,3 +85,54 @@ test('кандидаты — все проекты пользователя, н�
   assert.equal(ctx!.candidates.length, 40);
   assert.ok(!ctx!.candidates.some((c) => c.projectId === 'view' || c.projectId === 'inbox'));
 });
+
+// --- Пространства: Telegram берёт проекты всех пространств, веб — только активного ---
+
+function spacesDeps() {
+  const projects = [
+    { id: 'a1', name: 'Сайт', role: 'owner', isInbox: false, workspaceId: 'w-me' },
+    { id: 'b1', name: 'Сайт', role: 'editor', isInbox: false, workspaceId: 'w-team' },
+  ];
+  return {
+    ...makeDeps(undefined, projects),
+    resolveActiveWorkspace: async () => ({ id: 'w-team', kind: 'team' as const }),
+    members: {
+      async listProjectsForUser() {
+        return projects as any;
+      },
+      async listProjectsForUserInWorkspace(_userId: string, workspaceId: string) {
+        return projects.filter((p) => p.workspaceId === workspaceId) as any;
+      },
+      async listByProject() {
+        return [] as any;
+      },
+    },
+    listWorkspacesForUser: async () => [
+      { id: 'w-me', name: 'Личное' },
+      { id: 'w-team', name: 'Команда' },
+    ],
+  } as any;
+}
+
+test('scope=all: проекты всех пространств, у каждого подписано пространство', async () => {
+  const ctx = await prepareComposeContext('u1', spacesDeps(), 'поправить сайт', 'all');
+  assert.ok(ctx);
+  assert.deepEqual(ctx!.candidates.map((c) => c.projectId).sort(), ['a1', 'b1']);
+  assert.match(ctx!.block, /\[projectId=a1\] Сайт\nПространство: Личное/);
+  assert.match(ctx!.block, /\[projectId=b1\] Сайт\nПространство: Команда/);
+});
+
+test('scope=active (веб): только активное пространство, без подписей', async () => {
+  const ctx = await prepareComposeContext('u1', spacesDeps(), 'поправить сайт');
+  assert.ok(ctx);
+  assert.deepEqual(ctx!.candidates.map((c) => c.projectId), ['b1']);
+  assert.doesNotMatch(ctx!.block, /Пространство:/);
+});
+
+test('scope=all при одном пространстве — подписи не нужны', async () => {
+  const deps = spacesDeps();
+  deps.listWorkspacesForUser = async () => [{ id: 'w-me', name: 'Личное' }];
+  const ctx = await prepareComposeContext('u1', deps, 'поправить сайт', 'all');
+  assert.ok(ctx);
+  assert.doesNotMatch(ctx!.block, /Пространство:/);
+});

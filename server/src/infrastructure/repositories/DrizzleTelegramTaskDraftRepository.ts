@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import type { MySqlUpdateSetSource } from 'drizzle-orm/mysql-core';
 import type { Database } from '../db/index.js';
 import { telegramTaskDrafts, type TelegramTaskDraftRow } from '../db/schema.js';
 import type {
@@ -113,6 +114,8 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
         : cloneAttachments(storedAttachments),
     targetStatus: r.targetStatus,
     awaitingTextSeg: r.awaitingTextSeg ?? null,
+    workspaceId: r.workspaceId ?? null,
+    workspacePending: Boolean(r.workspacePending),
     status: r.status,
     createdAt: r.createdAt,
     autoCreateAt: r.autoCreateAt,
@@ -153,6 +156,8 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
         photos,
         attachments,
         targetStatus: input.targetStatus ?? null,
+        workspaceId: input.workspaceId ?? null,
+        workspacePending: input.workspacePending ?? false,
         status: 'composing',
         autoCreateAt:
           input.autoCreateSeconds == null
@@ -223,8 +228,10 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
   private async patchValues(
     id: string,
     patch: TelegramTaskDraftPatch,
-  ): Promise<Partial<typeof telegramTaskDrafts.$inferInsert>> {
-    const set: Partial<typeof telegramTaskDrafts.$inferInsert> = {};
+  ): Promise<MySqlUpdateSetSource<typeof telegramTaskDrafts>> {
+    // MySqlUpdateSetSource, а не $inferInsert: значение может быть SQL-выражением
+    // (auto_create_at считаем в БД, как и при создании черновика).
+    const set: MySqlUpdateSetSource<typeof telegramTaskDrafts> = {};
     if (patch.taskText !== undefined) set.taskText = patch.taskText;
     if (patch.projectId !== undefined) set.projectId = patch.projectId;
     if (patch.assigneeUserId !== undefined) set.assigneeUserId = patch.assigneeUserId;
@@ -245,6 +252,14 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
     if (patch.sourceKey !== undefined) set.sourceKey = patch.sourceKey;
     if (patch.targetStatus !== undefined) set.targetStatus = patch.targetStatus;
     if (patch.awaitingTextSeg !== undefined) set.awaitingTextSeg = patch.awaitingTextSeg;
+    if (patch.workspaceId !== undefined) set.workspaceId = patch.workspaceId;
+    if (patch.workspacePending !== undefined) set.workspacePending = patch.workspacePending;
+    if (patch.autoCreateSeconds !== undefined) {
+      set.autoCreateAt =
+        patch.autoCreateSeconds === null
+          ? null
+          : sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${patch.autoCreateSeconds} SECOND)`;
+    }
     if (patch.status !== undefined) set.status = patch.status;
     return set;
   }
@@ -316,6 +331,13 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
         confirmationStartedAt: null,
         autoCreateAt: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${retrySeconds} SECOND)`,
       })
+      .where(and(eq(telegramTaskDrafts.id, id), eq(telegramTaskDrafts.status, 'confirming')));
+  }
+
+  async parkConfirmation(id: string): Promise<void> {
+    await this.db
+      .update(telegramTaskDrafts)
+      .set({ status: 'composing', confirmationStartedAt: null, autoCreateAt: null })
       .where(and(eq(telegramTaskDrafts.id, id), eq(telegramTaskDrafts.status, 'confirming')));
   }
 

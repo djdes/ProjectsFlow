@@ -57,7 +57,13 @@ export type TelegramDraftAttachment = {
 // offered.projects[idx] / offered.members[idx] резолвят кнопку в UUID без раздувания
 // callback_data (UUID = 36 символов, не влезает рядом с draft id в 64 байта).
 export type TelegramDraftOffered = {
-  readonly projects?: readonly { readonly id: string; readonly name: string }[];
+  // space — имя пространства проекта, только для подписи кнопки (одноимённые проекты разных
+  // пространств иначе неотличимы). Отсутствует у старых черновиков и у единственного пространства.
+  readonly projects?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly space?: string | null;
+  }[];
   readonly members?: readonly { readonly id: string; readonly displayName: string }[];
 };
 
@@ -72,6 +78,9 @@ export type TelegramDraftSegment = {
   readonly body: string;
   readonly projectId: string | null;
   readonly projectName: string | null;
+  // Одноимённые проекты требуют выбора человеком. undefined — проект уже определён.
+  // Хранится внутри segments JSON, отдельная миграция не нужна.
+  readonly projectChoices?: NonNullable<TelegramDraftOffered['projects']>;
   readonly assigneeUserId: string | null;
   // Сырое имя из текста («Олег») — подсказка, когда userId не сматчился.
   readonly assigneeName: string | null;
@@ -115,6 +124,11 @@ export type TelegramTaskDraft = {
   // Правка формулировки: индекс сегмента, который ждёт новый текст от пользователя.
   // null — ничего не ждём; MANUAL_TEXT_SEG (-1) — ручной черновик без сегментов. См. db/140.
   readonly awaitingTextSeg: number | null;
+  // Пространство для задач без проекта (в чьи «Входящие» они лягут). null — не решено или
+  // черновик старше db/164: тогда прежнее поведение (активное пространство автора).
+  readonly workspaceId: string | null;
+  // Бот не смог решить пространство сам и ждёт выбора кнопкой (см. resolveDraftWorkspace).
+  readonly workspacePending: boolean;
   readonly status: TelegramTaskDraftStatus;
   readonly createdAt: Date;
   readonly autoCreateAt: Date | null;
@@ -136,6 +150,8 @@ export type CreateTelegramTaskDraftInput = {
   readonly photos?: readonly TelegramDraftPhoto[];
   readonly attachments?: readonly TelegramDraftAttachment[];
   readonly targetStatus?: VisibleKanbanStatus | null;
+  readonly workspaceId?: string | null;
+  readonly workspacePending?: boolean;
   // Срок жизни в секундах от now. Репо считает expires_at = now + ttl.
   readonly ttlSeconds: number;
   // Через сколько секунд автоматически подтвердить черновик. null/undefined = не создавать.
@@ -156,6 +172,11 @@ export type TelegramTaskDraftPatch = {
   readonly targetStatus?: VisibleKanbanStatus | null;
   readonly status?: TelegramTaskDraftStatus;
   readonly awaitingTextSeg?: number | null;
+  readonly workspaceId?: string | null;
+  readonly workspacePending?: boolean;
+  // Перезапустить авто-создание через N секунд от now (null — выключить). Нужно, когда
+  // черновик ждал выбора пространства без таймера, а пользователь наконец выбрал.
+  readonly autoCreateSeconds?: number | null;
 };
 
 // Ручной черновик (без AI-сегментов) — текст один, индексировать нечего. Отдельное значение,
@@ -183,6 +204,9 @@ export interface TelegramTaskDraftRepository {
   claimForConfirmation(id: string, dueOnly: boolean): Promise<TelegramTaskDraft | null>;
   // При временной ошибке возвращаем черновик в очередь; при ручной отмене меняем только composing.
   releaseConfirmation(id: string, retrySeconds: number): Promise<void>;
+  // Создавать нельзя, пока не решит человек (пространство не выбрано, а положить задачу
+  // некуда): confirming → composing БЕЗ авто-создания. Таймер снова заводит выбор кнопкой.
+  parkConfirmation(id: string): Promise<void>;
   // Повторять бессмысленно: confirming → cancelled. Только из confirming — уже созданный
   // (confirmed) черновик не перетирается. true — черновик действительно закрыт этим вызовом.
   cancelConfirmation(id: string): Promise<boolean>;

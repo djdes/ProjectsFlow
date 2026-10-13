@@ -35,6 +35,11 @@ const OPEN_STATUSES = new Set<TaskStatus>([
 
 type Deps = {
   readonly resolveActiveWorkspace?: ResolveActiveWorkspace;
+  // Пространства пользователя — подписи проектов в контексте при scope='all': у одноимённых
+  // проектов разных пространств модель иначе не отличит, какой имеется в виду.
+  readonly listWorkspacesForUser?: (
+    userId: string,
+  ) => Promise<readonly { readonly id: string; readonly name: string }[]>;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
   readonly members: ProjectMemberRepository;
@@ -85,15 +90,20 @@ function isMentioned(normalizedText: string, projectName: string): boolean {
   return name.length >= 3 && normalizedText.includes(name);
 }
 
+// Откуда брать проекты-кандидаты: 'active' — активное пространство (веб: пользователь уже
+// внутри пространства), 'all' — все его пространства (Telegram: сообщение может быть про
+// любой его проект, а «активное» там — случайное состояние браузера).
+export type ComposeProjectScope = 'active' | 'all';
+
 /**
  * Готовит контекст для compose-режима: перечень проектов, в которых пользователь
  * МОЖЕТ создавать задачи (роль editor/owner, не Inbox), с коротким KB-дайджестом
  * каждого. Этот блок кладётся в kb_context job'а и уходит модели в pass-1, чтобы та
  * разбила текст на задачи и классифицировала каждую к нужному проекту.
  *
- * Кандидаты — проекты ВСЕХ пространств пользователя, а не только активного в веб-интерфейсе:
- * сообщение из Telegram может быть про любой его проект. Проекты, названные в тексте,
- * идут первыми — так они точно попадают в лимит кандидатов и получают дайджест.
+ * Кандидаты — по scope (см. ComposeProjectScope); при 'all' у проекта подписано его
+ * пространство, если пространств больше одного. Проекты, названные в тексте, идут первыми —
+ * так они точно попадают в лимит кандидатов и получают дайджест.
  *
  * Best-effort: ошибки KB на отдельном проекте не валят сборку (проект попадает в
  * список без дайджеста). Если проектов-кандидатов нет — возвращает null.
@@ -102,10 +112,11 @@ export async function prepareComposeContext(
   userId: string,
   deps: Deps,
   text = '',
+  scope: ComposeProjectScope = 'active',
 ): Promise<ComposeContext | null> {
   let projects;
   try {
-    if (deps.resolveActiveWorkspace) {
+    if (scope === 'active' && deps.resolveActiveWorkspace) {
       const workspace = await deps.resolveActiveWorkspace(userId);
       if (!workspace) return null;
       projects = await deps.members.listProjectsForUserInWorkspace(userId, workspace.id);
@@ -114,6 +125,16 @@ export async function prepareComposeContext(
     }
   } catch {
     return null;
+  }
+  // Подписи пространств — только когда их несколько (иначе строка — лишний шум в промпте).
+  let spaceNames = new Map<string, string>();
+  if (scope === 'all' && deps.listWorkspacesForUser) {
+    try {
+      const spaces = await deps.listWorkspacesForUser(userId);
+      if (spaces.length > 1) spaceNames = new Map(spaces.map((s) => [s.id, s.name]));
+    } catch {
+      spaceNames = new Map();
+    }
   }
 
   const normalizedText = normalizeName(text);
@@ -167,7 +188,14 @@ export async function prepareComposeContext(
       } catch {
         memberLine = '';
       }
-      return { projectId: p.id, name: p.name, digest, memberLine };
+      const space = spaceNames.get(p.workspaceId);
+      return {
+        projectId: p.id,
+        name: p.name,
+        spaceLine: space ? `Пространство: ${space}\n` : '',
+        digest,
+        memberLine,
+      };
     }),
   );
 
@@ -198,11 +226,11 @@ export async function prepareComposeContext(
         taskTotal += line.length;
       }
     }
-    const part = `[projectId=${d.projectId}] ${d.name}\n${memberPart}${taskPart}${body}`;
+    const part = `[projectId=${d.projectId}] ${d.name}\n${d.spaceLine}${memberPart}${taskPart}${body}`;
     if (total + part.length > MAX_TOTAL_CHARS) {
       // Дальше не лезем, но сам проект (хотя бы имя + участники) всё равно полезен —
       // добавим усечённый заголовок без дайджеста, чтобы id/ответственные остались модели.
-      const header = `[projectId=${d.projectId}] ${d.name}\n${memberPart}${taskPart}(дайджест опущен — лимит контекста)`;
+      const header = `[projectId=${d.projectId}] ${d.name}\n${d.spaceLine}${memberPart}${taskPart}(дайджест опущен — лимит контекста)`;
       if (total + header.length <= MAX_TOTAL_CHARS) {
         parts.push(header);
         total += header.length;

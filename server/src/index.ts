@@ -337,6 +337,7 @@ import { GroqVoiceTranscriber } from './infrastructure/groq/GroqVoiceTranscriber
 import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories/DrizzleTelegramOutboundRepository.js';
 import { DrizzleTelegramRalphQuestionRepository } from './infrastructure/repositories/DrizzleTelegramRalphQuestionRepository.js';
 import { DrizzleTelegramTaskDraftRepository } from './infrastructure/repositories/DrizzleTelegramTaskDraftRepository.js';
+import { DrizzleTelegramChatWorkspaceRepository } from './infrastructure/repositories/DrizzleTelegramChatWorkspaceRepository.js';
 import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
 import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositories/DrizzleTelegramMessageTaskRepository.js';
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
@@ -1104,6 +1105,16 @@ const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: tas
 // --- Telegram-конструктор задач (+проект текст @ответственный) ---
 // Свои репо для черновиков конструктора (db/048) и маппинга task-сообщений (db/049).
 const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
+// Пространства пользователя для выбора, куда бот кладёт задачи без проекта (db/164).
+const listWorkspaceOptionsForUser = async (userId: string) =>
+  (await workspaceRepo.listForUser(userId)).map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    icon: workspace.icon,
+    kind: workspace.kind,
+  }));
+const isWorkspaceMember = async (userId: string, workspaceId: string): Promise<boolean> =>
+  (await workspaceRepo.getMembership(workspaceId, userId)) !== null;
 // Конструктору нужны те же use-case'ы что и HTTP/agent-роутерам; они собираются инлайн
 // внутри createApp(), а здесь нам нужны собственные экземпляры (use-case'ы stateless —
 // дубль безопасен). Делим только репозитории.
@@ -1112,6 +1123,7 @@ const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
 // конструктор откатывается на ручной флоу.
 const enqueueAiPromptJob = new EnqueueAiPromptJob({
   resolveActiveWorkspace,
+  listWorkspacesForUser: listWorkspaceOptionsForUser,
   projects: projectRepo,
   members: projectMemberRepo,
   aiPromptJobs: aiPromptJobRepo,
@@ -1175,9 +1187,16 @@ const telegramComposer = new TelegramComposerService({
     members: projectMemberRepo,
     idGen: idGenerator,
     resolveWorkspaceId,
+    isWorkspaceMember,
   }),
+  workspaces: {
+    listForUser: listWorkspaceOptionsForUser,
+    isMember: (workspaceId, userId) => isWorkspaceMember(userId, workspaceId),
+    chats: new DrizzleTelegramChatWorkspaceRepository(db),
+  },
   // Делегированная из Telegram задача — во «Входящие» ответственного там, где он работает
-  // (его текущее пространство), если отправитель тоже в нём состоит.
+  // (его текущее пространство), если отправитель тоже в нём состоит. Запасной путь, когда
+  // пространство черновика не решено (см. resolveDraftWorkspace).
   resolveDelegatedInboxWorkspace: async (ownerUserId, actorUserId) => {
     const workspaceId = await workspaceRepo.getCurrentWorkspaceId(ownerUserId);
     if (!workspaceId) return null;

@@ -153,3 +153,19 @@ test('greedy: нет совпадения по имени → null (откат �
   const r = greedyProjectPrefix('xyz обнови', projects, (p) => p.name);
   assert.equal(r, null);
 });
+
+test('greedy: одноимённые проекты (разные пространства) — все в ties, а не первый по списку', () => {
+  const items = [
+    { id: 'a', name: 'Сайт' },
+    { id: 'b', name: 'сайт' },
+    { id: 'c', name: 'Сайт клиники' },
+  ];
+  const r = greedyProjectPrefix('Сайт поправить шапку', items, (p) => p.name);
+  assert.deepEqual(r?.ties.map((p) => p.id), ['a', 'b']);
+  assert.equal(r?.remainder, 'поправить шапку');
+});
+
+test('greedy: уникальное имя — ties из одного проекта', () => {
+  const r = greedyProjectPrefix('Ралф core Обнови билд', projects, (p) => p.name);
+  assert.equal(r?.ties.length, 1);
+});
