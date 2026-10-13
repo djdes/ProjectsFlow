@@ -19,14 +19,16 @@ export class TelegramDigestActionService {
   async complete(token: string): Promise<EmailActionRun> {
     const delivery = await this.deps.deliveries.findByToken(token).catch(() => null);
     const result = await this.deps.emailActions.complete(token);
-    if (result.kind !== 'done' && result.kind !== 'used') return result;
+    if (result.kind !== 'done' && result.kind !== 'pending_approval' && result.kind !== 'used') return result;
+    if (result.kind === 'used' && result.taskStatus !== 'done' && result.taskStatus !== 'pending_approval') return result;
 
-    if (result.kind === 'done') {
+    if (result.kind === 'done' || result.kind === 'pending_approval') {
       this.deps.notifyTaskChanged?.(result.projectId);
     }
     if (!delivery) return result;
 
-    const updated = markTelegramDigestTaskCompleted(delivery.messageHtml, token);
+    const awaitingApproval = result.kind === 'pending_approval' || (result.kind === 'used' && result.taskStatus === 'pending_approval');
+    const updated = markTelegramDigestTaskCompleted(delivery.messageHtml, token, awaitingApproval ? 'pending_approval' : 'done');
     if (updated === delivery.messageHtml) return result;
 
     await this.deps.deliveries
@@ -68,7 +70,9 @@ export function extractTelegramDigestActionTokens(html: string): string[] {
   return [...tokens];
 }
 
-export function markTelegramDigestTaskCompleted(html: string, token: string): string {
+export function markTelegramDigestTaskCompleted(html: string, token: string, status: 'done' | 'pending_approval' = 'done'): string {
+  const awaitingApproval = status === 'pending_approval';
+  const label = awaitingApproval ? '📨 На утверждении' : '✅ Завершено';
   const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const actionPattern = new RegExp(
     `<a href="[^"]*\\/api\\/telegram-digest-actions\\/${safeToken}">(?:○|✓(?: Завершить)?)<\\/a>`,
@@ -82,8 +86,8 @@ export function markTelegramDigestTaskCompleted(html: string, token: string): st
   if (rowStart >= 0 && rowEnd >= 0) {
     const end = rowEnd + '</tr>'.length;
     const row = html.slice(rowStart, end);
-    let updatedRow = row.replace(actionPattern, '<b>✅</b>');
-    updatedRow = updatedRow.replace(/<b>([\s\S]*?)<\/b>/, '<s><b>$1</b></s>');
+    let updatedRow = row.replace(actionPattern, awaitingApproval ? `<b>${label}</b>` : '<b>✅</b>');
+    if (!awaitingApproval) updatedRow = updatedRow.replace(/<b>([\s\S]*?)<\/b>/, '<s><b>$1</b></s>');
     return html.slice(0, rowStart) + updatedRow + html.slice(end);
   }
 
@@ -94,8 +98,8 @@ export function markTelegramDigestTaskCompleted(html: string, token: string): st
     const nextBreak = html.indexOf('\n', match.index);
     const lineEnd = nextBreak < 0 ? html.length : nextBreak;
     const line = html.slice(lineStart, lineEnd);
-    let updatedLine = line.replace(actionPattern, '<b>✅ Завершено</b>');
-    updatedLine = updatedLine.replace(
+    let updatedLine = line.replace(actionPattern, `<b>${label}</b>`);
+    if (!awaitingApproval) updatedLine = updatedLine.replace(
       /<a href="([^"]+)"><b>([\s\S]*?)<\/b><\/a>/,
       '<a href="$1"><s><b>$2</b></s></a>',
     );
@@ -104,8 +108,8 @@ export function markTelegramDigestTaskCompleted(html: string, token: string): st
 
   const end = itemEnd + '</li>'.length;
   const item = html.slice(itemStart, end);
-  let updatedItem = item.replace(actionPattern, '<b>✅ Завершено</b>');
-  updatedItem = updatedItem.replace(
+  let updatedItem = item.replace(actionPattern, `<b>${label}</b>`);
+  if (!awaitingApproval) updatedItem = updatedItem.replace(
     /<a href="([^"]+)"><b>([\s\S]*?)<\/b><\/a>/,
     '<a href="$1"><s><b>$2</b></s></a>',
   );

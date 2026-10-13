@@ -66,7 +66,7 @@ export function emailActionsRouter(deps: Deps): Router {
         if (p.alreadyUsed) {
           return void res
             .type('html')
-            .send(shell('Уже завершено', `<p style="font-size:15px;margin:0 0 4px;">Задача ${name} уже завершена ✓</p>`));
+            .send(shell('Результат действия', `<p style="font-size:15px;margin:0 0 4px;">${p.taskStatus === 'pending_approval' ? 'Задача ждёт утверждения руководителя.' : p.taskStatus === 'done' ? `Задача ${name} уже завершена ✓` : 'Ссылка уже использована.'}</p>`));
         }
         // Мгновенно по клику: страница САМА шлёт POST через JS (реальный браузер завершает сразу).
         // Почтовые сканеры/префетч обычно без JS → POST не уходит → случайного завершения нет.
@@ -105,18 +105,19 @@ export function emailActionsRouter(deps: Deps): Router {
 
       if (p.action === 'complete') {
         const r = await deps.service.complete(token);
-        if (r.kind === 'done') {
+        if (r.kind === 'done' || r.kind === 'pending_approval') {
+          const awaitingApproval = r.kind === 'pending_approval';
           const back = linkBtn(appLink(deps.appUrl, `/projects/${r.projectId}`), 'Открыть доску', BRAND);
           const inner =
-            `<p style="font-size:18px;font-weight:700;margin:0 0 6px;color:${OK};">✓ Задача завершена</p>` +
-            `<p style="font-size:13px;color:#64748b;margin:0 0 18px;">Можно закрыть эту вкладку.</p>` +
+            `<p style="font-size:18px;font-weight:700;margin:0 0 6px;color:${OK};">${awaitingApproval ? '📨 Задача отправлена на утверждение' : '✓ Задача завершена'}</p>` +
+            `<p style="font-size:13px;color:#64748b;margin:0 0 18px;">${awaitingApproval ? 'Задача остаётся на утверждении до решения руководителя.' : 'Можно закрыть эту вкладку.'}</p>` +
             back +
             // Попытка автозакрытия (срабатывает не во всех браузерах — это нормально).
-            `<script>setTimeout(function(){try{window.close()}catch(e){}},700)</script>`;
-          return void res.type('html').send(shell('Готово', inner));
+            (awaitingApproval ? '' : `<script>setTimeout(function(){try{window.close()}catch(e){}},700)</script>`);
+          return void res.type('html').send(shell(awaitingApproval ? 'На утверждении' : 'Готово', inner));
         }
         if (r.kind === 'used') {
-          return void res.type('html').send(shell('Уже завершено', '<p style="font-size:15px;margin:0;">Задача уже была завершена ✓</p>'));
+          return void res.type('html').send(shell('Результат действия', `<p style="font-size:15px;margin:0;">${r.taskStatus === 'pending_approval' ? 'Задача ждёт утверждения руководителя.' : r.taskStatus === 'done' ? 'Задача уже была завершена ✓' : 'Ссылка уже использована.'}</p>`));
         }
         return void res.status(400).type('html').send(errorPage('Не удалось завершить задачу. Возможно, нет прав или задача удалена.'));
       }

@@ -79,13 +79,16 @@ export function telegramDigestActionsRouter(deps: Deps): Router {
     try {
       const token = req.params['token'] as string;
       const result = await deps.service.complete(token);
-      if (result.kind === 'done' || result.kind === 'used') {
+      if (result.kind === 'done' || result.kind === 'pending_approval' || result.kind === 'used') {
+        const awaitingApproval = result.kind === 'pending_approval' || (result.kind === 'used' && result.taskStatus === 'pending_approval');
+        const completed = result.kind === 'done' || (result.kind === 'used' && result.taskStatus === 'done');
+        const title = awaitingApproval ? 'Задача на утверждении' : completed ? 'Задача завершена' : 'Ссылка уже использована';
         return void res.type('html').send(
           page(
-            'Задача завершена',
-            '<p style="margin:0;color:#16a34a;font-size:17px;font-weight:800">● Задача завершена</p>' +
-              '<p style="margin:8px 0 0;color:#6b7280;font-size:13px">Сообщение в Telegram обновлено.</p>' +
-              '<script>setTimeout(function(){try{window.close()}catch(e){}},500)</script>',
+            title,
+            `<p style="margin:0;color:#16a34a;font-size:17px;font-weight:800">${escapeHtml(title)}</p>` +
+              `<p style="margin:8px 0 0;color:#6b7280;font-size:13px">${awaitingApproval ? 'Задача ждёт решения руководителя.' : completed ? 'Сообщение в Telegram обновлено.' : 'Проверьте текущий статус задачи на сайте.'}</p>` +
+              (completed ? '<script>setTimeout(function(){try{window.close()}catch(e){}},500)</script>' : ''),
           ),
         );
       }

@@ -1,3 +1,4 @@
+import type { Task, TaskStatus } from '../../domain/task/Task.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
@@ -10,14 +11,15 @@ import type {
 const MAX_COMMENT = 5000;
 
 export type EmailActionPreview =
-  | { kind: 'ok'; action: EmailActionType; taskName: string; alreadyUsed: boolean }
+  | { kind: 'ok'; action: EmailActionType; taskName: string; alreadyUsed: boolean; taskStatus?: TaskStatus | null }
   | { kind: 'invalid' }
   | { kind: 'expired' };
 
 export type EmailActionRun =
-  | { kind: 'done'; projectId: string; taskId: string }
+  | { kind: 'done' | 'pending_approval'; projectId: string; taskId: string }
   | { kind: 'commented'; projectId: string; taskId: string }
-  | { kind: 'invalid' | 'expired' | 'used' | 'empty' | 'error'; message?: string };
+  | { kind: 'used'; taskStatus?: TaskStatus | null }
+  | { kind: 'invalid' | 'expired' | 'empty' | 'error'; message?: string };
 
 type Deps = {
   readonly tokens: EmailActionTokenRepository;
@@ -52,6 +54,7 @@ export class EmailActionService {
       action: t.action,
       taskName: taskTitle(task?.description),
       alreadyUsed: t.usedAt != null,
+      taskStatus: task?.status ?? null,
     };
   }
 
@@ -59,9 +62,13 @@ export class EmailActionService {
     const t = await this.deps.tokens.findByToken(token);
     if (!t || t.action !== 'complete') return { kind: 'invalid' };
     if (this.expired(t)) return { kind: 'expired' };
-    if (t.usedAt) return { kind: 'used' };
+    if (t.usedAt) {
+      const task = await this.deps.tasks.getById(t.taskId).catch(() => null);
+      return { kind: 'used', taskStatus: task?.status ?? null };
+    }
+    let updated: Task;
     try {
-      await this.deps.moveTask.execute({
+      updated = await this.deps.moveTask.execute({
         projectId: t.projectId,
         ownerUserId: t.userId,
         taskId: t.taskId,
@@ -73,7 +80,7 @@ export class EmailActionService {
       return { kind: 'error', message: (e as Error).message };
     }
     await this.deps.tokens.markUsed(t.id, this.deps.now());
-    return { kind: 'done', projectId: t.projectId, taskId: t.taskId };
+    return { kind: updated.status === 'pending_approval' ? 'pending_approval' : 'done', projectId: t.projectId, taskId: t.taskId };
   }
 
   async comment(token: string, body: string): Promise<EmailActionRun> {

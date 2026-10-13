@@ -78,10 +78,7 @@ import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useSpotlightTask } from '@/presentation/hooks/useSpotlightTask';
-import {
-  REALTIME_CONNECTED_EVENT,
-  TASK_CHANGED_EVENT,
-} from '@/presentation/hooks/useNotificationStream';
+import { useInboxRealtimeRefresh } from '@/presentation/hooks/useInboxRealtimeRefresh';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -526,14 +523,7 @@ export function AssignedToMeBlock({
     hideDoneRef.current = hideDone;
   }, [hideDone]);
 
-  // Таймстемп ЛЮБОГО своего refresh() — не только после мутации, но и mount-эффекта,
-  // смены вкладки/фильтра, возврата фокуса и т.п. (refresh() пишет сюда безусловно —
-  // И в начале запроса, И по его завершении, см. refresh() ниже). Грубый гвард (см.
-  // useEffect ниже) на 400мс глушит ЛЮБОЕ SSE-обновление в этом окне, не только
-  // «эхо своей же мутации» — включая легитимное параллельное действие коллеги.
-  // Осознанный компромисс брифа («грубый гвард»): в среднем такое окно раз в 250-400мс
-  // после любого своего рефетча — цена редких секундных задержек чужого realtime-события
-  // против частых двойных перерисовок от гарантированного эха своей же мутации.
+  // Debounce realtime events until the current refresh settles; never discard them.
   const lastRefreshAtRef = useRef(0);
 
   // Зеркало focusedMemberId для refresh(): refresh не должен зависеть от него напрямую —
@@ -622,35 +612,7 @@ export function AssignedToMeBlock({
   // Пришли по ссылке из плашки «вам назначили задачу» — подсвечиваем карточку.
   useSpotlightTask(!loading && boardTasks !== null, refresh);
 
-  // Realtime: задачу изменили в другой вкладке или это сделал коллега — например поставил
-  // срочный приоритет. Без подписки подсветка появлялась бы только после перезагрузки.
-  // Дебаунс: серия правок (приоритет + дедлайн + перенос) даёт пачку событий, а список
-  // тяжёлый — перечитываем один раз в конце пачки.
-  useEffect(() => {
-    let timer: number | undefined;
-    const schedule = (): void => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        // Грубый гвард: ЛЮБОЙ refresh() (наш собственный, в т.ч. mount/фокус, не только
-        // после мутации) в последние 400мс глушит эту SSE-волну целиком — она может
-        // нести и эхо нашего же изменения (в подавляющем большинстве случаев — именно
-        // его, приёмка/сдача на утверждение и т.п.), и легитимное действие коллеги,
-        // прилетевшее в то же окно. Различить их без версионирования снапшота нельзя —
-        // бриф разрешил именно грубый гвард; чужое событие в худшем случае долетит со
-        // следующей волной (следующий SSE-event/фокус/интервал), не потеряется совсем.
-        if (Date.now() - lastRefreshAtRef.current < 400) return;
-        void refresh();
-      }, 250);
-    };
-    window.addEventListener(TASK_CHANGED_EVENT, schedule);
-    // Реконнект SSE: события, случившиеся при обрыве, до нас не дошли — читаем снапшот.
-    window.addEventListener(REALTIME_CONNECTED_EVENT, schedule);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener(TASK_CHANGED_EVENT, schedule);
-      window.removeEventListener(REALTIME_CONNECTED_EVENT, schedule);
-    };
-  }, [refresh]);
+  useInboxRealtimeRefresh(refresh, lastRefreshAtRef);
 
   useEffect(() => {
     let cancelled = false;
