@@ -61,6 +61,8 @@ function makeHarness(opts?: {
   existingTasks?: Record<string, any>;
   // Отказ CreateTask: вернуть ошибку — createTask её бросит (нет проекта, сбой БД и т.п.).
   createTaskError?: (input: any) => Error | null;
+  // Пространство «Входящих» ответственного при делегировании (undefined — зависимость не задана).
+  delegatedInboxWorkspace?: string | null;
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
@@ -80,6 +82,8 @@ function makeHarness(opts?: {
   const answers: { text?: string }[] = [];
   const assigneeMessages: { userId: string; buttons: string; kind: string }[] = [];
   const inboxUserIds: string[] = [];
+  const inboxCalls: { ownerId?: string; actorId?: string; workspaceId?: string }[] = [];
+  const delegatedResolverCalls: [string, string][] = [];
   const updatedDescriptions: string[] = [];
   const downloadedFileIds: string[] = [];
   const uploadedAttachments: {
@@ -316,8 +320,9 @@ function makeHarness(opts?: {
       },
     },
     getOrCreateInbox: {
-      async execute(userId?: string) {
+      async execute(userId?: string, actorId?: string, workspaceId?: string) {
         if (userId) inboxUserIds.push(userId);
+        inboxCalls.push({ ownerId: userId, actorId, workspaceId });
         // Инбокс у каждого юзера свой: 'inbox1' у u1 (создатель в тестах), 'inbox-<id>' у прочих.
         const id = !userId || userId === 'u1' ? 'inbox1' : `inbox-${userId}`;
         return { id, name: 'Входящие', isInbox: true } as any;
@@ -387,6 +392,14 @@ function makeHarness(opts?: {
         return { id: `c${comments.length}` } as any;
       },
     },
+    ...(opts?.delegatedInboxWorkspace !== undefined
+      ? {
+          async resolveDelegatedInboxWorkspace(ownerId: string, actorId: string) {
+            delegatedResolverCalls.push([ownerId, actorId]);
+            return opts.delegatedInboxWorkspace ?? null;
+          },
+        }
+      : {}),
     idGen: () => 'uuid',
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
@@ -403,6 +416,8 @@ function makeHarness(opts?: {
     answers,
     assigneeMessages,
     inboxUserIds,
+    inboxCalls,
+    delegatedResolverCalls,
     updatedDescriptions,
     downloadedFileIds,
     uploadedAttachments,
@@ -1219,6 +1234,68 @@ test('AI: сегмент без проекта, но с ответственны
   assert.equal(h.createTaskCalls[0]!.allowInboxDelegation, true);
   assert.deepEqual(h.inboxUserIds, ['u2']);
   assert.equal(h.assigneeMessages.length, 0); // Delivery belongs to the shared task-change stream.
+});
+
+test('AI: делегированная задача — во «Входящие» ответственного в ЕГО пространстве, со ссылкой в ответе', async () => {
+  // Инцидент 13.10.2026: пространство бралось активное у ОТПРАВИТЕЛЯ (последняя вкладка в
+  // браузере) — ответственному создавались новые «Входящие (системный)» там, куда он не смотрит,
+  // а бот отвечал «→ Входящие» без ссылок: «создал задачи, но в ПФ их не видно».
+  const h = makeHarness({
+    shared: [{ id: 'u2', displayName: 'Олег', email: 'o@e.com' }],
+    delegatedInboxWorkspace: 'ws-u2',
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Дорисовать схему производства',
+        simpleBody: 'Отметить камеру и пандус.',
+        projectId: null,
+        projectName: null,
+        confidence: 0.9,
+        assigneeUserId: 'u2',
+        assigneeName: 'Олег',
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'олегу дорисовать схему производства');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+
+  assert.deepEqual(h.delegatedResolverCalls, [['u2', 'u1']]);
+  assert.deepEqual(h.inboxCalls, [{ ownerId: 'u2', actorId: 'u1', workspaceId: 'ws-u2' }]);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox-u2');
+  const reply = h.edits.at(-1)!.text;
+  assert.ok(
+    reply.includes('<a href="https://pf.test/projects/inbox-u2?task=t1">'),
+    `в ответе нужна ссылка на задачу:\n${reply}`,
+  );
+  // Имя — из ответа CreateTask (в харнессе ответственный u2 всегда «Вася»).
+  assert.ok(reply.includes('Входящие · Вася'), `видно, чьи это «Входящие»:\n${reply}`);
+});
+
+test('AI: своя задача без проекта — пространство не подсказываем (регрессия)', async () => {
+  const h = makeHarness({
+    delegatedInboxWorkspace: 'ws-u2',
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Разобрать почту',
+        simpleBody: 'Тело',
+        projectId: null,
+        projectName: null,
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'разобрать почту');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+
+  assert.deepEqual(h.delegatedResolverCalls, []);
+  assert.deepEqual(h.inboxCalls, [{ ownerId: 'u1', actorId: 'u1', workspaceId: undefined }]);
 });
 
 test('AI: сегмент без проекта и без ответственного → инбокс создателя (регрессия)', async () => {

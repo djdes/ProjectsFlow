@@ -1176,6 +1176,13 @@ const telegramComposer = new TelegramComposerService({
     idGen: idGenerator,
     resolveWorkspaceId,
   }),
+  // Делегированная из Telegram задача — во «Входящие» ответственного там, где он работает
+  // (его текущее пространство), если отправитель тоже в нём состоит.
+  resolveDelegatedInboxWorkspace: async (ownerUserId, actorUserId) => {
+    const workspaceId = await workspaceRepo.getCurrentWorkspaceId(ownerUserId);
+    if (!workspaceId) return null;
+    return (await workspaceRepo.getMembership(workspaceId, actorUserId)) ? workspaceId : null;
+  },
   sendNotification: sendAgentTelegramNotification,
   client: telegramClient,
   idGen: idGenerator,

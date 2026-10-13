@@ -76,6 +76,9 @@ type Deps = {
   readonly users: UserRepository;
   readonly createTask: CreateTask;
   readonly getOrCreateInbox: GetOrCreateInbox;
+  // Пространство «Входящих» ответственного при делегировании: его текущее, если
+  // отправитель тоже там состоит; null — как раньше, активное у отправителя.
+  readonly resolveDelegatedInboxWorkspace?: (ownerUserId: string, actorUserId: string) => Promise<string | null>;
   readonly sendNotification: SendAgentTelegramNotification;
   readonly client: TelegramClient;
   readonly idGen: () => string;
@@ -1254,7 +1257,7 @@ export class TelegramComposerService {
       const inboxOwnerId = delegateUserId ?? userId;
       const delegatedInbox = !draft.projectId && inboxOwnerId !== userId;
       const targetId =
-        draft.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId, userId)).id;
+        draft.projectId ?? (await this.inboxFor(inboxOwnerId, userId)).id;
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
@@ -1297,7 +1300,7 @@ export class TelegramComposerService {
         await this.edit(
           chatId,
           messageId,
-          `✅ Задача создана в <b>${escapeHtml(projName)}</b>.${assigneeSuffix}\n📝 ${markdownToTelegramHtml(excerpt(text))}${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+          `✅ Задача создана в <b>${escapeHtml(projName)}</b>.${assigneeSuffix}\n📝 ${markdownToTelegramHtml(excerpt(text))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
         );
       }
       if (cqId) {
@@ -1630,6 +1633,20 @@ export class TelegramComposerService {
       console.warn('[tg-composer] segment assignee resolve failed:', err);
       return null;
     }
+  }
+
+  // «Входящие» владельца. При делегировании пространство — ответственного (если отправитель
+  // там тоже состоит), а не вкладка, которую отправитель последней открыл в браузере.
+  private async inboxFor(ownerUserId: string, actorUserId: string) {
+    const workspaceId =
+      ownerUserId !== actorUserId && this.deps.resolveDelegatedInboxWorkspace
+        ? await this.deps.resolveDelegatedInboxWorkspace(ownerUserId, actorUserId).catch(() => null)
+        : null;
+    return this.deps.getOrCreateInbox.execute(ownerUserId, actorUserId, workspaceId ?? undefined);
+  }
+
+  private taskUrl(projectId: string, taskId: string): string {
+    return `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}`;
   }
 
   private async projNameOf(projectId: string | null): Promise<string> {
@@ -2452,7 +2469,7 @@ export class TelegramComposerService {
         const inboxOwnerId = assigneeUserId ?? userId;
         const delegatedInbox = !seg.projectId && inboxOwnerId !== userId;
         const targetId =
-          seg.projectId ?? (await this.deps.getOrCreateInbox.execute(inboxOwnerId, userId)).id;
+          seg.projectId ?? (await this.inboxFor(inboxOwnerId, userId)).id;
         const task = await this.deps.createTask.execute({
           projectId: targetId,
           ownerUserId: userId,
@@ -2478,8 +2495,12 @@ export class TelegramComposerService {
         });
         lastTaskId = task.id;
         lastProjectId = targetId;
-        const projName = await this.projNameOf(seg.projectId);
-        summary.push(`✅ ${escapeHtml(title || excerpt(body, 40))} → <b>${escapeHtml(projName)}</b>`);
+        const projName = delegatedInbox
+          ? `Входящие · ${task.assignee?.displayName ?? 'ответственного'}`
+          : await this.projNameOf(seg.projectId);
+        summary.push(
+          `✅ <a href="${this.taskUrl(targetId, task.id)}">${escapeHtml(title || excerpt(body, 40))}</a> → <b>${escapeHtml(projName)}</b>`,
+        );
       } catch (err) {
         console.warn('[tg-composer] finalizeSegments: segment failed:', err);
         failed += 1;

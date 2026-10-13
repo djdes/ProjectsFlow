@@ -75,3 +75,34 @@ test('inbox уже есть — ничего не создаём', async () => {
   assert.equal(got, existing);
   assert.equal(h.created(), null);
 });
+
+test('явное пространство важнее активного пространства инициатора (делегирование из Telegram)', async () => {
+  const seen: { find?: string; created?: string } = {};
+  const repo = {
+    findInboxByOwner: async (_owner: string, ws: string) => {
+      seen.find = ws;
+      return null;
+    },
+    listProjectNamesInWorkspace: async () => [],
+    createWithOwnerMembership: async (p: { id: string; name: string; workspaceId: string }) => {
+      seen.created = p.workspaceId;
+      return { id: p.id, name: p.name, isInbox: true } as unknown as Project;
+    },
+  } as unknown as ProjectRepository;
+  const members = {
+    listProjectsForUser: async () => [],
+    // Инициатор и владелец — коллеги именно в пространстве владельца.
+    listSharedUsersInWorkspace: async (_actor: string, ws: string) => (ws === 'ws-owner' ? [{ id: 'owner-1' }] : []),
+  } as unknown as ProjectMemberRepository;
+  const inbox = new GetOrCreateInbox({
+    repo,
+    members,
+    idGen: () => 'new-id',
+    resolveWorkspaceId: async () => 'ws-actor',
+  });
+
+  await inbox.execute('owner-1', 'actor-1', 'ws-owner');
+
+  assert.equal(seen.find, 'ws-owner');
+  assert.equal(seen.created, 'ws-owner');
+});

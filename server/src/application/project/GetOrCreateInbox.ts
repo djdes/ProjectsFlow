@@ -23,8 +23,12 @@ type Deps = {
 export class GetOrCreateInbox {
   constructor(private readonly deps: Deps) {}
 
-  async execute(ownerId: string, actorUserId = ownerId): Promise<Project> {
-    const workspaceId = await this.deps.resolveWorkspaceId(actorUserId);
+  // workspaceId — явное пространство вместо активного у инициатора. Нужен фоновым
+  // путям без веб-запроса (Telegram-бот): там «активное» — просто вкладка, которую
+  // отправитель последней открыл в браузере, и делегированная задача уезжала в
+  // свежесозданные «Входящие» ответственного там, куда он не смотрит.
+  async execute(ownerId: string, actorUserId = ownerId, workspaceId?: string): Promise<Project> {
+    workspaceId ??= await this.deps.resolveWorkspaceId(actorUserId);
     if (actorUserId !== ownerId) {
       const colleagues = await this.deps.members.listSharedUsersInWorkspace(actorUserId, workspaceId);
       if (!colleagues.some((member) => member.id === ownerId)) throw new AssigneeNotSharedMemberError();
