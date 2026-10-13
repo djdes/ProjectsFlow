@@ -5,6 +5,7 @@ import {
   TaskNotFoundError,
 } from '../../domain/task/errors.js';
 import type { Task } from '../../domain/task/Task.js';
+import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -78,7 +79,7 @@ export class ChangeTaskAssignee {
       kind: 'task_updated',
       payload: {
         taskId,
-        taskExcerpt: (task.description ?? '').slice(0, 120),
+        taskExcerpt: taskExcerpt(task.description),
         changes: [
           {
             field: 'assignee',

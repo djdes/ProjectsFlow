@@ -1,5 +1,6 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskCommentBodyEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
+import { taskExcerpt, taskTitleExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
 import type { CommentNotifyMode } from '../../domain/task/TaskComment.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
@@ -87,7 +88,14 @@ export class CreateTaskComment {
         projectId: input.projectId,
         actorUserId: input.ownerUserId,
         kind: 'task_commented',
-        payload: { taskId: task.id, commentId: comment.id, taskExcerpt: excerpt(task.description), commentExcerpt: excerpt(body) },
+        // Без картинок и HTML: иначе у задачи со скриншотом в начале превью съедал тег
+        // (в ленте «<figure data-…»).
+        payload: {
+          taskId: task.id,
+          commentId: comment.id,
+          taskExcerpt: excerpt(taskTitleExcerpt(task.description, 200)),
+          commentExcerpt: excerpt(taskExcerpt(body, 1000)),
+        },
       });
     }
 

@@ -1,6 +1,7 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { RalphMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
+import { taskTitleExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ActivityFieldChange } from '../../domain/activity/ActivityEvent.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -18,9 +19,10 @@ type Deps = {
   readonly activity?: ActivityRecorder;
 };
 
-// Первая строка описания (заголовок задачи) — короткая выжимка для ленты.
+// Заголовок задачи для ленты — первая строка ТЕКСТА описания: картинка-`<figure>` в начале
+// описания иначе становилась «заголовком» события.
 function taskTitle(description: string | null | undefined): string {
-  return (description ?? '').split('\n')[0]!.trim().slice(0, 80);
+  return taskTitleExcerpt(description);
 }
 
 export type UpdateTaskCommand = {

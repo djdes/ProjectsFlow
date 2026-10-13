@@ -10,6 +10,7 @@ import {
   formatTitleHeading,
   stripInlineMarkdown,
   plainTaskTitle,
+  plainDescription,
 } from './taskTitleBody';
 
 const FIGURE = '<figure data-figure-image><img src="/api/attachments/x" alt="" /></figure>';
@@ -163,4 +164,45 @@ test('round-trip: смена заголовка сохраняет тело бе
   assert.equal(next, 'Новый заголовок\n## Тело\nстрока с **markdown**');
   // Тело по-прежнему отделяется корректно.
   assert.equal(splitTitleBody(next).body, body);
+});
+
+// --- plainDescription: описание одной строкой для ленты событий ---
+
+test('plainDescription: картинка редактора — меткой, а не сырым <figure>', () => {
+  const desc =
+    '<figure data-figure-image><img src="/api/attachments/836a74ce" alt="" /></figure>\n\n\nИсправить отображение уведомлений';
+  assert.equal(plainDescription(desc), '🖼 изображение Исправить отображение уведомлений');
+});
+
+test('plainDescription: несколько картинок подряд — одна метка', () => {
+  const fig = '<figure data-figure-image><img src="/a" alt="" /></figure>';
+  assert.equal(plainDescription(`${fig}\n\n${fig}\n\nТекст`), '🖼 изображение Текст');
+});
+
+test('plainDescription: markdown-картинка, заголовки, списки и инлайн-разметка срезаны', () => {
+  const desc = '## Шапка сайта\n- поправить **меню**\n1. и `логотип`\n![скрин](/api/attachments/1)';
+  assert.equal(plainDescription(desc), 'Шапка сайта поправить меню и логотип 🖼 изображение');
+});
+
+test('plainDescription: HTML-теги цвета/подчёркивания и сущности', () => {
+  assert.equal(
+    plainDescription('<span style="color: red">Срочно</span> &amp; <u>важно</u>&nbsp;сегодня'),
+    'Срочно & важно сегодня',
+  );
+});
+
+test('plainDescription: пустое описание — пустая строка', () => {
+  assert.equal(plainDescription(''), '');
+});
+
+// Превью с сервера режется по длине — иногда прямо посреди картинки.
+test('превью, обрезанное посреди <figure>: ни сырого тега, ни «<figure data-»', () => {
+  const cut = '<figure data-figure-image><img src="/api/attachm';
+  assert.equal(plainDescription(cut), '🖼 изображение');
+  assert.equal(plainTaskTitle(cut), 'Скриншот');
+  assert.equal(plainTaskTitle('Починить шапку <span style="col'), 'Починить шапку');
+});
+
+test('plainTaskTitle: заголовок из первой строки текста, даже если перед ней пустая строка', () => {
+  assert.equal(plainTaskTitle('\n**Важно**: проверить оплату'), 'Важно: проверить оплату');
 });

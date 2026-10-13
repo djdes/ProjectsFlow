@@ -1,6 +1,7 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { effectivePlan, type Subscription } from '../../domain/usage/Subscription.js';
 import type { Task } from '../../domain/task/Task.js';
+import { taskTitleExcerpt } from '../../domain/task/taskExcerpt.js';
 import {
   TaskNotFoundError,
   TaskVersionLockedError,
@@ -93,7 +94,7 @@ export class RestoreTaskVersion {
       kind: 'task_updated',
       payload: {
         taskId: updated.id,
-        taskExcerpt: (updated.description ?? '').split('\n')[0]!.trim().slice(0, 80),
+        taskExcerpt: taskTitleExcerpt(updated.description),
         changes: [{ field: 'restore', old: null, new: version.createdAt.toISOString() }],
       },
     });

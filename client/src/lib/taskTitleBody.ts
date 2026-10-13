@@ -15,11 +15,20 @@ export type TitleBody = {
 // скриншот(ы)), splitTitleBody отдаёт пустой title — молчаливая пустая строка хуже честного
 // лейбла, поэтому фолбэк «Скриншот». Полностью пустое описание — исключение, там остаётся ''
 // (у пустой задачи и так есть свои фолбэки в местах отображения, например «Задача»).
+//
+// Превью описания с сервера (уведомления, лента) бывает обрезано по длине прямо посреди
+// `<figure …>` — такую строку splitTitleBody картинкой не узнаёт. Поэтому HTML из заголовка
+// срезается, а если от заголовка ничего не осталось — берётся первая строка текста.
 export function plainTaskTitle(description: string): string {
   const desc = description ?? '';
   const raw = splitTitleBody(desc).title;
-  const text = stripInlineMarkdown(parseTitleHeading(raw).text).trim();
+  const text = stripInlineMarkdown(parseTitleHeading(stripDescriptionHtml(raw)).text).trim();
   if (text) return text;
+  const firstText = stripDescriptionHtml(desc)
+    .split('\n')
+    .map((line) => stripInlineMarkdown(parseTitleHeading(line.trim()).text).trim())
+    .find((line) => line.length > 0);
+  if (firstText) return firstText;
   return desc.trim() ? 'Скриншот' : '';
 }
 
@@ -115,6 +124,68 @@ export function parseTitleHeading(rawTitle: string): TitleHeading {
 export function formatTitleHeading(text: string, level: TitleHeadingLevel): string {
   const t = (text ?? '').replace(/\r?\n/g, ' ');
   return level > 0 ? `${'#'.repeat(level)} ${t}` : t;
+}
+
+// Метка картинки в плоском тексте описания (см. plainDescription).
+export const DESCRIPTION_IMAGE_MARK = '🖼 изображение';
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+function decodeHtmlEntities(input: string): string {
+  return input.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+    if (entity[0] === '#') {
+      const code =
+        entity[1] === 'x' || entity[1] === 'X'
+          ? Number.parseInt(entity.slice(2), 16)
+          : Number.parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : match;
+    }
+    return HTML_ENTITIES[entity.toLowerCase()] ?? match;
+  });
+}
+
+// Срезать из описания HTML редактора, сохранив переводы строк: картинки (figure-блок
+// `<figure data-figure-image>…`, `<img>`) → imageMark, прочие теги — прочь, сущности
+// раскодированы. Сервер режет превью по длине, поэтому figure/тег бывает оборван на середине —
+// такой хвост тоже срезается целиком (иначе в ленте оставалось «<figure data-»).
+export function stripDescriptionHtml(text: string, imageMark = ''): string {
+  let s = text ?? '';
+  s = s.replace(/<figure\b[^>]*>[\s\S]*?<\/figure>/gi, imageMark);
+  // Незакрытый figure — превью оборвано внутри картинки: всё после него и есть её разметка.
+  s = s.replace(/<figure\b[\s\S]*$/i, imageMark);
+  s = s.replace(/<img\b[^>]*>/gi, imageMark);
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<\/?[a-z][^>]*>/gi, '');
+  // Оборванный тег в самом конце превью (`<span style="col`).
+  s = s.replace(/<\/?[a-z][^>]*$/i, '');
+  return decodeHtmlEntities(s);
+}
+
+// Описание задачи ОДНОЙ строкой для превью (дифф в ленте событий, уведомления). Картинки —
+// figure-блок редактора `<figure data-figure-image>…`, `<img>` и markdown `![alt](url)` —
+// становятся меткой «🖼 изображение», остальной HTML редактора и инлайн-markdown срезаются,
+// ведущие маркеры строк (# - * > 1.) убираются, пробелы схлопываются. Без этого в ленте
+// показывался сырой `<figure data-figure-image><img src="/api/attachments/…">`.
+export function plainDescription(description: string): string {
+  const image = ` ${DESCRIPTION_IMAGE_MARK} `;
+  let s = (description ?? '').replace(/!\[[^\]]*\]\([^)]*\)/g, image);
+  s = stripDescriptionHtml(s, image);
+  s = s
+    .split('\n')
+    .map((line) => stripInlineMarkdown(line).replace(/^\s*(?:[-*+>~=#]+|\d+[.)])\s+/, ''))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Несколько картинок подряд — одной меткой.
+  const mark = DESCRIPTION_IMAGE_MARK.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(new RegExp(`${mark}(?: ${mark})+`, 'g'), DESCRIPTION_IMAGE_MARK);
 }
 
 // Срезать инлайн-markdown для ОТОБРАЖЕНИЯ заголовка: `**жирный**`, `*курсив*`, `__b__`,

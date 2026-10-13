@@ -287,7 +287,7 @@ export function AppLogsPanel({
           projectEntries.length === 0 ? (
             <EmptyLogs />
           ) : (
-            <ul>
+            <ul className="px-2 py-1">
               {projectEntries.map((item) => (
                 <ActivityItem key={item.id} item={item} />
               ))}

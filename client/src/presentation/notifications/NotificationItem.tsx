@@ -1,9 +1,9 @@
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { relativeTime } from '@/lib/relativeTime';
-import type { Notification } from '@/domain/notifications/Notification';
-import { getInitials } from '@/presentation/layout/projectIcons';
+import { plainDescription, plainTaskTitle } from '@/lib/taskTitleBody';
+import type { Notification, NotificationPayload } from '@/domain/notifications/Notification';
+import { FeedRow } from '@/presentation/activity/FeedRow';
+import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import type { NotificationActions } from './useNotificationActions';
 
 const roleLabel: Record<'editor' | 'viewer', string> = {
@@ -11,9 +11,212 @@ const roleLabel: Record<'editor' | 'viewer', string> = {
   viewer: 'наблюдатель',
 };
 
-// Строка уведомления с действиями (принять инвайт в пространство/проект, join-request;
-// старые уведомления о назначении — информационные). Переиспользуется на странице
-// /notifications и в ленте «Все»/«Требуется действие».
+// Сервер кладёт в уведомление кусок description как есть — с картинками-`<figure>` редактора
+// и markdown. Показываем то, что человек видит на карточке: заголовок задачи…
+function taskLabel(excerpt: string | null | undefined): string {
+  return (excerpt ? plainTaskTitle(excerpt) : '') || '(без описания)';
+}
+
+// …а фрагменты (превью задачи, комментарий, сообщение) — одной строкой без HTML и разметки.
+function plainExcerpt(excerpt: string | null | undefined): string {
+  return excerpt ? plainDescription(excerpt) : '';
+}
+
+function Who({ name }: { name: string }): React.ReactElement {
+  return <span className="text-foreground">{name}</span>;
+}
+
+// Уведомление в две строки ленты: о чём (задача, проект, чат) и «кто · что сделал».
+type NotificationView = {
+  readonly avatarName: string;
+  readonly subject: string;
+  readonly meta: React.ReactNode;
+  readonly metaTitle: string;
+  // Справа от названия, до времени: «уточнение» у упоминаний в задаче, ждущей ответа.
+  readonly chip?: React.ReactNode;
+  // Под строками — то, что нельзя обрезать: детали изменения задачи.
+  readonly details?: React.ReactNode;
+};
+
+function describe(payload: NotificationPayload): NotificationView {
+  switch (payload.type) {
+    case 'task_changed': {
+      const actor = payload.actorDisplayName;
+      return {
+        avatarName: actor,
+        subject: taskLabel(payload.taskExcerpt),
+        meta: (
+          <>
+            <Who name={actor} /> · <span>{payload.title}</span> · {payload.projectName}
+          </>
+        ),
+        metaTitle: `${actor} · ${payload.title} · ${payload.projectName}`,
+        details: payload.detail ? (
+          <p className="whitespace-pre-line text-meta leading-[1.125rem] text-muted-foreground">{payload.detail}</p>
+        ) : undefined,
+      };
+    }
+    case 'comment_mention': {
+      const actor = payload.actorDisplayName ?? 'Кто-то';
+      const comment = plainExcerpt(payload.commentExcerpt);
+      return {
+        avatarName: actor,
+        subject: taskLabel(payload.taskExcerpt),
+        meta: comment ? (
+          <>
+            <Who name={actor} /> упомянул вас: «{comment}»
+          </>
+        ) : (
+          <>
+            <Who name={actor} /> упомянул вас в «{payload.projectName}»
+          </>
+        ),
+        metaTitle: comment ? `${actor}: «${comment}»` : `${actor} упомянул вас в «${payload.projectName}»`,
+        chip:
+          payload.taskStatus === 'awaiting_clarification' ? (
+            <span
+              className="shrink-0 rounded bg-manual-soft px-1 text-2xs font-medium text-manual-ink"
+              title="Задача ждёт твоего ответа"
+            >
+              уточнение
+            </span>
+          ) : undefined,
+      };
+    }
+    case 'project_invite':
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: payload.projectName,
+        meta: (
+          <>
+            <Who name={payload.actorDisplayName ?? 'Кто-то'} /> приглашает вас как {roleLabel[payload.role]}
+          </>
+        ),
+        metaTitle: `${payload.actorDisplayName ?? 'Кто-то'} приглашает вас в проект как ${roleLabel[payload.role]}`,
+      };
+    case 'workspace_invite':
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: payload.workspaceName,
+        meta: (
+          <>
+            <Who name={payload.actorDisplayName ?? 'Кто-то'} /> приглашает в пространство как{' '}
+            {roleLabel[payload.role]}
+          </>
+        ),
+        metaTitle: `${payload.actorDisplayName ?? 'Кто-то'} приглашает в пространство как ${roleLabel[payload.role]}`,
+      };
+    case 'task_delegation':
+    case 'task_assignee_changed': {
+      const actor = payload.actorDisplayName ?? 'Кто-то';
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: taskLabel(payload.taskExcerpt),
+        meta: (
+          <>
+            <Who name={actor} /> назначил(а) вас ответственным
+          </>
+        ),
+        metaTitle: `${actor} назначил(а) вас ответственным`,
+      };
+    }
+    case 'task_approval_requested':
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: taskLabel(payload.taskExcerpt),
+        meta: (
+          <>
+            <Who name={payload.actorDisplayName} /> отметил(а) выполненной — ждёт вашего утверждения
+          </>
+        ),
+        metaTitle: `${payload.actorDisplayName} отметил(а) задачу выполненной в «${payload.projectName}» — ждёт вашего утверждения`,
+      };
+    case 'task_delegation_resolved': {
+      const verb = payload.resolution === 'declined' ? 'снял(а) с себя задачу' : 'принял(а) задачу';
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: taskLabel(payload.taskExcerpt),
+        meta: (
+          <>
+            <Who name={payload.actorDisplayName} /> {verb}
+          </>
+        ),
+        metaTitle: `${payload.actorDisplayName} ${verb}`,
+      };
+    }
+    case 'task_assigned_to_project':
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: taskLabel(payload.taskExcerpt),
+        meta: (
+          <>
+            <Who name={payload.actorDisplayName} /> перенёс(ла) в «{payload.projectName}»
+          </>
+        ),
+        metaTitle: `${payload.actorDisplayName} перенёс(ла) задачу, за которую вы отвечаете, в «${payload.projectName}»`,
+      };
+    case 'chat_mention': {
+      const actor = payload.actorDisplayName ?? 'Кто-то';
+      const message = plainExcerpt(payload.messageExcerpt);
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: `Чат «${payload.workspaceName}»`,
+        meta: message ? (
+          <>
+            <Who name={actor} />: «{message}»
+          </>
+        ) : (
+          <>
+            <Who name={actor} /> упомянул(а) вас
+          </>
+        ),
+        metaTitle: message ? `${actor}: «${message}»` : `${actor} упомянул(а) вас`,
+      };
+    }
+    case 'server_alert': {
+      const icon = payload.alertStatus === 'resolved' ? '✅' : payload.severity === 'critical' ? '🔴' : '🟠';
+      return {
+        avatarName: payload.serverName,
+        subject: `${icon} ${payload.serverName}`,
+        meta: `${payload.message} · «${payload.projectName}»`,
+        metaTitle: `${payload.message} · «${payload.projectName}»`,
+      };
+    }
+    case 'daily_digest':
+      return {
+        avatarName: payload.projectName,
+        subject: '🗂️ Ежедневная сводка',
+        meta: `«${payload.projectName}» · ${payload.taskCount} задач`,
+        metaTitle: `«${payload.projectName}» · ${payload.taskCount} задач`,
+      };
+    case 'support_ticket': {
+      const from = `${payload.submitterDisplayName ?? 'Аноним'}${payload.source === 'landing' ? ' · с лендинга' : ''}`;
+      const text = from + (payload.messageExcerpt ? `: «${payload.messageExcerpt}»` : '');
+      return {
+        avatarName: payload.submitterDisplayName ?? 'Поддержка',
+        subject: '🆘 Обращение в поддержку',
+        meta: text,
+        metaTitle: text,
+      };
+    }
+    case 'join_request': {
+      const requester = payload.requesterDisplayName ?? 'Пользователь';
+      return {
+        avatarName: payload.actorDisplayName,
+        subject: payload.projectName,
+        meta: (
+          <>
+            <Who name={requester} /> просит доступ к проекту
+          </>
+        ),
+        metaTitle: `${requester} просит доступ к проекту «${payload.projectName}»`,
+      };
+    }
+  }
+}
+
+// Строка уведомления в ленте «Все»/«Требуется действие» (дизайн C4, плотная): две строки
+// с обрезкой, под ними — только детали изменения и кнопки (принять инвайт/join-request).
 export function NotificationItem({
   n,
   actions,
@@ -24,302 +227,96 @@ export function NotificationItem({
   const isUnread = n.readAt === null;
   const payload = n.payload;
   const actionUi = actions.actionUi[n.id];
+  const view = describe(payload);
+  // Кнопки — в рост плотной строки (24px); под палец — 36px.
+  const buttonClass = 'h-6 gap-1 px-2 text-xs [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:px-3';
+
+  let controls: React.ReactNode = null;
+  if (payload.type === 'project_invite' || payload.type === 'workspace_invite') {
+    controls =
+      actionUi === 'accepted' ? (
+        <p className="pbs-0.5 text-meta font-medium text-done">✓ Принято</p>
+      ) : actionUi === 'resolved' ? (
+        <p className="pbs-0.5 text-meta text-muted-foreground">Уже обработано</p>
+      ) : (
+        <div className="pbs-1">
+          <Button
+            size="sm"
+            className={buttonClass}
+            disabled={actionUi === 'busy'}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (payload.type === 'project_invite') actions.handleAcceptInvite(n);
+              else actions.handleAcceptWorkspaceInvite(n);
+            }}
+          >
+            Принять
+          </Button>
+        </div>
+      );
+  } else if (payload.type === 'join_request') {
+    controls =
+      actionUi === 'accepted' ? (
+        <p className="pbs-0.5 text-meta font-medium text-done">✓ Доступ предоставлен</p>
+      ) : actionUi === 'declined' ? (
+        <p className="pbs-0.5 text-meta text-muted-foreground">Запрос отклонён</p>
+      ) : (
+        <div className="flex gap-1.5 pbs-1">
+          <Button
+            size="sm"
+            className={buttonClass}
+            disabled={actionUi === 'busy'}
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.handleResolveJoin(n, true);
+            }}
+          >
+            Принять
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className={buttonClass}
+            disabled={actionUi === 'busy'}
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.handleResolveJoin(n, false);
+            }}
+          >
+            Отклонить
+          </Button>
+        </div>
+      );
+  }
 
   return (
-    <li
+    <FeedRow
       onClick={() => actions.handleClick(n)}
-      className={cn(
-        // overflow-hidden = содержит float аватара; текст обтекает иконку (справа от неё и
-        // продолжается под ней на всю ширину блока) — так шире и читабельнее.
-        'group cursor-pointer overflow-hidden px-3 py-2 transition-colors',
-        isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-hover',
-      )}
+      className={cn('cursor-pointer', isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-hover')}
+      createdAt={n.createdAt}
+      subject={view.subject}
+      subjectTitle={view.subject}
+      meta={view.meta}
+      metaTitle={view.metaTitle}
+      badge={view.chip}
+      avatar={
+        <>
+          <UserAvatar displayName={view.avatarName} className="size-5 rounded-full text-[9px]" />
+          {/* Непрочитанное — точка на углу аватара (выделяет иконку). */}
+          {isUnread && (
+            <span
+              className="absolute -end-0.5 -inset-bs-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
+              aria-hidden
+            />
+          )}
+        </>
+      }
     >
-      <span className="relative float-start me-2.5">
-        <Avatar className="size-7 ring-1 ring-border">
-          <AvatarFallback className="text-2xs">
-            {getInitials(
-              payload.type === 'server_alert'
-                ? payload.serverName
-                : payload.type === 'daily_digest'
-                  ? payload.projectName
-                  : payload.type === 'support_ticket'
-                    ? (payload.submitterDisplayName ?? 'Поддержка')
-                    : payload.actorDisplayName,
-            )}
-          </AvatarFallback>
-        </Avatar>
-        {/* Непрочитанное — точка на углу аватара (выделяет иконку). */}
-        {isUnread && (
-          <span
-            className="absolute -end-0.5 -inset-bs-0.5 size-2.5 rounded-full bg-primary ring-2 ring-background"
-            aria-hidden
-          />
-        )}
-      </span>
-      {/* Компактные action-кнопки внутри карточки: меньше высота/паддинги/шрифт. */}
-      <div className="space-y-0.5 [&_button]:h-7 [&_button]:gap-1 [&_button]:px-2.5 [&_button]:text-xs">
-        {payload.type === 'task_changed' && (
-          <>
-            <p className="text-sm font-medium leading-tight">{payload.title}</p>
-            <p className="text-xs text-muted-foreground">{payload.actorDisplayName} · {payload.projectName}</p>
-            <p className="line-clamp-2 text-sm">{payload.taskExcerpt}</p>
-            {payload.detail && <p className="whitespace-pre-line text-xs text-muted-foreground">{payload.detail}</p>}
-          </>
-        )}
-        {payload.type === 'comment_mention' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> упомянул тебя в{' '}
-              <span className="font-medium">«{payload.projectName}»</span>
-              {payload.taskStatus === 'awaiting_clarification' && (
-                <>
-                  {' '}
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md bg-manual-soft px-1.5 py-0.5 text-xs font-medium text-manual-ink"
-                    title="Задача ждёт твоего ответа"
-                  >
-                    🤔 ждёт уточнения
-                  </span>
-                </>
-              )}
-              {payload.taskExcerpt && (
-                <>
-                  {' · '}
-                  <span className="italic text-muted-foreground">{payload.taskExcerpt}</span>
-                </>
-              )}
-            </p>
-            {payload.commentExcerpt && (
-              <p className="line-clamp-2 text-xs text-muted-foreground">«{payload.commentExcerpt}»</p>
-            )}
-          </>
-        )}
-
-        {payload.type === 'project_invite' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в{' '}
-              <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
-            </p>
-            {actionUi === 'accepted' ? (
-              <p className="clear-start pbs-1 text-xs font-medium text-done">
-                ✓ Принято
-              </p>
-            ) : actionUi === 'resolved' ? (
-              <p className="clear-start pbs-1 text-xs text-muted-foreground">Уже обработано</p>
-            ) : (
-              <div className="clear-start pbs-1">
-                <Button
-                  size="sm"
-                  disabled={actionUi === 'busy'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    actions.handleAcceptInvite(n);
-                  }}
-                >
-                  Принять
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-
-        {payload.type === 'workspace_invite' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в
-              пространство <span className="font-medium">«{payload.workspaceName}»</span> как{' '}
-              {roleLabel[payload.role]}
-            </p>
-            {actionUi === 'accepted' ? (
-              <p className="clear-start pbs-1 text-xs font-medium text-done">
-                ✓ Принято
-              </p>
-            ) : actionUi === 'resolved' ? (
-              <p className="clear-start pbs-1 text-xs text-muted-foreground">Уже обработано</p>
-            ) : (
-              <div className="clear-start pbs-1">
-                <Button
-                  size="sm"
-                  disabled={actionUi === 'busy'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    actions.handleAcceptWorkspaceInvite(n);
-                  }}
-                >
-                  Принять
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-
-        {payload.type === 'task_delegation' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> назначил(а) вас
-              ответственным за задачу:
-            </p>
-            <p className="line-clamp-2 text-xs italic text-muted-foreground">
-              «{payload.taskExcerpt || '(без описания)'}»
-            </p>
-          </>
-        )}
-
-        {payload.type === 'task_assignee_changed' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> назначил(а) вас
-              ответственным за задачу:
-            </p>
-            <p className="line-clamp-2 text-xs italic text-muted-foreground">
-              «{payload.taskExcerpt || '(без описания)'}»
-            </p>
-          </>
-        )}
-
-        {payload.type === 'task_approval_requested' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName}</span> отметил(а) задачу
-              выполненной в «{payload.projectName}» — работа ждёт вашего утверждения:
-            </p>
-            <p className="line-clamp-2 text-xs italic text-muted-foreground">
-              «{payload.taskExcerpt || '(без описания)'}»
-            </p>
-          </>
-        )}
-
-        {payload.type === 'task_delegation_resolved' && payload.resolution === 'declined' && (
-          <p className="text-sm leading-tight">
-            <span className="font-medium">{payload.actorDisplayName}</span> снял(а) с себя задачу
-            {payload.taskExcerpt && (
-              <>
-                {' '}
-                <span className="italic text-muted-foreground">«{payload.taskExcerpt}»</span>
-              </>
-            )}
-          </p>
-        )}
-
-        {payload.type === 'task_assigned_to_project' && (
-          <p className="text-sm leading-tight">
-            <span className="font-medium">{payload.actorDisplayName}</span> перенёс задачу, за которую вы
-            отвечаете, в{' '}
-            <span className="font-medium">«{payload.projectName}»</span>
-            {payload.taskExcerpt && (
-              <>
-                {' · '}
-                <span className="italic text-muted-foreground">«{payload.taskExcerpt}»</span>
-              </>
-            )}
-          </p>
-        )}
-
-        {payload.type === 'chat_mention' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> упомянул(а) вас в
-              чате <span className="font-medium">«{payload.workspaceName}»</span>
-            </p>
-            {payload.messageExcerpt && (
-              <p className="line-clamp-2 text-xs text-muted-foreground">«{payload.messageExcerpt}»</p>
-            )}
-          </>
-        )}
-
-        {payload.type === 'server_alert' && (
-          <p className="text-sm leading-tight">
-            {payload.alertStatus === 'resolved' ? '✅ ' : payload.severity === 'critical' ? '🔴 ' : '🟠 '}
-            <span className="font-medium">{payload.serverName}</span>
-            {' · '}
-            {payload.message}
-            {' · '}
-            <span className="text-muted-foreground">«{payload.projectName}»</span>
-          </p>
-        )}
-
-        {payload.type === 'daily_digest' && (
-          <p className="text-sm leading-tight">
-            🗂️ Ежедневная сводка по <span className="font-medium">«{payload.projectName}»</span>
-            {' · '}
-            {payload.taskCount} задач
-          </p>
-        )}
-
-        {payload.type === 'support_ticket' && (
-          <>
-            <p className="text-sm leading-tight">
-              🆘 Новое обращение в поддержку
-              {payload.submitterDisplayName ? (
-                <>
-                  {' от '}
-                  <span className="font-medium">{payload.submitterDisplayName}</span>
-                </>
-              ) : (
-                ' (аноним)'
-              )}
-              {payload.source === 'landing' && (
-                <span className="text-muted-foreground"> · с лендинга</span>
-              )}
-            </p>
-            {payload.messageExcerpt && (
-              <p className="line-clamp-2 text-xs italic text-muted-foreground">
-                «{payload.messageExcerpt}»
-              </p>
-            )}
-          </>
-        )}
-
-        {payload.type === 'join_request' && (
-          <>
-            <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.requesterDisplayName ?? 'Пользователь'}</span> просит доступ к
-              проекту <span className="font-medium">«{payload.projectName}»</span>
-            </p>
-            {actionUi === 'accepted' ? (
-              <p className="clear-start pbs-1 text-xs font-medium text-done">
-                ✓ Доступ предоставлен
-              </p>
-            ) : actionUi === 'declined' ? (
-              <p className="clear-start pbs-1 text-xs text-muted-foreground">Запрос отклонён</p>
-            ) : (
-              <div className="flex clear-start gap-2 pbs-1">
-                <Button
-                  size="sm"
-                  disabled={actionUi === 'busy'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    actions.handleResolveJoin(n, true);
-                  }}
-                >
-                  Принять
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={actionUi === 'busy'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    actions.handleResolveJoin(n, false);
-                  }}
-                >
-                  Отклонить
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Задача из payload'а в корзине: текст уведомления сохраняем, но предупреждаем, что
-            перехода не будет — иначе клик выглядел бы поломкой. */}
-        {n.taskDeleted && (
-          <p className="text-xs font-medium text-muted-foreground">🗑️ Задача удалена</p>
-        )}
-
-        <p className="text-xs text-muted-foreground">{relativeTime(n.createdAt)}</p>
-      </div>
-    </li>
+      {view.details}
+      {/* Задача из payload'а в корзине: текст уведомления сохраняем, но предупреждаем, что
+          перехода не будет — иначе клик выглядел бы поломкой. */}
+      {n.taskDeleted && <p className="text-meta text-muted-foreground">🗑️ Задача удалена</p>}
+      {controls}
+    </FeedRow>
   );
 }

@@ -1,29 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, CalendarDays, Clock } from 'lucide-react';
-import { relativeTime } from '@/lib/relativeTime';
-import { formatExactDateTime } from '@/lib/datetime';
-import { cn } from '@/lib/utils';
-import { parseTitleHeading, splitTitleBody, stripInlineMarkdown } from '@/lib/taskTitleBody';
-
-// Полная очистка текста от markdown для минималистичной ленты (Notion): инлайн-разметка
-// (** * ` ~~ == и т.п.) + ведущие маркеры заголовков/списков/цитат (### - * + > =) + схлоп пробелов.
-function cleanText(s: string): string {
-  return stripInlineMarkdown(s)
-    .replace(/^\s*[-*+>~=#]+\s*/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Чистое короткое имя (заголовок = первая строка, без markdown-заголовка ### и разметки), обрезка.
-function cleanName(raw: string | null | undefined, max = 40): string {
-  if (!raw) return '';
-  const title = cleanText(parseTitleHeading(splitTitleBody(raw).title).text);
-  return title.length > max ? `${title.slice(0, max).trimEnd()}…` : title;
-}
+import { Clock } from 'lucide-react';
+import { plainDescription, plainTaskTitle, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
@@ -35,25 +15,43 @@ import type {
   ActivityKind,
 } from '@/domain/activity/ActivityFeedItem';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
+import { FeedRow } from './FeedRow';
+
+// Полная очистка текста от markdown для минималистичной ленты (Notion): инлайн-разметка
+// (** * ` ~~ == и т.п.) + ведущие маркеры заголовков/списков/цитат (### - * + > =) + схлоп пробелов.
+function cleanText(s: string): string {
+  return stripInlineMarkdown(s)
+    .replace(/^\s*[-*+>~=#]+\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Имя задачи/проекта: заголовок без разметки и HTML (превью с сервера бывает обрезано
+// посреди картинки-`<figure>` — plainTaskTitle это переживает). По ширине режет CSS.
+function cleanName(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const title = cleanText(plainTaskTitle(raw));
+  return title.length > 200 ? `${title.slice(0, 200).trimEnd()}…` : title;
+}
 
 function statusLabel(s: string | undefined): string {
   if (!s) return '';
   return STATUS_LABEL[s as TaskStatus] ?? s;
 }
 
-// Человекочитаемые подписи изменённых полей + значений (для Notion-style диффа).
+// Подписи изменённых полей — строчными, они идут внутри строки: «срок: 13 окт.».
 const FIELD_LABEL: Record<string, string> = {
-  description: 'Описание',
-  status: 'Статус',
-  deadline: 'Дедлайн',
-  priority: 'Приоритет',
-  assigneeUserId: 'Ответственный',
-  assignee: 'Ответственный',
-  ralphMode: 'Режим',
-  name: 'Название',
-  cover: 'Обложка',
-  attachments: 'Файлы',
-  startDate: 'Дата начала',
+  description: 'описание',
+  status: 'статус',
+  deadline: 'срок',
+  priority: 'приоритет',
+  assigneeUserId: 'ответственный',
+  assignee: 'ответственный',
+  ralphMode: 'режим',
+  name: 'название',
+  cover: 'обложка',
+  attachments: 'файлы',
+  startDate: 'начало',
 };
 const PRIORITY_LABEL: Record<string, string> = {
   '1': 'Срочный',
@@ -61,77 +59,85 @@ const PRIORITY_LABEL: Record<string, string> = {
   '3': 'Средний',
   '4': 'Низкий',
 };
+const DATE_FIELDS: ReadonlySet<string> = new Set(['deadline', 'startDate']);
+
+// «2026-10-13» → «13 окт.» (год — только если не текущий).
+function formatDay(v: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (!m) return v;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  }).format(date);
+}
+
 function humanizeValue(field: string, v: string | null): string {
   if (field === 'cover') return v ? 'обновлена' : 'убрана';
   if (v == null || v === '') return '—';
   if (field === 'status') return statusLabel(v);
   if (field === 'priority') return PRIORITY_LABEL[v] ?? v;
-  // Текстовые поля (описание/название) — полная чистка markdown и короткая обрезка (Notion).
-  const clean = cleanText(v);
+  if (DATE_FIELDS.has(field)) return formatDay(v);
+  // Текстовые поля — плоский текст и короткая обрезка (Notion). Описание хранит и HTML
+  // редактора (картинки — `<figure data-figure-image>`): его чистит plainDescription.
+  const clean = field === 'description' ? plainDescription(v) : cleanText(v);
+  if (!clean) return '—';
   return clean.length > 80 ? `${clean.slice(0, 80).trimEnd()}…` : clean;
 }
 
-// Дифф изменённых полей: новое значение подсвечено синим (как в Notion), старое — зачёркнуто.
-// onOpen — клик по блоку открывает задачу/страницу с подсветкой изменённого поля.
-function ChangesDiff({
-  changes,
-  onOpen,
-}: {
-  changes: readonly ActivityFieldChange[];
-  onOpen?: () => void;
-}): React.ReactElement {
+// Одно изменение в строке «кто · что»: «Вручную → Готово», «срок: 13 окт.», «приоритет:
+// Средний → Высокий». Статус без подписи — стрелка между статусами говорит сама за себя.
+// Описание в строку не влезает — называем поле, текст виден в задаче (клик подсветит поле).
+type ChangeParts = { readonly label: string; readonly old: string | null; readonly next: string };
+
+function changeParts(change: ActivityFieldChange): ChangeParts {
+  if (change.field === 'cover') return { label: '', old: null, next: `обложка ${humanizeValue('cover', change.new)}` };
+  if (change.field === 'description') {
+    return { label: '', old: null, next: change.new ? 'описание' : 'описание очищено' };
+  }
+  const old = humanizeValue(change.field, change.old);
+  return {
+    label: change.field === 'status' ? '' : `${FIELD_LABEL[change.field] ?? change.field}: `,
+    old: old === '—' ? null : old,
+    next: humanizeValue(change.field, change.new),
+  };
+}
+
+function changeText(change: ActivityFieldChange): string {
+  const { label, old, next } = changeParts(change);
+  return `${label}${old ? `${old} → ` : ''}${next}`;
+}
+
+function ChangeInline({ change }: { change: ActivityFieldChange }): React.ReactElement {
+  const { label, old, next } = changeParts(change);
+  const plain = change.field === 'description' || change.field === 'cover';
   return (
-    <div
-      onClick={onOpen ? () => onOpen() : undefined}
-      className={cn(
-        'mbs-2.5 overflow-clip rounded-xl border border-border/70 bg-muted/20 transition-colors',
-        onOpen && 'cursor-pointer hover:border-border hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+    <>
+      {label}
+      {old && (
+        <>
+          <span className="line-through decoration-muted-foreground/50">{old}</span>
+          {' → '}
+        </>
       )}
-      role={onOpen ? 'button' : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-      onKeyDown={onOpen ? (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        onOpen();
-      } : undefined}
-    >
-      {changes.map((c, i) => (
-        <div
-          key={`${c.field}-${i}`}
-          className="grid gap-1.5 border-be border-border/50 px-3 py-2.5 text-xs last:border-be-0 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start"
-        >
-          <span className="font-medium text-muted-foreground">{FIELD_LABEL[c.field] ?? c.field}</span>
-          {c.field === 'description' ? (
-            <span className="grid min-w-0 gap-1.5">
-              {c.old ? (
-                <span className="min-w-0 rounded-md bg-background/80 px-2 py-1.5 text-muted-foreground line-through decoration-muted-foreground/50">
-                  {humanizeValue(c.field, c.old)}
-                </span>
-              ) : null}
-              <span className="min-w-0 rounded-md bg-primary/10 px-2 py-1.5 font-medium text-foreground">
-                {c.new ? humanizeValue(c.field, c.new) : 'Очищено'}
-              </span>
-            </span>
-          ) : (
-            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className="max-w-full truncate rounded-md bg-background/80 px-2 py-1 text-muted-foreground line-through decoration-muted-foreground/50">
-                {humanizeValue(c.field, c.old)}
-              </span>
-              <ArrowRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
-              <span className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">
-                {humanizeValue(c.field, c.new)}
-              </span>
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
+      <span className={plain ? undefined : 'font-medium text-foreground'}>{next}</span>
+    </>
   );
 }
 
-// Кликабельный фрагмент текста события (название задачи / имя проекта). stopPropagation —
-// чтобы клик по ссылке не «проваливался» дальше по строке.
-function ActLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }): React.ReactElement {
+// Кликабельный фрагмент строки (название задачи / изменения). stopPropagation — чтобы клик
+// не «проваливался» дальше по строке.
+function ActLink({
+  onClick,
+  className,
+  children,
+}: {
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}): React.ReactElement {
   return (
     <span
       role="button"
@@ -142,117 +148,56 @@ function ActLink({ onClick, children }: { onClick: () => void; children: React.R
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
           e.stopPropagation();
           onClick();
         }
       }}
-      className="cursor-pointer rounded font-semibold text-foreground decoration-muted-foreground/40 underline-offset-2 hover:underline"
+      className={className ?? 'cursor-pointer rounded decoration-muted-foreground/40 underline-offset-2 hover:underline'}
     >
       {children}
     </span>
   );
 }
 
-type NavHandlers = { openTask: () => void; openProject: () => void };
+// События про задачу: строка 1 — её название (у событий проекта — имя проекта).
+const TASK_EVENT_KINDS: ReadonlySet<ActivityKind> = new Set([
+  'task_created',
+  'task_status_changed',
+  'task_updated',
+  'task_deleted',
+  'task_commented',
+]);
 
-// Текст события. Название задачи и имя проекта — отдельные кликабельные ссылки; сам глагол
-// («изменил», «перенёс») и имя автора — обычный выделяемый/копируемый текст.
-function renderText(item: ActivityEventItem, nav: NavHandlers): React.ReactNode {
-  const actor = item.actorDisplayName ?? 'Кто-то';
-  const target = item.targetDisplayName ?? 'участника';
-  const p = item.payload ?? {};
-  const taskName = cleanName(p.taskExcerpt);
-  const taskLabel = taskName ? `«${taskName}»` : 'задачу';
-  // Задача в корзине: текст события сохраняем («что было»), но ссылку убираем — она вела бы
-  // в 404. Помечаем явно, чтобы отсутствие клика не выглядело поломкой.
-  const taskLink = item.taskDeleted ? (
-    <span className="text-muted-foreground">
-      {taskLabel} <span className="text-xs">(задача удалена)</span>
-    </span>
-  ) : (
-    <ActLink onClick={nav.openTask}>{taskLabel}</ActLink>
-  );
-  const projectName = cleanName(p.projectName, 32);
-  const projectLink = projectName ? <ActLink onClick={nav.openProject}>«{projectName}»</ActLink> : null;
-  switch (item.kind) {
-    case 'task_created':
-      return (
-        <>
-          <b>{actor}</b> создал {taskLink}
-        </>
-      );
-    case 'task_status_changed':
-      return (
-        <>
-          <b>{actor}</b> изменил статус {taskLink}
-        </>
-      );
-    case 'task_updated':
-      return (
-        <>
-          <b>{actor}</b> изменил {taskLink}
-        </>
-      );
-    case 'task_deleted':
-      return (
-        <>
-          <b>{actor}</b> удалил {taskName ? `«${taskName}»` : 'задачу'}
-        </>
-      );
-    case 'task_commented':
-      return (
-        <>
-          <b>{actor}</b> прокомментировал {taskLink}
-          {p.commentExcerpt ? (
-            <span className="text-muted-foreground">: «{cleanName(p.commentExcerpt, 48)}»</span>
-          ) : null}
-        </>
-      );
-    case 'project_created':
-      return (
-        <>
-          <b>{actor}</b> создал проект {projectLink}
-        </>
-      );
-    case 'project_updated':
-      return (
-        <>
-          <b>{actor}</b> изменил проект {projectLink}
-        </>
-      );
-    case 'member_added':
-      return (
-        <>
-          <b>{item.targetDisplayName ?? actor}</b> присоединился к проекту
-        </>
-      );
-    case 'member_removed':
-      return (
-        <>
-          <b>{actor}</b> удалил {target} из проекта
-        </>
-      );
-    case 'member_role_changed':
-      return (
-        <>
-          <b>{actor}</b> сменил роль {target}
-        </>
-      );
-    default:
-      return <b>{actor}</b>;
-  }
-}
+// События про участника: строка 1 — его имя.
+const MEMBER_EVENT_KINDS: ReadonlySet<ActivityKind> = new Set([
+  'member_added',
+  'member_removed',
+  'member_role_changed',
+]);
 
 // Задачные события, у которых есть история версий (кнопка-часы «Посмотреть версию»).
-const TASK_KINDS: ReadonlySet<ActivityKind> = new Set([
+const VERSIONED_KINDS: ReadonlySet<ActivityKind> = new Set([
   'task_created',
   'task_updated',
   'task_status_changed',
 ]);
 
-// Строка амбиентного действия в ленте «Все». Клик ведёт к задаче/коммену/доске.
-// onOpenVersions — если задан и событие задачное, справа-сверху появляется часы-иконка,
-// открывающая окно версий этой задачи.
+// Строка 2 события без изменений и комментария: «Олег Боев создал задачу».
+const KIND_VERB: Partial<Record<ActivityKind, string>> = {
+  task_created: 'создал задачу',
+  task_status_changed: 'изменил статус',
+  task_updated: 'изменил задачу',
+  task_deleted: 'удалил задачу',
+  task_commented: 'прокомментировал',
+  project_created: 'создал проект',
+  project_updated: 'изменил проект',
+};
+
+// Строка ленты событий (дизайн C4, плотная): строка 1 — задача или проект и время, строка 2 —
+// «кто · что изменилось». Клик по названию открывает задачу, по изменениям — задачу с
+// подсветкой поля. onOpenVersions — если задан и у задачи есть версии, справа от времени
+// появляются часы «История версий».
 export function ActivityItem({
   item,
   onOpenVersions,
@@ -264,15 +209,14 @@ export function ActivityItem({
   const { user } = useCurrentUser();
   const actor = item.actorDisplayName ?? 'Кто-то';
   const isYou = !!user?.id && item.actorUserId === user.id;
+  const payload = item.payload;
   // Кнопку истории версий показываем ТОЛЬКО когда у задачи реально есть версии (hasVersions
   // с сервера) — иначе часы-иконка вела бы в пустое окно «Версий пока нет».
   const versionTaskId =
-    onOpenVersions && TASK_KINDS.has(item.kind) && item.hasVersions && !item.taskDeleted
-      ? (item.payload?.taskId ?? null)
+    onOpenVersions && VERSIONED_KINDS.has(item.kind) && item.hasVersions && !item.taskDeleted
+      ? (payload?.taskId ?? null)
       : null;
-  const taskId = item.taskDeleted ? null : (item.payload?.taskId ?? null);
-  // Название задачи / блок изменения ведут на страницу задачи (при hl= — с подсветкой поля);
-  // имя проекта — на доску проекта. Сам глагол/имя автора остаются обычным текстом (выделяется).
+  const taskId = item.taskDeleted || item.kind === 'task_deleted' ? null : (payload?.taskId ?? null);
   const openTask = (field?: string): void => {
     if (!taskId) return;
     navigate(`/projects/${item.projectId}/tasks/${taskId}${field ? `?hl=${encodeURIComponent(field)}` : ''}`);
@@ -280,18 +224,107 @@ export function ActivityItem({
   const openProject = (): void => {
     navigate(`/projects/${item.projectId}`);
   };
+
+  // Строка 1: о чём событие — задача, участник или проект. Задача в корзине — зачёркнутое
+  // название без ссылки: ссылка вела бы в 404, а зачёркивание объясняет, почему клика нет.
+  const isTaskEvent = TASK_EVENT_KINDS.has(item.kind);
+  const isMemberEvent = MEMBER_EVENT_KINDS.has(item.kind);
+  const name = isTaskEvent
+    ? cleanName(payload?.taskExcerpt) || 'Задача'
+    : isMemberEvent
+      ? (item.targetDisplayName ?? (item.kind === 'member_added' ? actor : 'Участник'))
+      : cleanName(payload?.projectName) || 'Проект';
+  const subject = isMemberEvent ? (
+    name
+  ) : !isTaskEvent ? (
+    <ActLink onClick={openProject}>{name}</ActLink>
+  ) : taskId ? (
+    <ActLink onClick={() => openTask()}>{name}</ActLink>
+  ) : (
+    <span className="text-muted-foreground line-through decoration-muted-foreground/50">{name}</span>
+  );
+
+  const changes: readonly ActivityFieldChange[] =
+    item.kind === 'task_status_changed'
+      ? payload?.newStatus
+        ? [{ field: 'status', old: payload.oldStatus ?? null, new: payload.newStatus }]
+        : []
+      : (item.kind === 'task_updated' || item.kind === 'project_updated') && payload?.changes?.length
+        ? payload.changes
+        : [];
+  const comment =
+    item.kind === 'task_commented' && payload?.commentExcerpt ? plainDescription(payload.commentExcerpt) : '';
+
+  // Строка 2: кто и что сделал.
+  const who = <span className="text-foreground">{actor}</span>;
+  let meta: React.ReactNode;
+  let metaTitle: string | undefined;
+  if (changes.length > 0) {
+    const inline = changes.map((change, i) => (
+      <span key={`${change.field}-${i}`}>
+        {i > 0 && ' · '}
+        <ChangeInline change={change} />
+      </span>
+    ));
+    meta = (
+      <>
+        {who}
+        {' · '}
+        {taskId || !isTaskEvent ? (
+          <ActLink
+            onClick={() => (taskId ? openTask(changes[0]?.field) : openProject())}
+            className="cursor-pointer hover:text-foreground"
+          >
+            {inline}
+          </ActLink>
+        ) : (
+          inline
+        )}
+      </>
+    );
+    metaTitle = `${actor} · ${changes.map(changeText).join(' · ')}`;
+  } else if (comment) {
+    meta = (
+      <>
+        {who}: «{comment}»
+      </>
+    );
+    metaTitle = `${actor}: «${comment}»`;
+  } else {
+    const verb = KIND_VERB[item.kind];
+    meta =
+      item.kind === 'member_added' ? (
+        'присоединился к проекту'
+      ) : item.kind === 'member_removed' ? (
+        <>
+          {who} удалил из проекта
+        </>
+      ) : item.kind === 'member_role_changed' ? (
+        <>
+          {who} сменил роль
+        </>
+      ) : (
+        <>
+          {who}
+          {verb ? ` ${verb}` : ''}
+        </>
+      );
+  }
+
   return (
-    <TooltipProvider delayDuration={550} skipDelayDuration={120}>
-      <li className="group relative flex gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
-        {/* Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion). */}
+    <FeedRow
+      className="hover:bg-hover"
+      createdAt={item.createdAt}
+      subject={subject}
+      subjectTitle={item.taskDeleted && isTaskEvent ? `${name} (задача удалена)` : name}
+      meta={meta}
+      metaTitle={metaTitle}
+      avatar={
+        // Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion).
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="relative z-10 mbs-0.5 shrink-0">
-              <UserAvatar
-                displayName={actor}
-                avatarUrl={item.actorAvatarUrl}
-                className="size-7 rounded-full text-2xs"
-              />
+            <span className="block">
+              <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-5 rounded-full text-[9px]" />
             </span>
           </TooltipTrigger>
           {/* Появляется чуть ВЫШЕ и ЛЕВЕЕ наведённого аватара (Notion-style): side=top align=end. */}
@@ -313,74 +346,33 @@ export function ActivityItem({
             </span>
           </TooltipContent>
         </Tooltip>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex min-h-8 items-start gap-2">
-            <p className="min-w-0 flex-1 select-text pbs-0.5 text-sm leading-relaxed">
-              {renderText(item, { openTask: () => openTask(), openProject })}
-            </p>
-            {/* Правый слот ФИКСИРОВАННОЙ ширины под кнопку версии — резервируется всегда, чтобы
-                текст НИКОГДА не доходил до правого края (там кнопка), одинаково у всех сообщений
-                (как в Notion). Кнопка появляется, если у задачи есть версии; иначе слот пустой. */}
-            <div className="flex w-9 shrink-0 justify-end">
-              {versionTaskId && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenVersions?.(versionTaskId);
-                      }}
-                      aria-label="История версий"
-                      className="grid size-9 shrink-0 place-items-center rounded-[10px] text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Clock className="size-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left" className="border-transparent bg-foreground text-background">
-                    История версий
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </div>
-          {/* Время — серым, чуть ниже; hover: точная дата/время до секунды (Notion-style). */}
+      }
+      aside={
+        // История версий — по наведению/фокусу (на тач-экранах — всегда).
+        versionTaskId ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="mbs-0.5 inline-block w-fit text-xs text-muted-foreground hover:text-foreground">
-                {relativeTime(item.createdAt)}
-              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenVersions?.(versionTaskId);
+                }}
+                aria-label="История версий"
+                className="-my-0.5 grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-hover hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+              >
+                <Clock className="size-3.5" />
+              </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" align="start" className="flex items-center gap-1.5 border-border/60 shadow-lg">
-              <CalendarDays className="size-3.5 text-muted-foreground" />
-              {formatExactDateTime(item.createdAt)}
+            <TooltipContent side="left" className="border-transparent bg-foreground text-background">
+              История версий
             </TooltipContent>
           </Tooltip>
-          {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
-          item.payload?.changes?.length ? (
-            <ChangesDiff
-              changes={item.payload.changes}
-              // Клик по блоку изменения → задача с подсветкой изменённого поля (или проект).
-              onOpen={() =>
-                taskId ? openTask(item.payload?.changes?.[0]?.field) : openProject()
-              }
-            />
-          ) : null}
-          {item.kind === 'task_status_changed' ? (
-            <ChangesDiff
-              changes={[
-                {
-                  field: 'status',
-                  old: item.payload?.oldStatus ?? null,
-                  new: item.payload?.newStatus ?? null,
-                },
-              ]}
-              onOpen={() => openTask('status')}
-            />
-          ) : null}
-        </div>
-      </li>
-    </TooltipProvider>
+        ) : onOpenVersions ? (
+          // Место под часы держим и у событий без версий — время стоит одной колонкой.
+          <span aria-hidden className="-my-0.5 size-6 shrink-0" />
+        ) : undefined
+      }
+    />
   );
 }

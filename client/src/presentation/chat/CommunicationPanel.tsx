@@ -143,9 +143,9 @@ function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElemen
 
   if (feed.loading) {
     return (
-      <div className="space-y-2 px-1 py-1">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+      <div className="space-y-1 px-1 py-1">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-10 animate-pulse rounded-md bg-muted" />
         ))}
       </div>
     );
@@ -169,7 +169,8 @@ function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElemen
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <ul className="divide-y overflow-clip rounded-lg border bg-card">
+      {/* Компактная лента (C4): строки без рамок и разделителей, подсветка по наведению. */}
+      <ul className="flex flex-col gap-px">
         {feed.items.map((it) =>
           it.type === 'activity' ? (
             <ActivityItem key={it.id} item={it} />

@@ -397,7 +397,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                     Загружаем старые изменения…
                   </div>
                 ) : null}
-                <ul className="pbe-4">
+                {/* px-3 + px-2 строки события = 20px — по краю с заголовками дней (px-5). */}
+                <ul className="px-3 pbe-4">
                   {activity.map((item, index) => {
                     const showDay =
                       index === 0 ||
@@ -407,7 +408,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                         {showDay ? (
                           <li
                             role="presentation"
-                            className="sticky inset-bs-0 z-20 border-be bg-background/95 px-5 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
+                            className="sticky inset-bs-0 z-20 -mx-3 border-be bg-background/95 px-5 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
                           >
                             {activityDayLabel(item.createdAt)}
                           </li>

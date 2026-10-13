@@ -4,6 +4,7 @@ import {
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
 import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskApprovalService } from './TaskApprovalService.js';
 import type { WorkerPolicy } from '../workspace/WorkerPolicy.js';
@@ -176,7 +177,7 @@ export class CreateTask {
       projectId: targetProjectId,
       actorUserId: input.ownerUserId,
       kind: 'task_created',
-      payload: { taskId: task.id, taskExcerpt: description.slice(0, 120) },
+      payload: { taskId: task.id, taskExcerpt: taskExcerpt(description) },
     });
     return task;
   }

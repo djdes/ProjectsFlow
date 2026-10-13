@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Inbox as InboxIcon, Loader2, PlayCircle } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { plainTaskTitle } from '@/lib/taskTitleBody';
 import { useContainer } from '@/infrastructure/di/container';
 
 // Просьба открыть задачу во «Входящих». Слушает AppShell — он внутри роутера.
@@ -58,7 +59,9 @@ function AssignedTaskToastCard({
     );
   };
 
-  const excerpt = data.taskExcerpt.trim();
+  // Заголовок задачи, а не сырой кусок description: в нём бывают картинки-`<figure>` редактора
+  // и markdown, которые в плашке показывались бы как есть.
+  const excerpt = plainTaskTitle(data.taskExcerpt);
   return (
     <div className="flex w-[min(22rem,90vw)] flex-col gap-2 rounded-xl border border-primary/30 bg-card p-3 shadow-lg">
       <div className="flex items-start gap-2">

@@ -1,5 +1,6 @@
 import { TaskNotFoundError } from '../../domain/task/errors.js';
 import { TASK_STATUSES, type Task, type TaskStatus } from '../../domain/task/Task.js';
+import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
@@ -171,7 +172,7 @@ export class MoveTask {
         kind: 'task_status_changed',
         payload: {
           taskId: task.id,
-          taskExcerpt: (task.description ?? '').slice(0, 120),
+          taskExcerpt: taskExcerpt(task.description),
           oldStatus: task.status,
           newStatus: updated.status,
         },

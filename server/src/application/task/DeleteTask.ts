@@ -1,4 +1,5 @@
 import { TaskNotFoundError } from '../../domain/task/errors.js';
+import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
@@ -44,7 +45,7 @@ export class DeleteTask {
       projectId,
       actorUserId: ownerUserId,
       kind: 'task_deleted',
-      payload: { taskId, taskExcerpt: (task.description ?? '').slice(0, 120) },
+      payload: { taskId, taskExcerpt: taskExcerpt(task.description) },
     });
   }
 }
