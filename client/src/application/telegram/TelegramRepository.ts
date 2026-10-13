@@ -38,7 +38,10 @@ export type TelegramLoginPayload = {
 
 export interface TelegramRepository {
   getStatus(): Promise<TelegramStatus>;
+  startConnection(): Promise<TelegramPairing>;
   connect(payload: TelegramLoginPayload): Promise<TelegramStatus>;
   disconnect(): Promise<void>;
   updatePrefs(prefs: Partial<TelegramPrefs>): Promise<TelegramStatus>;
 }
+
+export type TelegramPairing = { readonly url: string; readonly expiresAt: string };

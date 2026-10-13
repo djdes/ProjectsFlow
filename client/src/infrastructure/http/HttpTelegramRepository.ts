@@ -4,9 +4,13 @@ import type {
   TelegramPrefs,
   TelegramRepository,
   TelegramStatus,
+  TelegramPairing,
 } from '@/application/telegram/TelegramRepository';
 
 export class HttpTelegramRepository implements TelegramRepository {
+  async startConnection(): Promise<TelegramPairing> {
+    return httpClient.post<TelegramPairing>('/me/telegram/connect/start', {});
+  }
   async getStatus(): Promise<TelegramStatus> {
     return httpClient.get<TelegramStatus>('/me/telegram');
   }

@@ -343,6 +343,8 @@ import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositori
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
+import { PairTelegramAccount } from './application/telegram/PairTelegramAccount.js';
+import { DrizzleTelegramPairingRepository } from './infrastructure/repositories/DrizzleTelegramPairingRepository.js';
 import { SendAgentTelegramNotification } from './application/telegram/SendAgentTelegramNotification.js';
 import { HandleTelegramWebhook } from './application/telegram/HandleTelegramWebhook.js';
 import { BroadcastTelegramNotificationByTask } from './application/telegram/BroadcastTelegramNotificationByTask.js';
@@ -951,6 +953,11 @@ const getTelegramStatus = new GetTelegramStatus({
   // bot_id = часть токена до «:» (публичная). Нужен фронту для кастомной login-кнопки.
   botId: telegramBotToken ? (telegramBotToken.split(':')[0] ?? null) : null,
 });
+const pairTelegramAccount = new PairTelegramAccount({
+  repository: new DrizzleTelegramPairingRepository(db),
+  botUsername: telegramBotUsername,
+  enabled: Boolean(telegramBotToken),
+});
 // Маппинг agent-kind → user pref-toggle. Неизвестные kinds шлются без pref-чека.
 // v2: добавлены ralph_answer_accepted/comment_on_my_task/task_blocked + task_done
 // перемаплен на statusChange (а не taskDone) по spec multi-user-telegram-...-v2-delta.
@@ -1274,6 +1281,7 @@ const dismissCloseProposal = new DismissCloseProposal({
 });
 
 const handleTelegramWebhook = new HandleTelegramWebhook({
+  pairing: pairTelegramAccount,
   users: userRepo,
   projects: projectRepo,
   members: projectMemberRepo,
@@ -2518,6 +2526,7 @@ const { app, devProxyUpgrade } = createApp({
     searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace }),
   },
   telegram: {
+    pairing: pairTelegramAccount,
     connect: connectTelegramAccount,
     status: getTelegramStatus,
     handler: handleTelegramWebhook,

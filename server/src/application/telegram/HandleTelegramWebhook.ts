@@ -62,6 +62,7 @@ import {
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
 import type { TelegramDraftAttachment } from './TelegramTaskDraftRepository.js';
 import type { VoiceTranscriber } from './VoiceTranscriber.js';
+import type { PairTelegramAccount } from './PairTelegramAccount.js';
 import {
   buildTaskTelegramContent,
   buildTaskTelegramFallbackContent,
@@ -317,6 +318,7 @@ function neutralMediaText(attachments: readonly TelegramDraftAttachment[]): stri
 }
 
 type Deps = {
+  readonly pairing?: PairTelegramAccount;
   readonly users: UserRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
@@ -450,6 +452,23 @@ export class HandleTelegramWebhook {
     const chatId = msg.chat.id;
 
     const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+
+    // Pairing is handled before reply/comment/composer routing. A token pasted into a group
+    // must never bind that group or create a task containing the secret.
+    const pairingCommand = /^\/start(?:@[a-zA-Z0-9_]+)?\s+(connect_\S*)$/i.exec(text);
+    if (pairingCommand) {
+      if (msg.chat.type !== 'private') return;
+      const result = await this.deps.pairing?.complete({
+        payload: pairingCommand[1]!, chatType: msg.chat.type, chatId, from: msg.from,
+      }) ?? 'expired';
+      const message = result === 'connected'
+        ? '✅ Telegram подключён! Уведомления будут приходить сюда. Вернитесь в профиль — статус обновится автоматически.\n\nЧтобы создать задачу, отправьте мне её текст. Все команды — /help.'
+        : result === 'already_linked'
+          ? 'Этот Telegram или аккаунт ProjectsFlow уже подключён. Для смены привязки сначала отключите Telegram в профиле.'
+          : 'Ссылка подключения устарела или уже использована. Откройте профиль ProjectsFlow и нажмите «Подключить Telegram» ещё раз.';
+      await this.reply(chatId, message);
+      return;
+    }
 
     // Voice messages are the one deliberate exception to the group mention gate. Only a group
     // explicitly linked to a ProjectsFlow account is considered a work chat; unrelated groups
@@ -1177,7 +1196,7 @@ export class HandleTelegramWebhook {
       const profileUrl = `${this.deps.appUrl.replace(/\/$/, '')}/profile`;
       await this.reply(
         chatId,
-        `👋 Привет! Чтобы получать уведомления, сначала зайди на <a href="${profileUrl}">${profileUrl}</a> и привяжи Telegram через кнопку «Login with Telegram».`,
+        `👋 Привет! Чтобы получать уведомления, открой <a href="${profileUrl}">профиль ProjectsFlow</a>, нажми «Подключить Telegram» и перейди по ссылке к боту.`,
       );
       return;
     }

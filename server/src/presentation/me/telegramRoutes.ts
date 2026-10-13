@@ -9,6 +9,8 @@ import {
 } from '../../application/telegram/ConnectTelegramAccount.js';
 import type { GetTelegramStatus } from '../../application/telegram/GetTelegramStatus.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
+import { PairTelegramAccount, TelegramAccountConnectedError, TelegramPairingUnavailableError } from '../../application/telegram/PairTelegramAccount.js';
+import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 
 const NOTIF_KINDS = [
   'commentOnMyTask',
@@ -42,11 +44,31 @@ type Deps = {
   readonly connect: ConnectTelegramAccount;
   readonly status: GetTelegramStatus;
   readonly users: UserRepository;
+  readonly pairing: PairTelegramAccount;
+  readonly rateLimiter?: InMemoryRateLimiter;
 };
 
 export function meTelegramRouter(deps: Deps): Router {
   const router = Router();
   router.use(requireAuth);
+  router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+
+  router.post('/connect/start', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (deps.rateLimiter && !deps.rateLimiter.hit(`telegram-connect:${req.user!.id}`, 10, 60_000)) {
+        res.setHeader('Retry-After', '60');
+        res.status(429).json({ error: 'rate_limited', message: 'Слишком много попыток. Подождите минуту.' });
+        return;
+      }
+      res.json(await deps.pairing.start(req.user!.id));
+    } catch (e) {
+      if (e instanceof TelegramPairingUnavailableError) {
+        res.status(503).json({ error: 'telegram_unavailable', message: 'Подключение Telegram пока недоступно. Попробуйте позже.' });
+      } else if (e instanceof TelegramAccountConnectedError) {
+        res.status(409).json({ error: 'telegram_connected', message: 'Telegram уже подключён. Обновите статус подключения.' });
+      } else next(e);
+    }
+  });
 
   router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -61,6 +83,7 @@ export function meTelegramRouter(deps: Deps): Router {
     try {
       const payload = connectPayloadSchema.parse(req.body);
       await deps.connect.execute(req.user!.id, payload);
+      await deps.pairing.revoke(req.user!.id);
       const status = await deps.status.execute(req.user!.id);
       res.json({ ok: true, ...status });
     } catch (e) {
@@ -84,6 +107,7 @@ export function meTelegramRouter(deps: Deps): Router {
 
   router.delete('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      await deps.pairing.revoke(req.user!.id);
       await deps.users.clearTelegramLink(req.user!.id);
       res.status(204).end();
     } catch (e) {

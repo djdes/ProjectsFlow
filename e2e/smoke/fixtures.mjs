@@ -486,7 +486,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/recent-task-views$/, () => json({ recent: [] })],
     [/^\/integrations\/github\/me$/, () => json({ connection: null })],
     [/^\/me\/telegram$/, () =>
-      json({
+      json(state.telegramStatus ?? {
         connected: false,
         telegramUsername: null,
         telegramFirstName: null,
@@ -688,6 +688,18 @@ export function createApiRouter({ authenticated = true } = {}) {
 
     const body = parseBody(request);
     journal.mutations.push({ method, path, body });
+    if (path === '/me/telegram/connect/start' && method === 'POST') {
+      if (state.telegramStartDelay) await new Promise(resolve => setTimeout(resolve, state.telegramStartDelay));
+      if (state.telegramStartError) {
+        journal.expectedErrors.push({ url: request.url(), status: 503 });
+        return fulfill(route, json({ error: 'telegram_unavailable' }, 503));
+      }
+      state.telegramLinkSequence = (state.telegramLinkSequence ?? 0) + 1;
+      return fulfill(route, json({
+        url: `https://t.me/SmokeTest_Bot?start=connect_${String(state.telegramLinkSequence).padStart(43, 'a')}`,
+        expiresAt: new Date(Date.now() + (state.telegramLinkTtl ?? 600_000)).toISOString(),
+      }));
+    }
     if (path === '/workspaces/current') {
       if (state.switchDelay) await new Promise((resolve) => setTimeout(resolve, state.switchDelay));
       if (state.failNextSwitch) {

@@ -16,6 +16,7 @@
 
 import { BOARD_PROJECT_ID, ME, WORKSPACE_ID, firstLine } from './fixtures.mjs';
 import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
+import { telegramConnectScenarios } from './telegram-connect.mjs';
 
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
@@ -209,6 +210,7 @@ async function openAndCloseTask(t, cardLocator, title) {
 // ------------------------------------------------------------- scenarios ----
 
 export const scenarios = [
+  ...telegramConnectScenarios,
   ...workspaceIsolationScenarios,
   {
     id: 'auth',

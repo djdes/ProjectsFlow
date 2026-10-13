@@ -147,6 +147,7 @@ import type { MaybeReopenForClarification } from '../application/task/MaybeReope
 import type { TaskRepository } from '../application/task/TaskRepository.js';
 import type { ConnectTelegramAccount } from '../application/telegram/ConnectTelegramAccount.js';
 import type { GetTelegramStatus } from '../application/telegram/GetTelegramStatus.js';
+import type { PairTelegramAccount } from '../application/telegram/PairTelegramAccount.js';
 import type { HandleTelegramWebhook } from '../application/telegram/HandleTelegramWebhook.js';
 import type { SendAgentTelegramNotification } from '../application/telegram/SendAgentTelegramNotification.js';
 import type { BroadcastTelegramNotificationByTask } from '../application/telegram/BroadcastTelegramNotificationByTask.js';
@@ -510,6 +511,7 @@ type AppDeps = {
   };
   readonly telegram: {
     readonly connect: ConnectTelegramAccount;
+    readonly pairing: PairTelegramAccount;
     readonly status: GetTelegramStatus;
     readonly handler: HandleTelegramWebhook;
     readonly webhookSecret: string | null;
@@ -1005,6 +1007,8 @@ export function createApp(deps: AppDeps): CreatedApp {
     '/api/me/telegram',
     meTelegramRouter({
       connect: deps.telegram.connect,
+      pairing: deps.telegram.pairing,
+      rateLimiter: deps.agent.rateLimiter,
       status: deps.telegram.status,
       users: deps.telegram.users,
     }),

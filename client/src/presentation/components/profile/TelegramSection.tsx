@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type {
-  TelegramLoginPayload,
+  TelegramPairing,
   TelegramPrefs,
   TelegramStatus,
 } from '@/application/telegram/TelegramRepository';
@@ -40,24 +40,6 @@ const LEAD_PREF: { key: keyof TelegramPrefs; label: string; hint: string } = {
   hint: 'Для руководителей и владельца: изменения и утверждение задач в личном чате с ботом',
 };
 
-declare global {
-  interface Window {
-    // Объект из telegram-widget.js. Login.auth открывает popup-логина по нашей кнопке —
-    // вместо встраиваемого iframe-виджета (его нельзя стилизовать, и он молча не рендерится
-    // на незарегистрированном/localhost-домене). user=false когда юзер закрыл окно.
-    Telegram?: {
-      Login?: {
-        auth: (
-          options: { bot_id: string; request_access?: string; lang?: string },
-          callback: (user: TelegramLoginPayload | false) => void,
-        ) => void;
-      };
-    };
-  }
-}
-
-const TELEGRAM_WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22';
-
 // Фирменный «бумажный самолётик» Telegram (белый глиф на синей кнопке).
 function TelegramGlyph({ className }: { className?: string }): React.ReactElement {
   return (
@@ -76,68 +58,71 @@ export function TelegramSection(): React.ReactElement {
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [pairing, setPairing] = useState<TelegramPairing | null>(null);
+  const [expired, setExpired] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const active = useRef(true);
+  const checking = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-    telegramRepository
-      .getStatus()
-      .then((s) => {
-        if (!cancelled) setStatus(s);
-      })
-      .catch(() => {
-        if (!cancelled) toast.error('Не удалось загрузить статус Telegram');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
+
+  const refreshStatus = useCallback(async (feedback = false): Promise<void> => {
+    if (checking.current) return;
+    checking.current = true;
+    try {
+      const next = await telegramRepository.getStatus();
+      if (!active.current) return;
+      setStatus(next);
+      setError(null);
+      if (next.connected && next.tgStarted) setPairing(null);
+      else if (feedback) toast.message('Нажмите «Запустить» в боте, затем проверьте подключение ещё раз.');
+    } catch {
+      if (active.current) setError('Не удалось проверить подключение. Проверьте интернет и повторите.');
+    } finally {
+      checking.current = false;
+      if (active.current) setLoading(false);
+    }
   }, [telegramRepository]);
 
-  // Подгружаем telegram-widget.js один раз (когда юзер не привязан и бот настроен) —
-  // нам нужен только глобальный window.Telegram.Login.auth для popup-логина по нашей
-  // кнопке. Скрипт глобальный, при unmount не снимаем (переиспользуется).
   useEffect(() => {
-    if (!status || status.connected || !status.botId) return;
-    if (window.Telegram?.Login || document.getElementById('pf-telegram-widget-js')) return;
-    const script = document.createElement('script');
-    script.id = 'pf-telegram-widget-js';
-    script.async = true;
-    script.src = TELEGRAM_WIDGET_SRC;
-    document.head.appendChild(script);
-  }, [status]);
+    void refreshStatus();
+  }, [refreshStatus]);
 
-  // Привязка после успешного Telegram-логина (callback из popup).
-  const handleTgAuth = async (user: TelegramLoginPayload): Promise<void> => {
+  // Poll only while waiting for confirmation. Focus/visibility handles returning from the app.
+  useEffect(() => {
+    if (expired || (!pairing && !(status?.connected && !status.tgStarted))) return;
+    const until = pairing ? Date.parse(pairing.expiresAt) : Date.now() + 600_000;
+    const check = (): void => {
+      if (Date.now() >= until) { void refreshStatus(); setExpired(true); return; }
+      if (document.visibilityState !== 'hidden') void refreshStatus();
+    };
+    const timer = window.setInterval(check, 3000);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [pairing, expired, status?.connected, status?.tgStarted, refreshStatus]);
+
+  const startTelegramLogin = async (): Promise<void> => {
+    if (connecting) return;
     setConnecting(true);
+    setError(null);
     try {
-      const next = await telegramRepository.connect(user);
-      setStatus(next);
-      toast.success('Telegram привязан — открываю бота, нажми Start');
-      // Telegram запрещает боту писать первым: юзер должен один раз нажать Start.
-      // Открываем бота сразу после user-clicked callback (popup blocker не мешает).
-      // Если всё же заблокируется — fallback-кнопка ниже (status.botDeepLink).
-      if (next.botDeepLink) {
-        window.open(next.botDeepLink, '_blank', 'noopener');
-      }
-    } catch (e) {
-      toast.error((e as Error).message || 'Не удалось привязать Telegram');
+      const next = await telegramRepository.startConnection();
+      if (!active.current) return;
+      setPairing(next);
+      setExpired(false);
+    } catch {
+      if (active.current) setError('Не удалось создать ссылку подключения. Попробуйте ещё раз.');
     } finally {
-      setConnecting(false);
+      if (active.current) setConnecting(false);
     }
-  };
-
-  // Открыть Telegram-popup логина по клику на нашу кнопку.
-  const startTelegramLogin = (): void => {
-    const auth = window.Telegram?.Login?.auth;
-    if (!auth || !status?.botId) {
-      toast.error('Telegram-виджет ещё загружается — попробуй через секунду');
-      return;
-    }
-    auth({ bot_id: status.botId, request_access: 'write' }, (user) => {
-      if (user) void handleTgAuth(user);
-    });
   };
 
   const togglePref = async (key: keyof TelegramPrefs, value: boolean): Promise<void> => {
@@ -159,6 +144,7 @@ export function TelegramSection(): React.ReactElement {
       await telegramRepository.disconnect();
       const next = await telegramRepository.getStatus();
       setStatus(next);
+      setPairing(null);
       toast.success('Telegram отвязан');
     } catch (e) {
       toast.error((e as Error).message || 'Не удалось отвязать');
@@ -174,14 +160,19 @@ export function TelegramSection(): React.ReactElement {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {error && (
+          <div role="alert" className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <p>{error}</p>
+            <Button variant="outline" size="sm" onClick={() => void refreshStatus()}>Обновить статус</Button>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка…
           </div>
-        ) : !status?.botUsername ? (
+        ) : !status ? null : !status.botUsername || !status.botId ? (
           <p className="rounded-md border border-dashed bg-muted/40 p-3 text-sm text-muted-foreground">
-            Telegram-бот ещё не настроен на этом сервере (TELEGRAM_BOT_USERNAME пуст). Привязка
-            недоступна.
+            Подключение Telegram пока недоступно. Попробуйте позже.
           </p>
         ) : status.connected ? (
           <>
@@ -206,7 +197,7 @@ export function TelegramSection(): React.ReactElement {
                 </p>
                 {!status.tgStarted && status.botDeepLink && (
                   <p className="mbs-0.5 text-xs text-warning">
-                    Нажми Start в боте, чтобы он мог писать тебе.
+                    Нажми «Запустить» в боте, чтобы получать уведомления.
                   </p>
                 )}
               </div>
@@ -255,12 +246,38 @@ export function TelegramSection(): React.ReactElement {
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Войди через Telegram — после этого бот сможет писать тебе по событиям, на которые
-              ты подпишешься.
+              {pairing && !expired
+                ? 'Откройте бота и нажмите «Запустить» (Start). Затем вернитесь сюда — подключение подтвердится автоматически.'
+                : expired
+                  ? 'Срок действия ссылки истёк. Получите новую ссылку, чтобы подключить Telegram.'
+                  : 'Подключите Telegram через бота, чтобы получать уведомления о своих задачах.'}
             </p>
+            {pairing && !expired ? (
+              <div className="space-y-3" data-pf-telegram-pairing>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild className="pf-tg-login-btn min-h-11 gap-2 text-white">
+                    <a href={pairing.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">
+                      <TelegramGlyph className="size-4" /> Открыть Telegram
+                    </a>
+                  </Button>
+                  <Button asChild variant="outline" className="min-h-11">
+                    <a href={`tg://resolve?domain=${encodeURIComponent(status.botUsername.replace(/^@/, ''))}&start=${encodeURIComponent(new URL(pairing.url).searchParams.get('start') ?? '')}`}>
+                      Открыть в приложении
+                    </a>
+                  </Button>
+                </div>
+                <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 shrink-0 motion-safe:animate-spin" /> Ожидаем подтверждение в Telegram…
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => void refreshStatus(true)}>Проверить подключение</Button>
+                  <Button variant="ghost" size="sm" className="min-h-11" disabled={connecting} onClick={() => void startTelegramLogin()}>Новая ссылка</Button>
+                </div>
+              </div>
+            ) : (
             <button
               type="button"
-              onClick={startTelegramLogin}
+              onClick={() => void startTelegramLogin()}
               disabled={connecting}
               className="pf-tg-login-btn group relative inline-flex items-center gap-2.5 overflow-clip rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-[transform,box-shadow] duration-300 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 motion-safe:active:translate-y-0 active:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -270,9 +287,10 @@ export function TelegramSection(): React.ReactElement {
                 ) : (
                   <TelegramGlyph className="size-5 motion-safe:transition-transform duration-300 ease-out group-hover:-rotate-12 motion-safe:group-hover:scale-110" />
                 )}
-                <span>{connecting ? 'Привязываем…' : 'Войти через Telegram'}</span>
+                <span>{connecting ? 'Подготавливаем ссылку…' : 'Подключить Telegram'}</span>
               </span>
             </button>
+            )}
           </div>
         )}
       </CardContent>

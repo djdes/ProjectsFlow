@@ -99,6 +99,12 @@ export const users = mysqlTable(
   ],
 );
 
+export const telegramPairingTokens = mysqlTable('telegram_pairing_tokens', {
+  userId: char('user_id', { length: 36 }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: char('token_hash', { length: 64 }).notNull(),
+  expiresAt: datetime('expires_at').notNull(),
+}, (t) => [uniqueIndex('uq_telegram_pairing_token_hash').on(t.tokenHash)]);
+
 // Аудит исходящих TG-сообщений: дедуп (одинаковые kind+task_id+user в течение минуты —
 // skip) и debugging. См. db/033.
 export const telegramOutboundMessages = mysqlTable(
