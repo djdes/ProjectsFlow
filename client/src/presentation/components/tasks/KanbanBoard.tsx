@@ -59,6 +59,7 @@ import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDo
 import { useCollapsingPresence } from '@/presentation/hooks/useCollapsingPresence';
 import { EXIT_MS } from '@/presentation/hooks/useFlashExitPhase';
 import { useColumnTypeFilter } from '@/presentation/hooks/useColumnTypeFilter';
+import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
 import { TASK_TYPE_META, matchesTypeFilter } from '@/domain/task/taskTypeMeta';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
@@ -1378,6 +1379,11 @@ export function KanbanBoard({
                     ? (input) => create({ ...input, status: input.status ?? status })
                     : undefined
                 }
+                creationDefaults={{
+                  assigneeUserId: filterAssignee ?? user?.id,
+                  deadline: getTaskCreationDeadline(filterDeadline ?? viewFilters?.due),
+                  priority: filterPriority ?? (viewFilters?.priorities.length === 1 ? viewFilters.priorities[0] : null),
+                }}
                 readOnly={!canEdit}
                 isInbox={isInbox}
                 isShared={isShared}

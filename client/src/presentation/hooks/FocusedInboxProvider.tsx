@@ -6,9 +6,15 @@ export type FocusedInboxMember = {
   readonly userId: string;
   readonly displayName: string;
 };
+type CreationFilters = { projectId: string | null; due: 'today' | 'none' | 'overdue' | null };
+const EMPTY_CREATION_FILTERS: CreationFilters = { projectId: null, due: null };
 
 type FocusedInbox = {
   readonly member: FocusedInboxMember | null;
+  readonly defaultAssigneeUserId: string | null;
+  readonly setAssigneeFilter: (userId: string | null) => void;
+  readonly creationFilters: CreationFilters;
+  readonly setCreationFilters: (filters: CreationFilters) => void;
   readonly setMember: (member: FocusedInboxMember | null) => void;
 };
 
@@ -27,13 +33,21 @@ export function FocusedInboxProvider({
   children: React.ReactNode;
 }): React.ReactElement {
   const [member, setMember] = useState<FocusedInboxMember | null>(null);
-  const value = useMemo(() => ({ member, setMember }), [member]);
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+  const [creationFilters, setCreationFilters] = useState(EMPTY_CREATION_FILTERS);
+  const value = useMemo(() => ({
+    member, setMember, setAssigneeFilter, creationFilters, setCreationFilters,
+    defaultAssigneeUserId: member?.userId ?? assigneeFilter,
+  }), [member, assigneeFilter, creationFilters]);
   return <FocusedInboxContext.Provider value={value}>{children}</FocusedInboxContext.Provider>;
 }
 
 // Вне провайдера — «смотрим свои входящие»: компонент может рендериться в изоляции
 // (публичная доска, предпросмотр), и там чужих досок не бывает.
-const NOOP: FocusedInbox = { member: null, setMember: () => {} };
+const NOOP: FocusedInbox = {
+  member: null, setMember: () => {}, defaultAssigneeUserId: null, setAssigneeFilter: () => {},
+  creationFilters: EMPTY_CREATION_FILTERS, setCreationFilters: () => {},
+};
 
 export function useFocusedInbox(): FocusedInbox {
   return useContext(FocusedInboxContext) ?? NOOP;

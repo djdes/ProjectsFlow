@@ -17,6 +17,7 @@ import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
 import { useCurrentUser } from './useCurrentUser';
 import { trackProjectAction } from '@/lib/productAnalytics';
+import { getDefaultTaskDeadline } from '@/domain/task/defaultTaskDeadline';
 
 type State = {
   tasks: Task[];
@@ -199,6 +200,7 @@ export function useTasks(projectId: string): UseTasks {
       const task = await taskRepository.create(projectId, {
         ...input,
         assigneeUserId,
+        deadline: input.deadline === undefined ? getDefaultTaskDeadline() : input.deadline,
       });
       apply((s) => ({
         ...s,

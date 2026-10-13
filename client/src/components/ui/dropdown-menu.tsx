@@ -205,10 +205,11 @@ export function DropdownMenuItem({
 export function DropdownMenuRadioItem({
   className,
   children,
+  indicator = <Circle className="h-2 w-2 fill-current" />,
   ...props
 }: React.ComponentPropsWithoutRef<
   typeof DropdownMenuPrimitive.RadioItem
->): React.ReactElement {
+> & { indicator?: React.ReactNode }): React.ReactElement {
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
@@ -219,7 +220,7 @@ export function DropdownMenuRadioItem({
     >
       <span className="absolute start-2 flex h-3.5 w-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Circle className="h-2 w-2 fill-current" />
+          {indicator}
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

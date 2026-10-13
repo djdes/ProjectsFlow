@@ -16,6 +16,7 @@ type Props = {
   value: TaskPriority | null;
   onChange: (next: TaskPriority | null) => void;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   // Compact-режим: trigger показывает только дот + label без рамки fill-card.
   compact?: boolean;
@@ -32,6 +33,7 @@ export function PrioritySelect({
   className,
   compact = false,
   iconOnly = false,
+  onOpenChange,
 }: Props): React.ReactElement {
   const meta = value !== null ? PRIORITY_META[value] : null;
 
@@ -42,7 +44,7 @@ export function PrioritySelect({
 
   if (iconOnly) {
     return (
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={onOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
@@ -66,7 +68,7 @@ export function PrioritySelect({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"

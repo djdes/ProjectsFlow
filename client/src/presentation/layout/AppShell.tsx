@@ -25,10 +25,9 @@ import { UsageProvider } from '@/presentation/usage/UsageProvider';
 import { UsageDialogProvider } from '@/presentation/usage/UsageDialogProvider';
 import { UpgradeDialogProvider } from '@/presentation/usage/UpgradeDialogProvider';
 import { UsageBanner } from '@/presentation/usage/UsageBanner';
-import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { PageTransition } from '@/presentation/components/motion/PageTransition';
 import { AppExperience } from '@/presentation/components/experience/AppExperience';
-import { WorkspaceIcon } from './WorkspaceIcon';
+import { QuickWorkspaceSwitcher } from './QuickWorkspaceSwitcher';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
@@ -407,7 +406,7 @@ function WorkspaceShell(): React.ReactElement {
           </div>
         ) : (
           <div className="flex h-dvh flex-col bg-background text-foreground">
-            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 border-be px-3">
+            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 border-be px-3 pbs-[env(safe-area-inset-top,0px)]">
               <Button
                 variant="ghost"
                 size="icon"
@@ -419,7 +418,7 @@ function WorkspaceShell(): React.ReactElement {
                     (иконка выглядит «раздвоенной»/жирной). Совпадает с бургером десктопа. */}
                 <Menu className="size-5" />
               </Button>
-              <MobileWorkspaceTitle />
+              <QuickWorkspaceSwitcher />
               <CompletedTodayPill />
               <Button
                 variant="ghost"
@@ -493,18 +492,6 @@ function WorkspaceShell(): React.ReactElement {
     </ProjectsProvider>
     </SidebarResizingContext.Provider>
     </SidebarCollapsedContext.Provider>
-  );
-}
-
-// Заголовок мобильной шапки — название активного пространства вместо статичного лого.
-function MobileWorkspaceTitle(): React.ReactElement {
-  const { workspace } = useCurrentWorkspace();
-  if (!workspace) return <span className="min-w-0 flex-1 truncate text-sm font-semibold">ProjectsFlow</span>;
-  return (
-    <span className="flex min-w-0 flex-1 items-center gap-1.5">
-      <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-5 text-[10px]" />
-      <span className="truncate text-sm font-semibold">{workspace.name}</span>
-    </span>
   );
 }
 

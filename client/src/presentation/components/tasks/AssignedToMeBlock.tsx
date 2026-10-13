@@ -74,6 +74,7 @@ import { useFlashExitPhase, EXIT_MS } from '@/presentation/hooks/useFlashExitPha
 import { useExitingListItems } from '@/presentation/hooks/useExitingListItems';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
+import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useSpotlightTask } from '@/presentation/hooks/useSpotlightTask';
@@ -118,7 +119,7 @@ import {
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
-import { InlineNewCard } from './KanbanColumn';
+import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { matchesInboxQuery } from './inbox/searchTasks';
 import { BulkActionBar } from './BulkActionBar';
 import {
@@ -347,7 +348,7 @@ export function AssignedToMeBlock({
   const isWorkspaceLead = canOpenMemberBoard(currentWorkspace);
   // Состояние общее с диалогом быстрого добавления: он подставляет этого сотрудника
   // ответственным, чтобы задача, созданная с его доски, создавалась для него.
-  const { member: focusedMember, setMember: setFocusedMember } = useFocusedInbox();
+  const { member: focusedMember, setMember: setFocusedMember, setAssigneeFilter, setCreationFilters } = useFocusedInbox();
   const focusedMemberId = focusedMember?.userId ?? null;
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
@@ -379,6 +380,11 @@ export function AssignedToMeBlock({
   }, []);
   // Фильтры вкладки «Другим»: ответственный и проект. null = все.
   const [filterTo, setFilterTo] = useState<string | null>(null);
+  // Share the active person filter with the global creation dialog; clear it on navigation.
+  useEffect(() => {
+    setAssigneeFilter(tab === 'byMe' ? filterTo : null);
+    return () => setAssigneeFilter(null);
+  }, [tab, filterTo, setAssigneeFilter]);
   const [filterProject, setFilterProject] = useState<string | null>(null);
   // «Скрыть личные» — вкладка «Другим» может быть плотно забита личными досками коллег.
   // Персистим за браузером (как выбор вкладки), сервера это не касается.
@@ -395,6 +401,10 @@ export function AssignedToMeBlock({
   // фильтрует только поиск — решение по сданной работе не прячется за сроком.
   const [query, setQuery] = useState('');
   const [due, setDue] = useState<DueKind | null>(null);
+  useEffect(() => {
+    setCreationFilters({ projectId: filterProject, due: due === 'today' || due === 'none' ? due : null });
+    return () => setCreationFilters({ projectId: null, due: null });
+  }, [filterProject, due, setCreationFilters]);
   const { animations } = useMotion();
   // Сворачивать колонки имеет смысл только на широком экране: на телефоне колонка и так
   // одна на экран, а полоска 38px только мешала бы листать.
@@ -700,14 +710,16 @@ export function AssignedToMeBlock({
   const [composingProject, setComposingProject] = useState<string | null>(null);
   // Publish the acknowledged task before refreshing, so a delayed GET cannot hide it.
   const createInProjectColumn = useCallback(
-    async (projectId: string, name: string, icon: string | null): Promise<Task | null> => {
+    async (projectId: string, name: string, icon: string | null, settings: InlineTaskSettings): Promise<Task | null> => {
       if (!user) return null;
-      const assigneeUserId = focusedMemberId ?? (tab === 'byMe' ? filterTo : null) ?? user.id;
+      const { assigneeUserId } = settings;
       const created = await taskRepository.create(projectId, {
         description: name,
         status: 'backlog',
         icon,
         assigneeUserId,
+        deadline: settings.deadline,
+        priority: settings.priority,
       });
       // Show the acknowledged write immediately. A pre-save GET must never remove it.
       ++refreshGeneration.current;
@@ -724,13 +736,21 @@ export function AssignedToMeBlock({
       // composer was opened in «Для всех». Reveal its actual destination after save.
       setQuery('');
       setDue(null);
-      if (!focusedMemberId && assigneeUserId === user.id) handleTabChange('toMe');
+      if (assigneeUserId === user.id) {
+        setFocusedMember(null);
+        handleTabChange('toMe');
+      } else if (focusedMemberId && focusedMemberId !== assigneeUserId) {
+        setFocusedMember({ userId: assigneeUserId, displayName: created.assignee.displayName });
+      } else if (!focusedMemberId) {
+        setFilterTo(null);
+        handleTabChange('byMe');
+      }
       setMobileSection('queue');
       void refresh();
       onChanged?.();
       return created;
     },
-    [user, focusedMemberId, tab, filterTo, taskRepository, allProjects, tasks, byMeTasks, focusedMemberTasks, handleTabChange, setMobileSection, refresh, onChanged],
+    [user, focusedMemberId, taskRepository, allProjects, tasks, byMeTasks, focusedMemberTasks, handleTabChange, setFocusedMember, setMobileSection, refresh, onChanged],
   );
 
   // Удаление карточки блока — через тот же стильный диалог, что и на досках проектов
@@ -1904,9 +1924,18 @@ export function AssignedToMeBlock({
       // проектов (InlineNewCard): Enter создаёт и оставляет поле для следующей, иконки,
       // blur-commit. Без модального окна.
       <InlineNewCard
-        onCreate={(name, icon) => createInProjectColumn(projectKey, name, icon)}
+        key={`${projectKey}:${focusedMemberId ?? filterTo ?? user?.id}`}
+        projectId={projectKey}
+        defaults={{
+          assigneeUserId: focusedMemberId ?? (tab === 'byMe' ? filterTo : null) ?? user?.id,
+          deadline: getTaskCreationDeadline(due === 'today' || due === 'none' ? due : null),
+        }}
+        onCreate={(name, icon, settings) => createInProjectColumn(projectKey, name, icon, settings)}
         onClose={() => setComposingProject(null)}
-        onOpenFull={() => setComposingProject(null)}
+        onOpenFull={(task) => {
+          setComposingProject(null);
+          setDrawerTask({ ...task, projectName: allProjects?.find((p) => p.id === task.projectId)?.name ?? 'Проект', isInbox: false, canModify: true, displaySource: 'assigned' });
+        }}
       />
     ) : null;
 
@@ -2391,7 +2420,7 @@ export function AssignedToMeBlock({
 
       {/* Телефон: создать задачу — плавающая кнопка над нижней навигацией (не прячется
           за меню). На время перетаскивания и выделения её нет — внизу свои панели. */}
-      {!isWide && !dragActive && !selectionActive && (
+      {!isWide && !dragActive && !selectionActive && composingProject === null && (
         <button
           type="button"
           onClick={openAddTask}

@@ -6,17 +6,15 @@ import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
 // дропа показывает только синяя полоска (DropIndicatorLine). Стратегия без сдвигов —
 // возвращает null для всех соседей (dnd-kit не применяет transform реордера).
 const noReflowStrategy: SortingStrategy = () => null;
-import { FileText, ListChecks, PanelRight, Plus, X } from 'lucide-react';
+import { ListChecks, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
 import { COLUMN_SCROLL_CLASS } from './ColumnPreview';
 import { TaskComposer } from './TaskComposer';
-import { IconPicker } from '@/presentation/components/project/IconPicker';
-import { ProjectIconView } from '@/presentation/components/project/projectIconView';
+import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { STATUS_SUBTITLE } from './statusLabels';
 import type { SelectModifiers } from './selection/selectionReducer';
 
@@ -93,6 +91,7 @@ type InlineCreateInput = {
 
 type Props = {
   status: TaskStatus;
+  creationDefaults?: Partial<InlineTaskSettings>;
   // Пустая строка ⇒ хедер без названия (backlog-колонка). Счётчик и `+` остаются.
   label: string;
   // Верхний офсет для sticky-шапки колонки (Notion: заголовки липнут при скролле).
@@ -201,6 +200,7 @@ export function KanbanColumn({
   stickyHeaderTop,
   tasks,
   onCreate,
+  creationDefaults,
   onEdit,
   onDelete,
   showShortId = true,
@@ -286,10 +286,10 @@ export function KanbanColumn({
     // смену seq — иначе он гонялся бы на любом ререндере колонки.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openInlineSeq]);
-  const handleInlineCreate = async (name: string, taskIcon: string | null): Promise<Task | null> => {
+  const handleInlineCreate = async (name: string, taskIcon: string | null, settings: InlineTaskSettings): Promise<Task | null> => {
     if (!onInlineCreate) return null;
     // afterTaskId = последняя созданная в сессии → новая встаёт ПОД ней (порядок создания).
-    return onInlineCreate({ description: name, status, icon: taskIcon, afterTaskId: lastSessionIdRef.current });
+    return onInlineCreate({ ...settings, description: name, status, icon: taskIcon, afterTaskId: lastSessionIdRef.current });
   };
   const appendSession = (t: Task): void => {
     lastSessionIdRef.current = t.id;
@@ -431,6 +431,8 @@ export function KanbanColumn({
       <InlineNewCard
         key="inline-new"
         refocusSignal={refocusSignal}
+        projectId={aiProjectId ?? undefined}
+        defaults={creationDefaults}
         onOpenFull={onEdit}
         onCreate={handleInlineCreate}
         onCreated={appendSession}
@@ -793,6 +795,7 @@ export function KanbanColumn({
           {composing ? (
             <TaskComposer
               variant="inline"
+              defaults={creationDefaults}
               forcedStatus={status}
               autoFocus
               onClose={() => onComposingChange?.(false)}
@@ -833,231 +836,6 @@ export function KanbanColumn({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// Notion-style карточка создания: поле названия сразу в потоке колонки. Enter — сохранить и
-// открыть следующую (быстрый ввод); клик вне карточки — сохранить и закрыть; Esc — отмена;
-// «открыть справа» — сохранить и открыть задачу в окне справа.
-export function InlineNewCard({
-  onCreate,
-  onCreated,
-  onClose,
-  onOpenFull,
-  refocusSignal = 0,
-}: {
-  onCreate: (name: string, icon: string | null) => Promise<Task | null>;
-  // Вызывается после успешного Enter-создания (родитель добавляет задачу в сессию и рендерит
-  // её ВЫШЕ карточки создания). Не вызывается при blur/«открыть справа» (там сессия закрывается).
-  onCreated?: (task: Task) => void;
-  onClose: () => void;
-  onOpenFull: (task: Task) => void;
-  // Растёт по «+» — вернуть фокус в поле после переезда карточки наверх.
-  refocusSignal?: number;
-}): React.ReactElement {
-  const [value, setValue] = useState('');
-  const [icon, setIcon] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const savingRef = useRef(false);
-  // Идёт ли взаимодействие с поповером иконки — пока да, блёр textarea НЕ коммитит/не
-  // закрывает карточку (иначе клик по эмодзи в пикере убивал бы карточку до выбора).
-  // Держим флаг ещё ~200мс после закрытия, чтобы отложенный blur-commit его увидел.
-  const pickingRef = useRef(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const closingRef = useRef(false);
-  // Запрос на возврат фокуса ПОСЛЕ рендера. Enter создаёт задачу выше → карточка создания
-  // сдвигается в DOM (теряет фокус); rAF не успевает. Фокусим в effect после коммита DOM.
-  const refocusRef = useRef(false);
-  // Окно ~после Enter: любой блёр в это время (сдвиг карточки в DOM, разное поведение фокуса
-  // на разных ОС/браузерах) НЕ закрывает карточку. Иначе на части машин Enter сохранял задачу,
-  // но карточку создания тут же закрывал blur-commit — новая пустая не появлялась.
-  const justEnteredRef = useRef(false);
-  const justEnteredTimer = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-  // useLayoutEffect — синхронно после коммита DOM (до макротаска blur-commit), чтобы фокус
-  // гарантированно вернулся в поле раньше, чем сработает отложенная проверка закрытия.
-  useLayoutEffect(() => {
-    if (refocusRef.current) {
-      refocusRef.current = false;
-      const el = ref.current;
-      if (el) {
-        el.style.height = 'auto';
-        el.focus();
-      }
-    }
-  });
-  // По «+» карточка переезжает наверх (сдвиг в DOM теряет фокус) — возвращаем его. Пропускаем
-  // самый первый рендер (mount-эффект уже сфокусировал).
-  const mountedRef = useRef(false);
-  useLayoutEffect(() => {
-    if (mountedRef.current) ref.current?.focus();
-    else mountedRef.current = true;
-  }, [refocusSignal]);
-
-  const grow = (el: HTMLTextAreaElement): void => {
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  // defaultName — имя, если поле пустое (для Enter по пустому полю: «Новая задача»).
-  // blur/«открыть справа» его НЕ передают: по пустому полю там просто закрываем без создания.
-  const create = async (defaultName?: string): Promise<Task | null> => {
-    const name = value.trim() || defaultName?.trim() || '';
-    if (!name || savingRef.current) return null;
-    savingRef.current = true;
-    setBusy(true);
-    try {
-      return await onCreate(name, icon);
-    } catch (error) {
-      toast.error(`Не удалось создать задачу: ${(error as Error).message}`);
-      return null;
-    } finally {
-      savingRef.current = false;
-      setBusy(false);
-    }
-  };
-
-  // Enter → создать задачу (она встаёт ВЫШЕ), поле очищается и остаётся для следующей.
-  // Фокус возвращаем в effect после коммита (карточка сдвигается в DOM и теряет фокус).
-  const markJustEntered = (): void => {
-    justEnteredRef.current = true;
-    if (justEnteredTimer.current) window.clearTimeout(justEnteredTimer.current);
-    justEnteredTimer.current = window.setTimeout(() => {
-      justEnteredRef.current = false;
-    }, 400);
-  };
-  const onEnter = async (): Promise<void> => {
-    // Ставим флаг СРАЗУ (до await) — блёр от сохранения/сдвига не должен закрыть карточку.
-    markJustEntered();
-    // Enter по ПУСТОМУ полю → задача «Новая задача» (и снова пустая карточка ниже).
-    const t = await create('Новая задача');
-    if (t) {
-      onCreated?.(t);
-      setValue('');
-      setIcon(null);
-      refocusRef.current = true;
-      markJustEntered();
-    }
-  };
-  // Клик вне карточки → создать (если есть текст) и закрыть. Откладываем на тик и
-  // пропускаем, если фокус ушёл в поповер иконки (взаимодействие с пикером, не выход).
-  const onBlurCommit = (): void => {
-    window.setTimeout(() => {
-      if (closingRef.current || pickingRef.current || savingRef.current) return;
-      // Только что был Enter — блёр от сохранения/сдвига карточки, НЕ выход. Не закрываем.
-      if (justEnteredRef.current) return;
-      const active = document.activeElement;
-      // Фокус вернулся в само поле (сдвиг карточки в DOM после Enter) — это НЕ выход, не закрываем.
-      if (active === ref.current) return;
-      if (active && active.closest('[data-radix-popper-content-wrapper], .bg-popover')) return;
-      if (!value.trim()) {
-        onClose();
-        return;
-      }
-      void create().then((task) => {
-        if (task) onClose();
-      });
-    }, 0);
-  };
-  // «Открыть справа» → создать и открыть в окне справа.
-  const openFull = async (): Promise<void> => {
-    if (savingRef.current) return;
-    closingRef.current = true;
-    const t = await create();
-    if (t) {
-      onClose();
-      onOpenFull(t);
-    } else {
-      closingRef.current = false;
-      if (!value.trim()) onClose();
-    }
-  };
-
-  // Радиус 10px — как у обычной карточки (замеры Notion), чтобы карточка создания
-  // не выбивалась из ряда.
-  return (
-    <div className="group/new rounded-lg bg-card p-2 shadow-card ring-1 ring-primary/30">
-      {/* items-start: иконка стоит рядом с ПЕРВОЙ строкой (при многострочном названии остаётся
-          сверху); при однострочном — визуально по центру. gap-1.5 — компактно. */}
-      <div className="flex items-start gap-1.5">
-        {/* Иконка задачи размером с текст (не крупный квадрат) — пикер тот же. Пока пикер
-            открыт — не закрываем карточку; после выбора возвращаем фокус в поле. */}
-        <IconPicker
-          value={icon}
-          onChange={(v) => {
-            setIcon(v);
-            requestAnimationFrame(() => ref.current?.focus());
-          }}
-          onOpenChange={(open) => {
-            if (open) {
-              pickingRef.current = true;
-            } else {
-              // Держим флаг чуть дольше, чтобы уже запланированный blur-commit его увидел,
-              // затем возвращаем фокус в поле — карточка живёт.
-              window.setTimeout(() => {
-                pickingRef.current = false;
-              }, 200);
-              requestAnimationFrame(() => ref.current?.focus());
-            }
-          }}
-          trigger={
-            <button
-              type="button"
-              // Не крадём фокус у поля (иначе blur-commit закроет карточку до открытия пикера).
-              onMouseDown={(e) => e.preventDefault()}
-              aria-label={icon ? 'Сменить иконку' : 'Добавить иконку'}
-              title="Иконка задачи"
-              className="mbs-px grid size-5 shrink-0 cursor-pointer place-items-center overflow-clip rounded text-muted-foreground/80 transition-colors hover:text-foreground"
-            >
-              {icon ? (
-                <ProjectIconView icon={icon} pixelSize={18} className="text-[1.05rem]" />
-              ) : (
-                <FileText className="size-[1.05rem]" />
-              )}
-            </button>
-          }
-        />
-        <textarea
-          ref={ref}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            grow(e.currentTarget);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void onEnter();
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              closingRef.current = true;
-              onClose();
-            }
-          }}
-          onBlur={onBlurCommit}
-          rows={1}
-          placeholder="Название задачи…"
-          readOnly={busy}
-          aria-busy={busy}
-          aria-label="Название задачи"
-          className="min-h-[1.25rem] w-full resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none placeholder:text-muted-foreground/70"
-        />
-        <button
-          type="button"
-          // preventDefault на mousedown — не терять фокус textarea до клика (иначе onBlur обгонит).
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => void openFull()}
-          title="Открыть справа"
-          aria-label="Открыть справа"
-          className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/new:opacity-100"
-        >
-          <PanelRight className="size-4" />
-        </button>
-      </div>
     </div>
   );
 }

@@ -15,6 +15,9 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
+import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
+import type { InlineTaskSettings } from './InlineNewCard';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
@@ -70,6 +73,7 @@ const ICON_BTN_PICKER =
   'size-7 shrink-0 rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 max-sm:size-10 max-sm:[&_svg]:size-4 motion-safe:[&_svg]:transition-transform hover:[&_svg]:scale-110';
 
 type Props = {
+  defaults?: Partial<InlineTaskSettings>;
   // Колбэк создания задачи. Передаёт выбранный/форсированный status.
   onCreate: (input: {
     description: string;
@@ -110,17 +114,20 @@ export function TaskComposer({
   autoFocus = false,
   onClose,
   storageKey,
+  defaults,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
   const isInline = variant === 'inline';
-  const defaultAssigneeUserId = user?.id ?? null;
+  const { defaultAssigneeUserId: filteredAssigneeUserId, creationFilters } = useFocusedInbox();
+  const defaultAssigneeUserId = defaults?.assigneeUserId ?? filteredAssigneeUserId ?? user?.id ?? null;
+  const [defaultDeadline, setDefaultDeadline] = useState(() => defaults?.deadline === undefined ? getTaskCreationDeadline(creationFilters.due) : defaults.deadline);
   // Persist text across orientation changes on mobile (браузер может пересоздать layout).
   const STORAGE_KEY = storageKey ?? 'pf:quick-add-text';
   const STASH_KEY = stashKeyFor(STORAGE_KEY);
   // Живой черновик (JSON: текст + режим + приоритет + дедлайн + ответственный) — переживает
   // перезагрузку. Файлы не сохраняются. На create/restore чистим явно.
-  const [initialDraft] = useState<ComposerDraft>(() => readComposerDraft(STORAGE_KEY) ?? EMPTY_COMPOSER_DRAFT);
+  const [initialDraft] = useState<ComposerDraft>(() => readComposerDraft(STORAGE_KEY) ?? { ...EMPTY_COMPOSER_DRAFT, priority: defaults?.priority ?? null, deadline: defaultDeadline });
   const [text, setText] = useState(initialDraft.text);
   const [ralphMode, setRalphMode] = useState<RalphMode>(initialDraft.ralphMode);
   // По умолчанию — черновик (backlog): быстрое добавление кидает в бэклог, а не сразу воркеру.
@@ -139,11 +146,11 @@ export function TaskComposer({
   // Только для inline-композера колонки. Стартовое значение — читаем stash при монтировании.
   const [hasStash, setHasStash] = useState(() => isInline && readComposerDraft(STASH_KEY) !== null);
   useEffect(() => {
-    writeComposerDraft(STORAGE_KEY, { text, ralphMode, priority, deadline, assigneeUserId });
-  }, [STORAGE_KEY, text, ralphMode, priority, deadline, assigneeUserId]);
+    writeComposerDraft(STORAGE_KEY, { text, ralphMode, priority, deadline, assigneeUserId }, defaultDeadline);
+  }, [STORAGE_KEY, text, ralphMode, priority, deadline, assigneeUserId, defaultDeadline]);
   useEffect(() => {
-    if (assigneeUserId === null && user) setAssigneeUserId(user.id);
-  }, [assigneeUserId, user]);
+    if (assigneeUserId === null && defaultAssigneeUserId) setAssigneeUserId(defaultAssigneeUserId);
+  }, [assigneeUserId, defaultAssigneeUserId]);
   const restoreDraft = (): void => {
     const d = readComposerDraft(STASH_KEY);
     setHasStash(false);
@@ -279,9 +286,11 @@ export function TaskComposer({
       setHasStash(false);
       setRalphMode('normal');
       setQuickStatus('backlog');
-      setAssigneeUserId(user?.id ?? null);
-      setPriority(null);
-      setDeadline(null);
+      setAssigneeUserId(defaultAssigneeUserId);
+      setPriority(defaults?.priority ?? null);
+      const nextDeadline = defaults?.deadline === undefined ? getTaskCreationDeadline(creationFilters.due) : defaults.deadline;
+      setDefaultDeadline(nextDeadline);
+      setDeadline(nextDeadline);
     } catch (err) {
       toast.error(`Не удалось создать: ${(err as Error).message}`);
     } finally {

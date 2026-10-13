@@ -101,7 +101,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
         <DropdownMenuTrigger
           title={user.displayName}
           className={cn(
-            'group flex items-center rounded-md text-start text-sm transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'group flex min-h-11 items-center rounded-lg text-start text-sm transition-colors active:bg-accent data-[state=open]:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring [@media(hover:hover)_and_(pointer:fine)]:hover:bg-hover',
             compact ? 'justify-center p-1' : 'min-w-0 flex-1 gap-2 px-2 py-1.5',
           )}
         >
@@ -116,7 +116,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                 {user.displayName}
               </span>
               <ChevronsUpDown
-                className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-data-[state=open]:opacity-100"
+                className="size-4 shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
             </>

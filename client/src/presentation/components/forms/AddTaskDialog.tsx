@@ -41,6 +41,7 @@ import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import type { RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 import type { RalphMode, TaskPriority } from '@/domain/task/Task';
+import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
 
 // Tiptap-редактор грузим лениво (тяжёлый chunk) — как в композере/окне задачи.
 const RichTextEditor = lazy(() =>
@@ -140,11 +141,13 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const { user } = useCurrentUser();
   const { data: projects } = useProjects();
   const [description, setDescription] = useState('');
-  const { member: focusedMember } = useFocusedInbox();
+  const { defaultAssigneeUserId, creationFilters } = useFocusedInbox();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(user?.id ?? null);
   const [deadline, setDeadline] = useState<string | null>(null);
+  const [initialDeadline, setInitialDeadline] = useState<string | null>(null);
+  const wasOpenRef = useRef(false);
   const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +175,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const hasContent = (): boolean =>
     description.trim() !== '' ||
     pending.length > 0 ||
-    deadline !== null ||
+    deadline !== initialDeadline ||
     priority !== null;
 
   // Освободить blob-URL'ы снимка и забыть его.
@@ -188,8 +191,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   // Снять снимок текущего черновика (при закрытии окна пользователем). blob'ы НЕ ревокаем —
   // они переходят «во владение» снимка.
   const snapshotToStash = (): void => {
-    discardStash(); // старый снимок больше не нужен
     if (!hasContent()) return;
+    discardStash(); // старый снимок больше не нужен
     stashRef.current = {
       description,
       projectId,
@@ -245,31 +248,29 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   };
 
   useEffect(() => {
+    if (wasOpenRef.current === open) return;
+    wasOpenRef.current = open;
     if (open) {
-      // Черновик есть, если жив in-session снимок ИЛИ остался персистентный (после reload).
       setHasStash(stashRef.current !== null || readDraft() !== null);
-      // Открыта доска входящих сотрудника — задача создаётся ДЛЯ НЕГО: подставляем его
-      // ответственным и цель «Без проекта (Входящие)». Сервер сам положит её в его личные
-      // (правило «я ответственный ⇒ задача в моих личных», см. CreateTask).
-      if (focusedMember) {
-        setProjectId(null);
-        setAssigneeUserId(focusedMember.userId);
-      }
+      setProjectId(creationFilters.projectId);
+      setAssigneeUserId(defaultAssigneeUserId ?? user?.id ?? null);
+      const defaultDeadline = getTaskCreationDeadline(creationFilters.due);
+      setInitialDeadline(defaultDeadline);
+      setDeadline(defaultDeadline);
       return;
     }
-    // Закрытие: чистим ЖИВЫЕ поля. blob'ы НЕ ревокаем — либо форма была пустой (нечего),
-    // либо они уже перешли в snapshot (revoke — за discardStash/submit).
+    // Files belong to the stashed draft until restoration or explicit discard.
     setDescription('');
     setProjectId(null);
     setRalphMode('normal');
-    setAssigneeUserId(focusedMember?.userId ?? user?.id ?? null);
+    setAssigneeUserId(null);
     setDeadline(null);
     setPriority(null);
     setError(null);
     setDragActive(false);
     setPending([]);
     inlineImagesRef.current = new Map();
-  }, [open, user?.id, focusedMember]);
+  }, [open, user?.id, defaultAssigneeUserId, creationFilters]);
 
   // При открытии этого окна закрываем inline-композер на доске (единая поверхность
   // создания — см. KanbanBoard). Слушатель — в KanbanBoard.
@@ -277,14 +278,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     if (open) window.dispatchEvent(new CustomEvent('pf:close-inline-composer'));
   }, [open]);
 
-  // При смене проекта возвращаем безопасный default: текущего пользователя. Исключение —
-  // открытая доска сотрудника и цель «Входящие»: там дефолт он, иначе задача, созданная с
-  // его доски, молча уходила бы себе.
-  useEffect(() => {
-    setAssigneeUserId(
-      projectId === null && focusedMember ? focusedMember.userId : (user?.id ?? null),
-    );
-  }, [projectId, user?.id, focusedMember]);
+  // AssigneeSelect validates membership after a project change. A valid manual
+  // choice or restored draft must not be overwritten by a default-setting effect.
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -440,7 +435,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           projectId !== null
             ? 'Задача добавлена в проект'
             : assigneeUserId && assigneeUserId !== user?.id
-              ? `Задача добавлена во «Входящие» — ${focusedMember?.displayName ?? 'сотруднику'}`
+              ? 'Задача добавлена во «Входящие» сотрудника'
               : 'Задача добавлена во «Входящие»',
         );
       }
@@ -629,7 +624,6 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                     value={projectId ?? INBOX_VALUE}
                     onValueChange={(v) => {
                       setProjectId(v === INBOX_VALUE ? null : v);
-                      setAssigneeUserId(user?.id ?? null);
                     }}
                   >
                     <DropdownMenuRadioItem value={INBOX_VALUE}>

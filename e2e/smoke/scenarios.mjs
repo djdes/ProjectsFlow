@@ -17,6 +17,8 @@
 import { BOARD_PROJECT_ID, ME, WORKSPACE_ID, firstLine } from './fixtures.mjs';
 import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
+import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
+import { quickTaskSettingsScenarios } from './quick-task-settings.mjs';
 
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
@@ -211,6 +213,8 @@ async function openAndCloseTask(t, cardLocator, title) {
 
 export const scenarios = [
   ...telegramConnectScenarios,
+  ...taskCreationDefaultsScenarios,
+  ...quickTaskSettingsScenarios,
   ...workspaceIsolationScenarios,
   {
     id: 'auth',

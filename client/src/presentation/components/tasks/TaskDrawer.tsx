@@ -59,6 +59,8 @@ import { paceAppend, runFilesLimited } from '@/presentation/components/attachmen
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode, TaskStatus } from '@/domain/task/Task';
 import { AssigneeSelect } from './AssigneeSelect';
+import { getDefaultTaskDeadline } from '@/domain/task/defaultTaskDeadline';
+import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { AssigneeTaskButton } from './AssigneeTaskButton';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
@@ -272,12 +274,12 @@ function readCreateDraft(key: string): CreateDraft | null {
     return null;
   }
 }
-function writeCreateDraft(key: string, draft: CreateDraft): void {
+function writeCreateDraft(key: string, draft: CreateDraft, defaultDeadline: string): void {
   try {
     // Пустой черновик не храним — чтобы свежее «+ создать» открывалось чистым.
     const empty =
       draft.description.trim() === '' &&
-      draft.deadline === null &&
+      draft.deadline === defaultDeadline &&
       draft.priority === null &&
       draft.ralphMode === 'normal';
     if (empty) sessionStorage.removeItem(key);
@@ -663,7 +665,9 @@ export function TaskDrawer({
     currentUser?.id ?? null,
   );
   // Срок и приоритет для create-mode (применимо к любому проекту).
-  const [createDeadline, setCreateDeadline] = useState<string | null>(null);
+  const [defaultDeadline, setDefaultDeadline] = useState(getDefaultTaskDeadline);
+  const [createDeadline, setCreateDeadline] = useState<string | null>(defaultDeadline);
+  const { defaultAssigneeUserId } = useFocusedInbox();
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
   // Черновик create-формы для кнопки «Восстановить»: снимок прошлого закрытия/reload + флаг
   // показа кнопки. restoreArmed — защита, чтобы только что открытая ПУСТАЯ форма не затёрла
@@ -910,7 +914,9 @@ export function TaskDrawer({
       setDescription('');
       setCreateRalphMode('normal');
       setCreateAssigneeUserId(null);
-      setCreateDeadline(null);
+      const nextDeadline = getDefaultTaskDeadline();
+      setDefaultDeadline(nextDeadline);
+      setCreateDeadline(nextDeadline);
       setCreatePriority(null);
     }
     setError(null);
@@ -930,9 +936,9 @@ export function TaskDrawer({
 
   useEffect(() => {
     if (state?.mode === 'create' && createAssigneeUserId === null && currentUser) {
-      setCreateAssigneeUserId(currentUser.id);
+      setCreateAssigneeUserId(defaultAssigneeUserId ?? currentUser.id);
     }
-  }, [state?.mode, createAssigneeUserId, currentUser]);
+  }, [state?.mode, createAssigneeUserId, currentUser, defaultAssigneeUserId]);
 
   // Сохраняем черновик create-формы при каждом изменении полей — чтобы при перезагрузке
   // страницы введённое не пропало. На пустой форме черновик удаляется (см. writeCreateDraft).
@@ -944,9 +950,9 @@ export function TaskDrawer({
     if (restoreArmedRef.current) {
       const untouched =
         description.trim() === '' &&
-        createDeadline === null &&
+        createDeadline === defaultDeadline &&
         createPriority === null &&
-        createAssigneeUserId === (currentUser?.id ?? null) &&
+        (createAssigneeUserId === null || createAssigneeUserId === (defaultAssigneeUserId ?? currentUser?.id ?? null)) &&
         createRalphMode === 'normal';
       if (untouched) return;
       restoreArmedRef.current = false;
@@ -958,13 +964,15 @@ export function TaskDrawer({
       assigneeUserId: createAssigneeUserId,
       deadline: createDeadline,
       priority: createPriority,
-    });
+    }, defaultDeadline);
   }, [
     state?.mode,
     description,
     createRalphMode,
     createAssigneeUserId,
     createDeadline,
+    defaultDeadline,
+    defaultAssigneeUserId,
     createPriority,
     createDraftKey,
     currentUser?.id,

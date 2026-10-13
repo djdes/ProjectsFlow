@@ -15,6 +15,7 @@ type Props = {
   value: string | null;          // 'YYYY-MM-DD' или null
   onChange: (next: string | null) => void;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   // Icon-only режим для композеров: иконка календаря, дата появляется рядом только когда задана.
   iconOnly?: boolean;
@@ -74,6 +75,7 @@ export function DeadlinePicker({
   className,
   iconOnly = false,
   emptyLabel,
+  onOpenChange,
 }: Props): React.ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -103,7 +105,7 @@ export function DeadlinePicker({
 
   return (
     <span className={cn('inline-flex items-center', inPropertyRow && 'w-full min-w-0')}>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={onOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"

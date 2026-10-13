@@ -20,12 +20,12 @@ export const EMPTY_COMPOSER_DRAFT: ComposerDraft = {
 };
 
 // Пустой черновик не храним и не предлагаем восстанавливать.
-export function isEmptyComposerDraft(d: ComposerDraft): boolean {
+export function isEmptyComposerDraft(d: ComposerDraft, defaultDeadline: string | null = null): boolean {
   return (
     d.text.trim() === '' &&
     d.ralphMode === 'normal' &&
     d.priority === null &&
-    d.deadline === null
+    d.deadline === defaultDeadline
   );
 }
 
@@ -48,9 +48,9 @@ export function readComposerDraft(key: string): ComposerDraft | null {
   }
 }
 
-export function writeComposerDraft(key: string, d: ComposerDraft): void {
+export function writeComposerDraft(key: string, d: ComposerDraft, defaultDeadline: string | null = null): void {
   try {
-    if (isEmptyComposerDraft(d)) sessionStorage.removeItem(key);
+    if (isEmptyComposerDraft(d, defaultDeadline)) sessionStorage.removeItem(key);
     else sessionStorage.setItem(key, JSON.stringify(d));
   } catch {
     /* sessionStorage недоступен — черновик действует только на эту сессию */
