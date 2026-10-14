@@ -12,6 +12,7 @@ import { errorHandler } from '../middleware/errorHandler.js';
 import { ListTasksAssignedToMe } from '../../application/task/ListTasksAssignedToMe.js';
 import { ListTasksAssignedToOthers } from '../../application/task/ListTasksAssignedToOthers.js';
 import { ListPersonalTasksOfColleagues } from '../../application/task/ListPersonalTasksOfColleagues.js';
+import { ListApprovalQueue } from '../../application/task/ListApprovalQueue.js';
 import { ListMemberTasksForLead } from '../../application/task/ListMemberTasksForLead.js';
 import { GetOrCreateInbox } from '../../application/project/GetOrCreateInbox.js';
 import { ListNotifications } from '../../application/notifications/ListNotifications.js';
@@ -109,6 +110,7 @@ async function harness(t: TestContext) {
     listAssignedToOthers: new ListTasksAssignedToOthers(common as never),
     listPersonalOfColleagues: new ListPersonalTasksOfColleagues(common as never),
     listMemberTasksForLead: new ListMemberTasksForLead(common as never),
+    listApprovalQueue: new ListApprovalQueue(common as never),
   }));
   app.use('/api/inbox', inboxRouter({ getOrCreateInbox: new GetOrCreateInbox({
     repo: projectRepo as never, members: members as never, idGen: () => 'new',

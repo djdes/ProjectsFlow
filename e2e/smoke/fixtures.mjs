@@ -213,7 +213,9 @@ function projectNameOf(state, projectId) {
 
 function assignedItem(state, task) {
   const inbox = isInboxProject(state, task.projectId);
-  const ownerId = task.projectId === VERA_INBOX_ID ? 'u-vera' : ME.id;
+  const ownerId = task.projectId === VERA_INBOX_ID
+    ? 'u-vera'
+    : state.projects.find((p) => p.id === task.projectId)?.ownerId ?? ME.id;
   return {
     task,
     projectId: task.projectId,
@@ -474,6 +476,16 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           .filter((t) => t.projectId === VERA_INBOX_ID)
           .map((t) => assignedItem(state, t)),
       })],
+    // Очередь приёмки руководителя: всё «На утверждении» пространства (ME — владелец).
+    [/^\/assignees\/approvals$/, () => {
+      const workspace = (state.workspaces ?? [workspaceDto()]).find((w) => w.id === workspaceId);
+      const approver = workspace?.role === 'owner' || workspace?.role === 'lead';
+      return json({
+        items: approver
+          ? scopedTasks().filter((t) => t.status === 'pending_approval').map((t) => assignedItem(state, t))
+          : [],
+      });
+    }],
     [/^\/assignees\/member\/([^/]+)$/, ([, memberId]) =>
       json({
         items: scopedTasks()

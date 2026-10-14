@@ -352,6 +352,9 @@ export function AssignedToMeBlock({
   // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
   // Сервер отдаёт их только по кругу общих рабочих пространств и всегда canModify: false.
   const [colleaguePersonalTasks, setColleaguePersonalTasks] = useState<AssignedTask[]>([]);
+  // Очередь приёмки руководителя (ListApprovalQueue) — только для полки «На утверждении»:
+  // задачи, которые он вправе принять, но не ставил сам. Во вкладки «Мне/Для всех» не вливается.
+  const [approvalQueue, setApprovalQueue] = useState<AssignedTask[]>([]);
   // Доска сотрудника (клик по кубику руководителем) — отдельный источник: ВСЕ его
   // незавершённые задачи по всем проектам пространства, включая те, где сам руководитель
   // не участник (см. BUG D). Личных инбоксов colleaguePersonalTasks для этого мало.
@@ -548,10 +551,11 @@ export function AssignedToMeBlock({
     // ответ всё равно принадлежал бы уже не тому запросу.
     const focusedAtStart = focusedMemberIdRef.current;
     try {
-      const [mine, byMe, personal, focused] = await Promise.all([
+      const [mine, byMe, personal, queue, focused] = await Promise.all([
         taskAssigneeRepository.listMine(),
         taskAssigneeRepository.listOthers(),
         taskAssigneeRepository.listColleaguesPersonal(),
+        taskAssigneeRepository.listApprovalQueue(),
         focusedAtStart
           ? taskAssigneeRepository.listMemberTasks(focusedAtStart)
           : Promise.resolve<AssignedTask[]>([]),
@@ -561,6 +565,7 @@ export function AssignedToMeBlock({
       setTasks(mine);
       setByMeTasks(byMe);
       setColleaguePersonalTasks(personal);
+      setApprovalQueue(queue);
       // Пишем focusedMemberTasks только если доска всё ещё открыта на ТОГО ЖЕ сотрудника —
       // иначе устаревший ответ перезаписал бы уже актуальные данные другого/пустого фокуса.
       if (focusedAtStart && focusedMemberIdRef.current === focusedAtStart && focusedRequest === focusedGeneration.current) {
@@ -624,14 +629,16 @@ export function AssignedToMeBlock({
       taskAssigneeRepository.listMine(),
       taskAssigneeRepository.listOthers(),
       taskAssigneeRepository.listColleaguesPersonal(),
+      taskAssigneeRepository.listApprovalQueue(),
       userRepository.getUiPrefs(),
     ])
-      .then(([mine, byMe, personal, prefs]) => {
+      .then(([mine, byMe, personal, queue, prefs]) => {
         if (cancelled) return;
         if (generation === refreshGeneration.current) {
           setTasks(mine);
           setByMeTasks(byMe);
           setColleaguePersonalTasks(personal);
+          setApprovalQueue(queue);
         }
         // Сортировка ПЕРСИСТИТСЯ за аккаунтом (users.ui_prefs) — при перезагрузке та же.
         // (Была session-only «точка 4» — юзер передумал 2026-07-11.)
@@ -821,12 +828,15 @@ export function AssignedToMeBlock({
     return focusedMemberTasks.map(asAssignedInboxBlockTask);
   }, [focusedMemberTasks, focusedMemberId]);
   const focusedTasks = useMemo(() => applyPatches(focusedRaw, patches), [focusedRaw, patches]);
+  // Очередь приёмки руководителя — только для полки «На утверждении» (selectApprovalTasks).
+  const approvalQueueRaw = useMemo(() => approvalQueue.map(asAssignedInboxBlockTask), [approvalQueue]);
+  const approvalQueueTasks = useMemo(() => applyPatches(approvalQueueRaw, patches), [approvalQueueRaw, patches]);
 
   // Снимаем отработавшие правки, когда подъехали живые данные. Без этого оверрайд навсегда
   // затеняет реальный статус и прячет чужие изменения (ловушка InboxCheckbox.optimistic).
   useEffect(() => {
-    setPatches((prev) => withoutPatches(prev, settledPatchIds(prev, [...toMeRaw, ...byMeRaw, ...focusedRaw])));
-  }, [toMeRaw, byMeRaw, focusedRaw]);
+    setPatches((prev) => withoutPatches(prev, settledPatchIds(prev, [...toMeRaw, ...byMeRaw, ...focusedRaw, ...approvalQueueRaw])));
+  }, [toMeRaw, byMeRaw, focusedRaw, approvalQueueRaw]);
   const focusedVisible = useMemo(
     () => (hideDone ? focusedTasks.filter(notDone) : focusedTasks),
     [focusedTasks, hideDone],
@@ -912,8 +922,8 @@ export function AssignedToMeBlock({
   // Фильтры вкладок не применяем: очередь не должна прятаться за фильтром.
   const approvalTasksAll = useMemo(
     () =>
-      selectApprovalTasks({ toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover }),
-    [toMeTasks, byMeDisplayTasks, focusedTasks, focusedMemberId, isApprover],
+      selectApprovalTasks({ toMeTasks, byMeDisplayTasks, focusedTasks, queueTasks: approvalQueueTasks, focusedMemberId, isApprover }),
+    [toMeTasks, byMeDisplayTasks, focusedTasks, approvalQueueTasks, focusedMemberId, isApprover],
   );
   const approvalQueried = useMemo(
     () => approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)

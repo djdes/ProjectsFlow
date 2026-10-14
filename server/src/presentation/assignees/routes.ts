@@ -6,6 +6,7 @@ import type {
 import type { ListTasksAssignedToOthers } from '../../application/task/ListTasksAssignedToOthers.js';
 import type { ListPersonalTasksOfColleagues } from '../../application/task/ListPersonalTasksOfColleagues.js';
 import type { ListMemberTasksForLead } from '../../application/task/ListMemberTasksForLead.js';
+import type { ListApprovalQueue } from '../../application/task/ListApprovalQueue.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { toDto as taskToDto } from '../tasks/routes.js';
 
@@ -14,6 +15,7 @@ type Deps = {
   readonly listAssignedToOthers: ListTasksAssignedToOthers;
   readonly listPersonalOfColleagues: ListPersonalTasksOfColleagues;
   readonly listMemberTasksForLead: ListMemberTasksForLead;
+  readonly listApprovalQueue: ListApprovalQueue;
 };
 
 export function taskAssigneesRouter(deps: Deps): Router {
@@ -73,6 +75,17 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/member/:userId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listMemberTasksForLead.execute(req.user!.id, req.params.userId as string);
+      res.json({ items: items.map(assignedViewToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Очередь приёмки руководителя: все задачи «На утверждении» активного пространства, которые
+  // он вправе принять (в том числе поставленные не им). Не руководителю — пустой список.
+  r.get('/approvals', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const items = await deps.listApprovalQueue.execute(req.user!.id);
       res.json({ items: items.map(assignedViewToDto) });
     } catch (e) {
       next(e);

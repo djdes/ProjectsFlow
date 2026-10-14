@@ -145,6 +145,7 @@ test('selectApprovalTasks: доска сотрудника видит его «�
     toMeTasks: [],
     byMeDisplayTasks: [],
     focusedTasks: [asAssignedInboxBlockTask(notMemberProjectTask)],
+    queueTasks: [],
     focusedMemberId: notMemberProjectTask.assignee.userId,
     isApprover: true,
   });
@@ -161,6 +162,7 @@ test('selectApprovalTasks: вне фокус-режима approver видит о
     toMeTasks: [asAssignedInboxBlockTask(mine)],
     byMeDisplayTasks: [asAssignedInboxBlockTask(other)],
     focusedTasks: [],
+    queueTasks: [],
     focusedMemberId: null,
     isApprover: true,
   });
@@ -170,10 +172,52 @@ test('selectApprovalTasks: вне фокус-режима approver видит о
     toMeTasks: [asAssignedInboxBlockTask(mine)],
     byMeDisplayTasks: [asAssignedInboxBlockTask(other)],
     focusedTasks: [],
+    queueTasks: [],
     focusedMemberId: null,
     isApprover: false,
   });
   assert.deepEqual(executorView.map((t) => t.id), ['mine-pending']);
+});
+
+test('selectApprovalTasks: очередь приёмки руководителя — задача, которой нет ни в «Мне», ни в «Другим»', () => {
+  // Инцидент 14.10.2026: личную задачу сотрудника поставил владелец пространства, сотрудник
+  // сдал её — у руководителя полка была пустой: ни «Мне», ни «Другим» её не видят.
+  const delegatedByOwner = {
+    ...assigned('owner-delegated', { projectId: 'inbox-benzin', status: 'pending_approval' }),
+    assignee: { userId: 'benzin', displayName: 'benzin', avatarUrl: null },
+  };
+  const queue = [asAssignedInboxBlockTask(delegatedByOwner)];
+  const approverView = selectApprovalTasks({
+    toMeTasks: [],
+    byMeDisplayTasks: [],
+    focusedTasks: [],
+    queueTasks: queue,
+    focusedMemberId: null,
+    isApprover: true,
+  });
+  assert.deepEqual(approverView.map((t) => t.id), ['owner-delegated']);
+
+  // На доске этого сотрудника — тоже, хотя ListMemberTasksForLead чужие личные не отдаёт.
+  const memberBoard = selectApprovalTasks({
+    toMeTasks: [],
+    byMeDisplayTasks: [],
+    focusedTasks: [],
+    queueTasks: queue,
+    focusedMemberId: 'benzin',
+    isApprover: true,
+  });
+  assert.deepEqual(memberBoard.map((t) => t.id), ['owner-delegated']);
+
+  // Исполнителю чужая очередь не нужна (сервер ему её и не отдаёт).
+  const executorView = selectApprovalTasks({
+    toMeTasks: [],
+    byMeDisplayTasks: [],
+    focusedTasks: [],
+    queueTasks: queue,
+    focusedMemberId: null,
+    isApprover: false,
+  });
+  assert.deepEqual(executorView, []);
 });
 
 test('canOpenMemberBoard: только team-пространство и роль lead/owner (Important 1 — регрессия в дефолт-хабе)', () => {

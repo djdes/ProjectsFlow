@@ -14,7 +14,7 @@
 //   t.boxFitsCheck(label, selector) — a dialog/sheet fits the screen horizontally,
 //   t.visible / t.hidden / t.waitFor / t.assert / t.waitForMutation — helpers.
 
-import { BOARD_PROJECT_ID, ME, WORKSPACE_ID, firstLine } from './fixtures.mjs';
+import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, WORKSPACE_ID, firstLine } from './fixtures.mjs';
 import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
 import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
@@ -385,6 +385,44 @@ export const scenarios = [
         );
         await expectGone(t, `${NOW} ${card('t-doctors')}`, 'карточка осталась на полке «На утверждении»');
       });
+    },
+  },
+
+  {
+    id: 'inbox-approval-queue',
+    title: 'Полка «На утверждении»: личная задача сотрудника, которую руководитель не ставил',
+    matrix: [['desktop', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      // Инцидент 14.10.2026: задачу во «Входящие» сотрудника поставил не руководитель, сотрудник
+      // её сдал — у руководителя полка была пустой: ни «Мне», ни «Другим», ни личные коллег её
+      // не отдают. Теперь её приносит очередь приёмки (/assignees/approvals).
+      const boris = COLLEAGUES.find((c) => c.id === 'u-boris');
+      const ref = { userId: boris.id, displayName: boris.displayName, avatarUrl: null };
+      const inbox = state.projects.find((p) => p.id === INBOX_ID);
+      state.projects.push({ ...inbox, id: 'p-inbox-boris', ownerId: boris.id });
+      const template = state.tasks.find((x) => x.id === 't-vera-report');
+      state.tasks.push({
+        ...template,
+        id: 't-boris-personal',
+        projectId: 'p-inbox-boris',
+        description: 'Добавить поля КБЖУ в каталог',
+        status: 'pending_approval',
+        assignee: ref,
+        creator: ref,
+      });
+      await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
+      await t.check('задача сотрудника на полке и принимается', async () => {
+        const approvalCard = page.locator(`${NOW} ${card('t-boris-personal')}`);
+        await t.visible(approvalCard, 'личная задача Бориса на полке «На утверждении»');
+        await approvalCard.getByRole('button', { name: 'Принять' }).click();
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === '/projects/p-inbox-boris/tasks/t-boris-personal/move' && m.body?.targetStatus === 'done',
+          'нет POST move → done для личной задачи сотрудника',
+        );
+        await expectGone(t, `${NOW} ${card('t-boris-personal')}`, 'принятая задача осталась на полке');
+      });
+      await t.pageChecks('Входящие: очередь приёмки');
     },
   },
 

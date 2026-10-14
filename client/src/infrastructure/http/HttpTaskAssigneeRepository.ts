@@ -30,6 +30,10 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
     return this.fetchAssignedList(`/assignees/member/${encodeURIComponent(memberId)}`);
   }
 
+  async listApprovalQueue(): Promise<AssignedTask[]> {
+    return this.fetchAssignedList('/assignees/approvals');
+  }
+
   private async fetchAssignedList(path: string): Promise<AssignedTask[]> {
     const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(path);
     return items.map((item) => ({

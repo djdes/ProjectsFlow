@@ -91,18 +91,25 @@ export function selectBoardTasks(tasks: readonly InboxBlockTask[]): InboxBlockTa
  *    единственное другое место, где она могла бы всплыть — не находит источник). BUG D.
  *  - ПРИНИМАЮЩИЙ (isApprover, вне фокус-режима) видит очередь целиком — оба направления.
  *  - ИСПОЛНИТЕЛЬ (не approver, не в фокус-режиме) видит только свои задачи (toMeTasks).
+ *
+ * queueTasks — очередь приёмки руководителя (ListApprovalQueue): всё «На утверждении» в
+ * пространстве, что он вправе принять, в том числе задачи, которые поставил не он (владелец
+ * пространства, сам сотрудник себе). Ни «Мне», ни «Другим», ни доска сотрудника их не видят,
+ * а без этого источника руководителю негде было принять работу. Только для approver'а.
  */
 export function selectApprovalTasks(input: {
   readonly toMeTasks: readonly InboxBlockTask[];
   readonly byMeDisplayTasks: readonly InboxBlockTask[];
   readonly focusedTasks: readonly InboxBlockTask[];
+  readonly queueTasks: readonly InboxBlockTask[];
   readonly focusedMemberId: string | null;
   readonly isApprover: boolean;
 }): InboxBlockTask[] {
+  const queue = input.isApprover ? input.queueTasks : [];
   const source = input.focusedMemberId
-    ? input.focusedTasks
+    ? [...input.focusedTasks, ...queue]
     : input.isApprover
-      ? [...input.toMeTasks, ...input.byMeDisplayTasks]
+      ? [...input.toMeTasks, ...input.byMeDisplayTasks, ...queue]
       : input.toMeTasks;
   const byId = new Map<string, InboxBlockTask>();
   for (const t of source) {

@@ -197,6 +197,7 @@ import { GetMyCompletedStats } from './application/stats/GetMyCompletedStats.js'
 import { ListUnreadTasks } from './application/task/ListUnreadTasks.js';
 import { ListTasksAssignedToOthers } from './application/task/ListTasksAssignedToOthers.js';
 import { ListPersonalTasksOfColleagues } from './application/task/ListPersonalTasksOfColleagues.js';
+import { ListApprovalQueue } from './application/task/ListApprovalQueue.js';
 import { ListMemberTasksForLead } from './application/task/ListMemberTasksForLead.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { ChangeTaskAssignee } from './application/task/ChangeTaskAssignee.js';
@@ -2951,6 +2952,17 @@ const { app, devProxyUpgrade } = createApp({
       resolveActiveWorkspace,
     }),
     listMemberTasksForLead: new ListMemberTasksForLead({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      workspaces: workspaceRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
+      resolveActiveWorkspace,
+      users: userRepo,
+    }),
+    listApprovalQueue: new ListApprovalQueue({
       projects: projectRepo,
       members: projectMemberRepo,
       workspaces: workspaceRepo,

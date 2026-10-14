@@ -96,6 +96,9 @@ export interface TaskRepository {
   // Как listAssignedTo, но только задачи проектов заданного пространства (изоляция
   // «Входящих» по активному team-пространству — см. ListTasksAssignedToMe).
   listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]>;
+  // Задачи в одном статусе по всем проектам пространства (именованным и личным) — очередь
+  // приёмки руководителя (ListApprovalQueue). Access-check делает вызывающий use-case.
+  listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]>;
   // Все выборки выше и getById отдают ТОЛЬКО живые задачи: удалённая задача (db/134)
   // не должна «воскресать» ни в одном виде.
   getById(taskId: string): Promise<Task | null>;

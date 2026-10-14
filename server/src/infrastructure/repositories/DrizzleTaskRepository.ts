@@ -197,6 +197,20 @@ export class DrizzleTaskRepository implements TaskRepository {
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
+  async listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]> {
+    // Тот же скоуп по пространству, что у listAssignedToInWorkspace: через проект задачи.
+    const workspaceProjects = this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.workspaceId, workspaceId));
+    const rows = await this.baseSelect()
+      .where(
+        activeTasks(and(eq(tasks.status, status), inArray(tasks.projectId, workspaceProjects))),
+      )
+      .orderBy(asc(tasks.updatedAt), asc(tasks.id));
+    return rows.map((r) => toTask(r as TaskRowJoined));
+  }
+
   async getById(taskId: string): Promise<Task | null> {
     const rows = await this.baseSelect().where(activeTasks(eq(tasks.id, taskId))).limit(1);
     return rows[0] ? toTask(rows[0] as TaskRowJoined) : null;
