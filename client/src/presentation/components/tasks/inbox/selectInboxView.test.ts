@@ -41,3 +41,17 @@ test('without the deadline filter completed cards remain visible when requested 
   assert.ok(view.queue.some((t) => t.id === 'done'));
   assert.equal(view.dueCounts.late, 2);
 });
+test('без воркера «В работе» — это работа человека: полка «Вручную», а не очередь', () => {
+  // 14.10.2026: сотрудник перевёл задачу в «В работе» на доске проекта, а во «Входящих» она
+  // осталась в очереди без кнопки «Взять в работу» — ни там, ни на полке.
+  const working = [task('hands', 'in_progress', null), task('queued', 'backlog', null)];
+  const view = selectInboxView({ tasks: working, approvals: [], today, wide: true, section: null, due: null, workerEnabled: false });
+  assert.deepEqual(view.manual.map((t) => t.id), ['hands']);
+  assert.deepEqual(view.queue.map((t) => t.id), ['queued']);
+});
+test('с воркером «В работе» — его статус: задача остаётся в очереди', () => {
+  const working = [task('agent', 'in_progress', null)];
+  const view = selectInboxView({ tasks: working, approvals: [], today, wide: true, section: null, due: null, workerEnabled: true });
+  assert.deepEqual(view.manual, []);
+  assert.deepEqual(view.queue.map((t) => t.id), ['agent']);
+});

@@ -1,5 +1,5 @@
 import type { InboxBlockTask } from '../inboxBlockTasks';
-import { selectBoardTasks } from '../inboxBlockTasks';
+import { isHandWork, selectBoardTasks } from '../inboxBlockTasks';
 import { dueKindOf, type DueKind } from '../assignedGrouping';
 
 // Counters and cards share the same universe. On mobile only one section is visible;
@@ -11,9 +11,12 @@ export function selectInboxView(input: {
   due: DueKind | null;
   section: 'now' | 'queue' | null;
   wide: boolean;
+  // Без воркера «В работе» — тоже ручная работа (см. isHandWork). По умолчанию воркер есть.
+  workerEnabled?: boolean;
 }) {
-  const manual = input.tasks.filter((task) => task.status === 'manual');
-  const queue = selectBoardTasks(input.tasks);
+  const workerEnabled = input.workerEnabled ?? true;
+  const manual = input.tasks.filter((task) => isHandWork(task, workerEnabled));
+  const queue = selectBoardTasks(input.tasks, workerEnabled);
   const now = [...input.approvals, ...manual];
   // Decide the initial section before filtering; selecting a chip must never move tabs.
   const section = input.section ?? (now.length === 0 && queue.length > 0 ? 'queue' : 'now');

@@ -1,4 +1,5 @@
 import { selectInboxView } from './inbox/selectInboxView';
+import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -333,6 +334,8 @@ export function AssignedToMeBlock({
   // Приёмка включена в пространстве вообще (независимо от роли смотрящего) — используется
   // отдельно от isApprover, чтобы решить, показывать ли полку рядовому исполнителю.
   const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
+  // Без воркера «В работе» ставят люди — такие задачи на полке «Вручную» (isHandWork).
+  const workerEnabled = useWorkerEnabled();
   const isApprover =
     approvalEnabled && (currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner');
   // Руководитель пространства смотрит доску сотрудника: клик по кубику переводит блок на
@@ -931,8 +934,8 @@ export function AssignedToMeBlock({
     [approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal],
   );
   const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
-    () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide }),
-    [queriedTasks, approvalQueried, today, due, mobileSection, isWide],
+    () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide, workerEnabled }),
+    [queriedTasks, approvalQueried, today, due, mobileSection, isWide, workerEnabled],
   );
   // У кого из людей есть сданная работа — фиолетовая точка на их аватаре (только тому,
   // кто принимает: исполнителю чужая очередь ни о чём не говорит).
@@ -1836,7 +1839,7 @@ export function AssignedToMeBlock({
   // Сколько карточек в очереди: «N» или «N из M», когда поиск/срок что-то спрятали.
   const queueGroups = grouping === 'deadline' ? kanbanGroups : groups;
   const queueShown = queueGroups.reduce((n, g) => n + g.items.length, 0);
-  const queueTotal = selectBoardTasks(visibleTasks).length;
+  const queueTotal = selectBoardTasks(visibleTasks, workerEnabled).length;
   const queueCountText = queueShown === queueTotal ? String(queueTotal) : `${queueShown} из ${queueTotal}`;
   const emptyColumnText = hasLocalFilters ? 'Нет задач по фильтрам' : 'Задач нет';
   // Бросок в «Готово» — только для своей карточки, которую можно менять и которая не закрыта.

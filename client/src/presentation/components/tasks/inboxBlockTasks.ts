@@ -76,8 +76,18 @@ export function buildToMeInboxBlockTasks(input: {
  * одном списке, а этот фильтр как раз и держит её в синхроне с отдельной полкой приёмки,
  * не показывая одну и ту же задачу дважды.
  */
-export function selectBoardTasks(tasks: readonly InboxBlockTask[]): InboxBlockTask[] {
-  return tasks.filter((t) => t.status !== 'manual' && t.status !== 'pending_approval');
+export function selectBoardTasks(tasks: readonly InboxBlockTask[], workerEnabled = true): InboxBlockTask[] {
+  return tasks.filter((t) => t.status !== 'pending_approval' && !isHandWork(t, workerEnabled));
+}
+
+/**
+ * Задача на руках у человека — место ей на полке «Вручную». Без AI-воркера (db/152) статус
+ * «В работе» ставят только люди (колонка «В работе» на доске проекта): такая задача раньше
+ * оставалась в очереди без кнопки «Взять в работу» — ни там, ни на полке. С воркером «В работе»
+ * — его статус, задача остаётся в очереди.
+ */
+export function isHandWork(task: Pick<InboxBlockTask, 'status'>, workerEnabled: boolean): boolean {
+  return task.status === 'manual' || (!workerEnabled && task.status === 'in_progress');
 }
 
 /**
