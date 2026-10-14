@@ -606,7 +606,7 @@ export class HandleTelegramWebhook {
         transcript,
         groupCtx,
         attachments,
-        { sourceKey, background: true },
+        { sourceKey, background: true, ...(msg.reply_to_message?.message_id ? { reply: true } : {}) },
       );
     } catch (err) {
       this.processedVoiceSources.delete(sourceKey);

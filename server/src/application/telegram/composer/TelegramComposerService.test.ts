@@ -1450,7 +1450,27 @@ const seg1 = (over: Partial<AiSeg> = {}): AiSeg => ({
 
 // ===================== Дополнение существующей задачи (B3) =====================
 
-test('existingTaskId валиден → комментарий в существующую задачу вместо новой', async () => {
+test('обычное сообщение (не ответ) → всегда новая задача, даже если модель нашла похожую', async () => {
+  // 14.10.2026: «саб по печати этикеток доработка …» бот дописал комментарием в старую задачу
+  // «Печать этикеток» вместо новой. Дополнять можно только ответом на сообщение.
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1({ title: 'Убрать дату изготовления', existingTaskId: 'old-1' })],
+    existingTasks: {
+      'old-1': { id: 'old-1', projectId: 'p1', description: 'Печать этикеток', deletedAt: null },
+    },
+  });
+  await h.service.startFromMessage(111, 500, 'доработка печати этикеток');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.ok(h.drafts.get(draftId)!.segments!.every((seg) => seg.existingTaskId === null));
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.match(h.createTaskCalls[0]!.description, /Убрать дату изготовления/);
+  assert.ok(h.comments.every((c) => c.taskId !== 'old-1'), 'в старую задачу ничего не дописано');
+  assert.ok(!h.edits.some((e) => /дополн/i.test(e.text)), 'карточка не обещает дополнить');
+});
+
+test('existingTaskId валиден и сообщение — ответ → комментарий в существующую задачу вместо новой', async () => {
   const h = makeHarness({
     projects: [{ id: 'p1', name: 'Альфа' }],
     aiSegments: [seg1({ title: 'Ещё деталь', existingTaskId: 'old-1' })],
@@ -1458,7 +1478,7 @@ test('existingTaskId валиден → комментарий в существ
       'old-1': { id: 'old-1', projectId: 'p1', description: 'Починить сборку', deletedAt: null },
     },
   });
-  await h.service.startFromMessage(111, 500, 'ещё про сборку');
+  await h.service.startFromMessage(111, 500, 'ещё про сборку', undefined, [], { reply: true });
   const draftId = [...h.drafts.keys()][0]!;
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls.length, 0); // новой задачи нет
@@ -1481,7 +1501,7 @@ test('existingTaskId мёртвый/чужой → фолбэк на созда�
       other: { id: 'other', projectId: 'p2', description: 'Из другого', deletedAt: null },
     },
   });
-  await h.service.startFromMessage(111, 500, 'три сомнительных сегмента');
+  await h.service.startFromMessage(111, 500, 'три сомнительных сегмента', undefined, [], { reply: true });
   const draftId = [...h.drafts.keys()][0]!;
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls.length, 3); // все три создались как обычные задачи

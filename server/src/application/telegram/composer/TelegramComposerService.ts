@@ -503,6 +503,9 @@ export type TelegramMessageIngestOptions = {
   // The Telegram transport only waits until the draft is durable. AI enrichment continues in
   // the background, so polling/webhook acknowledgements never depend on a long-running job.
   readonly background?: boolean;
+  // Сообщение — ответ на другое сообщение чата. Только тогда ИИ может дописать его в уже
+  // существующую задачу (existingTaskId); обычное сообщение всегда даёт новые задачи.
+  readonly reply?: boolean;
 };
 
 function withDefaultAttachmentTargets(
@@ -752,7 +755,7 @@ export class TelegramComposerService {
     // задача без проекта всё равно ляжет в решённое пространство, а не в «активное» браузера.
     // После разбора на задачи решение уточняется (см. enrichDraft).
     const decided = await this.decideWorkspace(draft);
-    const enrichment = this.enrichDraft(decided, userId, chatId, effectiveRaw, parsedEff, hint, aiText, forceStatus);
+    const enrichment = this.enrichDraft(decided, userId, chatId, effectiveRaw, parsedEff, hint, aiText, forceStatus, options.reply === true);
     if (options.background) {
       void enrichment.catch((err) => console.warn('[tg-composer] background enrichment failed:', err));
       return;
@@ -770,6 +773,8 @@ export class TelegramComposerService {
     aiText: string,
     // «Готово»-режим: все AI-сегменты создаём сразу в этой колонке (см. startFromMessage).
     forceStatus: VisibleKanbanStatus | null = null,
+    // Сообщение — ответ: можно дописать в существующую задачу (см. toDraftSegments).
+    allowAppend = false,
   ): Promise<void> {
     let waitMsgId: number | null = null;
     let stopSpinner: (() => Promise<void>) | null = null;
@@ -800,7 +805,7 @@ export class TelegramComposerService {
         stopSpinner = null;
       }
       const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
-        parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null);
+        parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend);
       const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
@@ -2014,6 +2019,10 @@ export class TelegramComposerService {
     // «Готово»-режим: колонка каждого сегмента фиксируется в 'done' (см. startFromMessage).
     forceStatus: VisibleKanbanStatus | null = null,
     hintAssigneeUserId: string | null = null,
+    // Дописать сегмент в существующую задачу (existingTaskId от модели) можно только когда
+    // сообщение — ответ. Иначе это новая задача: модель «узнаёт» похожую по теме и уводила
+    // в комментарий старой задачи то, что человек ставил как новую работу.
+    allowAppend = false,
   ): Promise<TelegramDraftSegment[]> {
     const out: TelegramDraftSegment[] = [];
     const projects = hintProjectId
@@ -2053,7 +2062,7 @@ export class TelegramComposerService {
         // приходит из «Готово»-режима и ставит все сегменты сразу в «Готово».
         targetStatus: forceStatus,
         taskType: s.taskType,
-        existingTaskId: projectChoices !== undefined ? null : s.existingTaskId,
+        existingTaskId: allowAppend && projectChoices === undefined ? s.existingTaskId : null,
         sourceExcerpt: s.sourceExcerpt,
       });
     }
