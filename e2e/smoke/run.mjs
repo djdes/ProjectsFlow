@@ -4,8 +4,13 @@
 //   node e2e/smoke/run.mjs                 # client/dist on a built-in static server
 //   node e2e/smoke/run.mjs --url <address> # an already running client (dev server, preview)
 //   node e2e/smoke/run.mjs --only inbox    # only cases whose id/title contains «inbox»
+//   node e2e/smoke/run.mjs --full          # every viewport/theme of every scenario
 //
-// Env: SMOKE_URL (same as --url), SMOKE_ONLY (same as --only), CHROME_PATH (browser binary),
+// By default each scenario runs once on desktop and once on a phone (its first variants):
+// dark theme and the narrow phone repeat the same flows and doubled the run time.
+//
+// Env: SMOKE_URL (same as --url), SMOKE_ONLY (same as --only), SMOKE_FULL=1 (same as --full),
+// CHROME_PATH (browser binary),
 // SMOKE_ALLOW_SKIP=1 (no browser found → warning and exit 0 instead of exit 1).
 
 import { createServer } from 'node:http';
@@ -40,6 +45,7 @@ function parseArgs(argv) {
   const opts = {
     url: process.env.SMOKE_URL || null,
     only: process.env.SMOKE_ONLY || null,
+    full: process.env.SMOKE_FULL === '1',
     headed: false,
     list: false,
     verbose: false,
@@ -51,6 +57,7 @@ function parseArgs(argv) {
     if (key === '--url') opts.url = value();
     else if (key === '--only') opts.only = value();
     else if (key === '--headed') opts.headed = true;
+    else if (key === '--full') opts.full = true;
     else if (key === '--list') opts.list = true;
     else if (key === '--verbose' || key === '-v') opts.verbose = true;
     else if (key === '--help' || key === '-h') {
@@ -61,11 +68,13 @@ function parseArgs(argv) {
           '  node e2e/smoke/run.mjs              собранный client/dist на встроенном сервере',
           '  node e2e/smoke/run.mjs --url <адрес>  уже запущенный клиент (например, Vite dev)',
           '  --only <часть id/названия>[,…]     только подходящие сценарии',
+          '  --full                             все экраны и темы каждого сценария (по умолчанию —',
+          '                                     один десктоп и один телефон на сценарий)',
           '  --list                             показать сценарии и выйти',
           '  --headed                           показать окно браузера',
           '  --verbose                          печатать все проверки, а не только упавшие',
           '',
-          'Переменные: SMOKE_URL, SMOKE_ONLY, CHROME_PATH, SMOKE_ALLOW_SKIP=1.',
+          'Переменные: SMOKE_URL, SMOKE_ONLY, SMOKE_FULL=1, CHROME_PATH, SMOKE_ALLOW_SKIP=1.',
         ].join('\n'),
       );
       process.exit(0);
@@ -727,11 +736,19 @@ function normalizeEndpoint(endpoint) {
   return endpoint.replace(/\/(p|t|u|ws|view|c)-[a-z0-9-]+/gi, '/:id');
 }
 
-function expandCases(filter) {
+// Быстрый прогон (по умолчанию): у сценария первый десктопный и первый телефонный вариант.
+// Тёмная тема и узкий телефон проходят те же шаги — они остаются в --full.
+function quickMatrix(matrix) {
+  const desktop = matrix.find(([vpKey]) => vpKey === 'desktop');
+  const phone = matrix.find(([vpKey]) => vpKey !== 'desktop');
+  return matrix.filter((entry) => entry === desktop || entry === phone);
+}
+
+function expandCases(filter, full = false) {
   const needles = filter ? filter.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : [];
   const cases = [];
   for (const scenario of scenarios) {
-    for (const [vpKey, themeKey] of scenario.matrix) {
+    for (const [vpKey, themeKey] of full ? scenario.matrix : quickMatrix(scenario.matrix)) {
       const id = `${scenario.id}-${vpKey}-${themeKey}`;
       const title = `${scenario.title} · ${VIEWPORTS[vpKey].label} · ${THEMES[themeKey].label}`;
       const haystack = `${id} ${title}`.toLowerCase();
@@ -744,7 +761,7 @@ function expandCases(filter) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const cases = expandCases(opts.only);
+  const cases = expandCases(opts.only, opts.full);
 
   if (opts.list) {
     for (const c of cases) console.log(`${c.id.padEnd(36)} ${c.title}`);
