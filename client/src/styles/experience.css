@@ -124,6 +124,15 @@ html.pf-no-motion .pf-pull-refresh {
   overflow: hidden;
   background: oklch(var(--muted) / 0.5);
 }
+/* Документ (.docx) читают, а не разглядывают: сцена во всю доступную высоту окна. */
+.pf-gallery-stage[data-kind='document'] {
+  height: calc(92dvh - 175px);
+}
+/* Страницы docx-preview — на фоне сцены, без серой подложки библиотеки. */
+.pf-docx .docx-wrapper {
+  background: transparent;
+  padding: 16px 16px 0;
+}
 .pf-gallery-image {
   position: relative;
   width: 100%;

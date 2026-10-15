@@ -113,6 +113,16 @@ export function isMp4File(mime: string | null | undefined, filename?: string | n
   return ext === MP4_EXT;
 }
 
+// Word .docx — его показываем в просмотрщике (docx-preview). Старый .doc — бинарный формат,
+// его в браузере не прочитать: только скачать.
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+export function isDocxFile(mime: string | null | undefined, filename?: string | null): boolean {
+  const normalizedMime = mime?.split(';', 1)[0]?.trim().toLowerCase();
+  if (normalizedMime === DOCX_MIME) return true;
+  return (filename ?? '').split('.').pop()?.toLowerCase() === 'docx';
+}
+
 // Извлекает ВСЕ файлы из буфера обмена (любой тип, не только картинки). Возвращает []
 // если файлов нет — тогда caller не делает preventDefault (обычная вставка текста).
 export function extractClipboardFiles(clipboardData: DataTransfer | null): File[] {

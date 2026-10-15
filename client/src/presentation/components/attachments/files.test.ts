@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractClipboardFiles, isMp4File } from './files';
+import { extractClipboardFiles, isDocxFile, isMp4File } from './files';
 
 function clipboard(items: File[], files: File[]): DataTransfer {
   return {
@@ -62,4 +62,11 @@ test('isMp4File recognizes MP4 by MIME or filename fallback', () => {
 test('isMp4File does not treat other video and document formats as MP4', () => {
   assert.equal(isMp4File('video/webm', 'recording.webm'), false);
   assert.equal(isMp4File('application/pdf', 'recording.pdf'), false);
+});
+
+test('isDocxFile: Word .docx по MIME или по имени; .doc и прочие — нет', () => {
+  assert.equal(isDocxFile('application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'x.bin'), true);
+  assert.equal(isDocxFile('application/octet-stream', 'Конфигуратор_доработка_1с.DOCX'), true);
+  assert.equal(isDocxFile('application/msword', 'old.doc'), false);
+  assert.equal(isDocxFile('application/pdf', 'report.pdf'), false);
 });

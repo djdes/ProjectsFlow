@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
-import { formatBytes, isImageFile, isMp4File } from './files';
+import { formatBytes, isDocxFile, isImageFile, isMp4File } from './files';
+import { DocxPreview } from './DocxPreview';
 
 export function AttachmentLightbox({
   attachment,
@@ -75,6 +76,9 @@ function AttachmentGallery({
     );
   const image = isImageFile(attachment.mimeType, attachment.filename);
   const mp4 = isMp4File(attachment.mimeType, attachment.filename);
+  const docx = !image && !mp4 && isDocxFile(attachment.mimeType, attachment.filename);
+  // Видео и документ листаются/прокручиваются сами — свайп галереи им не мешает.
+  const ownGestures = zoomed || mp4 || docx;
   return (
     <DialogContent
       hideClose
@@ -119,11 +123,12 @@ function AttachmentGallery({
         className="pf-gallery-stage"
         data-pf-no-swipe
         data-pf-no-edge-swipe
-        style={{ touchAction: zoomed || mp4 ? 'auto' : 'pan-y pinch-zoom' }}
+        data-kind={docx ? 'document' : undefined}
+        style={{ touchAction: ownGestures ? 'auto' : 'pan-y pinch-zoom' }}
         onTouchStart={(event) => {
           const touch = event.touches[0];
           swipe.current =
-            !zoomed && !mp4 && event.touches.length === 1 && touch
+            !ownGestures && event.touches.length === 1 && touch
               ? { x: touch.clientX, y: touch.clientY }
               : null;
         }}
@@ -161,6 +166,8 @@ function AttachmentGallery({
             className="size-full object-contain"
             aria-label={'Видео ' + attachment.filename}
           />
+        ) : docx ? (
+          <DocxPreview key={attachment.id} attachment={attachment} />
         ) : (
           <div className="grid h-full place-content-center justify-items-center gap-3 px-6 text-center">
             <FileText className="size-12 text-muted-foreground" />
