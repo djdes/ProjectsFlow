@@ -517,6 +517,7 @@ export class HandleTelegramWebhook {
     // к задаче (карточка, сводка, уточнение бота). Ответ на любое другое сообщение (алерт другого
     // бота, реплика коллеги) — новая задача, а то сообщение уходит ей в комментарий.
     let replyContext: TelegramReplyContext | null = null;
+    let replyToMessageId: number | null = null;
     if (msg.reply_to_message?.message_id) {
       const context = replyContextOf(msg.reply_to_message);
       // Задачу есть из чего сделать: свой текст/файл или текст сообщения, на которое ответили.
@@ -528,6 +529,7 @@ export class HandleTelegramWebhook {
         });
       }
       replyContext = context;
+      replyToMessageId = msg.reply_to_message.message_id;
       // Только «@бот» в ответ на сообщение — задачей становится само это сообщение.
       if (text.length === 0 && attachments.length === 0 && context) text = context.text;
     }
@@ -577,12 +579,14 @@ export class HandleTelegramWebhook {
         sourceKey,
         background: true,
         ...(replyContext ? { replyContext } : {}),
+        ...(replyToMessageId !== null ? { replyToMessageId } : {}),
       });
     }
     return this.deps.composer.startFromMessage(tgUserId, chatId, text, undefined, attachments, {
       sourceKey,
       background: true,
       ...(replyContext ? { replyContext } : {}),
+      ...(replyToMessageId !== null ? { replyToMessageId } : {}),
     });
   }
 

@@ -33,6 +33,9 @@ export type GenerateLlmTextInput = {
   readonly signal?: AbortSignal;
   // Ответ строго по JSON-схеме (см. LlmJsonSchema).
   readonly jsonSchema?: LlmJsonSchema;
+  // Вход для запасной модели, если подписка недоступна (см. FallbackLlmTextGenerator): короче
+  // основного, потому что у запасного провайдера жёсткий лимит токенов на запрос.
+  readonly fallbackInput?: string;
 };
 
 export type GenerateLlmTextResult = {

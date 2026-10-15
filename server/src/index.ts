@@ -410,6 +410,8 @@ import { LlmGateway } from './application/llm/LlmGateway.js';
 import { LlmRouter } from './application/llm/LlmRouter.js';
 import { LlmSettingsService } from './application/llm/LlmSettingsService.js';
 import { LlmTextGenerator } from './application/llm/LlmTextGenerator.js';
+import { FallbackLlmTextGenerator } from './application/llm/FallbackLlmTextGenerator.js';
+import { GroqTextGenerator } from './infrastructure/groq/GroqTextGenerator.js';
 import { ServerExecutionPolicy } from './application/llm/ServerExecutionPolicy.js';
 import { ServerQueueRunner, type ServerQueueAdapter } from './application/llm/ServerQueueRunner.js';
 import { RunAiPromptJobWithLlm } from './application/ai-prompt/RunAiPromptJobWithLlm.js';
@@ -928,6 +930,21 @@ const llmTextGenerator = new LlmTextGenerator({
   settings: llmSettingsService,
   connections: llmConnectionRepo,
 });
+// Разбор задач (compose, «Улучшить»): подписка ChatGPT в лимите или не подключена — запасная
+// модель Groq (ключ тот же, что у расшифровки голоса), чтобы бот не ставил задачи без разбора.
+const groqTextGenerator = new GroqTextGenerator({
+  apiKey: process.env['GROQ_API_KEY'] ?? '',
+  apiBaseUrl: process.env['GROQ_API_BASE_URL'],
+  model: process.env['GROQ_TEXT_MODEL'],
+  proxyUrl: process.env['GROQ_HTTP_PROXY'] || process.env['TELEGRAM_HTTP_PROXY'],
+});
+const aiPromptLlm = groqTextGenerator.enabled
+  ? new FallbackLlmTextGenerator({
+      primary: llmTextGenerator,
+      fallback: groqTextGenerator,
+      log: (message) => console.warn(message),
+    })
+  : llmTextGenerator;
 // Короткие задания, которые админ перевёл на сервер (llm_settings.server_queues), сервер
 // забирает сам; при недоступной подписке они завершаются ошибкой, а не уходят диспетчеру.
 const llmServerPolicy = new ServerExecutionPolicy({ settings: llmSettingsService });
@@ -1140,7 +1157,7 @@ llmQueueAdapters.push(
     aiPromptJobs: aiPromptJobRepo,
     run: new RunAiPromptJobWithLlm({
       complete: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
-      llm: llmTextGenerator,
+      llm: aiPromptLlm,
       // KB читается от имени создателя job'а, как у диспетчера (GetAiPromptKbBundle).
       loadKbBundles: (job, projectIds) =>
         new GetAiPromptKbBundle({

@@ -62,6 +62,10 @@ function makeHarness(opts?: {
   shared?: { id: string; displayName: string; email: string }[];
   aiSegments?: AiSeg[];
   aiOutcome?: 'enqueue-throw' | 'timeout' | 'fail' | 'bad';
+  // Текст ошибки упавшего задания (aiOutcome: 'fail') — например, лимит подписки ChatGPT.
+  aiError?: string;
+  // Сообщения бота, привязанные к задачам: `${chatId}:${messageId}` → задача (taskMessages).
+  taskMessageLinks?: Record<string, { taskId: string; projectId: string }>;
   aiGate?: Promise<void>;
   // Per-project kanban settings (кастомные подписи/скрытость колонок) для пикера.
   kanbanByProject?: Record<string, any>;
@@ -282,7 +286,13 @@ function makeHarness(opts?: {
 
   const deps = {
     drafts: draftsRepo,
-    taskMessages: { async upsert() {}, async findByMessage() { return null; } },
+    taskMessages: {
+      async upsert() {},
+      async findByMessage(chatId: number, messageId: number) {
+        const link = opts?.taskMessageLinks?.[`${chatId}:${messageId}`];
+        return link ? ({ tgChatId: chatId, tgMessageId: messageId, recipientUserId: 'u1', ...link } as any) : null;
+      },
+    },
     members: {
       async listProjectsForUser() {
         return projects.map((p) => ({ ...p, isInbox: false })) as any;
@@ -414,7 +424,7 @@ function makeHarness(opts?: {
       async execute(_input: any) {
         await opts?.aiGate;
         if (aiOutcome === 'timeout') return null;
-        if (aiOutcome === 'fail') return { status: 'failed', improvedText: null } as any;
+        if (aiOutcome === 'fail') return { status: 'failed', improvedText: null, error: opts?.aiError ?? null } as any;
         if (aiOutcome === 'bad') return { status: 'succeeded', improvedText: 'это не JSON' } as any;
         return {
           status: 'succeeded',
@@ -2290,4 +2300,34 @@ test('задача ответом на сообщение: то сообщени
   assert.match(body, /Оригинал сообщения/);
   assert.match(body, /В ответ на сообщение от MagDay/);
   assert.match(body, /> ⚠️ Остатки: расхождения\n> 497 записей/);
+});
+
+test('ответ на сообщение, из которого уже создана задача: проект, ответственный и колонка — как у неё', async () => {
+  // 15.10.2026: «@бот ещё … сделать кнопку» ответом на сообщение-задачу падало во «Входящие»
+  // на автора и в «Черновики», хотя та задача — в проекте, у Васи, «Вручную».
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1({ title: 'Кнопка по центру', projectId: null, projectName: null })],
+    existingTasks: {
+      'old-1': { id: 'old-1', projectId: 'p1', status: 'manual', assignee: { userId: 'u2', displayName: 'Вася', avatarUrl: null }, deletedAt: null },
+    },
+    taskMessageLinks: { '500:77': { taskId: 'old-1', projectId: 'p1' } },
+  });
+  // Сообщение 42 уже стало задачей: черновик подтверждён, его карточка — сообщение 77.
+  h.drafts.set('src', { id: 'src', sourceKey: 'm:500:42', status: 'confirmed', tgMessageId: 77, creatorUserId: 'u1', tgChatId: 500, segments: null, projectId: null, assigneeUserId: null, targetStatus: null } as any);
+  await h.service.startFromMessage(111, 500, 'ещё сделать кнопку по центру', undefined, [], { replyToMessageId: 42 });
+  const draft = [...h.drafts.values()].find((d) => d.id !== 'src')!;
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1');
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
+  assert.equal(h.createTaskCalls[0]!.status, 'manual');
+});
+
+test('ИИ недоступен из-за лимита подписки — карточка честно говорит об этом', async () => {
+  const h = makeHarness({ aiOutcome: 'fail', aiError: 'llm_failed: Достигнут лимит подписки ChatGPT — повторите позже.' });
+  await h.service.startFromMessage(111, 500, 'магдей сделать шрифт крупнее');
+  const card = h.edits.at(-1)?.text ?? h.sent.at(-1)?.text ?? '';
+  assert.match(card, /лимит подписки ChatGPT/);
+  assert.match(card, /Новая задача/);
 });

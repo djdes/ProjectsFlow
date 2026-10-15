@@ -10,6 +10,7 @@ import { TASKSFLOW_TEMPLATE } from './prompts/tasksflowPrompt.js';
 import { COMPOSE_PASS1_SCHEMA, COMPOSE_PASS2_SCHEMA } from './prompts/composeSchemas.js';
 import type { LlmJsonSchema } from '../llm/LlmTransport.js';
 import { RUN_PROMPT_INSTRUCTIONS, fillPromptTemplate } from '../llm/promptTemplate.js';
+import { liteComposeContext } from './liteComposeContext.js';
 
 // Серверное исполнение заданий кнопок «AI» (improve, compose, compose-advanced и конверт
 // TasksFlow) через подписку ChatGPT — замена ai-job-worker.ps1 на машине диспетчера.
@@ -105,7 +106,12 @@ export class RunAiPromptJobWithLlm {
   private async compose(job: AiPromptJob): Promise<Outcome> {
     const candidates = job.kbContext?.trim() ? job.kbContext : '(нет проектов-кандидатов)';
     const prompt = fillPromptTemplate(COMPOSE_PASS1_TEMPLATE, { CANDIDATES_BLOCK: candidates, INPUT_TEXT: job.inputText });
-    const llm = await this.generate(job, prompt, 'fast', 'medium', COMPOSE_TIMEOUT_MS, COMPOSE_PASS1_SCHEMA);
+    // Запасной модели — только проекты и участники: с дайджестами база знаний не влезет в её лимит.
+    const fallbackPrompt = fillPromptTemplate(COMPOSE_PASS1_TEMPLATE, {
+      CANDIDATES_BLOCK: job.kbContext?.trim() ? liteComposeContext(job.kbContext) : candidates,
+      INPUT_TEXT: job.inputText,
+    });
+    const llm = await this.generate(job, prompt, 'fast', 'medium', COMPOSE_TIMEOUT_MS, COMPOSE_PASS1_SCHEMA, fallbackPrompt);
     const parsed = parseComposeJson(llm.text);
     if (!parsed) throw new JobFailure('compose_pass1_bad_json');
     // advancedBody здесь не считается — его доберёт ленивый проход 2 (compose-advanced).
@@ -225,6 +231,7 @@ export class RunAiPromptJobWithLlm {
     // Compose отвечает JSON-ом, который разбирают бот и веб: по схеме модель не вернёт битый
     // JSON (быстрая модель изредка ломала его на длинных сообщениях — бот уходил в ручной флоу).
     jsonSchema?: LlmJsonSchema,
+    fallbackInput?: string,
   ): Promise<GenerateLlmTextResult> {
     return this.deps.llm.generate({
       billedUserId: job.createdBy,
@@ -234,6 +241,7 @@ export class RunAiPromptJobWithLlm {
       reasoningEffort,
       timeoutMs,
       ...(jsonSchema ? { jsonSchema } : {}),
+      ...(fallbackInput ? { fallbackInput } : {}),
     });
   }
 }

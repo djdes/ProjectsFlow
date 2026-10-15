@@ -193,6 +193,7 @@ test('reply на сообщение без задачи — новая зада�
   assert.equal(h.composerCalls.length, 1);
   assert.equal(h.composerCalls[0]!.text, 'сегодня проверить остатки');
   assert.deepEqual(h.composerCalls[0]!.options.replyContext, { from: 'MagDay', text: alert });
+  assert.equal(h.composerCalls[0]!.options.replyToMessageId, 55, 'чтобы взять контекст задачи из того сообщения');
   assert.equal(h.composerCalls[0]!.options.reply, undefined, 'в старую задачу не дописываем');
 });
 

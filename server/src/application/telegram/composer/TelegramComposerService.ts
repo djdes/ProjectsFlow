@@ -510,7 +510,54 @@ export type TelegramMessageIngestOptions = {
   // Задачу ставят ответом на сообщение, не привязанное к задаче (алерт другого бота, реплика
   // коллеги): это сообщение уходит в комментарий созданной задачи как контекст.
   readonly replyContext?: TelegramReplyContext | null;
+  // Id сообщения, на которое ответили: если из него уже сделали задачу, новая встаёт в тот же
+  // контекст — проект, ответственный, колонка (см. replyDefaults).
+  readonly replyToMessageId?: number;
 };
+
+// Чем заполнить задачу из ответа, если сам текст этого не называет (см. replyDefaults).
+type ReplyDefaults = {
+  readonly projectId: string | null;
+  readonly assigneeUserId: string | null;
+  readonly status: VisibleKanbanStatus | null;
+};
+
+type ManualFlowExtras = {
+  readonly replyContext?: TelegramReplyContext | null;
+  readonly defaults?: ReplyDefaults | null;
+  // Строка над карточкой: почему черновик собран без ИИ.
+  readonly notice?: string | null;
+};
+
+// Почему ИИ не разобрал сообщение — одной строкой для карточки. Лимит подписки называем прямо:
+// иначе черновик «без проекта и ответственного» выглядит как поломка бота.
+export function aiFailureNotice(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/лимит подписки|usage limit/i.test(message)) {
+    return '⚠️ ИИ-разбор сейчас недоступен: закончился лимит подписки ChatGPT. Собрал задачу без ИИ — проект и ответственного выберите кнопками.';
+  }
+  return '⚠️ ИИ не разобрал сообщение — собрал задачу как есть. Проект и ответственного выберите кнопками.';
+}
+
+// Колонка, в которую можно поставить новую задачу «как у той»: рабочие колонки доски. Готовую,
+// сданную на утверждение или занятую воркером не наследуем — новая задача начинается заново.
+function activeColumn(status: string | null): VisibleKanbanStatus | null {
+  return status === 'backlog' || status === 'manual' || status === 'todo' ? status : null;
+}
+
+// Одно значение на всех — или null, если они различаются (или их нет).
+function same<T>(values: readonly T[]): T | null {
+  return values.length > 0 && values.every((value) => value === values[0]) ? values[0]! : null;
+}
+
+// Модель не назвала ответственного (нет или сам автор) — берём того, что по умолчанию.
+function withDefaultAssignee(
+  resolved: string | null,
+  fallback: string | null,
+  creatorUserId: string,
+): string | null {
+  return (resolved === null || resolved === creatorUserId) && fallback ? fallback : resolved;
+}
 
 // Сообщение, ответом на которое поставили задачу: отправитель и текст цитатой (markdown).
 // Длинный алерт режем — в комментарии нужен контекст, а не весь лог.
@@ -693,6 +740,12 @@ export class TelegramComposerService {
           .join(' ')
       : rawText;
     const parsedEff = donePrefix.isDone ? parseComposerMessage(effectiveRaw) : parsed;
+    // Ответ на сообщение, из которого уже сделали задачу: новая — в тот же контекст (проект,
+    // ответственный, колонка), если сам текст их не называет.
+    const inherited = options.replyToMessageId
+      ? await this.replyDefaults(chatId, options.replyToMessageId)
+      : null;
+    const column = forceStatus ?? inherited?.status ?? null;
 
     // Нет текста задачи (например, один '+Проект' или голое «готово») → ручной флоу с подсказкой.
     if (parsedEff.taskText.trim().length === 0) {
@@ -704,8 +757,8 @@ export class TelegramComposerService {
         attachments,
         undefined,
         options.sourceKey ?? null,
-        forceStatus,
-        options.replyContext ?? null,
+        column,
+        { replyContext: options.replyContext ?? null, defaults: inherited },
       );
       return;
     }
@@ -723,14 +776,15 @@ export class TelegramComposerService {
         attachments,
         undefined,
         options.sourceKey ?? null,
-        forceStatus,
-        options.replyContext ?? null,
+        column,
+        { replyContext: options.replyContext ?? null, defaults: inherited },
       );
       return;
     }
+    if (parsedEff.projectQuery === null && inherited?.projectId) hint = { ...hint, projectId: inherited.projectId };
     if (hint.ambiguous) {
       await this.manualFlow(userId, chatId, effectiveRaw, undefined, attachments, undefined,
-        options.sourceKey ?? null, forceStatus, options.replyContext ?? null);
+        options.sourceKey ?? null, column, { replyContext: options.replyContext ?? null, defaults: inherited });
       return;
     }
     const aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
@@ -746,6 +800,9 @@ export class TelegramComposerService {
       // will retry the richer resolution without making intake depend on this optional lookup.
       console.warn('[tg-composer] fallback assignee hint failed:', err);
     }
+    if (parsedEff.assigneeQuery === null && !fallbackAssigneeUserId) {
+      fallbackAssigneeUserId = inherited?.assigneeUserId ?? null;
+    }
     const draftId = this.deps.shortIdGen();
     const draft = await this.deps.drafts.create({
       id: draftId,
@@ -758,8 +815,8 @@ export class TelegramComposerService {
       taskText: hint.taskText,
       projectId: hint.projectId,
       assigneeUserId: fallbackAssigneeUserId,
-      // «Готово»-режим фиксирует колонку сразу; обычные задачи — null (ЧЕРНОВИКИ по умолчанию).
-      targetStatus: forceStatus,
+      // «Готово»-режим или колонка задачи, на которую ответили; иначе null (ЧЕРНОВИКИ).
+      targetStatus: column,
       attachments: withDefaultAttachmentTargets(attachments),
       replyContext: options.replyContext ?? null,
       ttlSeconds: DRAFT_TTL_SECONDS,
@@ -773,7 +830,7 @@ export class TelegramComposerService {
     // задача без проекта всё равно ляжет в решённое пространство, а не в «активное» браузера.
     // После разбора на задачи решение уточняется (см. enrichDraft).
     const decided = await this.decideWorkspace(draft);
-    const enrichment = this.enrichDraft(decided, userId, chatId, effectiveRaw, parsedEff, hint, aiText, forceStatus, options.reply === true);
+    const enrichment = this.enrichDraft(decided, userId, chatId, effectiveRaw, parsedEff, hint, aiText, column, options.reply === true);
     if (options.background) {
       void enrichment.catch((err) => console.warn('[tg-composer] background enrichment failed:', err));
       return;
@@ -823,7 +880,9 @@ export class TelegramComposerService {
         stopSpinner = null;
       }
       const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
-        parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend);
+        parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
+        // Без явного @ответственного — тот, что в черновике (из задачи, на которую ответили).
+        parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId);
       const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
@@ -853,6 +912,7 @@ export class TelegramComposerService {
         current,
         null,
         forceStatus,
+        { notice: aiFailureNotice(err) },
       );
     } finally {
       if (stopSpinner) await stopSpinner();
@@ -991,10 +1051,16 @@ export class TelegramComposerService {
     sourceKey: string | null = null,
     // «Готово»-режим: одиночная задача создаётся сразу в этой колонке (см. startFromMessage).
     forceStatus: VisibleKanbanStatus | null = null,
-    // Сообщение, ответом на которое поставили задачу (см. TelegramMessageIngestOptions).
-    replyContext: TelegramReplyContext | null = null,
+    extras: ManualFlowExtras = {},
   ): Promise<void> {
     const parsed = parseComposerMessage(rawText);
+    // Чем заполнить то, что текст не называет: задача, на которую ответили, или (повтор после
+    // сбоя ИИ) то, что уже лежит в черновике.
+    const defaults: ReplyDefaults | null =
+      extras.defaults ??
+      (existingDraft
+        ? { projectId: existingDraft.projectId, assigneeUserId: existingDraft.assigneeUserId, status: existingDraft.targetStatus }
+        : null);
 
     // Резолв проекта. taskText может быть переопределён жадным матчем многословного имени.
     let projectId: string | null = null; // null = «Входящие» (если решено)
@@ -1021,6 +1087,8 @@ export class TelegramComposerService {
       }
     }
 
+    if (parsed.projectQuery === null && defaults?.projectId) projectId = defaults.projectId;
+
     if (taskText.length === 0) {
       await this.respond(
         chatId,
@@ -1043,6 +1111,8 @@ export class TelegramComposerService {
         offeredMembers = list.map((u) => ({ id: u.id, displayName: u.displayName }));
       }
     }
+
+    if (parsed.assigneeQuery === null && defaults?.assigneeUserId) assigneeUserId = defaults.assigneeUserId;
 
     if (offeredProjects && assigneeUserId && assigneeUserId !== userId && this.deps.workspaces) {
       const all = await this.deps.members.listProjectsForUser(userId);
@@ -1072,7 +1142,7 @@ export class TelegramComposerService {
           // AI may have persisted segments before a later render/transport error. This fallback
           // renders a manual tc:-card, so its stored finalize path must be manual as well.
           segments: null,
-          targetStatus: forceStatus,
+          targetStatus: forceStatus ?? defaults?.status ?? null,
           attachments: withDefaultAttachmentTargets(attachments),
         })) ?? existingDraft)
       : await this.deps.drafts.create({
@@ -1084,9 +1154,9 @@ export class TelegramComposerService {
           projectId,
           assigneeUserId,
           offered,
-          targetStatus: forceStatus,
+          targetStatus: forceStatus ?? defaults?.status ?? null,
           attachments: withDefaultAttachmentTargets(attachments),
-          replyContext,
+          replyContext: extras.replyContext ?? null,
           ttlSeconds: DRAFT_TTL_SECONDS,
           autoCreateSeconds: AUTO_CREATE_SECONDS,
         });
@@ -1096,7 +1166,8 @@ export class TelegramComposerService {
 
     const decided = await this.decideWorkspace(draft);
     const card = await this.nextCard(decided);
-    const tgMessageId = await this.respond(chatId, waitMsgId ?? null, card.text, card.replyMarkup);
+    const text = extras.notice ? `${extras.notice}\n\n${card.text}` : card.text;
+    const tgMessageId = await this.respond(chatId, waitMsgId ?? null, text, card.replyMarkup);
     if (tgMessageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId });
   }
 
@@ -2029,7 +2100,7 @@ export class TelegramComposerService {
       if (job && SEGMENT_TERMINAL.has(job.status)) break;
     }
     if (!job || job.status !== 'succeeded' || !job.improvedText) {
-      throw new Error(`compose job not ready: ${job?.status ?? 'timeout'}`);
+      throw new Error(`compose job not ready: ${job?.status ?? 'timeout'}${job?.error ? ` (${job.error})` : ''}`);
     }
     return parseComposeSegments(job.improvedText);
   }
@@ -2047,6 +2118,8 @@ export class TelegramComposerService {
     // сообщение — ответ. Иначе это новая задача: модель «узнаёт» похожую по теме и уводила
     // в комментарий старой задачи то, что человек ставил как новую работу.
     allowAppend = false,
+    // Ответственный по умолчанию, когда модель никого не назвала (не нашла или поставила автора).
+    defaultAssigneeUserId: string | null = null,
   ): Promise<TelegramDraftSegment[]> {
     const out: TelegramDraftSegment[] = [];
     const projects = hintProjectId
@@ -2075,7 +2148,11 @@ export class TelegramComposerService {
         projectId,
         projectName: hintProjectId ? null : (project?.name ?? s.projectName),
         ...(projectChoices !== undefined ? { projectChoices } : {}),
-        assigneeUserId: hintAssigneeUserId ?? (projectId ? await this.resolveSegmentAssignee(s, projectId, creatorUserId) : assigneeUserId),
+        assigneeUserId: withDefaultAssignee(
+          hintAssigneeUserId ?? (projectId ? await this.resolveSegmentAssignee(s, projectId, creatorUserId) : assigneeUserId),
+          defaultAssigneeUserId,
+          creatorUserId,
+        ),
         assigneeName: hintAssigneeUserId ? null : s.assigneeName,
         // Срока нет — ставим конец недели ЗДЕСЬ, а не при создании: так он попадает в карточку,
         // пользователь его видит и может поменять пресетом до подтверждения. Оставить пустым
@@ -3178,6 +3255,47 @@ export class TelegramComposerService {
       };
     } catch (err) {
       console.warn('[tg-composer] resolveAppendTarget failed:', err);
+      return null;
+    }
+  }
+
+  // Задача ответом на сообщение, из которого уже сделали задачу («ещё …» в продолжение): берём
+  // контекст той задачи — проект, ответственного и колонку. Одна задача — какая она сейчас (её
+  // могли перенести, например, во «Вручную»); несколько — то, что у них было общим в черновике.
+  // null — то сообщение задачей не становилось.
+  private async replyDefaults(chatId: number, replyToMessageId: number): Promise<ReplyDefaults | null> {
+    try {
+      const source = await this.deps.drafts.findBySourceKey(`m:${chatId}:${replyToMessageId}`);
+      if (!source || source.status !== 'confirmed') return null;
+      const link =
+        source.tgMessageId !== null
+          ? await this.deps.taskMessages.findByMessage(chatId, source.tgMessageId)
+          : null;
+      const task = link && this.deps.tasks ? await this.deps.tasks.getById(link.taskId) : null;
+      if (task && !task.deletedAt) {
+        const project = await this.deps.projects.getById(task.projectId);
+        return {
+          // «Входящие» как проект не наследуем: их выбирают по ответственному (см. inboxFor).
+          projectId: project && !project.isInbox ? project.id : null,
+          assigneeUserId: task.assignee.userId,
+          status: activeColumn(task.status),
+        };
+      }
+      const segments = (source.segments ?? []).filter((seg) => seg.included);
+      if (segments.length > 0) {
+        return {
+          projectId: same(segments.map((seg) => seg.projectId)),
+          assigneeUserId: same(segments.map((seg) => seg.assigneeUserId)),
+          status: activeColumn(same(segments.map((seg) => seg.targetStatus ?? null))),
+        };
+      }
+      return {
+        projectId: source.projectId,
+        assigneeUserId: source.assigneeUserId,
+        status: activeColumn(source.targetStatus),
+      };
+    } catch (err) {
+      console.warn('[tg-composer] reply defaults failed:', err);
       return null;
     }
   }
