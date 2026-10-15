@@ -4,7 +4,7 @@
 // участников. Дайджесты и открытые задачи (кандидаты на дополнение) отбрасываем.
 const KEEP_LINE = /^(\[projectId=|Пространство:|Участники)/;
 
-export function liteComposeContext(block: string, maxChars = 8_000): string {
+export function liteComposeContext(block: string, maxChars = 6_000): string {
   const parts = block.split('\n\n---\n\n');
   const today = /^Сегодня: .*$/m.exec(block)?.[0] ?? null;
   const kept: string[] = [];

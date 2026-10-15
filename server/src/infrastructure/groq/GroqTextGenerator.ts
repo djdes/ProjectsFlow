@@ -62,7 +62,8 @@ export class GroqTextGenerator implements GenerateLlmText {
           { role: 'system', content: input.instructions },
           { role: 'user', content: input.input },
         ],
-        reasoning_effort: input.reasoningEffort ?? (input.tier === 'fast' ? 'low' : 'medium'),
+        // Рассуждения тоже считаются в лимит токенов в минуту — для коротких заданий хватает low.
+        reasoning_effort: 'low',
         ...(input.jsonSchema
           ? {
               response_format: {
