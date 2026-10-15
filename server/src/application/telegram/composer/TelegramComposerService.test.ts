@@ -154,6 +154,7 @@ function makeHarness(opts?: {
         awaitingTextSeg: null,
         workspaceId: input.workspaceId ?? null,
         workspacePending: input.workspacePending ?? false,
+        replyContext: input.replyContext ?? null,
         status: 'composing',
         createdAt: new Date(),
         autoCreateAt:
@@ -2275,4 +2276,18 @@ test('явный @исполнитель сохраняется при проп�
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox-u2@w-studio');
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
+});
+
+test('задача ответом на сообщение: то сообщение — в комментарии рядом с оригиналом', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiSegments: [seg1({ title: 'Проверить остатки' })] });
+  await h.service.startFromMessage(111, 500, 'сегодня проверить остатки', undefined, [], {
+    replyContext: { from: 'MagDay', text: '⚠️ Остатки: расхождения\n497 записей' },
+  });
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  const body = h.comments[0]!.body;
+  assert.match(body, /Оригинал сообщения/);
+  assert.match(body, /В ответ на сообщение от MagDay/);
+  assert.match(body, /> ⚠️ Остатки: расхождения\n> 497 записей/);
 });

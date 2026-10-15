@@ -10,6 +10,7 @@ import type {
   TelegramDraftAttachment,
   TelegramDraftOffered,
   TelegramDraftSegment,
+  TelegramReplyContext,
 } from '../TelegramTaskDraftRepository.js';
 import type { EnqueueAiPromptJob } from '../../ai-prompt/EnqueueAiPromptJob.js';
 import type { WaitForAiPromptJob } from '../../ai-prompt/WaitForAiPromptJob.js';
@@ -506,7 +507,20 @@ export type TelegramMessageIngestOptions = {
   // Сообщение — ответ на другое сообщение чата. Только тогда ИИ может дописать его в уже
   // существующую задачу (existingTaskId); обычное сообщение всегда даёт новые задачи.
   readonly reply?: boolean;
+  // Задачу ставят ответом на сообщение, не привязанное к задаче (алерт другого бота, реплика
+  // коллеги): это сообщение уходит в комментарий созданной задачи как контекст.
+  readonly replyContext?: TelegramReplyContext | null;
 };
+
+// Сообщение, ответом на которое поставили задачу: отправитель и текст цитатой (markdown).
+// Длинный алерт режем — в комментарии нужен контекст, а не весь лог.
+export function replyContextBlock(reply: TelegramReplyContext | null | undefined): string {
+  const text = reply?.text.trim() ?? '';
+  if (!text) return '';
+  const clipped = text.length > 3000 ? `${text.slice(0, 3000).trimEnd()}…` : text;
+  const quote = clipped.split('\n').map((line) => `> ${line}`).join('\n');
+  return `**В ответ на сообщение${reply?.from ? ` от ${reply.from}` : ''}:**\n\n${quote}`;
+}
 
 function withDefaultAttachmentTargets(
   attachments: readonly TelegramDraftAttachment[],
@@ -629,6 +643,7 @@ export class TelegramComposerService {
           groupCtx,
           attachments,
           options.sourceKey ?? null,
+          options.replyContext ?? null,
         );
       }
       if (route === 'nudge') return this.send(chatId, this.bindHintText());
@@ -690,6 +705,7 @@ export class TelegramComposerService {
         undefined,
         options.sourceKey ?? null,
         forceStatus,
+        options.replyContext ?? null,
       );
       return;
     }
@@ -708,12 +724,13 @@ export class TelegramComposerService {
         undefined,
         options.sourceKey ?? null,
         forceStatus,
+        options.replyContext ?? null,
       );
       return;
     }
     if (hint.ambiguous) {
       await this.manualFlow(userId, chatId, effectiveRaw, undefined, attachments, undefined,
-        options.sourceKey ?? null, forceStatus);
+        options.sourceKey ?? null, forceStatus, options.replyContext ?? null);
       return;
     }
     const aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
@@ -744,6 +761,7 @@ export class TelegramComposerService {
       // «Готово»-режим фиксирует колонку сразу; обычные задачи — null (ЧЕРНОВИКИ по умолчанию).
       targetStatus: forceStatus,
       attachments: withDefaultAttachmentTargets(attachments),
+      replyContext: options.replyContext ?? null,
       ttlSeconds: DRAFT_TTL_SECONDS,
       autoCreateSeconds: AUTO_CREATE_SECONDS,
     });
@@ -870,6 +888,7 @@ export class TelegramComposerService {
     groupCtx: TelegramGroupContext,
     attachments: readonly TelegramDraftAttachment[],
     sourceKey: string | null = null,
+    replyContext: TelegramReplyContext | null = null,
   ): Promise<void> {
     const body = rawText.trim();
     if (body.length === 0) return;
@@ -921,6 +940,8 @@ export class TelegramComposerService {
       // Close the idempotency receipt immediately after task creation. Everything below is
       // best-effort decoration; a Telegram retry must never create a duplicate task.
       if (receipt) await this.deps.drafts.patch(receipt.id, { status: 'confirmed' });
+      // Текст сообщения уже в описании задачи — в комментарий только то, на что ответили.
+      await this.postOriginalComment(task.id, inbox.id, ownerUserId, '', [], replyContext);
       const attachmentResult = await this.attachDraftAttachments(
         receipt?.attachments ?? attachments,
         task.id,
@@ -970,6 +991,8 @@ export class TelegramComposerService {
     sourceKey: string | null = null,
     // «Готово»-режим: одиночная задача создаётся сразу в этой колонке (см. startFromMessage).
     forceStatus: VisibleKanbanStatus | null = null,
+    // Сообщение, ответом на которое поставили задачу (см. TelegramMessageIngestOptions).
+    replyContext: TelegramReplyContext | null = null,
   ): Promise<void> {
     const parsed = parseComposerMessage(rawText);
 
@@ -1063,6 +1086,7 @@ export class TelegramComposerService {
           offered,
           targetStatus: forceStatus,
           attachments: withDefaultAttachmentTargets(attachments),
+          replyContext,
           ttlSeconds: DRAFT_TTL_SECONDS,
           autoCreateSeconds: AUTO_CREATE_SECONDS,
         });
@@ -1409,7 +1433,7 @@ export class TelegramComposerService {
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
       await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
-      await this.postOriginalComment(task.id, targetId, userId, text);
+      await this.postOriginalComment(task.id, targetId, userId, text, [], draft.replyContext);
       const attachmentResult = await this.attachDraftAttachments(
         draft.attachments,
         task.id,
@@ -3060,6 +3084,7 @@ export class TelegramComposerService {
         userId,
         target.sourceExcerpt ?? draft.taskText ?? '',
         siblings,
+        draft.replyContext,
       );
     }
     const downloadCache: AttachmentDownloadCache = new Map();
@@ -3167,10 +3192,17 @@ export class TelegramComposerService {
     userId: string,
     original: string,
     siblings: readonly RelatedTaskLink[] = [],
+    // Сообщение, ответом на которое поставили задачу, — цитатой после оригинала.
+    reply: TelegramReplyContext | null = null,
   ): Promise<void> {
     const text = original.trim();
-    if (text.length === 0) return;
-    const body = [`**Оригинал сообщения:**\n\n${text}`, this.relatedTasksBlock(siblings)]
+    const replyBlock = replyContextBlock(reply);
+    if (text.length === 0 && replyBlock.length === 0) return;
+    const body = [
+      text ? `**Оригинал сообщения:**\n\n${text}` : '',
+      replyBlock,
+      this.relatedTasksBlock(siblings),
+    ]
       .filter((part) => part.length > 0)
       .join('\n\n');
     try {

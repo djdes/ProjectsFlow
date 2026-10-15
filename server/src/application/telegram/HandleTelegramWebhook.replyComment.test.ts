@@ -16,6 +16,7 @@ function makeHarness(opts: { senderUserId?: string | null; listed?: string[] } =
   const edited: Array<{ chatId: number; messageId: number; text?: string; replyMarkup?: unknown }> = [];
   const answered: Array<{ id: string; text?: string }> = [];
   const comments: Array<{ projectId: string; taskId: string; ownerUserId: string; body: string }> = [];
+  const composerCalls: Array<{ text: string; options: any }> = [];
   const listed = opts.listed ?? ['t1', 't2', 't3'];
   const senderUserId = 'senderUserId' in opts ? opts.senderUserId : 'u-sender';
   const deps = {
@@ -62,16 +63,24 @@ function makeHarness(opts: { senderUserId?: string | null; listed?: string[] } =
     },
     dispatchCommentNotifications: { async execute() {} },
     groupOwners: { async getOwnerUserId() { return 'owner'; } },
-    composer: { async startFromMessage() {}, async handleCallback() {} },
+    composer: {
+      async startFromMessage(_tg: number, _chat: number, text: string, _group: unknown, _att: unknown, options: unknown) {
+        composerCalls.push({ text, options });
+      },
+      async handleCallback() {},
+    },
     maybeReopenForClarification: {},
     notifyTaskChanged() {},
     notifyCommentAdded() {},
     notifyStatusChanged() {},
   };
-  return { h: new HandleTelegramWebhook(deps as any), sent, edited, answered, comments };
+  return { h: new HandleTelegramWebhook(deps as any), sent, edited, answered, comments, composerCalls };
 }
 
-function replyUpdate(text: string, opts: { quote?: string; replyTo?: number; fromId?: number } = {}): TelegramUpdate {
+function replyUpdate(
+  text: string,
+  opts: { quote?: string; replyTo?: number; fromId?: number; repliedText?: string; repliedFrom?: string } = {},
+): TelegramUpdate {
   return {
     update_id: 1,
     message: {
@@ -79,7 +88,11 @@ function replyUpdate(text: string, opts: { quote?: string; replyTo?: number; fro
       from: { id: opts.fromId ?? 111, first_name: 'Олег' },
       chat: { id: -100, type: 'supergroup', title: 'Рабочий чат' },
       text,
-      reply_to_message: { message_id: opts.replyTo ?? 9, from: { id: 999, is_bot: true } },
+      reply_to_message: {
+        message_id: opts.replyTo ?? 9,
+        from: { id: 999, is_bot: true, first_name: opts.repliedFrom ?? 'ProjectsFlow' },
+        ...(opts.repliedText ? { text: opts.repliedText } : {}),
+      },
       ...(opts.quote ? { quote: { text: opts.quote } } : {}),
     },
   };
@@ -169,9 +182,23 @@ test('reply от непривязанного Telegram — просьба при
   assert.match(h.sent[0]!.text, /привяжи Telegram/);
 });
 
-test('reply на сообщение без задач — подсказка', async () => {
+test('reply на сообщение без задачи — новая задача, то сообщение уходит ей в комментарий', async () => {
+  // 15.10.2026: ответ на алерт MagDay «@бот сегодня проверить остатки…» получил «не привязано
+  // к задаче» — задача не создалась вовсе.
   const h = makeHarness();
-  await h.h.execute(replyUpdate('Что это?', { replyTo: 55 }));
+  const alert = '⚠️ Остатки: расхождения с 14.10 09:12 — 497 записей';
+  await h.h.execute(replyUpdate('@ProjectsFlow_Bot сегодня проверить остатки', { replyTo: 55, repliedText: alert, repliedFrom: 'MagDay' }));
   assert.equal(h.comments.length, 0);
-  assert.match(h.sent[0]!.text, /не привязано к задаче/);
+  assert.equal(h.sent.length, 0, 'без подсказки «не привязано»');
+  assert.equal(h.composerCalls.length, 1);
+  assert.equal(h.composerCalls[0]!.text, 'сегодня проверить остатки');
+  assert.deepEqual(h.composerCalls[0]!.options.replyContext, { from: 'MagDay', text: alert });
+  assert.equal(h.composerCalls[0]!.options.reply, undefined, 'в старую задачу не дописываем');
+});
+
+test('только @бот в ответ на сообщение — задача из самого этого сообщения', async () => {
+  const h = makeHarness();
+  await h.h.execute(replyUpdate('@ProjectsFlow_Bot', { replyTo: 55, repliedText: 'Позвонить поставщику', repliedFrom: 'Денис' }));
+  assert.equal(h.composerCalls.length, 1);
+  assert.equal(h.composerCalls[0]!.text, 'Позвонить поставщику');
 });

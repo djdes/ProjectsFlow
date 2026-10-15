@@ -32,6 +32,7 @@ import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 import type {
   TelegramDraftAttachment,
   TelegramDraftOffered,
+  TelegramReplyContext,
   TelegramDraftPhoto,
   TelegramDraftSegment,
 } from '../../application/telegram/TelegramTaskDraftRepository.js';
@@ -188,6 +189,8 @@ export const telegramTaskDrafts = mysqlTable(
     workspaceId: char('workspace_id', { length: 36 }),
     // Бот не смог решить пространство сам и ждёт выбора кнопкой. См. db/164.
     workspacePending: boolean('workspace_pending').notNull().default(false),
+    // Сообщение, ответом на которое поставили задачу: в комментарий задачи. См. db/165.
+    replyContext: json('reply_context').$type<TelegramReplyContext | null>(),
     status: mysqlEnum('status', ['composing', 'confirming', 'confirmed', 'cancelled', 'expired'])
       .notNull()
       .default('composing'),

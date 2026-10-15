@@ -103,6 +103,14 @@ export type TelegramDraftSegment = {
   readonly sourceExcerpt?: string | null;
 };
 
+// Сообщение, на которое ответили, ставя задачу (reply в чате). Уходит в комментарий созданной
+// задачи как контекст. См. db/165.
+export type TelegramReplyContext = {
+  // Имя отправителя (человека, бота или канала); null — Telegram его не отдал.
+  readonly from: string | null;
+  readonly text: string;
+};
+
 export type TelegramTaskDraft = {
   readonly id: string;
   readonly creatorUserId: string;
@@ -129,6 +137,8 @@ export type TelegramTaskDraft = {
   readonly workspaceId: string | null;
   // Бот не смог решить пространство сам и ждёт выбора кнопкой (см. resolveDraftWorkspace).
   readonly workspacePending: boolean;
+  // Задачу поставили ответом на это сообщение (db/165). null — не ответ.
+  readonly replyContext: TelegramReplyContext | null;
   readonly status: TelegramTaskDraftStatus;
   readonly createdAt: Date;
   readonly autoCreateAt: Date | null;
@@ -152,6 +162,7 @@ export type CreateTelegramTaskDraftInput = {
   readonly targetStatus?: VisibleKanbanStatus | null;
   readonly workspaceId?: string | null;
   readonly workspacePending?: boolean;
+  readonly replyContext?: TelegramReplyContext | null;
   // Срок жизни в секундах от now. Репо считает expires_at = now + ttl.
   readonly ttlSeconds: number;
   // Через сколько секунд автоматически подтвердить черновик. null/undefined = не создавать.

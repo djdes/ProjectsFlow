@@ -60,7 +60,7 @@ import {
   splitDescription,
 } from '../../domain/task/digestFormat.js';
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
-import type { TelegramDraftAttachment } from './TelegramTaskDraftRepository.js';
+import type { TelegramDraftAttachment, TelegramReplyContext } from './TelegramTaskDraftRepository.js';
 import type { VoiceTranscriber } from './VoiceTranscriber.js';
 import type { PairTelegramAccount } from './PairTelegramAccount.js';
 import {
@@ -153,7 +153,17 @@ export type TelegramUpdate = {
     // C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
     readonly reply_to_message?: {
       readonly message_id: number;
-      readonly from?: { readonly id: number; readonly is_bot?: boolean };
+      readonly from?: {
+        readonly id: number;
+        readonly is_bot?: boolean;
+        readonly first_name?: string;
+        readonly last_name?: string;
+        readonly username?: string;
+      };
+      // Сообщение от имени канала/группы — тогда автор здесь, а не во from.
+      readonly sender_chat?: { readonly title?: string };
+      readonly text?: string;
+      readonly caption?: string;
     };
     // Ответ с цитатой: выделенный фрагмент сообщения, на которое отвечают (Bot API 7.0).
     // По нему reply на сводку находит задачу, к которой относится комментарий.
@@ -503,12 +513,23 @@ export class HandleTelegramWebhook {
     if (text.length === 0 && attachments.length > 0) text = neutralMediaText(attachments);
 
     // Reply→ralph-answer / комментарий ловим ДО командного роутинга — юзер может reply'нуть
-    // просто текстом, без слэш-префикса (типичный TG UX).
+    // просто текстом, без слэш-префикса (типичный TG UX). Это ответы на сообщения, привязанные
+    // к задаче (карточка, сводка, уточнение бота). Ответ на любое другое сообщение (алерт другого
+    // бота, реплика коллеги) — новая задача, а то сообщение уходит ей в комментарий.
+    let replyContext: TelegramReplyContext | null = null;
     if (msg.reply_to_message?.message_id) {
-      return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text, {
-        quote: msg.quote?.text ?? null,
-        messageId: msg.message_id,
-      });
+      const context = replyContextOf(msg.reply_to_message);
+      // Задачу есть из чего сделать: свой текст/файл или текст сообщения, на которое ответили.
+      const canBeTask = text.length > 0 || attachments.length > 0 || context !== null;
+      if (!canBeTask || (await this.isTaskLinkedMessage(chatId, msg.reply_to_message.message_id))) {
+        return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text, {
+          quote: msg.quote?.text ?? null,
+          messageId: msg.message_id,
+        });
+      }
+      replyContext = context;
+      // Только «@бот» в ответ на сообщение — задачей становится само это сообщение.
+      if (text.length === 0 && attachments.length === 0 && context) text = context.text;
     }
 
     // «Пустое» @упоминание в группе (только @bot, без другого текста) → меню задач
@@ -555,11 +576,13 @@ export class HandleTelegramWebhook {
       return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, attachments, {
         sourceKey,
         background: true,
+        ...(replyContext ? { replyContext } : {}),
       });
     }
     return this.deps.composer.startFromMessage(tgUserId, chatId, text, undefined, attachments, {
       sourceKey,
       background: true,
+      ...(replyContext ? { replyContext } : {}),
     });
   }
 
@@ -1346,6 +1369,21 @@ export class HandleTelegramWebhook {
     );
   }
 
+  // Привязано ли сообщение к задаче: уточнение бота, карточка задачи или сообщение со списком
+  // задач (сводка, «На утверждении»). Сбой поиска — считаем привязанным: прежнее поведение
+  // (комментарий или подсказка) лучше, чем лишняя задача.
+  private async isTaskLinkedMessage(chatId: number, messageId: number): Promise<boolean> {
+    try {
+      if (await this.deps.ralphQuestionMessages.findByMessage(chatId, messageId)) return true;
+      if (await this.deps.taskMessages.findByMessage(chatId, messageId)) return true;
+      const listed = (await this.deps.messageTasks?.listByMessage(chatId, messageId)) ?? [];
+      return listed.length > 0;
+    } catch (err) {
+      console.warn('[tg-webhook] reply link lookup failed:', err);
+      return true;
+    }
+  }
+
   // --- Reply на task-сообщение бота → обычный комментарий к задаче (db/049). ---
   private async handleTaskReplyComment(
     tgUserId: number,
@@ -2071,6 +2109,16 @@ function excerptShort(text: string | null, limit: number): string {
 }
 
 // Человекочитаемое имя отправителя для атрибуции задачи-фолбэка: «Имя Фамилия (@username)».
+// Сообщение, на которое ответили: автор и текст (или подпись к медиа). Пустое — не контекст.
+function replyContextOf(
+  reply: NonNullable<TelegramMessage['reply_to_message']>,
+): TelegramReplyContext | null {
+  const text = (reply.text ?? reply.caption ?? '').trim();
+  if (!text) return null;
+  const from = reply.sender_chat?.title?.trim() || (reply.from ? formatSenderName(reply.from) : '');
+  return { from: from || null, text };
+}
+
 function formatSenderName(from: {
   readonly first_name?: string;
   readonly last_name?: string;

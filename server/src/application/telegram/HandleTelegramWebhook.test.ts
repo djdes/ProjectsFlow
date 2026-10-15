@@ -555,11 +555,11 @@ test('группа: /help@BotName → справка (не задача)', async
   assert.ok(h.sent[0]!.text.includes('ProjectsFlow'));
 });
 
-test('группа: reply на сообщение бота → reply-ветка (не игнор)', async () => {
+test('группа: reply на сообщение бота без задачи → не игнор: проверили привязку и ставим задачу', async () => {
   const h = makeHarness();
   await h.h.execute(msgUpdate({ text: 'мой ответ', chatType: 'group', reply: { is_bot: true } }));
-  assert.equal(h.composerCalls.length, 0);
-  assert.equal(h.ralphLookups(), 1); // дошли до handleReply
+  assert.equal(h.ralphLookups(), 1); // проверили, не ответ ли это на уточнение/задачу
+  assert.equal(h.composerCalls.length, 1);
 });
 
 test('группа: reply на НЕ бота без упоминания → игнор', async () => {

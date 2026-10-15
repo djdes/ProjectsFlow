@@ -8,6 +8,7 @@ import type {
   TelegramDraftOffered,
   TelegramDraftPhoto,
   TelegramDraftSegment,
+  TelegramReplyContext,
   TelegramTaskDraft,
   TelegramTaskDraftPatch,
   TelegramTaskDraftRepository,
@@ -116,6 +117,7 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
     awaitingTextSeg: r.awaitingTextSeg ?? null,
     workspaceId: r.workspaceId ?? null,
     workspacePending: Boolean(r.workspacePending),
+    replyContext: parseJsonCol<TelegramReplyContext | null>(r.replyContext, null),
     status: r.status,
     createdAt: r.createdAt,
     autoCreateAt: r.autoCreateAt,
@@ -158,6 +160,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
         targetStatus: input.targetStatus ?? null,
         workspaceId: input.workspaceId ?? null,
         workspacePending: input.workspacePending ?? false,
+        replyContext: input.replyContext ?? null,
         status: 'composing',
         autoCreateAt:
           input.autoCreateSeconds == null
