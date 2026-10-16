@@ -34,7 +34,6 @@ function visibleIn(workspaceId: string | undefined): SQL | undefined {
   if (!workspaceId) return undefined;
   return or(
     eq(notifications.workspaceId, workspaceId),
-    isNull(notifications.workspaceId),
     inArray(notifications.type, [...PERSONAL_NOTIFICATION_TYPES]),
   );
 }

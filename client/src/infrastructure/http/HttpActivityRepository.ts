@@ -1,4 +1,8 @@
-import type { Notification, NotificationPayload } from '@/domain/notifications/Notification';
+import type {
+  Notification,
+  NotificationActionState,
+  NotificationPayload,
+} from '@/domain/notifications/Notification';
 import type {
   ActivityEventItem,
   ActivityKind,
@@ -34,6 +38,7 @@ type NotificationDto = {
   readAt: string | null;
   createdAt: string;
   taskDeleted?: boolean;
+  actionState?: NotificationActionState;
 };
 
 type NotificationFeedDto = { type: 'notification'; createdAt: string; notification: NotificationDto };
@@ -52,6 +57,7 @@ function parseNotification(dto: NotificationDto): Notification {
     readAt: dto.readAt ? new Date(dto.readAt) : null,
     createdAt: new Date(dto.createdAt),
     taskDeleted: dto.taskDeleted ?? false,
+    ...(dto.actionState ? { actionState: dto.actionState } : {}),
   };
 }
 

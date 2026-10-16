@@ -216,6 +216,11 @@ export type NotificationPayload =
   | SupportTicketPayload
   | CloseProposalPayload;
 
+// Чем кончилось действие по уведомлению (приглашение, запрос доступа) на сейчас: pending —
+// ещё ждёт ответа; expired — отвечать не на что (приглашение отозвано или просрочено,
+// запрос или проект удалены).
+export type NotificationActionState = 'pending' | 'accepted' | 'declined' | 'expired';
+
 export type Notification = {
   readonly workspaceId?: string | null;
   readonly id: string;
@@ -223,6 +228,8 @@ export type Notification = {
   readonly payload: NotificationPayload;
   readonly readAt: Date | null;
   readonly createdAt: Date;
+  // Только у уведомлений с действием, считается при чтении (NotificationActionStates).
+  readonly actionState?: NotificationActionState;
 };
 
 // Задача, на которую ссылается уведомление (null — уведомление не про задачу). Payload
@@ -242,11 +249,13 @@ export const ACTIONABLE_NOTIFICATION_TYPES: readonly NotificationPayload['type']
 
 // Приглашения адресованы человеку, а не пространству, которое он сейчас открыл: инвайт
 // хранится с пространством приглашающего, где получатель ещё не участник. Их, как и
-// уведомления без пространства (обращения в поддержку), видно в любом активном
-// пространстве — иначе приглашение не найти нигде.
+// обращения в поддержку (без пространства), видно в любом активном пространстве — иначе
+// приглашение не найти нигде. Прочие уведомления без пространства — осиротевшие (проект
+// или задача удалены), их не показываем.
 export const PERSONAL_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
   'workspace_invite',
   'project_invite',
+  'support_ticket',
 ];
 
 // Зеркало: DrizzleNotificationRepository.visibleIn — менять синхронно.
@@ -254,9 +263,5 @@ export function isVisibleInWorkspace(
   n: Pick<Notification, 'workspaceId' | 'payload'>,
   workspaceId: string,
 ): boolean {
-  return (
-    n.workspaceId === workspaceId ||
-    n.workspaceId == null ||
-    PERSONAL_NOTIFICATION_TYPES.includes(n.payload.type)
-  );
+  return n.workspaceId === workspaceId || PERSONAL_NOTIFICATION_TYPES.includes(n.payload.type);
 }

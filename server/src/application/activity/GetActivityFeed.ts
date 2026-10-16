@@ -1,6 +1,7 @@
 import type { ActivityFeedItem } from '../../domain/activity/ActivityFeedItem.js';
 import { ACTIONABLE_NOTIFICATION_TYPES, type Notification } from '../../domain/notifications/Notification.js';
 import type { ActivityRepository } from './ActivityRepository.js';
+import type { NotificationActionStates } from '../notifications/NotificationActionStates.js';
 
 // Уведомления, требующие действия (кнопка «Принять»). Только они формируют вкладку
 // «Требуется действие».
@@ -23,6 +24,7 @@ type NotificationsPort = {
 type Deps = {
   readonly activity: ActivityRepository;
   readonly notifications: NotificationsPort;
+  readonly actionStates?: Pick<NotificationActionStates, 'reconcile' | 'attach'>;
 };
 
 export class GetActivityFeed {
@@ -33,6 +35,9 @@ export class GetActivityFeed {
     workspaceId: string,
     query: GetActivityFeedQuery,
   ): Promise<ActivityFeedItem[]> {
+    await this.deps.actionStates?.reconcile(userId, workspaceId);
+    const attach = (list: Notification[]): Promise<Notification[]> =>
+      this.deps.actionStates ? this.deps.actionStates.attach(list) : Promise.resolve(list);
     if (query.tab === 'action') {
       const notifs = await this.deps.notifications.listByUser(userId, {
         limit: query.limit,
@@ -41,7 +46,7 @@ export class GetActivityFeed {
         actionableOnly: true,
         before: query.before,
       });
-      return notifs
+      return (await attach(notifs))
         .filter((n) => ACTIONABLE_TYPES.has(n.payload.type))
         .slice(0, query.limit)
         .map((n) => ({ type: 'notification', createdAt: n.createdAt, notification: n }));
@@ -65,7 +70,7 @@ export class GetActivityFeed {
 
     const items: ActivityFeedItem[] = [
       ...events.map((event) => ({ type: 'activity' as const, createdAt: event.createdAt, event })),
-      ...notifs.map((notification) => ({
+      ...(await attach(notifs)).map((notification) => ({
         type: 'notification' as const,
         createdAt: notification.createdAt,
         notification,

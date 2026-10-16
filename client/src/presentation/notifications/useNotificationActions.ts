@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/sonner';
 import { HttpError } from '@/lib/HttpError';
+import { actionErrorMessage } from '@/lib/actionFeedback';
 import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
@@ -10,7 +11,13 @@ import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 
-export type NotificationActionUiState = 'busy' | 'accepted' | 'declined' | 'resolved';
+// expired — отвечать не на что: запрос, приглашение или проект уже удалены.
+export type NotificationActionUiState = 'busy' | 'accepted' | 'declined' | 'resolved' | 'expired';
+
+// Ответ сервера «этого больше нет / уже решено» — не ошибка пользователя, а устаревшая кнопка.
+function isSettledError(e: unknown): e is HttpError {
+  return e instanceof HttpError && (e.status === 404 || e.status === 409 || e.status === 410);
+}
 
 export type NotificationActions = {
   readonly actionUi: Record<string, NotificationActionUiState>;
@@ -46,7 +53,7 @@ export function useNotificationActions(opts?: {
       refreshBadge();
       opts?.onChanged?.();
     } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
+      toast.error(actionErrorMessage(e, 'Не удалось отметить уведомление прочитанным'));
     }
   };
 
@@ -102,12 +109,18 @@ export function useNotificationActions(opts?: {
         await markRead(n);
         toast.success(accept ? 'Доступ предоставлен' : 'Запрос отклонён');
       } catch (e) {
+        if (isSettledError(e)) {
+          setActionUi((s) => ({ ...s, [n.id]: 'expired' }));
+          await markRead(n);
+          toast.info('Запрос больше не актуален: проект или сам запрос уже удалены');
+          return;
+        }
         setActionUi((s) => {
           const next = { ...s };
           delete next[n.id];
           return next;
         });
-        toast.error(`Не удалось: ${(e as Error).message}`);
+        toast.error(actionErrorMessage(e, 'Не удалось ответить на запрос доступа'));
       }
     })();
   };
@@ -131,10 +144,11 @@ export function useNotificationActions(opts?: {
         // Инвайт уже использован/недействителен (410 invite_used / 409) → принимать нечего:
         // гасим уведомление (mark read + «Уже обработано»), чтобы оно не висело неактивным
         // действием и не раздувало счётчик. Прочие ошибки (сеть и т.п.) — оставляем кнопку.
-        if (e instanceof HttpError && (e.status === 410 || e.status === 409)) {
-          setActionUi((s) => ({ ...s, [n.id]: 'resolved' }));
+        if (isSettledError(e)) {
+          const gone = e.status === 404;
+          setActionUi((s) => ({ ...s, [n.id]: gone ? 'expired' : 'resolved' }));
           await markRead(n);
-          toast.success('Приглашение уже использовано — убрал из действий');
+          toast.info(gone ? 'Приглашение больше не действует' : 'Приглашение уже использовано — убрал из действий');
           return;
         }
         setActionUi((s) => {
@@ -142,7 +156,7 @@ export function useNotificationActions(opts?: {
           delete next[n.id];
           return next;
         });
-        toast.error(`Не удалось принять приглашение: ${(e as Error).message}`);
+        toast.error(actionErrorMessage(e, 'Не удалось принять приглашение'));
       }
     })();
   };
@@ -161,10 +175,11 @@ export function useNotificationActions(opts?: {
         refreshProjects();
         toast.success(`Вы присоединились к пространству «${workspaceName}»`);
       } catch (e) {
-        if (e instanceof HttpError && (e.status === 410 || e.status === 409)) {
-          setActionUi((s) => ({ ...s, [n.id]: 'resolved' }));
+        if (isSettledError(e)) {
+          const gone = e.status === 404;
+          setActionUi((s) => ({ ...s, [n.id]: gone ? 'expired' : 'resolved' }));
           await markRead(n);
-          toast.success('Приглашение уже использовано — убрал из действий');
+          toast.info(gone ? 'Приглашение больше не действует' : 'Приглашение уже использовано — убрал из действий');
           return;
         }
         setActionUi((s) => {
@@ -172,7 +187,7 @@ export function useNotificationActions(opts?: {
           delete next[n.id];
           return next;
         });
-        toast.error(`Не удалось принять приглашение: ${(e as Error).message}`);
+        toast.error(actionErrorMessage(e, 'Не удалось принять приглашение'));
       }
     })();
   };

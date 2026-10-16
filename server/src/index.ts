@@ -359,6 +359,7 @@ import { RevokeRalphCancel } from './application/task/RevokeRalphCancel.js';
 import { AckRalphCancel } from './application/task/AckRalphCancel.js';
 import { ListNotifications } from './application/notifications/ListNotifications.js';
 import { CountUnreadNotifications } from './application/notifications/CountUnreadNotifications.js';
+import { NotificationActionStates } from './application/notifications/NotificationActionStates.js';
 import { MarkNotificationRead } from './application/notifications/MarkNotificationRead.js';
 import { MarkAllNotificationsRead } from './application/notifications/MarkAllNotificationsRead.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
@@ -576,9 +577,22 @@ const manageWorkflows = new ManageWorkflows({
   workflows: projectWorkflowRepo,
   idGen: idGenerator,
 });
+const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
+// Живое состояние приглашений и запросов доступа: кнопки «Принять» только там, где ещё есть
+// на что отвечать (колокольчик, лента «Действие», бейджи).
+const notificationActionStates = new NotificationActionStates({
+  repo: notificationRepo,
+  joinRequests: projectJoinRequestRepo,
+  projectInvites: projectInviteRepo,
+  workspaceInvites: workspaceInviteRepo,
+  hasProjectAccess: async (projectId, userId) => (await projectMemberRepo.findForProject(projectId, userId)) !== null,
+  isWorkspaceMember: async (workspaceId, userId) => (await workspaceRepo.getMembership(workspaceId, userId)) !== null,
+  now,
+});
 const getActivityFeed = new GetActivityFeed({
   activity: activityRepo,
   notifications: notificationRepo,
+  actionStates: notificationActionStates,
 });
 // GC: чистим события старше 30 дней (на старте + раз в сутки).
 const ACTIVITY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -720,7 +734,6 @@ const buyPlan = new BuyPlan({ users: userRepo, now });
 const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db, projectMemberRepo);
-const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
@@ -2419,8 +2432,12 @@ const { app, devProxyUpgrade } = createApp({
     resolveActiveWorkspace,
     getProjectWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
     tasks: taskRepo,
-    list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace }),
-    countUnread: new CountUnreadNotifications({ repo: notificationRepo, resolveActiveWorkspace }),
+    list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace, actionStates: notificationActionStates }),
+    countUnread: new CountUnreadNotifications({
+      repo: notificationRepo,
+      resolveActiveWorkspace,
+      actionStates: notificationActionStates,
+    }),
     markRead: new MarkNotificationRead({ repo: notificationRepo, now, resolveActiveWorkspace }),
     markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now, resolveActiveWorkspace }),
     subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),

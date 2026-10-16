@@ -226,7 +226,10 @@ export function NotificationItem({
 }): React.ReactElement {
   const isUnread = n.readAt === null;
   const payload = n.payload;
-  const actionUi = actions.actionUi[n.id];
+  // Ответ уже есть: свой клик в этой сессии или живое состояние с сервера (запрос приняли
+  // другие, по приглашению вошли из письма, проект удалили) — тогда вместо кнопок итог.
+  const actionUi =
+    actions.actionUi[n.id] ?? (n.actionState && n.actionState !== 'pending' ? n.actionState : undefined);
   const view = describe(payload);
   // Кнопки — в рост плотной строки (24px); под палец — 36px.
   const buttonClass = 'h-6 gap-1 px-2 text-xs [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:px-3';
@@ -238,6 +241,8 @@ export function NotificationItem({
         <p className="pbs-0.5 text-meta font-medium text-done">✓ Принято</p>
       ) : actionUi === 'resolved' ? (
         <p className="pbs-0.5 text-meta text-muted-foreground">Уже обработано</p>
+      ) : actionUi === 'expired' || actionUi === 'declined' ? (
+        <p className="pbs-0.5 text-meta text-muted-foreground">Приглашение больше не действует</p>
       ) : (
         <div className="pbs-1">
           <Button
@@ -260,6 +265,8 @@ export function NotificationItem({
         <p className="pbs-0.5 text-meta font-medium text-done">✓ Доступ предоставлен</p>
       ) : actionUi === 'declined' ? (
         <p className="pbs-0.5 text-meta text-muted-foreground">Запрос отклонён</p>
+      ) : actionUi === 'expired' || actionUi === 'resolved' ? (
+        <p className="pbs-0.5 text-meta text-muted-foreground">Запрос больше не актуален</p>
       ) : (
         <div className="flex gap-1.5 pbs-1">
           <Button

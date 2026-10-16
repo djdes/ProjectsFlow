@@ -198,4 +198,9 @@ export type Notification = {
   // Задача из payload'а удалена (сервер сверяет на чтении). Уведомление остаётся в списке,
   // но вместо ссылки в 404 UI показывает пометку «задача удалена».
   readonly taskDeleted?: boolean;
+  // Только у приглашений и запросов доступа: живое состояние с сервера. Кнопки «Принять» —
+  // лишь при pending; expired — отвечать не на что (отозвано, просрочено, проект удалён).
+  readonly actionState?: NotificationActionState;
 };
+
+export type NotificationActionState = 'pending' | 'accepted' | 'declined' | 'expired';

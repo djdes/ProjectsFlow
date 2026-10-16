@@ -1,5 +1,6 @@
 import type {
   Notification,
+  NotificationActionState,
   NotificationPayload,
 } from '@/domain/notifications/Notification';
 import type { NotificationRepository } from '@/application/notifications/NotificationRepository';
@@ -12,6 +13,7 @@ type NotificationDto = {
   readAt: string | null;
   createdAt: string;
   taskDeleted?: boolean;
+  actionState?: NotificationActionState;
 };
 
 function fromDto(dto: NotificationDto): Notification {
@@ -28,6 +30,7 @@ function fromDto(dto: NotificationDto): Notification {
     readAt: dto.readAt ? new Date(dto.readAt) : null,
     createdAt: new Date(dto.createdAt),
     taskDeleted: dto.taskDeleted ?? false,
+    ...(dto.actionState ? { actionState: dto.actionState } : {}),
   };
 }
 

@@ -843,6 +843,10 @@ export const scenarios = [
           payload: { type: 'task_changed', action: 'updated', title: 'Срок изменён', taskId: 't-x', projectId: BOARD_PROJECT_ID,
             projectName: 'Сайт клиники', taskExcerpt: 'Обновить прайс', actorUserId: 'u-boris',
             actorDisplayName: 'Борис', detail: 'Срок до: 12.10.2026 → 20.10.2026', taskAvailable: true } },
+        // Запрос доступа к удалённому проекту: сервер отдаёт actionState=expired — кнопок нет.
+        { id: 'n-stale-join', userId: ME.id, createdAt: ago(90), readAt: ago(80), taskDeleted: false, actionState: 'expired',
+          payload: { type: 'join_request', projectId: 'p-gone', projectName: 'Старый проект', joinRequestId: 'jr-gone',
+            requesterUserId: 'u-den', requesterDisplayName: 'Денис', actorUserId: 'u-den', actorDisplayName: 'Денис' } },
       ];
       await t.goto('/', { ready: () => page.locator(NOW) });
       if (t.isMobile) await page.getByRole('button', { name: 'Открыть меню', exact: true }).tap();
@@ -855,6 +859,8 @@ export const scenarios = [
         const pending = page.getByRole('region', { name: 'Ждут ответа' });
         await t.visible(pending.getByText('Студия Север', { exact: true }), 'приглашение в «Ждут ответа»');
         await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'изменение задачи в ленте');
+        await t.visible(page.getByText('Запрос больше не актуален', { exact: true }), 'устаревший запрос доступа — итог вместо кнопок');
+        if (await page.getByRole('button', { name: 'Отклонить' }).count()) throw new Error('у устаревшего запроса остались кнопки');
       });
       await t.pageChecks('Колокольчик открыт', { bottomNav: false });
       await t.check('«Принять» принимает приглашение', async () => {
