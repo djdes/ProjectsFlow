@@ -146,6 +146,11 @@ const AUTO_RETRY_SECONDS = 60;
 // ошибку, которую повтор не лечит, иначе молотили бы вечно.
 const AUTO_RETRY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const STALE_CONFIRMATION_SECONDS = 15 * 60;
+// Оборванный перезапуском ИИ-разбор повторяем, если он начат не раньше чем столько назад:
+// разбор постарше уже не ждут — пусть идёт обычным путём авто-создания.
+const AI_RESUME_WINDOW_MS = 2 * 60 * 60 * 1000;
+// Повторный разбор не должно обогнать авто-создание сырой задачи.
+const AI_RESUME_AUTO_CREATE_SECONDS = 3 * 60;
 const PAGE_SIZE = 6; // кнопок-вариантов на страницу пикера
 const ATTACHMENT_TASK_PAGE_SIZE = 6;
 const EXCERPT_LIMIT = 120;
@@ -607,11 +612,28 @@ export class TelegramComposerService {
   private readonly activeSpinners = new Map<string, () => Promise<void>>();
   private readonly callbackLocks = new Map<string, Promise<void>>();
 
-  constructor(private readonly deps: Deps) {}
+  // Разборы с ai_started_at раньше этого момента начаты прошлым процессом (см. resumeOrphanedCompose).
+  private readonly bootedAt: Date;
+  private orphansChecked = false;
+
+  constructor(private readonly deps: Deps) {
+    this.bootedAt = this.now();
+  }
 
   // Фоновый тик. Дедлайн и claim живут в БД, поэтому рестарт/несколько инстансов безопасны:
   // конкретный черновик из composing в confirming переведёт только один процесс.
   async processDueAutoCreate(limit = 25): Promise<number> {
+    // Первый тик после старта: сначала подхватываем разборы, оборванные перезапуском, — иначе
+    // этот же тик сделал бы из них сырые задачи.
+    if (!this.orphansChecked) {
+      this.orphansChecked = true;
+      try {
+        const resumed = await this.resumeOrphanedCompose();
+        if (resumed > 0) console.log(`[tg-composer] resumed interrupted AI compose: ${resumed}`);
+      } catch (err) {
+        console.warn('[tg-composer] resume of interrupted AI compose failed:', err);
+      }
+    }
     await this.deps.drafts.recoverStaleConfirmations(
       STALE_CONFIRMATION_SECONDS,
       AUTO_RETRY_SECONDS,
@@ -650,6 +672,38 @@ export class TelegramComposerService {
       }
     }
     return processed;
+  }
+
+  // ИИ-разбор живёт в памяти процесса: перезапуск (выкладка, падение) обрывал его, черновик
+  // оставался в composing, ждать результат было некому, и через 10 минут авто-создание делало
+  // сырую задачу без проекта и перефразирования. Повторяем такие разборы в новом процессе.
+  // Исходное сообщение не хранится — разбираем текст черновика, ответственного из него
+  // подставляем по умолчанию.
+  async resumeOrphanedCompose(): Promise<number> {
+    const createdAfter = new Date(this.bootedAt.getTime() - AI_RESUME_WINDOW_MS);
+    const orphans = await this.deps.drafts.listOrphanedAiDrafts(this.bootedAt, createdAfter, 20);
+    let resumed = 0;
+    for (const orphan of orphans) {
+      if (!orphan.aiStartedAt) continue;
+      const draft = await this.deps.drafts.claimAiResume(orphan.id, orphan.aiStartedAt, AI_RESUME_AUTO_CREATE_SECONDS);
+      if (!draft) continue;
+      resumed += 1;
+      const text = draft.taskText ?? '';
+      const parsed = { ...parseComposerMessage(text), projectQuery: null, assigneeQuery: null };
+      void this.enrichDraft(
+        draft,
+        draft.creatorUserId,
+        draft.tgChatId,
+        text,
+        parsed,
+        { projectId: draft.projectId, taskText: text },
+        this.buildAiText(text, null),
+        draft.targetStatus,
+        false,
+        draft.tgMessageId,
+      ).catch((err) => console.warn(`[tg-composer] resumed compose ${draft.id} failed:`, err));
+    }
+    return resumed;
   }
 
   // Захваченный (confirming) черновик, по которому ничего не создалось: вернуть в очередь
@@ -850,12 +904,19 @@ export class TelegramComposerService {
     forceStatus: VisibleKanbanStatus | null = null,
     // Сообщение — ответ: можно дописать в существующую задачу (см. toDraftSegments).
     allowAppend = false,
+    // Повтор оборванного разбора: карточка «Разбираю…» уже есть — крутим её, а не шлём новую.
+    resumeWaitMsgId: number | null = null,
   ): Promise<void> {
     let waitMsgId: number | null = null;
     let stopSpinner: (() => Promise<void>) | null = null;
     try {
-      waitMsgId = await this.sendReturningId(chatId, WAIT_TEXT);
-      if (waitMsgId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: waitMsgId });
+      waitMsgId = resumeWaitMsgId ?? (await this.sendReturningId(chatId, WAIT_TEXT));
+      // Отметка «разбор идёт» — до постановки задания: если процесс умрёт на любом шаге
+      // дальше, новый процесс найдёт черновик и повторит разбор (resumeOrphanedCompose).
+      await this.deps.drafts.patch(draft.id, {
+        ...(waitMsgId !== null && waitMsgId !== resumeWaitMsgId ? { tgMessageId: waitMsgId } : {}),
+        aiStartedAt: this.now(),
+      });
       const job = await this.deps.enqueueAiPromptJob.execute({
         userId,
         text: aiText,
@@ -886,6 +947,7 @@ export class TelegramComposerService {
       const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
+        aiStartedAt: null,
       });
       if (!patched) return;
       // Задачи разобраны — теперь известно, есть ли среди них задачи без проекта и кому они:
@@ -901,6 +963,7 @@ export class TelegramComposerService {
     } catch (err) {
       if (stopSpinner) await stopSpinner();
       console.warn('[tg-composer] AI compose failed → ручной флоу:', err);
+      await this.deps.drafts.patchComposing(draft.id, { aiStartedAt: null }).catch(() => null);
       const current = await this.deps.drafts.getById(draft.id);
       if (!current || current.status !== 'composing') return;
       await this.manualFlow(

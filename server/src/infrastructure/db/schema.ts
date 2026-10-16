@@ -198,6 +198,8 @@ export const telegramTaskDrafts = mysqlTable(
     autoCreateAt: timestamp('auto_create_at'),
     confirmationStartedAt: timestamp('confirmation_started_at'),
     expiresAt: timestamp('expires_at').notNull(),
+    // Идёт ИИ-разбор (db/166): по отметке новый процесс находит разборы, оборванные перезапуском.
+    aiStartedAt: timestamp('ai_started_at'),
   },
   (t) => [
     index('idx_ttd_creator').on(t.creatorUserId),

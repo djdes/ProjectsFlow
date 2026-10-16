@@ -165,6 +165,7 @@ function makeHarness(opts?: {
           input.autoCreateSeconds == null ? null : new Date(Date.now() + input.autoCreateSeconds * 1000),
         confirmationStartedAt: null,
         expiresAt: new Date(8640000000000000),
+        aiStartedAt: null,
       };
       drafts.set(id, d);
       return d;
@@ -250,6 +251,23 @@ function makeHarness(opts?: {
     },
     async recoverStaleConfirmations() {
       return 0;
+    },
+    async listOrphanedAiDrafts(startedBefore: Date, createdAfter: Date) {
+      return [...drafts.values()].filter(
+        (d) => d.status === 'composing' && d.aiStartedAt && d.aiStartedAt < startedBefore && d.createdAt > createdAfter,
+      );
+    },
+    async claimAiResume(id: string, seenStartedAt: Date, notBeforeSeconds: number) {
+      const cur = drafts.get(id);
+      if (!cur || cur.status !== 'composing' || cur.aiStartedAt?.getTime() !== seenStartedAt.getTime()) return null;
+      const notBefore = new Date(Date.now() + notBeforeSeconds * 1000);
+      const next = {
+        ...cur,
+        aiStartedAt: new Date(),
+        autoCreateAt: cur.autoCreateAt && cur.autoCreateAt > notBefore ? cur.autoCreateAt : cur.autoCreateAt ? notBefore : null,
+      };
+      drafts.set(id, next);
+      return next;
     },
     async deleteExpired() {
       return 0;
@@ -1623,6 +1641,33 @@ test('Колонка: многосегментная карточка показ
   // Сводная карточка — это edit поверх «Ожидайте». Колонка дефолт ЧЕРНОВИКИ у обоих.
   const card = h.edits[h.edits.length - 1]!;
   assert.match(card.text, /ЧЕРНОВИКИ/);
+});
+
+test('ИИ-разбор, оборванный перезапуском сервера, повторяется, а не становится сырой задачей', async () => {
+  // 16.10.2026: сервер перезапустили, пока бот разбирал сообщения, — через 10 минут из них
+  // создались сырые задачи во «Входящих», без проекта и перефразирования.
+  const h = makeHarness({ aiSegments: [seg1()] });
+  const ago = (ms: number) => new Date(Date.now() - ms);
+  h.drafts.set('orphan', {
+    id: 'orphan', creatorUserId: 'u1', tgChatId: 500, tgMessageId: 777, sourceKey: 'm:500:1',
+    taskText: 'Починить отчёт', projectId: null, assigneeUserId: null, offered: null, segments: null,
+    photos: [], attachments: [], targetStatus: null, awaitingTextSeg: null, workspaceId: null,
+    workspacePending: false, replyContext: null, status: 'composing', createdAt: ago(11 * 60_000),
+    autoCreateAt: ago(1_000), confirmationStartedAt: null, expiresAt: new Date(8640000000000000),
+    aiStartedAt: ago(11 * 60_000),
+  });
+
+  assert.equal(await h.service.processDueAutoCreate(), 0);
+  await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  assert.equal(h.createTaskCalls.length, 0);
+  const draft = h.drafts.get('orphan')!;
+  assert.equal(draft.status, 'composing');
+  assert.equal(draft.segments?.length, 1);
+  assert.equal(draft.aiStartedAt, null);
+  assert.ok(draft.autoCreateAt && draft.autoCreateAt > new Date());
+  // Карточка «Разбираю…» прошлого процесса переписана результатом, новая не отправлялась.
+  assert.ok(h.edits.some((e) => e.messageId === 777));
+  assert.equal(h.sent.length, 0);
 });
 
 test('черновик автоматически создаётся после дедлайна ровно один раз', async () => {

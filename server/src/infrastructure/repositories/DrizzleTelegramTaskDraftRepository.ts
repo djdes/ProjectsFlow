@@ -118,6 +118,7 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
     workspaceId: r.workspaceId ?? null,
     workspacePending: Boolean(r.workspacePending),
     replyContext: parseJsonCol<TelegramReplyContext | null>(r.replyContext, null),
+    aiStartedAt: r.aiStartedAt ?? null,
     status: r.status,
     createdAt: r.createdAt,
     autoCreateAt: r.autoCreateAt,
@@ -257,6 +258,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
     if (patch.awaitingTextSeg !== undefined) set.awaitingTextSeg = patch.awaitingTextSeg;
     if (patch.workspaceId !== undefined) set.workspaceId = patch.workspaceId;
     if (patch.workspacePending !== undefined) set.workspacePending = patch.workspacePending;
+    if (patch.aiStartedAt !== undefined) set.aiStartedAt = patch.aiStartedAt;
     if (patch.autoCreateSeconds !== undefined) {
       set.autoCreateAt =
         patch.autoCreateSeconds === null
@@ -378,6 +380,52 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
         ),
       );
     return affectedRows(result);
+  }
+
+  async listOrphanedAiDrafts(
+    startedBefore: Date,
+    createdAfter: Date,
+    limit: number,
+  ): Promise<TelegramTaskDraft[]> {
+    const rows = await this.db
+      .select()
+      .from(telegramTaskDrafts)
+      .where(
+        and(
+          eq(telegramTaskDrafts.status, 'composing'),
+          isNotNull(telegramTaskDrafts.aiStartedAt),
+          lt(telegramTaskDrafts.aiStartedAt, startedBefore),
+          gt(telegramTaskDrafts.createdAt, createdAfter),
+          gt(telegramTaskDrafts.expiresAt, sql`CURRENT_TIMESTAMP`),
+        ),
+      )
+      .orderBy(asc(telegramTaskDrafts.createdAt))
+      .limit(Math.max(1, Math.min(limit, 100)));
+    return rows.map(toDomain);
+  }
+
+  async claimAiResume(
+    id: string,
+    seenStartedAt: Date,
+    notBeforeSeconds: number,
+  ): Promise<TelegramTaskDraft | null> {
+    const result = await this.db
+      .update(telegramTaskDrafts)
+      .set({
+        aiStartedAt: sql`CURRENT_TIMESTAMP`,
+        // Черновик без таймера (ждёт выбора) таким и остаётся.
+        autoCreateAt: sql`CASE WHEN ${telegramTaskDrafts.autoCreateAt} IS NULL THEN NULL
+          ELSE GREATEST(${telegramTaskDrafts.autoCreateAt}, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${notBeforeSeconds} SECOND)) END`,
+      })
+      .where(
+        and(
+          eq(telegramTaskDrafts.id, id),
+          eq(telegramTaskDrafts.status, 'composing'),
+          eq(telegramTaskDrafts.aiStartedAt, seenStartedAt),
+        ),
+      );
+    if (affectedRows(result) === 0) return null;
+    return this.loadById(id);
   }
 
   async deleteExpired(): Promise<number> {

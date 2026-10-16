@@ -144,6 +144,8 @@ export type TelegramTaskDraft = {
   readonly autoCreateAt: Date | null;
   readonly confirmationStartedAt: Date | null;
   readonly expiresAt: Date;
+  // Когда начался ИИ-разбор, который ещё не закончился (db/166). null — разбор не идёт.
+  readonly aiStartedAt: Date | null;
 };
 
 export type CreateTelegramTaskDraftInput = {
@@ -188,6 +190,7 @@ export type TelegramTaskDraftPatch = {
   // Перезапустить авто-создание через N секунд от now (null — выключить). Нужно, когда
   // черновик ждал выбора пространства без таймера, а пользователь наконец выбрал.
   readonly autoCreateSeconds?: number | null;
+  readonly aiStartedAt?: Date | null;
 };
 
 // Ручной черновик (без AI-сегментов) — текст один, индексировать нечего. Отдельное значение,
@@ -223,6 +226,11 @@ export interface TelegramTaskDraftRepository {
   cancelConfirmation(id: string): Promise<boolean>;
   cancelComposing(id: string): Promise<boolean>;
   recoverStaleConfirmations(staleSeconds: number, retrySeconds: number): Promise<number>;
+  // Черновики, чей ИИ-разбор начат до startedBefore (прошлым процессом) и не закончился.
+  listOrphanedAiDrafts(startedBefore: Date, createdAfter: Date, limit: number): Promise<TelegramTaskDraft[]>;
+  // Забрать оборванный разбор себе: только если отметка не сменилась (другой процесс не успел)
+  // и черновик ещё composing. Авто-создание отодвигается минимум на notBeforeSeconds.
+  claimAiResume(id: string, seenStartedAt: Date, notBeforeSeconds: number): Promise<TelegramTaskDraft | null>;
   // Удалить истёкшие черновики. Возвращает число удалённых.
   deleteExpired(): Promise<number>;
 }
