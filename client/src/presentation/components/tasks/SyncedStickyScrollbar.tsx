@@ -87,6 +87,7 @@ export function SyncedStickyScrollbar({
     >
       <div
         ref={trackRef}
+        data-pf-sticky-hscroll
         onScroll={onTrackScroll}
         className="pf-scroll-visible pointer-events-auto w-full overflow-x-auto overflow-y-hidden"
       >

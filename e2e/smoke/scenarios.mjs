@@ -296,6 +296,24 @@ export const scenarios = [
         }
         await expectCards(t, QUEUE, myQueueTasks(state).map((x) => x.id), '«Очередь»');
       });
+      await t.check('нижняя полоса прокрутки доводит ряд колонок до последней', async () => {
+        const bar = page.locator('[data-pf-sticky-hscroll]');
+        await t.visible(bar, 'полоса прокрутки под колонками');
+        await bar.evaluate((el) => {
+          el.scrollLeft = el.scrollWidth;
+        });
+        const rowEnd = () =>
+          page.locator(QUEUE).evaluate((queue) => {
+            const row = [...queue.querySelectorAll('*')].find(
+              (el) => getComputedStyle(el).overflowX === 'auto' && el.scrollWidth > el.clientWidth + 1,
+            );
+            return row ? row.scrollWidth - row.clientWidth - row.scrollLeft : null;
+          });
+        await t.waitFor(async () => {
+          const left = await rowEnd();
+          return left !== null && left <= 2;
+        }, 'полоса упёрлась в край, а ряд колонок не долистан до конца');
+      });
       await t.pageChecks('Входящие');
     },
   },
