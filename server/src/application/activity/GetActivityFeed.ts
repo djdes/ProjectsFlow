@@ -1,16 +1,10 @@
 import type { ActivityFeedItem } from '../../domain/activity/ActivityFeedItem.js';
-import type { Notification } from '../../domain/notifications/Notification.js';
+import { ACTIONABLE_NOTIFICATION_TYPES, type Notification } from '../../domain/notifications/Notification.js';
 import type { ActivityRepository } from './ActivityRepository.js';
 
 // Уведомления, требующие действия (кнопка «Принять»). Только они формируют вкладку
-// «Требуется действие». Назначение ответственного и старые task_delegation-события
-// информационные и сюда не входят.
-// Зеркало: DrizzleNotificationRepository.countActionableUnread — менять СИНХРОННО.
-const ACTIONABLE_TYPES: ReadonlySet<string> = new Set([
-  'workspace_invite',
-  'project_invite',
-  'join_request',
-]);
+// «Требуется действие».
+const ACTIONABLE_TYPES: ReadonlySet<string> = new Set(ACTIONABLE_NOTIFICATION_TYPES);
 
 export type FeedTab = 'all' | 'action';
 export type GetActivityFeedQuery = {
@@ -54,8 +48,8 @@ export class GetActivityFeed {
     }
 
     // tab === 'all': амбиентные события (workspace+membership-scoped в репозитории) +
-    // ВСЕ уведомления юзера (персональные, БЕЗ скоупа по пространству — колокольчика больше
-    // нет, лента «Все» это единственная поверхность уведомлений), слиты по времени.
+    // уведомления юзера в этом пространстве плюс личные (приглашения, см. isVisibleInWorkspace),
+    // слиты по времени.
     const [events, notifs] = await Promise.all([
       this.deps.activity.listForUserInWorkspace(userId, workspaceId, {
         before: query.before,

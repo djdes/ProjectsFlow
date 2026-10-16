@@ -30,7 +30,7 @@ import { AppExperience } from '@/presentation/components/experience/AppExperienc
 import { QuickWorkspaceSwitcher } from './QuickWorkspaceSwitcher';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
-import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
+import { useNotificationBadge } from '@/presentation/notifications/useNotificationBadge';
 import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
@@ -497,16 +497,15 @@ function WorkspaceShell(): React.ReactElement {
 
 // Бейдж непрочитанного в правом верхнем углу свёрнутого бургера. Пока панель свёрнута,
 // её собственный счётчик (rail-кнопка «Чат») не виден вообще — сигнал «есть что
-// посмотреть» иначе теряется до разворота панели. Сумма ровно та же, что у «Чата»
-// в Sidebar (chatUnread + actionable): разные слагаемые в двух состояниях одной панели
-// читались бы как разные цифры об одном и том же.
+// посмотреть» иначе теряется до разворота панели. Сумма бейджей «Чата» и колокольчика
+// в Sidebar — те же слагаемые, что видны в развёрнутой панели.
 // Отдельный компонент, а не хуки в теле AppShell: useActiveChatUnread ходит в
 // WorkspacesProvider, который AppShell сам монтирует ниже по дереву, — из своего же тела
 // его контекст не виден.
 function BurgerUnreadBadge(): React.ReactElement | null {
-  const { count: actionable } = useActionableUnreadCount();
+  const notifications = useNotificationBadge();
   const chatUnread = useActiveChatUnread();
-  const total = chatUnread + actionable;
+  const total = chatUnread + notifications;
   // Ноль не показываем вовсе: пустая точка на кнопке читается как «что-то есть».
   if (total <= 0) return null;
   return (

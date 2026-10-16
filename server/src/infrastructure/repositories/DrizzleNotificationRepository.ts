@@ -1,9 +1,11 @@
-import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lt, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { notifications, projects, tasks, type NotificationRow } from '../db/schema.js';
-import type {
-  Notification,
-  NotificationPayload,
+import {
+  ACTIONABLE_NOTIFICATION_TYPES,
+  PERSONAL_NOTIFICATION_TYPES,
+  type Notification,
+  type NotificationPayload,
 } from '../../domain/notifications/Notification.js';
 import type {
   CreateNotificationInput,
@@ -26,6 +28,18 @@ function toNotification(row: NotificationRow): Notification {
     createdAt: row.createdAt,
   };
 }
+
+// Уведомления активного пространства плюс личные — зеркало isVisibleInWorkspace (домен).
+function visibleIn(workspaceId: string | undefined): SQL | undefined {
+  if (!workspaceId) return undefined;
+  return or(
+    eq(notifications.workspaceId, workspaceId),
+    isNull(notifications.workspaceId),
+    inArray(notifications.type, [...PERSONAL_NOTIFICATION_TYPES]),
+  );
+}
+
+const ACTIONABLE = [...ACTIONABLE_NOTIFICATION_TYPES];
 
 export class DrizzleNotificationRepository implements NotificationRepository {
   constructor(private readonly db: Database) {}
@@ -65,8 +79,9 @@ export class DrizzleNotificationRepository implements NotificationRepository {
     opts: { limit: number; unreadOnly: boolean; before?: Date; workspaceId?: string; actionableOnly?: boolean },
   ): Promise<Notification[]> {
     const conds = [eq(notifications.userId, userId)];
-    if (opts.workspaceId) conds.push(eq(notifications.workspaceId, opts.workspaceId));
-    if (opts.actionableOnly) conds.push(inArray(notifications.type, ['workspace_invite', 'project_invite', 'join_request']));
+    const scope = visibleIn(opts.workspaceId);
+    if (scope) conds.push(scope);
+    if (opts.actionableOnly) conds.push(inArray(notifications.type, ACTIONABLE));
     if (opts.unreadOnly) conds.push(isNull(notifications.readAt));
     if (opts.before) conds.push(lt(notifications.createdAt, opts.before));
     const rows = await this.db
@@ -78,28 +93,25 @@ export class DrizzleNotificationRepository implements NotificationRepository {
     return rows.map(toNotification);
   }
 
-  async countUnread(userId: string, workspaceId?: string): Promise<number> {
+  async countUnread(userId: string, workspaceId?: string, opts?: { since?: Date }): Promise<number> {
     const rows = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt),
-        workspaceId ? eq(notifications.workspaceId, workspaceId) : undefined));
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt), visibleIn(workspaceId),
+        opts?.since ? or(gt(notifications.createdAt, opts.since), inArray(notifications.type, ACTIONABLE)) : undefined));
     return Number(rows[0]?.count ?? 0);
   }
 
   async countActionableUnread(userId: string, workspaceId?: string): Promise<number> {
-    // Actionable-типы (кнопка «Принять») — те же, что формируют вкладку «Действие».
-    // Зеркало GetActivityFeed.ACTIONABLE_TYPES — менять СИНХРОННО. Назначение
-    // ответственного информационное; сводки/упоминания сюда НЕ входят.
     const rows = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
       .where(
         and(
           eq(notifications.userId, userId),
-          workspaceId ? eq(notifications.workspaceId, workspaceId) : undefined,
+          visibleIn(workspaceId),
           isNull(notifications.readAt),
-          inArray(notifications.type, ['workspace_invite', 'project_invite', 'join_request']),
+          inArray(notifications.type, ACTIONABLE),
         ),
       );
     return Number(rows[0]?.count ?? 0);
@@ -111,7 +123,7 @@ export class DrizzleNotificationRepository implements NotificationRepository {
       .set({ readAt })
       .where(
         and(eq(notifications.id, id), eq(notifications.userId, userId), isNull(notifications.readAt),
-          workspaceId ? eq(notifications.workspaceId, workspaceId) : undefined),
+          visibleIn(workspaceId)),
       );
     const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
     return affected > 0;
@@ -121,8 +133,8 @@ export class DrizzleNotificationRepository implements NotificationRepository {
     const result = await this.db
       .update(notifications)
       .set({ readAt })
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt),
-        workspaceId ? eq(notifications.workspaceId, workspaceId) : undefined));
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt), visibleIn(workspaceId),
+        notInArray(notifications.type, ACTIONABLE)));
     return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
   }
 }

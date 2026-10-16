@@ -27,8 +27,8 @@ export class PublishingNotificationRepository implements NotificationRepository 
     return this.inner.listByUser(userId, opts);
   }
 
-  countUnread(userId: string, workspaceId?: string): Promise<number> {
-    return this.inner.countUnread(userId, workspaceId);
+  countUnread(userId: string, workspaceId?: string, opts?: { since?: Date }): Promise<number> {
+    return this.inner.countUnread(userId, workspaceId, opts);
   }
 
   countActionableUnread(userId: string, workspaceId?: string): Promise<number> {

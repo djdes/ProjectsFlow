@@ -11,6 +11,8 @@ export type ListNotificationsCommand = {
   readonly userId: string;
   readonly unreadOnly: boolean;
   readonly limit: number;
+  // Только с действием (приглашения, запросы доступа) — раздел «Ждут ответа» у колокольчика.
+  readonly actionableOnly?: boolean;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -27,6 +29,7 @@ export class ListNotifications {
       limit,
       workspaceId: workspace.id,
       unreadOnly: input.unreadOnly,
+      ...(input.actionableOnly ? { actionableOnly: true } : {}),
     });
   }
 }

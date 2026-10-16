@@ -32,9 +32,10 @@ function fromDto(dto: NotificationDto): Notification {
 }
 
 export class HttpNotificationRepository implements NotificationRepository {
-  async list(opts: { unreadOnly: boolean; limit: number }): Promise<Notification[]> {
+  async list(opts: { unreadOnly: boolean; limit: number; actionableOnly?: boolean }): Promise<Notification[]> {
     const params = new URLSearchParams();
     if (opts.unreadOnly) params.set('unread', '1');
+    if (opts.actionableOnly) params.set('actionable', '1');
     if (opts.limit) params.set('limit', String(opts.limit));
     const query = params.toString();
     const { notifications } = await httpClient.get<{ notifications: NotificationDto[] }>(
@@ -43,8 +44,9 @@ export class HttpNotificationRepository implements NotificationRepository {
     return notifications.map(fromDto);
   }
 
-  async countUnread(): Promise<number> {
-    const { count } = await httpClient.get<{ count: number }>('/notifications/unread-count');
+  async countUnread(opts?: { since?: Date }): Promise<number> {
+    const query = opts?.since ? `?since=${encodeURIComponent(opts.since.toISOString())}` : '';
+    const { count } = await httpClient.get<{ count: number }>(`/notifications/unread-count${query}`);
     return count;
   }
 

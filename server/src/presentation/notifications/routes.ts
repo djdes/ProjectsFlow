@@ -3,7 +3,11 @@ import type { ListNotifications } from '../../application/notifications/ListNoti
 import type { CountUnreadNotifications } from '../../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../../application/notifications/MarkAllNotificationsRead.js';
-import { notificationTaskId, type Notification } from '../../domain/notifications/Notification.js';
+import {
+  isVisibleInWorkspace,
+  notificationTaskId,
+  type Notification,
+} from '../../domain/notifications/Notification.js';
 import type { RealtimeEvent } from '../../domain/realtime/RealtimeEvent.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -51,12 +55,14 @@ export function notificationsRouter(deps: Deps): Router {
   router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const unreadOnly = req.query['unread'] === '1' || req.query['unread'] === 'true';
+      const actionableOnly = req.query['actionable'] === '1' || req.query['actionable'] === 'true';
       const limitParam = Number(req.query['limit'] ?? 50);
       const limit = Number.isFinite(limitParam) ? limitParam : 50;
       const list = await deps.list.execute({
         userId: req.user!.id,
         unreadOnly,
         limit,
+        actionableOnly,
       });
       const taskIds = list
         .map((n) => notificationTaskId(n.payload))
@@ -87,7 +93,7 @@ export function notificationsRouter(deps: Deps): Router {
     res.write('retry: 5000\n\n');
 
     const send = (n: Notification): void => {
-      if (closed || n.workspaceId !== workspaceId) return;
+      if (closed || !isVisibleInWorkspace(n, workspaceId)) return;
       res.write(`event: notification\ndata: ${JSON.stringify(toDto(n, NO_DELETED_TASKS))}\n\n`);
     };
     const unsubscribe = deps.subscribe(req.user!.id, send);
@@ -117,8 +123,11 @@ export function notificationsRouter(deps: Deps): Router {
   router.get('/unread-count', async (req: Request, res: Response, next: NextFunction) => {
     try {
       // ?actionable=1 — только непрочитанные с действием (бейдж «Действие» в чат-ленте).
+      // ?since=<ISO> — бейдж колокольчика: новые с прошлого просмотра + неотвеченные приглашения.
       const actionableOnly = req.query['actionable'] === '1' || req.query['actionable'] === 'true';
-      const count = await deps.countUnread.execute(req.user!.id, actionableOnly);
+      const sinceParam = typeof req.query['since'] === 'string' ? new Date(req.query['since']) : null;
+      const since = sinceParam && Number.isFinite(sinceParam.getTime()) ? sinceParam : undefined;
+      const count = await deps.countUnread.execute(req.user!.id, { actionableOnly, ...(since ? { since } : {}) });
       res.json({ count });
     } catch (e) {
       next(e);

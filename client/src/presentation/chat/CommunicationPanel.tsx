@@ -30,8 +30,8 @@ export function CommunicationPanel(): React.ReactElement {
   const [tab, setTab] = useState<CommTab>(readTab);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  // Счётчики на вкладках = слагаемые бейджа на rail-иконке «Чат» (chatUnread + actionable),
-  // чтобы «3» на иконке всегда сводилось к конкретной вкладке (иначе непонятно, где эти уведомления).
+  // «Чат» — тот же счётчик, что на rail-иконке «Чат»; «Действие» — неотвеченные приглашения,
+  // они же в колокольчике.
   const { count: actionable } = useActionableUnreadCount();
   const chatUnread = useActiveChatUnread();
 

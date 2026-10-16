@@ -279,6 +279,7 @@ function projectMemberDto(projectId, p, role) {
 }
 
 const NOTIFICATION_PREFS = {};
+const ACTIONABLE_NOTIFICATIONS = ['workspace_invite', 'project_invite', 'join_request'];
 
 // --- Router ----------------------------------------------------------------------
 
@@ -493,8 +494,19 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           .map((t) => assignedItem(state, t)),
       })],
 
-    [/^\/notifications$/, () => json({ notifications: [] })],
-    [/^\/notifications\/unread-count$/, () => json({ count: 0 })],
+    [/^\/notifications$/, (_match, query) => json({
+      notifications: (state.notifications ?? []).filter((n) =>
+        (query.get('unread') !== '1' || !n.readAt) &&
+        (query.get('actionable') !== '1' || ACTIONABLE_NOTIFICATIONS.includes(n.payload.type))),
+    })],
+    // since — бейдж колокольчика: новые после прошлого открытия + неотвеченные приглашения.
+    [/^\/notifications\/unread-count$/, (_match, query) => {
+      const since = query.get('since') ? new Date(query.get('since')) : null;
+      return json({
+        count: (state.notifications ?? []).filter((n) => !n.readAt &&
+          (!since || new Date(n.createdAt) > since || ACTIONABLE_NOTIFICATIONS.includes(n.payload.type))).length,
+      });
+    }],
     [/^\/recent-task-views$/, () => json({ recent: [] })],
     [/^\/integrations\/github\/me$/, () => json({ connection: null })],
     [/^\/me\/telegram$/, () =>
@@ -607,6 +619,7 @@ function mutate(state, method, path, body) {
   }
   if (method === 'PUT' && path === '/me/kanban-colors') return json({ colors: body?.colors ?? {} });
   if (method === 'POST' && /^\/notifications\/[^/]+\/read$/.test(path)) return noContent();
+  if (method === 'POST' && path === '/notifications/read-all') return json({ updated: 0 });
   if (method === 'POST' && path === '/recent-task-views') return noContent();
   if (method === 'PUT' && path === '/workspaces/current') { state.activeWorkspaceId = body.workspaceId; return noContent(); }
   if (method === 'POST' && path === '/auth/logout') return noContent();
@@ -634,11 +647,11 @@ export function createApiRouter({ authenticated = true } = {}) {
     // Exceptions inside the router itself (a bug in the fixtures, not in the app).
     routerErrors: [],
   };
-  function resolveGet(path, workspaceId) {
+  function resolveGet(path, workspaceId, query) {
     for (const [pattern, handler] of getRoutes(state, workspaceId)) {
       const match = path.match(pattern);
       if (!match) continue;
-      const res = handler(match);
+      const res = handler(match, query);
       if (res) return res;
     }
     return undefined;
@@ -690,7 +703,7 @@ export function createApiRouter({ authenticated = true } = {}) {
         journal.expectedErrors.push({ url: request.url(), status: failure.status });
         return fulfill(route, json({ error: failure.error }, failure.status));
       }
-      const res = resolveGet(path, workspaceId);
+      const res = resolveGet(path, workspaceId, url.searchParams);
       const delay = state.delays?.[`${workspaceId}:${path}`] ?? 0;
       if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       if (res) return fulfill(route, res);

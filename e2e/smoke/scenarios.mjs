@@ -827,6 +827,45 @@ export const scenarios = [
   },
 
   {
+    id: 'notifications-bell',
+    title: 'Колокольчик: приглашение в чужое пространство и лента уведомлений',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      // 16.10.2026: колокольчика не было, а приглашение в чужое пространство не показывалось
+      // нигде — лента скоупилась активным пространством.
+      const ago = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
+      state.notifications = [
+        { id: 'n-invite', userId: ME.id, createdAt: ago(5), readAt: null, taskDeleted: false,
+          payload: { type: 'workspace_invite', workspaceId: 'ws-foreign', workspaceName: 'Студия Север',
+            role: 'editor', inviteId: 'inv-1', token: 'tok-1', actorUserId: 'u-ext', actorDisplayName: 'Игорь Петров' } },
+        { id: 'n-change', userId: ME.id, createdAt: ago(60), readAt: null, taskDeleted: false,
+          payload: { type: 'task_changed', action: 'updated', title: 'Срок изменён', taskId: 't-x', projectId: BOARD_PROJECT_ID,
+            projectName: 'Сайт клиники', taskExcerpt: 'Обновить прайс', actorUserId: 'u-boris',
+            actorDisplayName: 'Борис', detail: 'Срок до: 12.10.2026 → 20.10.2026', taskAvailable: true } },
+      ];
+      await t.goto('/', { ready: () => page.locator(NOW) });
+      if (t.isMobile) await page.getByRole('button', { name: 'Открыть меню', exact: true }).tap();
+      const bell = page.getByRole('button', { name: /^Уведомления/ }).first();
+      await t.check('бейдж колокольчика — неотвеченное приглашение', async () => {
+        await t.visible(page.getByRole('button', { name: 'Уведомления: 1 новых' }), 'колокольчик с бейджем 1');
+      });
+      await t.check('колокольчик открывает приглашение и ленту', async () => {
+        if (t.isMobile) await bell.tap(); else await bell.click();
+        const pending = page.getByRole('region', { name: 'Ждут ответа' });
+        await t.visible(pending.getByText('Студия Север', { exact: true }), 'приглашение в «Ждут ответа»');
+        await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'изменение задачи в ленте');
+      });
+      await t.pageChecks('Колокольчик открыт', { bottomNav: false });
+      await t.check('«Принять» принимает приглашение', async () => {
+        const accept = page.getByRole('region', { name: 'Ждут ответа' }).getByRole('button', { name: 'Принять' });
+        if (t.isMobile) await accept.tap(); else await accept.click();
+        await t.waitForMutation((m) => m.method === 'POST' && m.path === '/invites/tok-1/accept', 'нет POST принятия приглашения');
+      });
+    },
+  },
+
+  {
     id: 'mobile-nav',
     title: 'Телефон: нижняя навигация и меню',
     matrix: [

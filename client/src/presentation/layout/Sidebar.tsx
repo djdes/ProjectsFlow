@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/tooltip';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
-import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
@@ -29,6 +28,7 @@ import {
   AnimatedSearch,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { CommunicationPanel } from '@/presentation/chat/CommunicationPanel';
+import { NotificationsBell } from '@/presentation/notifications/NotificationsBell';
 import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
@@ -76,9 +76,6 @@ export function Sidebar({
   navCompact = false,
   onNavigate,
 }: SidebarProps): React.ReactElement {
-  // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
-  // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
-  const { count: actionable } = useActionableUnreadCount();
   const { open: openSearch } = useGlobalSearch();
   const { open: openAddTask } = useAddTaskDialog();
   const { user } = useCurrentUser();
@@ -157,7 +154,7 @@ export function Sidebar({
   // клик = действие). Порядок в массиве задаёт и порядок внутри своей группы.
   const railItems: RailItem[] = [
     { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" />, variant: 'tab' },
-    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable, variant: 'tab' },
+    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread, variant: 'tab' },
     {
       // «Задача» (открывает AddTaskDialog) — первая в правой группе. Раньше была залитым
       // акцентным кружком посреди ряда; в Notion все кнопки рейла одинаково серые,
@@ -238,6 +235,7 @@ export function Sidebar({
           >
             <AnimatedChat className="size-4" />
           </RailButton>
+          <NotificationsBell variant="rail" />
           <div className="my-0.5 h-px w-6 bg-border" />
 
           <div className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto py-0.5">
@@ -266,8 +264,8 @@ export function Sidebar({
     <aside className="group/sidebar grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pbe-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
       {/* Шапка: переключатель пространства + тоггл панели. Высота строки = min-h-11 (44px)
           с вертикальным центрированием — ровно как верхняя строка крошек на страницах
-          (Notion-style: свитчер пространства и топбар на одной горизонтали). Уведомления
-          переехали в чат-ленту; колокольчика больше нет. На мобиле (drawer) правый отступ,
+          (Notion-style: свитчер пространства и топбар на одной горизонтали). Справа —
+          колокольчик уведомлений, всегда на месте. На мобиле (drawer) правый отступ,
           чтобы контролы не лезли под крестик SheetContent. */}
       <div className="flex h-11 items-center gap-1 max-md:pe-8">
         <WorkspaceSwitcher />
@@ -297,6 +295,8 @@ export function Sidebar({
             </Tooltip>
           </TooltipProvider>
         )}
+
+        <NotificationsBell />
       </div>
 
       {/* Навигационный rail: Главная/Чат/Задача/Входящие/Поиск. Узкая панель → без подписей

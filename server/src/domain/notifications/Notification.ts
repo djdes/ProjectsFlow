@@ -230,3 +230,33 @@ export type Notification = {
 export function notificationTaskId(payload: NotificationPayload): string | null {
   return 'taskId' in payload ? payload.taskId : null;
 }
+
+// Уведомления с действием (кнопка «Принять»): вкладка «Действие», раздел «Ждут ответа» у
+// колокольчика и его бейдж — пока на них не ответили. Назначение ответственного,
+// сводки и упоминания информационные и сюда не входят.
+export const ACTIONABLE_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
+  'workspace_invite',
+  'project_invite',
+  'join_request',
+];
+
+// Приглашения адресованы человеку, а не пространству, которое он сейчас открыл: инвайт
+// хранится с пространством приглашающего, где получатель ещё не участник. Их, как и
+// уведомления без пространства (обращения в поддержку), видно в любом активном
+// пространстве — иначе приглашение не найти нигде.
+export const PERSONAL_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
+  'workspace_invite',
+  'project_invite',
+];
+
+// Зеркало: DrizzleNotificationRepository.visibleIn — менять синхронно.
+export function isVisibleInWorkspace(
+  n: Pick<Notification, 'workspaceId' | 'payload'>,
+  workspaceId: string,
+): boolean {
+  return (
+    n.workspaceId === workspaceId ||
+    n.workspaceId == null ||
+    PERSONAL_NOTIFICATION_TYPES.includes(n.payload.type)
+  );
+}
