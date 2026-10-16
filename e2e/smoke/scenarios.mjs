@@ -919,6 +919,37 @@ export const scenarios = [
   },
 
   {
+    id: 'sidebar-project-reorder',
+    title: 'Сайдбар: перетаскивание проекта не перезагружает приложение',
+    matrix: [['desktop', 'light']],
+    async run(t) {
+      const { page } = t;
+      // 16.10.2026: после броска проекта браузер переходил по ссылке строки — всё приложение
+      // перезагружалось в этот проект («фризы, когда передвигаю проекты»).
+      await t.goto('/', { ready: () => page.locator(NOW) });
+      await page.evaluate(() => { window.__pfSameDocument = true; });
+      const aside = page.locator('aside').first();
+      const from = await aside.getByText('CRM-интеграция', { exact: true }).boundingBox();
+      const to = await aside.getByText('Сайт клиники', { exact: true }).boundingBox();
+      await t.check('бросок меняет порядок без перезагрузки и перехода', async () => {
+        await page.mouse.move(from.x + 20, from.y + from.height / 2);
+        await page.mouse.down();
+        for (let i = 1; i <= 12; i += 1) {
+          await page.mouse.move(from.x + 20, from.y + from.height / 2 + ((to.y - from.y) * i) / 12);
+          await page.waitForTimeout(16);
+        }
+        await page.mouse.up();
+        await t.waitForMutation((m) => m.method === 'PUT' && m.path === '/projects/reorder', 'нет PUT нового порядка');
+        await page.waitForTimeout(500);
+        const same = await page.evaluate(() => window.__pfSameDocument === true);
+        if (!same) throw new Error('после броска приложение перезагрузилось');
+        const path = new URL(page.url()).pathname;
+        if (path !== '/') throw new Error(`после броска открылся ${path} вместо «Входящих»`);
+      });
+    },
+  },
+
+  {
     id: 'mobile-nav',
     title: 'Телефон: нижняя навигация и меню',
     matrix: [

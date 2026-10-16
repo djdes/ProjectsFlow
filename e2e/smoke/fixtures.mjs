@@ -624,6 +624,7 @@ function mutate(state, method, path, body) {
     return json({ prefs: state.uiPrefs });
   }
   if (method === 'PUT' && path === '/me/kanban-colors') return json({ colors: body?.colors ?? {} });
+  if (method === 'PUT' && path === '/projects/reorder') return noContent();
   if (method === 'POST' && /^\/notifications\/[^/]+\/read$/.test(path)) return noContent();
   if (method === 'POST' && path === '/notifications/read-all') return json({ updated: 0 });
   if (method === 'POST' && path === '/recent-task-views') return noContent();

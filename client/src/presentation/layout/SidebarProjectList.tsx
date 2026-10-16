@@ -1,5 +1,5 @@
 import { SidebarSkeleton } from '@/presentation/components/loading/LoadingLayouts';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -9,6 +9,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -80,48 +82,14 @@ type RowProps = {
   highlightQuery?: string;
 };
 
-function SidebarProjectRow({
-  project,
-  bucket,
-  reorderable,
-  isFirst,
-  isLast,
-  onMove,
-  highlightQuery,
-}: RowProps): React.ReactElement {
-  const navigate = useNavigate();
+// Строка-обёртка для dnd-kit: useSortable перерисовывает её на каждом движении мыши во
+// время перетаскивания. Тяжёлое содержимое (меню, диалоги, ссылка) — в мемоизированном
+// SidebarProjectRowBody: при перетаскивании оно перерисовывается только у самой
+// перетаскиваемой строки, а не у всех проектов списка на каждый пиксель.
+function SidebarProjectRow(props: RowProps): React.ReactElement {
+  const { project, bucket, reorderable } = props;
   const location = useLocation();
-  const { refresh: refreshProjects } = useProjectsContext();
-  const { submit: updateProject } = useUpdateProject();
-  const { submit: duplicateProject } = useDuplicateProject();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const isArchived = project.status === 'archived';
-  // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
-  // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
-  const canDelete = hasOwnerRights(project.role) && !project.isInbox;
-  // Архивировать/дублировать — editor+ (viewer не может менять проект). Inbox исключаем.
-  const canManage = project.role !== 'viewer' && !project.isInbox;
-
-  const handleSetArchived = async (archived: boolean): Promise<void> => {
-    try {
-      await updateProject(project.id, { status: archived ? 'archived' : 'active' });
-      refreshProjects();
-    } catch (e) {
-      toast.error(`Не удалось ${archived ? 'архивировать' : 'вернуть'} проект: ${(e as Error).message}`);
-    }
-  };
-
-  const handleDuplicate = async (): Promise<void> => {
-    try {
-      const created = await duplicateProject({ name: project.name, icon: project.icon });
-      refreshProjects();
-      navigate(`/projects/${created.id}`);
-    } catch (e) {
-      toast.error(`Не удалось дублировать проект: ${(e as Error).message}`);
-    }
-  };
 
   // Один project.id может рендериться дважды (в favorites и в main); чтобы dnd-kit и
   // React не ругались на дубли ключей — префиксуем sortable-id'шник bucket'ом.
@@ -151,10 +119,6 @@ function SidebarProjectRow({
     if (isActiveRoute) rowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [isActiveRoute]);
 
-  // Бейджи (число задач + индикатор команды) прячем при hover/focus/открытом меню —
-  // на их месте появляется кнопка «три точки».
-  const actionsActive = menuOpen;
-
   return (
     <div
       ref={setRefs}
@@ -169,6 +133,76 @@ function SidebarProjectRow({
         isDragging && 'z-10 opacity-60',
       )}
     >
+      <SidebarProjectRowBody
+        {...props}
+        listeners={listeners}
+        attributes={attributes}
+        isDragging={isDragging}
+        menuOpen={menuOpen}
+        setMenuOpen={setMenuOpen}
+      />
+    </div>
+  );
+}
+
+const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
+  project,
+  reorderable,
+  isFirst,
+  isLast,
+  onMove,
+  highlightQuery,
+  listeners,
+  attributes,
+  isDragging,
+  menuOpen,
+  setMenuOpen,
+}: RowProps & {
+  listeners: DraggableSyntheticListeners;
+  attributes: DraggableAttributes;
+  isDragging: boolean;
+  menuOpen: boolean;
+  setMenuOpen: (open: boolean) => void;
+}): React.ReactElement {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { refresh: refreshProjects } = useProjectsContext();
+  const { submit: updateProject } = useUpdateProject();
+  const { submit: duplicateProject } = useDuplicateProject();
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const isArchived = project.status === 'archived';
+  // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
+  // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
+  const canDelete = hasOwnerRights(project.role) && !project.isInbox;
+  // Архивировать/дублировать — editor+ (viewer не может менять проект). Inbox исключаем.
+  const canManage = project.role !== 'viewer' && !project.isInbox;
+
+  const handleSetArchived = async (archived: boolean): Promise<void> => {
+    try {
+      await updateProject(project.id, { status: archived ? 'archived' : 'active' });
+      refreshProjects();
+    } catch (e) {
+      toast.error(`Не удалось ${archived ? 'архивировать' : 'вернуть'} проект: ${(e as Error).message}`);
+    }
+  };
+
+  const handleDuplicate = async (): Promise<void> => {
+    try {
+      const created = await duplicateProject({ name: project.name, icon: project.icon });
+      refreshProjects();
+      navigate(`/projects/${created.id}`);
+    } catch (e) {
+      toast.error(`Не удалось дублировать проект: ${(e as Error).message}`);
+    }
+  };
+
+  // Бейджи (число задач + индикатор команды) прячем при hover/focus/открытом меню —
+  // на их месте появляется кнопка «три точки».
+  const actionsActive = menuOpen;
+
+  return (
+    <>
       <NavLink
         to={`/projects/${project.id}`}
         // listeners/attributes на ссылке: тащим за всю строку. Мышь — порог 8px; тач —
@@ -361,9 +395,9 @@ function SidebarProjectRow({
           }}
         />
       )}
-    </div>
+    </>
   );
-}
+});
 
 
 // Один проект в секции. Хелпер выносит общий рендер строк (skeleton иначе разрастается).
@@ -389,6 +423,7 @@ function ProjectGroup({
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   );
   const sortableIds = projects.map((p) => `${bucket}-${p.id}`);
+  const suppressClick = useSuppressClickAfterDrag();
 
   const rows = (
     <div className="space-y-1">
@@ -410,12 +445,45 @@ function ProjectGroup({
   if (!reorderable) return rows;
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorderEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={suppressClick.start}
+      onDragEnd={(event) => {
+        suppressClick.release();
+        onReorderEnd(event);
+      }}
+      onDragCancel={suppressClick.release}
+    >
       <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
         {rows}
       </SortableContext>
     </DndContext>
   );
+}
+
+// Клик, которым заканчивается перетаскивание строки. dnd-kit гасит его через
+// stopPropagation на document — до React он не доходит, но у ссылки остаётся действие по
+// умолчанию: браузер уходил по href строки и перезагружал всё приложение в этот проект
+// («фризы, когда передвигаю проекты»). Отменяем действие раньше, на window.
+function useSuppressClickAfterDrag(): { start: () => void; release: () => void } {
+  const blockRef = useRef<((event: MouseEvent) => void) | null>(null);
+  const release = useCallback((): void => {
+    const block = blockRef.current;
+    if (!block) return;
+    blockRef.current = null;
+    // Клик приходит после mouseup, в котором dnd-kit зовёт onDragEnd, — снимаем с запасом,
+    // как сам dnd-kit снимает свои слушатели.
+    window.setTimeout(() => window.removeEventListener('click', block, true), 50);
+  }, []);
+  const start = useCallback((): void => {
+    if (blockRef.current) return;
+    const block = (event: MouseEvent): void => event.preventDefault();
+    blockRef.current = block;
+    window.addEventListener('click', block, true);
+  }, []);
+  useEffect(() => release, [release]);
+  return { start, release };
 }
 
 // Лимит проектов на тариф. Сейчас у всех безлимит → показываем ∞. Когда появятся
