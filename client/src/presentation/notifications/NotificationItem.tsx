@@ -330,6 +330,7 @@ export function NotificationItem({
       kind={kind}
       context={view.context}
       unread={isUnread}
+      onMarkRead={() => void actions.markRead(n)}
       subject={view.subject}
       subjectTitle={view.subject}
       meta={view.meta}

@@ -1,4 +1,4 @@
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Check } from 'lucide-react';
 import { formatExactDateTime } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 import {
@@ -20,6 +20,7 @@ export function FeedRow({
   kind,
   context,
   unread = false,
+  onMarkRead,
   subject,
   subjectTitle,
   meta,
@@ -36,6 +37,8 @@ export function FeedRow({
   // Где это случилось: проект, пространство.
   context?: string;
   unread?: boolean;
+  // Отметить прочитанным, не открывая: точка непрочитанного становится кнопкой.
+  onMarkRead?: () => void;
   subject: React.ReactNode;
   subjectTitle?: string;
   meta?: React.ReactNode;
@@ -77,8 +80,26 @@ export function FeedRow({
                 {formatExactDateTime(createdAt)}
               </TooltipContent>
             </Tooltip>
-            {/* Непрочитанное — точка в конце строки, а не поверх аватара. */}
-            {unread && <span className="size-2 shrink-0 rounded-full bg-primary" role="img" aria-label="Не прочитано" />}
+            {/* Непрочитанное — точка в конце строки, а не поверх аватара. С onMarkRead точка —
+                кнопка: наведение показывает галочку, клик гасит уведомление без перехода. */}
+            {unread &&
+              (onMarkRead ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMarkRead();
+                  }}
+                  aria-label="Отметить прочитанным"
+                  title="Отметить прочитанным"
+                  className="group/read -me-1 grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover max-sm:size-8"
+                >
+                  <span className="size-2 rounded-full bg-primary group-hover/read:hidden group-focus-visible/read:hidden" />
+                  <Check className="hidden size-3.5 group-hover/read:block group-focus-visible/read:block" />
+                </button>
+              ) : (
+                <span className="size-2 shrink-0 rounded-full bg-primary" role="img" aria-label="Не прочитано" />
+              ))}
             {aside}
           </div>
           <div className="mbs-0.5 flex min-w-0 items-center gap-1.5">

@@ -901,6 +901,15 @@ export const scenarios = [
         if (await panel.getByText(/inbox:/).count()) throw new Error('в колокольчике осталось служебное имя inbox:<id>');
         if (await page.getByRole('button', { name: 'Отклонить' }).count()) throw new Error('у устаревшего запроса остались кнопки');
       });
+      await t.check('уведомление гасится кнопкой, без перехода', async () => {
+        // 16.10.2026: «нужна возможность отметить уведомление прочитанным, без открытия».
+        const row = page.locator('[data-pf-motion-surface="popover"] li').filter({ hasText: 'Повтор заказа нужен' });
+        const mark = row.getByRole('button', { name: 'Отметить прочитанным' });
+        if (t.isMobile) await mark.tap(); else await mark.click();
+        await t.waitForMutation((m) => m.method === 'POST' && m.path === '/notifications/n-created/read', 'уведомление не отмечено прочитанным');
+        await t.visible(page.locator('[data-pf-motion-surface="popover"]'), 'окно уведомлений осталось открытым');
+        if (new URL(page.url()).pathname !== '/') throw new Error('отметка прочитанным открыла задачу');
+      });
       await t.check('«Для меня» прячет чужие задачи, «Все» показывает', async () => {
         // 16.10.2026: лиду приходят изменения всех задач проектов — нужен режим «только мои».
         const change = page.locator('[data-pf-motion-surface="popover"]').getByText('Обновить прайс', { exact: true });
