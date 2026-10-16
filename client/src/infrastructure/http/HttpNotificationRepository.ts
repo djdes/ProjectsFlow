@@ -35,10 +35,16 @@ function fromDto(dto: NotificationDto): Notification {
 }
 
 export class HttpNotificationRepository implements NotificationRepository {
-  async list(opts: { unreadOnly: boolean; limit: number; actionableOnly?: boolean }): Promise<Notification[]> {
+  async list(opts: {
+    unreadOnly: boolean;
+    limit: number;
+    actionableOnly?: boolean;
+    mineOnly?: boolean;
+  }): Promise<Notification[]> {
     const params = new URLSearchParams();
     if (opts.unreadOnly) params.set('unread', '1');
     if (opts.actionableOnly) params.set('actionable', '1');
+    if (opts.mineOnly) params.set('mine', '1');
     if (opts.limit) params.set('limit', String(opts.limit));
     const query = params.toString();
     const { notifications } = await httpClient.get<{ notifications: NotificationDto[] }>(
@@ -47,9 +53,12 @@ export class HttpNotificationRepository implements NotificationRepository {
     return notifications.map(fromDto);
   }
 
-  async countUnread(opts?: { since?: Date }): Promise<number> {
-    const query = opts?.since ? `?since=${encodeURIComponent(opts.since.toISOString())}` : '';
-    const { count } = await httpClient.get<{ count: number }>(`/notifications/unread-count${query}`);
+  async countUnread(opts?: { since?: Date; mineOnly?: boolean }): Promise<number> {
+    const params = new URLSearchParams();
+    if (opts?.since) params.set('since', opts.since.toISOString());
+    if (opts?.mineOnly) params.set('mine', '1');
+    const query = params.toString();
+    const { count } = await httpClient.get<{ count: number }>(`/notifications/unread-count${query ? `?${query}` : ''}`);
     return count;
   }
 

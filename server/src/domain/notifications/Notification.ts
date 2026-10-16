@@ -258,6 +258,26 @@ export const PERSONAL_NOTIFICATION_TYPES: readonly NotificationPayload['type'][]
   'support_ticket',
 ];
 
+// «Для меня» в колокольчике: лид получает изменения всех задач проекта, а ориентироваться
+// нужно по своим. Эти виды адресованы лично человеку всегда…
+export const MINE_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
+  'workspace_invite',
+  'project_invite',
+  'join_request',
+  'comment_mention',
+  'chat_mention',
+  'task_assignee_changed',
+  'task_delegation',
+  'task_delegation_resolved',
+  'task_assigned_to_project',
+];
+
+// …а эти — только если задача его: он исполнитель или поставил её сам.
+export const TASK_RELATION_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
+  'task_changed',
+  'task_approval_requested',
+];
+
 // Зеркало: DrizzleNotificationRepository.visibleIn — менять синхронно.
 export function isVisibleInWorkspace(
   n: Pick<Notification, 'workspaceId' | 'payload'>,

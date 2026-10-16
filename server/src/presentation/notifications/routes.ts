@@ -56,6 +56,7 @@ export function notificationsRouter(deps: Deps): Router {
     try {
       const unreadOnly = req.query['unread'] === '1' || req.query['unread'] === 'true';
       const actionableOnly = req.query['actionable'] === '1' || req.query['actionable'] === 'true';
+      const mineOnly = req.query['mine'] === '1' || req.query['mine'] === 'true';
       const limitParam = Number(req.query['limit'] ?? 50);
       const limit = Number.isFinite(limitParam) ? limitParam : 50;
       const list = await deps.list.execute({
@@ -63,6 +64,7 @@ export function notificationsRouter(deps: Deps): Router {
         unreadOnly,
         limit,
         actionableOnly,
+        mineOnly,
       });
       const taskIds = list
         .map((n) => notificationTaskId(n.payload))
@@ -127,7 +129,9 @@ export function notificationsRouter(deps: Deps): Router {
       const actionableOnly = req.query['actionable'] === '1' || req.query['actionable'] === 'true';
       const sinceParam = typeof req.query['since'] === 'string' ? new Date(req.query['since']) : null;
       const since = sinceParam && Number.isFinite(sinceParam.getTime()) ? sinceParam : undefined;
-      const count = await deps.countUnread.execute(req.user!.id, { actionableOnly, ...(since ? { since } : {}) });
+      // ?mine=1 — только «для меня» (колокольчик в режиме «Для меня»).
+      const mineOnly = req.query['mine'] === '1' || req.query['mine'] === 'true';
+      const count = await deps.countUnread.execute(req.user!.id, { actionableOnly, mineOnly, ...(since ? { since } : {}) });
       res.json({ count });
     } catch (e) {
       next(e);

@@ -861,7 +861,7 @@ export const scenarios = [
           payload: { type: 'task_changed', action: 'updated', title: 'Срок изменён', taskId: 't-x', projectId: BOARD_PROJECT_ID,
             projectName: 'Сайт клиники', taskExcerpt: 'Обновить прайс', actorUserId: 'u-boris',
             actorDisplayName: 'Борис', detail: 'Срок до: 12.10.2026 → 20.10.2026', taskAvailable: true } },
-        { id: 'n-created', userId: ME.id, createdAt: ago(30), readAt: null, taskDeleted: false,
+        { id: 'n-created', userId: ME.id, createdAt: ago(30), readAt: null, taskDeleted: false, forMe: true,
           payload: { type: 'task_changed', action: 'created', title: 'Создана задача', taskId: 't-y', projectId: 'p-inbox-anna',
             projectName: 'inbox:65db53ef-b4e7-46f0-bd0b-6a3083292aed', taskExcerpt: 'Повтор заказа нужен', actorUserId: 'u-boris',
             actorDisplayName: 'Борис', detail: 'Исполнитель: Анна Смирнова\nСрок до: 16.10.2026', taskAvailable: true } },
@@ -880,13 +880,20 @@ export const scenarios = [
         if (t.isMobile) await bell.tap(); else await bell.click();
         const pending = page.getByRole('region', { name: 'Ждут ответа' });
         await t.visible(pending.getByText('Студия Север', { exact: true }), 'приглашение в «Ждут ответа»');
-        await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'изменение задачи в ленте');
         await t.visible(page.getByText('Запрос больше не актуален', { exact: true }), 'устаревший запрос доступа — итог вместо кнопок');
         await t.visible(page.getByText('Новая задача', { exact: true }), 'метка «Новая задача»');
         const panel = page.locator('[data-pf-motion-surface="popover"]');
         await t.visible(panel.getByText('Входящие', { exact: true }), '«Входящие» вместо служебного inbox:<id>');
         if (await panel.getByText(/inbox:/).count()) throw new Error('в колокольчике осталось служебное имя inbox:<id>');
         if (await page.getByRole('button', { name: 'Отклонить' }).count()) throw new Error('у устаревшего запроса остались кнопки');
+      });
+      await t.check('«Для меня» прячет чужие задачи, «Все» показывает', async () => {
+        // 16.10.2026: лиду приходят изменения всех задач проектов — нужен режим «только мои».
+        const change = page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true });
+        if (await change.count()) throw new Error('в «Для меня» видно изменение чужой задачи');
+        const all = page.locator('[data-pf-motion-surface="popover"]').getByRole('tab', { name: 'Все', exact: true });
+        if (t.isMobile) await all.tap(); else await all.click();
+        await t.visible(change, 'изменение чужой задачи во «Все»');
       });
       await t.pageChecks('Колокольчик открыт', { bottomNav: false });
       await t.check('«Принять» принимает приглашение', async () => {

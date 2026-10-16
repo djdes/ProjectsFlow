@@ -280,6 +280,10 @@ function projectMemberDto(projectId, p, role) {
 
 const NOTIFICATION_PREFS = {};
 const ACTIONABLE_NOTIFICATIONS = ['workspace_invite', 'project_invite', 'join_request'];
+// «Для меня» (?mine=1): личные виды всегда, о задачах — у которых в фикстуре стоит forMe
+// (на сервере это «я исполнитель или автор задачи»).
+const MINE_NOTIFICATIONS = [...ACTIONABLE_NOTIFICATIONS, 'comment_mention', 'chat_mention', 'task_assignee_changed'];
+const isMineNotification = (n) => MINE_NOTIFICATIONS.includes(n.payload.type) || n.forMe === true;
 
 // --- Router ----------------------------------------------------------------------
 
@@ -497,13 +501,15 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/notifications$/, (_match, query) => json({
       notifications: (state.notifications ?? []).filter((n) =>
         (query.get('unread') !== '1' || !n.readAt) &&
-        (query.get('actionable') !== '1' || ACTIONABLE_NOTIFICATIONS.includes(n.payload.type))),
+        (query.get('actionable') !== '1' || ACTIONABLE_NOTIFICATIONS.includes(n.payload.type)) &&
+        (query.get('mine') !== '1' || isMineNotification(n))),
     })],
     // since — бейдж колокольчика: новые после прошлого открытия + неотвеченные приглашения.
     [/^\/notifications\/unread-count$/, (_match, query) => {
       const since = query.get('since') ? new Date(query.get('since')) : null;
       return json({
         count: (state.notifications ?? []).filter((n) => !n.readAt &&
+          (query.get('mine') !== '1' || isMineNotification(n)) &&
           (!since || new Date(n.createdAt) > since || ACTIONABLE_NOTIFICATIONS.includes(n.payload.type))).length,
       });
     }],

@@ -17,11 +17,19 @@ export interface NotificationRepository {
   // уведомления мёржатся с amбиентными событиями и страница уходит в прошлое.
   listByUser(
     userId: string,
-    opts: { limit: number; unreadOnly: boolean; before?: Date; workspaceId?: string; actionableOnly?: boolean },
+    opts: {
+      limit: number;
+      unreadOnly: boolean;
+      before?: Date;
+      workspaceId?: string;
+      actionableOnly?: boolean;
+      mineOnly?: boolean;
+    },
   ): Promise<Notification[]>;
   // since — бейдж колокольчика: новые с тех пор, как человек открывал уведомления, плюс
   // все неотвеченные с действием (приглашения не гаснут от одного взгляда).
-  countUnread(userId: string, workspaceId?: string, opts?: { since?: Date }): Promise<number>;
+  // mineOnly — только «для меня» (MINE_NOTIFICATION_TYPES и задачи, где он исполнитель или автор).
+  countUnread(userId: string, workspaceId?: string, opts?: { since?: Date; mineOnly?: boolean }): Promise<number>;
   // Непрочитанные actionable-уведомления (инвайты/join) — для бейджа «Действие».
   countActionableUnread(userId: string, workspaceId?: string): Promise<number>;
   markRead(id: string, userId: string, readAt: Date, workspaceId?: string): Promise<boolean>;

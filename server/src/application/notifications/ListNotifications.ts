@@ -15,6 +15,8 @@ export type ListNotificationsCommand = {
   readonly limit: number;
   // Только с действием (приглашения, запросы доступа) — раздел «Ждут ответа» у колокольчика.
   readonly actionableOnly?: boolean;
+  // Только «для меня» — см. MINE_NOTIFICATION_TYPES.
+  readonly mineOnly?: boolean;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -33,6 +35,7 @@ export class ListNotifications {
       workspaceId: workspace.id,
       unreadOnly: input.unreadOnly,
       ...(input.actionableOnly ? { actionableOnly: true } : {}),
+      ...(input.mineOnly ? { mineOnly: true } : {}),
     });
     return this.deps.actionStates ? this.deps.actionStates.attach(list) : list;
   }

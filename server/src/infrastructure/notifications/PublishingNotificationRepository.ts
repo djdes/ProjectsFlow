@@ -22,12 +22,19 @@ export class PublishingNotificationRepository implements NotificationRepository 
 
   listByUser(
     userId: string,
-    opts: { limit: number; unreadOnly: boolean; before?: Date; workspaceId?: string; actionableOnly?: boolean },
+    opts: {
+      limit: number;
+      unreadOnly: boolean;
+      before?: Date;
+      workspaceId?: string;
+      actionableOnly?: boolean;
+      mineOnly?: boolean;
+    },
   ): Promise<Notification[]> {
     return this.inner.listByUser(userId, opts);
   }
 
-  countUnread(userId: string, workspaceId?: string, opts?: { since?: Date }): Promise<number> {
+  countUnread(userId: string, workspaceId?: string, opts?: { since?: Date; mineOnly?: boolean }): Promise<number> {
     return this.inner.countUnread(userId, workspaceId, opts);
   }
 

@@ -3,7 +3,9 @@ import type { Database } from '../db/index.js';
 import { notifications, projects, tasks, type NotificationRow } from '../db/schema.js';
 import {
   ACTIONABLE_NOTIFICATION_TYPES,
+  MINE_NOTIFICATION_TYPES,
   PERSONAL_NOTIFICATION_TYPES,
+  TASK_RELATION_NOTIFICATION_TYPES,
   type Notification,
   type NotificationPayload,
 } from '../../domain/notifications/Notification.js';
@@ -40,6 +42,20 @@ function visibleIn(workspaceId: string | undefined): SQL | undefined {
 
 const ACTIONABLE = [...ACTIONABLE_NOTIFICATION_TYPES];
 
+// «Для меня»: личные виды всегда, уведомления о задаче — если человек её исполнитель или
+// автор (по текущему состоянию задачи; payload хранит только её id).
+function mineFor(userId: string): SQL | undefined {
+  return or(
+    inArray(notifications.type, [...MINE_NOTIFICATION_TYPES]),
+    and(
+      inArray(notifications.type, [...TASK_RELATION_NOTIFICATION_TYPES]),
+      sql`EXISTS (SELECT 1 FROM ${tasks} t
+        WHERE t.id = JSON_UNQUOTE(JSON_EXTRACT(${notifications.payload}, '$.taskId'))
+          AND (t.assignee_user_id = ${userId} OR t.created_by = ${userId}))`,
+    ),
+  );
+}
+
 export class DrizzleNotificationRepository implements NotificationRepository {
   constructor(private readonly db: Database) {}
 
@@ -75,12 +91,20 @@ export class DrizzleNotificationRepository implements NotificationRepository {
 
   async listByUser(
     userId: string,
-    opts: { limit: number; unreadOnly: boolean; before?: Date; workspaceId?: string; actionableOnly?: boolean },
+    opts: {
+      limit: number;
+      unreadOnly: boolean;
+      before?: Date;
+      workspaceId?: string;
+      actionableOnly?: boolean;
+      mineOnly?: boolean;
+    },
   ): Promise<Notification[]> {
     const conds = [eq(notifications.userId, userId)];
     const scope = visibleIn(opts.workspaceId);
     if (scope) conds.push(scope);
     if (opts.actionableOnly) conds.push(inArray(notifications.type, ACTIONABLE));
+    if (opts.mineOnly) conds.push(mineFor(userId)!);
     if (opts.unreadOnly) conds.push(isNull(notifications.readAt));
     if (opts.before) conds.push(lt(notifications.createdAt, opts.before));
     const rows = await this.db
@@ -92,12 +116,13 @@ export class DrizzleNotificationRepository implements NotificationRepository {
     return rows.map(toNotification);
   }
 
-  async countUnread(userId: string, workspaceId?: string, opts?: { since?: Date }): Promise<number> {
+  async countUnread(userId: string, workspaceId?: string, opts?: { since?: Date; mineOnly?: boolean }): Promise<number> {
     const rows = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
       .where(and(eq(notifications.userId, userId), isNull(notifications.readAt), visibleIn(workspaceId),
-        opts?.since ? or(gt(notifications.createdAt, opts.since), inArray(notifications.type, ACTIONABLE)) : undefined));
+        opts?.since ? or(gt(notifications.createdAt, opts.since), inArray(notifications.type, ACTIONABLE)) : undefined,
+        opts?.mineOnly ? mineFor(userId) : undefined));
     return Number(rows[0]?.count ?? 0);
   }
 

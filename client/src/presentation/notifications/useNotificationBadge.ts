@@ -5,6 +5,29 @@ import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificatio
 
 const SEEN_KEY = 'pf_notifications_seen_at';
 const SEEN_EVENT = 'pf:notifications-seen';
+const SCOPE_KEY = 'pf_notifications_scope';
+
+// «Для меня» — личное и задачи, где я исполнитель или автор; «Все» — ещё и всё, что приходит
+// лиду по проектам. По умолчанию «Для меня»: по нему ориентируются, «Все» — посмотреть общую картину.
+export type NotificationScope = 'mine' | 'all';
+
+export function readNotificationScope(): NotificationScope {
+  try {
+    return localStorage.getItem(SCOPE_KEY) === 'all' ? 'all' : 'mine';
+  } catch {
+    return 'mine';
+  }
+}
+
+// Бейдж считает в том же режиме, что выбран в колокольчике.
+export function saveNotificationScope(scope: NotificationScope): void {
+  try {
+    localStorage.setItem(SCOPE_KEY, scope);
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new Event(SEEN_EVENT));
+}
 const POLL_MS = 60_000;
 
 // Когда человек последний раз открывал колокольчик (на этом устройстве). Первый запуск
@@ -33,7 +56,8 @@ export function markNotificationsSeen(): void {
 }
 
 // Бейдж колокольчика: уведомления, пришедшие после прошлого открытия, плюс приглашения
-// и запросы доступа, на которые ещё не ответили. Гаснет при открытии колокольчика.
+// и запросы доступа, на которые ещё не ответили. Гаснет при открытии колокольчика. В режиме
+// «Для меня» не считает то, что лиду приходит по чужим задачам.
 export function useNotificationBadge(): number {
   const { notificationRepository } = useContainer();
   const { workspace } = useCurrentWorkspace();
@@ -43,7 +67,7 @@ export function useNotificationBadge(): number {
   const refresh = useCallback((): void => {
     if (!workspaceId) return;
     notificationRepository
-      .countUnread({ since: readSeenAt() })
+      .countUnread({ since: readSeenAt(), mineOnly: readNotificationScope() === 'mine' })
       .then(setCount)
       .catch(() => {
         /* тихо — бейдж остаётся на старом значении */

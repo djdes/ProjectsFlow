@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
+import type { NotificationScope } from './useNotificationBadge';
 
 const PAGE = 50;
 const PENDING_LIMIT = 20;
@@ -10,7 +11,10 @@ export type NotificationsFilter = 'all' | 'unread';
 
 // Список колокольчика: сверху — неотвеченные приглашения и запросы доступа («Ждут ответа»),
 // чтобы их не утопили сотни изменений задач; ниже — последние уведомления без них.
-export function useNotificationsList(filter: NotificationsFilter): {
+export function useNotificationsList(
+  filter: NotificationsFilter,
+  scope: NotificationScope,
+): {
   pending: Notification[];
   items: Notification[];
   loading: boolean;
@@ -29,7 +33,7 @@ export function useNotificationsList(filter: NotificationsFilter): {
     const s = (seq.current += 1);
     Promise.all([
       notificationRepository.list({ unreadOnly: true, limit: PENDING_LIMIT, actionableOnly: true }),
-      notificationRepository.list({ unreadOnly: filter === 'unread', limit: PAGE }),
+      notificationRepository.list({ unreadOnly: filter === 'unread', limit: PAGE, mineOnly: scope === 'mine' }),
     ])
       .then(([waiting, latest]) => {
         if (s !== seq.current) return;
@@ -44,7 +48,7 @@ export function useNotificationsList(filter: NotificationsFilter): {
       .finally(() => {
         if (s === seq.current) setLoading(false);
       });
-  }, [notificationRepository, filter]);
+  }, [notificationRepository, filter, scope]);
 
   useEffect(() => {
     setLoading(true);
