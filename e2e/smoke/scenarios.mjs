@@ -685,9 +685,11 @@ export const scenarios = [
       });
       await t.goto('/', { ready: () => page.locator(NOW) });
       if (t.isMobile) await page.getByRole('button', { name: 'Открыть меню', exact: true }).tap();
-      await t.step('уведомление показывает событие и обе даты', async () => {
+      await t.step('уведомление показывает событие коротко, без дат', async () => {
+        // 16.10.2026: «не показывай в уведомлениях сроки, нужно меньше инфы».
         await t.visible(page.getByText('Изменение', { exact: true }), 'метка вида уведомления');
-        await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'прежний и новый срок');
+        await t.visible(page.getByText('Изменён срок', { exact: true }), 'факт смены срока');
+        if (await page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }).count()) throw new Error('в уведомлении остались даты срока');
       });
       await t.step('клик помечает прочитанным и открывает конкретную задачу', async () => {
         const notice = page.getByText('Изменение', { exact: true });
@@ -901,7 +903,7 @@ export const scenarios = [
       });
       await t.check('«Для меня» прячет чужие задачи, «Все» показывает', async () => {
         // 16.10.2026: лиду приходят изменения всех задач проектов — нужен режим «только мои».
-        const change = page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true });
+        const change = page.locator('[data-pf-motion-surface="popover"]').getByText('Обновить прайс', { exact: true });
         if (await change.count()) throw new Error('в «Для меня» видно изменение чужой задачи');
         const all = page.locator('[data-pf-motion-surface="popover"]').getByRole('tab', { name: 'Все', exact: true });
         if (t.isMobile) await all.tap(); else await all.click();

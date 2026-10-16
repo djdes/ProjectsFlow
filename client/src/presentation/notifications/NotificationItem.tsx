@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { plainDescription, plainTaskTitle } from '@/lib/taskTitleBody';
 import type { Notification, NotificationPayload } from '@/domain/notifications/Notification';
 import { FEED_AVATAR_CLASS, FeedRow } from '@/presentation/activity/FeedRow';
-import { feedActorName, feedProjectName, notificationKind } from '@/presentation/activity/feedKind';
+import { feedActorName, feedProjectName, notificationDetail, notificationKind } from '@/presentation/activity/feedKind';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import type { NotificationActions } from './useNotificationActions';
 
@@ -47,6 +47,7 @@ function describe(payload: NotificationPayload): NotificationView {
     case 'task_changed': {
       const actor = feedActorName(payload.actorDisplayName) || 'Кто-то';
       const comment = payload.action === 'commented' ? plainExcerpt(payload.detail) : '';
+      const detail = comment ? '' : notificationDetail(payload.action, payload.detail);
       return {
         avatarName: actor,
         context: feedProjectName(payload.projectName),
@@ -59,10 +60,11 @@ function describe(payload: NotificationPayload): NotificationView {
           <Who name={actor} />
         ),
         metaTitle: comment ? `${actor}: «${comment}»` : `${actor} · ${payload.title}`,
-        details:
-          !comment && payload.detail ? (
-            <p className="whitespace-pre-line text-meta leading-[1.125rem] text-muted-foreground">{payload.detail}</p>
-          ) : undefined,
+        details: detail ? (
+          <p title={payload.detail} className="truncate text-meta leading-[1.125rem] text-muted-foreground">
+            {detail}
+          </p>
+        ) : undefined,
       };
     }
     case 'comment_mention': {

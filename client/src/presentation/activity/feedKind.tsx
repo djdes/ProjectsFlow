@@ -122,6 +122,23 @@ export function feedProjectName(name: string | null | undefined): string {
   return value.startsWith('inbox:') ? 'Входящие' : value;
 }
 
+// Детали изменения задачи в уведомлении — одной короткой строкой и без дат: сроки видно в
+// самой задаче, а в ленте они только раздували уведомление. Смена срока остаётся фактом
+// («Изменён срок»), у новой задачи срок просто не показываем.
+export function notificationDetail(action: string, detail: string | null | undefined): string {
+  const lines = (detail ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      if (/^Срок до:/u.test(line)) return action === 'created' ? '' : 'Изменён срок';
+      if (/^Дата начала:/u.test(line)) return action === 'created' ? '' : 'Изменена дата начала';
+      return line;
+    })
+    .filter(Boolean);
+  return lines[0] ?? '';
+}
+
 // Служебные имена авторов (агенты платформы) — по-человечески.
 const ACTOR_LABEL: Record<string, string> = {
   'telegram-composer': 'Бот Telegram',
