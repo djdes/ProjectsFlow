@@ -674,11 +674,11 @@ export const scenarios = [
       await t.goto('/', { ready: () => page.locator(NOW) });
       if (t.isMobile) await page.getByRole('button', { name: 'Открыть меню', exact: true }).tap();
       await t.step('уведомление показывает событие и обе даты', async () => {
-        await t.visible(page.getByText('Задача изменена', { exact: true }), 'заголовок уведомления');
+        await t.visible(page.getByText('Изменение', { exact: true }), 'метка вида уведомления');
         await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'прежний и новый срок');
       });
       await t.step('клик помечает прочитанным и открывает конкретную задачу', async () => {
-        const notice = page.getByText('Задача изменена', { exact: true });
+        const notice = page.getByText('Изменение', { exact: true });
         if (t.isMobile) await notice.tap(); else await notice.click();
         await t.waitForMutation((m) => m.path === '/notifications/deadline-notification/read', 'уведомление не прочитано');
         await t.waitFor(() => page.url().includes(`/tasks/${task.id}`), 'нет перехода к задаче');
@@ -861,6 +861,10 @@ export const scenarios = [
           payload: { type: 'task_changed', action: 'updated', title: 'Срок изменён', taskId: 't-x', projectId: BOARD_PROJECT_ID,
             projectName: 'Сайт клиники', taskExcerpt: 'Обновить прайс', actorUserId: 'u-boris',
             actorDisplayName: 'Борис', detail: 'Срок до: 12.10.2026 → 20.10.2026', taskAvailable: true } },
+        { id: 'n-created', userId: ME.id, createdAt: ago(30), readAt: null, taskDeleted: false,
+          payload: { type: 'task_changed', action: 'created', title: 'Создана задача', taskId: 't-y', projectId: 'p-inbox-anna',
+            projectName: 'inbox:65db53ef-b4e7-46f0-bd0b-6a3083292aed', taskExcerpt: 'Повтор заказа нужен', actorUserId: 'u-boris',
+            actorDisplayName: 'Борис', detail: 'Исполнитель: Анна Смирнова\nСрок до: 16.10.2026', taskAvailable: true } },
         // Запрос доступа к удалённому проекту: сервер отдаёт actionState=expired — кнопок нет.
         { id: 'n-stale-join', userId: ME.id, createdAt: ago(90), readAt: ago(80), taskDeleted: false, actionState: 'expired',
           payload: { type: 'join_request', projectId: 'p-gone', projectName: 'Старый проект', joinRequestId: 'jr-gone',
@@ -878,6 +882,10 @@ export const scenarios = [
         await t.visible(pending.getByText('Студия Север', { exact: true }), 'приглашение в «Ждут ответа»');
         await t.visible(page.getByText('Срок до: 12.10.2026 → 20.10.2026', { exact: true }), 'изменение задачи в ленте');
         await t.visible(page.getByText('Запрос больше не актуален', { exact: true }), 'устаревший запрос доступа — итог вместо кнопок');
+        await t.visible(page.getByText('Новая задача', { exact: true }), 'метка «Новая задача»');
+        const panel = page.locator('[data-pf-motion-surface="popover"]');
+        await t.visible(panel.getByText('Входящие', { exact: true }), '«Входящие» вместо служебного inbox:<id>');
+        if (await panel.getByText(/inbox:/).count()) throw new Error('в колокольчике осталось служебное имя inbox:<id>');
         if (await page.getByRole('button', { name: 'Отклонить' }).count()) throw new Error('у устаревшего запроса остались кнопки');
       });
       await t.pageChecks('Колокольчик открыт', { bottomNav: false });

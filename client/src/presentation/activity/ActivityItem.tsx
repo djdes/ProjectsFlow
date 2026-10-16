@@ -15,7 +15,8 @@ import type {
   ActivityKind,
 } from '@/domain/activity/ActivityFeedItem';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
-import { FeedRow } from './FeedRow';
+import { FEED_AVATAR_CLASS, FeedRow } from './FeedRow';
+import { activityKind, feedProjectName } from './feedKind';
 
 // Полная очистка текста от markdown для минималистичной ленты (Notion): инлайн-разметка
 // (** * ` ~~ == и т.п.) + ведущие маркеры заголовков/списков/цитат (### - * + > =) + схлоп пробелов.
@@ -201,9 +202,12 @@ const KIND_VERB: Partial<Record<ActivityKind, string>> = {
 export function ActivityItem({
   item,
   onOpenVersions,
+  showProject = false,
 }: {
   item: ActivityEventItem;
   onOpenVersions?: (taskId: string) => void;
+  // Лента всего пространства — подписать проект; внутри проекта это шум.
+  showProject?: boolean;
 }): React.ReactElement {
   const navigate = useNavigate();
   const { user } = useCurrentUser();
@@ -315,6 +319,8 @@ export function ActivityItem({
     <FeedRow
       className="hover:bg-hover"
       createdAt={item.createdAt}
+      kind={activityKind(item.kind)}
+      context={showProject && isTaskEvent ? feedProjectName(payload?.projectName) || undefined : undefined}
       subject={subject}
       subjectTitle={item.taskDeleted && isTaskEvent ? `${name} (задача удалена)` : name}
       meta={meta}
@@ -324,7 +330,7 @@ export function ActivityItem({
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="block">
-              <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-5 rounded-full text-[9px]" />
+              <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className={FEED_AVATAR_CLASS} />
             </span>
           </TooltipTrigger>
           {/* Появляется чуть ВЫШЕ и ЛЕВЕЕ наведённого аватара (Notion-style): side=top align=end. */}
@@ -334,7 +340,7 @@ export function ActivityItem({
             sideOffset={8}
             className="flex items-center gap-3 rounded-xl border-border/60 p-3 shadow-lg"
           >
-            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-11 rounded-full text-base" />
+            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-11 text-base" />
             <span className="pe-2 text-start">
               <span className="block text-sm font-semibold text-foreground">
                 {actor}

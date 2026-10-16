@@ -2,6 +2,7 @@ import type { EmailSender } from './EmailSender.js';
 import type { CommentNotificationLogRepository, CommentNotificationRecord } from './CommentNotificationLogRepository.js';
 import type { ProjectMemberRepository, ProjectMemberWithUser } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { projectDisplayName } from '../../domain/project/Project.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
@@ -98,7 +99,7 @@ export class DispatchCommentNotifications {
       }
     }
 
-    const projectName = project.name;
+    const projectName = projectDisplayName(project);
     const actorName =
       comment.actorKind === 'agent'
         ? (comment.agentName ?? 'Агент')

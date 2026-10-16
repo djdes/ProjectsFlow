@@ -2,7 +2,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { plainDescription, plainTaskTitle } from '@/lib/taskTitleBody';
 import type { Notification, NotificationPayload } from '@/domain/notifications/Notification';
-import { FeedRow } from '@/presentation/activity/FeedRow';
+import { FEED_AVATAR_CLASS, FeedRow } from '@/presentation/activity/FeedRow';
+import { feedActorName, feedProjectName, notificationKind } from '@/presentation/activity/feedKind';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import type { NotificationActions } from './useNotificationActions';
 
@@ -18,21 +19,24 @@ function taskLabel(excerpt: string | null | undefined): string {
 }
 
 // …а фрагменты (превью задачи, комментарий, сообщение) — одной строкой без HTML и разметки.
+// Служебный заголовок комментария бота («Оригинал сообщения:») в превью ничего не добавляет.
 function plainExcerpt(excerpt: string | null | undefined): string {
-  return excerpt ? plainDescription(excerpt) : '';
+  return excerpt ? plainDescription(excerpt).replace(/^Оригинал сообщения:\s*/u, '') : '';
 }
 
 function Who({ name }: { name: string }): React.ReactElement {
   return <span className="text-foreground">{name}</span>;
 }
 
-// Уведомление в две строки ленты: о чём (задача, проект, чат) и «кто · что сделал».
+// Уведомление в три строки ленты: что это и где (метка вида + проект), о чём (задача, проект,
+// чат) и «кто · что сделал». Вид события — метка, поэтому в тексте его не повторяем.
 type NotificationView = {
   readonly avatarName: string;
+  readonly context?: string;
   readonly subject: string;
   readonly meta: React.ReactNode;
   readonly metaTitle: string;
-  // Справа от названия, до времени: «уточнение» у упоминаний в задаче, ждущей ответа.
+  // Справа от названия: «уточнение» у упоминаний в задаче, ждущей ответа.
   readonly chip?: React.ReactNode;
   // Под строками — то, что нельзя обрезать: детали изменения задачи.
   readonly details?: React.ReactNode;
@@ -41,37 +45,43 @@ type NotificationView = {
 function describe(payload: NotificationPayload): NotificationView {
   switch (payload.type) {
     case 'task_changed': {
-      const actor = payload.actorDisplayName;
+      const actor = feedActorName(payload.actorDisplayName) || 'Кто-то';
+      const comment = payload.action === 'commented' ? plainExcerpt(payload.detail) : '';
       return {
         avatarName: actor,
-        subject: taskLabel(payload.taskExcerpt),
-        meta: (
-          <>
-            <Who name={actor} /> · <span>{payload.title}</span> · {payload.projectName}
-          </>
-        ),
-        metaTitle: `${actor} · ${payload.title} · ${payload.projectName}`,
-        details: payload.detail ? (
-          <p className="whitespace-pre-line text-meta leading-[1.125rem] text-muted-foreground">{payload.detail}</p>
-        ) : undefined,
-      };
-    }
-    case 'comment_mention': {
-      const actor = payload.actorDisplayName ?? 'Кто-то';
-      const comment = plainExcerpt(payload.commentExcerpt);
-      return {
-        avatarName: actor,
+        context: feedProjectName(payload.projectName),
         subject: taskLabel(payload.taskExcerpt),
         meta: comment ? (
           <>
-            <Who name={actor} /> упомянул вас: «{comment}»
+            <Who name={actor} />: «{comment}»
+          </>
+        ) : (
+          <Who name={actor} />
+        ),
+        metaTitle: comment ? `${actor}: «${comment}»` : `${actor} · ${payload.title}`,
+        details:
+          !comment && payload.detail ? (
+            <p className="whitespace-pre-line text-meta leading-[1.125rem] text-muted-foreground">{payload.detail}</p>
+          ) : undefined,
+      };
+    }
+    case 'comment_mention': {
+      const actor = feedActorName(payload.actorDisplayName) || 'Кто-то';
+      const comment = plainExcerpt(payload.commentExcerpt);
+      return {
+        avatarName: actor,
+        context: feedProjectName(payload.projectName),
+        subject: taskLabel(payload.taskExcerpt),
+        meta: comment ? (
+          <>
+            <Who name={actor} />: «{comment}»
           </>
         ) : (
           <>
-            <Who name={actor} /> упомянул вас в «{payload.projectName}»
+            <Who name={actor} /> упомянул(а) вас
           </>
         ),
-        metaTitle: comment ? `${actor}: «${comment}»` : `${actor} упомянул вас в «${payload.projectName}»`,
+        metaTitle: comment ? `${actor}: «${comment}»` : `${actor} упомянул(а) вас`,
         chip:
           payload.taskStatus === 'awaiting_clarification' ? (
             <span
@@ -83,34 +93,45 @@ function describe(payload: NotificationPayload): NotificationView {
           ) : undefined,
       };
     }
-    case 'project_invite':
+    case 'project_invite': {
+      const actor = payload.actorDisplayName ?? 'Кто-то';
       return {
-        avatarName: payload.actorDisplayName,
+        avatarName: actor,
+        context: 'проект',
         subject: payload.projectName,
         meta: (
           <>
-            <Who name={payload.actorDisplayName ?? 'Кто-то'} /> приглашает вас как {roleLabel[payload.role]}
+            <Who name={actor} /> приглашает вас как {roleLabel[payload.role]}
           </>
         ),
-        metaTitle: `${payload.actorDisplayName ?? 'Кто-то'} приглашает вас в проект как ${roleLabel[payload.role]}`,
+        metaTitle: `${actor} приглашает вас в проект как ${roleLabel[payload.role]}`,
       };
-    case 'workspace_invite':
+    }
+    case 'workspace_invite': {
+      const actor = payload.actorDisplayName ?? 'Кто-то';
       return {
-        avatarName: payload.actorDisplayName,
+        avatarName: actor,
+        context: 'пространство',
         subject: payload.workspaceName,
         meta: (
           <>
-            <Who name={payload.actorDisplayName ?? 'Кто-то'} /> приглашает в пространство как{' '}
-            {roleLabel[payload.role]}
+            <Who name={actor} /> приглашает вас как {roleLabel[payload.role]}
           </>
         ),
-        metaTitle: `${payload.actorDisplayName ?? 'Кто-то'} приглашает в пространство как ${roleLabel[payload.role]}`,
+        metaTitle: `${actor} приглашает в пространство как ${roleLabel[payload.role]}`,
       };
+    }
     case 'task_delegation':
     case 'task_assignee_changed': {
       const actor = payload.actorDisplayName ?? 'Кто-то';
       return {
-        avatarName: payload.actorDisplayName,
+        avatarName: actor,
+        context:
+          payload.type === 'task_assignee_changed'
+            ? payload.isInbox
+              ? 'Входящие'
+              : feedProjectName(payload.projectName)
+            : undefined,
         subject: taskLabel(payload.taskExcerpt),
         meta: (
           <>
@@ -123,13 +144,14 @@ function describe(payload: NotificationPayload): NotificationView {
     case 'task_approval_requested':
       return {
         avatarName: payload.actorDisplayName,
+        context: feedProjectName(payload.projectName),
         subject: taskLabel(payload.taskExcerpt),
         meta: (
           <>
-            <Who name={payload.actorDisplayName} /> отметил(а) выполненной — ждёт вашего утверждения
+            <Who name={payload.actorDisplayName} /> выполнил(а) — ждёт вашего утверждения
           </>
         ),
-        metaTitle: `${payload.actorDisplayName} отметил(а) задачу выполненной в «${payload.projectName}» — ждёт вашего утверждения`,
+        metaTitle: `${payload.actorDisplayName} отметил(а) задачу выполненной — ждёт вашего утверждения`,
       };
     case 'task_delegation_resolved': {
       const verb = payload.resolution === 'declined' ? 'снял(а) с себя задачу' : 'принял(а) задачу';
@@ -147,62 +169,61 @@ function describe(payload: NotificationPayload): NotificationView {
     case 'task_assigned_to_project':
       return {
         avatarName: payload.actorDisplayName,
+        context: feedProjectName(payload.projectName),
         subject: taskLabel(payload.taskExcerpt),
         meta: (
           <>
-            <Who name={payload.actorDisplayName} /> перенёс(ла) в «{payload.projectName}»
+            <Who name={payload.actorDisplayName} /> перенёс(ла) задачу, за которую вы отвечаете
           </>
         ),
-        metaTitle: `${payload.actorDisplayName} перенёс(ла) задачу, за которую вы отвечаете, в «${payload.projectName}»`,
+        metaTitle: `${payload.actorDisplayName} перенёс(ла) задачу, за которую вы отвечаете, в «${feedProjectName(payload.projectName)}»`,
       };
     case 'chat_mention': {
       const actor = payload.actorDisplayName ?? 'Кто-то';
       const message = plainExcerpt(payload.messageExcerpt);
       return {
-        avatarName: payload.actorDisplayName,
-        subject: `Чат «${payload.workspaceName}»`,
-        meta: message ? (
+        avatarName: actor,
+        context: payload.workspaceName,
+        subject: message || 'Сообщение в чате',
+        meta: (
           <>
-            <Who name={actor} />: «{message}»
-          </>
-        ) : (
-          <>
-            <Who name={actor} /> упомянул(а) вас
+            <Who name={actor} /> упомянул(а) вас в чате
           </>
         ),
-        metaTitle: message ? `${actor}: «${message}»` : `${actor} упомянул(а) вас`,
+        metaTitle: message ? `${actor}: «${message}»` : `${actor} упомянул(а) вас в чате`,
       };
     }
-    case 'server_alert': {
-      const icon = payload.alertStatus === 'resolved' ? '✅' : payload.severity === 'critical' ? '🔴' : '🟠';
+    case 'server_alert':
       return {
         avatarName: payload.serverName,
-        subject: `${icon} ${payload.serverName}`,
-        meta: `${payload.message} · «${payload.projectName}»`,
-        metaTitle: `${payload.message} · «${payload.projectName}»`,
+        context: feedProjectName(payload.projectName),
+        subject: payload.serverName,
+        meta: payload.message,
+        metaTitle: payload.message,
       };
-    }
     case 'daily_digest':
       return {
         avatarName: payload.projectName,
-        subject: '🗂️ Ежедневная сводка',
-        meta: `«${payload.projectName}» · ${payload.taskCount} задач`,
-        metaTitle: `«${payload.projectName}» · ${payload.taskCount} задач`,
+        context: feedProjectName(payload.projectName),
+        subject: 'Сводка задач за день',
+        meta: `${payload.taskCount} задач`,
+        metaTitle: `«${feedProjectName(payload.projectName)}» · ${payload.taskCount} задач`,
       };
     case 'support_ticket': {
-      const from = `${payload.submitterDisplayName ?? 'Аноним'}${payload.source === 'landing' ? ' · с лендинга' : ''}`;
-      const text = from + (payload.messageExcerpt ? `: «${payload.messageExcerpt}»` : '');
+      const from = payload.submitterDisplayName ?? 'Аноним';
       return {
         avatarName: payload.submitterDisplayName ?? 'Поддержка',
-        subject: '🆘 Обращение в поддержку',
-        meta: text,
-        metaTitle: text,
+        context: payload.source === 'landing' ? 'с лендинга' : 'из приложения',
+        subject: payload.messageExcerpt || 'Обращение в поддержку',
+        meta: <Who name={from} />,
+        metaTitle: payload.messageExcerpt ? `${from}: «${payload.messageExcerpt}»` : from,
       };
     }
     case 'join_request': {
       const requester = payload.requesterDisplayName ?? 'Пользователь';
       return {
-        avatarName: payload.actorDisplayName,
+        avatarName: requester,
+        context: 'проект',
         subject: payload.projectName,
         meta: (
           <>
@@ -212,11 +233,13 @@ function describe(payload: NotificationPayload): NotificationView {
         metaTitle: `${requester} просит доступ к проекту «${payload.projectName}»`,
       };
     }
+    default:
+      return { avatarName: '', subject: 'Уведомление', meta: '', metaTitle: '' };
   }
 }
 
-// Строка уведомления в ленте «Все»/«Требуется действие» (дизайн C4, плотная): две строки
-// с обрезкой, под ними — только детали изменения и кнопки (принять инвайт/join-request).
+// Строка уведомления в колокольчике и ленте «Все»/«Действие» (дизайн C4): метка вида, о чём
+// и кто; под строками — только детали изменения и кнопки (принять инвайт/join-request).
 export function NotificationItem({
   n,
   actions,
@@ -231,6 +254,7 @@ export function NotificationItem({
   const actionUi =
     actions.actionUi[n.id] ?? (n.actionState && n.actionState !== 'pending' ? n.actionState : undefined);
   const view = describe(payload);
+  const kind = notificationKind(payload);
   // Кнопки — в рост плотной строки (24px); под палец — 36px.
   const buttonClass = 'h-6 gap-1 px-2 text-xs [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:px-3';
 
@@ -301,23 +325,15 @@ export function NotificationItem({
       onClick={() => actions.handleClick(n)}
       className={cn('cursor-pointer', isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-hover')}
       createdAt={n.createdAt}
+      kind={kind}
+      context={view.context}
+      unread={isUnread}
       subject={view.subject}
       subjectTitle={view.subject}
       meta={view.meta}
       metaTitle={view.metaTitle}
       badge={view.chip}
-      avatar={
-        <>
-          <UserAvatar displayName={view.avatarName} className="size-5 rounded-full text-[9px]" />
-          {/* Непрочитанное — точка на углу аватара (выделяет иконку). */}
-          {isUnread && (
-            <span
-              className="absolute -end-0.5 -inset-bs-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
-              aria-hidden
-            />
-          )}
-        </>
-      }
+      avatar={<UserAvatar displayName={view.avatarName} className={FEED_AVATAR_CLASS} />}
     >
       {view.details}
       {/* Задача из payload'а в корзине: текст уведомления сохраняем, но предупреждаем, что

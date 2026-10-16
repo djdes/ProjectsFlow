@@ -173,7 +173,7 @@ function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElemen
       <ul className="flex flex-col gap-px">
         {feed.items.map((it) =>
           it.type === 'activity' ? (
-            <ActivityItem key={it.id} item={it} />
+            <ActivityItem key={it.id} item={it} showProject />
           ) : (
             <NotificationItem key={it.notification.id} n={it.notification} actions={actions} />
           ),

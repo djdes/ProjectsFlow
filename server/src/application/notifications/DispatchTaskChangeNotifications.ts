@@ -2,7 +2,7 @@ import type { TaskChange } from '../../domain/notifications/TaskChange.js';
 import { taskChangeRecipients } from '../../domain/notifications/TaskChange.js';
 import { resolvePref, type NotifEventType } from '../../domain/notifications/NotificationPrefs.js';
 import type { TaskChangedPayload } from '../../domain/notifications/Notification.js';
-import type { Project } from '../../domain/project/Project.js';
+import { projectDisplayName, type Project } from '../../domain/project/Project.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -41,7 +41,7 @@ export class DispatchTaskChangeNotifications {
       ? await this.deps.members.listApproverUserIdsForProject(previousProject.id) : [];
     const actor = actorUserId ? await this.deps.users.getById(actorUserId) : null;
     const actorDisplayName = actor?.displayName ?? 'Система';
-    const message = taskChangeMessage(change, project.name, previousProject?.name);
+    const message = taskChangeMessage(change, projectDisplayName(project), previousProject ? projectDisplayName(previousProject) : undefined);
     const recipients = taskChangeRecipients({
       actorUserId, assigneeUserId: task.assignee.userId,
       previousAssigneeUserId: previous?.assignee.userId,
@@ -59,6 +59,7 @@ export class DispatchTaskChangeNotifications {
         const user = await this.deps.users.getById(userId);
         if (!user) return;
         const context = hasAccess ? project : previousProject!;
+        const contextName = projectDisplayName(context);
         const snapshot = hasAccess ? task : previous!;
         const detail = hasAccess ? message.detail : 'Задача перенесена или переназначена. Доступ к ней изменился.';
         const title = hasAccess ? message.title : 'Задача больше не в вашей работе';
@@ -68,7 +69,7 @@ export class DispatchTaskChangeNotifications {
           : `${this.deps.appUrl.replace(/\/$/u, '')}/notifications`;
         const payload: TaskChangedPayload = {
           type: 'task_changed', taskId: task.id, projectId: context.id,
-          projectName: context.name, taskExcerpt: excerpt,
+          projectName: contextName, taskExcerpt: excerpt,
           actorUserId: actorUserId ?? 'system', actorDisplayName,
           action: message.action, title, detail, taskAvailable: hasAccess && message.action !== 'deleted',
         };
@@ -85,13 +86,13 @@ export class DispatchTaskChangeNotifications {
         }
         const tgKind = approvers.includes(userId) && userId !== task.assignee.userId
           ? 'team_task_changed' : 'task_changed';
-        const text = `${title}\n${actorDisplayName} · ${context.name}\n${excerpt}\n${detail}\n${url}`;
+        const text = `${title}\n${actorDisplayName} · ${contextName}\n${excerpt}\n${detail}\n${url}`;
         const channels: Array<[string, () => Promise<unknown>]> = [
           ['site', () => this.deps.notifications.create({ id: this.deps.idGen(), userId, payload })],
           ['telegram', () => this.deps.telegram.execute({
             userId, kind: tgKind, taskId: task.id,
             projectId: hasAccess ? project.id : undefined,
-            text: `<b>${escapeHtml(title)}</b>\n${escapeHtml(actorDisplayName)} · ${escapeHtml(context.name)}\n\n${escapeHtml(excerpt)}\n${escapeHtml(detail)}\n\n<a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a>`,
+            text: `<b>${escapeHtml(title)}</b>\n${escapeHtml(actorDisplayName)} · ${escapeHtml(contextName)}\n\n${escapeHtml(excerpt)}\n${escapeHtml(detail)}\n\n<a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a>`,
             parseMode: 'HTML',
             // Each invocation is an actual change, not a polling repeat. Do not
             // swallow a second deadline/status change within the transport's 60s window.
@@ -101,8 +102,8 @@ export class DispatchTaskChangeNotifications {
         ];
         if (user.email && emailEnabled) {
           channels.push(['email', () => this.deps.email.send(renderEmailLayout({
-            to: user.email, subject: `${title} — ${context.name}`, heading: title,
-            bodyHtml: `<p>${escapeHtml(actorDisplayName)} · ${escapeHtml(context.name)}</p><p>${escapeHtml(excerpt)}</p><p>${escapeHtml(detail).replace(/\n/gu, '<br>')}</p>`,
+            to: user.email, subject: `${title} — ${contextName}`, heading: title,
+            bodyHtml: `<p>${escapeHtml(actorDisplayName)} · ${escapeHtml(contextName)}</p><p>${escapeHtml(excerpt)}</p><p>${escapeHtml(detail).replace(/\n/gu, '<br>')}</p>`,
             text, ctaUrl: url, ctaLabel: 'Открыть в ProjectsFlow',
           }))]);
         }

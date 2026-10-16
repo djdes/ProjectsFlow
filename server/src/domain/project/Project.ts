@@ -70,3 +70,9 @@ export type Project = {
   readonly siteSlug: string | null;
   readonly createdAt: Date;
 };
+
+// Имя проекта для людей (уведомления, письма, Telegram): личные «Входящие» в пространствах
+// хранятся под служебным именем `inbox:<id>`, которое человеку ничего не говорит.
+export function projectDisplayName(project: Pick<Project, 'name' | 'isInbox'>): string {
+  return project.isInbox ? 'Входящие' : project.name;
+}
