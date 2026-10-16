@@ -103,9 +103,9 @@ type Props = {
   onDelete: (task: Task) => void;
   // Прокидывается в KanbanCard — управляет видимостью short-id [xxxxxxxx].
   showShortId?: boolean;
-  // Если задан — на каждой карточке колонки появляется стрелка → для быстрого
-  // перевода в TODO. Прокидывается KanbanBoard'ом только для backlog-колонки.
-  onQuickPromote?: (task: Task) => void;
+  // Если задан — на карточках колонки появляются быстрые переносы: стрелка → «шаг вперёд»
+  // и «Взять в работу» (target = 'manual'). См. KanbanCard.onQuickPromote.
+  onQuickPromote?: (task: Task, target?: TaskStatus) => void;
   // Триггер refetch после изменения agent-job на карточке (enqueue / cancel).
   onTaskChanged?: () => void;
   // Доп. контрол в шапке колонки (слева от «+»). Сейчас используется done-колонкой

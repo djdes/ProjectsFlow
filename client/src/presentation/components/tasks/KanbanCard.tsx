@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2, Undo2 } from 'lucide-react';
+import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Play, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -12,7 +12,7 @@ import { TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
-import type { Task } from '@/domain/task/Task';
+import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AssigneeBadge } from './AssigneeBadge';
@@ -22,7 +22,7 @@ import { DeadlineBadge } from './DeadlineBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { checklistProgress } from '@/lib/checklist';
-import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
+import { STATUS_LABEL, canTakeToManual, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
@@ -41,9 +41,9 @@ type Props = {
   // Проп оставлен для совместимости с вызывателями (KanbanColumn/TaskListView),
   // которые всё ещё его передают; здесь не используется.
   showShortId?: boolean;
-  // Если задан — на карточке появится стрелка → справа, клик «промоутит» задачу
-  // в TODO. Используется в backlog-колонке для быстрого triage без drag'а.
-  onQuickPromote?: (task: Task) => void;
+  // Если задан — на карточке появляются быстрые переносы без drag'а: стрелка → «шаг
+  // вперёд» (quickPromoteNext) и «Взять в работу» (target = 'manual').
+  onQuickPromote?: (task: Task, target?: TaskStatus) => void;
   // Вызывается после изменения состояния agent-job (enqueue / cancel) — триггерит
   // refetch tasks в родителе чтобы обновить бейдж.
   onTaskChanged?: () => void;
@@ -223,7 +223,11 @@ function KanbanCardImpl({
 
   // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
-  const promoteNext = onQuickPromote ? quickPromoteNext(task.status, workerEnabled) : null;
+  // «Вручную» — своя кнопка «Взять в работу» (как во «Входящих»): безымянная стрелка его
+  // не выдавала. Поэтому стрелку, ведущую в «Вручную», не показываем — действие одно.
+  const canTake = !!onQuickPromote && canTakeToManual(task.status);
+  const quickNext = onQuickPromote ? quickPromoteNext(task.status, workerEnabled) : null;
+  const promoteNext = quickNext === 'manual' && canTake ? null : quickNext;
   // Исполнителю кнопка «выполнено» на задаче в очереди приёмки бесполезна — сервер вернёт
   // ту же очередь, и ничего не произойдёт. Оставляем её только принимающему: для него это
   // и есть «принять работу». (awaitingApproval/canApproveWork объявлены выше — их читает
@@ -281,6 +285,25 @@ function KanbanCardImpl({
           />
         </Button>
       ) : null;
+    const take = canTake ? (
+      <Button
+        key="take"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'shrink-0 cursor-pointer rounded-[5px] text-manual hover:bg-hover',
+          big ? bigAction : 'size-6',
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onQuickPromote?.(task, 'manual');
+        }}
+        aria-label="Взять в работу"
+        title="Взять в работу — в «Вручную»"
+      >
+        <Play className={cn('fill-current', big ? 'size-4' : 'size-3')} />
+      </Button>
+    ) : null;
     const withdrawButton = canWithdraw ? (
       <Button
         key="withdraw"
@@ -323,7 +346,9 @@ function KanbanCardImpl({
     // карточки — корзина. На узкой карточке ряд кнопок доходит почти до её центра, и тап
     // «по середине» попадал в «выполнено»: задача закрывалась вместо того, чтобы открыться.
     // Корзина же только спрашивает подтверждение — промах по ней ничего не ломает.
-    return big ? [remove, withdrawButton, promote, complete] : [complete, promote, withdrawButton, remove];
+    return big
+      ? [remove, withdrawButton, promote, take, complete]
+      : [complete, take, promote, withdrawButton, remove];
   };
 
   // Мета-бейджи (срок / приоритет / чеклист / комменты / статус / ответственный) — нижняя

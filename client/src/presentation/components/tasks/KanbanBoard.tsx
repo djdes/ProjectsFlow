@@ -1012,9 +1012,10 @@ export function KanbanBoard({
   const topAnchorFor = (status: TaskStatus): string | null =>
     status === 'done' ? null : (grouped[status][0]?.id ?? null);
 
-  const handleQuickPromote = async (task: Task): Promise<void> => {
+  const handleQuickPromote = async (task: Task, target?: TaskStatus): Promise<void> => {
     // «Шаг вперёд» по колонкам: Черновики→Вручную→Воркер→Готово (quickPromoteNext).
-    const next = quickPromoteNext(task.status, workerEnabled);
+    // Явный target — кнопка «Взять в работу» (→ 'manual') с любой колонки.
+    const next = target ?? quickPromoteNext(task.status, workerEnabled);
     if (!next) return;
     try {
       await moveWithUndo(task, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });

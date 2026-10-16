@@ -21,7 +21,7 @@ import {
   type Modifier,
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
-import { STATUS_LABEL } from './statusLabels';
+import { STATUS_LABEL, canTakeToManual } from './statusLabels';
 import {
   applyPatches,
   settledPatchIds,
@@ -1560,13 +1560,7 @@ export function AssignedToMeBlock({
     <Button variant="outline" onClick={() => { setLoading(true); void refresh().finally(() => setLoading(false)); }}>Повторить</Button>
   </section>;
 
-  const canTake = (item: InboxBlockTask): boolean =>
-    item.canModify &&
-    item.status !== 'manual' &&
-    item.status !== 'done' &&
-    item.status !== 'pending_approval' &&
-    item.status !== 'in_progress' &&
-    item.status !== 'awaiting_clarification';
+  const canTake = (item: InboxBlockTask): boolean => item.canModify && canTakeToManual(item.status);
   const takeToWorkAction = (item: InboxBlockTask): React.ReactNode =>
     canTake(item) ? (
       <QuickAction

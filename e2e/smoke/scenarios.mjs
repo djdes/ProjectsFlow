@@ -649,6 +649,18 @@ export const scenarios = [
       });
       await t.pageChecks('доска проекта');
       await openAndCloseTask(t, page.locator(card('t-home')), taskTitle(state, 't-home'));
+      await t.check('кнопка «Взять в работу» на черновике переносит его в «Вручную»', async () => {
+        const draft = page.locator(card('t-prices')).first();
+        if (!t.isMobile) await draft.hover();
+        const take = draft.getByRole('button', { name: 'Взять в работу' }).filter({ visible: true }).first();
+        await t.visible(take, 'кнопка «Взять в работу»');
+        if (t.isMobile) await take.tap();
+        else await take.click();
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === `/projects/${BOARD_PROJECT_ID}/tasks/t-prices/move` && m.body?.targetStatus === 'manual',
+          'нет переноса черновика в «Вручную»',
+        );
+      });
     },
   },
 

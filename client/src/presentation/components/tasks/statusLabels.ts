@@ -54,6 +54,19 @@ export function quickPromoteNext(status: TaskStatus, workerEnabled = true): Task
   return next;
 }
 
+// Можно ли «взять в работу» руками (→ 'manual'). Не предлагаем там, где задачей уже занят
+// воркер (в работе / ждёт уточнения), и для взятой, закрытой или сданной на утверждение.
+// Один источник для кнопки на карточке доски (KanbanCard) и в очереди «Входящих».
+export function canTakeToManual(status: TaskStatus): boolean {
+  return (
+    status !== 'manual' &&
+    status !== 'done' &&
+    status !== 'pending_approval' &&
+    status !== 'in_progress' &&
+    status !== 'awaiting_clarification'
+  );
+}
+
 // Optional small subtitle rendered next to the main label in column header.
 // Только для `todo` (Воркер): модель воркера, коротко — длинная подпись отъедала ширину
 // у названия и резалась многоточием. null/undefined = без подписи.
