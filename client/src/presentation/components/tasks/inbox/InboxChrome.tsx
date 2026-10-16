@@ -4,9 +4,10 @@ import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import type { DueKind } from '../assignedGrouping';
+import { useScrollEdges } from './useScrollEdges';
 
 // Мелкие детали шапки и доски «Входящих» (дизайн C4 «Одна доска»): поиск, чипы срока,
-// заголовок очереди с листанием. Без состояния и без dnd — только вид и клавиатура;
+// заголовок очереди с листанием. Без dnd и данных — вид, клавиатура и края прокрутки;
 // данные и решения остаются в AssignedToMeBlock.
 
 // Поиск по задачам «Входящих». «/» с любого места страницы ставит курсор в поле (если
@@ -151,15 +152,15 @@ export function QueueHeader({
   label,
   count,
   onScroll,
-  canScrollBack,
-  canScrollForward,
+  scrollTarget,
 }: {
   label: string;
   count: string;
   onScroll: (direction: -1 | 1) => void;
-  canScrollBack: boolean;
-  canScrollForward: boolean;
+  // Ряд колонок: по нему шапка сама гасит кнопки ‹ › у краёв.
+  scrollTarget: HTMLElement | null;
 }): React.ReactElement {
+  const { back: canScrollBack, forward: canScrollForward } = useScrollEdges(scrollTarget);
   return (
     <div className="flex h-7 items-center gap-2 px-0.5">
       <span aria-hidden className="size-3 rounded-full border-[2.4px] border-primary" />

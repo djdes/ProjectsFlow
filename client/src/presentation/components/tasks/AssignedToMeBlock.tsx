@@ -480,38 +480,18 @@ export function AssignedToMeBlock({
   // досках проектов): держим ref на сам скролл-контейнер, чтобы SyncedStickyScrollbar
   // зеркалил его scrollLeft. Комбинированный callback-ref — и persist-скролл, и sticky-бар.
   const hScrollElRef = useRef<HTMLDivElement>(null);
-  // Можно ли листать ряд колонок назад/вперёд — гасит кнопки ‹ › в заголовке очереди.
-  const [scrollEdges, setScrollEdges] = useState({ back: false, forward: false });
-  const measureScrollEdges = useCallback((el: HTMLDivElement | null): void => {
-    if (!el) return;
-    const back = el.scrollLeft > 2;
-    const forward = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
-    setScrollEdges((prev) => (prev.back === back && prev.forward === forward ? prev : { back, forward }));
-  }, []);
+  // Сам ряд — в состоянии ради шапки очереди: края прокрутки (кнопки ‹ ›) она считает сама,
+  // подписавшись на ряд. Меняется только при смене ряда, а не на каждой прокрутке: состояние
+  // краёв здесь перерисовывало весь блок и подвешивало прокрутку вбок.
+  const [rowEl, setRowEl] = useState<HTMLDivElement | null>(null);
   const setRowRef = useCallback(
     (el: HTMLDivElement | null): void => {
       hScrollElRef.current = el;
       setHScrollRef(el);
-      measureScrollEdges(el);
+      setRowEl(el);
     },
-    [setHScrollRef, measureScrollEdges],
+    [setHScrollRef],
   );
-  const handleRowScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>): void => {
-      onHScroll(e);
-      measureScrollEdges(e.currentTarget);
-    },
-    [onHScroll, measureScrollEdges],
-  );
-  // Ширина ряда меняется с окном и составом колонок — края пересчитываем по ResizeObserver.
-  useEffect(() => {
-    const el = hScrollElRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measureScrollEdges(el));
-    ro.observe(el);
-    for (const child of Array.from(el.children)) ro.observe(child);
-    return () => ro.disconnect();
-  });
   const scrollColumns = (direction: -1 | 1): void => {
     hScrollElRef.current?.scrollBy({
       left: direction * COLUMN_SCROLL_STEP,
@@ -1989,7 +1969,7 @@ export function AssignedToMeBlock({
     ) : grouping === 'deadline' ? (
       // Группировка «Дедлайн» = 3 колонки по времени (Без срока / На сегодня / Будущее).
       // Drag между колонками меняет дедлайн; drag на аватар участника — назначает его.
-      <div ref={setRowRef} onScroll={handleRowScroll} className={COLUMNS_ROW_CLASS}>
+      <div ref={setRowRef} onScroll={onHScroll} className={COLUMNS_ROW_CLASS}>
         {kanbanGroups.map((group, index) => {
           const collapseKey = `bucket:${group.key}`;
           return (
@@ -2028,7 +2008,7 @@ export function AssignedToMeBlock({
     ) : (
       // Остальные сортировки (проект / дата создания / приоритет / тип): колонки-группы.
       // Пока тащат свою карточку, колонки других проектов принимают её (перенос в проект).
-      <div ref={setRowRef} onScroll={handleRowScroll} className={COLUMNS_ROW_CLASS}>
+      <div ref={setRowRef} onScroll={onHScroll} className={COLUMNS_ROW_CLASS}>
         {boardDragActive && phantomProjectNeeded && (
           <PhantomDropColumn
             id="phantom-project"
@@ -2349,8 +2329,7 @@ export function AssignedToMeBlock({
               label={QUEUE_LABEL[grouping]}
               count={queueCountText}
               onScroll={scrollColumns}
-              canScrollBack={scrollEdges.back}
-              canScrollForward={scrollEdges.forward}
+              scrollTarget={rowEl}
             />
             {desktopQueue}
             {/* Закреплённый снизу вьюпорта горизонтальный скролл ряда колонок — как на досках
