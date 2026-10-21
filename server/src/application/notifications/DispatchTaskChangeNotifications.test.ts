@@ -152,6 +152,16 @@ test('user content is escaped in email and Telegram', async () => {
   assert.match(h.telegram[0]!.text, /&lt;script&gt;/u);
 });
 
+test('Telegram change notifications format Markdown and link images after long descriptions', async () => {
+  const h = harness();
+  await h.run('worker', { description: '**Название**\n\n' + 'Описание '.repeat(80)
+    + '<figure data-figure-image><img src="/api/attachments/photo"/></figure>' }, ['description']);
+  assert.match(h.telegram[0]!.text, /<b>Название<\/b>/u);
+  assert.match(h.telegram[0]!.text, /https:\/\/pf.test\/api\/attachments\/photo/u);
+  assert.doesNotMatch(h.telegram[0]!.text, /figure|\*\*/u);
+  assert.equal(h.telegram[0]!.parseMode, 'HTML');
+});
+
 test('UpdateTask → saved snapshot → all channels; history failure does not lose notifications', async () => {
   const h = harness();
   const current = task();

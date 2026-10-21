@@ -12,6 +12,7 @@ import type { NotificationRepository } from './NotificationRepository.js';
 import type { EmailSender } from './EmailSender.js';
 import { escapeHtml, renderEmailLayout } from './emails/layout.js';
 import { taskChangeMessage } from './taskChangeMessage.js';
+import { notificationExcerpt } from '../telegram/notificationExcerpt.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -92,7 +93,7 @@ export class DispatchTaskChangeNotifications {
           ['telegram', () => this.deps.telegram.execute({
             userId, kind: tgKind, taskId: task.id,
             projectId: hasAccess ? project.id : undefined,
-            text: `<b>${escapeHtml(title)}</b>\n${escapeHtml(actorDisplayName)} · ${escapeHtml(contextName)}\n\n${escapeHtml(excerpt)}\n${escapeHtml(detail)}\n\n<a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a>`,
+            text: `<b>${escapeHtml(title)}</b>\n${escapeHtml(actorDisplayName)} · ${escapeHtml(contextName)}\n\n${notificationExcerpt(snapshot.description ?? '', this.deps.appUrl)}\n${escapeHtml(detail)}\n\n<a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a>`,
             parseMode: 'HTML',
             // Each invocation is an actual change, not a polling repeat. Do not
             // swallow a second deadline/status change within the transport's 60s window.

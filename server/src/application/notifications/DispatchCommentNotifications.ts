@@ -12,7 +12,7 @@ import { resolvePref, type NotifSource } from '../../domain/notifications/Notifi
 import { renderActivityEmail } from './emails/activityEmail.js';
 import { buildTaskUrl } from './taskUrl.js';
 import { parseMentions } from '../task/parseMentions.js';
-import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
+import { notificationExcerpt } from '../telegram/notificationExcerpt.js';
 import type { NotificationRepository } from './NotificationRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 
@@ -55,11 +55,6 @@ type Deps = {
 
 function escapeTgHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function tgExcerpt(text: string, limit = 100): string {
-  const s = text.trim().replace(/\s+/g, ' ');
-  return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
 }
 
 // Усечение reason под VARCHAR(64).
@@ -174,7 +169,7 @@ export class DispatchCommentNotifications {
     // --- Telegram-канал: base (kind 'comment_on_my_task') + упомянутые (kind 'mention') ---
     const tgText =
       `💬 Новый комментарий в «${escapeTgHtml(projectName)}»:\n` +
-      `<i>${markdownToTelegramHtml(tgExcerpt(comment.body))}</i>\n\n` +
+      `${notificationExcerpt(comment.body, this.deps.appUrl, 100)}\n\n` +
       `<a href="${url}">Открыть комментарий</a>`;
 
     for (const m of base) {
@@ -202,7 +197,7 @@ export class DispatchCommentNotifications {
     // TG_KIND_TO_PREF, so it stays switchable off by the user).
     const tgMentionText =
       `💬 Вас упомянули в комментарии в «${escapeTgHtml(projectName)}»:\n` +
-      `<i>${markdownToTelegramHtml(tgExcerpt(comment.body))}</i>\n\n` +
+      `${notificationExcerpt(comment.body, this.deps.appUrl, 100)}\n\n` +
       `<a href="${url}">Открыть комментарий</a>`;
 
     // Only for mode 'all': 'selected'/'none' are an explicit narrowing by the author and
