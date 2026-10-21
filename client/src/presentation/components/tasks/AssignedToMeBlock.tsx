@@ -294,8 +294,8 @@ function readStoredSet(key: string): ReadonlySet<string> {
   }
 }
 
-// Шаг листания ряда колонок кнопками ‹ › — ширина колонки (256px) и зазор.
-const COLUMN_SCROLL_STEP = 264;
+// Minimum arrow scroll distance: two columns (256px each) including their gaps.
+const MIN_COLUMN_SCROLL_STEP = 528;
 
 // «Скрыть личные» на вкладке «Другим»: личные доски коллег могут занимать много колонок,
 // поэтому выбор запоминаем между сессиями. По умолчанию — показывать.
@@ -493,8 +493,12 @@ export function AssignedToMeBlock({
     [setHScrollRef],
   );
   const scrollColumns = (direction: -1 | 1): void => {
-    hScrollElRef.current?.scrollBy({
-      left: direction * COLUMN_SCROLL_STEP,
+    const row = hScrollElRef.current;
+    if (!row) return;
+    // Page through wide boards while keeping some context from the previous page.
+    const step = Math.max(MIN_COLUMN_SCROLL_STEP, Math.round(row.clientWidth * 0.85));
+    row.scrollBy({
+      left: direction * step,
       behavior: animations ? 'smooth' : 'auto',
     });
   };
