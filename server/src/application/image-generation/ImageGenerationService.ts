@@ -1,19 +1,31 @@
 import { ImageGenerationError, type ImageGeneration } from '../../domain/image-generation/ImageGeneration.js';
 import type { ImageGenerationRepository } from './ImageGenerationRepository.js';
 import type { AttachmentStorage } from '../task/AttachmentStorage.js';
+import type { AiConversationService } from '../ai-conversation/AiConversationService.js';
 
 export class ImageGenerationService {
-  constructor(private readonly deps: { jobs: ImageGenerationRepository; storage: AttachmentStorage; dispatcherUserId: string; idGen: () => string }) {}
-  async create(userId: string, prompt: string): Promise<ImageGeneration> {
+  constructor(private readonly deps: {
+    jobs: ImageGenerationRepository;
+    storage: AttachmentStorage;
+    dispatcherUserId: string;
+    idGen: () => string;
+    conversations?: Pick<AiConversationService, 'get'>;
+  }) {}
+  async create(userId: string, prompt: string, conversationId?: string): Promise<ImageGeneration> {
     const text = prompt.trim();
     if (!text || text.length > 8000) throw new ImageGenerationError(400, 'Введите описание фотографии — до 8000 символов');
     if (!this.deps.dispatcherUserId) throw new ImageGenerationError(503, 'Генерация фотографий пока недоступна');
-    return this.deps.jobs.create({ id: this.deps.idGen(), userId, prompt: text, dispatcherUserId: this.deps.dispatcherUserId });
+    if (conversationId) await this.requireConversation(userId, conversationId);
+    return this.deps.jobs.create({ id: this.deps.idGen(), userId, prompt: text, dispatcherUserId: this.deps.dispatcherUserId, conversationId: conversationId ?? null });
   }
-  list(userId: string): Promise<ImageGeneration[]> { return this.deps.jobs.list(userId); }
+  async list(userId: string, conversationId?: string): Promise<ImageGeneration[]> {
+    if (conversationId) await this.requireConversation(userId, conversationId);
+    return this.deps.jobs.list(userId, conversationId);
+  }
   async owned(userId: string, id: string): Promise<ImageGeneration> {
     const job = await this.deps.jobs.get(id);
     if (!job || job.userId !== userId) throw new ImageGenerationError(404, 'Фотография не найдена');
+    if (job.conversationId) await this.requireConversation(userId, job.conversationId);
     return job;
   }
   async image(userId: string, id: string): Promise<Buffer> {
@@ -45,5 +57,9 @@ export class ImageGenerationService {
   }
   private requireDispatcher(id: string): void {
     if (!this.deps.dispatcherUserId || id !== this.deps.dispatcherUserId) throw new ImageGenerationError(403, 'Недостаточно прав');
+  }
+  private async requireConversation(userId: string, conversationId: string): Promise<void> {
+    if (!this.deps.conversations) throw new ImageGenerationError(404, 'Чат не найден');
+    await this.deps.conversations.get(userId, conversationId);
   }
 }

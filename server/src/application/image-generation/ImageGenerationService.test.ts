@@ -28,3 +28,32 @@ test('empty prompts are rejected and failed generations expose a safe retry mess
   await assert.rejects(f.service.create('owner','x'.repeat(8001)),{status:400});
   await f.service.complete('dispatcher','job','lease');assert.equal(f.job.status,'failed');assert.match(f.job.errorMessage!,/Попробуйте/);
 });
+
+test('conversation images use the existing conversation authorization and survive service restart', async () => {
+  const jobs = new Map<string, ImageGeneration>();
+  let allowed = true;
+  const deps = {
+    jobs: {
+      async create(input: Pick<ImageGeneration, 'id'|'userId'|'dispatcherUserId'|'prompt'|'conversationId'>) {
+        const job = { ...fixture().job, ...input, status: 'queued' as const };
+        jobs.set(job.id, job); return job;
+      },
+      async list(user: string, chat?: string) { return [...jobs.values()].filter(job => job.userId === user && (!chat || job.conversationId === chat)); },
+      async get(id: string) { return jobs.get(id) ?? null; },
+      async claim() { return null; },
+      async complete() { return true; },
+    },
+    conversations: { async get(user: string, chat: string) { if (!allowed || user !== 'owner' || chat !== 'chat') throw new Error('chat access denied'); return {} as never; } },
+    storage: { async put() {}, async read() { return null; }, async delete() {} },
+    dispatcherUserId: 'dispatcher', idGen: () => 'photo',
+  };
+  const first = new ImageGenerationService(deps);
+  await first.create('owner', 'Фото чашки', 'chat');
+  const reopened = new ImageGenerationService(deps);
+  assert.equal((await reopened.list('owner', 'chat'))[0]!.conversationId, 'chat');
+  await assert.rejects(reopened.create('other', 'Фото', 'chat'));
+  assert.equal(jobs.size, 1);
+  allowed = false;
+  await assert.rejects(reopened.list('owner', 'chat'));
+  await assert.rejects(reopened.owned('owner', 'photo'));
+});

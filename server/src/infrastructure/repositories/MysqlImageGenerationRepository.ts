@@ -1,24 +1,24 @@
 import type { Pool, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import type { ImageGenerationRepository } from '../../application/image-generation/ImageGenerationRepository.js';
 import { ImageGenerationError, type ImageGeneration } from '../../domain/image-generation/ImageGeneration.js';
-const fields = `id, user_id AS userId, dispatcher_user_id AS dispatcherUserId, prompt, status, claim_token AS claimToken, storage_key AS storageKey, error_message AS errorMessage, created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
+const fields = `id, user_id AS userId, conversation_id AS conversationId, dispatcher_user_id AS dispatcherUserId, prompt, status, claim_token AS claimToken, storage_key AS storageKey, error_message AS errorMessage, created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
 export class MysqlImageGenerationRepository implements ImageGenerationRepository {
   constructor(private readonly pool: Pool) {}
-  async create(job: Pick<ImageGeneration, 'id'|'userId'|'dispatcherUserId'|'prompt'>): Promise<ImageGeneration> {
+  async create(job: Pick<ImageGeneration, 'id'|'userId'|'dispatcherUserId'|'prompt'|'conversationId'>): Promise<ImageGeneration> {
     const connection = await this.pool.getConnection();
     try {
       await connection.beginTransaction();
       await connection.query('SELECT id FROM users WHERE id=? FOR UPDATE', [job.userId]);
       const [rows] = await connection.query<RowDataPacket[]>(`SELECT COUNT(*) AS total, SUM(status IN ('queued','running')) AS active FROM image_generation_jobs WHERE user_id=? AND created_at >= UTC_TIMESTAMP() - INTERVAL 1 DAY`, [job.userId]);
       if (Number(rows[0]?.active) >= 2 || Number(rows[0]?.total) >= 10) throw new ImageGenerationError(429, 'Лимит: две генерации одновременно и десять за сутки');
-      await connection.query('INSERT INTO image_generation_jobs (id,user_id,dispatcher_user_id,prompt) VALUES (?,?,?,?)', [job.id,job.userId,job.dispatcherUserId,job.prompt]);
+      await connection.query('INSERT INTO image_generation_jobs (id,user_id,dispatcher_user_id,prompt,conversation_id) VALUES (?,?,?,?,?)', [job.id,job.userId,job.dispatcherUserId,job.prompt,job.conversationId ?? null]);
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
     return (await this.get(job.id))!;
   }
-  async list(userId: string): Promise<ImageGeneration[]> {
+  async list(userId: string, conversationId?: string): Promise<ImageGeneration[]> {
     await this.expire();
-    const [rows] = await this.pool.query<RowDataPacket[]>(`SELECT ${fields} FROM image_generation_jobs WHERE user_id=? ORDER BY created_at DESC LIMIT 40`, [userId]);
+    const [rows] = await this.pool.query<RowDataPacket[]>(`SELECT ${fields} FROM image_generation_jobs WHERE user_id=?${conversationId ? ' AND conversation_id=?' : ''} ORDER BY created_at DESC LIMIT 40`, conversationId ? [userId, conversationId] : [userId]);
     return rows as ImageGeneration[];
   }
   async get(id: string): Promise<ImageGeneration | null> {

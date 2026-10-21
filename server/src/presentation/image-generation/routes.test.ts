@@ -6,18 +6,26 @@ import type { AddressInfo } from 'node:net';
 import { imageGenerationRouter, imageGenerationAgentRouter } from './routes.js';
 import { ImageGenerationService } from '../../application/image-generation/ImageGenerationService.js';
 import type { ImageGeneration } from '../../domain/image-generation/ImageGeneration.js';
+import { ImageGenerationError } from '../../domain/image-generation/ImageGeneration.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const lease = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const conversationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 async function withApi(run: (url: string) => Promise<void>) {
   const job: ImageGeneration = { id, userId: 'owner', dispatcherUserId: 'dispatcher', prompt: 'Фото кружки', status: 'succeeded', claimToken: lease, storageKey: 'private/photo.png', errorMessage: null, createdAt: new Date(), startedAt: new Date(), finishedAt: new Date() };
   const service = new ImageGenerationService({
+    conversations: {
+      async get(userId, chatId) {
+        if (userId !== 'owner' || chatId !== conversationId) throw new ImageGenerationError(404, 'Чат не найден');
+        return { id: conversationId } as never;
+      },
+    },
     jobs: {
       async create(input) { return { ...job, ...input, status: 'queued', storageKey: null }; },
-      async list(userId) { return userId === job.userId ? [job] : []; },
+      async list(userId, chatId) { return userId === job.userId && (!chatId || chatId === job.conversationId) ? [job] : []; },
       async get(key) { return key === id ? job : null; },
       async claim() { return job; },
       async complete() { return true; },
@@ -69,5 +77,23 @@ test('photo API queues a prompt and the bridge accepts only the configured accou
       const claim = await fetch(base + '/api/agent/image-jobs/claim', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} });
       assert.equal(claim.status, expected, token || 'anonymous');
     }
+  });
+});
+
+test('photo API binds a request to an accessible chat and rejects foreign or invalid chat IDs', async () => {
+  await withApi(async base => {
+    const create = (chatId: string, user = 'owner') => fetch(base + '/api/ai/image-jobs', {
+      method: 'POST', headers: { 'x-test-user': user, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'Фото чашки', conversationId: chatId }),
+    });
+    const response = await create(conversationId);
+    assert.equal(response.status, 202);
+    assert.equal((await response.json()).conversationId, conversationId);
+    assert.equal((await create(conversationId, 'other')).status, 404);
+    assert.equal((await create(id)).status, 404);
+    assert.equal((await create('not-a-uuid')).status, 400);
+    assert.equal((await fetch(`${base}/api/ai/image-jobs?conversationId=${conversationId}`, { headers: { 'x-test-user': 'other' } })).status, 404);
+    const listing = await (await fetch(`${base}/api/ai/image-jobs?conversationId=${conversationId}`, { headers: { 'x-test-user': 'owner' } })).json();
+    assert.deepEqual(listing.items, [], 'standalone photos do not appear in an unrelated chat');
   });
 });

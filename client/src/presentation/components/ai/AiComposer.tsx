@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, FileText, Lightbulb, Paperclip, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, FileText, ImagePlus, Lightbulb, Paperclip, Sparkles, Square, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -92,6 +92,7 @@ export function AiComposer({
   selection,
   onOpenSelection,
   insert,
+  imageMode,
 }: {
   conversationId: string | null;
   sending: boolean;
@@ -105,6 +106,11 @@ export function AiComposer({
   selection?: AiSelectionRef | null;
   onOpenSelection?: (selection: AiSelectionRef) => void;
   insert?: AiComposerInsert | null;
+  imageMode?: {
+    enabled: boolean;
+    onChange: (enabled: boolean) => void;
+    onSend: (prompt: string) => Promise<void>;
+  };
 }): React.ReactElement {
   const { aiConversationRepository } = useContainer();
   const storageKey = `pf-ai-draft:${conversationId ?? 'new'}`;
@@ -117,6 +123,8 @@ export function AiComposer({
   const fileInput = useRef<HTMLInputElement | null>(null);
   const activeRunId = useAiActiveRunId(conversationId);
   const insertTokenRef = useRef<number | null>(null);
+  const submitting = useRef(false);
+  const photoMode = imageMode?.enabled === true;
   // Умолчание — «делать»: кнопка «Размышление» выключена, пока её не нажали.
   const mode = modeSwitch?.mode ?? 'build';
 
@@ -179,6 +187,7 @@ export function AiComposer({
   }, [insert, setEditorText]);
 
   const addFiles = async (files: FileList | File[]): Promise<void> => {
+    if (photoMode) { toast.info('Для генерации фото напишите описание без вложений'); return; }
     const selected = [...files].slice(0, Math.max(0, 8 - attachments.length));
     if (!selected.length) return;
     try {
@@ -203,18 +212,23 @@ export function AiComposer({
   };
 
   const submit = async (): Promise<void> => {
-    const value = composeAiMessage(body, attachments);
-    if (!value || sending) return;
+    const value = photoMode ? body.trim() : composeAiMessage(body, attachments);
+    if (!value || sending || submitting.current) return;
+    if (photoMode && value.length > 8000) { toast.error('Описание фотографии — до 8000 символов'); return; }
+    submitting.current = true;
     const previousBody = body;
     const previousAttachments = attachments;
     setEditorText('');
     setAttachments([]);
     try {
-      await onSend(value, mode);
+      if (photoMode && imageMode) await imageMode.onSend(value);
+      else await onSend(value, mode);
       try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
     } catch {
       setEditorText(previousBody);
       setAttachments(previousAttachments);
+    } finally {
+      submitting.current = false;
     }
   };
 
@@ -231,7 +245,7 @@ export function AiComposer({
     }
   };
 
-  const empty = isComposerBlank(body) && attachments.length === 0;
+  const empty = isComposerBlank(body) && (photoMode || attachments.length === 0);
 
   return (
     <div className={cn(
@@ -252,7 +266,7 @@ export function AiComposer({
         {/* Плейсхолдер прячем по факту непустого DOM, а не по trim: иначе он ляжет под набранные пробелы. */}
         {body === '' && (
           <span aria-hidden="true" className="pointer-events-none absolute start-[14px] inset-bs-3 select-none truncate text-base leading-6 text-muted-foreground/70">
-            {modeSwitch ? placeholderFor(mode, Boolean(selection)) : 'О чём хотите подумать или что сделать?'}
+            {photoMode ? 'Опишите фотографию, которую хотите создать' : modeSwitch ? placeholderFor(mode, Boolean(selection)) : 'О чём хотите подумать или что сделать?'}
           </span>
         )}
         <div
@@ -262,7 +276,7 @@ export function AiComposer({
           suppressContentEditableWarning
           tabIndex={0}
           aria-multiline="true"
-          aria-label="Сообщение для ИИ"
+          aria-label={photoMode ? 'Описание фотографии' : 'Сообщение для ИИ'}
           className="max-h-[40vh] min-h-6 w-full overflow-y-auto whitespace-pre-wrap break-words pbe-0 ps-[14px] pe-3 pbs-3 text-base leading-6 outline-none"
           onInput={syncFromEditor}
           onKeyDown={(event) => {
@@ -308,14 +322,22 @@ export function AiComposer({
           ))}
         </div>
       )}
-      <div className="mbs-2 flex items-center gap-1.5 px-2.5">
+      <div className="mbs-2 flex flex-wrap items-center gap-1.5 px-2.5">
         <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.target.value = ''; }} />
-        <button type="button" title="Вставьте скрин Ctrl+V или выберите файл" aria-label="Прикрепить файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-10" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
+        <button type="button" disabled={photoMode} title={photoMode ? 'Для генерации фото напишите описание' : 'Вставьте скрин Ctrl+V или выберите файл'} aria-label="Прикрепить файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground disabled:opacity-40 max-sm:size-10" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
         <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
+        {imageMode && <button
+          type="button"
+          aria-pressed={photoMode}
+          disabled={sending || attachments.length > 0}
+          title={attachments.length ? 'Уберите вложения, чтобы включить генерацию фото' : 'Создать фотографию по описанию'}
+          onClick={() => imageMode.onChange(!photoMode)}
+          className={cn('inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:opacity-50', photoMode ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground')}
+        ><ImagePlus className="size-3.5 shrink-0" aria-hidden />Генерация фото</button>}
         <div className="flex-1" />
         {/* Чистый тумблер: коробка кнопки не меняется, меняются только заливка/цвет и
             плейсхолдер поля. Черновик и фокус остаются на месте — поле не перемонтируется. */}
-        {modeSwitch && (
+        {modeSwitch && !photoMode && (
           <button
             type="button"
             aria-pressed={modeSwitch.mode === 'discuss'}
@@ -333,7 +355,7 @@ export function AiComposer({
             Размышление
           </button>
         )}
-        {activeRunId ? (
+        {activeRunId && !photoMode ? (
           <button
             type="button"
             onClick={() => void stop()}

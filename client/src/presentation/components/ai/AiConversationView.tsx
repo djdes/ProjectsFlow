@@ -6,6 +6,8 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { useAiConversation } from '@/presentation/hooks/useAiConversation';
+import { useConversationImages } from '@/presentation/hooks/useConversationImages';
+import { ConversationImageMessage } from './ConversationImageMessage';
 import { useAiConversations, announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
 import { useAiChatPanels } from '@/presentation/hooks/useAiChatPanels';
 import { useContainer } from '@/infrastructure/di/container';
@@ -67,6 +69,9 @@ export function AiConversationView({
   onBuild?: (prompt: string) => void | Promise<void>;
 }): React.ReactElement {
   const state = useAiConversation(conversationId);
+  const images = useConversationImages(conversationId);
+  const [imageMode, setImageMode] = useState({ conversationId, enabled: false });
+  const photoMode = imageMode.conversationId === conversationId && imageMode.enabled;
   const scrollArea = useRef<HTMLDivElement | null>(null);
   const wasNearBottom = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -173,7 +178,7 @@ export function AiConversationView({
     return () => window.cancelAnimationFrame(frame);
     // Keep the surrounding application shell in place: only this conversation
     // viewport is allowed to scroll when a new message arrives.
-  }, [state.messages]);
+  }, [state.messages, images.jobs]);
 
   if (state.loading && state.messages.length === 0) {
     return <PageSkeleton layout="chat" />;
@@ -183,6 +188,10 @@ export function AiConversationView({
   // как в референсе. Сообщения без поля `suggestions` просто не дают блока.
   const lastAssistant = [...state.messages].reverse().find((message) => message.role === 'assistant');
   const suggestions = readAiSuggestions(lastAssistant?.metadata);
+  const timeline = [
+    ...state.messages.map((message, index) => ({ kind: 'message' as const, message, index, createdAt: message.createdAt })),
+    ...images.jobs.map(job => ({ kind: 'image' as const, job, createdAt: job.createdAt })),
+  ].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
@@ -221,7 +230,7 @@ export function AiConversationView({
                   каждым сообщением смонтирован всегда и сам работает разделителем, а
                   прежние 24px превращали ленту в редкую лесенку. */}
               <div className={cn('mx-auto flex min-h-full min-w-0 w-full flex-col gap-2.5 px-4 py-6', compact ? 'max-w-3xl' : 'max-w-4xl')}>
-                {state.messages.length === 0 ? (
+                {timeline.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
                     <div className="mbe-4 grid size-14 place-items-center rounded-xl bg-foreground text-background shadow-card"><Sparkles className="size-7" /></div>
                     <h2 className="text-xl font-semibold">{projectName ? `Работаем над «${projectName}»` : 'Чем помочь?'}</h2>
@@ -230,7 +239,14 @@ export function AiConversationView({
                     </p>
                     {!compact && <AiComposerPresets className="mbs-6 w-full max-w-2xl" disabled={state.sending} onPick={(prompt) => fillComposer(prompt, true)} />}
                   </div>
-                ) : state.messages.map((message, index) => {
+                ) : timeline.map(entry => {
+                  if (entry.kind === 'image') return <ConversationImageMessage
+                    key={`image:${entry.job.id}`}
+                    job={entry.job}
+                    onImageLoad={() => { if (wasNearBottom.current) scrollToLatest('auto'); }}
+                    onRetry={prompt => { setImageMode({ conversationId, enabled: true }); fillComposer(prompt, true); }}
+                  />;
+                  const { message, index } = entry;
                   const previousUser = [...state.messages.slice(0, index)].reverse().find((item) => item.role === 'user');
                   return (
                     <ConversationMessage
@@ -245,6 +261,7 @@ export function AiConversationView({
                   );
                 })}
                 {state.error && <div className="mx-auto flex max-w-lg items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"><AlertCircle className="size-4 shrink-0" />{state.error}</div>}
+                {images.error && <p role="alert" className="text-sm text-destructive">{images.error}</p>}
                 <div aria-hidden="true" />
               </div>
             </div>
@@ -279,8 +296,9 @@ export function AiConversationView({
               <AiComposer
                 key={conversationId}
                 conversationId={conversationId}
-                sending={state.sending}
+                sending={state.sending || images.sending}
                 onSend={send}
+                imageMode={{ enabled: photoMode, onChange: enabled => setImageMode({ conversationId, enabled }), onSend: images.generate }}
                 compact={compact}
                 insert={composerInsert}
                 selection={selection}

@@ -1,5 +1,6 @@
 export type ImageGeneration = {
   id: string; userId: string; dispatcherUserId: string; prompt: string;
+  conversationId?: string | null;
   status: 'queued' | 'running' | 'succeeded' | 'failed';
   claimToken: string | null; storageKey: string | null; errorMessage: string | null;
   createdAt: Date; startedAt: Date | null; finishedAt: Date | null;

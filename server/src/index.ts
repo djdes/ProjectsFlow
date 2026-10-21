@@ -2165,6 +2165,7 @@ const aiActionBatchService = new AiActionBatchService({
 
 const { app, devProxyUpgrade } = createApp({
   imageGeneration: new ImageGenerationService({
+    conversations: aiConversationService,
     jobs: new MysqlImageGenerationRepository(pool),
     storage: attachmentStorage,
     dispatcherUserId: process.env.IMAGE_DISPATCHER_USER_ID ?? '',
