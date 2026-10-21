@@ -1,86 +1,111 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
-/**
- * Горизонтальный скролл-бар, закреплённый снизу вьюпорта (Notion-style): всегда виден и
- * НЕ исчезает при вертикальном скролле страницы (в отличие от родного scrollbar доски,
- * который живёт у нижнего края высокой колонки — ниже сгиба). Синхронизирует `scrollLeft`
- * с целевым контейнером (доской канбана) в обе стороны. Рендерится только при переполнении.
- *
- * Кладётся сиблингом сразу после прокручиваемого контейнера, внутри вертикального
- * скролл-порта страницы — тогда `sticky bottom` прилипает к низу вьюпорта.
- */
+function setSyncedPosition(element: HTMLElement, left: number, pending: WeakMap<HTMLElement, number>): void {
+  if (element.scrollLeft === left) return;
+  element.scrollLeft = left;
+  // Read the actual position: the browser can clamp it after a resize.
+  pending.set(element, element.scrollLeft);
+}
+
+function isSyncedScroll(element: HTMLElement, pending: WeakMap<HTMLElement, number>): boolean {
+  const expected = pending.get(element);
+  if (expected !== undefined && element.scrollLeft === expected) return true;
+  pending.delete(element);
+  return false;
+}
+
+/** A native horizontal scrollbar pinned to the page's vertical scrollport. */
 export function SyncedStickyScrollbar({
-  targetRef,
+  target,
+  ctrlWheel = false,
   className,
 }: {
-  targetRef: React.RefObject<HTMLElement | null>;
+  target: HTMLElement | null;
+  ctrlWheel?: boolean;
   className?: string;
 }): React.ReactElement | null {
   const trackRef = useRef<HTMLDivElement>(null);
-  const syncing = useRef(false);
-  const [scrollWidth, setScrollWidth] = useState(0);
-  const [clientWidth, setClientWidth] = useState(0);
+  const pendingScrolls = useRef(new WeakMap<HTMLElement, number>());
+  const [size, setSize] = useState({ scrollWidth: 0, clientWidth: 0 });
 
-  useEffect(() => {
-    const target = targetRef.current;
+  useLayoutEffect(() => {
     if (!target) return;
+    const pending = pendingScrolls.current;
 
     const measure = (): void => {
-      setScrollWidth(target.scrollWidth);
-      setClientWidth(target.clientWidth);
+      const { scrollWidth, clientWidth } = target;
+      setSize(previous => (
+        previous.scrollWidth === scrollWidth && previous.clientWidth === clientWidth
+          ? previous
+          : { scrollWidth, clientWidth }
+      ));
     };
-    measure();
+    const syncTrack = (): void => {
+      // Scroll events arrive asynchronously. An echo of our own write must not
+      // move the thumb back while the user is already dragging it further.
+      if (isSyncedScroll(target, pending)) return;
+      const track = trackRef.current;
+      if (track) setSyncedPosition(track, target.scrollLeft, pending);
+    };
 
+    // Observe columns too: collapsing one changes scrollWidth without resizing the row.
     const ro = new ResizeObserver(measure);
-    ro.observe(target);
-    // Колонки/задачи добавляются и удаляются — пересчитываем ширину контента.
-    const mo = new MutationObserver(measure);
+    const observeSizes = (): void => {
+      ro.disconnect();
+      ro.observe(target);
+      for (const child of Array.from(target.children)) ro.observe(child);
+      measure();
+    };
+    observeSizes();
+    const mo = new MutationObserver(observeSizes);
     mo.observe(target, { childList: true, subtree: true });
 
-    const onTargetScroll = (): void => {
-      if (syncing.current) return;
-      const track = trackRef.current;
-      if (!track) return;
-      syncing.current = true;
-      track.scrollLeft = target.scrollLeft;
-      requestAnimationFrame(() => {
-        syncing.current = false;
-      });
+    const onWheel = (event: WheelEvent): void => {
+      if (!ctrlWheel || !event.ctrlKey || event.defaultPrevented
+        || target.scrollWidth <= target.clientWidth + 1) return;
+      const delta = event.deltaY || event.deltaX;
+      if (!delta) return;
+      // Ctrl + wheel normally zooms Chrome; only the overflowing queue owns this gesture.
+      event.preventDefault();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? target.clientWidth : 1;
+      target.scrollLeft += delta * unit;
     };
-    target.addEventListener('scroll', onTargetScroll, { passive: true });
-    window.addEventListener('resize', measure);
-
+    target.addEventListener('scroll', syncTrack, { passive: true });
+    if (ctrlWheel) target.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('resize', observeSizes);
+    const track = trackRef.current;
     return () => {
+      pending.delete(target);
+      if (track) pending.delete(track);
       ro.disconnect();
       mo.disconnect();
-      target.removeEventListener('scroll', onTargetScroll);
-      window.removeEventListener('resize', measure);
+      target.removeEventListener('scroll', syncTrack);
+      target.removeEventListener('wheel', onWheel);
+      window.removeEventListener('resize', observeSizes);
     };
-  }, [targetRef]);
+  }, [target, ctrlWheel]);
+
+  // The track may mount after measuring overflow. Restore its position in that commit.
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (target && track) setSyncedPosition(track, target.scrollLeft, pendingScrolls.current);
+  }, [target, size]);
 
   const onTrackScroll = (): void => {
-    if (syncing.current) return;
-    const target = targetRef.current;
     const track = trackRef.current;
-    if (!target || !track) return;
-    syncing.current = true;
-    target.scrollLeft = track.scrollLeft;
-    requestAnimationFrame(() => {
-      syncing.current = false;
-    });
+    if (track && isSyncedScroll(track, pendingScrolls.current)) return;
+    if (target && track && target.scrollLeft !== track.scrollLeft) {
+      setSyncedPosition(target, track.scrollLeft, pendingScrolls.current);
+    }
   };
 
-  // +1 — страховка от сабпиксельных расхождений scrollWidth/clientWidth.
-  if (scrollWidth <= clientWidth + 1) return null;
+  if (!target || size.scrollWidth <= size.clientWidth + 1) return null;
 
   return (
     <div
       className={cn(
-        // Прилипает к низу вертикального скролл-порта. z над колонками, но под плавающим
-        // композером/таб-баром (у тех z-30+). Отрицательный top-margin убирает лишний зазор.
-        // Только десктоп: на мобиле колонки листаются свайпом (snap) + внизу фикс. таб-бар.
-        'pointer-events-none sticky inset-be-0 z-20 -mbs-2 hidden sm:block',
+        'pointer-events-none sticky inset-be-0 z-20 -mbs-2 hidden sm:flex sm:justify-end',
         className,
       )}
       aria-hidden
@@ -89,9 +114,10 @@ export function SyncedStickyScrollbar({
         ref={trackRef}
         data-pf-sticky-hscroll
         onScroll={onTrackScroll}
-        className="pf-scroll-visible pointer-events-auto w-full overflow-x-auto overflow-y-hidden"
+        className="pointer-events-auto max-w-full shrink-0 overflow-x-auto overflow-y-hidden"
+        style={{ width: size.clientWidth }}
       >
-        <div style={{ width: scrollWidth, height: 1 }} />
+        <div style={{ width: size.scrollWidth, height: 1 }} />
       </div>
     </div>
   );

@@ -372,6 +372,11 @@ export function KanbanBoard({
   const [deleting, setDeleting] = useState(false);
   // Прокручиваемый контейнер доски — для закреплённого снизу горизонтального скролла.
   const boardScrollRef = useRef<HTMLDivElement>(null);
+  const [boardScrollTarget, setBoardScrollTarget] = useState<HTMLDivElement | null>(null);
+  const setBoardScrollRef = useCallback((element: HTMLDivElement | null): void => {
+    boardScrollRef.current = element;
+    setBoardScrollTarget(element);
+  }, []);
   // ЛЮБОЙ ресайз ширины доски (тяга сайдбара/правого окна, сворачивание панели, ресайз окна)
   // → на время реколонки выключаем layout-анимацию карточек (иначе «плывут»/«висят в воздухе»,
   // особенно заметно на macOS). Сигнал true во время изменений + 160мс после последнего.
@@ -1284,7 +1289,7 @@ export function KanbanBoard({
         <BoardColumnTabs columns={columnTabs} scrollerRef={boardScrollRef} className="min-w-0 sm:hidden" />
 
         <div
-          ref={boardScrollRef}
+          ref={setBoardScrollRef}
           data-pf-kanban-scroll
           className={cn(
             // items-start + full-bleed: ряд колонок во всю ширину окна; первая колонка
@@ -1499,7 +1504,7 @@ export function KanbanBoard({
         <div className="min-h-0 flex-1" aria-hidden />
         {/* Закреплённый снизу вьюпорта горизонтальный скролл доски (см. компонент).
             bleedNegClass — во всю ширину окна (по краям обложки/плашки), как ряд колонок. */}
-        <SyncedStickyScrollbar targetRef={boardScrollRef} className={bleedNegClass} />
+        <SyncedStickyScrollbar target={boardScrollTarget} className={bleedNegClass} />
           </>
         );
         return (

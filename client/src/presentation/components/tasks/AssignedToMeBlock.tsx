@@ -128,7 +128,7 @@ import {
 import { useDragSelect } from './selection/useDragSelect';
 import { useCrossProjectBulkActions } from '@/presentation/hooks/useCrossProjectBulkActions';
 import { TaskTitleText } from './TaskTitleText';
-import { TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
+import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
@@ -1574,6 +1574,7 @@ export function AssignedToMeBlock({
     const card = (
       <AcceptedCard
         item={item}
+        open={!ghost && drawerTask?.id === item.id}
         onOpen={() => setDrawerTask(item)}
         onChanged={handleToggled}
         onDelete={() => handleDelete(item)}
@@ -1897,6 +1898,7 @@ export function AssignedToMeBlock({
       {showApprovalZone && (
         <ApprovalShelf
           items={approvalTasks}
+          openTaskId={drawerTask?.id}
           selecting={selectionActive}
           selectedIds={selectedIds}
           onSelectToggle={handleSelectToggle}
@@ -1920,6 +1922,7 @@ export function AssignedToMeBlock({
       {showManualZone && (
         <InProgressShelf
           items={inProgressTasks}
+          openTaskId={drawerTask?.id}
           onOpen={(t) => setDrawerTask(t)}
           onChanged={handleToggled}
           onDelete={handleDelete}
@@ -2336,7 +2339,7 @@ export function AssignedToMeBlock({
                 проектов. Живёт внутри очереди, а не под всем блоком: ширина полосы обязана
                 совпадать с шириной ряда, иначе её ход короче на ширину полки «В работе» и
                 последние колонки до неё не докручиваются. */}
-            <SyncedStickyScrollbar key={grouping} targetRef={hScrollElRef} />
+            <SyncedStickyScrollbar target={rowEl} ctrlWheel />
           </section>
         </div>
       ) : section === 'now' ? (
@@ -3194,6 +3197,7 @@ function RejectApprovalDialog({
 // перетаскивании своей готовой работы зона подсвечивается как цель.
 function ApprovalShelf({
   items,
+  openTaskId = null,
   onOpen,
   onChanged,
   onAccept,
@@ -3212,6 +3216,7 @@ function ApprovalShelf({
   className,
 }: {
   items: readonly InboxBlockTask[];
+  openTaskId?: string | null;
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
   // Сетевая мутация приёмки. Реджект пробрасывается наверх — ApprovalItemCard сам решает,
@@ -3287,6 +3292,7 @@ function ApprovalShelf({
           <ApprovalItemCard
             key={item.id}
             item={item}
+            open={item.id === openTaskId}
             onOpen={() => onOpen(item)}
             onChanged={onChanged}
             onReject={() => onReject(item)}
@@ -3310,6 +3316,7 @@ function ApprovalShelf({
 // после ответа сервера, а карточка висела до конца refresh() — казалось, что клик не сработал.
 function ApprovalItemCard({
   item,
+  open = false,
   onOpen,
   onChanged,
   onReject,
@@ -3322,6 +3329,7 @@ function ApprovalItemCard({
   onSelectToggle,
 }: {
   item: InboxBlockTask;
+  open?: boolean;
   onOpen: () => void;
   onChanged: () => void;
   onReject: () => void;
@@ -3433,6 +3441,7 @@ function ApprovalItemCard({
           >
             <AcceptedCard
               item={item}
+              open={open}
               onOpen={onOpen}
               onChanged={onChanged}
               onDelete={onReject}
@@ -3455,6 +3464,7 @@ function ApprovalItemCard({
 // драга; внизу всегда штриховая подсказка-цель «перетащите сюда».
 function InProgressShelf({
   items,
+  openTaskId = null,
   onOpen,
   onChanged,
   onDelete,
@@ -3472,6 +3482,7 @@ function InProgressShelf({
   className,
 }: {
   items: readonly InboxBlockTask[];
+  openTaskId?: string | null;
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
   onDelete: (item: InboxBlockTask) => void;
@@ -3579,6 +3590,7 @@ function InProgressShelf({
                 <SwipeWrap action={exiting || !swipe ? null : swipe(item)} disabled={swipeDisabled}>
                   <AcceptedCard
                     item={item}
+                    open={!exiting && item.id === openTaskId}
                     onOpen={() => onOpen(item)}
                     onChanged={onChanged}
                     onDelete={() => onDelete(item)}
@@ -4331,6 +4343,7 @@ function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
 // снизу. Клик открывает drawer, ПКМ и Ctrl+клик — «выполнено».
 function AcceptedCard({
   item,
+  open = false,
   onOpen,
   onChanged,
   onDelete,
@@ -4346,6 +4359,7 @@ function AcceptedCard({
   dueOnTop = false,
 }: {
   item: InboxBlockTask;
+  open?: boolean;
   onOpen: () => void;
   onChanged: () => void;
   onDelete: () => void;
@@ -4535,6 +4549,8 @@ function AcceptedCard({
         <div
           // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
           data-pf-task-id={item.id}
+          data-pf-task-open={open || undefined}
+          aria-current={open ? 'true' : undefined}
           // Вне режима выделения role/tabIndex приходят от dnd-kit на обёртке DraggableTask —
           // второй кнопки внутри кнопки не создаём. В режиме выделения атрибуты сняты, и
           // фокусируемость с ролью возвращает карточка.
@@ -4543,13 +4559,15 @@ function AcceptedCard({
           aria-pressed={selectable ? selected : undefined}
           onContextMenu={completeByContextMenu}
           className={cn(
-            'group relative flex cursor-pointer select-none flex-col gap-1 rounded-lg bg-card px-2.5 py-[7px] text-card-foreground shadow-card transition-[box-shadow,background-color] duration-150 hover:shadow-card-hover dark:hover:bg-card-hover',
+            'group relative flex cursor-pointer select-none flex-col gap-1 rounded-lg bg-card px-2.5 py-[7px] text-card-foreground shadow-card transition-[box-shadow,background-color] duration-150 hover:shadow-card-hover',
+            !open && 'dark:hover:bg-card-hover',
             // Непрочитанная: синий неон по контуру. До состояний выбора/вспышки — те
             // временные и должны перебивать подсветку.
-            !selecting && item.priority !== 1 && isUnread(item.id) && 'pf-unread',
+            !open && !selecting && item.priority !== 1 && isUnread(item.id) && 'pf-unread',
             // Срочная: красное свечение. Перебивает синее — «сделай сейчас» важнее «посмотри».
-            !selecting && item.priority === 1 && 'pf-urgent',
+            !open && !selecting && item.priority === 1 && 'pf-urgent',
             selected && 'ring-2 ring-primary',
+            open && completePhase === 'idle' && OPEN_TASK_CARD_CLASS,
             // Вспышка «выполнено»: мягкий зелёный + лёгкий pop.
             completePhase === 'flash' && 'scale-[1.02] bg-done-soft ring-2 ring-done/60',
             // Уход: сжимаемся внутрь, обёртка коллапсит высоту и гасит opacity.

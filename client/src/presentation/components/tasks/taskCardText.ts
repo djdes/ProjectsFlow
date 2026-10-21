@@ -28,3 +28,6 @@ export const TASK_CARD_BODY_CLASS = cn(
   '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
   '[&_strong]:font-medium [&_b]:font-medium [&_strong]:text-foreground [&_b]:text-foreground',
 );
+
+// A persistent inset outline stays visible inside scrolling columns without shifting cards.
+export const OPEN_TASK_CARD_CLASS = 'bg-primary-soft outline outline-2 -outline-offset-2 outline-primary';

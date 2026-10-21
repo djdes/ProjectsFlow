@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
-import { TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
+import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from './taskCardText';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -159,10 +159,10 @@ function KanbanCardImpl({
   const selecting = selectionMode && !preview;
   // Непрочитанная задача: назначена на меня и я её ещё не открывал. Гаснет при открытии
   // (см. UnreadTasksProvider и TaskDrawer). ПОСЛЕ `selecting` — иначе TDZ.
-  const unread = !preview && !selecting && isUnread(task.id);
+  const unread = !open && !preview && !selecting && isUnread(task.id);
   // Срочный приоритет — красное свечение. Перебивает синее «непрочитано»: два ореола на
   // одной карточке спорят друг с другом, а «сделай сейчас» важнее, чем «посмотри».
-  const urgent = !preview && !selecting && task.priority === 1;
+  const urgent = !open && !preview && !selecting && task.priority === 1;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
@@ -424,6 +424,8 @@ function KanbanCardImpl({
       <div
         ref={setNodeRef}
         data-pf-task-id={task.id}
+        data-pf-task-open={open && !preview || undefined}
+        aria-current={open && !preview ? 'true' : undefined}
         style={style}
         {...(selecting || readOnly ? {} : attributes)}
         {...(selecting || readOnly ? {} : listeners)}
@@ -476,7 +478,8 @@ function KanbanCardImpl({
           'shadow-[0_0_0_1px_var(--pf-card-ring,oklch(16.84%_0_none/0.08)),0_1px_3px_oklch(16.84%_0_none/0.06)]',
           'dark:shadow-[0_0_0_1px_var(--pf-card-ring,oklch(31.05%_0.015_274.41))]',
           // Наведение: светлая — глубже тень, тёмная — карточка чуть светлеет.
-          !preview && 'hover:shadow-card-hover dark:hover:bg-card-hover dark:hover:shadow-card-hover',
+          !preview && 'hover:shadow-card-hover dark:hover:shadow-card-hover',
+          !preview && !open && 'dark:hover:bg-card-hover',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[border-color,opacity,background-color,box-shadow] duration-150 ease-out',
@@ -496,7 +499,7 @@ function KanbanCardImpl({
           // Подсветка выбранной карточки в режиме выделения.
           selecting && selected && 'border-primary ring-2 ring-primary/60',
           // E4: открыта в drawer'е — слегка синяя заливка + синий бордер (как в Notion).
-          open && !preview && 'border-primary/60 bg-primary/[0.04] dark:bg-primary/[0.08]',
+          open && !preview && OPEN_TASK_CARD_CLASS,
           // E4: только что перемещена drag'ом — выделена синим (держится до клика в стороне).
           recentlyMoved && !preview && 'border-primary ring-2 ring-primary/60',
           preview
