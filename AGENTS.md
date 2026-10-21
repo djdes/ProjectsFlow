@@ -13,6 +13,8 @@ It is the shared source for architecture, commands, migrations and deployment ru
   with meaningful domain/API tests and verify affected UI states.
 - Add database migrations as new `db/NNN_*.sql` files; do not rewrite deployed migrations.
 - Run relevant tests, typecheck and lint. Distinguish existing failures from regressions.
+- After completing the requested work and required checks, always commit and push
+  the task changes unless the user explicitly asks otherwise. Preserve unrelated work.
 - Do not change nginx or commit credentials. Follow the commit/kanban workflow in
   `CLAUDE.md` when a commit is requested; do not move tasks to done without authorization.
 
