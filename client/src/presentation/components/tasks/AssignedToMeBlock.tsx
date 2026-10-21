@@ -1928,15 +1928,6 @@ export function AssignedToMeBlock({
           onDelete={handleDelete}
           renderActions={(t) => (
             <>
-              {approvalEnabled && canSendToApproval(t, user?.id ?? null) && (
-                <QuickAction
-                  label="Сдать на утверждение"
-                  className="text-approval"
-                  onClick={() => void sendToApproval(t)}
-                >
-                  <ShieldCheck className="size-3.5" />
-                </QuickAction>
-              )}
               {t.canModify && (
                 <QuickAction
                   label="Вернуть в очередь"
