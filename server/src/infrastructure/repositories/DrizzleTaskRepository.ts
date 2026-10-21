@@ -299,6 +299,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         | 'parentTaskId'
         | 'priority'
         | 'taskType'
+        | 'ralphCancelRequestedAt'
+        | 'ralphCancelRequestedBy'
       >
     > = {};
     if (patch.assigneeUserId !== undefined) set.assigneeUserId = patch.assigneeUserId;
@@ -306,7 +308,15 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.cover !== undefined) set.cover = patch.cover;
     if (patch.coverPosition !== undefined) set.coverPosition = patch.coverPosition;
-    if (patch.status !== undefined) set.status = patch.status;
+    if (patch.status !== undefined) {
+      set.status = patch.status;
+      // Cancellation belongs to the current run. Requeueing must not leave a
+      // stale stop flag that makes the dispatcher skip/cancel the next worker.
+      if (patch.status !== 'in_progress' && patch.status !== 'awaiting_clarification') {
+        set.ralphCancelRequestedAt = null;
+        set.ralphCancelRequestedBy = null;
+      }
+    }
     if (patch.statusBeforeDone !== undefined) set.statusBeforeDone = patch.statusBeforeDone;
     if (patch.position !== undefined) set.position = patch.position;
     if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
@@ -404,7 +414,11 @@ export class DrizzleTaskRepository implements TaskRepository {
         ralphCancelRequestedAt: sql`CURRENT_TIMESTAMP`,
         ralphCancelRequestedBy: userId,
       })
-      .where(activeTasks(eq(tasks.id, taskId), sql`${tasks.ralphCancelRequestedAt} IS NULL`));
+      .where(activeTasks(
+        eq(tasks.id, taskId),
+        inArray(tasks.status, ['in_progress', 'awaiting_clarification']),
+        sql`${tasks.ralphCancelRequestedAt} IS NULL`,
+      ));
     const updated = await this.getById(taskId);
     if (updated && before) await this.history?.record(updated, userId, before);
     return updated;
@@ -448,7 +462,12 @@ export class DrizzleTaskRepository implements TaskRepository {
     // дешевле, чем держать здесь ещё одну транзакцию перенумерации.
     const result = await this.db
       .update(tasks)
-      .set({ status: to })
+      .set({
+        status: to,
+        ...(to !== 'in_progress' && to !== 'awaiting_clarification'
+          ? { ralphCancelRequestedAt: null, ralphCancelRequestedBy: null }
+          : {}),
+      })
       .where(activeTasks(inArray(tasks.projectId, [...projectIds]), eq(tasks.status, from)));
     const affected = (result as unknown as { affectedRows?: number }[])[0]?.affectedRows;
     return typeof affected === 'number' ? affected : 0;

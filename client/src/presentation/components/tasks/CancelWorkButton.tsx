@@ -7,9 +7,8 @@ import { useContainer } from '@/infrastructure/di/container';
 
 type Props = {
   task: Task;
-  // Колбэк после успешной request/revoke — родитель refetchнет board (новые поля
-  // ralphCancelRequestedAt подтянутся, UI перерисуется в pending / clear состояние).
-  onChanged: () => void;
+  // Notify the parent to refresh other views after applying the server response.
+  onChanged: (task: Task) => void;
 };
 
 const TIME_FMT = new Intl.DateTimeFormat('ru-RU', {
@@ -36,9 +35,13 @@ function formatRelativeMinutes(date: Date): string {
 //   2. Запрос висит — амбер-badge «🛑 Отмена запрошена…» + кнопка «Отозвать».
 //      DELETE /ralph-cancel.
 // SSE task_changed обновит board ⇒ refetch ⇒ pending переключение в реалтайме.
-export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement {
+export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ source: Task; task: Task } | null>(null);
+  // Some drawers keep their original task until reopened. Apply the acknowledged
+  // response immediately; a refreshed parent task (including SSE ack) takes over.
+  const task = result?.source === sourceTask ? result.task : sourceTask;
 
   const pending = task.ralphCancelRequestedAt !== null;
 
@@ -53,9 +56,10 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
       return;
     setBusy(true);
     try {
-      await taskRepository.requestRalphCancel(task.projectId, task.id);
+      const updated = await taskRepository.requestRalphCancel(task.projectId, task.id);
+      setResult({ source: sourceTask, task: updated });
       toast.success('Отмена запрошена — Ralph обработает её в ближайшие секунды');
-      onChanged();
+      onChanged(updated);
     } catch (e) {
       toast.error(`Не удалось запросить отмену: ${(e as Error).message}`);
     } finally {
@@ -67,9 +71,10 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
     if (busy) return;
     setBusy(true);
     try {
-      await taskRepository.revokeRalphCancel(task.projectId, task.id);
+      const updated = await taskRepository.revokeRalphCancel(task.projectId, task.id);
+      setResult({ source: sourceTask, task: updated });
       toast.success('Запрос отозван');
-      onChanged();
+      onChanged(updated);
     } catch (e) {
       toast.error(`Не удалось отозвать: ${(e as Error).message}`);
     } finally {
@@ -86,7 +91,7 @@ export function CancelWorkButton({ task, onChanged }: Props): React.ReactElement
           <p className="font-medium">🛑 Отмена запрошена ({formatRelativeMinutes(when)})</p>
           {who && <p className="mbs-0.5 opacity-80">{who}</p>}
           <p className="mbs-1 text-2xs opacity-70">
-            Ralph дисдетчер обработает в ближайшие ~5 секунд.
+            Диспетчер обработает запрос, когда будет на связи.
           </p>
         </div>
         <Button
