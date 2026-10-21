@@ -1,4 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
+import type { ImageGenerationRepository } from '@/application/image-generation/ImageGenerationRepository';
+import { HttpImageGenerationRepository } from '@/infrastructure/http/HttpImageGenerationRepository';
 import { HttpProjectRepository } from "@/infrastructure/http/HttpProjectRepository";
 import { HttpUserRepository } from "@/infrastructure/http/HttpUserRepository";
 import { HttpAuthRepository } from "@/infrastructure/http/HttpAuthRepository";
@@ -141,6 +143,7 @@ type Container = {
   chatRepository: ChatRepository;
   aiPromptRepository: AiPromptRepository;
   aiConversationRepository: AiConversationRepository;
+  imageGenerationRepository: ImageGenerationRepository;
   aiActionBatchRepository: AiActionBatchRepository;
   improveTaskDescription: ImproveTaskDescription;
   composeTasks: ComposeTasks;
@@ -245,6 +248,7 @@ function buildContainer(): Container {
     chatRepository: chatRepo,
     aiPromptRepository: aiPromptRepo,
     aiConversationRepository: aiConversationRepo,
+    imageGenerationRepository: new HttpImageGenerationRepository(),
     aiActionBatchRepository: aiActionBatchRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     composeTasks: new ComposeTasks(aiPromptRepo),

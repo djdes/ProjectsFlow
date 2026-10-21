@@ -2,6 +2,7 @@ import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { SendAgentTelegramNotification } from './SendAgentTelegramNotification.js';
+import type { ReportTelegramWorkerResult } from './ReportTelegramWorkerResult.js';
 
 export type BroadcastByTaskCommand = {
   readonly taskId: string;
@@ -53,6 +54,7 @@ type Deps = {
   readonly send: Pick<SendAgentTelegramNotification, 'execute'>;
   // Руководители пространства — вторая (и единственная кроме ответственного) аудитория.
   readonly members: Pick<ProjectMemberRepository, 'listApproverUserIdsForProject'>;
+  readonly workerResults?: Pick<ReportTelegramWorkerResult, 'request'>;
 };
 
 // Какие события пересылаются руководителю. Всё остальное (новая задача, комментарии,
@@ -88,6 +90,12 @@ export class BroadcastTelegramNotificationByTask {
   async execute(cmd: BroadcastByTaskCommand): Promise<BroadcastByTaskResult> {
     const task = await this.deps.tasks.getById(cmd.taskId);
     if (!task) throw new TaskNotFoundError(cmd.taskId);
+
+    // The dispatcher's final notification follows commit auto-linking. Group delivery
+    // uses its durable source destination, independently of personal notification prefs.
+    if (cmd.kind === 'task_done' && cmd.skipUserId) {
+      await this.deps.workerResults?.request(cmd.taskId, cmd.skipUserId);
+    }
 
     const userId = task.assignee.userId;
 

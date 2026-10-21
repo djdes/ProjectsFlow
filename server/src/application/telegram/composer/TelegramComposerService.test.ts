@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TelegramComposerService, type TelegramCallbackQuery } from './TelegramComposerService.js';
 import type { TelegramTaskDraft } from '../TelegramTaskDraftRepository.js';
+import type { TelegramTaskOrigin } from '../TelegramTaskOriginRepository.js';
+import { WorkerDisabledError } from '../../../domain/workspace/errors.js';
 import {
   InsufficientProjectRoleError,
   ProjectNotFoundError,
@@ -58,6 +60,7 @@ type AiSeg = {
 };
 
 function makeHarness(opts?: {
+  workerEnabled?: boolean;
   projects?: { id: string; name: string }[];
   shared?: { id: string; displayName: string; email: string }[];
   aiSegments?: AiSeg[];
@@ -106,6 +109,7 @@ function makeHarness(opts?: {
   const createTaskError = opts?.createTaskError;
 
   const drafts = new Map<string, TelegramTaskDraft>();
+  const origins: Omit<TelegramTaskOrigin, 'requestedAt'>[] = [];
   let seq = 0;
   const createTaskCalls: CreateTaskCall[] = [];
   const sent: { chatId: number; text: string }[] = [];
@@ -304,6 +308,12 @@ function makeHarness(opts?: {
 
   const deps = {
     drafts: draftsRepo,
+    workerPolicy: {
+      async requireEnabledForProject() { if (opts?.workerEnabled === false) throw new WorkerDisabledError(); },
+    },
+    taskOrigins: {
+      async attach(origin: Omit<TelegramTaskOrigin, 'requestedAt'>) { origins.push(origin); },
+    },
     taskMessages: {
       async upsert() {},
       async findByMessage(chatId: number, messageId: number) {
@@ -503,6 +513,7 @@ function makeHarness(opts?: {
   const service = new TelegramComposerService(deps as any);
   return {
     service,
+    origins,
     drafts,
     createTaskCalls,
     sent,
@@ -754,6 +765,56 @@ test('+Проект (уникальный) текст → createTask в этот
   assert.equal(h.createTaskCalls[0]!.description, 'Обнови билд');
 });
 
+test('ручное создание сохраняет группу и сообщение для отчёта, повтор callback не создаёт второй origin', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(111, -100500, '+Альфа Обнови билд');
+  const draft = [...h.drafts.values()][0]!;
+  const callback = { ...cq(`tc:${draft.id}`), message: { message_id: 99, chat: { id: -100500 } } };
+  await h.service.handleCallback(callback);
+  await h.service.handleCallback(callback);
+  assert.deepEqual(h.origins, [{ taskId: 't1', projectId: 'p1', chatId: -100500, messageId: draft.tgMessageId }]);
+  assert.equal(h.createTaskCalls.length, 1);
+});
+
+test('«@hotspotping проджектфлоу воркеру» ставит задачу воркеру и сохраняет явно указанного ответственного', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'ProjectsFlow' }], telegramUsernames: { hotspotping: 'u2' } });
+  await h.service.startFromMessage(111, 500, '@hotspotping проджектфлоу воркеру исправить оформление уведомлений');
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.projectId, 'p1');
+  assert.equal(draft.targetStatus, 'todo');
+  assert.equal(draft.assigneeUserId, 'u2');
+  await h.service.handleCallback(cq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls[0]!.status, 'todo');
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
+});
+
+test('воркер без явного ответственного закрепляется за автором, AI не подменяет его коллегой', async () => {
+  const h = makeHarness({ aiSegments: [seg1({ assigneeUserId: 'u2', assigneeName: 'Вася' })] });
+  await h.service.startFromMessage(111, 500, '+Альфа воркер исправь кнопку');
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.segments![0]!.targetStatus, 'todo');
+  assert.equal(draft.segments![0]!.assigneeUserId, 'u1');
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.equal(h.createTaskCalls[0]!.status, 'todo');
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u1');
+});
+
+test('@worker не попадает в пикер людей и явно выбранный человек сохраняется после AI', async () => {
+  const h = makeHarness({ telegramUsernames: { hotspotping: 'u2' }, aiSegments: [seg1({ assigneeUserId: 'u1' })] });
+  await h.service.startFromMessage(111, 500, '+Альфа Исправить кнопку @worker @hotspotping');
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.segments![0]!.targetStatus, 'todo');
+  assert.equal(draft.segments![0]!.assigneeUserId, 'u2');
+});
+
+test('явный запрос воркеру при выключенном воркере даёт причину вместо тихого создания черновика', async () => {
+  const h = makeHarness({ workerEnabled: false });
+  await h.service.startFromMessage(111, 500, '+Альфа Исправить кнопку @worker');
+  await h.service.handleCallback(cq(`tc:${[...h.drafts.keys()][0]!}`));
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.match(h.edits.at(-1)!.text, /воркер выключен/);
+});
+
 test('+неоднозначный проект → пикер, выбор кнопки → confirm → createTask', async () => {
   const h = makeHarness({
     projects: [
@@ -850,6 +911,10 @@ test('AI-сегменты: оригинал уходит комментарие�
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls.length, 2);
   assert.equal(h.comments.length, 2);
+  assert.deepEqual(h.origins.map(({ taskId, projectId, chatId }) => ({ taskId, projectId, chatId })), [
+    { taskId: 't1', projectId: 'p1', chatId: 500 },
+    { taskId: 't2', projectId: 'p2', chatId: 500 },
+  ]);
   // Оригинал общий для всех сегментов одного сообщения.
   assert.ok(h.comments.every((c) => /надо сделать раз и два/.test(c.body)));
   assert.deepEqual(

@@ -12,6 +12,7 @@ import type { RecordUsage } from '../usage/RecordUsage.js';
 import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 import type { TaskBillingAttributionRepository } from '../usage/TaskBillingAttributionRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { ReportTelegramWorkerResult } from '../telegram/ReportTelegramWorkerResult.js';
 
 export type LiveServiceDeps = {
   readonly repo: LiveRepository;
@@ -32,6 +33,7 @@ export type LiveServiceDeps = {
   // Только legacy-фолбэк биллинга для строк до tasks.created_by; не участвует в назначении.
   readonly legacyAttribution: TaskBillingAttributionRepository;
   readonly tasks: TaskRepository;
+  readonly workerResults?: Pick<ReportTelegramWorkerResult, 'request'>;
   // TTL retention сессии (lazy-GC по expires_at). default 30 дней.
   readonly sessionTtlSeconds?: number;
 };
@@ -257,6 +259,12 @@ export class LiveService {
       .catch(() => {});
     this.deps.liveEventHub.publishEnd(taskId, input.status);
     this.broadcastChanged(projectId, taskId, sessionId, input.status, [userId]);
+    // Fallback when the dispatcher's personal notification request was unavailable.
+    if (input.status === 'completed') {
+      await this.deps.workerResults?.request(taskId, userId).catch((error: unknown) =>
+        console.warn('[live] telegram worker result queue failed', error),
+      );
+    }
     return { ok: true };
   }
 

@@ -4,6 +4,8 @@ import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request, type Response, type RequestHandler } from 'express';
 import { mountBuildAssets } from './staticAssets.js';
+import type { ImageGenerationService } from '../application/image-generation/ImageGenerationService.js';
+import { imageGenerationRouter, imageGenerationAgentRouter } from './image-generation/routes.js';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
@@ -323,6 +325,7 @@ import { llmGatewayRouter } from './llm/gatewayRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
+  readonly imageGeneration?: ImageGenerationService;
   readonly workspaceScope?: RequestHandler;
   readonly emailActions: {
     readonly service: EmailActionService;
@@ -943,6 +946,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Долговечные личные и проектные ИИ-чаты. Отдельный контур от коротких
   // ai-prompt-jobs: история сообщений не очищается вместе с очередью воркера.
   app.use('/api/ai', aiConversationRouter(deps.aiConversations));
+  if (deps.imageGeneration) {
+    app.use('/api/ai/image-jobs', imageGenerationRouter(deps.imageGeneration));
+    app.use('/api/agent/image-jobs', imageGenerationAgentRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
+  }
   // Журнал батчей действий ассистента: серверная идемпотентность плана и Undo,
   // переживающий перезагрузку вкладки.
   app.use('/api/ai', aiActionBatchRouter(deps.aiActionBatches));

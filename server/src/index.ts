@@ -1,3 +1,7 @@
+import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
+import { MysqlTelegramTaskOriginRepository } from './infrastructure/repositories/MysqlTelegramTaskOriginRepository.js';
+import { ImageGenerationService } from './application/image-generation/ImageGenerationService.js';
+import { MysqlImageGenerationRepository } from './infrastructure/repositories/MysqlImageGenerationRepository.js';
 import { RequestWorkspaceContext } from './infrastructure/workspace/RequestWorkspaceContext.js';
 import { workspaceScope } from './presentation/middleware/workspaceScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
@@ -1136,6 +1140,21 @@ const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: tas
 // --- Telegram-конструктор задач (+проект текст @ответственный) ---
 // Свои репо для черновиков конструктора (db/048) и маппинга task-сообщений (db/049).
 const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
+const telegramTaskOriginRepo = new MysqlTelegramTaskOriginRepository(pool);
+const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
+  origins: telegramTaskOriginRepo,
+  tasks: taskRepo,
+  commits: taskCommitRepo,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  client: telegramClient,
+  users: userRepo,
+  now,
+  idGen: idGenerator,
+});
+// Durable retries and reconciliation also recover completions missed during a deploy.
+reportTelegramWorkerResult.wake();
+setInterval(reportTelegramWorkerResult.wake, 15_000).unref();
 // Пространства пользователя для выбора, куда бот кладёт задачи без проекта (db/164).
 const listWorkspaceOptionsForUser = async (userId: string) =>
   (await workspaceRepo.listForUser(userId)).map((workspace) => ({
@@ -1197,6 +1216,8 @@ const waitForAiPromptJob = new WaitForAiPromptJob({
   isAdmin: async (userId) => (await userRepo.getById(userId))?.isAdmin ?? false,
 });
 const telegramComposer = new TelegramComposerService({
+  workerPolicy,
+  taskOrigins: telegramTaskOriginRepo,
   drafts: telegramTaskDraftRepo,
   taskMessages: telegramTaskMessageRepo,
   members: projectMemberRepo,
@@ -1279,6 +1300,7 @@ setInterval(runTelegramDraftAutoCreate, 15_000).unref();
 // v2: адресная отправка по taskId — грузит задачу и шлёт её ответственному через
 // sendAgentTelegramNotification (там уже все gates — link/started/prefs/dedup/audit).
 const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
+  workerResults: reportTelegramWorkerResult,
   tasks: taskRepo,
   send: sendAgentTelegramNotification,
   members: projectMemberRepo,
@@ -1552,6 +1574,7 @@ const queryAppLogs = new QueryAppLogs({
   now,
 });
 const liveService = new LiveService({
+  workerResults: reportTelegramWorkerResult,
   repo: liveRepo,
   access: { projects: projectRepo, members: projectMemberRepo },
   broadcaster: projectEventBroadcaster,
@@ -2141,6 +2164,12 @@ const aiActionBatchService = new AiActionBatchService({
 });
 
 const { app, devProxyUpgrade } = createApp({
+  imageGeneration: new ImageGenerationService({
+    jobs: new MysqlImageGenerationRepository(pool),
+    storage: attachmentStorage,
+    dispatcherUserId: process.env.IMAGE_DISPATCHER_USER_ID ?? '',
+    idGen: idGenerator,
+  }),
   workspaceScope: workspaceScope({ workspaces: workspaceRepo, run: (userId, workspace, next) => requestWorkspaceContext.run(userId, workspace, next) }),
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
   telegramDigestActions: { service: telegramDigestActionService },

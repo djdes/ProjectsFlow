@@ -15,6 +15,11 @@ import type {
 import type { EnqueueAiPromptJob } from '../../ai-prompt/EnqueueAiPromptJob.js';
 import type { WaitForAiPromptJob } from '../../ai-prompt/WaitForAiPromptJob.js';
 import type { TelegramTaskMessageRepository } from '../TelegramTaskMessageRepository.js';
+import type { TelegramTaskOriginRepository } from '../TelegramTaskOriginRepository.js';
+import { extractWorkerMention } from './workerMention.js';
+import { matchProjectMention } from './projectMention.js';
+import type { WorkerPolicy } from '../../workspace/WorkerPolicy.js';
+import { WorkerDisabledError } from '../../../domain/workspace/errors.js';
 import type { SendAgentTelegramNotification } from '../SendAgentTelegramNotification.js';
 import type { ProjectMemberRepository } from '../../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../../project/ProjectRepository.js';
@@ -79,6 +84,8 @@ export type TelegramGroupContext = {
 type Deps = {
   readonly drafts: TelegramTaskDraftRepository;
   readonly taskMessages: TelegramTaskMessageRepository;
+  readonly taskOrigins?: Pick<TelegramTaskOriginRepository, 'attach'>;
+  readonly workerPolicy?: Pick<WorkerPolicy, 'requireEnabledForProject'>;
   readonly members: ProjectMemberRepository;
   readonly projects: ProjectRepository;
   readonly users: UserRepository;
@@ -212,6 +219,7 @@ function projectButtonText(project: { readonly name: string; readonly space?: st
 // (БД, сеть), черновик стоит повторить. Без этого различия черновик с битым id проекта трое
 // суток раз в минуту падал на «Project not found».
 function permanentFailureReason(err: unknown): string | null {
+  if (err instanceof WorkerDisabledError) return 'воркер выключен в настройках пространства';
   if (err instanceof ProjectNotFoundError) return 'проект не найден или нет доступа';
   if (err instanceof InsufficientProjectRoleError) return 'нет прав создавать задачи в проекте';
   if (err instanceof AssigneeNotProjectMemberError || err instanceof AssigneeNotSharedMemberError) {
@@ -776,14 +784,15 @@ export class TelegramComposerService {
       }
     }
 
-    const parsed = parseComposerMessage(rawText);
+    const worker = extractWorkerMention(rawText);
+    const parsed = parseComposerMessage(worker.text);
     // «Готово …» / «Сделано …» → ТА ЖЕ обработка, что и обычное создание (AI-перефраз +
     // разбиение на задачи по проектам/ответственным), только все задачи попадают сразу в
     // колонку «Готово»: фиксируем УЖЕ ВЫПОЛНЕННУЮ работу в трекере, а не оставляем в переписке.
     // Ключевое слово вырезаем из текста (пересобираем сообщение без него) и гоним обычный
     // конвейер, помечая колонку forceStatus='done' у черновика и у каждого AI-сегмента.
     const donePrefix = parseDonePrefix(parsed.taskText);
-    const forceStatus: VisibleKanbanStatus | null = donePrefix.isDone ? 'done' : null;
+    const forceStatus: VisibleKanbanStatus | null = donePrefix.isDone ? 'done' : worker.requested ? 'todo' : null;
     const effectiveRaw = donePrefix.isDone
       ? [
           parsed.projectQuery !== null ? `+${parsed.projectQuery}` : null,
@@ -792,7 +801,7 @@ export class TelegramComposerService {
         ]
           .filter((s): s is string => !!s && s.trim().length > 0)
           .join(' ')
-      : rawText;
+      : worker.text;
     const parsedEff = donePrefix.isDone ? parseComposerMessage(effectiveRaw) : parsed;
     // Ответ на сообщение, из которого уже сделали задачу: новая — в тот же контекст (проект,
     // ответственный, колонка), если сам текст их не называет.
@@ -855,7 +864,7 @@ export class TelegramComposerService {
       console.warn('[tg-composer] fallback assignee hint failed:', err);
     }
     if (parsedEff.assigneeQuery === null && !fallbackAssigneeUserId) {
-      fallbackAssigneeUserId = inherited?.assigneeUserId ?? null;
+      fallbackAssigneeUserId = worker.requested ? userId : inherited?.assigneeUserId ?? null;
     }
     const draftId = this.deps.shortIdGen();
     const draft = await this.deps.drafts.create({
@@ -941,7 +950,7 @@ export class TelegramComposerService {
         stopSpinner = null;
       }
       const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
-        parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
+        forceStatus === 'todo' ? draft.assigneeUserId ?? userId : parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
         // Без явного @ответственного — тот, что в черновике (из задачи, на которую ответили).
         parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId);
       const patched = await this.deps.drafts.patchComposing(draft.id, {
@@ -1063,6 +1072,7 @@ export class TelegramComposerService {
       // Close the idempotency receipt immediately after task creation. Everything below is
       // best-effort decoration; a Telegram retry must never create a duplicate task.
       if (receipt) await this.deps.drafts.patch(receipt.id, { status: 'confirmed' });
+      await this.rememberOrigin(chatId, receipt?.tgMessageId ?? null, task.id, inbox.id);
       // Текст сообщения уже в описании задачи — в комментарий только то, на что ответили.
       await this.postOriginalComment(task.id, inbox.id, ownerUserId, '', [], replyContext);
       const attachmentResult = await this.attachDraftAttachments(
@@ -1151,6 +1161,10 @@ export class TelegramComposerService {
     }
 
     if (parsed.projectQuery === null && defaults?.projectId) projectId = defaults.projectId;
+    if (parsed.projectQuery === null && !projectId) {
+      const all = (await this.deps.members.listProjectsForUser(userId)).filter(p => !p.isInbox);
+      projectId = matchProjectMention(taskText, all)?.id ?? null;
+    }
 
     if (taskText.length === 0) {
       await this.respond(
@@ -1176,6 +1190,7 @@ export class TelegramComposerService {
     }
 
     if (parsed.assigneeQuery === null && defaults?.assigneeUserId) assigneeUserId = defaults.assigneeUserId;
+    if (forceStatus === 'todo' && parsed.assigneeQuery === null) assigneeUserId = userId;
 
     if (offeredProjects && assigneeUserId && assigneeUserId !== userId && this.deps.workspaces) {
       const all = await this.deps.members.listProjectsForUser(userId);
@@ -1553,6 +1568,7 @@ export class TelegramComposerService {
       const delegatedInbox = !draft.projectId && inboxOwnerId !== userId;
       const targetId =
         draft.projectId ?? (await this.inboxFor(inboxOwnerId, userId, inboxWorkspaceId)).id;
+      if (draft.targetStatus === 'todo') await this.deps.workerPolicy?.requireEnabledForProject(targetId);
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
@@ -1567,6 +1583,7 @@ export class TelegramComposerService {
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
       await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+      await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId);
       await this.postOriginalComment(task.id, targetId, userId, text, [], draft.replyContext);
       const attachmentResult = await this.attachDraftAttachments(
         draft.attachments,
@@ -2070,7 +2087,10 @@ export class TelegramComposerService {
     parsed: { projectQuery: string | null; taskText: string },
   ): Promise<{ projectId: string | null; taskText: string; ambiguous?: boolean }> {
     const taskText = parsed.taskText.trim();
-    if (parsed.projectQuery === null) return { projectId: null, taskText };
+    if (parsed.projectQuery === null) {
+      const all = (await this.deps.members.listProjectsForUser(userId)).filter(p => !p.isInbox);
+      return { projectId: matchProjectMention(taskText, all)?.id ?? null, taskText };
+    }
     const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
     const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
     const greedy = greedyProjectPrefix(segment, all, (p) => p.name);
@@ -3167,6 +3187,7 @@ export class TelegramComposerService {
         const delegatedInbox = !seg.projectId && inboxOwnerId !== userId;
         const targetId =
           seg.projectId ?? (await this.inboxFor(inboxOwnerId, userId, inboxWorkspaceId)).id;
+        if (seg.targetStatus === 'todo') await this.deps.workerPolicy?.requireEnabledForProject(targetId);
         const task = await this.deps.createTask.execute({
           projectId: targetId,
           ownerUserId: userId,
@@ -3182,6 +3203,7 @@ export class TelegramComposerService {
           // Защита от дублей при падении на последующих сегментах/уведомлениях.
           await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
         }
+        await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId);
         createdTargets.push({
           segmentIndex,
           taskId: task.id,
@@ -3290,6 +3312,10 @@ export class TelegramComposerService {
             : 'Не удалось — повторю через минуту',
       });
     }
+  }
+
+  private async rememberOrigin(chatId: number, messageId: number | null, taskId: string, projectId: string): Promise<void> {
+    await this.deps.taskOrigins?.attach({ chatId, messageId, taskId, projectId });
   }
 
   /**

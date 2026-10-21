@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
 import { WorkspaceCrumbs } from '@/presentation/layout/InboxBreadcrumbs';
@@ -9,16 +9,19 @@ import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConver
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 import { AiComposer } from '@/presentation/components/ai/AiComposer';
 import { AiComposerPresets } from '@/presentation/components/ai/AiComposerPresets';
+import { ImageGenerationPanel } from '@/presentation/components/ai/ImageGenerationPanel';
 
 export function AiPage(): React.ReactElement {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const { aiConversationRepository } = useContainer();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'images' ? 'images' : 'chat';
 
   useEffect(() => {
-    document.title = conversationId ? 'Чат с ИИ — ProjectsFlow' : 'ИИ — ProjectsFlow';
-  }, [conversationId]);
+    document.title = conversationId ? 'Чат с ИИ — ProjectsFlow' : tab==='images'?'Генерация фото — ProjectsFlow':'ИИ — ProjectsFlow';
+  }, [conversationId, tab]);
 
   if (conversationId) return <AiConversationView conversationId={conversationId} />;
 
@@ -71,7 +74,12 @@ export function AiPage(): React.ReactElement {
       <PageTopBar className="hidden sm:flex">
         <WorkspaceCrumbs icon={<Sparkles className="size-3.5 shrink-0" />} label="ИИ" />
       </PageTopBar>
+      <div className="flex shrink-0 gap-2 border-be border-border px-4 py-3" role="tablist" aria-label="Разделы ИИ">
+        <Button role="tab" aria-selected={tab==='chat'} variant={tab==='chat'?'secondary':'ghost'} onClick={()=>navigate('/ai',{replace:true})}>Чат</Button>
+        <Button role="tab" aria-selected={tab==='images'} variant={tab==='images'?'secondary':'ghost'} onClick={()=>navigate('/ai?tab=images',{replace:true})}>Генерация фото</Button>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {tab==='images'?<ImageGenerationPanel />:
         <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-8 sm:px-6 md:py-12">
           <div className="flex flex-1 flex-col items-center justify-center py-8 text-center md:py-10">
             <div className="mbe-6 grid size-14 place-items-center rounded-xl bg-foreground text-background">
@@ -94,7 +102,7 @@ export function AiPage(): React.ReactElement {
               Открыть пустой чат
             </Button>
           </div>
-        </div>
+        </div>}
       </div>
     </main>
   );
