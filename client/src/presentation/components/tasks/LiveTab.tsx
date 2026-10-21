@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
+import { isWorkerStartupNotice } from '@/lib/isWorkerStartupNotice';
+import { parseWorkerResult } from '@/domain/live/WorkerResult';
+import { WorkerResultMessage } from './WorkerResultMessage';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +28,7 @@ import { CommentBody } from './CommentBody';
 import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
+import { RunWithWorkerButton } from './RunWithWorkerButton';
 import {
   isRalphQuestionComment,
   parseRalphAnswer,
@@ -67,6 +72,7 @@ const RICH_MD =
 type Props = {
   task: Task;
   active?: boolean;
+  canEdit?: boolean;
   backlogTail: { readonly id: string } | null;
   todoTail: { readonly id: string } | null;
   onRunningChange?: (running: boolean) => void;
@@ -81,6 +87,7 @@ type Props = {
 export function LiveTab({
   task,
   active = true,
+  canEdit = task.canEdit !== false,
   backlogTail,
   todoTail,
   onRunningChange,
@@ -285,32 +292,72 @@ export function LiveTab({
   const isWorking = running || anyRunning || task.status === 'in_progress';
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const getScrollViewport = useCallback((): HTMLElement | null => {
+    const feed = scrollRef.current;
+    if (!feed || feed.clientHeight === 0) return null;
+    if (feed.scrollHeight > feed.clientHeight + 1) return feed;
+    // In the narrow drawer the feed grows naturally inside the outer task scroller.
+    for (let parent = feed.parentElement; parent; parent = parent.parentElement) {
+      if (/(auto|scroll)/.test(getComputedStyle(parent).overflowY)
+        && parent.clientHeight > 0 && parent.scrollHeight > parent.clientHeight + 1) return parent;
+    }
+    return feed;
+  }, []);
   const onScroll = useCallback((): void => {
-    const el = scrollRef.current;
-    if (!el) return;
+    const el = getScrollViewport();
+    if (!el || el.clientHeight === 0) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     stickToBottomRef.current = dist < 80;
-  }, []);
+    setShowScrollBottom(dist >= 80);
+  }, [getScrollViewport]);
 
   const scrollToBottom = useCallback((): void => {
-    const el = scrollRef.current;
+    const el = getScrollViewport();
     if (!el || el.clientHeight === 0) return;
-    requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight, behavior: 'auto' }));
-  }, []);
+    // Apply before paint. A queued animation frame can run after the user scrolls up.
+    el.scrollTop = el.scrollHeight;
+    setShowScrollBottom(false);
+  }, [getScrollViewport]);
 
-  useEffect(() => {
-    if (stickToBottomRef.current) scrollToBottom();
-  }, [events.length, dispatcherQuestions.length, running, scrollToBottom]);
-
-  useEffect(() => {
-    if (active && stickToBottomRef.current) scrollToBottom();
-  }, [active, scrollToBottom]);
-
-  useEffect(() => {
+  // Every opening (including a force-mounted tab) starts at the newest message.
+  useLayoutEffect(() => {
     setVisibleCount(DOM_CAP);
     stickToBottomRef.current = true;
-  }, [selectedId]);
+    setShowScrollBottom(false);
+    if (active) scrollToBottom();
+  }, [active, projectId, taskId, selectedId, scrollToBottom]);
+
+  // Replay, questions and final diffs arrive independently, sometimes with the same count.
+  useLayoutEffect(() => {
+    if (active && stickToBottomRef.current) scrollToBottom();
+  });
+
+  // A hidden tab has no height; images and expanded messages can resize after React commits.
+  // Watch both the viewport and its content, while preserving manual reading higher up.
+  useLayoutEffect(() => {
+    const viewport = scrollRef.current;
+    const content = contentRef.current;
+    if (!active || !viewport || !content) return;
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollToBottom();
+    });
+    observer?.observe(viewport);
+    observer?.observe(content);
+    const parents: HTMLElement[] = [];
+    for (let parent = viewport.parentElement; parent; parent = parent.parentElement) {
+      if (!/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) continue;
+      parents.push(parent);
+      parent.addEventListener('scroll', onScroll, { passive: true });
+      observer?.observe(parent);
+    }
+    return () => {
+      observer?.disconnect();
+      for (const parent of parents) parent.removeEventListener('scroll', onScroll);
+    };
+  }, [active, onScroll, scrollToBottom]);
 
   const shown = useMemo(
     () => (events.length > visibleCount ? events.slice(events.length - visibleCount) : events),
@@ -372,17 +419,25 @@ export function LiveTab({
       )}
 
       {/* Лента событий. */}
+      {task.status === 'todo' && !isWorking && sessions.length > 0 && (
+        <div role="status" className="border-be border-border px-3 py-2 text-sm text-primary">
+          Задача в очереди — ожидает запуска диспетчера.
+        </div>
+      )}
+      <div className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3"
+        data-pf-worker-chat=""
+        className="h-full min-h-0 overflow-y-auto px-3 py-3"
       >
+      <div ref={contentRef} className="space-y-2.5">
         {sessionsLoading && sessions.length === 0 ? (
           <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
             <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…
           </div>
         ) : sessions.length === 0 ? (
-          dispatcherQuestions.length === 0 && !questionsLoading ? <EmptyState working={isWorking} /> : null
+          dispatcherQuestions.length === 0 && !questionsLoading ? <EmptyState working={isWorking} task={task} onTaskChanged={onTaskChanged} canEdit={canEdit} /> : null
         ) : loading && events.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка ленты…
@@ -429,6 +484,15 @@ export function LiveTab({
           />
         ))}
       </div>
+      </div>
+      {showScrollBottom && (
+        <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
+          className="absolute end-4 inset-be-3 grid size-10 place-items-center rounded-full border bg-card text-foreground shadow-lg"
+          onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
+          <ChevronDown className="size-5" aria-hidden />
+        </button>
+      )}
+      </div>
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
       <div className="shrink-0">
@@ -466,7 +530,7 @@ const QUESTION_TIME_FMT = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 });
 
-function DispatcherQuestionCard({
+export function DispatcherQuestionCard({
   comment,
   question,
   answer,
@@ -481,11 +545,12 @@ function DispatcherQuestionCard({
   taskId: string;
   onAnswerCreated: (created: TaskComment) => void;
 }): React.ReactElement {
+  const [collapsed, setCollapsed] = useState(Boolean(answer));
   const answerText = Array.isArray(answer?.value) ? answer.value.join(', ') : answer?.value;
   return (
     // Вопрос ждёт решения человека — смысл «на утверждении» (фиолетовый). Карточка
     // нейтральная, цвет живёт в иконке и подписи.
-    <section className="rounded-lg bg-card p-3 shadow-card" aria-label="Вопрос диспетчера">
+    <section id={`comment-${comment.id}`} className="rounded-lg bg-card p-3 shadow-card" aria-label="Вопрос диспетчера">
       <div className="mbe-2 flex items-center gap-2">
         <span className="grid size-7 shrink-0 place-items-center rounded-full bg-approval-soft text-approval">
           <MessageCircleQuestion className="size-4" aria-hidden />
@@ -496,7 +561,12 @@ function DispatcherQuestionCard({
             {QUESTION_TIME_FMT.format(comment.createdAt)}
           </p>
         </div>
+        <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed}
+          className="rounded-md px-2 py-1 text-xs text-muted-foreground">
+          {collapsed ? 'Показать вопрос' : 'Скрыть вопрос'}
+        </button>
       </div>
+      <div hidden={collapsed}>
       <CommentBody body={comment.body} className={cn(RICH_MD, 'text-sm')} />
       {answer ? (
         <div className="mbs-2 flex items-start gap-1.5 rounded-md bg-done-soft px-2.5 py-2 text-xs text-done-ink">
@@ -514,22 +584,30 @@ function DispatcherQuestionCard({
           onCreated={onAnswerCreated}
         />
       )}
+      </div>
     </section>
   );
 }
 
-function EmptyState({ working }: { working: boolean }): React.ReactElement {
+function EmptyState({ working, task, onTaskChanged, canEdit }: { working: boolean; task: Task; onTaskChanged?: () => void; canEdit: boolean }): React.ReactElement {
+  const [queuedTaskId, setQueuedTaskId] = useState<string | null>(null);
+  useEffect(() => {
+    if (working || task.status === 'todo') setQueuedTaskId(null);
+  }, [working, task.status]);
+  const queued = !working && (task.status === 'todo' || queuedTaskId === task.id);
   return (
     <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
       <span className="pf-tone-purple text-2xl text-tone">✻</span>
-      <span className="text-sm text-foreground">
-        Воркер ещё не запускался по этой задаче.
+      <span role="status" className="text-sm text-foreground">
+        {working ? 'Воркер запускается…' : queued ? 'Задача в очереди — ожидает запуска' : 'Воркер ещё не запускался по этой задаче.'}
       </span>
       <span className="max-w-xs text-xs text-muted-foreground">
         {working
           ? 'Воркер вот-вот начнёт — здесь появится живая лента действий.'
-          : 'Отправь задачу воркеру (поле ниже) — и здесь в реальном времени пойдёт лента действий, как в IDE.'}
+          : queued ? 'Диспетчер получил задачу. Лента действий появится автоматически после запуска.'
+          : 'Нажми «Сделать с помощью воркера» — здесь появится лента действий.'}
       </span>
+      {!working && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => setQueuedTaskId(task.id)} onChanged={onTaskChanged} />}
     </div>
   );
 }
@@ -596,6 +674,8 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
     case 'assistant_text': {
       const text = event.text ?? '';
       if (text.trim().length === 0) return null;
+      const result = parseWorkerResult(text);
+      if (result) return <WorkerResultMessage result={result} />;
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-purple bg-tone" />
@@ -607,7 +687,7 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
     }
     case 'bash': {
       const payload = event.payload as LiveBashPayload | null;
-      const command = payload?.command ?? event.text ?? '';
+      const command = readableWorkerCommand(payload?.command ?? event.text ?? '');
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-blue bg-tone" />
@@ -615,7 +695,8 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
             <div className="border-be border-border bg-muted/60 px-2.5 py-1 text-2xs uppercase tracking-wider text-muted-foreground">
               терминал
             </div>
-            <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-2xs leading-relaxed text-foreground">
+            <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-2xs leading-relaxed text-foreground"
+              style={{ maxBlockSize: '18rem', overflow: 'auto' }}>
               <span className="pf-tone-blue select-none text-tone">$ </span>
               {command}
             </pre>
@@ -624,6 +705,7 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       );
     }
     case 'tool_error': {
+      if (isWorkerStartupNotice(event.text ?? '')) return null;
       return (
         <div className="flex gap-2">
           <Dot tone="bg-destructive" />

@@ -81,6 +81,7 @@ export function useLiveSession(
 
     let cancelled = false;
     setLoading(true);
+    setRunning(false);
     // Полный сброс перед replay новой сессии.
     lastSeqRef.current = 0;
     seenSeqRef.current = new Set();
@@ -93,16 +94,28 @@ export function useLiveSession(
         if (cancelled) return;
         const meta = sessions.find((s) => s.id === sessionId) ?? null;
         setSession(meta);
-        setRunning(meta?.status === 'running');
 
-        const replayed = await liveRepository.listEvents(projectId, taskId, sessionId, 0, 1000);
-        if (cancelled) return;
+        // Completed runs have no SSE tail: reading only page one would omit their
+        // final message. Replay up to the captured session tail before opening SSE.
+        const replayed: LiveEvent[] = [];
+        let afterSeq = 0;
+        for (;;) {
+          const page = await liveRepository.listEvents(projectId, taskId, sessionId, afterSeq, 1000);
+          if (cancelled) return;
+          if (page.length === 0) break;
+          const nextSeq = Math.max(...page.map((event) => event.seq));
+          if (nextSeq <= afterSeq) break;
+          replayed.push(...page);
+          afterSeq = nextSeq;
+          if (page.length < 1000 || (meta && afterSeq >= meta.lastSeq)) break;
+        }
         for (const e of replayed) {
           seenSeqRef.current.add(e.seq);
           if (e.seq > lastSeqRef.current) lastSeqRef.current = e.seq;
         }
         replayed.sort((a, b) => a.seq - b.seq);
         setEvents(replayed);
+        setRunning(meta?.status === 'running');
 
         // Завершённая сессия — сразу подтягиваем финальные git-диффы.
         if (meta && meta.status !== 'running') {
@@ -127,7 +140,7 @@ export function useLiveSession(
 
   // 2) EventSource live-хвост — открываем только для running-сессии.
   useEffect(() => {
-    if (!sessionId || !running) return undefined;
+    if (!sessionId || !running || loading || session?.id !== sessionId) return undefined;
 
     let closed = false;
     let source: EventSource | null = null;
@@ -200,7 +213,7 @@ export function useLiveSession(
       closed = true;
       source?.close();
     };
-  }, [projectId, taskId, sessionId, running, ingest, liveRepository]);
+  }, [projectId, taskId, sessionId, session?.id, running, loading, ingest, liveRepository]);
 
   return { events, session, fileDiffs, loading, running, reload };
 }

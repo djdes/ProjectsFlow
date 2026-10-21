@@ -37,6 +37,9 @@ jobs:
       - name: Server tests
         run: npm run test:server
 
+      - name: MCP contract tests
+        run: npm run test -w @projectsflow/mcp-server
+
       - name: Build client
         run: npm run build:client
 

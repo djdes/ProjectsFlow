@@ -100,8 +100,14 @@ export type TaskStatus =
   | 'todo'
   | 'in_progress'
   | 'awaiting_clarification'
+  | 'pending_approval'
   | 'done'
-  | 'manual';
+  | 'manual'
+  | 'custom_1'
+  | 'custom_2'
+  | 'custom_3'
+  | 'custom_4'
+  | 'custom_5';
 
 // Режим работы Ralph по задаче. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
 //   'normal'  — дефолт; worker может задать ralph-question, grillme по триггерам.

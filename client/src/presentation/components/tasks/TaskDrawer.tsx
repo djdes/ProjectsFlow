@@ -2171,6 +2171,7 @@ export function TaskDrawer({
               >
                 <LiveTab
                   task={task}
+                  canEdit={canEdit}
                   active={activeTab === 'live'}
                   backlogTail={backlogTail}
                   todoTail={todoTail}

@@ -100,8 +100,14 @@ const TASK_STATUS_VALUES = [
   'todo',
   'in_progress',
   'awaiting_clarification',
+  'pending_approval',
   'done',
   'manual',
+  'custom_1',
+  'custom_2',
+  'custom_3',
+  'custom_4',
+  'custom_5',
 ] as const;
 
 const TOOLS = [

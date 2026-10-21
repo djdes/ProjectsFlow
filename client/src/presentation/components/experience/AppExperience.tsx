@@ -47,7 +47,7 @@ export function AppExperience({
     if (timer.current) clearTimeout(timer.current);
   }, [pathname]);
   useEffect(() => {
-    setMain(document.querySelector('main[data-pf-main]'));
+    setMain(document.querySelector<HTMLElement>('main[data-pf-main]'));
   }, [desktop]);
   useEffect(
     () => () => {
