@@ -1,9 +1,19 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import type { Task } from '@/domain/task/Task';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
+import { defaultCommentAudience } from '@/domain/task/defaultCommentAudience';
+import {
+  acknowledgeComment,
+  beginCommentSend,
+  commentDraftKey,
+  readCommentDraft,
+  subscribeCommentDraft,
+  updateCommentDraft,
+  type CommentReplyDraft,
+} from './commentDraft';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
@@ -32,12 +42,6 @@ const RichTextEditor = lazy(() =>
   })),
 );
 
-type PendingFile = {
-  readonly id: string;
-  readonly file: File;
-  readonly previewUrl: string;
-};
-
 const DRAWER_TARGETS = [
   { value: 'draft', label: 'В черновики' },
   { value: 'worker', label: 'Воркеру' },
@@ -46,12 +50,7 @@ const DRAWER_TARGETS = [
 // Воркер выключен в пространстве (db/152) — «Воркеру» отправлять некуда, остаются черновики.
 const DRAWER_TARGETS_NO_WORKER = DRAWER_TARGETS.filter((t) => t.value !== 'worker');
 
-type ReplyDraft = { commentId: string; authorName: string; quotedText: string | null };
-
-// The server resolves this to assignee + approvers + reply author, excluding the actor.
-function defaultNotify(): NotifyAudience {
-  return { mode: 'all' };
-}
+type ReplyDraft = CommentReplyDraft;
 
 type Props = {
   task: Task;
@@ -73,30 +72,53 @@ function targetStorageKey(projectId: string): string {
 
 function readTarget(projectId: string): ComposerTarget {
   if (typeof window === 'undefined') return 'draft';
-  const raw = window.localStorage.getItem(targetStorageKey(projectId));
-  return raw === 'worker' ? 'worker' : 'draft';
+  try {
+    return window.localStorage.getItem(targetStorageKey(projectId)) === 'worker' ? 'worker' : 'draft';
+  } catch { return 'draft'; }
 }
 
-export function TaskDrawerComposer({
+export function TaskDrawerComposer(props: Props): React.ReactElement | null {
+  const { user } = useCurrentUser();
+  if (!user) return null;
+  const draftKey = commentDraftKey(user.id, props.task.projectId, props.task.id);
+  return <TaskDrawerComposerForm key={draftKey} {...props} draftKey={draftKey} />;
+}
+
+function TaskDrawerComposerForm({
   task,
   backlogTail,
   todoTail,
   onCommentCreated,
   onTaskChanged,
-  replyDraft,
+  replyDraft: incomingReply,
+  draftKey,
   onClearReply,
   onNavigateToComment,
-}: Props): React.ReactElement {
+}: Props & { draftKey: string }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
-  const [body, setBody] = useState('');
-  const [pending, setPending] = useState<PendingFile[]>([]);
+  const subscribe = useCallback((listener: () => void) => subscribeCommentDraft(draftKey, listener), [draftKey]);
+  const getSnapshot = useCallback(() => readCommentDraft(draftKey), [draftKey]);
+  const draft = useSyncExternalStore(subscribe, getSnapshot);
+  const { body, files: pending, reply: replyDraft, sending: submitting } = draft;
+  const defaultAudience = defaultCommentAudience(task.assignee?.userId ?? null, currentUser?.id ?? null);
+  const notify = draft.notify ?? defaultAudience;
+  const setBody = (value: string): void => updateCommentDraft(draftKey, (current) => ({ ...current, body: value }));
+  const setNotify = (value: NotifyAudience): void => updateCommentDraft(draftKey, (current) => ({ ...current, notify: value }));
+  useEffect(() => {
+    if (incomingReply) updateCommentDraft(draftKey, (current) => ({ ...current, reply: incomingReply }));
+  }, [draftKey, incomingReply]);
+  const clearReply = (): void => {
+    updateCommentDraft(draftKey, (current) => ({ ...current, reply: null }));
+    onClearReply?.();
+  };
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   // Открытая на просмотр прикреплённая картинка (ещё не загруженная — url это blob-превью).
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
-  // Адресация уведомления (по умолчанию — только ответственный за задачу).
-  const [notify, setNotify] = useState<NotifyAudience>(() =>
-    defaultNotify(),
-  );
   // На awaiting_clarification дефолт = «Воркеру»: юзер отвечает на ralph-question и
   // ожидаемое действие — продолжить работу. На остальных статусах берём из localStorage'а.
   const [target, setTarget] = useState<ComposerTarget>(() =>
@@ -106,7 +128,6 @@ export function TaskDrawerComposer({
   // его в черновики, иначе кнопка целилась бы в статус, который сервер уже не принимает.
   const workerEnabled = useWorkerEnabled();
   const effectiveTarget: ComposerTarget = workerEnabled ? target : 'draft';
-  const [submitting, setSubmitting] = useState(false);
   // Участники проекта для @-упоминаний. Грузим как TaskCommentsSection; ошибка не блокирует
   // композер (degrade gracefully — без упоминаний).
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -150,18 +171,8 @@ export function TaskDrawerComposer({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(targetStorageKey(task.projectId), target);
+    try { window.localStorage.setItem(targetStorageKey(task.projectId), target); } catch { /* Optional preference. */ }
   }, [task.projectId, target]);
-
-  // Сменилась задача (drawer переиспользуется без ремаунта), сменился ответственный или
-  // догрузился текущий юзер — пересобираем дефолтную аудиторию.
-  const assigneeId = task.assignee?.userId ?? null;
-  const currentUserId = currentUser?.id ?? null;
-  useEffect(() => {
-    setNotify(defaultNotify());
-    // Пересчитываем именно по этим трём входам: реакция на весь `task` сбрасывала бы
-    // ручной выбор автора на любом фоновом обновлении задачи.
-  }, [task.id, assigneeId, currentUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,8 +199,8 @@ export function TaskDrawerComposer({
     // Мало файлов — разом (как раньше); от порога — порциями, чтобы декод пачки превью
     // не фризил UI (см. pace.ts).
     paceAppend(list, (chunk) => {
-      setPending((prev) => [
-        ...prev,
+      updateCommentDraft(draftKey, (current) => ({ ...current, files: [
+        ...current.files,
         ...chunk.map((file) => ({
           id: crypto.randomUUID(),
           file,
@@ -197,88 +208,71 @@ export function TaskDrawerComposer({
           // type, а превью (и просмотр по клику) всё равно должны работать.
           previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
         })),
-      ]);
+      ] }));
     });
   };
 
   const removeFile = (id: string): void => {
     // Лайтбокс держит тот же blob-URL — закрываем, иначе он покажет отозванную ссылку.
     setPreview((cur) => (cur?.id === id ? null : cur));
-    setPending((prev) => {
-      const t = prev.find((p) => p.id === id);
-      if (t?.previewUrl) URL.revokeObjectURL(t.previewUrl);
-      return prev.filter((p) => p.id !== id);
-    });
+    updateCommentDraft(draftKey, (current) => ({ ...current, files: current.files.filter((file) => file.id !== id) }));
   };
 
   const submit = async (): Promise<void> => {
-    const trimmed = body.trim();
-    if ((trimmed.length === 0 && pending.length === 0) || submitting) return;
-    setSubmitting(true);
+    const sent = beginCommentSend(draftKey);
+    if (!sent) return;
+    let created: TaskComment;
     try {
-      const created = await taskRepository.createComment(
+      created = await taskRepository.createComment(
         task.projectId,
         task.id,
-        trimmed || ' ',
-        notify,
-        replyDraft
-          ? { replyToCommentId: replyDraft.commentId, quotedText: replyDraft.quotedText }
-          : undefined,
+        sent.body.trim() || ' ',
+        sent.notify ?? defaultAudience,
+        sent.reply ? { replyToCommentId: sent.reply.commentId, quotedText: sent.reply.quotedText } : undefined,
       );
+    } catch (error) {
+      toast.error(`Не удалось отправить: ${(error as Error).message}`);
+      updateCommentDraft(draftKey, (current) => ({ ...current, sending: false }));
+      return;
+    }
+
+    // The server accepted this text. A later upload/move failure must not resend it.
+    acknowledgeComment(draftKey, sent);
+    try {
       onClearReply?.();
-      const uploaded = [];
-      for (const pf of pending) {
+      const uploaded: TaskAttachment[] = [];
+      for (const file of sent.files) {
         try {
-          uploaded.push(
-            await taskRepository.uploadCommentAttachment(
-              task.projectId,
-              task.id,
-              created.id,
-              pf.file,
-            ),
-          );
-        } catch (err) {
-          toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+          uploaded.push(await taskRepository.uploadCommentAttachment(task.projectId, task.id, created.id, file.file));
+          updateCommentDraft(draftKey, (current) => ({ ...current, files: current.files.filter((entry) => entry.id !== file.id) }));
+        } catch (error) {
+          toast.error(`Не удалось загрузить ${file.file.name}: ${(error as Error).message}`);
         }
       }
-      onCommentCreated({ ...created, attachments: uploaded });
-
-      // Только свои задачи двигаются автоматически по комментарию — на чужой задаче
-      // (например руководитель комментирует задачу сотрудника) move был бы сюрпризом.
+      if (mountedRef.current) {
+        setPreview(null);
+        onCommentCreated({ ...created, attachments: uploaded });
+      }
       const moveTo = shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
         ? resolveMoveTarget(task.status, effectiveTarget)
         : null;
       if (moveTo !== null) {
         const tail = moveTo === 'backlog' ? backlogTail : todoTail;
-        await taskRepository.move(task.projectId, task.id, {
-          targetStatus: moveTo,
-          beforeTaskId: tail?.id ?? null,
-          afterTaskId: null,
-        });
-        onTaskChanged();
-        toast.success(moveTo === 'todo' ? 'Передано воркеру' : 'Задача в черновиках');
-      } else {
-        onTaskChanged();
+        try {
+          await taskRepository.move(task.projectId, task.id, {
+            targetStatus: moveTo, beforeTaskId: tail?.id ?? null, afterTaskId: null,
+          });
+          toast.success(moveTo === 'todo' ? 'Передано воркеру' : 'Задача в черновиках');
+        } catch (error) {
+          toast.error(`Комментарий отправлен, но не удалось изменить статус: ${(error as Error).message}`);
+        }
       }
-
-      setPreview(null);
-      pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
-      setPending([]);
-      setBody('');
-      refocusAfterSendRef.current = true;
-    } catch (e) {
-      toast.error(`Не удалось отправить: ${(e as Error).message}`);
+      if (mountedRef.current) onTaskChanged();
     } finally {
-      setSubmitting(false);
+      if (mountedRef.current) refocusAfterSendRef.current = true;
+      updateCommentDraft(draftKey, (current) => ({ ...current, sending: false }));
     }
   };
-
-  useEffect(() => {
-    return () => {
-      pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const canSubmit = (body.trim().length > 0 || pending.length > 0) && !submitting;
 
@@ -305,7 +299,7 @@ export function TaskDrawerComposer({
             </button>
             <button
               type="button"
-              onClick={() => onClearReply?.()}
+              onClick={clearReply}
               className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Отменить ответ"
               title="Отменить ответ"
@@ -393,6 +387,9 @@ export function TaskDrawerComposer({
             <NotifyAudienceControl
               projectId={task.projectId}
               excludeUserId={currentUser?.id ?? null}
+              members={members}
+              assignee={task.assignee}
+              defaultAudience={defaultAudience}
               value={notify}
               onChange={setNotify}
               disabled={submitting}

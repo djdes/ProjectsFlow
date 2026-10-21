@@ -1525,7 +1525,7 @@ export function TaskDrawer({
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
   // композером-футером (плашка «в ответ …») и уходит в createComment. db/080.
-  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
+  const [replyDraft, setReplyDraft] = useState<(ReplyDraft & { taskId: string; userId: string | null }) | null>(null);
   // Приёмка (db/150): задача ждёт утверждения, а текущий юзер её не принимает — сервер
   // отклонит любую правку (409 task_awaiting_approval). Опускаем окно в read-only по той же
   // причине, что и для viewer'а: иначе исполнитель правит поля, а каждое сохранение
@@ -2152,7 +2152,7 @@ export function TaskDrawer({
                     onCountChange={setCommentCount}
                     scrollToCommentId={scrollToCommentId}
                     onReply={(commentId, authorName, quotedText) =>
-                      setReplyDraft({ commentId, authorName, quotedText })
+                      setReplyDraft({ taskId: task.id, userId: currentUser?.id ?? null, commentId, authorName, quotedText })
                     }
                     frozen={frozenByApproval}
                   />
@@ -2221,8 +2221,8 @@ export function TaskDrawer({
                         task={task}
                         backlogTail={backlogTail}
                         todoTail={todoTail}
-                        replyDraft={replyDraft}
-                        onClearReply={() => setReplyDraft(null)}
+                        replyDraft={replyDraft?.taskId === task.id && replyDraft.userId === currentUser?.id ? replyDraft : null}
+                        onClearReply={() => setReplyDraft((current) => current === replyDraft ? null : current)}
                         onNavigateToComment={flashComment}
                         onCommentCreated={(c) => {
                           onCommentCreatedRef.current?.(c);

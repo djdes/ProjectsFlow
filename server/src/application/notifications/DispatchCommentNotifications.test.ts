@@ -323,3 +323,22 @@ test('manager comment reaches executor and other approver, with no duplicate sit
   assert.deepEqual(h.site, ['C']); // B gets the existing mention from CreateTaskComment.
   assert.deepEqual(h.tgCalls.sort(), ['B', 'C']);
 });
+
+
+test('explicit assignee audience does not notify approvers or the reply author', async () => {
+  const h = makeHarness({
+    members: [member('A', 'Автор'), member('B', 'Исполнитель'), member('C', 'Утверждающий'), member('D', 'Автор ответа')],
+    assigneeUserId: 'B',
+    approvers: ['C'],
+    comments: { c0: { id: 'c0', ownerUserId: 'D' } },
+  });
+  await h.service.execute({
+    projectId: 'p1', actorUserId: 'A', source: 'team',
+    audience: { mode: 'selected', userIds: ['B'] },
+    comment: { ...baseComment, replyToCommentId: 'c0' },
+  });
+  assert.deepEqual(h.sentEmails.map((entry) => entry.to), ['B@example.com']);
+  assert.deepEqual(h.tgCalls, ['B']);
+  assert.deepEqual(h.site, ['B']);
+  assert.equal(h.recorded.every((entry) => entry.recipientUserId === 'B'), true);
+});

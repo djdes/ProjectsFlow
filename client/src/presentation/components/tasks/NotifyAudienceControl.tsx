@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import type { NotifyAudience } from '@/domain/task/TaskComment';
+import type { TaskAssignee } from '@/domain/task/TaskAssignee';
 import { useContainer } from '@/infrastructure/di/container';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
@@ -20,6 +21,8 @@ type Props = {
   excludeUserId?: string | null;
   // Уже загруженные участники (если есть) — чтобы не дёргать listMembers повторно.
   members?: readonly ProjectMember[];
+  assignee?: TaskAssignee | null;
+  defaultAudience?: NotifyAudience;
   value: NotifyAudience;
   onChange: (next: NotifyAudience) => void;
   disabled?: boolean;
@@ -30,7 +33,7 @@ function initials(name: string): string {
 }
 
 // Контрол адресации уведомления для композера: переключатель «Уведомить / Никто» +
-// выпадающий список участников (мультивыбор; по умолчанию «Все»). Эмитит NotifyAudience.
+// выпадающий список участников (мультивыбор). Эмитит NotifyAudience.
 //
 // На телефоне — одна кнопка «🔔 Денис Волков ▾» (или «🔕 Никто»), а «Никого не уведомлять»
 // живёт первым пунктом её меню (меню там открывается нижним листом). Переключатель и
@@ -40,6 +43,8 @@ export function NotifyAudienceControl({
   projectId,
   excludeUserId,
   members: membersProp,
+  assignee,
+  defaultAudience = { mode: 'all' },
   value,
   onChange,
   disabled,
@@ -47,6 +52,7 @@ export function NotifyAudienceControl({
   const { projectRepository } = useContainer();
   const [fetched, setFetched] = useState<ProjectMember[]>([]);
   const compact = useMediaQuery('(max-width: 639px)');
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     // Если участники переданы пропом — не дёргаем сеть.
@@ -65,7 +71,12 @@ export function NotifyAudienceControl({
     };
   }, [projectId, membersProp, projectRepository]);
 
-  const members = (membersProp ?? fetched).filter((m) => m.userId !== excludeUserId);
+  const members = (membersProp ?? fetched)
+    .filter((m) => m.userId !== excludeUserId)
+    .map((m) => ({ userId: m.userId, displayName: m.user.displayName, avatarUrl: m.user.avatarUrl }));
+  if (assignee && assignee.userId !== excludeUserId && !members.some((m) => m.userId === assignee.userId)) {
+    members.push(assignee);
+  }
 
   const notifyOn = value.mode !== 'none';
   const selectedIds =
@@ -78,14 +89,14 @@ export function NotifyAudienceControl({
   const triggerLabel =
     value.mode !== 'selected'
       ? 'По задаче'
-      : (soleSelected?.user.displayName ?? `Выбрано: ${selectedIds.size}`);
+      : (soleSelected?.displayName ?? `Выбрано: ${selectedIds.size}`);
 
   const toggleMember = (userId: string): void => {
     const next = new Set(selectedIds);
     if (next.has(userId)) next.delete(userId);
     else next.add(userId);
-    // Сняли всех — возвращаемся к «Все» (это интуитивнее, чем пустой selected).
-    if (next.size === 0) onChange({ mode: 'all' });
+    // Removing the last recipient means no notifications.
+    if (next.size === 0) onChange({ mode: 'none' });
     else onChange({ mode: 'selected', userIds: [...next] });
   };
 
@@ -100,10 +111,15 @@ export function NotifyAudienceControl({
       <div className="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5">
         <button
           type="button"
+          disabled={disabled}
           aria-pressed={notifyOn}
           // Уже уведомляем — клик ничего не меняет. Иначе повторный клик по активной кнопке
           // втихую расширял бы адресата с «только ответственный» до всех участников.
-          onClick={() => !notifyOn && onChange({ mode: 'all' })}
+          onClick={() => {
+            if (notifyOn) return;
+            if (defaultAudience.mode === 'none') setOpen(true);
+            else onChange(defaultAudience);
+          }}
           className={cn(
             'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors',
             notifyOn
@@ -116,6 +132,7 @@ export function NotifyAudienceControl({
         </button>
         <button
           type="button"
+          disabled={disabled}
           aria-pressed={!notifyOn}
           onClick={() => onChange({ mode: 'none' })}
           className={cn(
@@ -130,88 +147,90 @@ export function NotifyAudienceControl({
       </div>
       )}
 
-      {(notifyOn || compact) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            {/* Имя получателя режется «…», а не переносится: на телефоне «Денис Волков»
-                ломалось на две строки и раздувало нижний ряд композера. */}
-            <button
-              type="button"
-              className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              title="Кого уведомить"
-              aria-label={compact ? `Кого уведомить: ${notifyOn ? triggerLabel : 'никого'}` : undefined}
-            >
-              {!compact ? (
-                <Users className="size-3 shrink-0" />
-              ) : notifyOn ? (
-                <Bell className="size-3.5 shrink-0" />
-              ) : (
-                <BellOff className="size-3.5 shrink-0" />
-              )}
-              <span className="min-w-0 truncate">{notifyOn ? triggerLabel : 'Никто'}</span>
-              <ChevronDown className="size-3 shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto">
-            {compact && (
-              <>
-                <DropdownMenuCheckboxItem
-                  checked={!notifyOn}
-                  onSelect={() => onChange({ mode: 'none' })}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span className="grid size-5 place-items-center rounded-full bg-muted">
-                      <BellOff className="size-3" />
-                    </span>
-                    Никого не уведомлять
-                  </span>
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuSeparator />
-              </>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          {/* Имя получателя режется «…», а не переносится: на телефоне «Денис Волков»
+              ломалось на две строки и раздувало нижний ряд композера. */}
+          <button
+            type="button"
+            className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            disabled={disabled}
+            title="Кого уведомить"
+            aria-label={compact ? `Кого уведомить: ${notifyOn ? triggerLabel : 'никого'}` : undefined}
+          >
+            {!compact ? (
+              <Users className="size-3 shrink-0" />
+            ) : notifyOn ? (
+              <Bell className="size-3.5 shrink-0" />
+            ) : (
+              <BellOff className="size-3.5 shrink-0" />
             )}
+            <span className="min-w-0 truncate">{notifyOn ? triggerLabel : compact ? 'Никто' : 'Выбрать'}</span>
+            <ChevronDown className="size-3 shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto">
+          {compact && (
+            <>
+              <DropdownMenuCheckboxItem
+                disabled={disabled}
+                checked={!notifyOn}
+                onSelect={() => onChange({ mode: 'none' })}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span className="grid size-5 place-items-center rounded-full bg-muted">
+                    <BellOff className="size-3" />
+                  </span>
+                  Никого не уведомлять
+                </span>
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuCheckboxItem
+            disabled={disabled}
+            checked={value.mode === 'all'}
+            onSelect={(e) => {
+              e.preventDefault();
+              onChange({ mode: 'all' });
+            }}
+          >
+            <span className="inline-flex items-center gap-2">
+              <span className="grid size-5 place-items-center rounded-full bg-muted">
+                <Users className="size-3" />
+              </span>
+              Участники задачи
+            </span>
+          </DropdownMenuCheckboxItem>
+          {members.length > 0 && <DropdownMenuSeparator />}
+          {members.map((m) => (
             <DropdownMenuCheckboxItem
-              checked={value.mode === 'all'}
+              disabled={disabled}
+              key={m.userId}
+              checked={selectedIds.has(m.userId)}
               onSelect={(e) => {
                 e.preventDefault();
-                onChange({ mode: 'all' });
+                toggleMember(m.userId);
               }}
             >
               <span className="inline-flex items-center gap-2">
-                <span className="grid size-5 place-items-center rounded-full bg-muted">
-                  <Users className="size-3" />
-                </span>
-                Участники задачи
+                <Avatar className="size-5">
+                  {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt="" />}
+                  <AvatarFallback className="text-[9px]">
+                    {initials(m.displayName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate">{m.displayName}</span>
               </span>
             </DropdownMenuCheckboxItem>
-            {members.length > 0 && <DropdownMenuSeparator />}
-            {members.map((m) => (
-              <DropdownMenuCheckboxItem
-                key={m.userId}
-                checked={selectedIds.has(m.userId)}
-                onSelect={(e) => {
-                  e.preventDefault();
-                  toggleMember(m.userId);
-                }}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Avatar className="size-5">
-                    {m.user.avatarUrl && <AvatarImage src={m.user.avatarUrl} alt="" />}
-                    <AvatarFallback className="text-[9px]">
-                      {initials(m.user.displayName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="truncate">{m.user.displayName}</span>
-                </span>
-              </DropdownMenuCheckboxItem>
-            ))}
-            {members.length === 0 && (
-              <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                Только вы — уведомлять некого
-              </div>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+          ))}
+          {members.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">
+              Только вы — уведомлять некого
+            </div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
