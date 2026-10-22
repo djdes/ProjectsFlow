@@ -38,6 +38,8 @@ function formatRelativeMinutes(date: Date): string {
 export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ taskId: string; text: string } | null>(null);
+  const [error, setError] = useState('');
   const [result, setResult] = useState<{ source: Task; task: Task } | null>(null);
   // Some drawers keep their original task until reopened. Apply the acknowledged
   // response immediately; a refreshed parent task (including SSE ack) takes over.
@@ -55,13 +57,17 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
     )
       return;
     setBusy(true);
+    setError('');
+    setFeedback(null);
     try {
       const updated = await taskRepository.requestRalphCancel(task.projectId, task.id);
       setResult({ source: sourceTask, task: updated });
-      toast.success('Отмена запрошена — Ralph обработает её в ближайшие секунды');
+      toast.success('Запрос на остановку отправлен. Ожидаем подтверждения диспетчера.');
       onChanged(updated);
     } catch (e) {
-      toast.error(`Не удалось запросить отмену: ${(e as Error).message}`);
+      const message = `Не удалось запросить отмену: ${(e as Error).message}`;
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -70,13 +76,20 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
   const handleRevoke = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
+    setError('');
     try {
       const updated = await taskRepository.revokeRalphCancel(task.projectId, task.id);
       setResult({ source: sourceTask, task: updated });
-      toast.success('Запрос отозван');
+      const text = ['in_progress', 'awaiting_clarification'].includes(updated.status)
+        ? 'Запрос на отмену отозван. Остановка больше не запрашивается.'
+        : 'Запрос на отмену снят. Работа уже остановлена или завершена.';
+      setFeedback({ taskId: task.id, text });
+      toast.success(text);
       onChanged(updated);
     } catch (e) {
-      toast.error(`Не удалось отозвать: ${(e as Error).message}`);
+      const message = `Не удалось отозвать запрос: ${(e as Error).message}`;
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -91,7 +104,8 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
           <p className="font-medium">🛑 Отмена запрошена ({formatRelativeMinutes(when)})</p>
           {who && <p className="mbs-0.5 opacity-80">{who}</p>}
           <p className="mbs-1 text-2xs opacity-70">
-            Диспетчер обработает запрос, когда будет на связи.
+            Остановка ещё не подтверждена. Диспетчер обработает запрос, когда будет на связи.
+            Отзыв отмены разрешит продолжить работу.
           </p>
         </div>
         <Button
@@ -103,14 +117,18 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
           disabled={busy}
         >
           {busy ? <Loader2 className="size-3.5 motion-safe:animate-spin" /> : <X className="size-3.5" />}
-          Отозвать запрос
+          {busy ? 'Отзываем запрос на отмену…' : 'Отозвать запрос на отмену'}
         </Button>
+        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       </div>
     );
   }
 
   return (
     <div className="border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
+      {feedback?.taskId === task.id && <p role="status" className="mbe-2 rounded-md bg-done-soft px-3 py-2 text-xs text-done-ink">{feedback.text}</p>}
+      {error && <p role="alert" className="mbe-2 text-xs text-destructive">{error}</p>}
+      {['in_progress', 'awaiting_clarification'].includes(task.status) && (
       <Button
         type="button"
         variant="destructive"
@@ -120,8 +138,9 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
         title="Прервать работу Ralph-агента над этой задачей"
       >
         {busy ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Octagon className="size-4" />}
-        Отменить работу
+        {busy ? 'Отправляем запрос на остановку…' : 'Отменить работу'}
       </Button>
+      )}
     </div>
   );
 }

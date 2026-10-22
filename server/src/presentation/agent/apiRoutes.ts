@@ -1,6 +1,7 @@
 import { Router, raw, type NextFunction, type Request, type Response } from 'express';
 import { contentDisposition } from '../contentDisposition.js';
 import { z } from 'zod';
+import { agentTaskCreateStatus, requireAgentTaskMove } from '../../application/agent/AgentTaskDispatchPolicy.js';
 import type { ListProjects } from '../../application/project/ListProjects.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { DispatchCommentNotifications } from '../../application/notifications/DispatchCommentNotifications.js';
@@ -976,7 +977,7 @@ export function agentApiRouter(deps: Deps): Router {
     },
   );
 
-  // Создание task'а из агента. По умолчанию падает в TODO внизу колонки.
+  // MCP creates drafts; only an explicit user action may delegate work.
   router.post(
     '/projects/:projectId/tasks',
     async (req: Request, res: Response, next: NextFunction) => {
@@ -991,7 +992,7 @@ export function agentApiRouter(deps: Deps): Router {
           // иначе автоматизация была бы бесплатным расходом подписки.
           attributeToOwner: true,
           description: body.description,
-          status: body.status ?? 'todo',
+          status: agentTaskCreateStatus(body.status),
           ralphMode: body.ralphMode,
           deadline: body.deadline ?? null,
           priority: body.priority ?? null,
@@ -1124,26 +1125,8 @@ export function agentApiRouter(deps: Deps): Router {
           comment.actorKind,
           comment.agentName,
         );
-        // Авто-возврат awaiting_clarification → in_progress по ralph-маркеру.
-        // Best-effort: ошибка не должна ломать ответ.
-        try {
-          const reopened = await deps.maybeReopenForClarification.execute(
-            taskId,
-            body.body,
-            req.user!.id,
-          );
-          if (reopened) {
-            deps.notifyStatusChanged(
-              projectId,
-              taskId,
-              reopened.oldStatus,
-              reopened.newStatus,
-              req.user!.id,
-            );
-          }
-        } catch (err) {
-          console.warn('[agent auto-reopen] failed for task', taskId, err);
-        }
+        // Agent comments are progress reports, never permission to resume a worker.
+        // User answers through the UI/Telegram retain their explicit resume path.
         res.status(201).json({ comment: commentToDto(comment) });
       } catch (e) {
         next(e);
@@ -1204,6 +1187,7 @@ export function agentApiRouter(deps: Deps): Router {
         const taskId = req.params['taskId'] as string;
         const body = moveTaskAgentSchema.parse(req.body);
         const before = await deps.taskRepo.getById(taskId);
+        requireAgentTaskMove(before?.projectId === projectId ? before.status : undefined, body.targetStatus);
         const task = await deps.moveTask.execute({
           projectId,
           ownerUserId: req.user!.id,

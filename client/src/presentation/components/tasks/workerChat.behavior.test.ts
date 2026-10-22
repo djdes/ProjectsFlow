@@ -19,7 +19,7 @@ const state: Record<string, unknown> = {};
 
 // Replace application ports and unrelated controls, retaining the real timeline,
 // activity store, composer keyboard handling and page routing logic.
-async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'AiConversationView' | 'TaskDetailPage') {
+async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'AiConversationView' | 'TaskDetailPage' | 'CancelWorkButton') {
   const entry = name === 'AiPage' || name === 'TaskDetailPage' ? `../../pages/${name}.tsx`
     : name === 'AiConversationView' ? '../ai/AiConversationView.tsx' : `./${name}.tsx`;
   const result = await build({
@@ -75,6 +75,52 @@ class Source extends EventTarget {
   emit(kind: string, value: unknown) { this.dispatchEvent(new MessageEvent(kind, { data: JSON.stringify(value) })); }
 }
 globalThis.EventSource = Source as unknown as typeof EventSource;
+
+test('revoking a cancel shows pending, persistent confirmation and inline failure', async () => {
+  const View = await component('CancelWorkButton');
+  const task = { id: 'cancel-task', projectId: 'project', status: 'in_progress', ralphCancelRequestedAt: new Date(), ralphCancelRequestedByDisplayName: 'benzin' } as Task;
+  let finish: (task: Task) => void = () => {};
+  let fail = true;
+  let changed: Task | null = null;
+  state.container = { taskRepository: { async revokeRalphCancel() {
+    if (fail) throw new Error('Нет связи');
+    return new Promise<Task>(resolve => { finish = resolve; });
+  } } };
+  const view = await mount(View, { task, onChanged: (updated: Task) => { changed = updated; } });
+  try {
+    await act(async () => { view.host.querySelector('button')!.click(); });
+    assert.match(view.host.querySelector('[role="alert"]')!.textContent!, /Нет связи/);
+    assert.match(view.host.textContent!, /Остановка ещё не подтверждена/);
+    fail = false;
+    await act(async () => { view.host.querySelector('button')!.click(); });
+    assert.equal(view.host.querySelector('button')!.disabled, true);
+    assert.match(view.host.textContent!, /Отзываем запрос на отмену/);
+    const updated = { ...task, ralphCancelRequestedAt: null };
+    await act(async () => { finish(updated); });
+    assert.equal(changed, updated);
+    assert.match(view.host.querySelector('[role="status"]')!.textContent!, /Запрос на отмену отозван/);
+    assert.doesNotMatch(view.host.textContent!, /Остановка ещё не подтверждена|Отозвать запрос/);
+    assert.match(view.host.textContent!, /Отменить работу/);
+  } finally { await view.close(); }
+});
+
+test('an old in-progress task without LIVE sessions never claims the worker is starting', async () => {
+  const View = await component('LiveTab');
+  state.container = {
+    liveRepository: { async listSessions() { return []; }, async listRunningTaskIds() { return []; } },
+    taskRepository: { async listComments() { return []; } },
+    projectRepository: { async listMembers() { return []; } },
+  };
+  const task = { id: 'unstarted', projectId: 'project', status: 'in_progress', ralphCancelRequestedAt: null } as Task;
+  const props = { task, backlogTail: null, todoTail: null };
+  const view = await mount(View, props);
+  try {
+    assert.match(view.host.textContent!, /Запуск воркера не подтверждён/);
+    assert.doesNotMatch(view.host.textContent!, /Воркер запускается|Воркер вот-вот начнёт/);
+    await view.render({ ...props, task: { ...task, ralphCancelRequestedAt: new Date() } });
+    assert.match(view.host.textContent!, /Ожидаем подтверждения остановки/);
+  } finally { await view.close(); }
+});
 
 async function mount(Component: React.ComponentType<Record<string, unknown>>, props: Record<string, unknown> = {}) {
   const host = document.createElement('div'); document.body.append(host);

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
+import { AgentTaskDispatchForbiddenError } from '../../application/agent/AgentTaskDispatchPolicy.js';
 import {
   InvalidCredentialsError,
   UserEmailAlreadyExistsError,
@@ -194,6 +195,10 @@ export function errorHandler(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void {
+  if (err instanceof AgentTaskDispatchForbiddenError) {
+    res.status(403).json({ error: 'agent_task_dispatch_forbidden', message: err.message });
+    return;
+  }
   if (err instanceof ZodError) {
     // Делаем message человеко-читаемым: первое нарушение с путём поля. Так клиент,
     // который видит только текст ошибки (Ralph dispatcher на .NET читает только status),

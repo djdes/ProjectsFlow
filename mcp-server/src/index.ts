@@ -95,11 +95,8 @@ function readPkgVersion(): string {
 // 'awaiting_clarification' — задача на паузе до действия человека (Ralph F11 Q&A).
 // 'manual' — колонка для задач, которые делает человек руками; вне pipeline'а агента.
 // Порядок повторяет домен сервера.
-const TASK_STATUS_VALUES = [
+const CREATE_TASK_STATUS_VALUES = [
   'backlog',
-  'todo',
-  'in_progress',
-  'awaiting_clarification',
   'pending_approval',
   'done',
   'manual',
@@ -109,6 +106,7 @@ const TASK_STATUS_VALUES = [
   'custom_4',
   'custom_5',
 ] as const;
+const MOVE_TASK_STATUS_VALUES = ['in_progress', 'awaiting_clarification', ...CREATE_TASK_STATUS_VALUES] as const;
 
 const TOOLS = [
   {
@@ -393,13 +391,11 @@ const TOOLS = [
     description:
       'Move a task to a different status column. The task lands at the BOTTOM of the target ' +
       'column — the user can manually reorder in the UI later if needed. ' +
-      'Use this to mark a task done after the commit is pushed, or to pull a task into in_progress ' +
-      'when you start working on it. NOTE: pf_link_commit_to_task already auto-transitions ' +
-      'todo→in_progress on the first linked commit, so you usually only need pf_move_task ' +
-      "explicitly when moving to done (or back to todo for a revert). 'awaiting_clarification' " +
+      'Delegating or requeueing tasks to the worker is forbidden through MCP. ' +
+      'Only the user can start a task in the UI or Telegram. Active status updates are ' +
+      "allowed only for tasks already delegated by the user. 'awaiting_clarification' " +
       'parks an in-progress task waiting on a human (answer to ralph-question, post-retry triage, ' +
-      'reformulation) — server auto-returns it to in_progress when a comment with ' +
-      '`<!-- ralph-answer ` or `<!-- ralph-grillme-summary ` marker arrives. ' +
+      'reformulation). Agent comments never resume a worker. ' +
       "'manual' is a parking column for tasks the user does by hand — no auto-transitions trigger " +
       'on this status.',
     inputSchema: {
@@ -409,9 +405,9 @@ const TOOLS = [
         taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
         targetStatus: {
           type: 'string',
-          enum: TASK_STATUS_VALUES,
+          enum: MOVE_TASK_STATUS_VALUES,
           description:
-            "Target column: 'backlog', 'todo', 'in_progress', 'awaiting_clarification', 'done', or 'manual'",
+            'Target column. Worker queue (todo) is forbidden; active columns require an already delegated task.',
         },
       },
       required: ['projectId', 'taskId', 'targetStatus'],
@@ -475,8 +471,8 @@ const TOOLS = [
   {
     name: 'pf_create_task',
     description:
-      'Create a new kanban task in the project. By default the task lands at the bottom of ' +
-      "the TODO column. Use this when the user asks to add a task / TODO / ticket to a project. " +
+      'Create a draft task in the project. Default: backlog (drafts). MCP cannot delegate ' +
+      'tasks to the worker or create them in active worker columns. ' +
       'Optionally specify ralphMode to control how the Ralph dispatcher should treat this task ' +
       "(default 'normal').",
     inputSchema: {
@@ -489,8 +485,8 @@ const TOOLS = [
         },
         status: {
           type: 'string',
-          enum: TASK_STATUS_VALUES,
-          description: "Initial column. Default: 'todo'.",
+          enum: CREATE_TASK_STATUS_VALUES,
+          description: "Initial column. Default: 'backlog'. Worker queue and active columns are forbidden.",
         },
         ralphMode: {
           type: 'string',
@@ -1253,7 +1249,8 @@ const TOOLS = [
       'dispatched project has 0 open tasks and automationEnabled=true (from ' +
       'pf_list_my_dispatched_projects). If shouldRun=true and nextCriterion is set: run Claude ' +
       'with nextCriterion.systemPrompt (+ userHint) to produce ONE task description, create the ' +
-      'task (status=todo, ralphMode from config), then call pf_record_automation_task. The ' +
+      'draft task (status=backlog, ralphMode from config), then call pf_record_automation_task. ' +
+      'MCP cannot enqueue execution; the user must explicitly delegate the draft. The ' +
       'response also carries per-project publish/deploy settings the worker must honor on every ' +
       'run: gitAuthorMode/gitAuthorName/gitAuthorEmail (commit identity — name/email already ' +
       "resolved; 'bot' means use the fixed agent identity), ignoreClaudeMd (skip the project's " +
@@ -1690,7 +1687,7 @@ const GetTaskInput = z.object({
 const MoveTaskInput = z.object({
   projectId: z.string().min(1),
   taskId: z.string().min(1),
-  targetStatus: z.enum(TASK_STATUS_VALUES),
+  targetStatus: z.enum(MOVE_TASK_STATUS_VALUES),
 });
 const LinkCommitInput = z.object({
   projectId: z.string().min(1),
@@ -1715,7 +1712,7 @@ const CreateCredentialInput = z.object({
 const CreateTaskInputZ = z.object({
   projectId: z.string().min(1),
   description: z.string().min(1),
-  status: z.enum(TASK_STATUS_VALUES).optional(),
+  status: z.enum(CREATE_TASK_STATUS_VALUES).default('backlog'),
   ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
   taskType: z.enum(['feature', 'bug']).nullable().optional(),
 });

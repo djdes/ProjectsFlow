@@ -84,15 +84,21 @@ export function LiveTab(props: Props): React.ReactElement {
 }
 
 function TaskLiveChat({
-  task,
+  task: sourceTask,
   active = true,
-  canEdit = task.canEdit !== false,
+  canEdit = sourceTask.canEdit !== false,
   backlogTail,
   todoTail,
   onRunningChange,
   onCommentCreated,
   onTaskChanged,
 }: Props): React.ReactElement {
+  const [cancelResult, setCancelResult] = useState<{ source: Task; task: Task } | null>(null);
+  const task = cancelResult?.source === sourceTask ? cancelResult.task : sourceTask;
+  const handleCancelChanged = (updated: Task): void => {
+    setCancelResult({ source: sourceTask, task: updated });
+    onTaskChanged?.();
+  };
   const projectId = task.projectId;
   const taskId = task.id;
   const { taskRepository, projectRepository } = useContainer();
@@ -195,7 +201,7 @@ function TaskLiveChat({
   useEffect(() => {
     if (anyRunning || (queuedAfterSession !== null && (runs.at(-1)?.session.id ?? '') !== queuedAfterSession)) setQueuedAfterSession(null);
   }, [anyRunning, runs, queuedAfterSession]);
-  const isWorking = anyRunning || task.status === 'in_progress';
+  const isWorking = anyRunning;
   const handleChatComment = (created: TaskComment): void => {
     stickToBottomRef.current = true;
     setQuestionComments(current => current.some(comment => comment.id === created.id) ? current.map(comment => comment.id === created.id ? created : comment) : [...current, created]);
@@ -328,11 +334,11 @@ function TaskLiveChat({
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
       <div className="shrink-0">
-        {isWorking ? (
-          <CancelWorkButton task={task} onChanged={() => onTaskChanged?.()} />
+        {isWorking || task.status === 'in_progress' ? (
+          <CancelWorkButton task={task} onChanged={handleCancelChanged} />
         ) : task.status === 'awaiting_clarification' ? (
           <>
-            <CancelWorkButton task={task} onChanged={() => onTaskChanged?.()} />
+            <CancelWorkButton task={task} onChanged={handleCancelChanged} />
             <TaskDrawerComposer
               task={task}
               backlogTail={backlogTail}
@@ -435,11 +441,13 @@ function EmptyState({ working, task, onTaskChanged, canEdit }: { working: boolea
     <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
       <span className="pf-tone-purple text-2xl text-tone">✻</span>
       <span role="status" className="text-sm text-foreground">
-        {working ? 'Воркер запускается…' : queued ? 'Задача в очереди — ожидает запуска' : 'Воркер ещё не запускался по этой задаче.'}
+        {task.ralphCancelRequestedAt ? 'Ожидаем подтверждения остановки' : working ? 'Воркер работает' : queued ? 'Задача в очереди — ожидает запуска' : task.status === 'in_progress' ? 'Запуск воркера не подтверждён' : 'Воркер ещё не запускался по этой задаче.'}
       </span>
       <span className="max-w-xs text-xs text-muted-foreground">
-        {working
-          ? 'Воркер вот-вот начнёт — здесь появится живая лента действий.'
+        {task.ralphCancelRequestedAt
+          ? 'Запрос на отмену сохранён. Диспетчер ещё не подтвердил остановку.'
+          : working ? 'Диспетчер подтвердил запуск. Здесь появится живая лента действий.'
+          : task.status === 'in_progress' ? 'Статус «В работе» сам по себе не означает запуск воркера. Активной LIVE-сессии пока нет.'
           : queued ? 'Задача сохранена в очереди. Лента действий появится автоматически после запуска.'
           : 'Нажми «Сделать с помощью воркера» — здесь появится лента действий.'}
       </span>
