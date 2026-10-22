@@ -25,6 +25,7 @@ import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { RunWithWorkerButton } from './RunWithWorkerButton';
+import { isLiveNearBottom, scrollLiveToBottom } from './liveScroll';
 import {
   isRalphQuestionComment,
   parseRalphAnswer,
@@ -212,32 +213,18 @@ function TaskLiveChat({
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
-  const getScrollViewport = useCallback((): HTMLElement | null => {
-    const feed = scrollRef.current;
-    if (!feed || feed.clientHeight === 0) return null;
-    if (feed.scrollHeight > feed.clientHeight + 1) return feed;
-    // In the narrow drawer the feed grows naturally inside the outer task scroller.
-    for (let parent = feed.parentElement; parent; parent = parent.parentElement) {
-      if (/(auto|scroll)/.test(getComputedStyle(parent).overflowY)
-        && parent.clientHeight > 0 && parent.scrollHeight > parent.clientHeight + 1) return parent;
-    }
-    return feed;
-  }, []);
   const onScroll = useCallback((): void => {
-    const el = getScrollViewport();
-    if (!el || el.clientHeight === 0) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stickToBottomRef.current = dist < 80;
-    setShowScrollBottom(dist >= 80);
-  }, [getScrollViewport]);
+    if (!scrollRef.current?.clientHeight) return;
+    const nearBottom = isLiveNearBottom(scrollRef.current);
+    stickToBottomRef.current = nearBottom;
+    setShowScrollBottom(!nearBottom);
+  }, []);
 
   const scrollToBottom = useCallback((): void => {
-    const el = getScrollViewport();
-    if (!el || el.clientHeight === 0) return;
     // Apply before paint. A queued animation frame can run after the user scrolls up.
-    el.scrollTop = el.scrollHeight;
+    scrollLiveToBottom(scrollRef.current);
     setShowScrollBottom(false);
-  }, [getScrollViewport]);
+  }, []);
 
   // Every opening (including a force-mounted tab) starts at the newest message.
   useLayoutEffect(() => {
@@ -326,8 +313,7 @@ function TaskLiveChat({
           in the narrow drawer; the negative margin overlays the feed without a new row. */}
       {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
-          disabled={!showScrollBottom}
-          className="sticky inset-be-3 z-10 -mbs-[3.25rem] ms-auto me-4 grid size-10 place-items-center rounded-full border bg-card text-foreground shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:text-muted-foreground"
+          className={cn('sticky inset-be-3 z-10 -mbs-[3.25rem] ms-auto me-4 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
           onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>
