@@ -945,11 +945,11 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/workspaces', chatRouter(deps.chat));
   // Долговечные личные и проектные ИИ-чаты. Отдельный контур от коротких
   // ai-prompt-jobs: история сообщений не очищается вместе с очередью воркера.
-  app.use('/api/ai', aiConversationRouter(deps.aiConversations));
   if (deps.imageGeneration) {
-    app.use('/api/ai/image-jobs', imageGenerationRouter(deps.imageGeneration));
+    app.use('/api/ai/image-jobs', imageGenerationRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
     app.use('/api/agent/image-jobs', imageGenerationAgentRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
   }
+  app.use('/api/ai', aiConversationRouter(deps.aiConversations));
   // Журнал батчей действий ассистента: серверная идемпотентность плана и Undo,
   // переживающий перезагрузку вкладки.
   app.use('/api/ai', aiActionBatchRouter(deps.aiActionBatches));

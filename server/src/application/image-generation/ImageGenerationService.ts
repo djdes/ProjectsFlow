@@ -1,6 +1,7 @@
 import { ImageGenerationError, type ImageGeneration } from '../../domain/image-generation/ImageGeneration.js';
 import type { ImageGenerationRepository } from './ImageGenerationRepository.js';
 import type { AttachmentStorage } from '../task/AttachmentStorage.js';
+import { prepareImageInput, type ImageGenerationInput, type StoredImageGenerationInput } from './ImageGenerationInput.js';
 import type { AiConversationService } from '../ai-conversation/AiConversationService.js';
 
 export class ImageGenerationService {
@@ -11,12 +12,22 @@ export class ImageGenerationService {
     idGen: () => string;
     conversations?: Pick<AiConversationService, 'get'>;
   }) {}
-  async create(userId: string, prompt: string, conversationId?: string): Promise<ImageGeneration> {
+  async create(userId: string, prompt: string, conversationId?: string, input?: ImageGenerationInput): Promise<ImageGeneration> {
     const text = prompt.trim();
     if (!text || text.length > 8000) throw new ImageGenerationError(400, 'Введите описание фотографии — до 8000 символов');
     if (!this.deps.dispatcherUserId) throw new ImageGenerationError(503, 'Генерация фотографий пока недоступна');
     if (conversationId) await this.requireConversation(userId, conversationId);
-    return this.deps.jobs.create({ id: this.deps.idGen(), userId, prompt: text, dispatcherUserId: this.deps.dispatcherUserId, conversationId: conversationId ?? null });
+    const prepared = input ? prepareImageInput(input) : undefined;
+    const id = this.deps.idGen();
+    // Publish the queue item only after its immutable inputs are durable.
+    const storageKey = `generated-images/${userId}/${id}.input.json`;
+    if (prepared) await this.deps.storage.put({ storageKey, data: Buffer.from(JSON.stringify(prepared)), mimeType: 'application/json' });
+    try {
+      return await this.deps.jobs.create({ id, userId, prompt: text, dispatcherUserId: this.deps.dispatcherUserId, conversationId: conversationId ?? null });
+    } catch (error) {
+      if (prepared) await this.deps.storage.delete(storageKey).catch(() => {});
+      throw error;
+    }
   }
   async list(userId: string, conversationId?: string): Promise<ImageGeneration[]> {
     if (conversationId) await this.requireConversation(userId, conversationId);
@@ -38,6 +49,15 @@ export class ImageGenerationService {
   async claim(dispatcherUserId: string): Promise<ImageGeneration | null> {
     this.requireDispatcher(dispatcherUserId);
     return this.deps.jobs.claim(dispatcherUserId, this.deps.idGen());
+  }
+  async input(dispatcherUserId: string, id: string, claimToken: string): Promise<StoredImageGenerationInput> {
+    this.requireDispatcher(dispatcherUserId);
+    const job = await this.deps.jobs.get(id);
+    if (!job || job.dispatcherUserId !== dispatcherUserId || job.claimToken !== claimToken || job.status !== 'running') {
+      throw new ImageGenerationError(404, 'Задание не найдено');
+    }
+    const file = await this.deps.storage.read(`generated-images/${job.userId}/${job.id}.input.json`);
+    return file ? JSON.parse(file.data.toString('utf8')) as StoredImageGenerationInput : { images: [] };
   }
   async complete(dispatcherUserId: string, id: string, claimToken: string, image?: Buffer): Promise<void> {
     this.requireDispatcher(dispatcherUserId);

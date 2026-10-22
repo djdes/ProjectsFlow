@@ -27,10 +27,10 @@ async function withApi(run: (url: string) => Promise<void>) {
       async create(input) { return { ...job, ...input, status: 'queued', storageKey: null }; },
       async list(userId, chatId) { return userId === job.userId && (!chatId || chatId === job.conversationId) ? [job] : []; },
       async get(key) { return key === id ? job : null; },
-      async claim() { return job; },
+      async claim() { job.status = 'running'; return job; },
       async complete() { return true; },
     },
-    storage: { async put() {}, async read() { return { data: Buffer.from('private image bytes'), mimeType: 'image/png' }; }, async delete() {} },
+    storage: { async put() {}, async read(key) { return key === 'private/photo.png' ? { data: Buffer.from('private image bytes'), mimeType: 'image/png' } : null; }, async delete() {} },
     dispatcherUserId: 'dispatcher', idGen: () => id,
   });
   const app = express();
