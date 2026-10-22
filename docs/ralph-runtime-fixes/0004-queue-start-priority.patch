@@ -1,0 +1,300 @@
+From 28794ab65feeadd6d7134c6b27d7467f33a0276e Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Thu, 22 Oct 2026 17:45:10 +0300
+Subject: [PATCH] fix(dispatch): prioritize queued work over periodic project
+ synchronization
+
+---
+ dispatch-queue-priority.integration.patch | 125 ++++++++++++++++++++++
+ dispatch-queue-priority.ps1               |  37 +++++++
+ dispatch-queue-priority.tests.ps1         | 102 ++++++++++++++++++
+ 3 files changed, 264 insertions(+)
+ create mode 100644 dispatch-queue-priority.integration.patch
+ create mode 100644 dispatch-queue-priority.ps1
+ create mode 100644 dispatch-queue-priority.tests.ps1
+
+diff --git a/dispatch-queue-priority.integration.patch b/dispatch-queue-priority.integration.patch
+new file mode 100644
+index 0000000..e75580d
+--- /dev/null
++++ b/dispatch-queue-priority.integration.patch
+@@ -0,0 +1,125 @@
++diff --git a/dispatch.ps1 b/dispatch.ps1
++index 88f8eb8..4e848be 100644
++--- a/dispatch.ps1
+++++ b/dispatch.ps1
++@@ -44,6 +44,7 @@ $root = 'C:\www\ralph'
++ Import-Module (Join-Path $root 'workspace-isolation.psm1') -Force
++ Import-Module (Join-Path $root 'codex-engine.psm1') -Force
++ Import-Module (Join-Path $root 'llm-client.psm1') -Force
+++. (Join-Path $root 'dispatch-queue-priority.ps1')
++ $map  = Get-Content "$root\projects-map.json" -Raw | ConvertFrom-Json
++ $mcp  = Get-Content $map.mcpConfig -Raw | ConvertFrom-Json
++ $token = $mcp.mcpServers.projectsflow.env.PROJECTSFLOW_AGENT_TOKEN
++@@ -3980,11 +3981,14 @@ function Process-CommitSyncJobsBatch {
++ # который каждые $script:AiPromptPollIntervalSec секунд проверяет AI-job'ы и при наличии
++ # работы немедленно её делает. Сохраняет общую длительность idle-периода = $totalSec.
++ # Без отдельного потока (PS5.1 async — головная боль) — простой синхронный loop.
++-function Wait-WithAiPoll([int]$totalSec) {
+++function Wait-WithAiPoll([int]$totalSec, [switch]$WakeForWorkerQueue) {
++   if ($totalSec -le 0) { return }
++   $start = Get-Date
++   $interval = if ($script:AiPromptPollIntervalSec -gt 0) { $script:AiPromptPollIntervalSec } else { 8 }
+++  if ($WakeForWorkerQueue) { $interval = [Math]::Min($interval, 5) }
++   do {
+++    # A task rejected by a readiness/retry gate may remain queued: never spin on it.
+++    if ($WakeForWorkerQueue -and ((Get-Date) - $start).TotalSeconds -ge 5 -and (Test-WorkerQueuePending)) { return }
++     if ($script:AiPromptJobsEnabled) {
++       try { Process-AiPromptJobsBatch } catch { Log "WARN ai-prompt under-tick: $($_.Exception.Message)" }
++     }
++@@ -4954,7 +4958,13 @@ function Test-ProjectsChanged {
++ # -Force — sync по запросу человека (дашборд) или по смене состава: игнорирует TTL-кэши, чтобы
++ # правки в KB/составе применились немедленно.
++ function Sync-ProjectsFromApi {
++-  param([switch]$Force)
+++  param([switch]$Force, [switch]$YieldToQueue)
+++  $script:SyncYieldedToQueue = $false
+++  $previousClaims = $script:WorkspaceClaims
+++  $previousBlocked = $script:KbBlockedProjects
+++  $previousSignature = $script:LastProjectsSignature
+++  $published = $false
+++  try {
++   Rotate-DispatchLog
++   Begin-SyncLog
++   if ($Force) { Reset-SyncCaches }
++@@ -5016,6 +5026,7 @@ function Sync-ProjectsFromApi {
++   $runtime = @(); $results = @(); $skippedNoKb = @()
++   $pIdx = 0; $pTotal = @($apiProjects).Count
++   foreach ($p in $apiProjects) {
+++    if ($YieldToQueue -and (Test-YieldSyncToWorkerQueue)) { return }
++     $pIdx++
++     Set-LoadStatus "KB: $($p.name) ($pIdx/$pTotal)"
++
++@@ -5323,6 +5334,7 @@ function Sync-ProjectsFromApi {
++   }
++
++   $script:RuntimeProjects = $runtime
+++  $published = $true
++   # Авто-масштабирование параллелизма: по слоту на проект, чтобы автоматизация могла идти со ВСЕХ
++   # проектов одновременно (очередь — внутри проекта). Явный PF_MAX_PARALLEL_WORKERS перекрывает.
++   if (-not $script:MaxParallelExplicit) {
++@@ -5343,6 +5355,7 @@ function Sync-ProjectsFromApi {
++   } else {
++     Set-LoadStatus 'KB-repair...'
++     foreach ($p in $runtime) {
+++      if ($YieldToQueue -and (Test-YieldSyncToWorkerQueue)) { return }
++       if ($script:KbBlockedProjects[[string]$p.Id]) { continue }
++       if (Get-KbBootstrapDone $p.Id) { continue }   # KB уже проверен — add-project баг разовый, не дёргаем List-KbDocs
++       try { Repair-KbNewlines $p (List-KbDocs $p.Id) } catch { Log "WARN kb-repair $($p.Name): $($_.Exception.Message)" }
++@@ -5361,12 +5374,20 @@ function Sync-ProjectsFromApi {
++     Set-LoadStatus 'bootstrap-проверка KB...'
++     $ran = 0
++     foreach ($p in $runtime) {
+++      if ($YieldToQueue -and (Test-YieldSyncToWorkerQueue)) { return }
++       if (Get-KbBootstrapDone $p.Id) { continue }   # KB уже проверен ранее — не дёргаем дорогой List-KbDocs
++       if ($ran -ge $maxBoot) { Log "  BOOTSTRAP-KB лимит $maxBoot/sync достигнут — остальные на следующих циклах"; break }
++       try { if (Run-BootstrapKb $p) { $ran++ } } catch { Log "WARN bootstrap $($p.Name): $($_.Exception.Message)" }
++     }
++   }
++   return $runtime
+++  } finally {
+++    if (-not $published) {
+++      $script:WorkspaceClaims = $previousClaims
+++      $script:KbBlockedProjects = $previousBlocked
+++      $script:LastProjectsSignature = $previousSignature
+++    }
+++  }
++ }
++
++ # Bootstrap общих KB-документов (architecture/stack/conventions/README). Запускается из
++@@ -7875,7 +7896,8 @@ while ($true) {
++   #   3) полный sync по кнопке в дашборде — всегда с -Force (мимо TTL-кэшей).
++   $syncReason = $null
++   if ($dash.SyncRequested -and -not $dash.SyncBusy) { $syncReason = 'dashboard'; $dash.SyncRequested = $false }
++-  elseif (-not $script:DisableAutoSync -and -not $dash.SyncBusy) {
+++  elseif (-not $script:DisableAutoSync -and -not $dash.SyncBusy -and
+++          (-not $script:NextAutomaticSyncAttempt -or (Get-Date) -ge $script:NextAutomaticSyncAttempt)) {
++     if (((Get-Date) - $script:LastAutoSync) -gt (New-TimeSpan -Minutes $script:FullSyncMinutes)) {
++       $syncReason = 'full'
++     } elseif (((Get-Date) - $script:LastProjectsProbe) -gt (New-TimeSpan -Minutes $script:HourlySyncMinutes)) {
++@@ -7891,9 +7913,14 @@ while ($true) {
++       if ($syncReason -eq 'full') { Log-FileOnly "--- Auto-sync (страховочный, раз в $($script:FullSyncMinutes) мин) ---" }
++       elseif ($syncReason -eq 'changed') { Log "--- Auto-sync (изменился состав проектов) ---" }
++       # -Force там, где ждём немедленного применения правок: кнопка в дашборде и смена состава.
++-      if ($syncReason -eq 'full') { Sync-ProjectsFromApi | Out-Null } else { Sync-ProjectsFromApi -Force | Out-Null }
++-      $script:LastAutoSync = Get-Date
++-      $script:LastProjectsProbe = Get-Date
+++      if ($syncReason -eq 'full') { Sync-ProjectsFromApi -YieldToQueue | Out-Null } else { Sync-ProjectsFromApi -Force | Out-Null }
+++      if ($script:SyncYieldedToQueue) {
+++        $script:NextAutomaticSyncAttempt = (Get-Date).AddSeconds(30)
+++      } else {
+++        $script:LastAutoSync = Get-Date
+++        $script:LastProjectsProbe = Get-Date
+++        $script:NextAutomaticSyncAttempt = $null
+++      }
++     } catch { Log "ERROR sync ($syncReason): $($_.Exception.Message)"; Abort-SyncLog }
++     finally { Stop-LoadingSpinner; $dash.SyncBusy = $false }
++   }
++@@ -7947,7 +7974,7 @@ while ($true) {
++     if ($script:WorkerCtxs.Count -eq 0) {
++       $dash.Running = $false; $dash.RunningTasks = @(); $dash.Action = 'простой'; Write-StatusFile
++       Enter-Idle ("нет todo/in_progress, пауза $($script:pollSeconds)s")
++-      Wait-WithAiPoll $script:pollSeconds; continue
+++      Wait-WithAiPoll $script:pollSeconds -WakeForWorkerQueue; continue
++     }
++
++     Exit-Idle
+diff --git a/dispatch-queue-priority.ps1 b/dispatch-queue-priority.ps1
+new file mode 100644
+index 0000000..67d0d48
+--- /dev/null
++++ b/dispatch-queue-priority.ps1
+@@ -0,0 +1,37 @@
++﻿# Dot-sourced: authenticated API and previously verified runtime projects belong to dispatch.ps1.
++function Test-WorkerQueuePending {
++  if (@($script:RuntimeProjects).Count -eq 0) { return $false }
++  $now = Get-Date
++  if ($script:WorkerQueueProbeAt -and ($now - $script:WorkerQueueProbeAt).TotalSeconds -lt 5) {
++    return [bool]$script:WorkerQueueProbePending
++  }
++  $script:WorkerQueueProbeAt = $now
++  $script:WorkerQueueProbePending = $false
++  try {
++    $response = Invoke-RestMethod -Uri "$api/agent/me/dispatched-projects" -Headers $headers -Method GET -TimeoutSec 5
++    $authorized = @{}
++    foreach ($project in @($response.projects)) { $authorized[[string]$project.id] = $project }
++    $blocked = Get-ClarifyBlockedTaskIds
++    foreach ($project in @($script:RuntimeProjects)) {
++      $current = $authorized[[string]$project.Id]
++      if (-not $current -or [int]$current.openTaskCount -le 0) { continue }
++      foreach ($task in @(Get-CachedTasks $project.Id)) {
++        if ($task.status -in @('todo', 'in_progress') -and -not $blocked.ContainsKey([string]$task.id)) {
++          $script:WorkerQueueProbePending = $true
++          return $true
++        }
++      }
++    }
++  } catch {
++    Log-RateLimited 'queue-probe' 'dispatched-projects' "WARN queue probe: $($_.Exception.Message)"
++  }
++  return $false
++}
++
++function Test-YieldSyncToWorkerQueue {
++  if (-not (Test-WorkerQueuePending)) { return $false }
++  $script:SyncYieldedToQueue = $true
++  Log 'Очередь задач получила приоритет: фоновая синхронизация отложена.'
++  Abort-SyncLog
++  return $true
++}
+diff --git a/dispatch-queue-priority.tests.ps1 b/dispatch-queue-priority.tests.ps1
+new file mode 100644
+index 0000000..b6bb96c
+--- /dev/null
++++ b/dispatch-queue-priority.tests.ps1
+@@ -0,0 +1,102 @@
++﻿$ErrorActionPreference = 'Stop'
++$errors = $null
++$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'dispatch.ps1'), [ref]$null, [ref]$errors)
++if ($errors.Count) { throw ($errors | Out-String) }
++. (Join-Path $PSScriptRoot 'dispatch-queue-priority.ps1')
++foreach ($name in @('Wait-WithAiPoll', 'Sync-ProjectsFromApi')) {
++  $fn = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
++  . ([scriptblock]::Create($fn.Extent.Text))
++}
++$script:Checks = 0
++function Assert([bool]$ok, [string]$label) { if (-not $ok) { throw $label }; $script:Checks++ }
++$script:Now = [datetime]'2026-10-22T15:00:00'
++function Get-Date { $script:Now }
++function Start-Sleep { param([int]$Seconds); $script:Now = $script:Now.AddSeconds($Seconds) }
++function Log {}
++function Log-Sync {}
++function Log-RateLimited { $script:Warnings++ }
++function Abort-SyncLog { $script:Aborts++ }
++function Rotate-DispatchLog {}
++function Begin-SyncLog {}
++function Set-LoadStatus {}
++function Save-AgentCache {}
++function Get-MyAccount { @{ email = 'test@example.invalid'; displayName = 'Test' } }
++function Get-ProjectsSignature { 'new-signature' }
++function HasProp($object, $key) { $object.ContainsKey($key) }
++function Reset-SyncCaches { $script:Resets++ }
++function Get-ClarifyBlockedTaskIds { $script:Blocked }
++function Process-SiteEditorJobsBatch { $script:OtherPolls++ }
++function Invoke-RestMethod {
++  $script:ApiCalls++
++  if ($script:ApiFails) { throw 'unavailable' }
++  return @{ projects = $script:ApiProjects }
++}
++function Get-CachedTasks($projectId) { $script:TaskReads++; $script:ProjectTasks[$projectId] }
++$api = 'https://example.invalid/api'; $headers = @{}
++$script:Warnings = 0; $script:Aborts = 0; $script:ApiCalls = 0; $script:TaskReads = 0
++$script:Blocked = @{}; $script:ApiFails = $false
++$script:RuntimeProjects = @(@{ Id = 'verified' })
++$script:ApiProjects = @(@{ id = 'verified'; openTaskCount = 1 }, @{ id = 'unverified'; openTaskCount = 1 })
++$script:ProjectTasks = @{ verified = @(@{ id = 'task'; status = 'pending_approval' }) }
++Assert (-not (Test-WorkerQueuePending)) 'Approval tasks must not interrupt maintenance'
++Assert ($script:TaskReads -eq 1) 'Unverified projects must not be read or dispatched'
++$script:ProjectTasks.verified[0].status = 'todo'
++Assert (-not (Test-WorkerQueuePending)) 'Probe must be throttled for five seconds'
++$script:Now = $script:Now.AddSeconds(5)
++Assert (Test-WorkerQueuePending) 'Fresh queued task must wake the dispatcher'
++$script:Blocked.task = $true; $script:Now = $script:Now.AddSeconds(5)
++Assert (-not (Test-WorkerQueuePending)) 'Tasks waiting for clarification must not wake the dispatcher'
++$script:Blocked = @{}; $script:ApiFails = $true; $script:Now = $script:Now.AddSeconds(5)
++Assert (-not (Test-WorkerQueuePending)) 'API failure must not infer runnable work'
++Assert ($script:Warnings -eq 1) 'API failure must be contained and logged'
++$script:ApiFails = $false
++$script:RuntimeProjects = @()
++$apiCallsBefore = $script:ApiCalls
++Assert (-not (Test-WorkerQueuePending)) 'Initial startup must finish verifying its runtime before yielding'
++Assert ($script:ApiCalls -eq $apiCallsBefore) 'No queue scan before a verified runtime exists'
++
++# Exercise real idle wait with virtual time, independently of AI queue settings.
++function Test-WorkerQueuePending { $script:ProbeTicks++; return $script:Now -ge $script:ArrivesAt }
++$script:AiPromptPollIntervalSec = 8; $script:OtherPolls = 0; $script:ProbeTicks = 0
++$script:ArrivesAt = $script:Now.AddSeconds(5); $waitStart = $script:Now
++Wait-WithAiPoll 60 -WakeForWorkerQueue
++Assert (($script:Now - $waitStart).TotalSeconds -eq 5) 'Queued task must wake idle wait after five seconds instead of sixty'
++Assert ($script:OtherPolls -eq 1) 'Other user-facing queues must continue polling'
++$waitStart = $script:Now; $ticksBefore = $script:ProbeTicks
++Wait-WithAiPoll 60
++Assert (($script:Now - $waitStart).TotalSeconds -eq 60) 'Work-hours and budget waits must retain their full pause'
++Assert ($script:ProbeTicks -eq $ticksBefore) 'Work-hours and budget waits must not wake for a kanban task'
++
++# Interrupt a real full sync halfway through: no partial runtime or path claims may leak.
++function Test-WorkerQueuePending { $script:SyncChecks++; return $script:SyncChecks -ge 3 }
++$script:SyncChecks = 0; $script:dash = @{}
++$script:RuntimeProjects = @(@{ Id = 'old-verified' })
++$script:WorkspaceClaims = @{ 'c:/verified' = 'old-verified' }
++$script:KbBlockedProjects = @{ denied = $true }
++$script:LastProjectsSignature = 'old-signature'
++$oldRuntime = $script:RuntimeProjects
++$oldClaims = $script:WorkspaceClaims
++$script:ApiProjects = @(1..4 | ForEach-Object { @{ id = "p$_"; name = "Project $_"; hasKb = $false } })
++Sync-ProjectsFromApi -YieldToQueue | Out-Null
++Assert $script:SyncYieldedToQueue 'Periodic sync must yield when work arrives during its project scan'
++Assert ([object]::ReferenceEquals($oldRuntime, $script:RuntimeProjects)) 'Interrupted sync must retain the complete verified runtime'
++Assert ([object]::ReferenceEquals($oldClaims, $script:WorkspaceClaims)) 'Interrupted sync must restore canonical workspace claims'
++Assert ($script:KbBlockedProjects.denied) 'Interrupted sync must retain KB access denials'
++Assert ($script:LastProjectsSignature -eq 'old-signature') 'Partial sync must not acknowledge an unprocessed discovery signature'
++Assert ($script:Aborts -eq 1) 'Interrupted sync must close its log'
++
++function End-SyncLog {}
++function Test-WorkerQueuePending { throw 'Explicit sync must not consult the yield probe' }
++$env:PF_DISABLE_KB_REPAIR = '1'; $env:PF_DISABLE_BOOTSTRAP = '1'
++$script:MaxParallelExplicit = $true; $script:Resets = 0
++Sync-ProjectsFromApi -Force | Out-Null
++Assert (-not $script:SyncYieldedToQueue) 'Explicit operator sync must finish instead of yielding'
++Assert ($script:Resets -eq 1) 'Explicit operator sync must retain cache invalidation'
++Assert ($script:RuntimeProjects.Count -eq 0) 'Complete sync must publish removals after verification'
++
++# Runtime integration: periodic sync only; budget/work-hours calls remain unchanged.
++$source = $ast.Extent.Text
++Assert ($source.Contains('Sync-ProjectsFromApi -YieldToQueue')) 'Periodic sync must enable cooperative queue priority'
++Assert ($source.Contains('Wait-WithAiPoll $script:pollSeconds -WakeForWorkerQueue; continue')) 'Kanban idle branch must opt into early wake'
++Assert ($source.Contains('$script:NextAutomaticSyncAttempt = (Get-Date).AddSeconds(30)')) 'Deferred sync must back off before retrying'
++Write-Host "OK: $($script:Checks) queue priority checks"
+-- 
+2.53.0.windows.2
+
