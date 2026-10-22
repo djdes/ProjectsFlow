@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
 import { isWorkerStartupNotice } from '@/lib/isWorkerStartupNotice';
 import { parseWorkerResult } from '@/domain/live/WorkerResult';
+import { parseFileEditPayload } from '@/domain/live/fileEditPayload';
 import { WorkerResultMessage } from './WorkerResultMessage';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTaskLiveTimeline } from '@/presentation/hooks/useTaskLiveTimeline';
@@ -13,7 +14,6 @@ import type { LiveSession } from '@/domain/live/LiveSession';
 import type {
   LiveEvent,
   LiveBashPayload,
-  LiveFileEditPayload,
   LiveToolUsePayload,
 } from '@/domain/live/LiveEvent';
 import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
@@ -598,13 +598,18 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
       );
     }
     case 'file_edit': {
-      const payload = event.payload as LiveFileEditPayload | null;
+      const payload = parseFileEditPayload(event.payload);
       if (!payload) return null;
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-yellow bg-tone" />
           <FileCard icon="✎" path={payload.path} tone="edit">
             <div className="space-y-1.5">
+              {payload.edits.length === 0 && (
+                <p className="px-1 py-1 text-xs text-muted-foreground">
+                  Нет текста для сравнения. Итоговый diff появится после завершения работы, если он доступен.
+                </p>
+              )}
               {payload.edits.map((edit, i) => (
                 <DiffView key={i} mode="hunks" before={edit.old} after={edit.new} />
               ))}
