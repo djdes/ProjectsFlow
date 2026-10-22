@@ -560,7 +560,7 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
               ошибка инструмента
             </div>
             <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-1.5 font-mono text-2xs leading-relaxed text-foreground">
-              {event.text ?? ''}
+              {event.text?.trim() || 'Воркер сообщил об ошибке инструмента без описания. Подробности не были сохранены.'}
             </pre>
           </div>
         </div>

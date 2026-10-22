@@ -1,0 +1,132 @@
+From 17783f278f2af001d6e7bbb462fb5ceb77843a17 Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Thu, 22 Oct 2026 13:33:15 +0300
+Subject: [PATCH] fix(live): preserve MCP error details and mask diagnostic
+ credentials
+
+---
+ codex-engine.psm1           | 41 ++++++++++++++++++++++++++++++++++---
+ codex-tool-errors.tests.ps1 | 38 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 76 insertions(+), 3 deletions(-)
+ create mode 100644 codex-tool-errors.tests.ps1
+
+diff --git a/codex-engine.psm1 b/codex-engine.psm1
+index 74d6ff5..d889fd9 100644
+--- a/codex-engine.psm1
++++ b/codex-engine.psm1
+@@ -235,6 +235,11 @@ function New-ToolUseEvent([string]$Id, [string]$Name, $InputObject) {
+ }
+ 
+ function New-ToolErrorEvent([string]$Id, [string]$Text) {
++  if ([string]::IsNullOrWhiteSpace($Text)) { $Text = 'Инструмент завершился с ошибкой, но не передал описание.' }
++  $Text = $Text -replace '(?i)(x-access-token:)[^@\s"'']+', '${1}REDACTED'
++  $Text = $Text -replace '(?i)(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9._~-]+', '${1}REDACTED'
++  $Text = $Text -replace '\bgh[pousr]_[A-Za-z0-9_]{20,}\b|\bgithub_pat_[A-Za-z0-9_]+\b', 'GITHUB_TOKEN_REDACTED'
++  $Text = $Text -replace '\bpfat_[A-Za-z0-9._~-]{16,}\b', 'PROJECTSFLOW_TOKEN_REDACTED'
+   if ($Text.Length -gt 2000) { $Text = $Text.Substring($Text.Length - 2000) }
+   return New-ClaudeEventJson @{
+     type = 'user'
+@@ -242,6 +247,32 @@ function New-ToolErrorEvent([string]$Id, [string]$Text) {
+   }
+ }
+ 
++# Read known diagnostic fields only. Never stringify an entire MCP result:
++# credential tools can return tokens even when the surrounding call failed.
++function Get-CodexToolErrorText($Value, [int]$Depth = 0) {
++  if ($null -eq $Value -or $Depth -gt 8) { return '' }
++  if ($Value -is [string]) {
++    $text = $Value.Trim()
++    if ($text.StartsWith('{') -or $text.StartsWith('[')) {
++      try {
++        $parsed = ConvertFrom-Json -InputObject $text -ErrorAction Stop
++        return Get-CodexToolErrorText $parsed ($Depth + 1)
++      } catch { return 'Инструмент вернул некорректное описание ошибки в JSON.' }
++    }
++    return $text
++  }
++  if ($Value -is [array]) {
++    $parts = @($Value | ForEach-Object { Get-CodexToolErrorText $_ ($Depth + 1) } | Where-Object { $_ })
++    return ($parts -join "`n")
++  }
++  foreach ($key in @('message', 'error', 'content', 'structuredContent', 'structured_content')) {
++    $details = Get-CodexToolErrorText $Value.$key ($Depth + 1)
++    if ($details) { return $details }
++  }
++  if ($Value.type -eq 'text' -and $Value.text) { return Get-CodexToolErrorText $Value.text ($Depth + 1) }
++  return ''
++}
++
+ # Переводит одну строку `codex exec --json` в 0..N строк stream-json Claude.
+ function ConvertFrom-CodexEventLine {
+   param([string]$Line, [hashtable]$State)
+@@ -285,7 +316,9 @@ function ConvertFrom-CodexEventLine {
+           $State.Done[$id] = $true
+           $code = $item.exit_code
+           if (($null -ne $code -and [int]$code -ne 0) -or [string]$item.status -eq 'failed') {
+-            $out += New-ToolErrorEvent $id ([string]$item.aggregated_output)
++            $message = [string]$item.aggregated_output
++            if ([string]::IsNullOrWhiteSpace($message)) { $message = "Команда завершилась с ошибкой (код выхода: $code), но не передала вывод." }
++            $out += New-ToolErrorEvent $id $message
+           }
+         }
+       }
+@@ -315,8 +348,10 @@ function ConvertFrom-CodexEventLine {
+             $out += New-ToolUseEvent $id $tool $toolArgs
+           }
+           $State.Done[$id] = $true
+-          if ($item.error -or [string]$item.status -eq 'failed') {
+-            $msg = if ($item.error -and $item.error.message) { [string]$item.error.message } else { [string]$item.error }
++          if ($item.error -or [string]$item.status -eq 'failed' -or $item.result.isError -eq $true -or $item.result.is_error -eq $true) {
++            $msg = Get-CodexToolErrorText $item.error
++            if (-not $msg) { $msg = Get-CodexToolErrorText $item.result }
++            if (-not $msg) { $msg = "Инструмент MCP $($item.server)/$($item.tool) завершился с ошибкой без описания." }
+             $out += New-ToolErrorEvent $id $msg
+           }
+         }
+diff --git a/codex-tool-errors.tests.ps1 b/codex-tool-errors.tests.ps1
+new file mode 100644
+index 0000000..0b6ac1b
+--- /dev/null
++++ b/codex-tool-errors.tests.ps1
+@@ -0,0 +1,38 @@
++﻿$ErrorActionPreference = 'Stop'
++Import-Module (Join-Path $PSScriptRoot 'codex-engine.psm1') -Force
++$script:checks = 0
++function Check([bool]$value, [string]$label) {
++  if (-not $value) { throw "FAILED: $label" }
++  $script:checks++
++  Write-Output "PASS: $label"
++}
++function Error-Text($item) {
++  $line = @{ type = 'item.completed'; item = $item } | ConvertTo-Json -Depth 20 -Compress
++  $events = @(ConvertFrom-CodexEventLine -Line $line -State (New-CodexEventState 'gpt-6.1-sol'))
++  $errors = @($events | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.type -eq 'user' })
++  if ($errors.Count -eq 0) { return '' }
++  return [string]$errors[0].message.content[0].content
++}
++function Mcp-Item { return @{ id='m1';type='mcp_tool_call';server='projectsflow';tool='pf_get_project_git_token';status='failed';error=$null;result=$null } }
++
++$item = Mcp-Item; $item.error = @{message='HTTP 403: delegation_disabled'}
++Check ((Error-Text $item) -eq 'HTTP 403: delegation_disabled') 'Native error.message is retained'
++$item = Mcp-Item; $item.result = @{content=@(@{type='text';text='HTTP 403: no_eligible_grantor'})}
++Check ((Error-Text $item) -eq 'HTTP 403: no_eligible_grantor') 'Failed calls extract MCP content when error is null'
++$item = Mcp-Item; $item.status='completed'; $item.result=@{isError=$true;content=@(@{type='text';text='Tool timeout'})}
++Check ((Error-Text $item) -eq 'Tool timeout') 'MCP isError is recognized even on a completed transport call'
++$item = Mcp-Item; $item.result=@{is_error=$true;structuredContent=@{error=@{message='Missing permission'}}}
++Check ((Error-Text $item) -eq 'Missing permission') 'Structured diagnostics and legacy is_error are supported'
++$item = Mcp-Item
++Check ((Error-Text $item) -match 'projectsflow/pf_get_project_git_token.+без описания') 'Missing diagnostics still identify the failed tool'
++$item = Mcp-Item; $item.result=@{token='private-credential-only';owner='member'}
++Check ((Error-Text $item) -notmatch 'private-credential-only|member|System.Management.Automation') 'Unknown credential payloads are never stringified'
++$item = Mcp-Item; $item.result=@{content=@(@{type='text';text='{"token":"private-credential-only","error":{"message":"Delegation disabled"}}'})}
++Check ((Error-Text $item) -eq 'Delegation disabled') 'Only error fields are read from JSON text, without credential siblings'
++$item = Mcp-Item; $item.status='completed'; $item.result=@{isError=$false;content=@(@{type='text';text='{"token":"private-credential-only"}'})}
++Check ((Error-Text $item) -eq '') 'Successful token responses never become diagnostic events'
++$item = Mcp-Item; $item.error=@{message=('HTTP 403: x-access-token:ghp_' + ('x'*30) + '@github.com Authorization: Bearer pfat_' + ('y'*30))}
++$redacted = Error-Text $item
++Check ($redacted -match 'REDACTED' -and $redacted -notmatch ('x'*20) -and $redacted -notmatch ('y'*20)) 'Credentials are masked before converted events are written to logs'
++Check ((Error-Text @{id='cmd';type='command_execution';status='failed';exit_code=17;aggregated_output=''}) -match '17.+не передала вывод') 'Commands with no stderr still report their exit code'
++Write-Output "Passed $script:checks tool error checks."
+-- 
+2.53.0.windows.2
+

@@ -163,14 +163,16 @@ test('worker chat keeps the user message between runs and follows the new stream
     assert.equal(feed.scrollTop, feed.scrollHeight, 'the new run continues at the bottom');
     await act(async () => { feed.scrollTop = 0; feed.dispatchEvent(new Event('scroll')); });
     const stream = Source.instances.at(-1)!;
-    await act(async () => { stream.emit('live', { ...event(5, 'Тест отправлен', 5), createdAt: at(5).toISOString() }); });
+    await act(async () => { stream.emit('live', { seq: 5, kind: 'tool_error', text: '  \n', payload: null, createdAt: at(4).toISOString() }); });
+    assert.match(view.host.textContent ?? '', /Воркер сообщил об ошибке инструмента без описания/);
+    await act(async () => { stream.emit('live', { ...event(6, 'Тест отправлен', 5), createdAt: at(5).toISOString() }); });
     assert.match(view.host.textContent ?? '', /Тест отправлен/);
     assert.equal(feed.scrollTop, 0, 'new actions do not pull the reader away from earlier messages');
     await act(async () => { view.host.querySelector<HTMLButtonElement>('[aria-label="К последнему сообщению"]')!.click(); });
     assert.equal(feed.scrollTop, feed.scrollHeight);
     await view.close();
-    sessions = sessions.map(s => ({ ...s, status: 'completed', lastSeq: s.id === 'next' ? 5 : 1, endedAt: at(s.id === 'next' ? 6 : 2) }));
-    events.get('next')!.push(event(5, 'Тест отправлен', 5));
+    sessions = sessions.map(s => ({ ...s, status: 'completed', lastSeq: s.id === 'next' ? 6 : 1, endedAt: at(s.id === 'next' ? 6 : 2) }));
+    events.get('next')!.push(event(6, 'Тест отправлен', 5));
     const reopened = await mount(View, props);
     try { assert.match(reopened.host.textContent ?? '', /Первый результат.*Отправь тестовое сообщение.*Тест отправлен/s); }
     finally { await reopened.close(); }
