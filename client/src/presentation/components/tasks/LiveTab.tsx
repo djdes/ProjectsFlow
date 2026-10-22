@@ -322,10 +322,12 @@ function TaskLiveChat({
         ))}
       </div>
       </div>
+      {/* Outside the message scroller. Sticky also follows the outer task scroller
+          in the narrow drawer; the negative margin overlays the feed without a new row. */}
       {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
           disabled={!showScrollBottom}
-          className="absolute end-4 inset-be-3 z-10 grid size-10 place-items-center rounded-full border bg-card text-foreground shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:text-muted-foreground"
+          className="sticky inset-be-3 z-10 -mbs-[3.25rem] ms-auto me-4 grid size-10 place-items-center rounded-full border bg-card text-foreground shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:text-muted-foreground"
           onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>
