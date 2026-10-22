@@ -275,7 +275,7 @@ function TaskLiveChat({
   const hiddenCount = entries.length - shown.length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-panel text-foreground">
+    <div className="flex h-[70dvh] max-h-full min-h-0 flex-1 flex-col bg-panel text-foreground">
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
 
       <div className="relative min-h-0 flex-1">
@@ -283,7 +283,7 @@ function TaskLiveChat({
         ref={scrollRef}
         onScroll={onScroll}
         data-pf-worker-chat=""
-        className="h-full min-h-0 overflow-y-auto px-3 py-3"
+        className="h-full min-h-0 overflow-y-auto px-3 pbs-3 pbe-14"
       >
       <div ref={contentRef} className="space-y-2.5">
         {sessionsLoading && entries.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
@@ -316,9 +316,10 @@ function TaskLiveChat({
         ))}
       </div>
       </div>
-      {showScrollBottom && (
+      {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
-          className="absolute end-4 inset-be-3 grid size-10 place-items-center rounded-full border bg-card text-foreground shadow-lg"
+          disabled={!showScrollBottom}
+          className="absolute end-4 inset-be-3 z-10 grid size-10 place-items-center rounded-full border bg-card text-foreground shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:text-muted-foreground"
           onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>

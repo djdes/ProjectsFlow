@@ -1,0 +1,126 @@
+From 459af8ed1e3a11b9bc286e0444dd2b43cc06b0af Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Thu, 22 Oct 2026 10:37:38 +0300
+Subject: [PATCH] fix(ai-chat): retry temporary model capacity failures within
+ the run lease
+
+---
+ ai-conversation-retry.psm1      | 24 ++++++++++++++++++++++++
+ ai-conversation-retry.tests.ps1 | 29 +++++++++++++++++++++++++++++
+ ai-conversation-worker.ps1      | 20 ++++++++++++++------
+ 3 files changed, 67 insertions(+), 6 deletions(-)
+ create mode 100644 ai-conversation-retry.psm1
+ create mode 100644 ai-conversation-retry.tests.ps1
+
+diff --git a/ai-conversation-retry.psm1 b/ai-conversation-retry.psm1
+new file mode 100644
+index 0000000..f303ca0
+--- /dev/null
++++ b/ai-conversation-retry.psm1
+@@ -0,0 +1,24 @@
++﻿function Invoke-AiConversationWithRetry {
++  param(
++    [Parameter(Mandatory = $true)][scriptblock]$Invoke,
++    [int]$TimeoutSec = 180,
++    [scriptblock]$Delay = { param($seconds) Start-Sleep -Seconds $seconds },
++    [scriptblock]$Now = { [DateTime]::UtcNow }
++  )
++  # The run lease lasts five minutes. All attempts share one bounded deadline.
++  $deadline = (& $Now).AddSeconds([Math]::Min(240, [Math]::Max(5, $TimeoutSec)))
++  $last = @{ ok = $false; reason = 'local_codex_timeout'; text = '' }
++  for ($attempt = 1; $attempt -le 3; $attempt++) {
++    $remaining = [int][Math]::Floor(($deadline - (& $Now)).TotalSeconds)
++    if ($remaining -lt 5) { return $last }
++    $last = & $Invoke $remaining
++    if ($last.ok) { return $last }
++    $transient = ([string]$last.reason) -match '(?i)at capacity|overload|model.{0,20}busy|rate.?limit|\b429\b|\b503\b|service.unavailable'
++    if (-not $transient -or $attempt -eq 3) { return $last }
++    $pause = if ($attempt -eq 1) { 2 } else { 5 }
++    if (($deadline - (& $Now)).TotalSeconds -lt ($pause + 5)) { return $last }
++    & $Delay $pause
++  }
++  return $last
++}
++Export-ModuleMember -Function Invoke-AiConversationWithRetry
+diff --git a/ai-conversation-retry.tests.ps1 b/ai-conversation-retry.tests.ps1
+new file mode 100644
+index 0000000..c7eaba9
+--- /dev/null
++++ b/ai-conversation-retry.tests.ps1
+@@ -0,0 +1,29 @@
++﻿$ErrorActionPreference = 'Stop'
++Import-Module (Join-Path $PSScriptRoot 'ai-conversation-retry.psm1') -Force
++$script:Checks = 0
++function Assert([bool]$condition, [string]$message) { if (-not $condition) { throw $message }; $script:Checks++ }
++$script:Clock = [DateTime]::UtcNow
++$script:Calls = 0
++$script:Pauses = @()
++$now = { $script:Clock }
++$delay = { param($seconds) $script:Pauses += $seconds; $script:Clock = $script:Clock.AddSeconds($seconds) }
++$result = Invoke-AiConversationWithRetry -TimeoutSec 30 -Now $now -Delay $delay -Invoke {
++  param($remaining)
++  $script:Calls++
++  Assert ($remaining -gt 0 -and $remaining -le 30) 'A shared remaining deadline must be passed to Codex'
++  if ($script:Calls -eq 1) { return @{ ok=$false; reason='codex_failed: Selected model is at capacity. Please try a different model.' } }
++  return @{ ok=$true; text='Answer'; model='gpt-6.1-sol'; cost=@{tokensIn=10} }
++}
++Assert ($result.ok -and $result.text -eq 'Answer') 'A capacity failure must recover without changing model'
++Assert ($script:Calls -eq 2 -and $script:Pauses.Count -eq 1) 'Only one bounded retry is needed after recovery'
++Assert ($result.model -eq 'gpt-6.1-sol' -and $result.cost.tokensIn -eq 10) 'The result and usage contract must be preserved'
++$script:Calls = 0
++$result = Invoke-AiConversationWithRetry -TimeoutSec 30 -Now $now -Delay $delay -Invoke { param($remaining) $script:Calls++; return @{ok=$false; reason='Selected model is at capacity'} }
++Assert (-not $result.ok -and $script:Calls -eq 3) 'Persistent overload must stop after three attempts'
++$script:Calls = 0
++$result = Invoke-AiConversationWithRetry -Now $now -Delay $delay -Invoke { param($remaining) $script:Calls++; return @{ok=$false; reason='local login expired'} }
++Assert (-not $result.ok -and $script:Calls -eq 1) 'Authentication failures must not be retried'
++$script:Calls = 0
++$result = Invoke-AiConversationWithRetry -TimeoutSec 6 -Now $now -Delay $delay -Invoke { param($remaining) $script:Calls++; return @{ok=$false; reason='503 unavailable'} }
++Assert ($script:Calls -eq 1) 'Backoff must not exceed the total deadline'
++Write-Output "OK: $script:Checks checks"
+diff --git a/ai-conversation-worker.ps1 b/ai-conversation-worker.ps1
+index 25f2a7d..61c1b7c 100644
+--- a/ai-conversation-worker.ps1
++++ b/ai-conversation-worker.ps1
+@@ -1,5 +1,5 @@
+-# Pure text-in/text-out worker for durable ProjectsFlow AI conversations.
+-# Receives only a redacted run snapshot; the model (GPT via the ProjectsFlow server) gets no tools.
++﻿# Pure text-in/text-out worker for durable ProjectsFlow AI conversations.
++# Receives only a redacted run snapshot; the model gets no tools.
+ param([Parameter(Mandatory = $true)][string]$CtxFile)
+ 
+ $ErrorActionPreference = 'Stop'
+@@ -48,11 +48,15 @@ function Fail-Run([string]$code, [string]$message, [bool]$retryable = $true) {
+ }
+ 
+ Import-Module (Join-Path $PSScriptRoot 'llm-client.psm1') -Force
++Import-Module (Join-Path $PSScriptRoot 'ai-conversation-retry.psm1') -Force
+ 
+-# Model call through the ProjectsFlow server: GPT on the platform ChatGPT subscription
+-# (llm-client.psm1). Same result shape as before: ok, text, reason, model, costUsd, tokensIn, tokensOut.
++# llm-client.psm1 owns the model transport and authentication.
++# Preserve its result contract while retrying temporary capacity failures.
+ function Invoke-LlmChat([string]$prompt) {
+-  $r = Invoke-PfLlmText -Api $Api -Token $Token -Prompt $prompt -Tier (ConvertTo-PfLlmTier $Model) -TimeoutSec ([Math]::Max(30, $WatchdogSec))
++  $r = Invoke-AiConversationWithRetry -TimeoutSec $WatchdogSec -Invoke {
++    param($remaining)
++    Invoke-PfLlmText -Api $Api -Token $Token -Prompt $prompt -Tier (ConvertTo-PfLlmTier $Model) -TimeoutSec $remaining
++  }
+   if (-not $r.ok) { return @{ ok = $false; reason = [string]$r.reason } }
+   return @{
+     ok = $true
+@@ -78,7 +82,11 @@ try {
+   $prompt = $prompt.Replace('{{SAFE_CONTEXT}}', $contextLabel)
+   $prompt = $prompt.Replace('{{INPUT_TEXT}}', $InputText)
+   $result = Invoke-LlmChat $prompt
+-  if (-not $result.ok) { Fail-Run 'model_failed' ([string]$result.reason) $true; exit 1 }
++  if (-not $result.ok) {
++    $code = if (([string]$result.reason) -match '(?i)at capacity|overload|model.{0,20}busy|rate.?limit|\b429\b|\b503\b') { 'model_busy' } else { 'model_failed' }
++    Fail-Run $code ([string]$result.reason) $true
++    exit 1
++  }
+   $answer = [string]$result.text
+   $cap = if ($MaxOutputChars -gt 0) { $MaxOutputChars } else { 100000 }
+   if ($answer.Length -gt $cap) { $answer = $answer.Substring(0, $cap) }
+-- 
+2.53.0.windows.2
+

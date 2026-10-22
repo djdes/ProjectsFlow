@@ -179,7 +179,7 @@ export type TaskDrawerState =
   | { mode: 'create'; status: Task['status'] }
   // scrollToCommentId — deep-link из письма/TG (?task=X#comment-Y): после загрузки
   // комментариев секция скроллит к нему и подсвечивает.
-  | { mode: 'edit'; task: Task; scrollToCommentId?: string };
+  | { mode: 'edit'; task: Task; scrollToCommentId?: string; commentNavigationKey?: string };
 
 type Props = {
   state: TaskDrawerState | null;
@@ -728,6 +728,11 @@ export function TaskDrawer({
       return 'discussion';
     }
   });
+  const requestedCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
+  const commentNavigationKey = state?.mode === 'edit' ? state.commentNavigationKey : undefined;
+  useEffect(() => {
+    if (requestedCommentId) setActiveTab('discussion');
+  }, [requestedCommentId, commentNavigationKey]);
   useEffect(() => {
     try {
       localStorage.setItem('pf-task-tab', activeTab);
@@ -2151,6 +2156,7 @@ export function TaskDrawer({
                     onFirstLoad={scrollBodyToBottom}
                     onCountChange={setCommentCount}
                     scrollToCommentId={scrollToCommentId}
+                    commentNavigationKey={commentNavigationKey}
                     onReply={(commentId, authorName, quotedText) =>
                       setReplyDraft({ taskId: task.id, userId: currentUser?.id ?? null, commentId, authorName, quotedText })
                     }
@@ -2497,6 +2503,7 @@ function TaskCommentsSection({
   onCountChange,
   // Deep-link: id комментария, к которому надо скроллнуть после загрузки (?task=X#comment-Y).
   scrollToCommentId,
+  commentNavigationKey,
   // Ответ/цитата: тред просит композер ответить на коммент (с опц. выделенным фрагментом).
   onReply,
   // Задача на утверждении, а юзер её не принимает: тред read-only (сервер вернёт 409).
@@ -2509,6 +2516,7 @@ function TaskCommentsSection({
   onFirstLoad?: () => void;
   onCountChange?: (count: number) => void;
   scrollToCommentId?: string;
+  commentNavigationKey?: string;
   onReply?: (commentId: string, authorName: string, quotedText: string | null) => void;
   frozen?: boolean;
 }): React.ReactElement {
@@ -2561,7 +2569,7 @@ function TaskCommentsSection({
       window.setTimeout(() => el.classList.remove('pf-comment-flash'), 2000);
     }, 60);
     return () => window.clearTimeout(t);
-  }, [loading, comments, scrollToCommentId]);
+  }, [loading, comments, scrollToCommentId, commentNavigationKey]);
 
   const handleUpdated = (updated: TaskComment): void => {
     setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));

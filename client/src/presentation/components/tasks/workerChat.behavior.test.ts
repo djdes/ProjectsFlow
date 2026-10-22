@@ -19,8 +19,9 @@ const state: Record<string, unknown> = {};
 
 // Replace application ports and unrelated controls, retaining the real timeline,
 // activity store, composer keyboard handling and page routing logic.
-async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage') {
-  const entry = name === 'AiPage' ? '../../pages/AiPage.tsx' : `./${name}.tsx`;
+async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'AiConversationView' | 'TaskDetailPage') {
+  const entry = name === 'AiPage' || name === 'TaskDetailPage' ? `../../pages/${name}.tsx`
+    : name === 'AiConversationView' ? '../ai/AiConversationView.tsx' : `./${name}.tsx`;
   const result = await build({
     entryPoints: [fileURLToPath(new URL(entry, import.meta.url))], bundle: true, write: false,
     platform: 'node', format: 'cjs', jsx: 'automatic',
@@ -36,10 +37,14 @@ async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage') {
         './CancelWorkButton': `import React from 'react';export const CancelWorkButton=()=>React.createElement('button',null,'Отменить работу');`,
         './RunWithWorkerButton': 'export const RunWithWorkerButton=()=>null;',
         './CommentBody': `import React from 'react';export const CommentBody=({body})=>React.createElement('div',null,body);`,
-        'react-router-dom': `export const useParams=()=>globalThis.__workerChatTest.params||{};export const useNavigate=()=>globalThis.__workerChatTest.navigate;export const useLocation=()=>globalThis.__workerChatTest.location||{};export const useSearchParams=()=>[new URLSearchParams()];`,
+        'react-router-dom': `import React from 'react';export const Link=({to,children})=>React.createElement('a',{href:to},children);export const useParams=()=>globalThis.__workerChatTest.params||{};export const useNavigate=()=>globalThis.__workerChatTest.navigate;export const useLocation=()=>globalThis.__workerChatTest.location||{};export const useSearchParams=()=>[new URLSearchParams()];`,
         '@/presentation/layout/InboxBreadcrumbs': 'export const WorkspaceCrumbs=()=>null;',
         '@/presentation/layout/PageChrome': `import React from 'react';export const PageTopBar=({children})=>React.createElement('div',null,children);`,
-        '@/presentation/hooks/useAiConversations': 'export const announceAiConversationsChanged=()=>{};',
+        '@/presentation/hooks/useAiConversations': 'export const announceAiConversationsChanged=()=>{};export const useAiConversations=()=>({items:[]});',
+        '@/presentation/hooks/useAiConversation': 'export const useAiConversation=()=>globalThis.__workerChatTest.aiChat;',
+        '@/presentation/hooks/useProject': 'export const useProject=()=>({data:null});',
+        '@/presentation/layout/ProjectBreadcrumbs': 'export const ProjectBreadcrumbs=()=>null;',
+        '@/presentation/components/tasks/TaskDrawer': `import React from 'react';export const TaskDrawer=({state})=>React.createElement('div',{'data-comment-target':state.scrollToCommentId,'data-comment-navigation':state.commentNavigationKey},'Задача');`,
         '@/presentation/components/ai/AiConversationView': `import React from 'react';export const AiConversationView=({initialImageMode})=>React.createElement('div',null,initialImageMode?'Режим фото':'Обычный чат');`,
         '@/presentation/components/ai/ImageGenerationPanel': 'export const ImageGenerationPanel=()=>null;',
       };
@@ -95,6 +100,7 @@ test('worker chat keeps the user message between runs and follows the new stream
   const view = await mount(View, props);
   try {
     assert.match(view.host.textContent ?? '', /Первый результат/);
+    assert.ok(view.host.querySelector('[aria-label="К последнему сообщению"]'), 'the down button remains visible at the bottom');
     const feed = view.host.querySelector('[data-pf-worker-chat]') as HTMLElement;
     Object.defineProperties(feed, { clientHeight: { value: 300 }, scrollHeight: { get: () => 2000 + feed.textContent!.length } });
     await act(async () => { [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Отправить воркеру')!.click(); });
@@ -123,6 +129,45 @@ test('worker chat keeps the user message between runs and follows the new stream
     try { assert.match(reopened.host.textContent ?? '', /Первый результат.*Отправь тестовое сообщение.*Тест отправлен/s); }
     finally { await reopened.close(); }
   } finally { if (view.host.isConnected) await view.close(); }
+});
+
+test('failed and cancelled AI answers stop waiting; a retry sends the original question', async () => {
+  const View = await component('AiConversationView');
+  const calls: string[] = [];
+  const makeMessage = (role: string, status: string, body: string, seq: string) => ({ id: role, conversationId: 'chat', role, status, body, seq, runId: 'run', parentMessageId: role === 'assistant' ? 'user' : null, createdAt: at(1).toISOString(), updatedAt: at(1).toISOString() });
+  const chat = { loading: false, sending: false, error: null, conversation: { id: 'chat', title: 'Тест' }, messages: [makeMessage('user', 'completed', 'тест', '1'), makeMessage('assistant', 'failed', '', '2')], async send(body: string) { calls.push(body); }, setConversation() {} };
+  state.aiChat = chat;
+  state.navigate = () => {};
+  state.container = { imageGenerationRepository: { async list() { return []; } }, aiConversationRepository: {} };
+  const view = await mount(View, { conversationId: 'chat', compact: true, hideHeader: true });
+  try {
+    assert.match(view.host.textContent ?? '', /Ответ не сформирован/);
+    assert.doesNotMatch(view.host.textContent ?? '', /Формирую ответ|В очереди локального диспетчера/);
+    await act(async () => { [...view.host.querySelectorAll('button')].find(button => button.textContent === 'Повторить')!.click(); });
+    assert.deepEqual(calls, ['тест']);
+    chat.messages[1] = makeMessage('assistant', 'queued', '', '2'); await view.render();
+    assert.match(view.host.textContent ?? '', /В очереди локального диспетчера/);
+    chat.messages[1] = makeMessage('assistant', 'running', '', '2'); await view.render();
+    assert.match(view.host.textContent ?? '', /Формирую ответ/);
+    chat.messages[1] = makeMessage('assistant', 'cancelled', '', '2'); await view.render();
+    assert.match(view.host.textContent ?? '', /Ответ остановлен/);
+    assert.doesNotMatch(view.host.textContent ?? '', /Формирую ответ/);
+  } finally { await view.close(); }
+});
+
+test('the task page passes the decoded comment anchor to the task drawer', async () => {
+  const Page = await component('TaskDetailPage');
+  state.params = { projectId: 'project', taskId: 'task' };
+  state.location = { hash: '#comment-comment%20id' };
+  state.container = { taskRepository: { async get() { return { id: 'task', projectId: 'project', description: 'Задача', canEdit: true }; }, async list() { return []; } } };
+  const view = await mount(Page);
+  try {
+    assert.equal(view.host.querySelector('[data-comment-target]')?.getAttribute('data-comment-target'), 'comment id');
+    state.location = { hash: '#comment-next' }; await view.render();
+    assert.equal(view.host.querySelector('[data-comment-target]')?.getAttribute('data-comment-target'), 'next');
+    state.location = { hash: '#comment-next', key: 'reopen-same-comment' }; await view.render();
+    assert.equal(view.host.querySelector('[data-comment-target]')?.getAttribute('data-comment-navigation'), 'reopen-same-comment');
+  } finally { await view.close(); }
 });
 
 test('a missed lifecycle event is recovered on focus and a late previous-task response cannot replace the open chat', async () => {

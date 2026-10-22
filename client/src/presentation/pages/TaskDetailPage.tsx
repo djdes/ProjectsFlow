@@ -1,7 +1,8 @@
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { taskCommentFromHash } from '@/lib/notificationTaskTarget';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { canEditReadableTask } from '@/domain/task/taskEditorOptions';
@@ -26,6 +27,7 @@ export function TaskDetailPage(): React.ReactElement {
   const { projectId, taskId } = useParams<{ projectId: string; taskId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
   const [task, setTask] = useState<Task | null>(null);
@@ -128,7 +130,7 @@ export function TaskDetailPage(): React.ReactElement {
       asPage
       breadcrumbs={breadcrumbs}
       highlightField={searchParams.get('hl')}
-      state={{ mode: 'edit', task }}
+      state={{ mode: 'edit', task, scrollToCommentId: taskCommentFromHash(location.hash), commentNavigationKey: location.key }}
       canEdit={task.canEdit ?? canEditReadableTask(project, task, user?.id ?? null)}
       onClose={() => navigate(`/projects/${projectId}`)}
       // onSubmit нужен только в create-mode; на странице задача уже существует.

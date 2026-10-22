@@ -88,6 +88,13 @@ export function useAiConversation(conversationId: string | null) {
     };
   }, [aiConversationRepository, conversationId, refresh]);
 
+  const awaitingReply = messages.some(message => message.role === 'assistant' && (message.status === 'queued' || message.status === 'running'));
+  useEffect(() => {
+    if (!conversationId || !awaitingReply) return;
+    const timer = window.setInterval(() => void refresh(true), 5000);
+    return () => window.clearInterval(timer);
+  }, [conversationId, awaitingReply, refresh]);
+
   // Композер рендерится вне этого хука, но кнопке «Стоп» нужен именно живой ран,
   // а не флаг `sending` (он гаснет сразу после POST, задолго до конца генерации).
   useEffect(() => {

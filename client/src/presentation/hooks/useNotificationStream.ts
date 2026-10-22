@@ -1,4 +1,6 @@
-import { useEffect } from 'react';
+import { createElement, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { notificationTaskTarget } from '@/lib/notificationTaskTarget';
 import { toast } from '@/components/ui/sonner';
 import { showAssignedTaskToast } from '@/presentation/components/tasks/AssignedTaskToast';
 
@@ -47,8 +49,8 @@ type RealtimeEvent =
   | { kind: 'workspace_chat_changed'; workspaceId: string };
 
 type StreamPayload =
-  | { type: 'task_changed'; title: string; detail: string; projectName: string; actorDisplayName: string }
-  | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
+  | { type: 'task_changed'; title: string; detail: string; projectName: string; actorDisplayName: string; projectId?: string; taskId?: string; commentId?: string; taskAvailable?: boolean }
+  | { type: 'comment_mention'; projectName: string; actorDisplayName: string; projectId?: string; taskId?: string; commentId?: string }
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
   | { type: 'workspace_invite'; workspaceName: string; actorDisplayName: string }
   | { type: 'chat_mention'; workspaceName: string; actorDisplayName: string }
@@ -64,7 +66,21 @@ type StreamPayload =
       actorDisplayName: string;
     };
 
-function toastFor(payload: StreamPayload): void {
+function toastFor(payload: StreamPayload, navigate: (to: string) => void): void {
+  if (payload.type === 'task_changed' || payload.type === 'comment_mention') {
+    const target = notificationTaskTarget(payload);
+    if (target) {
+      const title = payload.type === 'task_changed' ? payload.title : 'Вас упомянули в комментарии';
+      const description = `${payload.actorDisplayName} · ${payload.projectName}` +
+        (payload.type === 'task_changed' && payload.detail ? `\n${payload.detail}` : '');
+      const id = toast(createElement('button', {
+        type: 'button', className: 'block w-full rounded-md text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80',
+        onClick: () => { toast.dismiss(id); navigate(target); },
+      }, createElement('span', { className: 'block font-semibold' }, title),
+      createElement('span', { className: 'block whitespace-pre-wrap text-sm font-normal' }, description)));
+      return;
+    }
+  }
   switch (payload.type) {
     case 'task_changed':
       toast(payload.title, { description: `${payload.actorDisplayName} · ${payload.projectName}${payload.detail ? `\n${payload.detail}` : ''}` });
@@ -99,6 +115,7 @@ function toastFor(payload: StreamPayload): void {
 // SSE-подписка на уведомления. При событии — toast + сигнал на refresh бейджа.
 // EventSource сам переподключается при обрыве. Mount один раз на authenticated-сессию.
 export function useNotificationStream(workspaceId: string): void {
+  const navigate = useNavigate();
   useEffect(() => {
     let closed = false;
     const source = new EventSource(`/api/notifications/stream?workspaceId=${encodeURIComponent(workspaceId)}`, { withCredentials: true });
@@ -112,7 +129,7 @@ export function useNotificationStream(workspaceId: string): void {
       if (closed) return;
       try {
         const data = JSON.parse((event as MessageEvent).data) as { payload: StreamPayload };
-        toastFor(data.payload);
+        toastFor(data.payload, navigate);
       } catch {
         // битый payload — игнорируем, но бейдж всё равно обновим ниже.
       }
@@ -174,5 +191,5 @@ export function useNotificationStream(workspaceId: string): void {
     });
 
     return () => { closed = true; source.close(); };
-  }, [workspaceId]);
+  }, [workspaceId, navigate]);
 }
