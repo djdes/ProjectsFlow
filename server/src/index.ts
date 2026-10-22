@@ -1,4 +1,6 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
+import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
+import { MysqlTelegramWorkerResultOutbox } from './infrastructure/repositories/MysqlTelegramWorkerResultOutbox.js';
 import { MysqlTelegramTaskOriginRepository } from './infrastructure/repositories/MysqlTelegramTaskOriginRepository.js';
 import { ImageGenerationService } from './application/image-generation/ImageGenerationService.js';
 import { MysqlImageGenerationRepository } from './infrastructure/repositories/MysqlImageGenerationRepository.js';
@@ -1143,6 +1145,11 @@ const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
 const telegramTaskOriginRepo = new MysqlTelegramTaskOriginRepository(pool);
 const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
   origins: telegramTaskOriginRepo,
+  outbox: new MysqlTelegramWorkerResultOutbox(pool),
+  destinations: new ResolveWorkerResultDestination({
+    origins: telegramTaskOriginRepo, projects: projectRepo, settings: digestSettingsRepo,
+    workspaceSettings: workspaceAssigneeDigestRepo, automation: automationRepo,
+  }),
   tasks: taskRepo,
   commits: taskCommitRepo,
   projects: projectRepo,

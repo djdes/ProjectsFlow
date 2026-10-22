@@ -4,6 +4,7 @@ export type TelegramTaskOrigin = {
   readonly chatId: number;
   readonly messageId: number | null;
   readonly requestedAt: Date | null;
+  readonly reportedAt?: Date | null;
 };
 
 // Durable destination and delivery queue. The destination comes exclusively from

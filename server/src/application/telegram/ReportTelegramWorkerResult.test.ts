@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReportTelegramWorkerResult } from './ReportTelegramWorkerResult.js';
-import type { TelegramTaskOrigin, TelegramTaskOriginRepository } from './TelegramTaskOriginRepository.js';
+import { FakeWorkerResultOutbox } from './FakeWorkerResultOutbox.test-helper.js';
+import type { WorkerResultDestination } from './TelegramWorkerResultOutbox.js';
+import type { TelegramTaskOrigin } from './TelegramTaskOriginRepository.js';
 import type { SendMessageInput, SendMessageResult } from './TelegramClient.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
@@ -10,33 +12,22 @@ import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 function harness() {
   let clock = new Date('2026-10-20T10:00:00Z');
   let row: TelegramTaskOrigin | null = { taskId: 't', projectId: 'p', chatId: -100123, messageId: 42, requestedAt: null };
-  let sentAt: Date | null = null;
-  let retryAt: Date | null = null;
-  let claimUntil: Date | null = null;
-  let claimToken: string | null = null;
   let seq = 0;
+  let configured: WorkerResultDestination | null = null;
   const messages: SendMessageInput[] = [];
   let sendResult: SendMessageResult = { kind: 'ok', messageId: 100 };
   let link: TelegramLink | null = null;
   let task = { id: 't', projectId: 'p', status: 'done', deletedAt: null, description: '**Исправить кнопку**\n\nТекст' } as Task | null;
   let commits = [{ taskId: 't', sha: 'abcdef1234567890', message: 'Убрана лишняя кнопка <готово>', htmlUrl: 'https://github.com/acme/app/commit/abcdef1234567890', committedAt: clock }] as TaskCommit[];
-  const eligible = (now: Date) => !!row?.requestedAt && !sentAt && (!retryAt || retryAt <= now) && (!claimUntil || claimUntil <= now);
-  const origins: TelegramTaskOriginRepository = {
-    async attach() {},
-    async getByTask(id) { return row?.taskId === id ? { ...row } : null; },
-    async requestResult(_id, now) { if (row && !row.requestedAt && !sentAt) row = { ...row, requestedAt: now }; },
-    async listDue(now) { return eligible(now) && row ? [{ ...row }] : []; },
-    async claim(_id, token, now, until) {
-      if (!eligible(now)) return false;
-      claimToken = token;
-      claimUntil = until;
-      return true;
-    },
-    async finish(_id, token, now) { if (token === claimToken) { sentAt = now; claimToken = null; claimUntil = null; } },
-    async retry(_id, token, at) { if (token === claimToken) { retryAt = at; claimToken = null; claimUntil = null; } },
+  const origins = {
+    async getByTask(id: string) { return row?.taskId === id ? { ...row } : null; },
   };
   const deps = {
     origins,
+    outbox: new FakeWorkerResultOutbox(),
+    destinations: { async resolve(task: Task): Promise<WorkerResultDestination | null> {
+      return row ? (row.projectId === task.projectId ? { ...row, source: 'origin' } : null) : configured;
+    } },
     tasks: { async getById() { return task; } },
     commits: { async listByTask() { return commits; } },
     projects: { async getById() { return { id: 'p', dispatcherUserId: 'dispatcher' }; } } as never,
@@ -48,7 +39,7 @@ function harness() {
   };
   const service = new ReportTelegramWorkerResult(deps);
   return {
-    service, origins, messages,
+    service, origins, messages, outbox: deps.outbox,
     newService: () => new ReportTelegramWorkerResult(deps),
     setResult: (value: SendMessageResult) => { sendResult = value; },
     setLink: (value: TelegramLink | null) => { link = value; },
@@ -57,8 +48,10 @@ function harness() {
     setCommits: (value: TaskCommit[]) => { commits = value; },
     get commits() { return commits; },
     removeOrigin: () => { row = null; },
+    setReportedAt: (reportedAt: Date) => { if (row) row = { ...row, reportedAt }; },
+    setDestination: (value: WorkerResultDestination | null) => { configured = value; },
     advance: (ms: number) => { clock = new Date(clock.getTime() + ms); },
-    queued: () => !!row?.requestedAt,
+    queued: () => deps.outbox.rows.size > 0,
   };
 }
 
@@ -94,6 +87,68 @@ test('technical and corrupted git subjects do not leak into the short Telegram r
   assert.doesNotMatch(h.messages[0]!.text, /fix\(tasks\)|╨|РєРЅ/);
 });
 
+test('follow-up work on the same task sends another report, replay of either completion does not', async () => {
+  const h = harness();
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  h.advance(60_000);
+  h.outbox.completion = { key: 'session:second', startedAt: new Date('2026-10-20T10:01:00Z') };
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  await h.newService().request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.messages.length, 2);
+  assert.equal(h.outbox.rows.size, 2);
+});
+
+test('legacy report watermark suppresses old runs but allows a new completion', async () => {
+  const h = harness();
+  h.setReportedAt(new Date('2026-10-20T09:30:00Z'));
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.messages.length, 0);
+  h.outbox.completion = { key: 'session:second', startedAt: new Date('2026-10-20T09:59:00Z') };
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.messages.length, 1);
+});
+
+test('website task delivers to the configured group and rechecks that binding before a retry', async () => {
+  const h = harness();
+  h.removeOrigin();
+  h.setDestination({ taskId: 't', projectId: 'p', chatId: -100456, messageId: null, source: 'workspace' });
+  h.setResult({ kind: 'error', description: 'offline' });
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.messages[0]?.chatId, -100456);
+  assert.equal(h.messages[0]?.replyToMessageId, undefined);
+  h.setDestination(null);
+  h.advance(60_000);
+  await h.newService().deliverPending();
+  assert.equal(h.messages.length, 1, 'revoked group binding does not receive queued private content');
+});
+
+test('no verified worker completion never queues a report', async () => {
+  const h = harness();
+  h.outbox.completion = null;
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.outbox.rows.size, 0);
+});
+
+test('retry of a superseded run cannot report the new run twice', async () => {
+  const h = harness();
+  h.setCommits([]);
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  h.advance(60_000);
+  h.outbox.completion = { key: 'session:second', startedAt: new Date('2026-10-20T10:01:00Z') };
+  h.setCommits([{ taskId: 't', sha: 'abcdef1234567890', htmlUrl: 'https://github.com/acme/app/commit/abcdef1234567890', committedAt: new Date() } as TaskCommit]);
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.messages.length, 1);
+});
+
 test('completion mentions the current responsible person by Telegram username', async () => {
   const h = harness();
   h.setTask({ ...h.task, assignee: { userId: 'responsible', displayName: 'Олег', avatarUrl: null } });
@@ -107,7 +162,7 @@ test('outbox polling recovers a missed completion request without replaying an a
   const h = harness();
   h.setTask({ ...h.task, status: 'pending_approval', assignee: { userId: 'responsible', displayName: 'benzin', avatarUrl: null } });
   h.setLink({ telegramUsername: 'hotspotping', telegramUserId: 123 } as TelegramLink);
-  h.origins.recoverCompleted = async (now) => { await h.origins.requestResult('t', now); };
+  h.outbox.recoverable = ['t'];
   await h.service.deliverPending();
   assert.equal(h.messages.length, 1);
   assert.match(h.messages[0]!.text, /^@hotspotping\n/);
@@ -157,7 +212,7 @@ test('non-Telegram, deleted, unfinished and moved tasks produce no report', asyn
 
 test('outbox rechecks project and deletion immediately before delivery', async () => {
   const h = harness();
-  await h.origins.requestResult('t', new Date('2026-10-20T10:00:00Z'));
+  await h.outbox.enqueue({ id: 'queued', taskId: 't', projectId: 'p', chatId: -100123, messageId: 42, source: 'origin', completionKey: 'first', requestedAt: new Date('2026-10-20T10:00:00Z') });
   h.setTask({ ...h.task, projectId: 'private-project' });
   await h.service.deliverPending();
   assert.equal(h.messages.length, 0);

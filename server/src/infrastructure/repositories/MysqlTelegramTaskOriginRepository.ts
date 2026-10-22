@@ -6,6 +6,7 @@ type Row = RowDataPacket & {
   tg_chat_id: number;
   tg_message_id: number | null;
   requested_at: Date | null;
+  sent_at: Date | null;
 };
 const map = (row: Row): TelegramTaskOrigin => ({
   taskId: row.task_id,
@@ -13,6 +14,7 @@ const map = (row: Row): TelegramTaskOrigin => ({
   chatId: Number(row.tg_chat_id),
   messageId: row.tg_message_id === null ? null : Number(row.tg_message_id),
   requestedAt: row.requested_at,
+  reportedAt: row.sent_at,
 });
 
 export class MysqlTelegramTaskOriginRepository implements TelegramTaskOriginRepository {

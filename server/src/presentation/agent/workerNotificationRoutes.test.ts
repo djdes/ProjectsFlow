@@ -7,6 +7,7 @@ import { agentApiRouter } from './apiRoutes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
 import { ReportTelegramWorkerResult } from '../../application/telegram/ReportTelegramWorkerResult.js';
+import { FakeWorkerResultOutbox } from '../../application/telegram/FakeWorkerResultOutbox.test-helper.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TelegramTaskOriginRepository } from '../../application/telegram/TelegramTaskOriginRepository.js';
 
@@ -21,6 +22,7 @@ async function withServer(actor: string, run: (url: string, queued: string[]) =>
   } as unknown as TelegramTaskOriginRepository;
   const workerResults = new ReportTelegramWorkerResult({
     tasks, origins,
+    outbox: Object.assign(new FakeWorkerResultOutbox(), { async enqueue(d: { taskId: string }) { queued.push(d.taskId); } }),
     projects: { async getById() { return { id: 'project', dispatcherUserId: 'dispatcher' }; } } as never,
     members: {} as never,
     commits: { async listByTask() { return []; } },
