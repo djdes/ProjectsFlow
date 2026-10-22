@@ -149,7 +149,8 @@ test('user content is escaped in email and Telegram', async () => {
   const h = harness();
   await h.run('worker', { description: '<script>alert(1)</script>&' }, ['description']);
   assert.doesNotMatch(h.email[0]!.html, /<script>/u);
-  assert.match(h.telegram[0]!.text, /&lt;script&gt;/u);
+  assert.doesNotMatch(h.telegram[0]!.text, /<\/?script|&lt;script/iu);
+  assert.match(h.telegram[0]!.text, /alert\(1\)&amp;/u);
 });
 
 test('Telegram change notifications format Markdown and link images after long descriptions', async () => {

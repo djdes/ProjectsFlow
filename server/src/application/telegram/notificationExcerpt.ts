@@ -16,7 +16,8 @@ export function notificationExcerpt(body: string, appUrl: string, limit = 240): 
       const src = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')/iu.exec(tag);
       return src ? image((src[1] ?? src[2] ?? '').replace(/&amp;/gu, '&')) : '';
     })
-    .replace(/<\/?figure\b[^>]*>/giu, '')
+    .replace(/```[\s\S]*?```|`[^`\n]+`|<\/?[a-z][^>]*>/giu, (part) =>
+      part.startsWith('`') ? part : '')
     .replace(/!\[[^\]]*\]\(([^)\s]+)\)/gu, (_match, src: string) => image(src))
     .trim();
   const excerpt = text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
