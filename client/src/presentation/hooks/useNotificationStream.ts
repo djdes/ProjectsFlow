@@ -1,6 +1,7 @@
 import { createElement, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationTaskTarget } from '@/lib/notificationTaskTarget';
+import { plainDescription } from '@/lib/taskTitleBody';
 import { toast } from '@/components/ui/sonner';
 import { showAssignedTaskToast } from '@/presentation/components/tasks/AssignedTaskToast';
 
@@ -67,12 +68,14 @@ type StreamPayload =
     };
 
 function toastFor(payload: StreamPayload, navigate: (to: string) => void): void {
+  const detail = payload.type === 'task_changed' ? plainDescription(payload.detail) : '';
+  const preview = detail.length > 240 ? `${detail.slice(0, 240).trimEnd()}…` : detail;
   if (payload.type === 'task_changed' || payload.type === 'comment_mention') {
     const target = notificationTaskTarget(payload);
     if (target) {
       const title = payload.type === 'task_changed' ? payload.title : 'Вас упомянули в комментарии';
       const description = `${payload.actorDisplayName} · ${payload.projectName}` +
-        (payload.type === 'task_changed' && payload.detail ? `\n${payload.detail}` : '');
+        (preview ? `\n${preview}` : '');
       const id = toast(createElement('button', {
         type: 'button', className: 'block w-full rounded-md text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80',
         onClick: () => { toast.dismiss(id); navigate(target); },
@@ -83,7 +86,7 @@ function toastFor(payload: StreamPayload, navigate: (to: string) => void): void 
   }
   switch (payload.type) {
     case 'task_changed':
-      toast(payload.title, { description: `${payload.actorDisplayName} · ${payload.projectName}${payload.detail ? `\n${payload.detail}` : ''}` });
+      toast(payload.title, { description: `${payload.actorDisplayName} · ${payload.projectName}${preview ? `\n${preview}` : ''}` });
       break;
     case 'project_invite':
       toast(`${payload.actorDisplayName} пригласил вас в «${payload.projectName}»`);
