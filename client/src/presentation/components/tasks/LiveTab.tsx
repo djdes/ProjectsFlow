@@ -67,6 +67,7 @@ const RICH_MD =
 
 type Props = {
   task: Task;
+  fillHeight?: boolean;
   active?: boolean;
   canEdit?: boolean;
   backlogTail: { readonly id: string } | null;
@@ -86,6 +87,7 @@ export function LiveTab(props: Props): React.ReactElement {
 
 function TaskLiveChat({
   task: sourceTask,
+  fillHeight = false,
   active = true,
   canEdit = sourceTask.canEdit !== false,
   backlogTail,
@@ -268,10 +270,10 @@ function TaskLiveChat({
   const hiddenCount = entries.length - shown.length;
 
   return (
-    <div ref={panelRef} className="flex h-[70dvh] max-h-full min-h-0 flex-1 flex-col bg-panel text-foreground">
+    <div ref={panelRef} data-pf-live-panel="" className={cn('flex min-h-0 flex-col bg-panel text-foreground', fillHeight ? 'h-full flex-1' : 'h-[70dvh] shrink-0')}>
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -283,7 +285,7 @@ function TaskLiveChat({
         role="log"
         aria-live="off"
         aria-label="Чат с воркером"
-        className="absolute inset-0 min-h-0 overflow-y-auto overscroll-y-contain px-3 pbs-3 pbe-14 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pbs-3 pbe-14 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
       >
       <div ref={contentRef} className="space-y-2.5">
         {sessionsLoading && entries.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
@@ -297,7 +299,7 @@ function TaskLiveChat({
         })}
         {runningRun && <ClaudeSpinner startedAt={runningRun.session.startedAt} />}
         {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
-        {!sessionsLoading && runs.length === 0 && entries.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} task={task} onTaskChanged={onTaskChanged} canEdit={canEdit} />}
+        {!sessionsLoading && runs.length === 0 && entries.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
         {questionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка вопросов…
@@ -328,6 +330,7 @@ function TaskLiveChat({
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
       <div className="shrink-0">
+        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }} onChanged={onTaskChanged} />}
         {isWorking || task.status === 'in_progress' ? (
           <CancelWorkButton task={task} onChanged={handleCancelChanged} />
         ) : task.status === 'awaiting_clarification' ? (
@@ -425,12 +428,8 @@ export function DispatcherQuestionCard({
   );
 }
 
-function EmptyState({ working, task, onTaskChanged, canEdit }: { working: boolean; task: Task; onTaskChanged?: () => void; canEdit: boolean }): React.ReactElement {
-  const [queuedTaskId, setQueuedTaskId] = useState<string | null>(null);
-  useEffect(() => {
-    if (working || task.status === 'todo') setQueuedTaskId(null);
-  }, [working, task.status]);
-  const queued = !working && (task.status === 'todo' || queuedTaskId === task.id);
+function EmptyState({ working, task, queued: queuedByUser }: { working: boolean; task: Task; queued: boolean }): React.ReactElement {
+  const queued = !working && (task.status === 'todo' || queuedByUser);
   return (
     <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
       <span className="pf-tone-purple text-2xl text-tone">✻</span>
@@ -445,7 +444,6 @@ function EmptyState({ working, task, onTaskChanged, canEdit }: { working: boolea
           : queued ? 'Задача сохранена в очереди. Лента действий появится автоматически после запуска.'
           : 'Нажми «Сделать с помощью воркера» — здесь появится лента действий.'}
       </span>
-      {!working && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => setQueuedTaskId(task.id)} onChanged={onTaskChanged} />}
     </div>
   );
 }

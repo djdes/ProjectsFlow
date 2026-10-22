@@ -16,5 +16,5 @@ export function RunWithWorkerButton({task,onChanged,onQueued}:{task:Task;onChang
     catch(e){setError(e instanceof Error?e.message:'Не удалось отправить задачу воркеру');}
     finally{sending.current=false;setBusy(false);}
   };
-  return <div className="mbs-4 space-y-2"><Button type="button" disabled={busy||waiting} onClick={()=>void run()}>{waiting?'Задача в очереди':busy?'Отправляем…':'Сделать с помощью воркера'}</Button>{error&&<p role="alert" className="max-w-xs text-xs text-destructive">{error}</p>}</div>;
+  return <div data-pf-worker-start="" className="mx-3 mbs-3 mbe-2 space-y-2">{!waiting&&<p className="text-xs text-muted-foreground">Передай задачу воркеру — ход выполнения появится в LIVE.</p>}<Button type="button" disabled={busy||waiting} onClick={()=>void run()}>{waiting?'Задача в очереди':busy?'Отправляем…':'Сделать с помощью воркера'}</Button>{error&&<p role="alert" className="max-w-xs text-xs text-destructive">{error}</p>}</div>;
 }

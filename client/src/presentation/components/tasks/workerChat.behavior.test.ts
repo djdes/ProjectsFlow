@@ -35,7 +35,7 @@ async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'A
         '@/components/ui/sonner': 'export const toast={error:()=>{},success:()=>{},info:()=>{}};',
         './TaskDrawerComposer': `import React from 'react';export const TaskDrawerComposer=p=>React.createElement('button',{onClick:()=>{p.onCommentCreated(globalThis.__workerChatTest.nextComment);p.onWorkerQueued();}},'Отправить воркеру');`,
         './CancelWorkButton': `import React from 'react';export const CancelWorkButton=()=>React.createElement('button',null,'Отменить работу');`,
-        './RunWithWorkerButton': 'export const RunWithWorkerButton=()=>null;',
+        '@/presentation/hooks/useWorkerEnabled': 'export const useWorkerEnabled=()=>true;',
         './CommentBody': `import React from 'react';export const CommentBody=({body})=>React.createElement('div',null,body);`,
         'react-router-dom': `import React from 'react';export const Link=({to,children})=>React.createElement('a',{href:to},children);export const useParams=()=>globalThis.__workerChatTest.params||{};export const useNavigate=()=>globalThis.__workerChatTest.navigate;export const useLocation=()=>globalThis.__workerChatTest.location||{};export const useSearchParams=()=>[new URLSearchParams()];`,
         '@/presentation/layout/InboxBreadcrumbs': 'export const WorkspaceCrumbs=()=>null;',
@@ -201,6 +201,33 @@ test('failed and cancelled AI answers stop waiting; a retry sends the original q
     assert.match(view.host.textContent ?? '', /Ответ остановлен/);
     assert.doesNotMatch(view.host.textContent ?? '', /Формирую ответ/);
   } finally { await view.close(); }
+});
+
+test('drafts show an explicit worker handoff with or without past sessions and queue immediately', async () => {
+  const View = await component('LiveTab');
+  for (const history of [false, true]) {
+    const moves: unknown[] = [];
+    state.container = {
+      liveRepository: { async listSessions() { return history ? [run('past', 1, 'completed')] : []; }, async listEvents() { return [event(1, 'Предыдущий результат', 1)]; }, async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; } },
+      taskRepository: { async listComments() { return []; }, async move(...args: unknown[]) { moves.push(args); } },
+      projectRepository: { async listMembers() { return []; } },
+    };
+    const props = { task: { id: 'task', projectId: 'project', status: 'backlog', canEdit: true } as Task, backlogTail: null, todoTail: null };
+    const view = await mount(View, props);
+    try {
+      const button = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера');
+      assert.ok(button, history ? 'past sessions must not hide handoff' : 'draft has an explicit handoff');
+      assert.match(view.host.textContent!, /Передай задачу воркеру/);
+      await act(async () => { button.click(); });
+      assert.equal(moves.length, 1);
+      assert.deepEqual(moves[0], ['project', 'task', { targetStatus: 'todo', beforeTaskId: null, afterTaskId: null }]);
+      assert.equal(button.disabled, true);
+      assert.equal(button.textContent, 'Задача в очереди');
+      assert.match(view.host.textContent!, /ожидает запуска/);
+      await view.render({ ...props, canEdit: false });
+      assert.equal(view.host.querySelector('[data-pf-worker-start]'), null);
+    } finally { await view.close(); }
+  }
 });
 
 test('a small upward wheel gesture pauses LIVE following before scroll fires; jump only moves the chat', async () => {

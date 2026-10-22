@@ -19,6 +19,7 @@ import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
 import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
 import { quickTaskSettingsScenarios } from './quick-task-settings.mjs';
+import { liveChatScenarios } from './live-chat.mjs';
 
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
@@ -212,6 +213,7 @@ async function openAndCloseTask(t, cardLocator, title) {
 // ------------------------------------------------------------- scenarios ----
 
 export const scenarios = [
+  ...liveChatScenarios,
   ...telegramConnectScenarios,
   ...taskCreationDefaultsScenarios,
   ...quickTaskSettingsScenarios,

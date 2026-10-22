@@ -398,7 +398,10 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/commits$/, () => json({ commits: [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/versions$/, ([, , taskId]) =>
       json({ plan: 'vip', cutoffAt: null, versions: [], taskId })],
-    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions$/, () => json({ sessions: [] })],
+    [/^\/projects\/([^/]+)\/live\/running$/, ([, projectId]) => json({ taskIds: Object.values(state.liveSessions ?? {}).flat().filter(s => s.projectId === projectId && s.status === 'running').map(s => s.taskId) })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions$/, ([, , taskId]) => json({ sessions: state.liveSessions?.[taskId] ?? [] })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/events$/, ([, , , sessionId]) => json({ events: state.liveEvents?.[sessionId] ?? [] })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/file-diffs$/, () => json({ files: [] })],
     [/^\/projects\/([^/]+)\/members$/, ([, id]) => {
       if (isInboxProject(state, id)) return json({ members: [projectMemberDto(id, ME, 'owner')] });
       return json({
