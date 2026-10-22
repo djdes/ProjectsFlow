@@ -18,8 +18,8 @@ test('insertions, deletions and whitespace changes retain their exact content', 
 });
 
 test('native Edit and MultiEdit payloads retain before and after text', () => {
-  const edit = { old_string: 'before', new_string: 'after' };
-  const expected = { path: 'file.ts', edits: [{ old: 'before', new: 'after' }] };
+  const edit = { old_string: 'Было: пустые изменения', new_string: 'Стало: виден текст изменения' };
+  const expected = { path: 'file.ts', edits: [{ old: 'Было: пустые изменения', new: 'Стало: виден текст изменения' }] };
   assert.deepEqual(parseFileEditPayload({ file_path: 'file.ts', ...edit }), expected);
   assert.deepEqual(parseFileEditPayload({ path: 'file.ts', edits: [edit] }), expected);
 });
