@@ -203,6 +203,45 @@ test('failed and cancelled AI answers stop waiting; a retry sends the original q
   } finally { await view.close(); }
 });
 
+test('a small upward wheel gesture pauses LIVE following before scroll fires; jump only moves the chat', async () => {
+  const View = await component('LiveTab');
+  state.container = {
+    liveRepository: { async listSessions() { return [run('wheel-run', 1, 'running')]; }, async listEvents() { return [event(1, 'Начало', 1)]; }, async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; } },
+    taskRepository: { async listComments() { return []; } }, projectRepository: { async listMembers() { return []; } },
+  };
+  const props = { task: { id: 'task', projectId: 'project', status: 'in_progress' } as Task, backlogTail: null, todoTail: null };
+  const view = await mount(View, props);
+  try {
+    const feed = view.host.querySelector<HTMLElement>('[data-pf-worker-chat]')!;
+    let contentHeight = 1600;
+    Object.defineProperties(feed, { clientHeight: { value: 300 }, scrollHeight: { get: () => contentHeight } });
+    view.host.style.overflowY = 'auto';
+    Object.defineProperties(view.host, { clientHeight: { value: 500 }, scrollHeight: { value: 2000 } });
+    view.host.scrollTop = 240;
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('[aria-label="К последнему сообщению"]')!.click(); });
+    const original = feed.scrollTop;
+    const wheel = new WheelEvent('wheel', { deltaY: -12, bubbles: true, cancelable: true });
+    // Incoming actions can arrive before the browser emits its native scroll event.
+    await act(async () => {
+      feed.dispatchEvent(wheel);
+      contentHeight += 200;
+      Source.instances.at(-1)!.emit('live', { ...event(2, 'Новая строка', 2), createdAt: at(2).toISOString() });
+    });
+    assert.equal(wheel.defaultPrevented, false, 'wheel remains native');
+    assert.equal(feed.scrollTop, original, 'LIVE updates do not cancel the upward gesture');
+    await act(async () => { feed.scrollTop = contentHeight - 300 - 12; feed.dispatchEvent(new Event('scroll')); });
+    const reading = feed.scrollTop;
+    await act(async () => {
+      contentHeight += 100;
+      Source.instances.at(-1)!.emit('live', { ...event(3, 'Ещё строка', 3), createdAt: at(3).toISOString() });
+    });
+    assert.equal(feed.scrollTop, reading, 'reading even 12px above the end stays in place');
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('[aria-label="К последнему сообщению"]')!.click(); });
+    assert.equal(feed.scrollTop, contentHeight);
+    assert.equal(view.host.scrollTop, 240, 'jump does not move the outer task panel');
+  } finally { await view.close(); }
+});
+
 test('the task page passes the decoded comment anchor to the task drawer', async () => {
   const Page = await component('TaskDetailPage');
   state.params = { projectId: 'project', taskId: 'task' };

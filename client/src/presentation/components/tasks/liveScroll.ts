@@ -1,23 +1,10 @@
-// Both the feed and the task panel can overflow in a narrow drawer.
-export function liveScrollViewports(feed: HTMLElement | null): HTMLElement[] {
-  if (!feed || feed.clientHeight === 0) return [];
-  const viewports = [feed];
-  for (let parent = feed.parentElement; parent; parent = parent.parentElement) {
-    if (/(auto|scroll)/.test(getComputedStyle(parent).overflowY)
-      && parent.clientHeight > 0 && parent.scrollHeight > parent.clientHeight + 1) {
-      viewports.push(parent);
-    }
-  }
-  return viewports;
-}
-
+// The chat owns its viewport. Moving task/page ancestors on every LIVE event
+// fights native wheel scrolling and can push the visible chat out of its panel.
 export function scrollLiveToBottom(feed: HTMLElement | null): void {
-  for (const viewport of liveScrollViewports(feed)) {
-    viewport.scrollTop = viewport.scrollHeight;
-  }
+  if (feed && feed.clientHeight > 0) feed.scrollTop = feed.scrollHeight;
 }
 
 export function isLiveNearBottom(feed: HTMLElement | null): boolean {
-  return liveScrollViewports(feed).every(viewport =>
-    viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80);
+  return !feed || feed.clientHeight === 0
+    || feed.scrollHeight - feed.scrollTop - feed.clientHeight <= 2;
 }

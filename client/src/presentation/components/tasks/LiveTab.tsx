@@ -209,6 +209,7 @@ function TaskLiveChat({
     onCommentCreated?.(created);
   };
 
+  const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -226,18 +227,25 @@ function TaskLiveChat({
     setShowScrollBottom(false);
   }, []);
 
+  // Cancel follow mode before native scrolling starts, including small trackpad
+  // deltas. No preventDefault: wheel/touch/keyboard retain browser scrolling.
+  const pauseFollow = useCallback((): void => { stickToBottomRef.current = false; }, []);
+
   // Every opening (including a force-mounted tab) starts at the newest message.
   useLayoutEffect(() => {
     setVisibleCount(DOM_CAP);
     stickToBottomRef.current = true;
     setShowScrollBottom(false);
-    if (active) scrollToBottom();
+    if (active) {
+      panelRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+      scrollToBottom();
+    }
   }, [active, projectId, taskId, scrollToBottom]);
 
   // Replay, questions and final diffs arrive independently, sometimes with the same count.
   useLayoutEffect(() => {
     if (active && stickToBottomRef.current) scrollToBottom();
-  });
+  }, [active, runs, questionComments, visibleCount, scrollToBottom]);
 
   // A hidden tab has no height; images and expanded messages can resize after React commits.
   // Watch both the viewport and its content, while preserving manual reading higher up.
@@ -250,33 +258,32 @@ function TaskLiveChat({
     });
     observer?.observe(viewport);
     observer?.observe(content);
-    const parents: HTMLElement[] = [];
-    for (let parent = viewport.parentElement; parent; parent = parent.parentElement) {
-      if (!/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) continue;
-      parents.push(parent);
-      parent.addEventListener('scroll', onScroll, { passive: true });
-      observer?.observe(parent);
-    }
     return () => {
       observer?.disconnect();
-      for (const parent of parents) parent.removeEventListener('scroll', onScroll);
     };
-  }, [active, onScroll, scrollToBottom]);
+  }, [active, scrollToBottom]);
 
   const entries = useMemo(() => taskLiveTimeline(runs, questionComments), [runs, questionComments]);
   const shown = entries.slice(-visibleCount);
   const hiddenCount = entries.length - shown.length;
 
   return (
-    <div className="flex h-[70dvh] max-h-full min-h-0 flex-1 flex-col bg-panel text-foreground">
+    <div ref={panelRef} className="flex h-[70dvh] max-h-full min-h-0 flex-1 flex-col bg-panel text-foreground">
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={onScroll}
+        onWheelCapture={(event) => { if (event.deltaY < 0) pauseFollow(); }}
+        onTouchStartCapture={pauseFollow}
+        onKeyDownCapture={(event) => { if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) pauseFollow(); }}
         data-pf-worker-chat=""
-        className="h-full min-h-0 overflow-y-auto px-3 pbs-3 pbe-14"
+        tabIndex={0}
+        role="log"
+        aria-live="off"
+        aria-label="Чат с воркером"
+        className="absolute inset-0 min-h-0 overflow-y-auto overscroll-y-contain px-3 pbs-3 pbe-14 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
       >
       <div ref={contentRef} className="space-y-2.5">
         {sessionsLoading && entries.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
@@ -309,11 +316,10 @@ function TaskLiveChat({
         ))}
       </div>
       </div>
-      {/* Outside the message scroller. Sticky also follows the outer task scroller
-          in the narrow drawer; the negative margin overlays the feed without a new row. */}
+      {/* The overlay belongs to the visible viewport, never to message flow. */}
       {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
-          className={cn('sticky inset-be-3 z-10 -mbs-[3.25rem] ms-auto me-4 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
+          className={cn('absolute inset-be-3 end-4 z-10 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
           onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>
