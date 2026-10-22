@@ -23,9 +23,9 @@ test('SSE for an attempt receives only that attempt, even when another run of th
     const reader = response.body!.getReader();
     const initial = await reader.read();
     let text = new TextDecoder().decode(initial.value);
-    hub.publish('attempt-2', [{ seq: 2, kind: 'assistant_text', text: 'Чужая попытка', createdAt: new Date() }]);
+    hub.publish('attempt-2', [{ seq: 2, kind: 'assistant_text', text: 'Чужая попытка', payload: null, createdAt: new Date() }]);
     hub.publishEnd('attempt-2', 'failed');
-    hub.publish('attempt-1', [{ seq: 1, kind: 'assistant_text', text: 'Своя попытка', createdAt: new Date() }]);
+    hub.publish('attempt-1', [{ seq: 1, kind: 'assistant_text', text: 'Своя попытка', payload: null, createdAt: new Date() }]);
     hub.publishEnd('attempt-1', 'completed');
     while (!text.includes('live_end')) text += new TextDecoder().decode((await reader.read()).value);
     assert.ok(text.includes('Своя попытка'));
