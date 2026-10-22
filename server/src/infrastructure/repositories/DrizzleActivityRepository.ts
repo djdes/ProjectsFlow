@@ -1,6 +1,6 @@
-import { and, countDistinct, desc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { activityEvents, tasks, type ActivityEventRow } from '../db/schema.js';
+import { activityEvents, liveSessions, projects, tasks, type ActivityEventRow } from '../db/schema.js';
 import type { ActivityEvent, ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 import type {
   ActivityRepository,
@@ -96,70 +96,49 @@ export class DrizzleActivityRepository implements ActivityRepository {
     return rows.map((r) => toEvent(r));
   }
 
-  // Счётчик «выполнено сегодня». Читаем ленту действий, а не задачи: у задачи нет отметки
-  // «кто и когда её закрыл» (status_before_done — про откат, updated_at перезаписывается
-  // любой правкой), а событие task_status_changed хранит и актора, и момент, и целевой
-  // статус. JSON_UNQUOTE нужен: JSON_EXTRACT вернул бы строку в кавычках.
-  //
-  // Считаем РАЗНЫЕ задачи, а не события. Иначе счётчик фармится циклом «выполнил →
-  // забрал с утверждения → выполнил снова»: каждый проход писал бы новое событие, и одна
-  // задача накручивала бы ранг сколько угодно раз.
-  async countTasksCompletedByActorSince(actorUserId: string, since: Date, workspaceId: string): Promise<number> {
-    const rows = await this.db
-      .select({ n: countDistinct(tasks.id) })
-      .from(activityEvents)
-      // JOIN к задаче нужен, чтобы проверить её ТЕКУЩЕЕ состояние: событие о закрытии
-      // остаётся в журнале навсегда, но задача могла вернуться в работу — руководитель
-      // отклонил приёмку или исполнитель забрал её сам. Такая задача не выполнена, и в
-      // рейтинге ей не место. Заодно отсекаются удалённые.
-      .innerJoin(
-        tasks,
-        sql`${tasks.id} = JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))`,
-      )
-      .where(
-        and(
-          eq(activityEvents.actorUserId, actorUserId),
-          eq(activityEvents.workspaceId, workspaceId),
-          eq(activityEvents.kind, 'task_status_changed'),
-          gte(activityEvents.createdAt, since),
-          sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')`,
-          isNull(tasks.deletedAt),
-          inArray(tasks.status, ['done', 'pending_approval']),
-        ),
-      );
+  // Keep the action's real author in the audit log. Worker work belongs to the
+  // task assignee, even when a different dispatcher account performed the move.
+  // UNION and COUNT DISTINCT deduplicate retries, approval and human/worker overlap.
+  private completedTaskCredits(userId: string, since: Date) {
+    const finished = and(isNull(tasks.deletedAt), inArray(tasks.status, ['done', 'pending_approval']));
+    return sql`
+      SELECT ${tasks.id} AS task_id, ${activityEvents.workspaceId} AS workspace_id
+      FROM ${activityEvents}
+      INNER JOIN ${tasks} ON ${tasks.id} = JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))
+      WHERE ${activityEvents.actorUserId} = ${userId}
+        AND ${activityEvents.kind} = 'task_status_changed'
+        AND ${gte(activityEvents.createdAt, since)}
+        AND JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')
+        AND ${finished}
+      UNION
+      SELECT ${tasks.id} AS task_id, ${projects.workspaceId} AS workspace_id
+      FROM ${liveSessions}
+      INNER JOIN ${tasks} ON ${tasks.id} = ${liveSessions.taskId} AND ${tasks.projectId} = ${liveSessions.projectId}
+      INNER JOIN ${projects} ON ${projects.id} = ${tasks.projectId}
+      WHERE ${tasks.assigneeUserId} = ${userId}
+        AND ${liveSessions.status} = 'completed'
+        AND ${gte(liveSessions.endedAt, since)}
+        AND ${finished}
+    `;
+  }
+
+  async countTasksCompletedByActorSince(userId: string, since: Date, workspaceId: string): Promise<number> {
+    const result = await this.db.execute(sql`
+      SELECT COUNT(DISTINCT task_id) AS n FROM (${this.completedTaskCredits(userId, since)}) AS completed_tasks
+      WHERE workspace_id = ${workspaceId}
+    `);
+    const rows = result[0] as unknown as Array<{ n: number | string }>;
     return Number(rows[0]?.n ?? 0);
   }
 
-  async countCompletedByActorPerWorkspaceSince(
-    actorUserId: string,
-    since: Date,
-  ): Promise<Array<{ workspaceId: string; count: number }>> {
-    // Условия — те же, что в countTasksCompletedByActorSince (включая JOIN к задаче, чтобы
-    // не считать работу, которую вернули в работу или удалили), плюс группировка по
-    // пространству. Пространство берём из самого события: оно записано при создании и не
-    // «поедет», если проект потом перенесут в другое пространство.
-    const rows = await this.db
-      .select({
-        workspaceId: activityEvents.workspaceId,
-        n: countDistinct(tasks.id),
-      })
-      .from(activityEvents)
-      .innerJoin(
-        tasks,
-        sql`${tasks.id} = JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.taskId'))`,
-      )
-      .where(
-        and(
-          eq(activityEvents.actorUserId, actorUserId),
-          eq(activityEvents.kind, 'task_status_changed'),
-          gte(activityEvents.createdAt, since),
-          sql`JSON_UNQUOTE(JSON_EXTRACT(${activityEvents.payload}, '$.newStatus')) IN ('done', 'pending_approval')`,
-          isNull(tasks.deletedAt),
-          inArray(tasks.status, ['done', 'pending_approval']),
-        ),
-      )
-      .groupBy(activityEvents.workspaceId);
-    return rows.map((r) => ({ workspaceId: r.workspaceId, count: Number(r.n) }));
+  async countCompletedByActorPerWorkspaceSince(userId: string, since: Date): Promise<Array<{ workspaceId: string; count: number }>> {
+    const result = await this.db.execute(sql`
+      SELECT workspace_id AS workspaceId, COUNT(DISTINCT task_id) AS n
+      FROM (${this.completedTaskCredits(userId, since)}) AS completed_tasks
+      GROUP BY workspace_id
+    `);
+    const rows = result[0] as unknown as Array<{ workspaceId: string; n: number | string }>;
+    return rows.map(row => ({ workspaceId: row.workspaceId, count: Number(row.n) }));
   }
 
   async deleteOlderThan(cutoff: Date): Promise<number> {

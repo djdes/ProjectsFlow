@@ -49,3 +49,21 @@ test('мусор вместо даты не роняет счётчик', async 
 
   assert.equal(h.calls[0]?.since.toISOString(), '2026-07-29T12:00:00.000Z');
 });
+
+test('без доступного активного пространства статистика задач не читается', async () => {
+  const uc = new CountMyCompletedToday({
+    resolveActiveWorkspace: async () => null,
+    activity: { countTasksCompletedByActorSince: async () => { throw new Error('must not query other workspaces'); } } as never,
+  });
+  assert.equal(await uc.execute('member', NOW, NOW), 0);
+});
+
+test('статистика воркера ограничена пользователем и пространством, определёнными сервером', async () => {
+  const calls: unknown[][] = [];
+  const uc = new CountMyCompletedToday({
+    resolveActiveWorkspace: async () => ({ id: 'allowed', kind: 'team' }),
+    activity: { countTasksCompletedByActorSince: async (...args: unknown[]) => { calls.push(args); return 2; } } as never,
+  });
+  assert.equal(await uc.execute('member', NOW, NOW), 2);
+  assert.deepEqual(calls, [['member', NOW, 'allowed']]);
+});

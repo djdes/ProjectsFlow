@@ -1,18 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
+import { LIVE_CHANGED_EVENT, REALTIME_CONNECTED_EVENT, TASK_CHANGED_EVENT } from './useNotificationStream';
 
 type CompletedToday = {
   // Сколько задач я закрыл сегодня. null — ещё не загрузили (пилюлю не рисуем).
   readonly count: number | null;
   // Растёт на каждое ЗАСЧИТАННОЕ закрытие: пилюля и конфетти перезапускают анимацию.
   readonly celebrationKey: number;
-  // По умолчанию — вызывать ПОСЛЕ успешного ответа сервера. Задача, уже закрытая сегодня,
-  // не считается повторно и праздника не запускает — иначе цикл «выполнил → забрал с
-  // утверждения → выполнил снова» накручивал бы ранг одной задачей.
-  // Допустим и ОПТИМИСТИЧНЫЙ вызов ДО ответа сервера (в момент клика, ради мгновенного
-  // отклика — см. ApprovalItemCard.startAccept в AssignedToMeBlock.tsx), но ТОЛЬКО если
-  // вызывающий код гарантированно откатывает счётчик через forget(taskId) на ошибке сети.
-  // Без такой компенсации оптимистичный celebrate() рискует навсегда разъехаться с сервером.
+  // Праздник запускается один раз на задачу за сессию. Цифру всегда сверяем с сервером:
+  // realtime мог уже учесть это закрытие, поэтому локальный +1 дал бы двойной зачёт.
+  // Можно вызвать до ответа сервера ради анимации (ApprovalItemCard.startAccept).
+  // При ошибке forget() снимает локальную отметку и перечитывает действительную цифру.
   readonly celebrate: (taskId: string) => void;
   // Задача вернулась в работу (возврат руководителем или отзыв исполнителем) — она больше
   // не выполнена. Забываем её и пересчитываем цифру с сервера: он считает по текущему
@@ -44,22 +42,42 @@ export function CompletedTodayProvider({
   // Дата суток, для которых загружен счётчик: сессию оставляют открытой на ночь, и утром
   // цифра должна начаться с нуля, а не продолжить вчерашнюю.
   const dayRef = useRef<string>('');
+  const requestRef = useRef({ generation: 0 });
 
   const refresh = useCallback((): void => {
+    const requestId = ++requestRef.current.generation;
     const midnight = localMidnight();
     // Сутки сменились — набор засчитанных задач больше не про сегодня.
     if (dayRef.current && dayRef.current !== midnight.toDateString()) countedRef.current.clear();
     dayRef.current = midnight.toDateString();
     statsRepository
       .completedToday(midnight)
-      .then(setCount)
+      .then(next => { if (requestId === requestRef.current.generation) setCount(next); })
       .catch(() => {
         // Тихо: мотивационный счётчик не повод показывать ошибку поверх работы.
       });
   }, [statsRepository]);
 
   useEffect(() => {
+    const requests = requestRef.current;
     refresh();
+    const onChanged = (): void => refresh();
+    window.addEventListener(TASK_CHANGED_EVENT, onChanged);
+    window.addEventListener(LIVE_CHANGED_EVENT, onChanged);
+    window.addEventListener(REALTIME_CONNECTED_EVENT, onChanged);
+    window.addEventListener('focus', onChanged);
+    // Recover a missed event and a date change even while the tab stays open.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 60_000);
+    return () => {
+      ++requests.generation;
+      window.clearInterval(timer);
+      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
+      window.removeEventListener(LIVE_CHANGED_EVENT, onChanged);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
+      window.removeEventListener('focus', onChanged);
+    };
   }, [refresh]);
 
   // Вернулись во вкладку — сверяем цифру: задачи закрываются и с телефона тоже, а за время
@@ -74,18 +92,17 @@ export function CompletedTodayProvider({
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
-  // Задачи, уже засчитанные в этой сессии. Сервер считает РАЗНЫЕ задачи, и клиент обязан
-  // считать так же — иначе локальная цифра разъезжается с реальной до ближайшего refresh.
+  // Задачи, для которых в этой сессии уже показан праздник.
   const countedRef = useRef<Set<string>>(new Set());
 
   const celebrate = useCallback(
     (taskId: string): void => {
       if (countedRef.current.has(taskId)) return;
       countedRef.current.add(taskId);
-      setCount((c) => (c ?? 0) + 1);
       setCelebrationKey((k) => k + 1);
+      refresh();
     },
-    [],
+    [refresh],
   );
 
   const forget = useCallback(

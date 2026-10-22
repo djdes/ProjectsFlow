@@ -44,7 +44,8 @@ export function CompletedStatsCard(): React.ReactElement {
         <CardTitle>Выполненные задачи</CardTitle>
         <CardDescription>
           По пространствам, где вы участник. «Всего» — задачи в&nbsp;«Готово», за которые
-          отвечаете вы; «За&nbsp;30 дней» — те, что вы закрыли сами.
+          отвечаете вы; «За&nbsp;30 дней» — выполненные вами или воркером по вашим задачам,
+          включая переданные на утверждение.
         </CardDescription>
       </CardHeader>
       <CardContent>
