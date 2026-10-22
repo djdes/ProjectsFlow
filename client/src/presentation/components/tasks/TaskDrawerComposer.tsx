@@ -60,6 +60,8 @@ type Props = {
   todoTail: { readonly id: string } | null;
   onCommentCreated: (created: TaskComment) => void;
   onTaskChanged: () => void;
+  defaultTarget?: ComposerTarget;
+  onWorkerQueued?: () => void;
   // Ответ/цитата (db/080): на какой коммент отвечаем + опц. фрагмент. Плашка над полем.
   replyDraft?: ReplyDraft | null;
   onClearReply?: () => void;
@@ -94,6 +96,8 @@ function TaskDrawerComposerForm({
   draftKey,
   onClearReply,
   onNavigateToComment,
+  defaultTarget,
+  onWorkerQueued,
 }: Props & { draftKey: string }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
@@ -122,7 +126,7 @@ function TaskDrawerComposerForm({
   // На awaiting_clarification дефолт = «Воркеру»: юзер отвечает на ralph-question и
   // ожидаемое действие — продолжить работу. На остальных статусах берём из localStorage'а.
   const [target, setTarget] = useState<ComposerTarget>(() =>
-    task.status === 'awaiting_clarification' ? 'worker' : readTarget(task.projectId),
+    defaultTarget ?? (task.status === 'awaiting_clarification' ? 'worker' : readTarget(task.projectId)),
   );
   // Сохранённый в localStorage выбор «Воркеру» переживает выключение воркера — схлопываем
   // его в черновики, иначе кнопка целилась бы в статус, который сервер уже не принимает.
@@ -170,9 +174,9 @@ function TaskDrawerComposerForm({
   }, [submitting]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || defaultTarget !== undefined) return;
     try { window.localStorage.setItem(targetStorageKey(task.projectId), target); } catch { /* Optional preference. */ }
-  }, [task.projectId, target]);
+  }, [task.projectId, target, defaultTarget]);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,11 +266,13 @@ function TaskDrawerComposerForm({
           await taskRepository.move(task.projectId, task.id, {
             targetStatus: moveTo, beforeTaskId: tail?.id ?? null, afterTaskId: null,
           });
-          toast.success(moveTo === 'todo' ? 'Передано воркеру' : 'Задача в черновиках');
+          if (moveTo === 'todo') onWorkerQueued?.();
+          toast.success(moveTo === 'todo' ? 'Задача в очереди воркера' : 'Задача в черновиках');
         } catch (error) {
           toast.error(`Комментарий отправлен, но не удалось изменить статус: ${(error as Error).message}`);
         }
       }
+      if (moveTo === null && effectiveTarget === 'worker' && task.status === 'todo') onWorkerQueued?.();
       if (mountedRef.current) onTaskChanged();
     } finally {
       if (mountedRef.current) refocusAfterSendRef.current = true;

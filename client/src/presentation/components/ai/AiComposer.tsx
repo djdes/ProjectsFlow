@@ -281,12 +281,11 @@ export function AiComposer({
           onInput={syncFromEditor}
           onKeyDown={(event) => {
             // IME: во время набора иероглифов Enter подтверждает вариант, а не переносит строку.
-            if (event.nativeEvent.isComposing) return;
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
             if (event.key !== 'Enter') return;
-            // Enter НЕ отправляет: отправка — только кнопкой. Перенос вставляем сами,
-            // иначе браузер расщепит поле на <div>/<p> и потеряется plain-text форма.
             event.preventDefault();
-            insertText('\n');
+            if (event.shiftKey) insertText('\n');
+            else if (!event.repeat) void submit();
           }}
           onPaste={(event) => {
             const images = [...event.clipboardData.items]

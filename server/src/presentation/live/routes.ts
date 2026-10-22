@@ -97,6 +97,11 @@ export function liveUserRouter(deps: LiveUserRouterDeps): Router {
   router.use(requireAuth);
   const svc = deps.service;
 
+  router.get('/:projectId/live/running', async (req, res, next) => {
+    try { res.json({ taskIds: await svc.listRunningTaskIds(pid(req), uid(req)) }); }
+    catch (error) { next(error); }
+  });
+
   router.get('/:projectId/tasks/:taskId/live/sessions', async (req, res, next) => {
     try {
       const sessions = await svc.listSessions(pid(req), uid(req), tid(req));

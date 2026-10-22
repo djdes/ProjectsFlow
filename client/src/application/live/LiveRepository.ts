@@ -7,6 +7,7 @@ import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
 // потому что EventSource не вписывается в request/response-модель httpClient'а
 // (паттерн зеркалит useNotificationStream).
 export interface LiveRepository {
+  listRunningTaskIds(projectId: string): Promise<string[]>;
   // Сессии задачи, newest-first.
   listSessions(projectId: string, taskId: string): Promise<LiveSession[]>;
   // События сессии с seq > afterSeq (для replay/пагинации). limit ограничивает батч.

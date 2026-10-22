@@ -70,7 +70,7 @@ function withMode(mode: AiComposerMode, onChange: (next: AiComposerMode) => void
   };
 }
 
-test('Enter не отправляет сообщение — отправка только кнопкой', async () => {
+test('Enter отправляет сообщение и очищает поле', async () => {
   const sent: string[] = [];
   const view = await render({
     conversationId: 'conv-enter',
@@ -80,11 +80,28 @@ test('Enter не отправляет сообщение — отправка т
 
   await view.type('черновик ответа');
   await view.press('Enter');
-  assert.deepEqual(sent, []);
-
-  await view.click(view.sendButton);
   assert.deepEqual(sent, ['черновик ответа']);
+  assert.equal(view.editable.textContent, '');
   await view.unmount();
+});
+
+test('Shift+Enter вставляет перенос, а Enter во время IME ничего не отправляет', async () => {
+  const sent: string[] = [];
+  const view = await render({ conversationId: null, sending: false, onSend: async body => { sent.push(body); } });
+  try {
+    await view.type('первая строка');
+    view.editable.focus();
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(view.editable); range.collapse(false);
+    selection.removeAllRanges(); selection.addRange(range);
+    await act(async () => { view.editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true })); });
+    assert.match(view.editable.textContent ?? '', /первая строка\n/);
+    await act(async () => { view.editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true })); });
+    assert.deepEqual(sent, []);
+    await view.press('Enter');
+    assert.deepEqual(sent, ['первая строка']);
+  } finally { await view.unmount(); }
 });
 
 test('кнопка отправки неактивна на пустом и пробельном вводе', async () => {

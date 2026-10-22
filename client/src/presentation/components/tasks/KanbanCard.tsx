@@ -26,6 +26,7 @@ import { STATUS_LABEL, canTakeToManual, quickPromoteNext } from './statusLabels'
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
+import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { useContainer } from '@/infrastructure/di/container';
 import { toast } from '@/components/ui/sonner';
@@ -536,16 +537,6 @@ function KanbanCardImpl({
             <span className="size-1.5 shrink-0 rounded-full bg-primary" />
           </span>
         )}
-        {/* 🔴 LIVE-индикатор: воркер прямо сейчас работает над задачей (есть running-сессия).
-            На hover прячем — там всплывают кнопки действий в том же углу. */}
-        {liveRunning && !preview && (
-          <span
-            aria-label="Воркер работает над задачей"
-            title="Воркер работает над задачей"
-            className="absolute end-1.5 inset-bs-1.5 z-10 size-2 rounded-full bg-destructive shadow-[0_0_6px_oklch(var(--destructive)/0.7)] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0 motion-safe:animate-pulse"
-          />
-        )}
-
         {/* Действия — ДЕСКТОП: плашка быстрых действий в правом верхнем углу (по hover/focus),
             та же, что на карточках «Входящих». На мобиле скрыта — там действия в нижнем ряду. */}
         {showActions && (
@@ -570,6 +561,7 @@ function KanbanCardImpl({
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
+          {!preview && <WorkerActivityBadge projectId={task.projectId} taskId={task.id} initialRunning={liveRunning} />}
           {/* Текст карточки НЕ затемняем: мета/действия всплывают как локальные плашки со
               своим фоном (снизу-слева и сверху-справа), маскируя только свою область. */}
           <div>

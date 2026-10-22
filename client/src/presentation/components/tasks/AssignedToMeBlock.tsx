@@ -1,4 +1,5 @@
 import { selectInboxView } from './inbox/selectInboxView';
+import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
@@ -4647,6 +4648,7 @@ function AcceptedCard({
           )}
 
           <div className="min-w-0">
+            <WorkerActivityBadge projectId={item.projectId} taskId={item.id} />
             {item.description?.trim() ? (
               <>
                 {/* Моб: весь текст задачи; десктоп — до трёх строк заголовка и строка тела. */}

@@ -33,6 +33,7 @@ export interface LiveRepository {
   insertSession(input: InsertLiveSessionInput): Promise<void>;
   getSession(sessionId: string): Promise<LiveSession | null>;
   listSessions(taskId: string): Promise<LiveSession[]>;
+  listRunningTaskIds(projectId: string): Promise<string[]>;
 
   // Проектный обзор воркера (раздел Agents): последние прогоны по ВСЕМ задачам проекта,
   // новые сверху. limit — потолок числа строк (карточка показывает историю).

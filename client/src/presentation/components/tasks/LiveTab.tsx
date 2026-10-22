@@ -5,15 +5,10 @@ import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
 import { isWorkerStartupNotice } from '@/lib/isWorkerStartupNotice';
 import { parseWorkerResult } from '@/domain/live/WorkerResult';
 import { WorkerResultMessage } from './WorkerResultMessage';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { useContainer } from '@/infrastructure/di/container';
-import { useLiveSession } from '@/presentation/hooks/useLiveSession';
+import { useTaskLiveTimeline } from '@/presentation/hooks/useTaskLiveTimeline';
+import { taskLiveTimeline } from '@/domain/live/TaskLiveTimeline';
+import { WorkerChatMessage } from './WorkerChatMessage';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type {
   LiveEvent,
@@ -24,6 +19,7 @@ import type {
 import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
 import { type Task } from '@/domain/task/Task';
 import type { TaskComment } from '@/domain/task/TaskComment';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { CommentBody } from './CommentBody';
 import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
@@ -38,7 +34,6 @@ import {
   type RalphQuestion,
 } from './RalphQuestionControls';
 import {
-  LIVE_CHANGED_EVENT,
   REALTIME_CONNECTED_EVENT,
   TASK_CHANGED_EVENT,
 } from '@/presentation/hooks/useNotificationStream';
@@ -84,7 +79,11 @@ type Props = {
 // (фон — серый лист панели bg-panel, блоки ленты — карточки bg-card; дизайн C4/C3).
 // Сверху — задача с кликабельными фото; снизу — композер промпта (когда работа не идёт)
 // или большая кнопка отмены (когда идёт).
-export function LiveTab({
+export function LiveTab(props: Props): React.ReactElement {
+  return <TaskLiveChat key={`${props.task.projectId}:${props.task.id}`} {...props} />;
+}
+
+function TaskLiveChat({
   task,
   active = true,
   canEdit = task.canEdit !== false,
@@ -96,13 +95,16 @@ export function LiveTab({
 }: Props): React.ReactElement {
   const projectId = task.projectId;
   const taskId = task.id;
-  const { liveRepository, taskRepository } = useContainer();
-  const [sessions, setSessions] = useState<LiveSession[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Start-сигнал приходит по общему realtime раньше REST-рефетча. Держим его отдельно,
-  // чтобы 🔴 включалась в тот же тик, а не после сетевого round-trip списка сессий.
-  const [realtimeRunningSessionId, setRealtimeRunningSessionId] = useState<string | null>(null);
+  const { taskRepository, projectRepository } = useContainer();
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  useEffect(() => {
+    let disposed = false;
+    void projectRepository.listMembers(projectId).then(list => { if (!disposed) setMembers(list); }).catch(() => {});
+    return () => { disposed = true; };
+  }, [projectId, projectRepository]);
+  const { runs, loading: sessionsLoading, error: timelineError } = useTaskLiveTimeline(projectId, taskId);
+  const [queuedAfterSession, setQueuedAfterSession] = useState<string | null>(null);
+  const queued = queuedAfterSession !== null;
   const [visibleCount, setVisibleCount] = useState(DOM_CAP);
   const [questionComments, setQuestionComments] = useState<TaskComment[]>([]);
   const [questionsLoading, setQuestionsLoading] = useState(true);
@@ -187,109 +189,18 @@ export function LiveTab({
     [onCommentCreated, onTaskChanged],
   );
 
-  const reloadSessions = useCallback(() => {
-    let cancelled = false;
-    setSessionsLoading(true);
-    void liveRepository
-      .listSessions(projectId, taskId)
-      .then((list) => {
-        if (cancelled) return;
-        setSessions(list);
-        setRealtimeRunningSessionId(list.find((s) => s.status === 'running')?.id ?? null);
-        setSelectedId((prev) =>
-          prev && list.some((session) => session.id === prev) ? prev : (list[0]?.id ?? null),
-        );
-      })
-      .catch(() => {
-        /* tolerate */
-      })
-      .finally(() => {
-        if (!cancelled) setSessionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, taskId, liveRepository]);
-
-  useEffect(() => reloadSessions(), [reloadSessions]);
-
+  const runningRun = runs.find(run => run.session.status === 'running');
+  const anyRunning = !!runningRun;
+  useEffect(() => { onRunningChange?.(anyRunning); }, [anyRunning, onRunningChange]);
   useEffect(() => {
-    const onChanged = (e: Event): void => {
-      const detail = (
-        e as CustomEvent<{
-          projectId?: string;
-          taskId?: string;
-          sessionId?: string;
-          status?: LiveSession['status'];
-        }>
-      ).detail;
-      if (
-        e.type === LIVE_CHANGED_EVENT &&
-        (detail?.projectId !== projectId || detail?.taskId !== taskId)
-      ) {
-        return;
-      }
-
-      // Оптимистично применяем lifecycle-сигнал до GET /sessions. Это мгновенно
-      // включает/гасит красную точку и сразу выбирает новый активный прогон.
-      if (detail?.sessionId && detail.status) {
-        const sessionStatus = detail.status;
-        if (sessionStatus === 'running') {
-          setRealtimeRunningSessionId(detail.sessionId);
-          setSelectedId(detail.sessionId);
-        } else {
-          setRealtimeRunningSessionId((current) =>
-            current === detail.sessionId ? null : current,
-          );
-          setSessions((current) =>
-            current.map((session) =>
-              session.id === detail.sessionId ? { ...session, status: sessionStatus } : session,
-            ),
-          );
-        }
-      }
-
-      void liveRepository
-        .listSessions(projectId, taskId)
-        .then((list) => {
-          setSessions(list);
-          const fresh = list.find((s) => s.status === 'running');
-          setRealtimeRunningSessionId(fresh?.id ?? null);
-          setSelectedId((current) => {
-            if (fresh) return fresh.id;
-            if (current && list.some((session) => session.id === current)) return current;
-            return list[0]?.id ?? null;
-          });
-        })
-        .catch(() => undefined);
-    };
-    window.addEventListener(LIVE_CHANGED_EVENT, onChanged);
-    window.addEventListener(REALTIME_CONNECTED_EVENT, onChanged);
-    return () => {
-      window.removeEventListener(LIVE_CHANGED_EVENT, onChanged);
-      window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
-    };
-  }, [projectId, taskId, liveRepository]);
-
-  const { events, session, fileDiffs, loading, running } = useLiveSession(
-    projectId,
-    taskId,
-    // Лента должна продолжать наполняться, пока юзер читает «Обсуждение». TabsContent
-    // скрыт визуально, но forceMount сохраняет компонент и его task-scoped SSE.
-    selectedId,
-  );
-
-  const anyRunning = useMemo(
-    () => realtimeRunningSessionId !== null || sessions.some((s) => s.status === 'running'),
-    [realtimeRunningSessionId, sessions],
-  );
-  useEffect(() => {
-    onRunningChange?.(anyRunning);
-  }, [anyRunning, onRunningChange]);
-
-  // «Работа идёт» — приоритетно по live-сессии (а не только по task.status, который
-  // может отставать). Тогда снизу гарантированно большая кнопка «Отменить работу».
-  const isWorking = running || anyRunning || task.status === 'in_progress';
+    if (anyRunning || (queuedAfterSession !== null && (runs.at(-1)?.session.id ?? '') !== queuedAfterSession)) setQueuedAfterSession(null);
+  }, [anyRunning, runs, queuedAfterSession]);
+  const isWorking = anyRunning || task.status === 'in_progress';
+  const handleChatComment = (created: TaskComment): void => {
+    stickToBottomRef.current = true;
+    setQuestionComments(current => current.some(comment => comment.id === created.id) ? current.map(comment => comment.id === created.id ? created : comment) : [...current, created]);
+    onCommentCreated?.(created);
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -328,7 +239,7 @@ export function LiveTab({
     stickToBottomRef.current = true;
     setShowScrollBottom(false);
     if (active) scrollToBottom();
-  }, [active, projectId, taskId, selectedId, scrollToBottom]);
+  }, [active, projectId, taskId, scrollToBottom]);
 
   // Replay, questions and final diffs arrive independently, sometimes with the same count.
   useLayoutEffect(() => {
@@ -359,71 +270,14 @@ export function LiveTab({
     };
   }, [active, onScroll, scrollToBottom]);
 
-  const shown = useMemo(
-    () => (events.length > visibleCount ? events.slice(events.length - visibleCount) : events),
-    [events, visibleCount],
-  );
-  const hiddenCount = events.length - shown.length;
-  const selected = sessions.find((s) => s.id === selectedId) ?? null;
-
-  function sessionLabel(s: LiveSession): string {
-    return `Попытка ${s.attempt} · ${STATUS_LABEL_RU[s.status]} · ${SESSION_TIME_FMT.format(s.startedAt)}`;
-  }
+  const entries = useMemo(() => taskLiveTimeline(runs, questionComments), [runs, questionComments]);
+  const shown = entries.slice(-visibleCount);
+  const hiddenCount = entries.length - shown.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel text-foreground">
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
 
-      {/* Селектор попыток. */}
-      {sessions.length > 0 && (
-        <div className="flex shrink-0 items-center gap-2 border-be border-border px-3 py-1.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Выбрать попытку"
-                className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-input bg-field px-2 text-start text-xs text-foreground transition-colors hover:bg-hover"
-              >
-                <span className="min-w-0 flex-1 truncate">
-                  {selected ? sessionLabel(selected) : 'Сессия'}
-                </span>
-                <ChevronDown className="size-3 shrink-0 opacity-60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-72 w-72 overflow-y-auto">
-              <DropdownMenuRadioGroup
-                value={selectedId ?? ''}
-                onValueChange={(v: string) => setSelectedId(v)}
-              >
-                {sessions.map((s) => (
-                  <DropdownMenuRadioItem key={s.id} value={s.id} className="text-xs">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate">{sessionLabel(s)}</span>
-                      {s.status === 'running' && (
-                        <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-destructive" />
-                      )}
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {running && (
-            // «В эфире» — красная точка, как у записи; метка без свечения (C4: без декора).
-            <span className="flex shrink-0 items-center gap-1 rounded-sm bg-destructive-soft px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wider text-destructive">
-              <span className="size-1.5 animate-pulse rounded-full bg-destructive" />
-              LIVE
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Лента событий. */}
-      {task.status === 'todo' && !isWorking && sessions.length > 0 && (
-        <div role="status" className="border-be border-border px-3 py-2 text-sm text-primary">
-          Задача в очереди — ожидает запуска диспетчера.
-        </div>
-      )}
       <div className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
@@ -432,42 +286,19 @@ export function LiveTab({
         className="h-full min-h-0 overflow-y-auto px-3 py-3"
       >
       <div ref={contentRef} className="space-y-2.5">
-        {sessionsLoading && sessions.length === 0 ? (
-          <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-            <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…
-          </div>
-        ) : sessions.length === 0 ? (
-          dispatcherQuestions.length === 0 && !questionsLoading ? <EmptyState working={isWorking} task={task} onTaskChanged={onTaskChanged} canEdit={canEdit} /> : null
-        ) : loading && events.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-            <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка ленты…
-          </div>
-        ) : (
-          <>
-            {hiddenCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setVisibleCount((c) => c + DOM_CAP)}
-                className="mx-auto block rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-              >
-                Загрузить ранее ({hiddenCount})
-              </button>
-            )}
-            {shown.map((ev) => (
-              <LiveEventRow key={ev.seq} event={ev} />
-            ))}
-            {running && <ClaudeSpinner startedAt={session?.startedAt} />}
-            {events.length === 0 && !running && (
-              <p className="py-6 text-center text-xs text-muted-foreground">
-                Нет событий в этой сессии.
-              </p>
-            )}
-            {session && session.status !== 'running' && fileDiffs.length > 0 && (
-              <FinalDiffs files={fileDiffs} session={session} />
-            )}
-          </>
-        )}
-        {questionsLoading && sessions.length === 0 && dispatcherQuestions.length === 0 && (
+        {sessionsLoading && entries.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
+        {timelineError && <p role="status" className="text-sm text-muted-foreground">{timelineError}</p>}
+        {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-md border px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
+        {shown.map(entry => {
+          if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
+          if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} />;
+          if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
+          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' ? 'работает' : STATUS_LABEL_RU[entry.session.status]}</p>;
+        })}
+        {runningRun && <ClaudeSpinner startedAt={runningRun.session.startedAt} />}
+        {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
+        {!sessionsLoading && runs.length === 0 && entries.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} task={task} onTaskChanged={onTaskChanged} canEdit={canEdit} />}
+        {questionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка вопросов…
           </div>
@@ -505,7 +336,9 @@ export function LiveTab({
               task={task}
               backlogTail={backlogTail}
               todoTail={todoTail}
-              onCommentCreated={(c) => onCommentCreated?.(c)}
+              onCommentCreated={handleChatComment}
+            defaultTarget="worker"
+            onWorkerQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }}
               onTaskChanged={() => onTaskChanged?.()}
             />
           </>
@@ -514,7 +347,9 @@ export function LiveTab({
             task={task}
             backlogTail={backlogTail}
             todoTail={todoTail}
-            onCommentCreated={(c) => onCommentCreated?.(c)}
+            onCommentCreated={handleChatComment}
+              defaultTarget="worker"
+              onWorkerQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }}
             onTaskChanged={() => onTaskChanged?.()}
           />
         )}
@@ -604,7 +439,7 @@ function EmptyState({ working, task, onTaskChanged, canEdit }: { working: boolea
       <span className="max-w-xs text-xs text-muted-foreground">
         {working
           ? 'Воркер вот-вот начнёт — здесь появится живая лента действий.'
-          : queued ? 'Диспетчер получил задачу. Лента действий появится автоматически после запуска.'
+          : queued ? 'Задача сохранена в очереди. Лента действий появится автоматически после запуска.'
           : 'Нажми «Сделать с помощью воркера» — здесь появится лента действий.'}
       </span>
       {!working && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => setQueuedTaskId(task.id)} onChanged={onTaskChanged} />}

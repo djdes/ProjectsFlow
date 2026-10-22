@@ -33,6 +33,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Worker chat and AI composer tests
+        working-directory: client
+        run: node --import tsx --test src/presentation/components/tasks/workerChat.behavior.test.ts src/presentation/components/ai/AiComposer.behavior.test.ts
+
       # Красный серверный тест останавливает выкладку: прод остаётся на прошлой версии.
       - name: Server tests
         run: npm run test:server

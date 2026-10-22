@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
 import { WorkspaceCrumbs } from '@/presentation/layout/InboxBreadcrumbs';
@@ -13,9 +14,12 @@ import { ImageGenerationPanel } from '@/presentation/components/ai/ImageGenerati
 
 export function AiPage(): React.ReactElement {
   const { conversationId } = useParams<{ conversationId?: string }>();
-  const { aiConversationRepository } = useContainer();
+  const { aiConversationRepository, imageGenerationRepository } = useContainer();
   const navigate = useNavigate();
+  const location = useLocation();
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const [photoMode, setPhotoMode] = useState(false);
   const [searchParams] = useSearchParams();
   const tab = searchParams.get('tab') === 'images' ? 'images' : 'chat';
 
@@ -23,7 +27,7 @@ export function AiPage(): React.ReactElement {
     document.title = conversationId ? 'Чат с ИИ — ProjectsFlow' : tab==='images'?'Генерация фото — ProjectsFlow':'ИИ — ProjectsFlow';
   }, [conversationId, tab]);
 
-  if (conversationId) return <AiConversationView conversationId={conversationId} />;
+  if (conversationId) return <AiConversationView key={conversationId} conversationId={conversationId} initialImageMode={(location.state as { imageMode?: boolean } | null)?.imageMode === true} />;
 
   const create = async (prompt?: string): Promise<void> => {
     if (busy) return;
@@ -40,14 +44,16 @@ export function AiPage(): React.ReactElement {
     }
   };
 
-  const createAndSend = async (body: string): Promise<void> => {
-    if (busy) return;
+  const createAndSend = async (body: string, image = false): Promise<void> => {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     let conversationIdForRetry: string | null = null;
     try {
       const conversation = await aiConversationRepository.create({ kind: 'personal', title: 'Новый чат' });
       conversationIdForRetry = conversation.id;
-      await aiConversationRepository.sendMessage(conversation.id, {
+      if (image) await imageGenerationRepository.create(body, conversation.id);
+      else await aiConversationRepository.sendMessage(conversation.id, {
         body,
         clientRequestId: typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
@@ -56,14 +62,16 @@ export function AiPage(): React.ReactElement {
         expectedConversationVersion: conversation.version,
       });
       announceAiConversationsChanged();
-      navigate(`/ai/c/${conversation.id}`);
+      navigate(`/ai/c/${conversation.id}`, { state: { imageMode: image } });
     } catch (error) {
       if (conversationIdForRetry) {
         try { sessionStorage.setItem(`pf-ai-draft:${conversationIdForRetry}`, body); } catch { /* ignore */ }
-        navigate(`/ai/c/${conversationIdForRetry}`);
+        navigate(`/ai/c/${conversationIdForRetry}`, { state: { imageMode: image } });
       }
+      toast.error((error as Error).message || 'Не удалось отправить сообщение');
       throw error;
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
@@ -88,7 +96,7 @@ export function AiPage(): React.ReactElement {
             <h1 className="text-display font-semibold tracking-tight">ProjectsFlow ИИ</h1>
             <p className="mbs-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
             <div className="mbs-7 w-full max-w-2xl text-start">
-              <AiComposer conversationId={null} sending={busy} onSend={createAndSend} autoFocus />
+              <AiComposer conversationId={null} sending={busy} onSend={(body) => createAndSend(body)} imageMode={{ enabled: photoMode, onChange: setPhotoMode, onSend: (body) => createAndSend(body, true) }} autoFocus />
               <AiComposerPresets className="mbs-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
             </div>
             <Button

@@ -29,6 +29,10 @@ function eventFromDto(dto: LiveEventDto): LiveEvent {
 }
 
 export class HttpLiveRepository implements LiveRepository {
+  async listRunningTaskIds(projectId: string): Promise<string[]> {
+    const { taskIds } = await httpClient.get<{ taskIds: string[] }>(`/projects/${projectId}/live/running`);
+    return taskIds;
+  }
   async listSessions(projectId: string, taskId: string): Promise<LiveSession[]> {
     const { sessions } = await httpClient.get<{ sessions: LiveSessionDto[] }>(
       `/projects/${projectId}/tasks/${taskId}/live/sessions`,

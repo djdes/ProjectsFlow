@@ -269,6 +269,11 @@ export class LiveService {
   }
 
   // ---------- read (участник проекта) ----------
+  async listRunningTaskIds(projectId: string, userId: string): Promise<string[]> {
+    await this.authRead(projectId, userId);
+    return this.deps.repo.listRunningTaskIds(projectId);
+  }
+
   async listSessions(projectId: string, userId: string, taskId: string): Promise<LiveSession[]> {
     await this.authRead(projectId, userId);
     return this.deps.repo.listSessions(taskId);

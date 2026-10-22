@@ -61,6 +61,12 @@ function toSession(r: LiveSessionRow): LiveSession {
 export class DrizzleLiveRepository implements LiveRepository {
   constructor(private readonly db: Database) {}
 
+  async listRunningTaskIds(projectId: string): Promise<string[]> {
+    const rows = await this.db.selectDistinct({ taskId: liveSessions.taskId }).from(liveSessions)
+      .where(and(eq(liveSessions.projectId, projectId), eq(liveSessions.status, 'running')));
+    return rows.map(row => row.taskId);
+  }
+
   async maxSeqForTask(taskId: string): Promise<number> {
     const rows = await this.db
       .select({ m: sql<number>`COALESCE(MAX(seq), 0)` })

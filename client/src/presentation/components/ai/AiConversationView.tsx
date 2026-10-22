@@ -49,6 +49,7 @@ export function AiConversationView({
   onOpenSelection,
   selection,
   onBuild,
+  initialImageMode = false,
 }: {
   conversationId: string;
   compact?: boolean;
@@ -67,10 +68,11 @@ export function AiConversationView({
   // что и у правой панели), а пару сообщений в ленте создаёт сервер. Нет колбэка —
   // нет и режима: тумблер не показывается. Отклонённый промис = правку не приняли.
   onBuild?: (prompt: string) => void | Promise<void>;
+  initialImageMode?: boolean;
 }): React.ReactElement {
   const state = useAiConversation(conversationId);
   const images = useConversationImages(conversationId);
-  const [imageMode, setImageMode] = useState({ conversationId, enabled: false });
+  const [imageMode, setImageMode] = useState({ conversationId, enabled: initialImageMode });
   const photoMode = imageMode.conversationId === conversationId && imageMode.enabled;
   const scrollArea = useRef<HTMLDivElement | null>(null);
   const wasNearBottom = useRef(true);
