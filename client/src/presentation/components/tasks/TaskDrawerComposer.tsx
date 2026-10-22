@@ -3,6 +3,7 @@ import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import type { Task } from '@/domain/task/Task';
+import { workerSessionPrompt, type WorkerSessionMode } from '@/domain/task/WorkerSessionMode';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import { defaultCommentAudience } from '@/domain/task/defaultCommentAudience';
 import {
@@ -132,6 +133,7 @@ function TaskDrawerComposerForm({
   // его в черновики, иначе кнопка целилась бы в статус, который сервер уже не принимает.
   const workerEnabled = useWorkerEnabled();
   const effectiveTarget: ComposerTarget = workerEnabled ? target : 'draft';
+  const [sessionMode, setSessionMode] = useState<WorkerSessionMode>('continue');
   // Участники проекта для @-упоминаний. Грузим как TaskCommentsSection; ошибка не блокирует
   // композер (degrade gracefully — без упоминаний).
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -230,7 +232,7 @@ function TaskDrawerComposerForm({
       created = await taskRepository.createComment(
         task.projectId,
         task.id,
-        sent.body.trim() || ' ',
+        effectiveTarget === 'worker' ? workerSessionPrompt(sent.body.trim() || ' ', sessionMode) : sent.body.trim() || ' ',
         sent.notify ?? defaultAudience,
         sent.reply ? { replyToCommentId: sent.reply.commentId, quotedText: sent.reply.quotedText } : undefined,
       );
@@ -242,6 +244,7 @@ function TaskDrawerComposerForm({
 
     // The server accepted this text. A later upload/move failure must not resend it.
     acknowledgeComment(draftKey, sent);
+    setSessionMode('continue');
     try {
       onClearReply?.();
       const uploaded: TaskAttachment[] = [];
@@ -373,6 +376,22 @@ function TaskDrawerComposerForm({
             className="px-3.5 py-2.5 text-sm leading-snug"
           />
         </Suspense>
+
+        {effectiveTarget === 'worker' && canChooseSendTarget(task.status) && (
+          <div className="flex justify-end px-3 pbe-1">
+            <select
+              aria-label="Сессия воркера"
+              title="Продолжить контекст этой задачи или начать с нуля"
+              value={sessionMode}
+              onChange={event => setSessionMode(event.target.value as WorkerSessionMode)}
+              disabled={submitting}
+              className="max-w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:bg-muted"
+            >
+              <option value="continue">Продолжить сессию</option>
+              <option value="new">Новая сессия</option>
+            </select>
+          </div>
+        )}
 
         {/* nowrap: кнопка отправки НЕ переносится на отдельную строку на узких экранах —
             левая группа (скрепка + «кому уведомить») сжимается, send всегда справа. */}

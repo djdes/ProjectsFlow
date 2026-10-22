@@ -137,7 +137,7 @@ export function liveUserRouter(deps: LiveUserRouterDeps): Router {
     },
   );
 
-  // SSE: replay из БД (seq > afterSeq) → subscribe firehose из LiveEventHub(taskId).
+  // SSE: replay из БД (seq > afterSeq) → subscribe firehose из LiveEventHub(sessionId).
   // requireProjectAccess('read_project') ДО writeHead (через svc.getSessionForStream).
   // Заголовки/heartbeat — копия notifications/routes.ts.
   router.get('/:projectId/tasks/:taskId/live/sessions/:sessionId/stream', async (req, res, next) => {
@@ -183,14 +183,14 @@ export function liveUserRouter(deps: LiveUserRouterDeps): Router {
     // на клиенте (afterSeq) разрулит дубли. Буферизуем live-события во время replay.
     const buffered: LiveEvent[] = [];
     let replaying = true;
-    unsubscribe = deps.liveEventHub.subscribe(taskId, (events) => {
+    unsubscribe = deps.liveEventHub.subscribe(sessionId, (events) => {
       if (replaying) {
         buffered.push(...events);
         return;
       }
       for (const e of events) writeEvent(e);
     });
-    unsubscribeEnd = deps.liveEventHub.subscribeEnd(taskId, (status) => {
+    unsubscribeEnd = deps.liveEventHub.subscribeEnd(sessionId, (status) => {
       writeEnd(status);
     });
 

@@ -162,7 +162,7 @@ export class LiveService {
     if (appended > 0) {
       await this.deps.repo.bumpSession(sessionId, maxSeq, session.eventCount + appended);
       // Firehose в открытые вкладки. Только реально записанные (не дубли).
-      this.deps.liveEventHub.publish(taskId, persisted);
+      this.deps.liveEventHub.publish(sessionId, persisted);
     }
     return { appended };
   }
@@ -232,7 +232,7 @@ export class LiveService {
         });
       }
       await this.deps.repo.bumpSession(sessionId, seq, session.eventCount + persisted.length);
-      this.deps.liveEventHub.publish(taskId, persisted);
+      this.deps.liveEventHub.publish(sessionId, persisted);
     }
 
     await this.deps.repo.finishSession(sessionId, {
@@ -257,7 +257,7 @@ export class LiveService {
         costUsd: input.costUsd,
       })
       .catch(() => {});
-    this.deps.liveEventHub.publishEnd(taskId, input.status);
+    this.deps.liveEventHub.publishEnd(sessionId, input.status);
     this.broadcastChanged(projectId, taskId, sessionId, input.status, [userId]);
     // Fallback when the dispatcher's personal notification request was unavailable.
     if (input.status === 'completed') {

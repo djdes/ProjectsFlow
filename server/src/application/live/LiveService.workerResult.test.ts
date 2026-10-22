@@ -55,3 +55,22 @@ test('an unauthorized member cannot finish a run or queue a group report', async
   assert.deepEqual(h.finished, []);
   assert.deepEqual(h.requested, []);
 });
+
+test('ingest and completion publish under the attempt UUID, never the shared task ID', async () => {
+  const calls: string[] = [];
+  const service = new LiveService({
+    access: { projects: { async getById() { return { id: 'p', dispatcherUserId: 'dispatcher' }; } }, members: {} },
+    repo: {
+      async getSession() { return { id: 'attempt', projectId: 'p', taskId: 't', lastSeq: 0, eventCount: 0 }; },
+      async appendEvent() { return true; }, async bumpSession() {}, async finishSession() {},
+    },
+    liveEventHub: {
+      publish(id: string) { calls.push(`events:${id}`); },
+      publishEnd(id: string) { calls.push(`end:${id}`); },
+    },
+    broadcaster: { async broadcastLiveSessionChanged() {} },
+  } as unknown as LiveServiceDeps);
+  await service.appendEvents('p', 'dispatcher', 't', 'attempt', [{ seq: 1, kind: 'assistant_text', text: 'Проверяю' }]);
+  await service.finishSession('p', 'dispatcher', 't', 'attempt', { status: 'completed' });
+  assert.deepEqual(calls, ['events:attempt', 'end:attempt']);
+});

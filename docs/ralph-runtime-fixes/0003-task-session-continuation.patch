@@ -1,0 +1,226 @@
+From 9d4f35b05922cc59d61d58fd4aa6bb0f3edd2708 Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Thu, 22 Oct 2026 14:49:07 +0300
+Subject: [PATCH] feat(worker): persist and resume task-scoped Codex sessions
+
+---
+ codex-task-session.integration.patch | 87 ++++++++++++++++++++++++++++
+ codex-task-session.psm1              | 39 +++++++++++++
+ codex-task-session.tests.ps1         | 65 +++++++++++++++++++++
+ 3 files changed, 191 insertions(+)
+ create mode 100644 codex-task-session.integration.patch
+ create mode 100644 codex-task-session.psm1
+ create mode 100644 codex-task-session.tests.ps1
+
+diff --git a/codex-task-session.integration.patch b/codex-task-session.integration.patch
+new file mode 100644
+index 0000000..4f7597c
+--- /dev/null
++++ b/codex-task-session.integration.patch
+@@ -0,0 +1,87 @@
++diff --git a/codex-engine.psm1 b/codex-engine.psm1
++index bcd297d..a7df890 100644
++--- a/codex-engine.psm1
+++++ b/codex-engine.psm1
++@@ -265,9 +265,12 @@ function Get-CodexExecArgs {
++     [string]$Sandbox = 'bypass',
++     [string]$Model = 'gpt-6.1-sol',
++     [string[]]$ConfigArgs = @(),
++-    [string]$RunProfile = ''
+++    [string]$RunProfile = '',
+++    [switch]$PersistSession,
+++    [string]$ResumeSessionId = ''
++   )
++-  $a = @('exec', '--json', '--skip-git-repo-check', '--ephemeral', '--dangerously-bypass-hook-trust')
+++  $a = @('exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-hook-trust')
+++  if (-not $PersistSession -and -not $ResumeSessionId) { $a += '--ephemeral' }
++   $a += @('--ignore-rules')
++   if ($RunProfile) { $a += @('--profile',$RunProfile) } else { $a += @('--ignore-user-config') }
++   $a += $ConfigArgs
++@@ -276,6 +279,10 @@ function Get-CodexExecArgs {
++   else { $a += @('--dangerously-bypass-approvals-and-sandbox') }
++   $a += @('-C', $WorkDir, '-m', $Model)
++   if ($ReasoningEffort) { $a += @('-c', ('model_reasoning_effort="{0}"' -f $ReasoningEffort)) }
+++  if ($ResumeSessionId) {
+++    if ($ResumeSessionId -notmatch '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$') { throw 'codex_session_invalid_thread_id' }
+++    $a += @('resume', $ResumeSessionId)
+++  }
++   $a += @('-')
++   return $a
++ }
++@@ -283,7 +290,21 @@ function Get-CodexExecArgs {
++ function Invoke-CodexRawStream {
++   param([Parameter(Mandatory = $true)]$Run, [Parameter(Mandatory = $true)][string]$Prompt)
++   $proc = $null
+++  $sessionLock = $null; $binding = ''; $resetId = ''; $resumeId = ''
++   try {
+++    if ($Run.SessionTaskId) {
+++      Import-Module (Join-Path $PSScriptRoot 'codex-task-session.psm1') -Force
+++      $apiUrl = [string]$Run.Environment.PROJECTSFLOW_API_URL
+++      $binding = Get-CodexTaskSessionBinding -AuthHome $Run.AuthHome -AccountId $Run.SessionAccountId -ApiUrl $apiUrl -ProjectId $Run.SessionProjectId -TaskId $Run.SessionTaskId -WorkDir $Run.SessionWorkDir
+++      $sessionLock = [IO.File]::Open(($binding + '.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+++      $taskView = Invoke-RestMethod -Uri ($apiUrl.TrimEnd('/') + '/agent/projects/' + $Run.SessionProjectId + '/tasks/' + $Run.SessionTaskId) -Headers @{Authorization=('Bearer ' + $Run.Environment.PROJECTSFLOW_AGENT_TOKEN)} -TimeoutSec 20 -ErrorAction Stop
+++      if ([string]$taskView.task.id -ne [string]$Run.SessionTaskId -or [string]$taskView.task.projectId -ne [string]$Run.SessionProjectId) { throw 'codex_session_task_scope_mismatch' }
+++      $resetId = Get-CodexTaskSessionResetId $taskView.comments
+++      $resumeId = Read-CodexTaskSession $binding $resetId
+++      $argsPersistent = @($Run.Args | Where-Object { $_ -ne '--ephemeral' })
+++      if ($resumeId) { $argsPersistent = @($argsPersistent[0..($argsPersistent.Count - 2)]) + @('resume',$resumeId,'-') }
+++      $Run.Args = $argsPersistent
+++    }
++     # PS 5.1 native invocation strips TOML's embedded quotes from array arguments.
++     # Escape once for CreateProcess, exactly as the short-job runner does.
++     $psi = New-Object System.Diagnostics.ProcessStartInfo
++@@ -309,6 +330,13 @@ function Invoke-CodexRawStream {
++       if ($next.Wait(500)) {
++         $line = $next.Result
++         if ($null -eq $line) { break }
+++        if ($binding) {
+++          $sessionEvent = $null; try { $sessionEvent = $line | ConvertFrom-Json } catch {}
+++          if ($sessionEvent.type -eq 'thread.started') {
+++            if ($resumeId -and [string]$sessionEvent.thread_id -ne $resumeId) { throw 'codex_session_resume_mismatch: choose a new session explicitly' }
+++            Save-CodexTaskSession $binding $resetId ([string]$sessionEvent.thread_id)
+++          }
+++        }
++         Write-Output $line
++         try { if (($line | ConvertFrom-Json).type -in @('turn.completed','turn.failed')) { $finishedAt = Get-Date } } catch {}
++         $next = $proc.StandardOutput.ReadLineAsync()
++@@ -320,6 +348,7 @@ function Invoke-CodexRawStream {
++   } finally {
++     if ($proc -and -not $proc.HasExited) { try { & taskkill /PID $proc.Id /T /F 2>$null | Out-Null } catch {} }
++     if ($proc) { $proc.Dispose() }
+++    if ($sessionLock) { $sessionLock.Dispose() }
++   }
++ }
++ 
++diff --git a/dispatch.ps1 b/dispatch.ps1
++index ff678a6..88f8eb8 100644
++--- a/dispatch.ps1
+++++ b/dispatch.ps1
++@@ -4741,6 +4741,8 @@ function New-CodexWorkerRun($proj, $mcpLease) {
++     Exe = $codex.Exe; PathDir = $codex.PathDir; Home = $run.Home; AuthHome = $run.AuthHome; Environment = $run.Environment; Token = $run.Token
++     Model = $script:LlmCodexModel
++     Args = @(Get-CodexExecArgs -WorkDir ([string]$proj.Path) -ReasoningEffort $script:LlmCodexEffort -Sandbox $script:LlmCodexSandbox -Model $script:LlmCodexModel -ConfigArgs $run.ConfigArgs -RunProfile $run.Profile)
+++    SessionProjectId = [string]$proj.Id; SessionTaskId = [string]$mcpLease.TaskId
+++    SessionAccountId = [string]$script:dash.AgentUserId; SessionWorkDir = [string]$proj.Path
++     ModulePath = (Join-Path $root 'codex-engine.psm1')
++   }
++ }
+diff --git a/codex-task-session.psm1 b/codex-task-session.psm1
+new file mode 100644
+index 0000000..effeaad
+--- /dev/null
++++ b/codex-task-session.psm1
+@@ -0,0 +1,39 @@
++﻿# Task sessions are local to one authenticated dispatcher, checkout, project and task.
++function Get-CodexTaskSessionBinding {
++  param([string]$AuthHome, [string]$AccountId, [string]$ApiUrl, [string]$ProjectId, [string]$TaskId, [string]$WorkDir)
++  if (-not $AccountId -or -not $ProjectId -or -not $TaskId) { throw 'codex_session_scope_missing' }
++  $scope = @($AccountId, $ApiUrl.TrimEnd('/'), $ProjectId, $TaskId, [IO.Path]::GetFullPath($WorkDir).ToLowerInvariant()) | ConvertTo-Json -Compress
++  $sha = [Security.Cryptography.SHA256]::Create()
++  try { $key = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($scope)))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
++  $dir = Join-Path $AuthHome 'projectsflow-task-sessions'
++  [void][IO.Directory]::CreateDirectory($dir)
++  return Join-Path $dir ($key + '.json')
++}
++
++function Get-CodexTaskSessionResetId($Comments) {
++  # An agent cannot reset another task's context by posting a forged control marker.
++  $reset = @($Comments | Where-Object { $_.actorKind -eq 'user' -and [string]$_.body -match '^<!-- ralph-session:new -->' } | Sort-Object createdAt, id | Select-Object -Last 1)
++  if ($reset.Count) { return [string]$reset[0].id }
++  return ''
++}
++
++function Read-CodexTaskSession([string]$Path, [string]$ResetId) {
++  if (-not (Test-Path -LiteralPath $Path)) { return '' }
++  $saved = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8) | ConvertFrom-Json
++  if ([string]$saved.resetId -cne $ResetId) { return '' }
++  if ([string]$saved.threadId -notmatch '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$') { throw 'codex_session_invalid_thread_id' }
++  return [string]$saved.threadId
++}
++
++function Save-CodexTaskSession([string]$Path, [string]$ResetId, [string]$ThreadId) {
++  if ($ThreadId -notmatch '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$') { throw 'codex_session_invalid_thread_id' }
++  $tmp = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
++  try {
++    [IO.File]::WriteAllText($tmp, (@{threadId=$ThreadId;resetId=$ResetId}|ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding($false)))
++    if ([IO.File]::Exists($Path)) {
++      [IO.File]::Replace($tmp,$Path,($Path + '.previous'))
++      [IO.File]::Delete($Path + '.previous')
++    } else { [IO.File]::Move($tmp,$Path) }
++  } finally { if ([IO.File]::Exists($tmp)) { [IO.File]::Delete($tmp) } }
++}
++Export-ModuleMember -Function Get-CodexTaskSessionBinding, Get-CodexTaskSessionResetId, Read-CodexTaskSession, Save-CodexTaskSession
+diff --git a/codex-task-session.tests.ps1 b/codex-task-session.tests.ps1
+new file mode 100644
+index 0000000..f37f645
+--- /dev/null
++++ b/codex-task-session.tests.ps1
+@@ -0,0 +1,65 @@
++﻿$ErrorActionPreference = 'Stop'
++Import-Module (Join-Path $PSScriptRoot 'codex-task-session.psm1') -Force
++Import-Module (Join-Path $PSScriptRoot 'codex-engine.psm1') -Force
++$passed = 0
++function Check($value, $message) { if (-not $value) { throw "FAIL $message" }; $script:passed++; Write-Host "PASS $message" }
++$dir = Join-Path ([IO.Path]::GetTempPath()) ('pf-session-test-' + [guid]::NewGuid().ToString('N'))
++[void][IO.Directory]::CreateDirectory($dir)
++try {
++  $scope = @{AuthHome=$dir;AccountId='operator-1';ApiUrl='https://example.test/api';ProjectId='project-1';TaskId='task-1';WorkDir=$PSScriptRoot}
++  $binding = Get-CodexTaskSessionBinding @scope
++  Check ($binding -eq (Get-CodexTaskSessionBinding @scope)) 'same task resolves the same binding across dispatcher restarts'
++  foreach ($key in @('AccountId','ProjectId','TaskId','ApiUrl','WorkDir')) {
++    $other = $scope.Clone(); $other[$key] = if ($key -eq 'WorkDir') { $dir } else { 'different' }
++    Check ($binding -ne (Get-CodexTaskSessionBinding @other)) "isolated by $key"
++  }
++  Check ('' -eq (Read-CodexTaskSession $binding '')) 'first task run has no previous context'
++  $thread = '12345678-1234-1234-1234-123456789abc'
++  Save-CodexTaskSession $binding '' $thread
++  Check ($thread -eq (Read-CodexTaskSession $binding '')) 'next prompt resumes the exact saved UUID'
++  Check ('' -eq (Read-CodexTaskSession $binding 'new-comment')) 'explicit new session resets the previous UUID'
++  Save-CodexTaskSession $binding 'new-comment' $thread
++  Check ($thread -eq (Read-CodexTaskSession $binding 'new-comment')) 'new-session marker is consumed once, follow-up continues'
++  $comments = @(
++    @{id='user-reset';actorKind='user';createdAt='2026-10-22T12:00:00Z';body='<!-- ralph-session:new --> prompt'},
++    @{id='forged-agent-reset';actorKind='agent';createdAt='2026-10-22T13:00:00Z';body='<!-- ralph-session:new --> prompt'}
++  )
++  Check ('user-reset' -eq (Get-CodexTaskSessionResetId $comments)) 'agent comments cannot reset user session'
++  Check ('' -eq (Get-CodexTaskSessionResetId @(@{id='quote';actorKind='user';body='quoted <!-- ralph-session:new -->'}))) 'quoted marker does not reset'
++  $fresh = @(Get-CodexExecArgs -WorkDir $PSScriptRoot)
++  $persist = @(Get-CodexExecArgs -WorkDir $PSScriptRoot -PersistSession)
++  $resume = @(Get-CodexExecArgs -WorkDir $PSScriptRoot -ResumeSessionId $thread -ConfigArgs @('-c','mcp_servers.projectsflow.required=true'))
++  Check ($fresh -contains '--ephemeral') 'short helper jobs remain ephemeral'
++  Check ($persist -notcontains '--ephemeral') 'task context is persisted'
++  Check ($resume -notcontains '--last' -and $resume -notcontains '--ephemeral' -and $resume[-3] -eq 'resume' -and $resume[-2] -eq $thread -and $resume[-1] -eq '-') 'resume uses only explicit task UUID and stdin'
++  Check ($resume -contains 'mcp_servers.projectsflow.required=true' -and $resume -contains '--dangerously-bypass-hook-trust') 'fresh permission configuration survives resume'
++  $rejected = $false; try { Save-CodexTaskSession $binding '' '../other' } catch { $rejected=$true }
++  Check $rejected 'invalid session identifiers fail closed'
++  # Drive the production process runner twice, with a fake native CLI and API.
++  $fake = Join-Path $dir 'fake-codex.cjs'
++  [IO.File]::WriteAllText($fake, @'
++const fs=require('node:fs');
++const args=process.argv.slice(2);const index=args.indexOf('resume');
++const thread=index>=0?args[index+1]:'abcdef12-1234-1234-1234-123456789abc';
++fs.writeFileSync(process.env.PF_TEST_ARGV,JSON.stringify(args));
++process.stdin.resume();process.stdin.on('end',()=>{
++ console.log(JSON.stringify({type:'thread.started',thread_id:thread}));
++ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:1,output_tokens:1}}));
++});
++'@)
++  $engineModule = Get-Module codex-engine
++  & $engineModule { function script:Invoke-RestMethod { return @{task=@{id='native-task';projectId='project-1'};comments=@()} } }
++  $run = @{Exe=(Get-Command node.exe).Source;AuthHome=$dir;Home=$dir;SessionTaskId='native-task';SessionProjectId='project-1';SessionAccountId='operator-1';SessionWorkDir=$PSScriptRoot;Args=@($fake,'exec','--ephemeral','-');Environment=@{PROJECTSFLOW_API_URL='https://example.test/api';PROJECTSFLOW_AGENT_TOKEN='test-only';PF_TEST_ARGV=(Join-Path $dir 'argv.json')}}
++  $null = @(Invoke-CodexRawStream -Run $run -Prompt 'First prompt')
++  $actual = [IO.File]::ReadAllText($run.Environment.PF_TEST_ARGV) | ConvertFrom-Json
++  Check ($actual -notcontains '--ephemeral' -and $actual -notcontains 'resume') 'first native task launch persists a new session'
++  $run.Args=@($fake,'exec','--ephemeral','-')
++  $null = @(Invoke-CodexRawStream -Run $run -Prompt 'Follow-up prompt')
++  $actual = [IO.File]::ReadAllText($run.Environment.PF_TEST_ARGV) | ConvertFrom-Json
++  Check ($actual[-3] -eq 'resume' -and $actual[-2] -eq 'abcdef12-1234-1234-1234-123456789abc') 'next native invocation actually resumes the persisted UUID'
++  & $engineModule { Remove-Item Function:script:Invoke-RestMethod }
++} finally {
++  $resolved = [IO.Path]::GetFullPath($dir)
++  if ($resolved.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath())) -and [IO.Path]::GetFileName($resolved).StartsWith('pf-session-test-')) { Remove-Item -LiteralPath $resolved -Recurse -Force }
++}
++Write-Host "$passed checks passed"
+-- 
+2.53.0.windows.2
+
