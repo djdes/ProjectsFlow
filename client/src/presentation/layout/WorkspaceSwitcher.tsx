@@ -127,7 +127,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           side={compact ? 'right' : 'bottom'}
           align="start"
           sideOffset={compact ? 8 : 4}
-          className="w-72 p-0"
+          className="pf-scrollbar-hide w-72 overflow-x-hidden p-0"
         >
           {/* Шапка: аватар + никнейм + строка тарифа со сроком (как «Free Plan · …» в Notion). */}
           <div className="flex items-center gap-3 px-3 py-3">
@@ -201,7 +201,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             )}
           </button>
 
-          <div className="max-h-56 overflow-y-auto p-1">
+          <div className="pf-scrollbar-hide max-h-56 overflow-x-hidden overflow-y-auto p-1">
             <TooltipProvider delayDuration={550} skipDelayDuration={120}>
               {(workspaces ?? []).map((ws) => (
                 <Tooltip key={ws.id}>
