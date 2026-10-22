@@ -1607,16 +1607,16 @@ export class TelegramComposerService {
         inboxWorkspaceId,
         await this.spaceNames(userId),
       );
-      const assigneeSuffix = draft.assigneeUserId
-        ? ` Ответственный — <b>${escapeHtml((await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? 'участник')}</b>.`
-        : '';
+      const metadata = await this.createdTaskMetadata(
+        task.assignee?.displayName, targetId, draft.targetStatus,
+      );
       const automatic = opts.automatic ? '\n\n⏱ Создано автоматически через 10 минут.' : '';
       const attachmentSuffix = this.attachmentResultText(attachmentResult);
       if (messageId) {
         await this.edit(
           chatId,
           messageId,
-          `✅ Задача создана в <b>${escapeHtml(projName)}</b>.${assigneeSuffix}\n📝 ${markdownToTelegramHtml(excerpt(text))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+          `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(text))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
         );
       }
       if (cqId) {
@@ -2364,6 +2364,17 @@ export class TelegramComposerService {
     const s = status ?? DEFAULT_COLUMN;
     const settings = await this.kanbanSettingsOf(projectId);
     return resolveColumnLabel(settings?.[s], s);
+  }
+
+  private async createdTaskMetadata(
+    assigneeName: string | undefined,
+    projectId: string,
+    status: VisibleKanbanStatus | null,
+  ): Promise<string> {
+    const label = !status || status === 'backlog'
+      ? 'Черновик'
+      : await this.columnLabelFor(projectId, status);
+    return `👤 Ответственный: <b>${escapeHtml(assigneeName ?? 'Не назначен')}</b>\n📋 Статус: <b>${escapeHtml(label)}</b>`;
   }
 
   // Имя ответственного для показа. Показываем ТОЛЬКО того, кто реально станет ответственным:
@@ -3221,8 +3232,11 @@ export class TelegramComposerService {
           spaces,
           delegatedInbox ? (task.assignee?.displayName ?? 'ответственного') : undefined,
         );
+        const metadata = await this.createdTaskMetadata(
+          task.assignee?.displayName, targetId, seg.targetStatus,
+        );
         summary.push(
-          `✅ <a href="${this.taskUrl(targetId, task.id)}">${escapeHtml(title || excerpt(body, 40))}</a> → <b>${escapeHtml(projName)}</b>`,
+          `✅ <a href="${this.taskUrl(targetId, task.id)}">${escapeHtml(title || excerpt(body, 40))}</a> → <b>${escapeHtml(projName)}</b>\n${metadata}`,
         );
       } catch (err) {
         console.warn('[tg-composer] finalizeSegments: segment failed:', err);

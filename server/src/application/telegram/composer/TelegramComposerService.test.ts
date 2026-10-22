@@ -754,6 +754,9 @@ test('голый текст → черновик во «Входящие», conf
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1'); // ушло в inbox
   assert.equal(h.createTaskCalls[0]!.description, 'Купить кофе');
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u1');
+  const confirmation = h.edits.at(-1)!.text;
+  assert.match(confirmation, /Ответственный: <b>Создатель<\/b>/);
+  assert.match(confirmation, /Статус: <b>Черновик<\/b>/);
 });
 
 test('+Проект (уникальный) текст → createTask в этот проект', async () => {
@@ -921,6 +924,29 @@ test('AI-сегменты: оригинал уходит комментарие�
     h.comments.map((c) => c.taskId),
     ['t1', 't2'],
   );
+});
+
+test('AI confirmation shows each actual assignee and selected status', async () => {
+  const h = makeHarness({
+    aiSegments: [
+      seg1({ id: 's1', title: 'Раз', projectId: 'p1', assigneeUserId: 'u2', assigneeName: 'Вася' }),
+      seg1({ id: 's2', title: 'Два', projectId: 'p1' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'Две задачи');
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  h.drafts.set(draftId, {
+    ...draft,
+    segments: draft.segments!.map((seg, index) => ({
+      ...seg, targetStatus: index === 0 ? 'manual' : 'backlog',
+    })),
+  });
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  const confirmation = h.edits.at(-1)!.text;
+  assert.equal(h.createTaskCalls.length, 2);
+  assert.match(confirmation, /Раз<\/a>[^]*Ответственный: <b>Вася<\/b>\n📋 Статус: <b>В РУЧНУЮ<\/b>/);
+  assert.match(confirmation, /Два<\/a>[^]*Ответственный: <b>Создатель<\/b>\n📋 Статус: <b>Черновик<\/b>/);
 });
 
 test('sourceExcerpt: в каждую задачу уходит ТОЛЬКО её фрагмент сообщения, а не всё письмо', async () => {
