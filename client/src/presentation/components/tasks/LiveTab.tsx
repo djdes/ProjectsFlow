@@ -321,7 +321,7 @@ function TaskLiveChat({
       {/* The overlay belongs to the visible viewport, never to message flow. */}
       {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
-          className={cn('absolute inset-be-3 end-4 z-10 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
+          className={cn('absolute inset-be-3 start-1/2 -translate-x-1/2 z-10 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
           onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>
