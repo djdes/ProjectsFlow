@@ -1,6 +1,6 @@
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { Fragment, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,7 +34,11 @@ export function WorkspaceBoundary({ children }: { children: ReactNode }): React.
 }
 
 export function WorkspaceNotifications(): null {
-  const { current } = useWorkspacesContext();
-  useNotificationStream(current!.id);
+  const { current, switchTo } = useWorkspacesContext();
+  const navigate = useNavigate();
+  useNotificationStream(current!.id, async (to, workspaceId) => {
+    if (workspaceId && workspaceId !== current!.id) await switchTo(workspaceId);
+    navigate(to);
+  });
   return null;
 }

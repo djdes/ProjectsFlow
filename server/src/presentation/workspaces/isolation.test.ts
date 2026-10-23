@@ -16,6 +16,7 @@ import { ListApprovalQueue } from '../../application/task/ListApprovalQueue.js';
 import { ListMemberTasksForLead } from '../../application/task/ListMemberTasksForLead.js';
 import { GetOrCreateInbox } from '../../application/project/GetOrCreateInbox.js';
 import { ListNotifications } from '../../application/notifications/ListNotifications.js';
+import { NotificationAlerts } from '../../application/notifications/NotificationAlerts.js';
 import { CountUnreadNotifications } from '../../application/notifications/CountUnreadNotifications.js';
 import { MarkAllNotificationsRead } from '../../application/notifications/MarkAllNotificationsRead.js';
 import { MarkNotificationRead } from '../../application/notifications/MarkNotificationRead.js';
@@ -85,7 +86,7 @@ async function harness(t: TestContext) {
     payload: { type: 'task_assignee_changed', taskId: `task-p-${workspaceId}`, projectId: `p-${workspaceId}` } as NotificationPayload,
   }));
   const repo = {
-    listByUser: async (_user, opts) => notices.filter((n) => n.workspaceId === opts.workspaceId && (!opts.unreadOnly || !n.readAt)).slice(0, opts.limit),
+    listByUser: async (_user, opts) => notices.filter((n) => n.userId === _user && (!opts.workspaceId || n.workspaceId === opts.workspaceId) && (!opts.unreadOnly || !n.readAt)).slice(0, opts.limit),
     countUnread: async (_user, ws) => notices.filter((n) => n.workspaceId === ws && !n.readAt).length,
     countActionableUnread: async () => 0,
     markRead: async (id, _user, date, ws) => {
@@ -121,6 +122,7 @@ async function harness(t: TestContext) {
     tasks: taskRepo as never, resolveActiveWorkspace,
     getProjectWorkspaceId: async (id) => projects.find((p) => p.id === id)?.workspaceId ?? null,
     list: new ListNotifications(nd), countUnread: new CountUnreadNotifications(nd),
+    alerts: new NotificationAlerts({ repo, workspaces: workspaces as never }),
     markRead: new MarkNotificationRead(nd), markAllRead: new MarkAllNotificationsRead(nd),
     subscribe: (_user, callback) => { publish = callback; return () => { publish = () => {}; }; },
     subscribeRealtime: (_user, callback) => { publishRealtime = callback; return () => { publishRealtime = () => {}; }; },
@@ -189,7 +191,7 @@ test('HTTP: notification pagination, counts and read operations use only the req
   assert.equal((await (await h.request('/notifications/unread-count', 'b')).json()).count, 2);
 });
 
-test('SSE: notifications and realtime events from another workspace never reach the stream', async (t) => {
+test('SSE: addressed alerts from accessible workspaces arrive, while realtime caches remain workspace scoped', async (t) => {
   const h = await harness(t);
   const abort = new AbortController();
   t.after(() => abort.abort());
@@ -198,22 +200,31 @@ test('SSE: notifications and realtime events from another workspace never reach 
   await reader.read(); // retry preamble: subscription is ready
   h.publish(h.notices[0]!); // workspace b
   h.publish(h.notices[2]!); // workspace a
-  const notice = new TextDecoder().decode((await reader.read()).value);
-  assert.ok(notice.includes('n2')); assert.ok(!notice.includes('n0'));
+  let notice = '';
+  while (!notice.includes('"id":"n2"')) notice += new TextDecoder().decode((await reader.read()).value);
+  assert.ok(notice.includes('n0')); assert.ok(notice.includes('n2'));
+  h.publish({ ...h.notices[0]!, id: 'for-another-user', userId: 'other' });
+  h.publish({ ...h.notices[0]!, id: 'lost-membership', workspaceId: 'private' });
+  h.publish({ ...h.notices[2]!, id: 'delivery-barrier' });
+  let authorized = '';
+  while (!authorized.includes('delivery-barrier')) authorized += new TextDecoder().decode((await reader.read()).value);
+  assert.doesNotMatch(authorized, /for-another-user|lost-membership/);
   h.realtime({ kind: 'task_changed', projectId: 'p-b' });
   h.realtime({ kind: 'task_changed', projectId: 'p-a' });
   const event = new TextDecoder().decode((await reader.read()).value);
   assert.ok(event.includes('p-a')); assert.ok(!event.includes('p-b'));
+  assert.doesNotMatch(event, /for-another-user|lost-membership/);
   abort.abort();
 });
 
-test('SSE reconnect replays missed unread notifications only from the authorized workspace', async (t) => {
+test('SSE reconnect replays missed unread alerts across accessible workspaces', async (t) => {
   const h = await harness(t);
   const since = new Date(Date.now() - 10_000);
   h.notices.forEach((n, i) => { h.notices[i] = { ...n, createdAt: new Date(since.getTime() + 1000 + i) }; });
   // MariaDB timestamps have second precision; the browser cursor may have milliseconds.
   h.notices[2] = { ...h.notices[2]!, createdAt: new Date(Math.floor(since.getTime() / 1000) * 1000) };
   h.notices[3] = { ...h.notices[3]!, readAt: new Date() };
+  h.notices.push({ ...h.notices[0]!, id: 'revoked-replay', workspaceId: 'private' });
   const abort = new AbortController();
   t.after(() => abort.abort());
   const response = await fetch(h.base + '/notifications/stream?workspaceId=a', {
@@ -223,7 +234,10 @@ test('SSE reconnect replays missed unread notifications only from the authorized
   let text = '';
   while (!text.includes('event: ready')) text += new TextDecoder().decode((await reader.read()).value);
   assert.match(text, /"id":"n2"/);
-  assert.doesNotMatch(text, /"id":"n[013]"/);
+  assert.match(text, /"id":"n0"/);
+  assert.match(text, /"id":"n1"/);
+  assert.doesNotMatch(text, /"id":"n3"/);
+  assert.doesNotMatch(text, /revoked-replay/);
   assert.match(text, /id: \d{4}-\d{2}-\d{2}T/);
   h.publish(h.notices[2]!); // duplicate arriving from persistence replay and pub/sub
   h.publish({ ...h.notices[2]!, id: 'new-notice', createdAt: new Date() });

@@ -1,10 +1,10 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { ListNotifications } from '../../application/notifications/ListNotifications.js';
+import type { NotificationAlerts } from '../../application/notifications/NotificationAlerts.js';
 import type { CountUnreadNotifications } from '../../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../../application/notifications/MarkAllNotificationsRead.js';
 import {
-  isVisibleInWorkspace,
   notificationTaskId,
   type Notification,
 } from '../../domain/notifications/Notification.js';
@@ -18,6 +18,7 @@ type Deps = {
   readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
   readonly tasks: TaskRepository;
   readonly list: ListNotifications;
+  readonly alerts: NotificationAlerts;
   readonly countUnread: CountUnreadNotifications;
   readonly markRead: MarkNotificationRead;
   readonly markAllRead: MarkAllNotificationsRead;
@@ -105,7 +106,7 @@ export function notificationsRouter(deps: Deps): Router {
     res.write('retry: 5000\n\n');
 
     const send = (n: Notification): void => {
-      if (closed || !isVisibleInWorkspace(n, workspaceId)) return;
+      if (closed) return;
       if (replaying) { pending.push(n); return; }
       if (sent.has(n.id)) return;
       sent.add(n.id);
@@ -113,7 +114,12 @@ export function notificationsRouter(deps: Deps): Router {
       latest = Math.max(latest, n.createdAt.getTime());
       res.write(`id: ${new Date(latest).toISOString()}\nevent: notification\ndata: ${JSON.stringify(toDto(n, NO_DELETED_TASKS))}\n\n`);
     };
-    const unsubscribe = deps.subscribe(req.user!.id, send);
+    let delivery = Promise.resolve();
+    const unsubscribe = deps.subscribe(req.user!.id, (notification) => {
+      delivery = delivery.then(async () => {
+        if (!closed && await deps.alerts.canReceive(req.user!.id, notification)) send(notification);
+      }).catch(() => { /* Do not deliver alerts whose access could not be verified. */ });
+    });
 
     // «Тихие» события: тот же коннект, отдельный event-тип 'realtime'. Клиент по ним
     // рефетчит данные (без toast).
@@ -139,7 +145,7 @@ export function notificationsRouter(deps: Deps): Router {
     // Subscribe first, then replay: writes arriving during the read are buffered.
     if (cursor) {
       try {
-        const missed = await deps.list.execute({ userId: req.user!.id, unreadOnly: true, limit: 200 });
+        const missed = await deps.alerts.listSince(req.user!.id, cursor);
         if (!closed) {
           replaying = false;
           for (const n of missed.filter((n) => n.createdAt >= cursor).reverse()) send(n);

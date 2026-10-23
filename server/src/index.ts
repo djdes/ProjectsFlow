@@ -369,6 +369,7 @@ import { RequestRalphCancel } from './application/task/RequestRalphCancel.js';
 import { RevokeRalphCancel } from './application/task/RevokeRalphCancel.js';
 import { AckRalphCancel } from './application/task/AckRalphCancel.js';
 import { ListNotifications } from './application/notifications/ListNotifications.js';
+import { NotificationAlerts } from './application/notifications/NotificationAlerts.js';
 import { CountUnreadNotifications } from './application/notifications/CountUnreadNotifications.js';
 import { NotificationActionStates } from './application/notifications/NotificationActionStates.js';
 import { MarkNotificationRead } from './application/notifications/MarkNotificationRead.js';
@@ -2479,6 +2480,7 @@ const { app, devProxyUpgrade } = createApp({
     getProjectWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
     tasks: taskRepo,
     list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace, actionStates: notificationActionStates }),
+    alerts: new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo }),
     countUnread: new CountUnreadNotifications({
       repo: notificationRepo,
       resolveActiveWorkspace,

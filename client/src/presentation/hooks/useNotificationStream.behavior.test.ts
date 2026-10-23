@@ -5,8 +5,10 @@ import test from 'node:test';
 import React, { act } from 'react';
 import type { ToastT } from 'sonner';
 const { createRoot } = await import('react-dom/client');
-const { MemoryRouter, useLocation } = await import('react-router-dom');
+const { MemoryRouter, useLocation, useNavigate } = await import('react-router-dom');
 const { toast } = await import('sonner');
+const { Toaster } = await import('@/components/ui/sonner');
+const { ThemeProvider } = await import('@/presentation/components/theme/ThemeProvider');
 const { renderToStaticMarkup } = await import('react-dom/server');
 const { useNotificationStream } = await import('./useNotificationStream');
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -75,4 +77,58 @@ test('clicking the new-comment toast navigates to the exact task and comment', a
     const approval = toast.getToasts().at(-1)! as ToastT;
     assert.match(renderToStaticMarkup(approval.title as React.ReactElement), /Задача ждёт утверждения/);
   } finally { await act(async () => root.unmount()); toast.dismiss(); host.remove(); }
+});
+
+test('a real comment toast opens its workspace before navigating and keeps the comment anchor', async (t) => {
+  const listeners = new Map<string, (event: { data: string }) => void>();
+  class Source {
+    addEventListener(name: string, callback: (event: { data: string }) => void) { listeners.set(name, callback); }
+    close() {}
+  }
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'EventSource');
+  Object.defineProperty(globalThis, 'EventSource', { value: Source, configurable: true });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'EventSource', original);
+    else Reflect.deleteProperty(globalThis, 'EventSource');
+  });
+  const switched: string[] = [];
+  let release!: () => void;
+  const switching = new Promise<void>(done => { release = done; });
+  function Probe() {
+    const navigate = useNavigate();
+    const location = useLocation();
+    useNotificationStream('workspace-a', async (to, workspaceId) => {
+      switched.push(workspaceId!);
+      await switching;
+      navigate(to);
+    });
+    return React.createElement(React.Fragment, null,
+      React.createElement('p', { id: 'destination' }, location.pathname + location.hash),
+      React.createElement(Toaster));
+  }
+  const host = document.createElement('div'); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(React.createElement(ThemeProvider, { defaultTheme: 'light', children:
+      React.createElement(MemoryRouter, null, React.createElement(Probe)) })));
+    await act(async () => {
+      listeners.get('notification')!({ data: JSON.stringify({ id: 'cross-workspace-comment', workspaceId: 'workspace-b', payload: {
+        type: 'task_changed', action: 'commented', title: 'Новый комментарий', detail: 'Ответ по задаче из другого пространства',
+        projectId: 'project-b', taskId: 'task-b', commentId: 'comment-b', taskAvailable: true,
+        projectName: 'Другой проект', actorDisplayName: 'Олег Боев',
+      } }) });
+      await new Promise(done => setTimeout(done, 30));
+    });
+    await act(async () => { await new Promise(done => setTimeout(done, 30)); });
+    const shown = host.querySelector('[data-sonner-toast]');
+    assert.ok(shown, 'the notification must be rendered by the application toaster');
+    assert.match(shown.textContent ?? '', /Олег Боев/);
+    assert.match(shown.textContent ?? '', /Ответ по задаче из другого пространства/);
+    const open = [...shown.querySelectorAll('button')].find(button => button.textContent?.includes('Новый комментарий'));
+    assert.ok(open);
+    await act(async () => open.click());
+    assert.deepEqual(switched, ['workspace-b']);
+    assert.equal(host.querySelector('#destination')!.textContent, '/', 'wait for the workspace switch');
+    await act(async () => { release(); await switching; });
+    assert.equal(host.querySelector('#destination')!.textContent, '/projects/project-b/tasks/task-b#comment-comment-b');
+  } finally { release(); await act(async () => root.unmount()); toast.dismiss(); host.remove(); }
 });

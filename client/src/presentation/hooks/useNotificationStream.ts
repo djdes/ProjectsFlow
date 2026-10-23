@@ -69,7 +69,12 @@ type StreamPayload =
       actorDisplayName: string;
     };
 
-function toastFor(payload: StreamPayload, navigate: (to: string) => void): void {
+function toastFor(payload: StreamPayload, navigate: (to: string) => void, crossWorkspace = false): void {
+  // Cross-workspace assignment actions must first open the correct workspace.
+  if (payload.type === 'task_assignee_changed' && crossWorkspace) {
+    toastFor({ ...payload, type: 'task_changed', title: 'Вам назначена задача', detail: payload.taskExcerpt }, navigate);
+    return;
+  }
   const detail = payload.type === 'task_changed' ? plainDescription(payload.detail) : '';
   const preview = detail.length > 240 ? `${detail.slice(0, 240).trimEnd()}…` : detail;
   if (payload.type === 'task_changed' || payload.type === 'comment_mention' || payload.type === 'task_approval_requested') {
@@ -123,10 +128,10 @@ function toastFor(payload: StreamPayload, navigate: (to: string) => void): void 
 
 // SSE-подписка на уведомления. При событии — toast + сигнал на refresh бейджа.
 // EventSource сам переподключается при обрыве. Mount один раз на authenticated-сессию.
-export function useNotificationStream(workspaceId: string): void {
+export function useNotificationStream(workspaceId: string, openNotification?: (to: string, workspaceId?: string) => void | Promise<void>): void {
   const navigate = useNavigate();
-  const navigateRef = useRef(navigate);
-  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  const navigateRef = useRef<(to: string, workspaceId?: string) => void | Promise<void>>(openNotification ?? ((to) => navigate(to)));
+  useEffect(() => { navigateRef.current = openNotification ?? ((to) => navigate(to)); }, [navigate, openNotification]);
   useEffect(() => {
     let closed = false;
     const seen = new Set<string>();
@@ -141,10 +146,13 @@ export function useNotificationStream(workspaceId: string): void {
     source.addEventListener('notification', (event) => {
       if (closed) return;
       try {
-        const data = JSON.parse((event as MessageEvent).data) as { id?: string; payload: StreamPayload | string };
+        const data = JSON.parse((event as MessageEvent).data) as { id?: string; workspaceId?: string | null; payload: StreamPayload | string };
         if (data.id && seen.has(data.id)) return;
         const payload = typeof data.payload === 'string' ? JSON.parse(data.payload) as StreamPayload : data.payload;
-        toastFor(payload, (to) => navigateRef.current(to));
+        toastFor(payload, (to) => {
+          void Promise.resolve().then(() => navigateRef.current(to, data.workspaceId ?? undefined))
+            .catch(() => toast.error('Не удалось открыть уведомление. Проверьте доступ к пространству и попробуйте снова.'));
+        }, !!data.workspaceId && data.workspaceId !== workspaceId);
         if (data.id) {
           seen.add(data.id);
           if (seen.size > 1000) seen.delete(seen.values().next().value!);

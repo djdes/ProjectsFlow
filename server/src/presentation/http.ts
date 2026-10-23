@@ -175,6 +175,7 @@ import type { ListMemberTasksForLead } from '../application/task/ListMemberTasks
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { ChangeTaskAssignee } from '../application/task/ChangeTaskAssignee.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
+import type { NotificationAlerts } from '../application/notifications/NotificationAlerts.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../application/notifications/MarkAllNotificationsRead.js';
@@ -554,6 +555,7 @@ type AppDeps = {
     readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
     readonly tasks: TaskRepository;
     readonly list: ListNotifications;
+    readonly alerts: NotificationAlerts;
     readonly countUnread: CountUnreadNotifications;
     readonly markRead: MarkNotificationRead;
     readonly markAllRead: MarkAllNotificationsRead;
