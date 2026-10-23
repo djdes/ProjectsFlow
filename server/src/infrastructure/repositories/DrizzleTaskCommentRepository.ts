@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, like, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, like, ne, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { taskComments, type TaskCommentRow } from '../db/schema.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
@@ -124,5 +124,34 @@ export class DrizzleTaskCommentRepository implements TaskCommentRepository {
     const m = new Map<string, number>();
     for (const r of rows) m.set(r.taskId, Number(r.n));
     return m;
+  }
+
+  async listUnansweredAddressedTo(userId: string, since: Date): Promise<TaskComment[]> {
+    // Addressed = author picked the user in «Кого уведомить» (the delivery journal keeps
+    // the recipients of a 'selected' comment) or @-mentioned them (comment_mention).
+    // Default 'all' fan-out to assignee/approvers is not a personal question.
+    // Inside the subquery task_comments is aliased `r`, so the bare table name refers to
+    // the outer comment.
+    const rows = await this.db
+      .select()
+      .from(taskComments)
+      .where(
+        and(
+          eq(taskComments.actorKind, 'user'),
+          ne(taskComments.ownerUserId, userId),
+          gte(taskComments.createdAt, since),
+          sql`((${taskComments.notifyMode} = 'selected' AND EXISTS (SELECT 1 FROM comment_notifications cn
+              WHERE cn.comment_id = ${taskComments.id} AND cn.recipient_user_id = ${userId}))
+            OR EXISTS (SELECT 1 FROM notifications n
+              WHERE n.user_id = ${userId} AND n.type = 'comment_mention'
+                AND JSON_UNQUOTE(JSON_EXTRACT(n.payload, '$.commentId')) = ${taskComments.id}))`,
+          sql`NOT EXISTS (SELECT 1 FROM task_comments r
+            WHERE r.task_id = ${taskComments.taskId} AND r.owner_user_id = ${userId}
+              AND r.actor_kind = 'user' AND r.created_at >= ${taskComments.createdAt})`,
+        ),
+      )
+      .orderBy(desc(taskComments.createdAt))
+      .limit(500);
+    return rows.map(toComment);
   }
 }

@@ -53,4 +53,8 @@ export interface TaskCommentRepository {
   deleteByTask(taskId: string): Promise<number>;
   // Кол-во комментариев по каждой задаче — для бейджа в списке задач.
   countsByTasks(taskIds: readonly string[]): Promise<ReadonlyMap<string, number>>;
+  // Human comments addressed to the user personally (picked in «Кого уведомить» or
+  // @-mentioned), newer than `since`, that the user has not answered yet: no own human
+  // comment in the same task after it. Newest first.
+  listUnansweredAddressedTo(userId: string, since: Date): Promise<TaskComment[]>;
 }

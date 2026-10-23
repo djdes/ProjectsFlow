@@ -321,6 +321,32 @@ export const scenarios = [
   },
 
   {
+    id: 'inbox-reply',
+    title: 'Входящие: «Ответить» — вопросы мне в чужих задачах',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      // Вера спросила меня в своей задаче — её нет в моих лентах «Мои».
+      state.awaitingReply = [{ taskId: 't-prices', authorUserId: 'u-vera', excerpt: 'Какие цены ставить на услуги?' }];
+      // На телефоне сначала открыт раздел «В работе», очереди на экране ещё нет.
+      await t.goto('/', {
+        ready: () => page.locator(t.isMobile ? '[data-pf-inbox-section-switch]' : QUEUE),
+        readyName: 'доска «Входящих» загрузилась',
+      });
+      const chip = page.getByRole('button', { name: 'Ответить: 1' });
+      await t.check('чип «Ответить» показывает число вопросов', () => t.visible(chip, 'чип «Ответить: 1»'));
+      await t.check('чип оставляет только задачи с вопросом, на карточке бейдж «Ответить»', async () => {
+        if (t.isMobile) await chip.tap();
+        else await chip.click();
+        await t.waitFor(async () => (await chip.getAttribute('aria-pressed')) === 'true', 'чип не нажат');
+        await expectCards(t, QUEUE, ['t-prices'], 'очередь с чипом «Ответить»');
+        await t.visible(page.locator(`${QUEUE} [data-pf-awaiting-reply]`).filter({ visible: true }).first(), 'бейдж «Ответить» на карточке');
+      });
+      await t.pageChecks('Входящие с фильтром «Ответить»');
+    },
+  },
+
+  {
     id: 'inbox-filters',
     title: 'Входящие: поиск, «/», Escape, срок, сброс',
     matrix: [['desktop', 'light']],

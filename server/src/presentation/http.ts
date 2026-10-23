@@ -168,6 +168,7 @@ import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssigne
 import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAssignedToOthers.js';
 import type { ListPersonalTasksOfColleagues } from '../application/task/ListPersonalTasksOfColleagues.js';
 import type { ListApprovalQueue } from '../application/task/ListApprovalQueue.js';
+import type { ListTasksAwaitingMyReply } from '../application/task/ListTasksAwaitingMyReply.js';
 import type { ListMemberTasksForLead } from '../application/task/ListMemberTasksForLead.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { ChangeTaskAssignee } from '../application/task/ChangeTaskAssignee.js';
@@ -684,6 +685,7 @@ type AppDeps = {
     readonly listPersonalOfColleagues: ListPersonalTasksOfColleagues;
     readonly listMemberTasksForLead: ListMemberTasksForLead;
     readonly listApprovalQueue: ListApprovalQueue;
+    readonly listAwaitingMyReply: ListTasksAwaitingMyReply;
     readonly assignToProject: MoveTaskToProject;
     readonly changeAssignee: ChangeTaskAssignee;
   };

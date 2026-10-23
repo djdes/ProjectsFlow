@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
+import { AtSign, Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -143,6 +143,38 @@ export function DueFilterChips({
         );
       })}
     </div>
+  );
+}
+
+// «Ответить»: только задачи, где мне адресовали комментарий, а я ещё не ответил. Отдельно
+// от чипов срока — это другой вопрос к списку («кто меня ждёт», а не «что горит»).
+export function ReplyFilterChip({
+  active,
+  count,
+  onToggle,
+}: {
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`Ответить: ${count}`}
+      title="Задачи, где вам адресовали комментарий, а вы ещё не ответили"
+      onClick={onToggle}
+      className={cn(
+        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
+        active
+          ? 'border-approval bg-approval-soft text-foreground'
+          : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
+      )}
+    >
+      <AtSign aria-hidden className="size-3.5 shrink-0 text-approval-ink" />
+      <span className="max-sm:hidden">Ответить</span>
+      <span className="shrink-0 tabular-nums text-muted-foreground" data-pf-reply-count>{count}</span>
+    </button>
   );
 }
 

@@ -38,6 +38,7 @@ import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/use
 import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { CompletedTodayProvider } from '@/presentation/hooks/CompletedTodayProvider';
 import { UnreadTasksProvider } from '@/presentation/hooks/UnreadTasksProvider';
+import { AwaitingReplyProvider } from '@/presentation/hooks/AwaitingReplyProvider';
 import { FocusedInboxProvider } from '@/presentation/hooks/FocusedInboxProvider';
 import { OPEN_INBOX_TASK_EVENT } from '@/presentation/components/tasks/AssignedTaskToast';
 import { SPOTLIGHT_TASK_EVENT } from '@/presentation/hooks/useSpotlightTask';
@@ -258,6 +259,8 @@ function WorkspaceShell(): React.ReactElement {
     {/* Непрочитанные задачи — над роутером: подсветка нужна и на доске, и во «Входящих»,
         и не должна перезапрашиваться на каждом переходе. */}
     <UnreadTasksProvider>
+    {/* Вопросы мне без ответа — тоже над роутером: подсветка карточек на любой доске. */}
+    <AwaitingReplyProvider>
     <FocusedInboxProvider>
     <UsageProvider>
       <GithubConnectionProvider>
@@ -487,6 +490,7 @@ function WorkspaceShell(): React.ReactElement {
       </GithubConnectionProvider>
     </UsageProvider>
     </FocusedInboxProvider>
+    </AwaitingReplyProvider>
     </UnreadTasksProvider>
     </CompletedTodayProvider>
     </ProjectsProvider>

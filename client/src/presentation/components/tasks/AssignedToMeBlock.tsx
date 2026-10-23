@@ -107,6 +107,7 @@ import {
 } from './assignedGrouping';
 import {
   DueFilterChips,
+  ReplyFilterChip,
   InboxSearch,
   InboxSectionSwitch,
   ManualIcon,
@@ -136,6 +137,8 @@ import { InboxCheckbox } from './InboxCheckbox';
 import { AssigneeBadge } from './AssigneeBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
+import { AwaitingReplyBadge } from './AwaitingReplyBadge';
+import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { RalphModeBadge } from './RalphMode';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
@@ -405,6 +408,8 @@ export function AssignedToMeBlock({
   // фильтрует только поиск — решение по сданной работе не прячется за сроком.
   const [query, setQuery] = useState('');
   const [due, setDue] = useState<DueKind | null>(null);
+  // «Ответить»: вместо вкладок — задачи, где мне адресовали комментарий и я не ответил.
+  const [replyOnly, setReplyOnly] = useState(false);
   useEffect(() => {
     setCreationFilters({ projectId: filterProject, due: due === 'today' || due === 'none' ? due : null });
     return () => setCreationFilters({ projectId: null, due: null });
@@ -829,11 +834,21 @@ export function AssignedToMeBlock({
     () => (hideDone ? focusedTasks.filter(notDone) : focusedTasks),
     [focusedTasks, hideDone],
   );
+  // Вопросы мне без ответа — свой источник: вопрос руководителю часто задают в чужой задаче,
+  // которой нет ни в «Моих», ни в «Для всех».
+  const { tasks: awaitingReplyList } = useAwaitingReply();
+  const awaitingReplyTasks = useMemo(
+    () => applyPatches(awaitingReplyList.map(asAssignedInboxBlockTask), patches),
+    [awaitingReplyList, patches],
+  );
+  const replyFilterOn = replyOnly && !focusedMemberId;
   const visibleTasks = focusedMemberId
     ? focusedVisible
-    : tab === 'toMe'
-      ? toMeVisible
-      : byMeVisible;
+    : replyFilterOn
+      ? awaitingReplyTasks
+      : tab === 'toMe'
+        ? toMeVisible
+        : byMeVisible;
   // Ждём оба независимых источника (назначенные задачи + нижнюю доску), иначе быстрый endpoint
   // «Другим» успевал выбрать не ту стартовую вкладку до появления личных зеркал. Явный
   // сохранённый выбор пользователя при этом не перебиваем.
@@ -914,9 +929,11 @@ export function AssignedToMeBlock({
     [toMeTasks, byMeDisplayTasks, focusedTasks, approvalQueueTasks, focusedMemberId, isApprover],
   );
   const approvalQueried = useMemo(
-    () => approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
-      && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !task.isInbox)))),
-    [approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal],
+    () => replyFilterOn
+      ? awaitingReplyTasks.filter((task) => task.status === 'pending_approval' && matchesInboxQuery(task, normalizedQuery))
+      : approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
+        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !task.isInbox)))),
+    [replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal],
   );
   const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
     () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide, workerEnabled }),
@@ -1625,11 +1642,12 @@ export function AssignedToMeBlock({
   // Единая кнопка «Фильтры»: сортировка (когда есть задачи) + скрыть-выполненные (всегда) +
   // фильтры ответственного/проекта (только вкладка «Для всех»).
   const hasLocalFilters =
-    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null;
+    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn;
   const resetFilters = (): void => {
     setQuery('');
     setSearchOpen(false);
     setDue(null);
+    setReplyOnly(false);
     setFilterTo(null);
     setFilterProject(null);
   };
@@ -2287,6 +2305,13 @@ export function AssignedToMeBlock({
         )}
       >
         <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
+        {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
+          <ReplyFilterChip
+            active={replyFilterOn}
+            count={awaitingReplyTasks.length}
+            onToggle={() => setReplyOnly((on) => !on)}
+          />
+        )}
         {isWide && hasLocalFilters && (
           <button
             type="button"
@@ -4444,6 +4469,8 @@ function AcceptedCard({
     item.isInbox && item.inboxOwner && item.inboxOwner.userId !== currentUser?.id
       ? item.inboxOwner.displayName
       : null;
+  // Мне здесь адресовали комментарий, а я не ответил — бейдж «Ответить» первым в мете.
+  const question = useAwaitingReply().questionFor(item.id);
   const projectLabel = item.isInbox
     ? foreignInboxOwner
       ? `Личные · ${foreignInboxOwner}`
@@ -4486,6 +4513,7 @@ function AcceptedCard({
   // Нижняя строка — только то, что есть: срок, приоритет, режим агента, счётчики,
   // ответственный (если не вы). Пустой строки не бывает.
   const bottomMeta = [
+    question ? <AwaitingReplyBadge key="reply" question={question} /> : null,
     !dueOnTop && deadline ? <span key="due">{deadline}</span> : null,
     item.priority !== null && item.priority !== undefined ? (
       <PriorityBadge key="priority" priority={item.priority} />

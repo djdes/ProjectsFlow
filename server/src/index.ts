@@ -198,6 +198,7 @@ import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/D
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { DrizzleTaskBillingAttributionRepository } from './infrastructure/repositories/DrizzleTaskBillingAttributionRepository.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
+import { ListTasksAwaitingMyReply } from './application/task/ListTasksAwaitingMyReply.js';
 import { CountMyCompletedToday } from './application/stats/CountMyCompletedToday.js';
 import { GetMyCompletedStats } from './application/stats/GetMyCompletedStats.js';
 import { ListUnreadTasks } from './application/task/ListUnreadTasks.js';
@@ -3039,6 +3040,16 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       workspaces: workspaceRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
+      resolveActiveWorkspace,
+      users: userRepo,
+    }),
+    listAwaitingMyReply: new ListTasksAwaitingMyReply({
+      projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,

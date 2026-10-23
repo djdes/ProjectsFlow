@@ -25,6 +25,8 @@ import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canTakeToManual, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
+import { AwaitingReplyBadge } from './AwaitingReplyBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
@@ -164,6 +166,9 @@ function KanbanCardImpl({
   // Срочный приоритет — красное свечение. Перебивает синее «непрочитано»: два ореола на
   // одной карточке спорят друг с другом, а «сделай сейчас» важнее, чем «посмотри».
   const urgent = !open && !preview && !selecting && task.priority === 1;
+  // Мне здесь адресовали комментарий, а я не ответил — бейдж «Ответить» первым в мете.
+  const { questionFor } = useAwaitingReply();
+  const question = preview ? null : questionFor(task.id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
@@ -206,7 +211,8 @@ function KanbanCardImpl({
   // Есть ли что показывать в нижней строке мета. Нет — строки нет вовсе (простая задача
   // остаётся карточкой из одного заголовка).
   const hasMeta = Boolean(
-    showAssignee ||
+    question ||
+      showAssignee ||
       checklist ||
       (task.commentCount ?? 0) > 0 ||
       (task.attachmentCount ?? 0) > 0 ||
@@ -358,6 +364,7 @@ function KanbanCardImpl({
   // действий, и в одну строку чипы обрезались посередине («Фи…» вместо «Фича»).
   const metaInner = hasMeta ? (
     <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden max-sm:flex-wrap max-sm:gap-y-1">
+      {question && <AwaitingReplyBadge question={question} />}
       {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
       {task.priority ? <PriorityBadge priority={task.priority} /> : null}
       {checklist && (

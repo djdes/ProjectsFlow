@@ -41,6 +41,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useApprovalFreeze } from '@/presentation/hooks/useApprovalFreeze';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
@@ -2676,6 +2677,7 @@ function CommentComposer({
   onCreated: (created: TaskComment) => void;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
+  const { markAnswered } = useAwaitingReply();
   const { user: currentUser } = useCurrentUser();
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -2716,6 +2718,7 @@ function CommentComposer({
     setSubmitting(true);
     try {
       const created = await taskRepository.createComment(projectId, taskId, trimmed || ' ', notify);
+      markAnswered(taskId);
       const uploaded: TaskAttachment[] = [];
       for (const pf of pending) {
         try {

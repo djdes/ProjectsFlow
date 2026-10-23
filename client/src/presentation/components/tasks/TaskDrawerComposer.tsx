@@ -17,6 +17,7 @@ import {
 } from './commentDraft';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
+import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
@@ -101,6 +102,7 @@ function TaskDrawerComposerForm({
   onWorkerQueued,
 }: Props & { draftKey: string }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
+  const { markAnswered } = useAwaitingReply();
   const { user: currentUser } = useCurrentUser();
   const subscribe = useCallback((listener: () => void) => subscribeCommentDraft(draftKey, listener), [draftKey]);
   const getSnapshot = useCallback(() => readCommentDraft(draftKey), [draftKey]);
@@ -244,6 +246,7 @@ function TaskDrawerComposerForm({
 
     // The server accepted this text. A later upload/move failure must not resend it.
     acknowledgeComment(draftKey, sent);
+    markAnswered(task.id);
     setSessionMode('continue');
     try {
       onClearReply?.();

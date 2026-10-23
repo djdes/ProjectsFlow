@@ -7,6 +7,7 @@ import type { ListTasksAssignedToOthers } from '../../application/task/ListTasks
 import type { ListPersonalTasksOfColleagues } from '../../application/task/ListPersonalTasksOfColleagues.js';
 import type { ListMemberTasksForLead } from '../../application/task/ListMemberTasksForLead.js';
 import type { ListApprovalQueue } from '../../application/task/ListApprovalQueue.js';
+import type { ListTasksAwaitingMyReply } from '../../application/task/ListTasksAwaitingMyReply.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { toDto as taskToDto } from '../tasks/routes.js';
 
@@ -16,6 +17,7 @@ type Deps = {
   readonly listPersonalOfColleagues: ListPersonalTasksOfColleagues;
   readonly listMemberTasksForLead: ListMemberTasksForLead;
   readonly listApprovalQueue: ListApprovalQueue;
+  readonly listAwaitingMyReply: ListTasksAwaitingMyReply;
 };
 
 export function taskAssigneesRouter(deps: Deps): Router {
@@ -87,6 +89,22 @@ export function taskAssigneesRouter(deps: Deps): Router {
     try {
       const items = await deps.listApprovalQueue.execute(req.user!.id);
       res.json({ items: items.map(assignedViewToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Задачи, где caller'у адресовали комментарий («Кого уведомить» или @), а он ещё не
+  // ответил — подсветка карточек и фильтр «Ответить» во «Входящих».
+  r.get('/awaiting-reply', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const items = await deps.listAwaitingMyReply.execute(req.user!.id);
+      res.json({
+        items: items.map((v) => ({
+          ...assignedViewToDto(v),
+          question: { ...v.question, askedAt: v.question.askedAt.toISOString() },
+        })),
+      });
     } catch (e) {
       next(e);
     }

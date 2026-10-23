@@ -484,6 +484,24 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           .filter((t) => t.projectId === VERA_INBOX_ID)
           .map((t) => assignedItem(state, t)),
       })],
+    // Вопросы мне без ответа: state.awaitingReply = [{ taskId, authorUserId, excerpt }].
+    [/^\/assignees\/awaiting-reply$/, () =>
+      json({
+        items: (state.awaitingReply ?? []).flatMap((q) => {
+          const task = scopedTasks().find((t) => t.id === q.taskId);
+          if (!task) return [];
+          return [{
+            ...assignedItem(state, task),
+            question: {
+              commentId: `c-${q.taskId}`,
+              authorUserId: q.authorUserId,
+              authorDisplayName: person(q.authorUserId).displayName,
+              excerpt: q.excerpt,
+              askedAt: new Date().toISOString(),
+            },
+          }];
+        }),
+      })],
     // Очередь приёмки руководителя: всё «На утверждении» пространства (ME — владелец).
     [/^\/assignees\/approvals$/, () => {
       const workspace = (state.workspaces ?? [workspaceDto()]).find((w) => w.id === workspaceId);
