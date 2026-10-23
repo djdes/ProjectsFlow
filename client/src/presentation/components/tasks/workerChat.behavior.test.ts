@@ -191,7 +191,7 @@ test('file edits show real before/after text; historical metadata uses only its 
       async listEvents(_p: string, _t: string, id: string) { return id === 'old-files' ? [
         edit(1, { path: 'C:\\worker\\project\\client\\src\\file.ts', edits: [{ old: '', new: '' }] }, 1),
         edit(2, { path: 'C:\\worker\\project\\unavailable.ts', edits: [] }, 1),
-        { ...edit(3, { path: 'missing-new.ts' }, 1), kind: 'file_write' },
+        { ...edit(3, { path: 'missing-new.ts', content: '' }, 1), kind: 'file_write' },
       ] : [edit(1, { path: 'client/src/file.ts', edits: [{ old: 'Было прямо перед правкой', new: 'Стало сразу после правки' }] }, 4)]; },
       async listFileDiffs(_p: string, _t: string, id: string) { return [file(id === 'old-files' ? 'первый запуск' : 'другой запуск')]; },
     },

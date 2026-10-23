@@ -576,7 +576,7 @@ function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles
     }
     case 'file_write': {
       const payload = event.payload as { path?: string; content?: string } | null;
-      if (typeof payload?.content !== 'string') {
+      if (typeof payload?.content !== 'string' || payload.content.length === 0) {
         return <LiveEventRow event={{ ...event, kind: 'file_edit', payload: { path: payload?.path ?? 'файл', edits: [] } }} finalFiles={finalFiles} />;
       }
       return (
