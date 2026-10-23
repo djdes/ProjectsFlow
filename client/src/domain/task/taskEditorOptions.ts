@@ -33,6 +33,6 @@ export function taskProjectOptions(projects: readonly Project[], userId: string)
 export function canEditReadableTask(project: Project | null, task: Task, userId: string | null): boolean {
   if (!project || !userId) return false;
   if (task.assignee.userId === userId) return true;
-  if (project.isInbox) return project.ownerId === userId || task.creator?.userId === userId;
-  return project.role === 'owner' || project.role === 'lead' || project.role === 'editor';
+  if (project.isInbox) return project.ownerId === userId;
+  return project.role === 'owner' || project.role === 'lead';
 }

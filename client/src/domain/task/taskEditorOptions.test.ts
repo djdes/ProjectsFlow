@@ -25,7 +25,8 @@ test('read-only task pages keep controls locked except for their current assigne
   assert.equal(canEditReadableTask(project, task, 'viewer'), false);
   assert.equal(canEditReadableTask(project, task, 'assignee'), true);
   assert.equal(canEditReadableTask(project, task, 'author'), false);
-  assert.equal(canEditReadableTask({ ...project, role: 'editor' }, task, 'viewer'), true);
-  assert.equal(canEditReadableTask({ ...project, isInbox: true }, task, 'author'), true);
+  assert.equal(canEditReadableTask({ ...project, role: 'editor' }, task, 'viewer'), false);
+  assert.equal(canEditReadableTask({ ...project, isInbox: true }, task, 'author'), false);
+  assert.equal(canEditReadableTask({ ...project, role: 'owner' }, task, 'owner'), true);
   assert.equal(canEditReadableTask(null, task, 'assignee'), false);
 });

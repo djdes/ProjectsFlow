@@ -1,4 +1,4 @@
-import { can } from '../../domain/project/permissions.js';
+import { canManageTask } from './taskAuthorization.js';
 import type { Project } from '../../domain/project/Project.js';
 import { WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
 import { requireWorkspaceLead, requireWorkspaceMember } from '../workspace/workspaceAccess.js';
@@ -77,9 +77,6 @@ export class ListMemberTasksForLead {
     if (visible.length === 0) return [];
 
     const ids = visible.map((t) => t.id);
-    const namedProjectIds = [
-      ...new Set(visible.filter((t) => !projectById.get(t.projectId)!.isInbox).map((t) => t.projectId)),
-    ];
     // Владелец inbox-проекта задачи — НЕ обязательно memberId: сотруднику могли делегировать
     // задачу в чужие личные входящие (project.ownerId — тот коллега). Резолвим имя по
     // РЕАЛЬНОМУ владельцу каждого inbox-проекта в выборке (как в ListTasksAssignedToOthers/
@@ -89,25 +86,18 @@ export class ListMemberTasksForLead {
         visible.filter((t) => projectById.get(t.projectId)!.isInbox).map((t) => projectById.get(t.projectId)!.ownerId),
       ),
     ];
-    const [commitCounts, attachmentCounts, commentCounts, callerMemberships, inboxOwners] = await Promise.all([
+    const [commitCounts, attachmentCounts, commentCounts, inboxOwners] = await Promise.all([
       this.deps.taskCommits.countsByTasks(ids),
       this.deps.attachments.countsByTasks(ids),
       this.deps.comments.countsByTasks(ids),
-      Promise.all(
-        namedProjectIds.map(
-          async (id) => [id, await this.deps.members.findForProject(id, callerId)] as const,
-        ),
-      ),
       Promise.all(inboxOwnerIds.map((id) => this.deps.users.getById(id))),
     ]);
-    const callerRoleByProject = new Map(callerMemberships);
     const inboxOwnerNames = new Map(
       inboxOwners.filter((u) => u !== null).map((u) => [u.id, u.displayName]),
     );
 
-    return visible.map((task) => {
+    return Promise.all(visible.map(async (task) => {
       const project = projectById.get(task.projectId)!;
-      const callerMembership = callerRoleByProject.get(project.id) ?? null;
       return {
         task,
         projectId: project.id,
@@ -116,13 +106,11 @@ export class ListMemberTasksForLead {
         inboxOwner: project.isInbox
           ? { userId: project.ownerId, displayName: inboxOwnerNames.get(project.ownerId) ?? '' }
           : null,
-        canModify: project.isInbox
-          ? true
-          : callerMembership !== null && can(callerMembership.role, 'move_task'),
+        canModify: await canManageTask(this.deps, project, task, callerId),
         commitCount: commitCounts.get(task.id) ?? 0,
         attachmentCount: attachmentCounts.get(task.id) ?? 0,
         commentCount: commentCounts.get(task.id) ?? 0,
       };
-    });
+    }));
   }
 }

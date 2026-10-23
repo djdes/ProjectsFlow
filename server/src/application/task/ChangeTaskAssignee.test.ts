@@ -5,7 +5,7 @@ import type { EmailMessage } from '../notifications/EmailSender.js';
 import type { CreateNotificationInput } from '../notifications/NotificationRepository.js';
 import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
 import type { Project } from '../../domain/project/Project.js';
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
+import { InsufficientProjectRoleError, ProjectNotFoundError } from '../../domain/project/errors.js';
 import type { Task } from '../../domain/task/Task.js';
 import {
   AssigneeNotProjectMemberError,
@@ -214,8 +214,8 @@ async function flushBackgroundWork(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-test('named project: a viewer can assign a task to another member', async () => {
-  const h = makeHarness();
+test('named project: an assigned viewer can assign a task to another member', async () => {
+  const h = makeHarness({ assigneeUserId: VIEWER_ID });
 
   const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
   await flushBackgroundWork();
@@ -230,14 +230,13 @@ test('named project: a viewer can assign a task to another member', async () => 
   ]);
 });
 
-test('named project: a viewer can take a task without notifying themself', async () => {
+test('named project: a viewer cannot take somebody else task', async () => {
   const h = makeHarness();
 
-  const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, VIEWER_ID);
+  await assert.rejects(h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, VIEWER_ID), InsufficientProjectRoleError);
   await flushBackgroundWork();
 
-  assert.equal(result.assignee.userId, VIEWER_ID);
-  assert.equal(h.calls.updates.length, 1);
+  assert.equal(h.calls.updates.length, 0);
   assert.deepEqual(h.calls.notifications, []);
   assert.deepEqual(h.calls.emails, []);
   assert.deepEqual(h.calls.userLookups, []);
@@ -247,7 +246,7 @@ test('named project: the new assignee must be a project member', async () => {
   const h = makeHarness();
 
   await assert.rejects(
-    h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, OUTSIDER_ID),
+    h.change.execute(PROJECT_ID, TASK_ID, CURRENT_ASSIGNEE_ID, OUTSIDER_ID),
     AssigneeNotProjectMemberError,
   );
 
@@ -287,15 +286,13 @@ test('inbox: the current assignee can return the task to the owner', async () =>
 // → canModify: true) и может двигать/удалять (taskAuthorization.isDelegatingColleague). Смена
 // ответственного идёт по той же границе: иначе массовое «назначить ответственного» по
 // выбранным карточкам падало бы на таких задачах 404-й, а остальные задачи выборки проходили.
-test('inbox: a colleague who put the task can reassign it', async () => {
+test('inbox: creating a colleague task does not grant reassignment', async () => {
   const h = makeHarness({ isInbox: true, sharedUserIds: [OWNER_ID, TARGET_ID], createdBy: VIEWER_ID });
 
-  const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
+  await assert.rejects(h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID), ProjectNotFoundError);
 
-  assert.equal(result.assignee.userId, TARGET_ID);
   assert.deepEqual(h.calls.updates, []);
-  assert.equal(h.calls.projectMoves.length, 1);
-  assert.equal(h.calls.projectMoves[0]?.assigneeUserId, TARGET_ID);
+  assert.equal(h.calls.projectMoves.length, 0);
 });
 
 test('inbox: a user with no shared workspace with the owner cannot reassign', async () => {
@@ -337,7 +334,7 @@ test('inbox: a non-owner target must be shared with the inbox owner', async () =
 test('assigning the current assignee is idempotent and has no side effects', async () => {
   const h = makeHarness({ assigneeUserId: TARGET_ID });
 
-  const result = await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
+  const result = await h.change.execute(PROJECT_ID, TASK_ID, TARGET_ID, TARGET_ID);
   await flushBackgroundWork();
 
   assert.strictEqual(result, h.initialTask);
@@ -351,7 +348,7 @@ test('assigning the current assignee is idempotent and has no side effects', asy
 test('assigning another user records activity and leaves delivery to the committed change stream', async () => {
   const h = makeHarness();
 
-  await h.change.execute(PROJECT_ID, TASK_ID, VIEWER_ID, TARGET_ID);
+  await h.change.execute(PROJECT_ID, TASK_ID, CURRENT_ASSIGNEE_ID, TARGET_ID);
   await flushBackgroundWork();
 
   assert.deepEqual(h.calls.notifications, []);
@@ -359,7 +356,7 @@ test('assigning another user records activity and leaves delivery to the committ
   assert.deepEqual(h.calls.activities, [
     {
       projectId: PROJECT_ID,
-      actorUserId: VIEWER_ID,
+      actorUserId: CURRENT_ASSIGNEE_ID,
       kind: 'task_updated',
       payload: {
         taskId: TASK_ID,

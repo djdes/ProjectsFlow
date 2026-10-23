@@ -505,7 +505,7 @@ export function KanbanBoard({
     // ?done=1 — «✓ Готово»-ссылка из дайджеста: переносим задачу в «Готово».
     // С подтверждением: защита от случайного клика и префетча почтовых сканеров
     // (действие идёт в уже авторизованной сессии, право write_project гейтит сервер).
-    if (task && canEdit && searchParams.get('done') === '1') {
+    if (task && task.canEdit !== false && canEdit && searchParams.get('done') === '1') {
       if (window.confirm('Перенести задачу в «Готово»?')) {
         void move(task.id, { targetStatus: 'done', beforeTaskId: null, afterTaskId: null })
           .then(() => toast.success('Задача перенесена в «Готово»'))
@@ -734,7 +734,7 @@ export function KanbanBoard({
     shownSelectionStatuses.map((s) => [
       s,
       filterTasks(hideDone && s === 'done' ? [] : grouped[s])
-        .filter((t) => matchesTypeFilter(t.taskType, typeFilterFor(s)))
+        .filter((t) => t.canEdit !== false && matchesTypeFilter(t.taskType, typeFilterFor(s)))
         .map((t) => t.id),
     ]),
   );

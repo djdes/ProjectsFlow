@@ -11,6 +11,23 @@ import { CancelWorkButton } from './CancelWorkButton';
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
+test('read-only task does not expose worker cancellation', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(React.createElement(ContainerProvider, null,
+      React.createElement(CancelWorkButton, {
+        task: { id: 'foreign', projectId: 'project', status: 'in_progress', canEdit: false, ralphCancelRequestedAt: null } as Task,
+        workerRunning: true, onChanged: () => {},
+      }))));
+    assert.equal(host.querySelector('button'), null);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});
+
 test('revoke applies the response without a parent refetch, errors retain pending, fresh props win', async () => {
   const source = {
     id: 'task', projectId: 'project', status: 'in_progress',

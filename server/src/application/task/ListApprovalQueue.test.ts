@@ -45,6 +45,7 @@ function makeQueue(input: {
   return new ListApprovalQueue({
     projects: { getById: async (id: string) => input.projects.find((p) => p.id === id) ?? null } as never,
     members: {
+      listApproverUserIdsForProject: async () => input.callerRole === 'lead' || input.callerRole === 'owner' ? ['lead'] : [],
       findForProject: async (projectId: string) => {
         const role = input.projectRoles?.[projectId];
         return role ? { role } : null;
@@ -92,7 +93,7 @@ test('задачи именованных проектов — только гд
       task('t-docs', 'docs', { assignee: 'bob', createdBy: 'bob' }),
       task('t-closed', 'closed', { assignee: 'bob', createdBy: 'bob' }),
     ],
-    projectRoles: { site: 'editor', docs: 'viewer' },
+    projectRoles: { site: 'lead', docs: 'viewer' },
   });
 
   const items = await queue.execute('lead');

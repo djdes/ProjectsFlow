@@ -1565,7 +1565,7 @@ export function TaskDrawer({
   // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
   // canEditProp сверху может опустить в read-only (viewer на чужой задаче) — иначе
   // окно выглядело бы редактируемым, а каждый save падал бы 403-ей.
-  const canEdit = !!task && canEditProp && !frozenByApproval;
+  const canEdit = !!task && canEditProp && task.canEdit !== false && !frozenByApproval;
 
   // Сохранить медиа-поля (иконка/обложка/положение обложки). Оптимистичный показ живёт в
   // TaskHeaderMedia; здесь только PATCH + оповещение. Ошибка — тост (локальный показ уже стоит).
@@ -1985,8 +1985,8 @@ export function TaskDrawer({
               <div className="px-[var(--pf-drawer-px)] pbe-2.5 pbs-1">
                 {(() => {
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
-                    status: <TaskStatusField task={task} disabled={!canEditProp || !currentUser} beforeChange={flushDescription} onMove={onMove} onChanged={(updated) => { setStatusResult(updated); notifyChanged(); }} />,
-                    project: <TaskProjectField task={task} projectName={projectName} isInbox={isInbox} disabled={!canEditProp || !currentUser} beforeChange={flushDescription} onMoved={(updated) => {
+                    status: <TaskStatusField task={task} disabled={!canEdit || !currentUser} beforeChange={flushDescription} onMove={onMove} onChanged={(updated) => { setStatusResult(updated); notifyChanged(); }} />,
+                    project: <TaskProjectField task={task} projectName={projectName} isInbox={isInbox} disabled={!canEdit || !currentUser} beforeChange={flushDescription} onMoved={(updated) => {
                       if (asPage) {
                         markViewedOnEdit();
                         navigate(`/projects/${updated.projectId}/tasks/${updated.id}`);
@@ -2010,10 +2010,8 @@ export function TaskDrawer({
                             }
                           }}
                           projectId={isInbox ? undefined : task.projectId}
-                          // frozenByApproval отдельным слагаемым: в именованном проекте
-                          // переназначение НЕ ходит через canEdit (viewer может «забрать
-                          // себе»), но на утверждении оно запрещено всем, кроме принимающего.
-                          disabled={!currentUser || (isInbox && !canEdit) || frozenByApproval}
+                          // Reassignment follows the same task management capability.
+                          disabled={!currentUser || !canEdit}
                           className={PROPERTY_VALUE_CLASS}
                         />
                       </div>
@@ -2208,7 +2206,7 @@ export function TaskDrawer({
               {/* Сидит в самом низу колонки обсуждения (shrink-0 авто-высота). */}
               {activeTab === 'discussion' &&
                 (task.status === 'in_progress' ? (
-                  <CancelWorkButton task={task} onChanged={() => notifyChanged()} />
+                  canEdit ? <CancelWorkButton task={task} onChanged={() => notifyChanged()} /> : null
                 ) : (
                   // Один ребёнок: иначе на awaiting_clarification фрагмент из двух
                   // элементов создаёт лишний неявный flex-ребёнок и ломает раскладку.
@@ -2225,7 +2223,7 @@ export function TaskDrawer({
                     )}
                   >
                     {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
-                    {task.status === 'awaiting_clarification' && (
+                    {canEdit && task.status === 'awaiting_clarification' && (
                       <CancelWorkButton task={task} onChanged={() => notifyChanged()} />
                     )}
                     {frozenByApproval ? (
@@ -2238,7 +2236,7 @@ export function TaskDrawer({
                       </div>
                     ) : (
                       <TaskDrawerComposer
-                        task={task}
+                        task={{ ...task, canEdit }}
                         backlogTail={backlogTail}
                         todoTail={todoTail}
                         replyDraft={replyDraft?.taskId === task.id && replyDraft.userId === currentUser?.id ? replyDraft : null}

@@ -6,6 +6,7 @@ import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { AssignedTaskView } from './ListTasksAssignedToMe.js';
+import { canManageTask } from './taskAuthorization.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -72,7 +73,7 @@ export class ListPersonalTasksOfColleagues {
     // Имя владельца входящих у нас уже есть из круга коллег — дополнительных запросов не надо.
     const colleagueNameById = new Map(colleagues.map((c) => [c.id, c.displayName]));
 
-    return visible.map((task) => {
+    return Promise.all(visible.map(async (task) => {
       const project = projectById.get(task.projectId)!;
       return {
         task,
@@ -83,12 +84,11 @@ export class ListPersonalTasksOfColleagues {
           userId: project.ownerId,
           displayName: colleagueNameById.get(project.ownerId) ?? '',
         },
-        // Задача поставлена caller'ом: видит её — значит может менять статус и удалять.
-        canModify: true,
+        canModify: await canManageTask(this.deps, project, task, userId),
         commitCount: commitCounts.get(task.id) ?? 0,
         attachmentCount: attachmentCounts.get(task.id) ?? 0,
         commentCount: commentCounts.get(task.id) ?? 0,
       };
-    });
+    }));
   }
 }

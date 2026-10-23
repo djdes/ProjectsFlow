@@ -421,7 +421,7 @@ export function KanbanColumn({
       selected={selectedIds?.has(t.id) ?? false}
       onSelectToggle={onSelectToggle}
         dropLine={dropLine}
-        readOnly={readOnly}
+        readOnly={readOnly || t.canEdit === false}
     />
   );
 

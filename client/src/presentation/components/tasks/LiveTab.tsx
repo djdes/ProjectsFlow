@@ -332,12 +332,12 @@ function TaskLiveChat({
       <div className="shrink-0">
         {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }} onChanged={onTaskChanged} />}
         {isWorking || task.status === 'in_progress' ? (
-          <CancelWorkButton task={task} workerRunning={isWorking} onChanged={handleCancelChanged} />
+          canEdit ? <CancelWorkButton task={task} workerRunning={isWorking} onChanged={handleCancelChanged} /> : null
         ) : task.status === 'awaiting_clarification' ? (
           <>
-            <CancelWorkButton task={task} onChanged={handleCancelChanged} />
+            {canEdit && <CancelWorkButton task={task} onChanged={handleCancelChanged} />}
             <TaskDrawerComposer
-              task={task}
+              task={{ ...task, canEdit }}
               backlogTail={backlogTail}
               todoTail={todoTail}
               onCommentCreated={handleChatComment}
@@ -348,7 +348,7 @@ function TaskLiveChat({
           </>
         ) : (
           <TaskDrawerComposer
-            task={task}
+            task={{ ...task, canEdit }}
             backlogTail={backlogTail}
             todoTail={todoTail}
             onCommentCreated={handleChatComment}

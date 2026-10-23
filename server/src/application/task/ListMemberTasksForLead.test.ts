@@ -160,7 +160,7 @@ test('lead sees member tasks across the whole workspace, including projects they
   assert.deepEqual(items.map((i) => i.task.id).sort(), ['t1', 't2']);
   const byId = new Map(items.map((i) => [i.task.id, i]));
   assert.equal(byId.get('t1')!.isInbox, true);
-  assert.equal(byId.get('t1')!.canModify, true, 'личную задачу, поставленную руководителем, он и меняет');
+  assert.equal(byId.get('t1')!.canModify, false, 'создание задачи само по себе не даёт права управления');
   assert.equal(byId.get('t2')!.isInbox, false);
   assert.equal(
     byId.get('t2')!.canModify,
@@ -179,7 +179,7 @@ test('caller who is a project member gets canModify per their real project role'
   });
 
   const items = await list.execute('lead', 'bob');
-  assert.equal(items[0]!.canModify, true);
+  assert.equal(items[0]!.canModify, false);
 });
 
 test('a non-lead caller (editor/viewer) is rejected even for a real workspace member', async () => {

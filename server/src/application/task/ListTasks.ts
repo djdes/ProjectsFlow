@@ -6,6 +6,7 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -17,6 +18,8 @@ type Deps = {
 };
 
 export type TaskWithCounts = Task & {
+  // Non-interactive digest projections also reuse this type.
+  readonly canEdit?: boolean;
   readonly commitCount: number;
   readonly attachmentCount: number;
   readonly commentCount: number;
@@ -26,7 +29,7 @@ export class ListTasks {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<TaskWithCounts[]> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    const { membership } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
 
     // Доска возвращает строго свои физические задачи. Подмешивать чужие личные не нужно:
     // личная задача всегда лежит во входящих своего ответственного (перенос владения живёт
@@ -39,6 +42,7 @@ export class ListTasks {
     const commentCounts = await this.deps.comments.countsByTasks(ids);
     return tasks.map((t) => ({
       ...t,
+      canEdit: t.assignee.userId === ownerUserId || hasOwnerRights(membership.role),
       commitCount: commitCounts.get(t.id) ?? 0,
       attachmentCount: attachmentCounts.get(t.id) ?? 0,
       commentCount: commentCounts.get(t.id) ?? 0,

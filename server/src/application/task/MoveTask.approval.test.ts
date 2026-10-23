@@ -94,7 +94,7 @@ function makeMove(input: {
       findForProject: async (projectId: string, userId: string) => ({
         projectId,
         userId,
-        role: 'editor',
+        role: userId === 'employee' ? 'editor' : input.actorRole ?? 'editor',
       }),
     } as never,
     tasks: {

@@ -1,4 +1,5 @@
-import { can } from '../../domain/project/permissions.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
+import { canManageTask } from './taskAuthorization.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -87,7 +88,7 @@ export class ListApprovalQueue {
       inboxOwners.filter((u) => u !== null).map((u) => [u.id, u.displayName]),
     );
 
-    return visible.map((task) => {
+    return Promise.all(visible.map(async (task) => {
       const project = projectById.get(task.projectId)!;
       return {
         task,
@@ -98,12 +99,12 @@ export class ListApprovalQueue {
           ? { userId: project.ownerId, displayName: inboxOwnerNames.get(project.ownerId) ?? '' }
           : null,
         // В очередь попадает только то, что руководитель вправе принять.
-        canModify: true,
+        canModify: await canManageTask(this.deps, project, task, callerId),
         commitCount: commitCounts.get(task.id) ?? 0,
         attachmentCount: attachmentCounts.get(task.id) ?? 0,
         commentCount: commentCounts.get(task.id) ?? 0,
       };
-    });
+    }));
   }
 
   private async canAccept(project: Project, callerId: string): Promise<boolean> {
@@ -111,6 +112,6 @@ export class ListApprovalQueue {
     // Личная задача: руководитель пространства — принимающий (см. isInboxApprover).
     if (project.isInbox) return true;
     const membership = await this.deps.members.findForProject(project.id, callerId);
-    return membership !== null && can(membership.role, 'move_task');
+    return membership !== null && hasOwnerRights(membership.role);
   }
 }

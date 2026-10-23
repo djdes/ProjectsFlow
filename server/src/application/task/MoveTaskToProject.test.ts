@@ -46,7 +46,7 @@ function makeHarness(opts: {
     } as never,
     members: {
       findForProject: async (_projectId: string, userId: string) =>
-        userId === ME ? { role: opts.sourceRole ?? 'editor' } : null,
+        userId === ME ? { role: opts.sourceRole ?? 'owner' } : null,
       listSharedUsersInWorkspace: async () =>
         (opts.sharedUsers ?? []).map((id) => ({ id })),
     } as never,
@@ -102,13 +102,19 @@ test('personal task transfer is denied when the destination only grants viewing'
   assert.deepEqual(h.moves, []);
 });
 
-test('personal task can be transferred by its assignee, delegating author or workspace approver', async () => {
-  for (const access of [{ assignee: ME }, { creator: ME, sharedUsers: [OTHER] }, { approvers: [ME] }]) {
+test('personal task can be transferred by its assignee or workspace approver', async () => {
+  for (const access of [{ assignee: ME }, { approvers: [ME] }]) {
     const h = personalMoveHarness('editor', OTHER, access);
     const moved = await h.move.execute('personal-task', 'destination', ME);
     assert.equal(moved.projectId, 'destination');
     assert.deepEqual(h.moves, [access.assignee ?? OTHER]);
   }
+});
+
+test('delegating author cannot transfer a task assigned to a colleague', async () => {
+  const h = personalMoveHarness('editor', OTHER, { creator: ME, sharedUsers: [OTHER] });
+  await assert.rejects(h.move.execute('personal-task', 'destination', ME), ProjectNotFoundError);
+  assert.deepEqual(h.moves, []);
 });
 
 test('approver cannot transfer into a read-only project or from an excluded inbox', async () => {

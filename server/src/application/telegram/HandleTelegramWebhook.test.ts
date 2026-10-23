@@ -810,13 +810,12 @@ test('Telegram delete requires confirmation and uses the existing soft-delete se
   assert.deepEqual(h.deleted, ['t1'], 'a stale button cannot delete twice');
 });
 
-test('a viewer assignee can work but cannot delete, including a forged confirm callback', async () => {
+test('a viewer assignee can work and delete their assigned task', async () => {
   const h = makeCbHarness({ role: 'viewer' });
   await h.h.execute(cbUpdate('nw:t1'));
   assert.equal(h.moves.length, 1);
   await h.h.execute(cbUpdate('nx:y:t1'));
-  assert.deepEqual(h.deleted, []);
-  assert.ok(h.answers.at(-1)!.showAlert);
+  assert.deepEqual(h.deleted, ['t1']);
 });
 
 test('Telegram actions do not bypass removed membership or viewer permissions', async () => {

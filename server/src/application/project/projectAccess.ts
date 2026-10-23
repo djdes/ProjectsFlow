@@ -26,6 +26,10 @@ export type ProjectAccessDeps = {
 // сигнатура requireProjectAccess остаётся прежней.
 let resolveIsAdmin: (userId: string) => Promise<boolean> = async () => false;
 
+export async function isSystemAdmin(userId: string): Promise<boolean> {
+  return resolveIsAdmin(userId);
+}
+
 export function configureAdminBypass(resolver: (userId: string) => Promise<boolean>): void {
   resolveIsAdmin = resolver;
 }

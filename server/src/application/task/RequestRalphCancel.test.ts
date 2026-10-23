@@ -5,7 +5,7 @@ import { RequestRalphCancel, TaskNotActiveError } from './RequestRalphCancel.js'
 function harness(status = 'pending_approval', running = true, role = 'editor') {
   let writes = 0;
   let queries = 0;
-  const task = { id: 't', projectId: 'p', status, ralphCancelRequestedAt: null };
+  const task = { id: 't', projectId: 'p', status, assignee: { userId: role === 'viewer' ? 'other' : 'u' }, ralphCancelRequestedAt: null };
   const deps = {
     projects: { getById: async () => ({ id: 'p' }) },
     members: { findForProject: async () => ({ role }) },
@@ -20,7 +20,7 @@ function harness(status = 'pending_approval', running = true, role = 'editor') {
 }
 const command = { projectId: 'p', taskId: 't', ownerUserId: 'u' };
 
-test('an editor can stop a resumed worker even while the task is in review or drafts', async () => {
+test('an assigned editor can stop a resumed worker even while the task is in review or drafts', async () => {
   for (const status of ['pending_approval', 'backlog', 'todo']) {
     const h = harness(status);
     assert.ok((await h.service.execute(command)).ralphCancelRequestedAt);
@@ -41,7 +41,7 @@ test('viewers cannot probe or cancel workers; a task in another project is rejec
   assert.equal(viewer.queries(), 0);
   assert.equal(viewer.writes(), 0);
   const h = harness();
-  await assert.rejects(h.service.execute({ ...command, projectId: 'other' }), { name: 'TaskNotFoundError' });
+  await assert.rejects(h.service.execute({ ...command, projectId: 'other' }), { name: 'ProjectNotFoundError' });
   assert.equal(h.writes(), 0);
 });
 

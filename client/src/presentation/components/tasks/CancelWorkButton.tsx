@@ -36,7 +36,7 @@ function formatRelativeMinutes(date: Date): string {
 //   2. Запрос висит — амбер-badge «🛑 Отмена запрошена…» + кнопка «Отозвать».
 //      DELETE /ralph-cancel.
 // SSE task_changed обновит board ⇒ refetch ⇒ pending переключение в реалтайме.
-export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = false }: Props): React.ReactElement {
+export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = false }: Props): React.ReactElement | null {
   const { taskRepository } = useContainer();
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ taskId: string; text: string } | null>(null);
@@ -96,6 +96,7 @@ export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = 
     }
   };
 
+  if (sourceTask.canEdit === false) return null;
   if (pending) {
     const when = task.ralphCancelRequestedAt!;
     const who = task.ralphCancelRequestedByDisplayName;

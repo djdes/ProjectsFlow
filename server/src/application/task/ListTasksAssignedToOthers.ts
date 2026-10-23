@@ -1,4 +1,5 @@
-import { can } from '../../domain/project/permissions.js';
+import { hasOwnerRights } from '../../domain/project/permissions.js';
+import { isSystemAdmin } from '../project/projectAccess.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ResolveActiveWorkspace } from '../workspace/activeWorkspace.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
@@ -55,6 +56,7 @@ export class ListTasksAssignedToOthers {
         .map((u) => [u.id, u.displayName]),
     );
 
+    const isAdmin = await isSystemAdmin(userId);
     return flat.map(({ task, project }) => ({
       task,
       projectId: project.id,
@@ -63,7 +65,7 @@ export class ListTasksAssignedToOthers {
       inboxOwner: project.isInbox
         ? { userId: project.ownerId, displayName: inboxOwnerNames.get(project.ownerId) ?? '' }
         : null,
-      canModify: project.isInbox || can(project.role, 'move_task'),
+      canModify: isAdmin || project.ownerId === userId || hasOwnerRights(project.role),
       commitCount: commitCounts.get(task.id) ?? 0,
       attachmentCount: attachmentCounts.get(task.id) ?? 0,
       commentCount: commentCounts.get(task.id) ?? 0,

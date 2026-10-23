@@ -86,7 +86,7 @@ function membersFake(): never {
     findForProject: async (projectId: string, userId: string) => ({
       projectId,
       userId,
-      role: 'editor',
+      role: userId === 'boss' ? 'lead' : 'editor',
     }),
     listSharedUsers: async () => [],
     // CreateTaskComment дёргает его для @-упоминаний (best-effort). Без заглушки тест

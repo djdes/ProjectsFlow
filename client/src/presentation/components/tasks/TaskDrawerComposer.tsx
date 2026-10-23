@@ -263,7 +263,7 @@ function TaskDrawerComposerForm({
         setPreview(null);
         onCommentCreated({ ...created, attachments: uploaded });
       }
-      const moveTo = shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
+      const moveTo = task.canEdit !== false && shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
         ? resolveMoveTarget(task.status, effectiveTarget)
         : null;
       if (moveTo !== null) {
@@ -380,7 +380,7 @@ function TaskDrawerComposerForm({
           />
         </Suspense>
 
-        {effectiveTarget === 'worker' && canChooseSendTarget(task.status) && (
+        {task.canEdit !== false && effectiveTarget === 'worker' && canChooseSendTarget(task.status) && (
           <div className="flex justify-end px-3 pbe-1">
             <select
               aria-label="Сессия воркера"
@@ -425,7 +425,7 @@ function TaskDrawerComposerForm({
           </div>
 
           <div className="shrink-0">
-            {canChooseSendTarget(task.status) ? (
+            {task.canEdit !== false && canChooseSendTarget(task.status) ? (
               <SendTargetButton
                 size="sm"
                 options={workerEnabled ? DRAWER_TARGETS : DRAWER_TARGETS_NO_WORKER}

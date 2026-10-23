@@ -235,6 +235,20 @@ test('task-only access never loads project members and still names the assignee'
   } finally { await view.close(); }
 });
 
+test('read-only task allows discussion without offering worker controls or moving the task', async () => {
+  let moves = 0;
+  const view = await harness({ ...task('read-only-task', 'author', 'awaiting_clarification'), canEdit: false }, {
+    move: async () => { moves++; return task('read-only-task'); },
+  });
+  try {
+    assert.doesNotMatch(view.host.textContent!, /Воркеру/);
+    await view.type('Комментарий без управления задачей');
+    await view.click(view.send());
+    assert.equal(view.created.length, 1);
+    assert.equal(moves, 0);
+  } finally { await view.close(); }
+});
+
 
 test('deselecting the last recipient silences notifications and self-assignees can choose another recipient', async () => {
   const a = task('recipient-menu');

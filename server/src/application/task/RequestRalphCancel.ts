@@ -2,7 +2,7 @@ import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
+import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { LiveRepository } from '../live/LiveRepository.js';
 
@@ -34,7 +34,7 @@ export class RequestRalphCancel {
 
   async execute(input: RequestRalphCancelCommand): Promise<Task> {
     // Используем cancel_agent_job — близкая семантика, та же editor-роль.
-    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'cancel_agent_job');
+    await requireTaskModifyAccess(this.deps, input.projectId, input.taskId, input.ownerUserId, 'cancel_agent_job');
 
     const existing = await this.deps.tasks.getById(input.taskId);
     if (!existing || existing.projectId !== input.projectId) {

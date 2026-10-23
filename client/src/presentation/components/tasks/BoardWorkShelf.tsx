@@ -91,7 +91,7 @@ export function BoardWorkShelf({
                 <ShelfCard
                   key={t.id}
                   flashing={flash && t.id === flashTaskId}
-                  {...(onComplete ? { onComplete: () => onComplete(t) } : {})}
+                  {...(onComplete && t.canEdit !== false ? { onComplete: () => onComplete(t) } : {})}
                 >
                   {renderCard(t)}
                 </ShelfCard>

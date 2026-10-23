@@ -87,8 +87,8 @@ test('a task the caller put into a colleague inbox is returned with inbox contex
   assert.equal(items[0]!.projectId, 'bob-inbox');
   assert.equal(items[0]!.projectName, 'Входящие');
   assert.equal(items[0]!.isInbox, true);
-  // Право на действие совпадает с правом на просмотр: поставил задачу — может двигать и удалять.
-  assert.equal(items[0]!.canModify, true);
+  // The creator can follow the task, but its assignee controls it.
+  assert.equal(items[0]!.canModify, false);
   assert.equal(items[0]!.commitCount, 2);
   assert.equal(items[0]!.attachmentCount, 3);
   assert.equal(items[0]!.commentCount, 4);

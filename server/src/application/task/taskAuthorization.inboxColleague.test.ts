@@ -75,13 +75,12 @@ test('коллега не видит, не двигает и не удаляет
   );
 });
 
-test('коллега, поставивший задачу, открывает, двигает и удаляет её в чужих «Входящих»', async () => {
+test('коллега, поставивший задачу, видит её, но не управляет чужой работой', async () => {
   const deps = makeDeps({ colleaguesOf: { me: ['bob'] }, createdBy: 'me' });
   assert.equal((await requireTaskReadAccess(deps, INBOX.id, 't1', 'me')).project.id, INBOX.id);
-  const access = await requireTaskModifyAccess(deps, INBOX.id, 't1', 'me', 'move_task');
-  assert.equal(access.isAssignee, false);
-  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task'));
-  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task', { includeDeleted: true }));
+  await assert.rejects(() => requireTaskModifyAccess(deps, INBOX.id, 't1', 'me', 'move_task'), ProjectNotFoundError);
+  await assert.rejects(() => requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task'), ProjectNotFoundError);
+  await assert.rejects(() => requireTaskDeleteAccess(deps, INBOX.id, 't1', 'me', 'delete_task', { includeDeleted: true }), ProjectNotFoundError);
 });
 
 // ГЛАВНОЕ: предел. Без общего пространства доступа нет ни к чему, даже к своей постановке.
@@ -108,12 +107,9 @@ test('владелец inbox сохраняет полный доступ', asyn
 });
 
 // Ответственный правит поручённую ему задачу, а вот убирать её из чужих «Входящих» — нет.
-test('ответственный правит задачу, но не удаляет её', async () => {
+test('ответственный правит и удаляет назначенную ему задачу', async () => {
   const deps = makeDeps({ colleaguesOf: { outsider: [] }, assigneeUserId: 'outsider' });
   const access = await requireTaskModifyAccess(deps, INBOX.id, 't1', 'outsider', 'move_task');
   assert.equal(access.isAssignee, true);
-  await assert.rejects(
-    () => requireTaskDeleteAccess(deps, INBOX.id, 't1', 'outsider', 'delete_task'),
-    ProjectNotFoundError,
-  );
+  assert.ok(await requireTaskDeleteAccess(deps, INBOX.id, 't1', 'outsider', 'delete_task'));
 });

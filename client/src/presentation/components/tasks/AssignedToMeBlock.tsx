@@ -989,17 +989,15 @@ export function AssignedToMeBlock({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const anchorRef = useRef<string | null>(null); // якорь Shift-диапазона
   const selectionColumns = grouping === 'deadline' ? kanbanGroups : groups;
-  // Выделяются ЛЮБЫЕ задачи колонки, включая те, что caller изменить не может (личные
-  // доски коллег сервер отдаёт с canModify: false). Пользователь просил не ограничивать
-  // выбор; задачи без прав просто попадут в «не удалось» при выполнении действия.
-  const columnSelectableGroups = selectionColumns.map((g) => g.items.map((t) => t.id));
+  // Bulk management uses the same server capability as individual controls.
+  const columnSelectableGroups = selectionColumns.map((g) => g.items.filter((t) => t.canModify).map((t) => t.id));
   // Полки «На утверждении» и «Вручную» — такие же участники выделения, как колонки: раньше
   // при включении режима они просто пропадали с экрана, и до этих задач массовые действия
   // было не достать вовсе. Идут первыми, потому что первыми же и нарисованы — порядок
   // важен для Shift-диапазона и протяжки мышью, которые считают по этому же списку.
   const selectableGroups = [
-    approvalTasks.map((t) => t.id),
-    inProgressTasks.map((t) => t.id),
+    approvalTasks.filter((t) => t.canModify).map((t) => t.id),
+    inProgressTasks.filter((t) => t.canModify).map((t) => t.id),
     ...columnSelectableGroups,
   ];
   const selectionOrderedIds = selectableGroups.flat();

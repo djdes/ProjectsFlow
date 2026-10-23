@@ -118,9 +118,10 @@ function KanbanCardImpl({
   onSelectToggle,
   currentUserId = null,
   dropLine = null,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
   disableLayoutAnimation = false,
 }: Props): React.ReactElement {
+  const readOnly = readOnlyProp || task.canEdit === false;
   // Роль в активном пространстве: ею решаем, показывать ли «выполнено» на задаче,
   // которая уже ждёт приёмки (см. checkboxVisible ниже).
   const { data: workspaces } = useWorkspaces();

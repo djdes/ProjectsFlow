@@ -1,10 +1,11 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
+import { InsufficientProjectRoleError, ProjectNotFoundError } from '../../domain/project/errors.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { ProjectAction } from '../../domain/project/permissions.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
+import { isSystemAdmin, requireProjectAccess } from '../project/projectAccess.js';
 import type { Task } from '../../domain/task/Task.js';
+import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { TaskRepository } from './TaskRepository.js';
 
 export type TaskAccessDeps = {
@@ -53,9 +54,7 @@ async function isInboxApprover(deps: TaskAccessDeps, project: Project, userId: s
  * Раньше любой участник общего пространства видел, двигал и удалял ВСЕ личные задачи коллег:
  * после приглашения в пространство чужие «на сегодня» оказывались у всех во «Входящих».
  *
- * Граница совпадает с лентой ListPersonalTasksOfColleagues: право на действие = право на
- * просмотр. Посторонний (нет общего пространства) не получает ничего — круг коллег формирует
- * сервер, клиент не передаёт ни одного id.
+ * Delegating colleagues retain read access. Management is checked independently below.
  */
 async function isDelegatingColleague(
   deps: TaskAccessDeps,
@@ -69,9 +68,26 @@ async function isDelegatingColleague(
   return colleagues.some((c) => c.id === inboxOwnerId);
 }
 
+// Creating a task for a colleague grants visibility, not management rights.
+export async function canManageTask(
+  deps: Pick<TaskAccessDeps, 'members'>,
+  project: Pick<Project, 'id' | 'ownerId' | 'isInbox'>,
+  task: Pick<Task, 'assignee'>,
+  userId: string,
+): Promise<boolean> {
+  if (await deps.members.isProjectHidden?.(project.id, userId)) return false;
+  if (await isSystemAdmin(userId)) return true;
+  if (project.isInbox) {
+    return project.ownerId === userId || task.assignee.userId === userId ||
+      (await deps.members.listApproverUserIdsForProject?.(project.id) ?? []).includes(userId);
+  }
+  const membership = await deps.members.findForProject(project.id, userId);
+  if (!project.isInbox && !membership) return false;
+  return task.assignee.userId === userId || membership?.role === 'owner' || membership?.role === 'lead';
+}
+
 // Assignee-aware authorization для task-modify операций.
-// Для inbox разрешён owner или текущий ответственный. В именованном проекте editor+
-// сохраняет обычные права, а назначенный viewer получает task-scoped update/move.
+// Management belongs to the assignee and owner-equivalent roles, regardless of creator.
 //
 // 404 (ProjectNotFoundError) когда caller не участник и не текущий ответственный —
 // семантика «не палим существование» (как в requireProjectAccess).
@@ -87,6 +103,18 @@ export async function requireTaskModifyAccess(
   const task = await deps.tasks.getById(taskId);
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
 
+  const managementActions: readonly ProjectAction[] = [
+    'update_task', 'move_task', 'assign_task', 'delete_task',
+    'delegate_task_to_agent', 'cancel_agent_job',
+  ];
+  if (managementActions.includes(action)) {
+    if (!await canManageTask(deps, project, task, userId)) {
+      if (project.isInbox || !await deps.members.findForProject(project.id, userId)) throw new ProjectNotFoundError();
+      throw new InsufficientProjectRoleError('viewer', action);
+    }
+    return { project, isAssignee: task.assignee.userId === userId };
+  }
+
   if (project.isInbox) {
     if (await isInboxApprover(deps, project, userId)) {
       return { project, isAssignee: task.assignee.userId === userId };
@@ -97,8 +125,7 @@ export async function requireTaskModifyAccess(
     if (task.assignee.userId === userId) {
       return { project, isAssignee: true };
     }
-    // Коллега, поставивший эту задачу: он видит её во «Входящих», значит может и перевести
-    // её в другую колонку.
+    // Discussion access remains available to the colleague who created the task.
     if (await isDelegatingColleague(deps, userId, project.ownerId, project.workspaceId, task)) {
       return { project, isAssignee: false };
     }
@@ -143,6 +170,9 @@ export async function requireTaskReadAccess(
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
+    if (await isSystemAdmin(userId) && !await deps.members.isProjectHidden?.(project.id, userId)) {
+      return { project, isAssignee: task.assignee.userId === userId };
+    }
     if (await isInboxApprover(deps, project, userId)) {
       return { project, isAssignee: task.assignee.userId === userId };
     }
@@ -162,10 +192,7 @@ export async function requireTaskReadAccess(
   return { project, isAssignee: task.assignee.userId === userId };
 }
 
-// Delete-операции для inbox-задач: владелец Inbox или коллега, поставивший эту задачу.
-// Текущий ответственный сам по себе права на удаление НЕ получает — задача ему поручена, и
-// убирать её из чужих «Входящих» он не должен. Удаление мягкое (deleted_at, db/134), поэтому
-// ошибочное действие восстановимо. includeDeleted — для корзины (восстановить, удалить навсегда).
+// Delete, restore and purge use the same assignee-scoped management policy.
 export async function requireTaskDeleteAccess(
   deps: TaskAccessDeps,
   projectId: string,
@@ -177,18 +204,16 @@ export async function requireTaskDeleteAccess(
   const project = await deps.projects.getById(projectId);
   if (!project) throw new ProjectNotFoundError();
 
-  if (project.isInbox) {
-    if (await isInboxApprover(deps, project, userId)) return { project, isAssignee: false };
-    if (project.ownerId === userId) return { project, isAssignee: false };
-    const task = options.includeDeleted
-      ? await deps.tasks.getByIdIncludingDeleted(taskId)
-      : await deps.tasks.getById(taskId);
-    if (task && task.projectId === projectId && (await isDelegatingColleague(deps, userId, project.ownerId, project.workspaceId, task))) {
-      return { project, isAssignee: false };
-    }
-    throw new ProjectNotFoundError();
+  const task = options.includeDeleted
+    ? await deps.tasks.getByIdIncludingDeleted(taskId)
+    : await deps.tasks.getById(taskId);
+  if (!task || task.projectId !== projectId) {
+    await requireProjectAccess(deps, projectId, userId, 'read_project');
+    throw new TaskNotFoundError(taskId);
   }
-
-  await requireProjectAccess(deps, projectId, userId, action);
-  return { project, isAssignee: false };
+  if (!await canManageTask(deps, project, task, userId)) {
+    if (project.isInbox || !await deps.members.findForProject(project.id, userId)) throw new ProjectNotFoundError();
+    throw new InsufficientProjectRoleError('viewer', action);
+  }
+  return { project, isAssignee: task.assignee.userId === userId };
 }
