@@ -10,6 +10,7 @@ export type InvitePreview = {
   readonly role: InviteRole;
   readonly inviterDisplayName: string | null;
   readonly inviteEmail: string | null;
+  readonly authMode?: 'login' | 'register';
   readonly expiresAt: Date;
 };
 

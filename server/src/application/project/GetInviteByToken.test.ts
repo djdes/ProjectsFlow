@@ -30,7 +30,7 @@ function pjInvite(over: Partial<ProjectInvite> = {}): ProjectInvite {
   };
 }
 
-function makeUseCase(seed: { ws?: WorkspaceInvite[]; pj?: ProjectInvite[] }) {
+function makeUseCase(seed: { ws?: WorkspaceInvite[]; pj?: ProjectInvite[]; registered?: boolean }) {
   return new GetInviteByToken({
     workspaceInvites: {
       async findByToken(token) {
@@ -53,6 +53,9 @@ function makeUseCase(seed: { ws?: WorkspaceInvite[]; pj?: ProjectInvite[] }) {
       },
     },
     users: {
+      async getByEmail() {
+        return seed.registered ? { id: 'recipient' } : null;
+      },
       async getById() {
         return { displayName: 'Ярослав' };
       },
@@ -88,4 +91,20 @@ test('просроченный workspace-токен → WorkspaceInviteExpiredEr
     ws: [wsInvite({ expiresAt: new Date(NOW.getTime() - 1000) })],
   });
   await assert.rejects(() => uc.execute(WS_TOKEN), WorkspaceInviteExpiredError);
+});
+
+test('email invitation selects registration for a new recipient', async () => {
+  const preview = await makeUseCase({ ws: [wsInvite()] }).execute(WS_TOKEN);
+  assert.equal(preview.authMode, 'register');
+  assert.equal(preview.inviteEmail, 'x@y');
+});
+
+test('email invitation selects login for an existing recipient', async () => {
+  const preview = await makeUseCase({ ws: [wsInvite()], registered: true }).execute(WS_TOKEN);
+  assert.equal(preview.authMode, 'login');
+});
+
+test('untargeted legacy invitation defaults to login', async () => {
+  const preview = await makeUseCase({ pj: [pjInvite()] }).execute(PJ_TOKEN);
+  assert.equal(preview.authMode, 'login');
 });

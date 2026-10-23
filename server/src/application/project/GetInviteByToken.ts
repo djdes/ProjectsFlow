@@ -21,7 +21,10 @@ type WorkspaceInvitesPort = {
 };
 type ProjectsPort = { getById(id: string): Promise<{ name: string } | null> };
 type WorkspacesPort = { getById(id: string): Promise<{ name: string } | null> };
-type UsersPort = { getById(id: string): Promise<{ displayName: string } | null> };
+type UsersPort = {
+  getById(id: string): Promise<{ displayName: string } | null>;
+  getByEmail(email: string): Promise<{ id: string } | null>;
+};
 
 type Deps = {
   readonly invites: ProjectInvitesPort;
@@ -41,6 +44,7 @@ export type InvitePreview = {
   readonly role: 'editor' | 'viewer';
   readonly inviterDisplayName: string | null;
   readonly inviteEmail: string | null;
+  readonly authMode: 'login' | 'register';
   readonly expiresAt: Date;
 };
 
@@ -63,6 +67,7 @@ export class GetInviteByToken {
         role: wsInvite.role,
         inviterDisplayName: inviter?.displayName ?? null,
         inviteEmail: wsInvite.email,
+        authMode: wsInvite.email && !(await this.deps.users.getByEmail(wsInvite.email)) ? 'register' : 'login',
         expiresAt: wsInvite.expiresAt,
       };
     }
@@ -83,6 +88,7 @@ export class GetInviteByToken {
       role: invite.role,
       inviterDisplayName: inviter?.displayName ?? null,
       inviteEmail: invite.email,
+      authMode: invite.email && !(await this.deps.users.getByEmail(invite.email)) ? 'register' : 'login',
       expiresAt: invite.expiresAt,
     };
   }

@@ -21,10 +21,8 @@ type LoadState =
   | { status: 'ready'; preview: InvitePreview }
   | { status: 'error'; message: string };
 
-// Анонимная страница: открывается по `/invite/:token`. Если юзер не залогинен — показывает
-// preview и кнопку «Войти, чтобы принять» (после логина роутер вернёт сюда). Залогиненный
-// юзер видит preview + кнопки accept/decline. Decline просто уводит на / (токен не
-// помечается — его всё ещё можно accept'ить, если передумает).
+// Email invitations route anonymous recipients to the matching auth form.
+// After authentication they return here to explicitly accept the invitation.
 export function InvitePage(): React.ReactElement {
   const { token } = useParams<{ token: string }>();
   const { inviteRepository } = useContainer();
@@ -56,6 +54,12 @@ export function InvitePage(): React.ReactElement {
       cancelled = true;
     };
   }, [token, inviteRepository]);
+
+  useEffect(() => {
+    if (status !== 'anonymous' || state.status !== 'ready' || !state.preview.inviteEmail) return;
+    const params = new URLSearchParams({ email: state.preview.inviteEmail, next: location.pathname });
+    navigate(`/${state.preview.authMode ?? 'login'}?${params}`, { replace: true });
+  }, [status, state, location.pathname, navigate]);
 
   const accept = async (): Promise<void> => {
     if (!token) return;

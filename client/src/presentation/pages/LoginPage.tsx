@@ -16,7 +16,7 @@ export function LoginPage(): React.ReactElement {
   const { status, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => new URLSearchParams(location.search).get('email') ?? '');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function LoginPage(): React.ReactElement {
       footer={
         <>
           Нет аккаунта?{' '}
-          <Link to="/register" className="font-medium text-primary-ink hover:underline">
+          <Link to={`/register${location.search}`} state={{ from: target }} className="font-medium text-primary-ink hover:underline">
             Зарегистрироваться
           </Link>
         </>

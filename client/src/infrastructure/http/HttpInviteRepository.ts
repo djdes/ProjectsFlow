@@ -15,6 +15,7 @@ type PreviewDto = {
   role: InviteRole;
   inviterDisplayName: string | null;
   inviteEmail: string | null;
+  authMode?: 'login' | 'register';
   expiresAt: string;
 };
 
@@ -27,6 +28,7 @@ export class HttpInviteRepository implements InviteRepository {
       role: preview.role,
       inviterDisplayName: preview.inviterDisplayName,
       inviteEmail: preview.inviteEmail,
+      authMode: preview.authMode,
       expiresAt: new Date(preview.expiresAt),
     };
   }

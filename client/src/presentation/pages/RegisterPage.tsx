@@ -16,7 +16,7 @@ export function RegisterPage(): React.ReactElement {
   const { status, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => new URLSearchParams(location.search).get('email') ?? '');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +62,7 @@ export function RegisterPage(): React.ReactElement {
       footer={
         <>
           Уже есть аккаунт?{' '}
-          <Link to="/login" className="font-medium text-primary-ink hover:underline">
+          <Link to={`/login${location.search}`} state={{ from: target }} className="font-medium text-primary-ink hover:underline">
             Войти
           </Link>
         </>

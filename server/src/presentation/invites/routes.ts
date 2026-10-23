@@ -33,6 +33,7 @@ export function invitesRouter(deps: Deps): Router {
           role: preview.role,
           inviterDisplayName: preview.inviterDisplayName,
           inviteEmail: preview.inviteEmail,
+          authMode: preview.authMode,
           expiresAt: preview.expiresAt.toISOString(),
         },
       });
