@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronsLeft, ChevronsRight, Plus, Shield, Sparkles, SquarePen } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Plus, Shield, SquarePen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -113,7 +113,7 @@ export function Sidebar({
     }
   }, [aiConversationRepository, creatingChat, navigate, onNavigate]);
 
-  // Ctrl/⌘+O — как в Notion (подпись есть на самой кнопке, поэтому сочетание должно работать).
+  // Ctrl/⌘+O opens a new AI conversation independently of sidebar controls.
   // Игнорируем, когда фокус в поле ввода: там Ctrl+O пользователю не нужен.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -252,10 +252,6 @@ export function Sidebar({
             ))}
           </div>
 
-          <RailButton onClick={() => void startNewChat()} label="Новый чат">
-            <Sparkles className="size-4" />
-          </RailButton>
-
           {user?.isAdmin && (
             <RailNavLink to="/admin" label="Администрирование">
               <Shield className="size-4" />
@@ -347,35 +343,9 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Закреплённый низ панели (Notion): широкая кнопка «Новый чат» + квадратная
-          «Новый проект». Видны всем; «Администрирование» — по-прежнему только админам.
-          Строка живёт ВНЕ скролл-контейнера списка проектов, чтобы не ломать его
-          затухание краёв (.pf-scroll-fade). */}
-      {/* Без border-t: в Notion над этими кнопками разделителя нет, панель заканчивается
-          самими кнопками. Отступ сверху даёт gap грида. */}
+      {/* Project creation and administration stay outside the scrollable content. */}
       <div className="pbs-1">
-        {/* Геометрия снята с Notion через CDP (кнопка New chat в подвале сайдбара): высота 40,
-            радиус 999px, зазор 10px, круглая кнопка 40×40. Поверхность — та же, что у карточек
-            (bg-card + shadow-card): белая с кольцом-тенью в светлой теме, графитовая с линией
-            в тёмной. */}
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => void startNewChat()}
-            disabled={creatingChat}
-            title="Новый чат"
-            className={cn(
-              'inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-card px-3 shadow-card',
-              'text-sm font-medium text-muted-foreground transition-[color,box-shadow,background-color] hover:text-foreground hover:shadow-card-hover disabled:opacity-60 dark:hover:bg-card-hover',
-            )}
-          >
-            <Sparkles className="size-5 shrink-0" />
-            <span className="min-w-0 truncate">Новый чат</span>
-            {/* Сочетание клавиш на сенсорном экране ни к чему — там нет клавиатуры. */}
-            <kbd className="shrink-0 rounded-[4px] bg-hover px-1 py-0.5 text-xs font-medium text-muted-foreground/80 [@media(pointer:coarse)]:hidden">
-              Ctrl+O
-            </kbd>
-          </button>
+        <div className="flex items-center justify-end">
           <button
             type="button"
             onClick={() => {
