@@ -486,6 +486,8 @@
    утилиты берут их через bg-tone-bg / text-tone-fg / bg-tone (точка) / bg-tone-solid /
    text-tone-on-solid. Светлая тема — пастельная подложка и тёмный текст; тёмная —
    метка без подложки с цветной точкой (см. .pf-tag), аватар — яркая заливка. */
+.notification-quote { border-inline-start-color: var(--tone); background: color-mix(in oklch, var(--tone) 10%, transparent); }
+.notification-quote-author { color: var(--tone); }
 .pf-tone-gray { --tone-bg: oklch(91.3% 0.003 84.56); --tone-fg: oklch(30.98% 0.008 84.59); --tone: oklch(68.62% 0.004 91.47); }
 .pf-tone-brown { --tone-bg: oklch(91.62% 0.017 44.8); --tone-fg: oklch(31.39% 0.044 45.46); --tone: oklch(57.66% 0.076 45.56); }
 .pf-tone-orange { --tone-bg: oklch(91.82% 0.042 59.1); --tone-fg: oklch(31.64% 0.062 57.69); --tone: oklch(65.94% 0.159 55.7); }

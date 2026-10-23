@@ -6,6 +6,7 @@ import { FEED_AVATAR_CLASS, FeedRow } from '@/presentation/activity/FeedRow';
 import { feedActorName, feedProjectName, notificationDetail, notificationKind } from '@/presentation/activity/feedKind';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import type { NotificationActions } from './useNotificationActions';
+import { NotificationQuote } from './NotificationQuote';
 
 const roleLabel: Record<'editor' | 'viewer', string> = {
   editor: 'редактор',
@@ -52,15 +53,11 @@ function describe(payload: NotificationPayload): NotificationView {
         avatarName: actor,
         context: feedProjectName(payload.projectName),
         subject: taskLabel(payload.taskExcerpt),
-        meta: comment ? (
-          <>
-            <Who name={actor} />: «{comment}»
-          </>
-        ) : (
+        meta: comment ? null : (
           <Who name={actor} />
         ),
         metaTitle: comment ? `${actor}: «${comment}»` : `${actor} · ${payload.title}`,
-        details: detail ? (
+        details: comment ? <NotificationQuote author={actor} text={payload.detail} /> : detail ? (
           <p title={payload.detail} className="truncate text-meta leading-[1.125rem] text-muted-foreground">
             {detail}
           </p>
@@ -74,16 +71,13 @@ function describe(payload: NotificationPayload): NotificationView {
         avatarName: actor,
         context: feedProjectName(payload.projectName),
         subject: taskLabel(payload.taskExcerpt),
-        meta: comment ? (
-          <>
-            <Who name={actor} />: «{comment}»
-          </>
-        ) : (
+        meta: comment ? null : (
           <>
             <Who name={actor} /> упомянул(а) вас
           </>
         ),
         metaTitle: comment ? `${actor}: «${comment}»` : `${actor} упомянул(а) вас`,
+        details: comment ? <NotificationQuote author={actor} text={payload.commentExcerpt} /> : undefined,
         chip:
           payload.taskStatus === 'awaiting_clarification' ? (
             <span

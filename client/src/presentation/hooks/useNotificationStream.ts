@@ -4,6 +4,7 @@ import { notificationTaskTarget } from '@/lib/notificationTaskTarget';
 import { plainDescription } from '@/lib/taskTitleBody';
 import { toast } from '@/components/ui/sonner';
 import { showAssignedTaskToast } from '@/presentation/components/tasks/AssignedTaskToast';
+import { NotificationQuote } from '@/presentation/notifications/NotificationQuote';
 
 // Window-событие, по которому счётчик непрочитанных делает мгновенный refresh.
 export const NOTIFICATIONS_CHANGED_EVENT = 'pf:notifications-changed';
@@ -51,7 +52,7 @@ type RealtimeEvent =
 
 type StreamPayload =
   | { type: 'task_changed'; title: string; detail: string; projectName: string; actorDisplayName: string; projectId?: string; taskId?: string; commentId?: string; taskAvailable?: boolean }
-  | { type: 'comment_mention'; projectName: string; actorDisplayName: string; projectId?: string; taskId?: string; commentId?: string }
+  | { type: 'comment_mention'; projectName: string; actorDisplayName: string; commentExcerpt?: string; projectId?: string; taskId?: string; commentId?: string }
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
   | { type: 'workspace_invite'; workspaceName: string; actorDisplayName: string }
   | { type: 'chat_mention'; workspaceName: string; actorDisplayName: string }
@@ -74,13 +75,15 @@ function toastFor(payload: StreamPayload, navigate: (to: string) => void): void 
     const target = notificationTaskTarget(payload);
     if (target) {
       const title = payload.type === 'task_changed' ? payload.title : 'Вас упомянули в комментарии';
-      const description = `${payload.actorDisplayName} · ${payload.projectName}` +
-        (preview ? `\n${preview}` : '');
       const id = toast(createElement('button', {
-        type: 'button', className: 'block w-full rounded-md text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80',
+        type: 'button', className: 'block w-full min-w-0 rounded-md text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80',
         onClick: () => { toast.dismiss(id); navigate(target); },
       }, createElement('span', { className: 'block font-semibold' }, title),
-      createElement('span', { className: 'block whitespace-pre-wrap text-sm font-normal' }, description)));
+      createElement('span', { className: 'block truncate text-xs font-normal text-muted-foreground' }, payload.projectName),
+      createElement(NotificationQuote, {
+        author: payload.actorDisplayName,
+        text: payload.type === 'task_changed' ? payload.detail : payload.commentExcerpt,
+      })));
       return;
     }
   }

@@ -33,7 +33,7 @@ test('clicking the new-comment toast navigates to the exact task and comment', a
     await act(async () => root.render(React.createElement(MemoryRouter, null, React.createElement(Probe))));
     await act(async () => listeners.get('notification')!({ data: JSON.stringify({ payload: {
       type: 'task_changed', action: 'commented', title: 'Новый комментарий',
-      detail: '<span style="background:#1f883d;color:#fff">На утверждении</span>\n**Готово** <figure data-figure-image><img src="/api/attachments/image"/></figure>\n' + 'Подробности '.repeat(100),
+      detail: '<span style="background:#1f883d;color:#fff">На утверждении</span>\n**Готово**\n- Первый пункт\n- [Открыть](https://example.com)\n<script>alert(1)</script><img src="x" onerror="alert(1)"/><figure data-figure-image><img src="/api/attachments/image"/></figure>\n' + 'Подробности '.repeat(100),
       projectId: 'project', taskId: 'task', commentId: 'comment', taskAvailable: true,
       projectName: 'ProjectsFlow', actorDisplayName: 'Воркер',
     } }) }));
@@ -41,10 +41,14 @@ test('clicking the new-comment toast navigates to the exact task and comment', a
     assert.ok(item);
     const title = item.title as React.ReactElement<{ onClick: () => void }>;
     const markup = renderToStaticMarkup(title);
-    assert.match(markup, /На утверждении Готово 🖼 изображение/);
+    assert.match(markup, /На утверждении/);
+    assert.match(markup, /<strong>Готово<\/strong>/);
+    assert.match(markup, /notification-quote-author[^>]*>Воркер/);
+    assert.match(markup, /<ul>/);
+    assert.doesNotMatch(markup, /<script|onerror|<a |<img /);
     assert.doesNotMatch(markup, /&lt;|background:|figure|\*\*/);
     assert.match(markup, /…/);
-    assert.ok(markup.length < 800, 'long comments must have a bounded preview');
+    assert.ok(markup.length < 3500, 'long comments must have a bounded preview');
     await act(async () => title.props.onClick());
     assert.equal(host.querySelector('#target')!.textContent, '/projects/project/tasks/task#comment-comment');
     await act(async () => listeners.get('notification')!({ data: JSON.stringify({ payload: {
