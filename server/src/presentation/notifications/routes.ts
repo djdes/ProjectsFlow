@@ -86,6 +86,16 @@ export function notificationsRouter(deps: Deps): Router {
     if (!workspace) { res.status(404).json({ error: 'workspace_not_found' }); return; }
     const workspaceId = workspace.id;
     let closed = false;
+    const connectedAt = new Date();
+    const rawCursor = req.get('Last-Event-ID');
+    const parsedCursor = rawCursor ? new Date(rawCursor) : null;
+    const cursor = parsedCursor && Number.isFinite(parsedCursor.getTime())
+      ? new Date(Math.floor(Math.max(connectedAt.getTime() - 86_400_000, Math.min(parsedCursor.getTime(), connectedAt.getTime())) / 1000) * 1000)
+      : null;
+    let replaying = cursor !== null;
+    const pending: Notification[] = [];
+    const sent = new Set<string>();
+    let latest = cursor?.getTime() ?? connectedAt.getTime();
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -96,7 +106,12 @@ export function notificationsRouter(deps: Deps): Router {
 
     const send = (n: Notification): void => {
       if (closed || !isVisibleInWorkspace(n, workspaceId)) return;
-      res.write(`event: notification\ndata: ${JSON.stringify(toDto(n, NO_DELETED_TASKS))}\n\n`);
+      if (replaying) { pending.push(n); return; }
+      if (sent.has(n.id)) return;
+      sent.add(n.id);
+      if (sent.size > 1000) sent.delete(sent.values().next().value!);
+      latest = Math.max(latest, n.createdAt.getTime());
+      res.write(`id: ${new Date(latest).toISOString()}\nevent: notification\ndata: ${JSON.stringify(toDto(n, NO_DELETED_TASKS))}\n\n`);
     };
     const unsubscribe = deps.subscribe(req.user!.id, send);
 
@@ -114,12 +129,29 @@ export function notificationsRouter(deps: Deps): Router {
     // Heartbeat — не даёт прокси/браузеру закрыть «молчащий» коннект.
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
 
-    req.on('close', () => {
+    res.on('close', () => {
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
       unsubscribeRealtime();
     });
+
+    // Subscribe first, then replay: writes arriving during the read are buffered.
+    if (cursor) {
+      try {
+        const missed = await deps.list.execute({ userId: req.user!.id, unreadOnly: true, limit: 200 });
+        if (!closed) {
+          replaying = false;
+          for (const n of missed.filter((n) => n.createdAt >= cursor).reverse()) send(n);
+          for (const n of pending) send(n);
+        }
+      } catch {
+        // Keep the last cursor so another reconnect retries the missing interval.
+        if (!closed) res.end();
+        return;
+      }
+    }
+    if (!closed) res.write(`id: ${new Date(latest).toISOString()}\nevent: ready\ndata: {}\n\n`);
   });
 
   router.get('/unread-count', async (req: Request, res: Response, next: NextFunction) => {

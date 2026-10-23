@@ -1,4 +1,4 @@
-import { createElement, useEffect } from 'react';
+import { createElement, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationTaskTarget } from '@/lib/notificationTaskTarget';
 import { plainDescription } from '@/lib/taskTitleBody';
@@ -51,6 +51,7 @@ type RealtimeEvent =
   | { kind: 'workspace_chat_changed'; workspaceId: string };
 
 type StreamPayload =
+  | { type: 'task_approval_requested'; taskExcerpt: string; projectName: string; actorDisplayName: string; projectId?: string; taskId?: string }
   | { type: 'task_changed'; title: string; detail: string; projectName: string; actorDisplayName: string; projectId?: string; taskId?: string; commentId?: string; taskAvailable?: boolean }
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string; commentExcerpt?: string; projectId?: string; taskId?: string; commentId?: string }
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
@@ -71,10 +72,11 @@ type StreamPayload =
 function toastFor(payload: StreamPayload, navigate: (to: string) => void): void {
   const detail = payload.type === 'task_changed' ? plainDescription(payload.detail) : '';
   const preview = detail.length > 240 ? `${detail.slice(0, 240).trimEnd()}…` : detail;
-  if (payload.type === 'task_changed' || payload.type === 'comment_mention') {
+  if (payload.type === 'task_changed' || payload.type === 'comment_mention' || payload.type === 'task_approval_requested') {
     const target = notificationTaskTarget(payload);
     if (target) {
-      const title = payload.type === 'task_changed' ? payload.title : 'Вас упомянули в комментарии';
+      const title = payload.type === 'task_changed' ? payload.title
+        : payload.type === 'task_approval_requested' ? 'Задача ждёт утверждения' : 'Вас упомянули в комментарии';
       const id = toast(createElement('button', {
         type: 'button', className: 'block w-full min-w-0 rounded-md text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80',
         onClick: () => { toast.dismiss(id); navigate(target); },
@@ -82,7 +84,8 @@ function toastFor(payload: StreamPayload, navigate: (to: string) => void): void 
       createElement('span', { className: 'block truncate text-xs font-normal text-muted-foreground' }, payload.projectName),
       createElement(NotificationQuote, {
         author: payload.actorDisplayName,
-        text: payload.type === 'task_changed' ? payload.detail : payload.commentExcerpt,
+        text: payload.type === 'task_changed' ? payload.detail
+          : payload.type === 'task_approval_requested' ? payload.taskExcerpt : payload.commentExcerpt,
       })));
       return;
     }
@@ -122,20 +125,30 @@ function toastFor(payload: StreamPayload, navigate: (to: string) => void): void 
 // EventSource сам переподключается при обрыве. Mount один раз на authenticated-сессию.
 export function useNotificationStream(workspaceId: string): void {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
   useEffect(() => {
     let closed = false;
+    const seen = new Set<string>();
     const source = new EventSource(`/api/notifications/stream?workspaceId=${encodeURIComponent(workspaceId)}`, { withCredentials: true });
 
     source.addEventListener('open', () => {
       if (closed) return;
       window.dispatchEvent(new Event(REALTIME_CONNECTED_EVENT));
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
     });
 
     source.addEventListener('notification', (event) => {
       if (closed) return;
       try {
-        const data = JSON.parse((event as MessageEvent).data) as { payload: StreamPayload };
-        toastFor(data.payload, navigate);
+        const data = JSON.parse((event as MessageEvent).data) as { id?: string; payload: StreamPayload | string };
+        if (data.id && seen.has(data.id)) return;
+        const payload = typeof data.payload === 'string' ? JSON.parse(data.payload) as StreamPayload : data.payload;
+        toastFor(payload, (to) => navigateRef.current(to));
+        if (data.id) {
+          seen.add(data.id);
+          if (seen.size > 1000) seen.delete(seen.values().next().value!);
+        }
       } catch {
         // битый payload — игнорируем, но бейдж всё равно обновим ниже.
       }
@@ -197,5 +210,5 @@ export function useNotificationStream(workspaceId: string): void {
     });
 
     return () => { closed = true; source.close(); };
-  }, [workspaceId, navigate]);
+  }, [workspaceId]);
 }

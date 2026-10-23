@@ -206,3 +206,28 @@ test('SSE: notifications and realtime events from another workspace never reach 
   assert.ok(event.includes('p-a')); assert.ok(!event.includes('p-b'));
   abort.abort();
 });
+
+test('SSE reconnect replays missed unread notifications only from the authorized workspace', async (t) => {
+  const h = await harness(t);
+  const since = new Date(Date.now() - 10_000);
+  h.notices.forEach((n, i) => { h.notices[i] = { ...n, createdAt: new Date(since.getTime() + 1000 + i) }; });
+  // MariaDB timestamps have second precision; the browser cursor may have milliseconds.
+  h.notices[2] = { ...h.notices[2]!, createdAt: new Date(Math.floor(since.getTime() / 1000) * 1000) };
+  h.notices[3] = { ...h.notices[3]!, readAt: new Date() };
+  const abort = new AbortController();
+  t.after(() => abort.abort());
+  const response = await fetch(h.base + '/notifications/stream?workspaceId=a', {
+    headers: { 'Last-Event-ID': since.toISOString() }, signal: abort.signal,
+  });
+  const reader = response.body!.getReader();
+  let text = '';
+  while (!text.includes('event: ready')) text += new TextDecoder().decode((await reader.read()).value);
+  assert.match(text, /"id":"n2"/);
+  assert.doesNotMatch(text, /"id":"n[013]"/);
+  assert.match(text, /id: \d{4}-\d{2}-\d{2}T/);
+  h.publish(h.notices[2]!); // duplicate arriving from persistence replay and pub/sub
+  h.publish({ ...h.notices[2]!, id: 'new-notice', createdAt: new Date() });
+  const fresh = new TextDecoder().decode((await reader.read()).value);
+  assert.match(fresh, /new-notice/);
+  assert.doesNotMatch(fresh, /"id":"n2"/);
+});

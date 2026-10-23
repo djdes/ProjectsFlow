@@ -13,9 +13,12 @@ Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
 test('clicking the new-comment toast navigates to the exact task and comment', async (t) => {
   const listeners = new Map<string, (event: { data: string }) => void>();
+  let connections = 0;
+  let closes = 0;
   class Source {
+    constructor() { connections++; }
     addEventListener(name: string, callback: (event: { data: string }) => void) { listeners.set(name, callback); }
-    close() {}
+    close() { closes++; }
   }
   const original = Object.getOwnPropertyDescriptor(globalThis, 'EventSource');
   Object.defineProperty(globalThis, 'EventSource', { value: Source, configurable: true });
@@ -51,11 +54,25 @@ test('clicking the new-comment toast navigates to the exact task and comment', a
     assert.ok(markup.length < 3500, 'long comments must have a bounded preview');
     await act(async () => title.props.onClick());
     assert.equal(host.querySelector('#target')!.textContent, '/projects/project/tasks/task#comment-comment');
+    assert.equal(connections, 1, 'navigation must keep the notification stream connected');
+    assert.equal(closes, 0);
     await act(async () => listeners.get('notification')!({ data: JSON.stringify({ payload: {
       type: 'task_changed', title: 'Задача изменена', detail: '**Готово** <span>теперь</span>',
       projectName: 'ProjectsFlow', actorDisplayName: 'Воркер',
     } }) }));
     const fallback = toast.getToasts().find((entry): entry is ToastT => 'title' in entry && entry.title === 'Задача изменена');
     assert.equal(fallback?.description, 'Воркер · ProjectsFlow\nГотово теперь');
+    const notification = JSON.stringify({ id: 'approval-notice', payload: {
+      type: 'task_approval_requested', taskExcerpt: 'Проверить результат',
+      actorDisplayName: 'Воркер', projectName: 'ProjectsFlow', projectId: 'project', taskId: 'task',
+    } });
+    const before = toast.getToasts().length;
+    await act(async () => {
+      listeners.get('notification')!({ data: notification });
+      listeners.get('notification')!({ data: notification });
+    });
+    assert.equal(toast.getToasts().length, before + 1, 'replayed notifications must not duplicate a toast');
+    const approval = toast.getToasts().at(-1)! as ToastT;
+    assert.match(renderToStaticMarkup(approval.title as React.ReactElement), /Задача ждёт утверждения/);
   } finally { await act(async () => root.unmount()); toast.dismiss(); host.remove(); }
 });
