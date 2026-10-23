@@ -16,6 +16,7 @@ test('phases follow runner steps and success requires the deployed artifact revi
     assert.equal(deploymentPhase(run({ steps: [{ name, status: 'in_progress', conclusion: null }] }), revision), phase);
   }
   const complete = run({ status: 'completed', conclusion: 'success' });
+  assert.equal(deploymentPhase(run({ status: 'completed', conclusion: null }), revision), 'unknown');
   assert.equal(deploymentPhase(complete, null), 'verifying');
   assert.equal(deploymentPhase(complete, 'b'.repeat(40)), 'verifying');
   assert.equal(deploymentPhase(complete, revision), 'success');

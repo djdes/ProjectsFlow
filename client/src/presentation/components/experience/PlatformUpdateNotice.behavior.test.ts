@@ -26,6 +26,9 @@ test('indicator follows real phases, preserves an uncertain status and reloads o
     await show({ phase: 'deploying', stale: true });
     assert.match(host.textContent ?? '', /Статус временно недоступен/);
     assert.equal(host.querySelector('[data-active]')?.getAttribute('data-active'), 'false');
+    await show({ phase: 'unknown', deployedRevision: nextRevision });
+    assert.match(host.textContent ?? '', /Доступна новая версия/);
+    assert.doesNotMatch(host.textContent ?? '', /Сайт обновлён/);
     await show({ phase: 'success', deployedRevision: nextRevision });
     assert.match(host.textContent ?? '', /Сайт обновлён/); assert.equal(reloads, 0);
     const refresh = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Обновить'));
