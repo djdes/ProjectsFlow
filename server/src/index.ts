@@ -3051,6 +3051,13 @@ const { app, devProxyUpgrade } = createApp({
     }),
     changeAssignee: new ChangeTaskAssignee({
       approval: taskApprovalService,
+      getOrCreateInbox: new GetOrCreateInbox({
+        repo: projectRepo,
+        members: projectMemberRepo,
+        idGen: idGenerator,
+        resolveWorkspaceId,
+        isWorkspaceMember,
+      }),
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,

@@ -9,6 +9,7 @@ import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { GetOrCreateInbox } from '../project/GetOrCreateInbox.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 
@@ -18,6 +19,7 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  readonly getOrCreateInbox: Pick<GetOrCreateInbox, 'execute'>;
   readonly activityRecorder?: ActivityRecorder;
 };
 
@@ -67,7 +69,7 @@ export class ChangeTaskAssignee {
     if (task.assignee.userId === assigneeUserId) return task;
     // One committed mutation (including the inbox move), hence one notification.
     const targetInbox = project.isInbox && assigneeUserId !== project.ownerId
-      ? await this.deps.projects.findInboxByOwner(assigneeUserId, project.workspaceId) : null;
+      ? await this.deps.getOrCreateInbox.execute(assigneeUserId, project.ownerId, project.workspaceId) : null;
     const updated = targetInbox && targetInbox.id !== project.id
       ? await this.deps.tasks.moveToProject(taskId, targetInbox.id, assigneeUserId, actorUserId)
       : await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);

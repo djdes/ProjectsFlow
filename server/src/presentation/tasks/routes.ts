@@ -548,6 +548,9 @@ export function tasksRouter(deps: Deps): Router {
           body.assigneeUserId,
         );
         deps.notifyTaskChanged(projectId, [task.assignee.userId]);
+        if (task.projectId !== projectId) {
+          deps.notifyTaskChanged(task.projectId, [task.assignee.userId]);
+        }
         res.json({ task: toDto(task) });
       } catch (e) {
         next(e);

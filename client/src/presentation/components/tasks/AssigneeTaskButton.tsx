@@ -20,7 +20,7 @@ import type { Task } from '@/domain/task/Task';
 
 type Props = {
   task: Task;
-  onChanged: () => void;
+  onChanged: (task: Task) => void;
   projectId?: string;
   className?: string;
   disabled?: boolean;
@@ -108,13 +108,13 @@ export function AssigneeTaskButton({
     });
     setSubmitting(true);
     try {
-      await taskRepository.assign(task.projectId, task.id, target.id);
+      const updated = await taskRepository.assign(task.projectId, task.id, target.id);
       toast.success(
         target.id === user?.id
           ? 'Теперь вы исполнитель'
           : `Исполнитель — ${target.displayName}`,
       );
-      onChanged();
+      onChanged(updated);
     } catch (error) {
       setAssignee(prev);
       toast.error(`Не удалось сменить исполнителя: ${(error as Error).message}`);

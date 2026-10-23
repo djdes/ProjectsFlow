@@ -1996,7 +1996,16 @@ export function TaskDrawer({
                       <div className="flex min-h-7 w-full min-w-0 items-center">
                         <AssigneeTaskButton
                           task={task}
-                          onChanged={() => notifyChanged()}
+                          onChanged={(updated) => {
+                            notifyChanged();
+                            if (updated.projectId !== task.projectId) {
+                              if (asPage) {
+                                navigate(`/projects/${updated.projectId}/tasks/${updated.id}`);
+                              } else {
+                                handleClose();
+                              }
+                            }
+                          }}
                           projectId={isInbox ? undefined : task.projectId}
                           // frozenByApproval отдельным слагаемым: в именованном проекте
                           // переназначение НЕ ходит через canEdit (viewer может «забрать

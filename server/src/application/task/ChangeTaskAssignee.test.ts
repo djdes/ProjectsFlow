@@ -38,11 +38,13 @@ type HarnessOptions = {
   readonly memberships?: Readonly<Record<string, ProjectRole>>;
   readonly sharedUserIds?: readonly string[];
   readonly createdBy?: string;
+  readonly inboxError?: Error;
 };
 
 function makeProject(isInbox: boolean): Project {
   return {
     id: PROJECT_ID,
+    workspaceId: 'workspace-1',
     ownerId: OWNER_ID,
     name: isInbox ? 'Inbox' : 'Roadmap',
     icon: null,
@@ -129,16 +131,19 @@ function makeHarness(options: HarnessOptions = {}) {
     notifications: [] as CreateNotificationInput[],
     emails: [] as EmailMessage[],
     activities: [] as RecordInput[],
+    inboxRequests: [] as Array<{ ownerId: string; actorId: string; workspaceId?: string }>,
   };
 
   const change = new ChangeTaskAssignee({
+    getOrCreateInbox: {
+      execute: async (ownerId: string, actorId = ownerId, workspaceId?: string) => {
+        calls.inboxRequests.push({ ownerId, actorId, workspaceId });
+        if (options.inboxError) throw options.inboxError;
+        return { ...makeProject(true), id: TARGET_INBOX_ID, ownerId };
+      },
+    },
     projects: {
       getById: async (id: string) => (id === PROJECT_ID ? project : null),
-      // Инбокс получателя: у TARGET_ID он есть, у остальных — нет (проверяем и этот путь).
-      findInboxByOwner: async (ownerId: string) =>
-        ownerId === TARGET_ID
-          ? { ...makeProject(true), id: TARGET_INBOX_ID, ownerId: TARGET_ID }
-          : null,
     } as never,
     members: {
       findForProject: async (projectId: string, userId: string) => {
@@ -402,8 +407,7 @@ test('именованный проект: смена ответственног
   assert.equal(updated.projectId, PROJECT_ID);
 });
 
-test('inbox: у получателя нет входящих — назначение проходит, запись остаётся на месте', async () => {
-  // VIEWER_ID в фейке findInboxByOwner возвращает null. Терять назначение из-за этого нельзя.
+test('inbox: у получателя нет входящих — создаём их в пространстве задачи и переносим запись', async () => {
   const h = makeHarness({
     isInbox: true,
     assigneeUserId: OWNER_ID,
@@ -412,7 +416,24 @@ test('inbox: у получателя нет входящих — назначе�
 
   const updated = await h.change.execute(PROJECT_ID, TASK_ID, OWNER_ID, VIEWER_ID);
 
-  assert.deepEqual(h.calls.projectMoves, []);
+  assert.deepEqual(h.calls.inboxRequests, [
+    { ownerId: VIEWER_ID, actorId: OWNER_ID, workspaceId: 'workspace-1' },
+  ]);
+  assert.deepEqual(h.calls.projectMoves, [
+    { taskId: TASK_ID, targetProjectId: TARGET_INBOX_ID, assigneeUserId: VIEWER_ID },
+  ]);
   assert.equal(updated.assignee.userId, VIEWER_ID);
-  assert.equal(updated.projectId, PROJECT_ID);
+  assert.equal(updated.projectId, TARGET_INBOX_ID);
+});
+
+test('inbox: failure to create recipient inbox leaves the task unchanged', async () => {
+  const h = makeHarness({
+    isInbox: true, assigneeUserId: OWNER_ID, inboxError: new Error('Inbox unavailable'),
+  });
+  await assert.rejects(
+    h.change.execute(PROJECT_ID, TASK_ID, OWNER_ID, TARGET_ID),
+    /Inbox unavailable/,
+  );
+  assert.deepEqual(h.calls.updates, []);
+  assert.deepEqual(h.calls.projectMoves, []);
 });
