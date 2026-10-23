@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { InviteEmailMismatchError } from '../../domain/invite/recipient.js';
 import { ZodError } from 'zod';
 import { AgentTaskDispatchForbiddenError } from '../../application/agent/AgentTaskDispatchPolicy.js';
 import {
@@ -308,6 +309,10 @@ export function errorHandler(
     return;
   }
 
+  if (err instanceof InviteEmailMismatchError) {
+    res.status(403).json({ error: 'invite_email_mismatch', message: err.message });
+    return;
+  }
   if (err instanceof ProjectInviteNotFoundError) {
     res.status(404).json({ error: 'invite_not_found', message: 'Приглашение не найдено' });
     return;

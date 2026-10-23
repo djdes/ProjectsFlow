@@ -26,11 +26,15 @@ type LoadState =
 export function InvitePage(): React.ReactElement {
   const { token } = useParams<{ token: string }>();
   const { inviteRepository } = useContainer();
-  const { status } = useAuth();
+  const { status, user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [accepting, setAccepting] = useState(false);
+  const [recipientRejected, setRecipientRejected] = useState(false);
+  const inviteEmail = state.status === 'ready' ? state.preview.inviteEmail : null;
+  const wrongAccount = status === 'authenticated' && (recipientRejected ||
+    (inviteEmail !== null && inviteEmail.trim().toLowerCase() !== user?.email.trim().toLowerCase()));
 
   useEffect(() => {
     if (!token) return;
@@ -62,7 +66,7 @@ export function InvitePage(): React.ReactElement {
   }, [status, state, location.pathname, navigate]);
 
   const accept = async (): Promise<void> => {
-    if (!token) return;
+    if (!token || wrongAccount) return;
     setAccepting(true);
     try {
       const res = await inviteRepository.accept(token);
@@ -75,11 +79,26 @@ export function InvitePage(): React.ReactElement {
         navigate('/', { replace: true });
       }
     } catch (e) {
+      if (e instanceof HttpError && e.body.error === 'invite_email_mismatch') {
+        setRecipientRejected(true);
+      }
       const msg =
         e instanceof HttpError && e.status === 410
           ? 'Приглашение больше не действительно.'
           : `Не удалось принять: ${(e as Error).message}`;
       toast.error(msg);
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const switchAccount = async (): Promise<void> => {
+    setAccepting(true);
+    try {
+      // The anonymous-recipient effect opens the matching auth form, retaining this invitation.
+      await logout();
+    } catch {
+      toast.error('Не удалось выйти из аккаунта. Попробуйте ещё раз.');
     } finally {
       setAccepting(false);
     }
@@ -141,15 +160,29 @@ export function InvitePage(): React.ReactElement {
             </div>
           </div>
 
-          {status === 'authenticated' ? (
-            <div className="flex gap-2">
-              <Button size="lg" className="flex-1" onClick={() => void accept()} disabled={accepting}>
+          {wrongAccount ? (
+            <div className="flex flex-col gap-3" role="alert">
+              <ErrorNote>
+                Сейчас открыт аккаунт {user?.email ?? 'с другой почтой'}.
+                Приглашение предназначено для {inviteEmail}. Войдите с этой почтой, чтобы принять его.
+              </ErrorNote>
+              <Button size="lg" className="w-full" onClick={() => void switchAccount()} disabled={accepting}>
                 {accepting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
-                Принять
+                Сменить аккаунт
               </Button>
-              <Button variant="ghost" size="lg" asChild>
-                <Link to="/">Отказаться</Link>
-              </Button>
+            </div>
+          ) : status === 'authenticated' ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">Аккаунт: {user?.email}</p>
+              <div className="flex gap-2">
+                <Button size="lg" className="flex-1" onClick={() => void accept()} disabled={accepting}>
+                  {accepting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : null}
+                  Принять
+                </Button>
+                <Button variant="ghost" size="lg" asChild>
+                  <Link to="/">Отказаться</Link>
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-2">

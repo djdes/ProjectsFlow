@@ -5,6 +5,7 @@ import {
 } from '../../domain/workspace/errors.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
+import { assertInviteRecipientEmail } from '../../domain/invite/recipient.js';
 
 type WorkspacesPort = {
   getMembership(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
@@ -14,6 +15,7 @@ type WorkspacesPort = {
 };
 
 type Deps = {
+  readonly users: { getById(id: string): Promise<{ email: string } | null> };
   readonly invites: WorkspaceInviteRepository;
   readonly workspaces: WorkspacesPort;
   readonly now: () => Date;
@@ -28,6 +30,10 @@ export class AcceptWorkspaceInvite {
     if (invite.acceptedAt !== null) throw new WorkspaceInviteAlreadyUsedError();
     const now = this.deps.now();
     if (invite.expiresAt.getTime() <= now.getTime()) throw new WorkspaceInviteExpiredError();
+    if (invite.email !== null) {
+      const user = await this.deps.users.getById(userId);
+      assertInviteRecipientEmail(invite.email, user?.email ?? null);
+    }
 
     await this.deps.invites.acceptWithMembership({
       inviteId: invite.id, acceptedAt: now, acceptedByUserId: userId,

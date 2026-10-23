@@ -456,7 +456,7 @@ export type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
 export type NewWorkspaceMemberRow = typeof workspaceMembers.$inferInsert;
 
 // Invite-ссылки в пространство (db/111) — замена per-project приглашений. Токен одноразовый,
-// TTL 7 дней; email — информационное поле, mismatch не блокирует accept.
+// TTL 7 дней; адресные приглашения принимаются только аккаунтом с указанной почтой.
 export const workspaceInvites = mysqlTable(
   'workspace_invites',
   {

@@ -40,7 +40,7 @@ export type CreateWorkspaceInviteCommand = {
   readonly workspaceId: string;
   readonly actorUserId: string;
   readonly role: WorkspaceInviteRole;
-  // Информационный email — mismatch при accept разрешён (как у project-инвайтов).
+  // Адресное приглашение: при принятии проверяется почта текущего аккаунта.
   readonly email: string | null;
   readonly excludedProjectIds?: readonly string[];
 };

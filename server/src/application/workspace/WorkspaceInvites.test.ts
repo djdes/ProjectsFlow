@@ -21,6 +21,7 @@ import {
   WorkspaceInviteCooldownError,
 } from '../../domain/workspace/errors.js';
 import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
+import { InviteEmailMismatchError } from '../../domain/invite/recipient.js';
 
 const NOW = new Date('2026-07-13T12:00:00Z');
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -139,7 +140,7 @@ function makeFakes(seed: Seed = {}) {
   const usersPort = {
     async getById(id: string) {
       const u = users.find((x) => x.id === id);
-      return u ? { displayName: u.displayName } : null;
+      return u ? { displayName: u.displayName, email: u.email } : null;
     },
     async getByEmail(email: string) {
       const u = users.find((x) => x.email === email);
@@ -176,6 +177,7 @@ function makeFakes(seed: Seed = {}) {
     telegram: { execute: async () => ({ status: 'not_connected' }) }, appUrl: 'https://projectsflow.ru', now: () => NOW });
   const manage = new ManageWorkspaceInvite({ invites: invitesRepo, workspaces, appUrl: 'https://projectsflow.ru', now: () => NOW, ttlMs: TTL_MS });
   const accept = new AcceptWorkspaceInvite({
+    users: usersPort,
     invites: invitesRepo,
     workspaces,
     now: () => NOW,
@@ -353,6 +355,30 @@ test('accept: использованный → WorkspaceInviteAlreadyUsedError',
     invites: [pendingInvite({ acceptedAt: NOW, acceptedByUserId: 'u9' })],
   });
   await assert.rejects(() => accept.execute('t'.repeat(64), 'u2'), WorkspaceInviteAlreadyUsedError);
+});
+
+test('addressed workspace invitation rejects even an existing member with a different email and remains usable', async () => {
+  const f = makeFakes({
+    invites: [pendingInvite({ email: 'recipient@example.test', excludedProjectIds: ['p2'] })],
+    members: [{ workspaceId: 'w1', userId: 'wrong', role: 'editor' }],
+    users: [{ id: 'wrong', email: 'wrong@example.test', displayName: 'Other' },
+      { id: 'right', email: ' RECIPIENT@EXAMPLE.TEST ', displayName: 'Recipient' }],
+  });
+  await assert.rejects(f.accept.execute('t'.repeat(64), 'wrong'), InviteEmailMismatchError);
+  assert.equal((await f.invitesRepo.getById('inv-1'))?.acceptedAt, null);
+  assert.equal(f.members.length, 1);
+  assert.deepEqual(f.exclusions, []);
+  await f.accept.execute('t'.repeat(64), 'right');
+  assert.equal((await f.invitesRepo.getById('inv-1'))?.acceptedByUserId, 'right');
+  assert.equal(f.members.length, 2);
+  assert.deepEqual(f.exclusions, [{ projectId: 'p2', userId: 'right' }]);
+});
+
+test('addressed workspace invitation rejects a deleted account without consuming the invitation', async () => {
+  const f = makeFakes({ invites: [pendingInvite({ email: 'recipient@example.test' })] });
+  await assert.rejects(f.accept.execute('t'.repeat(64), 'missing'), InviteEmailMismatchError);
+  assert.equal((await f.invitesRepo.getById('inv-1'))?.acceptedAt, null);
+  assert.equal(f.members.length, 0);
 });
 
 test('list: expired invitations remain visible until accepted or revoked', async () => {

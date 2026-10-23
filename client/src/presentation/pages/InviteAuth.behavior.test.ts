@@ -13,12 +13,16 @@ import { build } from 'esbuild';
 test('invitation routes recipients to auth, prefills email and retains the return target', async () => {
   const scope = globalThis as typeof globalThis & { __inviteAuth: unknown };
   const navigations: string[] = [];
+  let accepts = 0;
+  let logouts = 0;
   const context = {
     status: 'anonymous',
+    user: { email: 'friend+team@example.test' },
+    logout: async () => { logouts++; context.status = 'anonymous'; },
     location: { pathname: '/invite/token', search: '', state: null },
     navigate: (to: string) => navigations.push(to),
-    preview: { kind: 'workspace', targetName: 'Команда', role: 'editor', inviteEmail: 'friend+team@example.test', authMode: 'register', expiresAt: new Date() },
-    repository: { getPreview: async () => context.preview },
+    preview: { kind: 'workspace', targetName: 'Команда', role: 'editor', inviteEmail: 'friend+team@example.test' as string | null, authMode: 'register', expiresAt: new Date() },
+    repository: { getPreview: async () => context.preview, accept: async () => { accepts++; return { workspaceId: 'workspace' }; } },
   };
   scope.__inviteAuth = context;
   const result = await build({
@@ -47,7 +51,7 @@ test('invitation routes recipients to auth, prefills email and retains the retur
   const host = document.createElement('div'); document.body.append(host);
   const root = createRoot(host);
   const render = async (name: string) => {
-    await act(async () => { root.render(React.createElement(module.exports[name], { key: `${name}-${context.preview.authMode}` })); });
+    await act(async () => { root.render(React.createElement(module.exports[name], { key: `${name}-${context.preview.authMode}-${context.preview.inviteEmail}` })); });
   };
   try {
     await render('InvitePage');
@@ -72,9 +76,40 @@ test('invitation routes recipients to auth, prefills email and retains the retur
 
     context.status = 'authenticated';
     navigations.length = 0;
+    context.location = { pathname: '/invite/token', search: '', state: null };
     await render('InvitePage');
     assert.equal(navigations.length, 0, 'authenticated recipients stay on the acceptance screen');
     assert.ok([...host.querySelectorAll('button')].some(button => button.textContent?.includes('Принять')));
+
+    context.user.email = 'other@example.test';
+    await render('InvitePage');
+    assert.ok(host.textContent?.includes('other@example.test'));
+    assert.ok(host.textContent?.includes(context.preview.inviteEmail!));
+    assert.equal([...host.querySelectorAll('button')].some(button => button.textContent?.includes('Принять')), false);
+    assert.equal(accepts, 0, 'a wrong session must not consume the invitation');
+    const switchButton = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Сменить аккаунт'));
+    assert.ok(switchButton);
+    await act(async () => { switchButton.click(); });
+    await render('InvitePage');
+    assert.equal(logouts, 1);
+    target = new URL(navigations.pop()!, 'https://app.test');
+    assert.equal(target.pathname, '/login');
+    assert.equal(target.searchParams.get('email'), context.preview.inviteEmail);
+    assert.equal(target.searchParams.get('next'), '/invite/token');
+
+    context.status = 'authenticated';
+    context.location = { pathname: '/invite/token', search: '', state: null };
+    context.user.email = 'FRIEND+TEAM@EXAMPLE.TEST';
+    await render('InvitePage');
+    const acceptButton = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Принять'));
+    assert.ok(acceptButton);
+    await act(async () => { acceptButton.click(); });
+    assert.equal(accepts, 1, 'the intended recipient can accept after switching accounts');
+
+    context.preview = { ...context.preview, inviteEmail: null };
+    context.user.email = 'anyone@example.test';
+    await render('InvitePage');
+    assert.ok([...host.querySelectorAll('button')].some(button => button.textContent?.includes('Принять')), 'unaddressed share links remain usable by any signed-in account');
   } finally {
     await act(async () => { root.unmount(); }); host.remove();
   }

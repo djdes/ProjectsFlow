@@ -6,8 +6,9 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { invitesRouter } from './routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import type { GetInviteByToken } from '../../application/project/GetInviteByToken.js';
-import type { AcceptWorkspaceInvite } from '../../application/workspace/AcceptWorkspaceInvite.js';
-import type { AcceptProjectInvite } from '../../application/project/AcceptProjectInvite.js';
+import { AcceptWorkspaceInvite } from '../../application/workspace/AcceptWorkspaceInvite.js';
+import { AcceptProjectInvite } from '../../application/project/AcceptProjectInvite.js';
+import type { WorkspaceInviteRepository } from '../../application/workspace/WorkspaceInviteRepository.js';
 import {
   WorkspaceInviteAlreadyUsedError,
   WorkspaceInviteNotFoundError,
@@ -23,6 +24,32 @@ const FAKE_USER: User = {
   isAdmin: false,
   createdAt: new Date('2026-01-01T00:00:00Z'),
 };
+
+for (const kind of ['workspace', 'project'] as const) {
+  test(`POST accept ${kind}: authenticated account must match the invitation despite a forged body`, async () => {
+    let writes = 0;
+    const invite = { id: 'invite', workspaceId: 'w1', projectId: 'p1', role: 'editor' as const,
+      token: 'addressed', email: 'recipient@example.test', acceptedAt: null, acceptedByUserId: null,
+      expiresAt: new Date('2030-01-01'), createdAt: new Date('2026-01-01'), createdByUserId: 'inviter' };
+    const users = { getById: async () => ({ email: FAKE_USER.email }) };
+    const workspaces = { getMembership: async () => null, addMember: async () => { writes++; }, absorbDefaultHubInto: async () => false };
+    const acceptWorkspace = new AcceptWorkspaceInvite({ users, workspaces, now: () => new Date('2026-10-23'),
+      invites: { findByToken: async () => kind === 'workspace' ? invite : null,
+        acceptWithMembership: async () => { writes++; } } as unknown as WorkspaceInviteRepository });
+    const acceptProject = new AcceptProjectInvite({ users, workspaces, now: () => new Date('2026-10-23'),
+      projects: { getWorkspaceId: async () => 'w1' }, invites: { findByToken: async () => invite,
+        markAccepted: async () => { writes++; return invite; } } });
+    await withServer({ acceptWorkspace, acceptProject }, async baseUrl => {
+      const res = await fetch(`${baseUrl}/api/invites/addressed/accept`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: invite.email, userId: 'recipient' }),
+      });
+      assert.equal(res.status, 403);
+      assert.equal((await res.json() as { error: string }).error, 'invite_email_mismatch');
+    });
+    assert.equal(writes, 0, 'mismatch must not create membership, exclusions or accepted state');
+  });
+}
 
 // GetInviteByToken не участвует в accept-развилке — заглушка, чтобы удовлетворить Deps.
 const NOOP_GET_BY_TOKEN = {

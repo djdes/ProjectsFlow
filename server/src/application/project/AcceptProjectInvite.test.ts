@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { AcceptProjectInvite } from './AcceptProjectInvite.js';
 import type { ProjectInvite } from '../../domain/project/ProjectInvite.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
+import { InviteEmailMismatchError } from '../../domain/invite/recipient.js';
 import {
   ProjectInviteExpiredError,
   ProjectInviteNotFoundError,
@@ -24,11 +25,13 @@ function invite(over: Partial<ProjectInvite> = {}): ProjectInvite {
 function makeFakes(seed: {
   invites?: ProjectInvite[];
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
+  userEmail?: string | null;
 }) {
   const invites = new Map<string, ProjectInvite>((seed.invites ?? []).map((i) => [i.id, i]));
   const members = (seed.members ?? []).map((m) => ({ ...m }));
 
   const uc = new AcceptProjectInvite({
+    users: { getById: async () => seed.userEmail ? { email: seed.userEmail } : null },
     invites: {
       async findByToken(token) {
         for (const i of invites.values()) if (i.token === token) return i;
@@ -91,4 +94,23 @@ test('accept: просроченный → ProjectInviteExpiredError, участ
   });
   await assert.rejects(() => uc.execute(TOKEN, 'u2'), ProjectInviteExpiredError);
   assert.equal(members.length, 0);
+});
+
+test('addressed legacy invite rejects a different account without adding membership or consuming the token', async () => {
+  const f = makeFakes({ invites: [invite({ email: 'recipient@example.test' })], userEmail: 'other@example.test' });
+  await assert.rejects(f.uc.execute(TOKEN, 'wrong-user'), InviteEmailMismatchError);
+  assert.equal(f.members.length, 0);
+  assert.equal(f.invites.get('pi-1')?.acceptedAt, null);
+});
+
+test('addressed legacy invite accepts the matching email ignoring case and surrounding whitespace', async () => {
+  const f = makeFakes({ invites: [invite({ email: ' Recipient@Example.Test ' })], userEmail: 'recipient@example.test' });
+  await f.uc.execute(TOKEN, 'recipient');
+  assert.equal(f.invites.get('pi-1')?.acceptedByUserId, 'recipient');
+});
+
+test('addressed legacy invite fails closed when the authenticated account no longer exists', async () => {
+  const f = makeFakes({ invites: [invite({ email: 'recipient@example.test' })] });
+  await assert.rejects(f.uc.execute(TOKEN, 'missing'), InviteEmailMismatchError);
+  assert.equal(f.invites.get('pi-1')?.acceptedAt, null);
 });

@@ -11,6 +11,7 @@ import type {
 } from '../../domain/workspace/WorkspaceMember.js';
 import type { AcceptProjectInviteInput } from './ProjectInviteRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
+import { assertInviteRecipientEmail } from '../../domain/invite/recipient.js';
 
 // Узкие структурные порты (реальные projectRepo/workspaceRepo им соответствуют).
 type InvitesPort = {
@@ -26,6 +27,7 @@ type WorkspacesPort = {
 };
 
 type Deps = {
+  readonly users: { getById(id: string): Promise<{ email: string } | null> };
   readonly invites: InvitesPort;
   readonly projects: ProjectsPort;
   readonly workspaces: WorkspacesPort;
@@ -50,6 +52,10 @@ export class AcceptProjectInvite {
     if (invite.acceptedAt !== null) throw new ProjectInviteAlreadyUsedError();
     const now = this.deps.now();
     if (invite.expiresAt.getTime() < now.getTime()) throw new ProjectInviteExpiredError();
+    if (invite.email !== null) {
+      const user = await this.deps.users.getById(userId);
+      assertInviteRecipientEmail(invite.email, user?.email ?? null);
+    }
 
     const workspaceId = await this.deps.projects.getWorkspaceId(invite.projectId);
     if (!workspaceId) throw new ProjectNotFoundError();

@@ -2519,11 +2519,13 @@ const { app, devProxyUpgrade } = createApp({
       now,
     }),
     acceptWorkspace: new AcceptWorkspaceInvite({
+      users: userRepo,
       invites: workspaceInviteRepo,
       workspaces: workspaceRepo,
       now,
     }),
     acceptProject: new AcceptProjectInvite({
+      users: userRepo,
       invites: projectInviteRepo,
       projects: projectRepo,
       workspaces: workspaceRepo,
