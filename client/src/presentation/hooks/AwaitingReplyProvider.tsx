@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useContainer } from '@/infrastructure/di/container';
 import type { AwaitingReplyTask } from '@/domain/task/AwaitingReplyTask';
@@ -27,11 +27,13 @@ const AwaitingReplyContext = createContext<AwaitingReply | null>(null);
 export function AwaitingReplyProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const { taskAssigneeRepository } = useContainer();
   const [tasks, setTasks] = useState<readonly AwaitingReplyTask[]>([]);
+  const requestSequence = useRef(0);
 
   const refresh = useCallback((): void => {
+    const request = ++requestSequence.current;
     taskAssigneeRepository
       .listAwaitingReply()
-      .then(setTasks)
+      .then(list => { if (request === requestSequence.current) setTasks(list); })
       .catch(() => {
         // Тихо: подсветка — подсказка, а не повод показывать ошибку поверх работы.
       });

@@ -46,6 +46,14 @@ export type TaskComment = {
   readonly quotedText: string | null;
   // Вложения комментария (на list-эндпоинте). На create — пусто (грузятся отдельно).
   readonly attachments: TaskAttachment[];
+  readonly acknowledgements?: readonly CommentAcknowledgement[];
+};
+
+export type CommentAcknowledgement = {
+  readonly commentId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly acknowledgedAt: Date;
 };
 
 // Строка журнала доставки уведомления (для меню ⋮ «Кто уведомлён»).

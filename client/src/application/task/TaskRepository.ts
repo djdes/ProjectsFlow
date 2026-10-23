@@ -144,6 +144,7 @@ export interface TaskRepository {
     attachmentId: string,
   ): Promise<void>;
   listComments(projectId: string, taskId: string): Promise<TaskComment[]>;
+  setCommentAcknowledged(projectId: string, taskId: string, commentId: string, accepted: boolean): Promise<NonNullable<TaskComment['acknowledgements']>>;
   // notify — адресация уведомления из композера (по умолчанию все участники).
   // reply — ответ/цитата (db/080): на какой коммент отвечаем + опц. цитируемый фрагмент.
   createComment(

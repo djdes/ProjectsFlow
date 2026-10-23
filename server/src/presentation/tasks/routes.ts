@@ -22,6 +22,7 @@ import type { UploadTaskAttachment } from '../../application/task/UploadTaskAtta
 import type { DeleteTaskAttachment } from '../../application/task/DeleteTaskAttachment.js';
 import type { ListTaskAttachments } from '../../application/task/ListTaskAttachments.js';
 import type { ListTaskComments } from '../../application/task/ListTaskComments.js';
+import type { AcknowledgeTaskComment } from '../../application/task/AcknowledgeTaskComment.js';
 import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment.js';
@@ -80,6 +81,7 @@ type Deps = {
   readonly deleteAttachment: DeleteTaskAttachment;
   readonly listAttachments: ListTaskAttachments;
   readonly listComments: ListTaskComments;
+  readonly acknowledgeComment: AcknowledgeTaskComment;
   readonly createComment: CreateTaskComment;
   readonly updateComment: UpdateTaskComment;
   readonly deleteComment: DeleteTaskComment;
@@ -699,6 +701,19 @@ export function tasksRouter(deps: Deps): Router {
   );
 
   // Comments
+  for (const method of ['put', 'delete'] as const) {
+    router[method]('/:taskId/comments/:commentId/acknowledgement', async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const acknowledgements = await deps.acknowledgeComment.execute(
+          projectId, req.params['taskId'] as string, req.params['commentId'] as string,
+          req.user!.id, method === 'put',
+        );
+        res.json({ acknowledgements });
+      } catch (e) { next(e); }
+    });
+  }
+
   router.get('/:taskId/comments', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = req.params['projectId'] as string;

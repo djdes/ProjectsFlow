@@ -292,7 +292,7 @@ function TaskLiveChat({
         {timelineError && <p role="status" className="text-sm text-muted-foreground">{timelineError}</p>}
         {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-md border px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
         {shown.map(entry => {
-          if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
+          if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
           if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
           return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' ? 'работает' : STATUS_LABEL_RU[entry.session.status]}</p>;

@@ -13,6 +13,7 @@ import type {
   CommentNotifications,
   NotifyAudience,
   TaskComment,
+  CommentAcknowledgement,
 } from '@/domain/task/TaskComment';
 import type {
   CreateTaskInput,
@@ -86,10 +87,12 @@ type AttachmentDto = Omit<TaskAttachment, 'uploadedAt'> & {
   uploadedAt: string;
 };
 
-type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt' | 'attachments'> & {
+type AcknowledgementDto = Omit<CommentAcknowledgement, 'acknowledgedAt'> & { acknowledgedAt: string };
+type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt' | 'attachments' | 'acknowledgements'> & {
   createdAt: string;
   updatedAt: string;
   attachments?: AttachmentDto[];
+  acknowledgements?: AcknowledgementDto[];
 };
 
 export function fromDto(dto: TaskDto): Task {
@@ -203,6 +206,7 @@ function commentFromDto(dto: CommentDto): TaskComment {
     replyToCommentId: dto.replyToCommentId ?? null,
     quotedText: dto.quotedText ?? null,
     attachments: (dto.attachments ?? []).map(attachmentFromDto),
+    acknowledgements: (dto.acknowledgements ?? []).map(a => ({ ...a, acknowledgedAt: new Date(a.acknowledgedAt) })),
   };
 }
 
@@ -374,6 +378,14 @@ export class HttpTaskRepository implements TaskRepository {
       `/projects/${projectId}/tasks/${taskId}/comments/${commentId}/attachments/${attachmentId}`,
     );
   }
+  async setCommentAcknowledged(projectId: string, taskId: string, commentId: string, accepted: boolean): Promise<CommentAcknowledgement[]> {
+    const path = `/projects/${projectId}/tasks/${taskId}/comments/${commentId}/acknowledgement`;
+    const { acknowledgements } = accepted
+      ? await httpClient.put<{ acknowledgements: AcknowledgementDto[] }>(path)
+      : await httpClient.delete<{ acknowledgements: AcknowledgementDto[] }>(path);
+    return acknowledgements.map(a => ({ ...a, acknowledgedAt: new Date(a.acknowledgedAt) }));
+  }
+
   async listComments(projectId: string, taskId: string): Promise<TaskComment[]> {
     const { comments } = await httpClient.get<{ comments: CommentDto[] }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,

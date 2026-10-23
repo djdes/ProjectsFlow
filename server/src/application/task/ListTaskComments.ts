@@ -7,10 +7,13 @@ import { requireTaskReadAccess } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
+import type { CommentAcknowledgementRepository } from './CommentAcknowledgementRepository.js';
+import type { CommentAcknowledgement } from '../../domain/task/CommentAcknowledgement.js';
 
 // Read-model: комментарий + его вложения (для ленты обсуждения).
 export type TaskCommentWithAttachments = TaskComment & {
   readonly attachments: TaskAttachment[];
+  readonly acknowledgements: CommentAcknowledgement[];
 };
 
 type Deps = {
@@ -19,6 +22,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
   readonly attachments: TaskAttachmentRepository;
+  readonly acknowledgements?: CommentAcknowledgementRepository;
 };
 
 export class ListTaskComments {
@@ -34,6 +38,7 @@ export class ListTaskComments {
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
     const comments = await this.deps.comments.listByTask(taskId);
     const byComment = await this.deps.attachments.listByCommentIds(comments.map((c) => c.id));
-    return comments.map((c) => ({ ...c, attachments: byComment.get(c.id) ?? [] }));
+    const accepted = await this.deps.acknowledgements?.listByComments(comments.map(c => c.id)) ?? [];
+    return comments.map((c) => ({ ...c, attachments: byComment.get(c.id) ?? [], acknowledgements: accepted.filter(a => a.commentId === c.id) }));
   }
 }

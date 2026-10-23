@@ -148,6 +148,9 @@ export class DrizzleTaskCommentRepository implements TaskCommentRepository {
           sql`NOT EXISTS (SELECT 1 FROM task_comments r
             WHERE r.task_id = ${taskComments.taskId} AND r.owner_user_id = ${userId}
               AND r.actor_kind = 'user' AND r.created_at >= ${taskComments.createdAt})`,
+          sql`NOT EXISTS (SELECT 1 FROM task_comment_acknowledgements a
+            WHERE a.comment_id = ${taskComments.id} AND a.user_id = ${userId}
+              AND a.comment_body_hash = UNHEX(SHA2(${taskComments.body}, 256)))`,
         ),
       )
       .orderBy(desc(taskComments.createdAt))

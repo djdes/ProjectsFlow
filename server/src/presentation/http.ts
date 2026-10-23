@@ -144,6 +144,7 @@ import type { DeleteTaskAttachment } from '../application/task/DeleteTaskAttachm
 import type { ListTaskAttachments } from '../application/task/ListTaskAttachments.js';
 import type { GetTaskAttachment } from '../application/task/GetTaskAttachment.js';
 import type { ListTaskComments } from '../application/task/ListTaskComments.js';
+import type { AcknowledgeTaskComment } from '../application/task/AcknowledgeTaskComment.js';
 import type { ListTaskCommentsForAgent } from '../application/task/ListTaskCommentsForAgent.js';
 import type { MaybeReopenForClarification } from '../application/task/MaybeReopenForClarification.js';
 import type { TaskRepository } from '../application/task/TaskRepository.js';
@@ -638,6 +639,7 @@ type AppDeps = {
     // Секрет для проверки подписанных URL картинок-вложений (письмо/Telegram, без сессии).
     readonly signingSecret: string;
     readonly listComments: ListTaskComments;
+    readonly acknowledgeComment: AcknowledgeTaskComment;
     readonly createComment: CreateTaskComment;
     readonly updateComment: UpdateTaskComment;
     readonly deleteComment: DeleteTaskComment;

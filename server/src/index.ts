@@ -338,6 +338,8 @@ import { DeleteTaskAttachment } from './application/task/DeleteTaskAttachment.js
 import { ListTaskAttachments } from './application/task/ListTaskAttachments.js';
 import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
 import { ListTaskComments } from './application/task/ListTaskComments.js';
+import { AcknowledgeTaskComment } from './application/task/AcknowledgeTaskComment.js';
+import { MysqlCommentAcknowledgementRepository } from './infrastructure/repositories/MysqlCommentAcknowledgementRepository.js';
 import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsForAgent.js';
 import { MaybeReopenForClarification } from './application/task/MaybeReopenForClarification.js';
 import { HttpTelegramClient } from './infrastructure/telegram/HttpTelegramClient.js';
@@ -704,6 +706,7 @@ const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
 const MAX_COVER_BYTES = 20 * 1024 * 1024;
 console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
+const commentAcknowledgementRepo = new MysqlCommentAcknowledgementRepository(pool);
 const taskBillingAttributionRepo = new DrizzleTaskBillingAttributionRepository(db);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
 const workspaceAssigneeDigestRepo = new DrizzleWorkspaceAssigneeDigestRepository(db);
@@ -2902,6 +2905,12 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       attachments: taskAttachmentRepo,
+      acknowledgements: commentAcknowledgementRepo,
+    }),
+    acknowledgeComment: new AcknowledgeTaskComment({
+      projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
+      comments: taskCommentRepo, acknowledgements: commentAcknowledgementRepo,
+      onChanged: notifyTaskChanged,
     }),
     createComment: createTaskCommentUseCase,
     updateComment: new UpdateTaskComment({

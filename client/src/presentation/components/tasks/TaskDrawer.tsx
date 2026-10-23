@@ -14,6 +14,8 @@ import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLe
 import { useNavigate } from 'react-router-dom';
 import type { TaskPropertyKey } from '@/domain/user/UiPrefs';
 import { TaskProperties, type TaskProperty } from './TaskProperties';
+import { CommentAcknowledgement } from './CommentAcknowledgement';
+import { TASK_CHANGED_EVENT, REALTIME_CONNECTED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { TaskStatusField } from './TaskStatusField';
 import { TaskProjectField } from './TaskProjectField';
 import {
@@ -2540,21 +2542,29 @@ function TaskCommentsSection({
 
   useEffect(() => {
     let cancelled = false;
+    let sequence = 0;
+    let firstLoaded = false;
     setLoading(true);
-    taskRepository
-      .listComments(projectId, taskId)
-      .then((list) => {
-        if (!cancelled) {
-          setComments(list);
-          onFirstLoad?.();
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) toast.error(`Не удалось загрузить комментарии: ${(e as Error).message}`);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    const reload = (): void => {
+      const request = ++sequence;
+      void taskRepository.listComments(projectId, taskId).then(list => {
+        if (cancelled || request !== sequence) return;
+        setComments(list);
+        if (!firstLoaded) { firstLoaded = true; onFirstLoad?.(); }
+      }).catch((e: unknown) => {
+        if (!cancelled && request === sequence && !firstLoaded) toast.error(`Не удалось загрузить комментарии: ${(e as Error).message}`);
+      }).finally(() => {
+        if (!cancelled && request === sequence) setLoading(false);
       });
+    };
+    const onChanged = (event: Event): void => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
+      if (event.type === TASK_CHANGED_EVENT && detail?.projectId !== projectId) return;
+      reload();
+    };
+    reload();
+    window.addEventListener(TASK_CHANGED_EVENT, onChanged);
+    window.addEventListener(REALTIME_CONNECTED_EVENT, onChanged);
     (canReadProject ? projectRepository.listMembers(projectId) : Promise.resolve([]))
       .then((list) => {
         if (!cancelled) setMembers(list);
@@ -2564,6 +2574,8 @@ function TaskCommentsSection({
       });
     return () => {
       cancelled = true;
+      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
     };
   }, [projectId, taskId, taskRepository, projectRepository, onFirstLoad, canReadProject]);
 
@@ -3150,6 +3162,7 @@ function CommentItem({
             <CommentBody body={comment.body} />
           </div>
         )}
+        <CommentAcknowledgement projectId={projectId} comment={comment} />
         {comment.attachments.length > 0 && (
           <div className="mbs-1.5 flex flex-wrap gap-1.5">
             {comment.attachments.map((att) =>
