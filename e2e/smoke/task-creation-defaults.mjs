@@ -107,7 +107,7 @@ export const taskCreationDefaultsScenarios = [
       const { page } = t;
       await page.clock.setFixedTime(new Date('2026-10-18T09:00:00+03:00'));
       await t.goto('/', { ready: () => person(page, COLLEAGUES[0]) });
-      await page.getByRole('group', { name: 'Чьи задачи', exact: true }).getByRole('button', { name: /^Для всех/ }).click();
+      await page.getByRole('group', { name: 'Чьи задачи', exact: true }).getByRole('button', { name: /^Все/ }).click();
       await page.getByRole('button', { name: 'Фильтры', exact: true }).click();
       await page.getByRole('dialog').getByRole('button', { name: COLLEAGUES[0].displayName, exact: true }).click();
       await page.keyboard.press('Escape');

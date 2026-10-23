@@ -783,15 +783,24 @@ export function AssignedToMeBlock({
     [tasks, boardTasks, inboxProjectId, user],
   );
   const toMeTasks = useMemo(() => applyPatches(toMeRaw, patches), [toMeRaw, patches]);
-  // Вкладка «Другим» = задачи, делегированные мной + личные доски коллег. Дедуп по id:
-  // задача, которую я делегировал коллеге в ЕГО инбокс, приезжает из обоих источников.
+  // Вкладка «Все» = мои задачи + задачи других участников + личные доски коллег. Свои
+  // включены: «Все» без своих читалось как странный отдельный список. Дедуп по id: задача,
+  // которую я делегировал коллеге в ЕГО инбокс, приезжает из двух источников.
   const byMeRaw = useMemo(() => {
-    const seen = new Set(byMeTasks.map((t) => t.id));
-    return [
-      ...byMeTasks,
-      ...colleaguePersonalTasks.filter((t) => !seen.has(t.id)),
-    ].map(asAssignedInboxBlockTask);
-  }, [byMeTasks, colleaguePersonalTasks]);
+    const seen = new Set(toMeRaw.map((t) => t.id));
+    const others: InboxBlockTask[] = [];
+    for (const t of [...byMeTasks, ...colleaguePersonalTasks]) {
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      others.push(asAssignedInboxBlockTask(t));
+    }
+    return [...toMeRaw, ...others];
+  }, [toMeRaw, byMeTasks, colleaguePersonalTasks]);
+  // «Скрыть личные» убирает личные доски коллег; свои личные задачи остаются.
+  const isColleaguePersonal = useCallback(
+    (t: InboxBlockTask): boolean => t.isInbox && t.assignee.userId !== user?.id,
+    [user?.id],
+  );
   const byMeDisplayTasks = useMemo(() => applyPatches(byMeRaw, patches), [byMeRaw, patches]);
   const toMeVisible = useMemo(
     () => (hideDone ? toMeTasks.filter(notDone) : toMeTasks),
@@ -799,8 +808,8 @@ export function AssignedToMeBlock({
   );
   const byMeVisibleAll = useMemo(() => {
     const afterDone = hideDone ? byMeDisplayTasks.filter(notDone) : byMeDisplayTasks;
-    return hidePersonal ? afterDone.filter((t) => !t.isInbox) : afterDone;
-  }, [byMeDisplayTasks, hideDone, hidePersonal]);
+    return hidePersonal ? afterDone.filter((t) => !isColleaguePersonal(t)) : afterDone;
+  }, [byMeDisplayTasks, hideDone, hidePersonal, isColleaguePersonal]);
   // Фильтры «ответственный / проект» — только вкладка «Другим», поверх hide-done.
   // Предикат вынесен: им же различаем причину пустоты (фильтры vs скрытые done).
   const matchesByMeFilters = useCallback(
@@ -932,8 +941,8 @@ export function AssignedToMeBlock({
     () => replyFilterOn
       ? awaitingReplyTasks.filter((task) => task.status === 'pending_approval' && matchesInboxQuery(task, normalizedQuery))
       : approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
-        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !task.isInbox)))),
-    [replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal],
+        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))),
+    [replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
   );
   const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
     () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide, workerEnabled }),
@@ -1658,7 +1667,7 @@ export function AssignedToMeBlock({
     <InboxFiltersPopover
       showSort={hasAny}
       // Фильтры «кому/проект» — про вкладку «Для всех»; на чужой доске фильтровать нечего.
-      showFilters={hasAny && !focusedMemberId && tab === 'byMe' && byMeTasks.length > 0}
+      showFilters={hasAny && !focusedMemberId && tab === 'byMe' && byMeDisplayTasks.length > 0}
       grouping={grouping}
       onGroupingChange={handleGroupingChange}
       hideDone={hideDone}
@@ -1695,15 +1704,15 @@ export function AssignedToMeBlock({
       ? toMeTasks.length > 0
         ? 'Все задачи выполнены и скрыты («Скрыть выполненные»)'
         : 'Назначенных вам задач пока нет'
-      : byMeTasks.length === 0
-        ? 'Задач других участников пока нет'
+      : byMeDisplayTasks.length === 0
+        ? 'Задач пока нет'
         : anyByMeFilter && !byMeDisplayTasks.some(matchesByMeFilters)
           ? 'Под выбранные фильтры ничего не попадает'
           : // Фильтрам (если есть) в СЫРОМ списке что-то соответствует, но видимых нет —
             // значит, спрятал Eye-toggle, и говорим про него, а не виним фильтры.
             'Все подходящие задачи выполнены и скрыты («Скрыть выполненные»)';
 
-  // «Мои / Для всех» или заголовок чужой доски (режим руководителя).
+  // «Мои / Все» или заголовок чужой доски (режим руководителя).
   const tabsOrFocus = focusedMember ? (
     // Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для всех»
     // тут не про что — показывается одна конкретная доска. Возврат — ×.
@@ -1726,7 +1735,7 @@ export function AssignedToMeBlock({
       tab={tab}
       onChange={handleTabChange}
       toMeCount={toMeVisible.length}
-      // #3: счётчик «Для всех» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
+      // #3: счётчик «Все» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
       // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
       // расходилось с количеством видимых карточек («неверное количество»).
       byMeCount={byMeVisible.length}
@@ -4003,7 +4012,7 @@ export function AssigneeConfirmDialog({
   );
 }
 
-// Вкладки блока ответственных: «Мои» / «Для всех» — переключатель в стиле C4: серая
+// Вкладки блока ответственных: «Мои» / «Все» — переключатель в стиле C4: серая
 // подложка, выбранная вкладка — белая плашка (в тёмной теме — приподнятая графитовая).
 function AssigneeTabs({
   tab,
@@ -4037,7 +4046,7 @@ function AssigneeTabs({
       />
       <TabButton
         active={tab === 'byMe'}
-        label="Для всех"
+        label="Все"
         count={byMeCount}
         onClick={() => onChange('byMe')}
       />

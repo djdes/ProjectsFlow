@@ -298,6 +298,13 @@ export const scenarios = [
         }
         await expectCards(t, QUEUE, myQueueTasks(state).map((x) => x.id), '«Очередь»');
       });
+      await t.check('вкладка «Все» показывает и мои задачи, и задачи коллег', async () => {
+        await page.getByRole('group', { name: 'Чьи задачи', exact: true }).getByRole('button', { name: /^Все/ }).click();
+        for (const id of ['t-home', 't-prices']) {
+          await t.waitFor(async () => (await page.locator(`${QUEUE} ${card(id)}`).count()) > 0, `на «Все» нет карточки ${id}`);
+        }
+        await page.getByRole('group', { name: 'Чьи задачи', exact: true }).getByRole('button', { name: /^Мои/ }).click();
+      });
       await t.check('нижняя полоса прокрутки доводит ряд колонок до последней', async () => {
         const bar = page.locator('[data-pf-sticky-hscroll]');
         await t.visible(bar, 'полоса прокрутки под колонками');
