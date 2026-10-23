@@ -741,6 +741,8 @@ const getUserUsage = new GetUserUsage({
   users: userRepo,
   now,
   capsOverride: usageCapsOverride,
+  unlimitedUserIds: new Set((process.env.USAGE_UNLIMITED_USER_IDS ?? '')
+    .split(',').map((id) => id.trim()).filter(Boolean)),
 });
 const buyPlan = new BuyPlan({ users: userRepo, now });
 const checkBudget = new CheckBudget({ getUserUsage });

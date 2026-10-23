@@ -15,6 +15,8 @@ type Deps = {
   readonly now: () => Date;
   // Env-оверрайд месячного лимита плана (для тестов/тюнинга). undefined → PLAN_MONTHLY_USD.
   readonly capsOverride?: PlanMonthlyOverride;
+  // Operator-managed exceptions; never accepted from profile or request input.
+  readonly unlimitedUserIds?: ReadonlySet<string>;
 };
 
 // Считает usage по двум скользящим окнам (5ч / 7д) из append-only ledger. Кэпы — из
@@ -36,7 +38,9 @@ export class GetUserUsage {
       expiresAt: null,
     };
     const plan = effectivePlan(sub, now);
-    const caps = planWindowCaps(plan, this.deps.capsOverride);
+    const caps = this.deps.unlimitedUserIds?.has(userId)
+      ? null
+      : planWindowCaps(plan, this.deps.capsOverride);
 
     const fiveHourSince = new Date(now.getTime() - FIVE_HOUR_MS);
     const sevenDaySince = new Date(now.getTime() - SEVEN_DAY_MS);
