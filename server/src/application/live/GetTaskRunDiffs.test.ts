@@ -4,7 +4,7 @@ import { GetTaskRunDiffs } from './GetTaskRunDiffs.js';
 import type { LiveSession } from '../../domain/live/LiveSession.js';
 
 const start = new Date('2026-10-23T13:00:00Z');
-const session = { taskId: '12345678-task', projectId: 'p', startedAt: start } as LiveSession;
+const session = { taskId: '12345678-task', projectId: 'p', startedAt: start, endedAt: new Date(start.getTime() + 10_000) } as LiveSession;
 function harness() {
   const requested: string[] = [];
   const linked = [
@@ -12,6 +12,7 @@ function harness() {
     { sha: 'upstream', message: 'feat: deployment status', linkedAt: new Date(start.getTime() + 2000), committedAt: start },
     { sha: 'other-task', message: 'fix: invites [abcdef12]', linkedAt: new Date(start.getTime() + 3000), committedAt: start },
     { sha: 'previous-run', message: 'fix: earlier [12345678]', linkedAt: new Date(start.getTime() - 1000), committedAt: start },
+    { sha: 'later-run', message: 'fix: later [12345678]', linkedAt: new Date(start.getTime() + 20_000), committedAt: start },
   ];
   const source = {
     projects: { getById: async () => ({ gitRepoUrl: 'https://github.com/owner/repo' }) },

@@ -21,7 +21,7 @@ const state: Record<string, unknown> = {};
 
 // Replace application ports and unrelated controls, retaining the real timeline,
 // activity store, composer keyboard handling and page routing logic.
-async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'AiConversationView' | 'TaskDetailPage' | 'CancelWorkButton') {
+async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'AiConversationView' | 'TaskDetailPage' | 'CancelWorkButton', realCancellation = false) {
   const entry = name === 'AiPage' || name === 'TaskDetailPage' ? `../../pages/${name}.tsx`
     : name === 'AiConversationView' ? '../ai/AiConversationView.tsx' : `./${name}.tsx`;
   const result = await build({
@@ -50,6 +50,7 @@ async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'A
         '@/presentation/components/ai/AiConversationView': `import React from 'react';export const AiConversationView=({initialImageMode})=>React.createElement('div',null,initialImageMode?'Режим фото':'Обычный чат');`,
         '@/presentation/components/ai/ImageGenerationPanel': 'export const ImageGenerationPanel=()=>null;',
       };
+      if (realCancellation) delete ports['./CancelWorkButton'];
       bundler.onResolve({ filter: /.*/ }, args => ports[args.path] ? { path: args.path, namespace: 'test-port' } : undefined);
       bundler.onLoad({ filter: /.*/, namespace: 'test-port' }, args => ({ contents: ports[args.path], loader: 'js' }));
     } }],
@@ -133,7 +134,7 @@ async function mount(Component: React.ComponentType<Record<string, unknown>>, pr
 }
 
 test('worker chat keeps the user message between runs and follows the new stream without selecting an attempt', async () => {
-  const View = await component('LiveTab');
+  const View = await component('LiveTab', true);
   let sessions = [run('first', 1, 'completed')];
   const events = new Map([['first', [event(1, 'Первый результат', 2)]], ['next', [event(4, 'Выполняю ваше сообщение', 4)]]]);
   const comments: TaskComment[] = [];
@@ -144,7 +145,7 @@ test('worker chat keeps the user message between runs and follows the new stream
   };
   state.container = { liveRepository: repository, taskRepository: { async listComments() { return comments; } }, projectRepository: { async listMembers() { return []; } } };
   state.nextComment = message();
-  const props = { task: { id: 'task', projectId: 'project', status: 'pending_approval' } as Task, backlogTail: null, todoTail: null };
+  const props = { task: { id: 'task', projectId: 'project', status: 'pending_approval', ralphCancelRequestedAt: null } as Task, backlogTail: null, todoTail: null };
   const view = await mount(View, props);
   try {
     assert.match(view.host.textContent ?? '', /Первый результат/);
@@ -159,6 +160,7 @@ test('worker chat keeps the user message between runs and follows the new stream
     sessions = [run('next', 4, 'running'), ...sessions];
     await act(async () => { window.dispatchEvent(new CustomEvent('pf:live-changed', { detail: { projectId: 'project', taskId: 'task', sessionId: 'next', status: 'running' } })); });
     assert.equal(view.host.querySelectorAll('[data-worker-run]').length, 2);
+    assert.ok([...view.host.querySelectorAll('button')].some(button => button.textContent?.includes('Отменить работу')), 'the actual stop control stays visible when a review task resumes');
     assert.equal(view.host.querySelectorAll('[data-worker-message]').length, 1);
     assert.equal(view.host.querySelector('[aria-label="Выбрать попытку"]'), null);
     assert.match(view.host.textContent ?? '', /Первый результат.*Отправь тестовое сообщение.*Выполняю ваше сообщение/s);

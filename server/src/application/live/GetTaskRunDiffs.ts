@@ -25,8 +25,9 @@ export class GetTaskRunDiffs {
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);
     if (!parsed) return [];
     const marker = `[${session.taskId.slice(0, 8).toLowerCase()}]`;
+    const endedAt = session.endedAt ?? new Date();
     const commits = (await this.deps.commits.listByTask(session.taskId))
-      .filter(commit => commit.message.toLowerCase().includes(marker) && commit.linkedAt >= session.startedAt)
+      .filter(commit => commit.message.toLowerCase().includes(marker) && commit.linkedAt >= session.startedAt && commit.linkedAt <= endedAt)
       .sort((a, b) => a.committedAt.getTime() - b.committedAt.getTime() || a.sha.localeCompare(b.sha));
     if (!commits.length) return [];
     if (commits.length > 30) throw new Error('task_run_commit_limit');
