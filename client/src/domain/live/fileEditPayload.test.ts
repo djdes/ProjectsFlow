@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseFileEditPayload } from './fileEditPayload';
+import { parseFileEditPayload, finalDiffForFileEdit } from './fileEditPayload';
+import type { LiveFileDiff } from './LiveFileDiff';
 
 test('empty, unchanged and malformed edits never become empty diffs', () => {
   assert.deepEqual(parseFileEditPayload({
@@ -29,4 +30,15 @@ test('invalid fragments do not discard valid changes in the same event', () => {
     path: 'file.ts',
     edits: [null, { old: '', new: '' }, { old: 'a', new: 'b' }, { old: 'missing after' }],
   }), { path: 'file.ts', edits: [{ old: 'a', new: 'b' }] });
+});
+
+test('historical empty events find only an unambiguous final comparison from their own run', () => {
+  const diff = (path: string): LiveFileDiff => ({ path, change: 'modified', additions: 1, deletions: 1, unifiedDiff: '-before\n+after', isBinary: false, truncated: false });
+  const file = diff('client/src/feature.ts');
+  assert.equal(finalDiffForFileEdit('C:\\worker\\project\\client\\src\\feature.ts', [file]), file);
+  assert.equal(finalDiffForFileEdit('client/src/feature.ts', [file]), file);
+  assert.equal(finalDiffForFileEdit('C:\\worker\\project\\feature.ts', [file]), undefined);
+  assert.equal(finalDiffForFileEdit('/worker/project/src/Feature.ts', [diff('src/feature.ts')]), undefined);
+  assert.equal(finalDiffForFileEdit('C:\\worker\\project\\nested\\client\\src\\feature.ts', [file, diff('nested/client/src/feature.ts')]), undefined);
+  assert.equal(finalDiffForFileEdit('C:\\worker\\project\\client\\src\\feature.ts', []), undefined);
 });

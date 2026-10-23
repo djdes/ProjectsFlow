@@ -12,7 +12,7 @@ export type TaskLiveRun = {
 export type TaskLiveEntry = { readonly key: string; readonly at: Date } & (
   | { readonly kind: 'message'; readonly comment: TaskComment }
   | { readonly kind: 'start'; readonly session: LiveSession }
-  | { readonly kind: 'event'; readonly event: LiveEvent }
+  | { readonly kind: 'event'; readonly event: LiveEvent; readonly sessionId: string }
   | { readonly kind: 'finish'; readonly run: TaskLiveRun }
 );
 
@@ -24,7 +24,7 @@ export function taskLiveTimeline(runs: readonly TaskLiveRun[], comments: readonl
   for (const run of runs) {
     const { session } = run;
     entries.push({ kind: 'start', key: `start:${session.id}`, at: session.startedAt, session });
-    for (const event of run.events) entries.push({ kind: 'event', key: `event:${session.id}:${event.seq}`, at: event.createdAt, event });
+    for (const event of run.events) entries.push({ kind: 'event', key: `event:${session.id}:${event.seq}`, at: event.createdAt, event, sessionId: session.id });
     if (session.status !== 'running') entries.push({
       kind: 'finish', key: `finish:${session.id}`,
       at: session.endedAt ?? run.events.at(-1)?.createdAt ?? session.startedAt, run,

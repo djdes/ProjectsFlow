@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
 import { isWorkerStartupNotice } from '@/lib/isWorkerStartupNotice';
 import { parseWorkerResult } from '@/domain/live/WorkerResult';
-import { parseFileEditPayload } from '@/domain/live/fileEditPayload';
+import { parseFileEditPayload, finalDiffForFileEdit } from '@/domain/live/fileEditPayload';
 import { WorkerResultMessage } from './WorkerResultMessage';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTaskLiveTimeline } from '@/presentation/hooks/useTaskLiveTimeline';
@@ -293,7 +293,7 @@ function TaskLiveChat({
         {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-md border px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
         {shown.map(entry => {
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
-          if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} />;
+          if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
           return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' ? 'работает' : STATUS_LABEL_RU[entry.session.status]}</p>;
         })}
@@ -505,7 +505,7 @@ function Dot({ tone }: { tone: string }): React.ReactElement {
 }
 
 // === Ряд ленты — рендер по kind ===
-function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | null {
+function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles?: readonly LiveFileDiff[] }): React.ReactElement | null {
   switch (event.kind) {
     case 'assistant_text': {
       const text = event.text ?? '';
@@ -576,6 +576,9 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
     }
     case 'file_write': {
       const payload = event.payload as { path?: string; content?: string } | null;
+      if (typeof payload?.content !== 'string') {
+        return <LiveEventRow event={{ ...event, kind: 'file_edit', payload: { path: payload?.path ?? 'файл', edits: [] } }} finalFiles={finalFiles} />;
+      }
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-green bg-tone" />
@@ -590,16 +593,25 @@ function LiveEventRow({ event }: { event: LiveEvent }): React.ReactElement | nul
     case 'file_edit': {
       const payload = parseFileEditPayload(event.payload);
       if (!payload) return null;
+      if (payload.edits.length === 0) {
+        const final = finalDiffForFileEdit(payload.path, finalFiles);
+        return <div className="flex min-w-0 items-start gap-2">
+          <Dot tone="pf-tone-yellow bg-tone" />
+          <div className="min-w-0 flex-1">
+            {final?.unifiedDiff ? <>
+              <p className="mbe-1 text-2xs text-muted-foreground">Итоговые изменения файла за запуск</p>
+              <FinalFileDiff file={final} />
+            </> : <p className="flex min-w-0 items-start gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-2xs text-muted-foreground" title="Текст этой промежуточной правки не был сохранён.">
+              <span className="shrink-0">Изменён файл</span><span className="min-w-0 truncate font-mono" title={payload.path}>{payload.path}</span>
+            </p>}
+          </div>
+        </div>;
+      }
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-yellow bg-tone" />
           <FileCard icon="✎" path={payload.path} tone="edit">
             <div className="space-y-1.5">
-              {payload.edits.length === 0 && (
-                <p className="px-1 py-1 text-xs text-muted-foreground">
-                  Нет текста для сравнения. Итоговый diff появится после завершения работы, если он доступен.
-                </p>
-              )}
               {payload.edits.map((edit, i) => (
                 <DiffView key={i} mode="hunks" before={edit.old} after={edit.new} />
               ))}

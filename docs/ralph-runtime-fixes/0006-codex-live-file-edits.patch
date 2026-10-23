@@ -1,0 +1,291 @@
+From 1f9a1e3afe6c29211f293e0d2c3407e2f3aa72c3 Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Fri, 23 Oct 2026 14:55:57 +0300
+Subject: [PATCH] fix(live): capture real file edits from native Codex events
+
+---
+ codex-file-edits.integration.patch |  51 ++++++++++++
+ codex-file-edits.ps1               | 129 +++++++++++++++++++++++++++++
+ codex-file-edits.tests.ps1         |  76 +++++++++++++++++
+ 3 files changed, 256 insertions(+)
+ create mode 100644 codex-file-edits.integration.patch
+ create mode 100644 codex-file-edits.ps1
+ create mode 100644 codex-file-edits.tests.ps1
+
+diff --git a/codex-file-edits.integration.patch b/codex-file-edits.integration.patch
+new file mode 100644
+index 0000000..1db60b3
+--- /dev/null
++++ b/codex-file-edits.integration.patch
+@@ -0,0 +1,51 @@
++diff --git a/codex-engine.psm1 b/codex-engine.psm1
++index a7df890..92e5741 100644
++--- a/codex-engine.psm1
+++++ b/codex-engine.psm1
++@@ -4,6 +4,7 @@
++ # auth.json is shared locally by Codex itself, never copied into a run or uploaded.
++ 
++ Set-StrictMode -Off
+++. (Join-Path $PSScriptRoot 'codex-file-edits.ps1')
++ 
++ # $ за 1M токенов (стандартный тариф API OpenAI, 06.10.2026): in / cached in / out.
++ # Нужен для «API-эквивалента» в статистике и бюджете — на подписке маржинальная цена 0.
++@@ -353,7 +354,7 @@ function Invoke-CodexRawStream {
++ }
++ 
++ function New-CodexEventState([string]$Model) {
++-  return @{ Model = $Model; StartedAt = (Get-Date); LastText = ''; Done = @{}; Turns = 0 }
+++  return @{ Model = $Model; StartedAt = (Get-Date); LastText = ''; Done = @{}; Turns = 0; FileChanges=@{}; FileBaseline=(New-CodexFileBaseline (Get-Location).Path) }
++ }
++ 
++ # Команда из события codex: снимаем обёртку `"...powershell.exe" -Command '...'`.
++@@ -473,18 +474,25 @@ function ConvertFrom-CodexEventLine {
++         }
++       }
++       'file_change' {
++-        # Пути и вид изменения приходят и в started, и в completed — отдаём один раз.
+++        # Wait for successful completion; started can precede the actual disk write.
+++        if (-not $done) { $State.FileChanges[$id]=$item.changes; break }
++         if (-not $State.Done.ContainsKey($id)) {
++           $State.Done[$id] = $true
+++          if ([string]$item.status -eq 'failed') { $out += New-ToolErrorEvent $id 'file change failed'; break }
++           $i = 0
++-          foreach ($ch in @($item.changes)) {
+++          $changes = if ($item.changes) { $item.changes } else { $State.FileChanges[$id] }
+++          foreach ($ch in @($changes)) {
+++            if (-not $ch) { continue }
++             $kind = [string]$ch.kind
++             $name = if ($kind -eq 'add') { 'Write' } elseif ($kind -eq 'delete') { 'Delete' } else { 'Edit' }
++-            $out += New-ToolUseEvent ("$id-$i") $name @{ file_path = [string]$ch.path }
+++            $inputObject = Get-CodexFileChangeInput $State.FileBaseline ([string]$ch.path) $kind
+++            if ($inputObject.capture_unchanged) { continue }
+++            if ($name -eq 'Delete' -and $inputObject.ContainsKey('old_string')) { $name='Edit' }
+++            $out += New-ToolUseEvent ("$id-$i") $name $inputObject
++             $i++
++           }
++         }
++-        if ($done -and [string]$item.status -eq 'failed') { $out += New-ToolErrorEvent $id 'file change failed' }
+++        [void]$State.FileChanges.Remove($id)
++       }
++       'mcp_tool_call' {
++         $tool = 'mcp__' + [string]$item.server + '__' + [string]$item.tool
+diff --git a/codex-file-edits.ps1 b/codex-file-edits.ps1
+new file mode 100644
+index 0000000..b7e2af3
+--- /dev/null
++++ b/codex-file-edits.ps1
+@@ -0,0 +1,129 @@
++﻿# Read-only capture for Codex JSON events, which contain paths but no edit body.
++function Invoke-CodexCaptureGit($Root, [string[]]$GitArgs) {
++  $process = New-Object Diagnostics.Process
++  try {
++    $process.StartInfo = New-Object Diagnostics.ProcessStartInfo
++    $process.StartInfo.FileName = 'git.exe'
++    $process.StartInfo.Arguments = (@('-c','core.fsmonitor=false','-c','core.quotepath=false','--no-pager','-C',$Root) + $GitArgs | ForEach-Object { ConvertTo-WindowsArgument ([string]$_) }) -join ' '
++    $process.StartInfo.UseShellExecute = $false
++    $process.StartInfo.CreateNoWindow = $true
++    $process.StartInfo.RedirectStandardOutput = $true
++    $process.StartInfo.RedirectStandardError = $true
++    $process.StartInfo.StandardOutputEncoding = New-Object Text.UTF8Encoding($false, $true)
++    [void]$process.Start()
++    $output = $process.StandardOutput.ReadToEndAsync()
++    $errors = $process.StandardError.ReadToEndAsync()
++    if (-not $process.WaitForExit(3000)) { $process.Kill(); return @{ Ok=$false; Text=''; ExitCode=-1 } }
++    return @{ Ok=($process.ExitCode -eq 0); Text=[string]$output.Result; ExitCode=$process.ExitCode }
++  } catch { return @{ Ok=$false; Text=''; ExitCode=-1 } }
++  finally { $process.Dispose() }
++}
++
++function Resolve-CodexCapturePath($Root, [string]$Path) {
++  try {
++    $full = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($Path)) { $Path } else { Join-Path $Root $Path }))
++    $prefix = $Root.TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar
++    if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $null }
++    $relative = $full.Substring($prefix.Length).Replace('\','/')
++    if ($relative -match '(?i)(^|/)(\.git|node_modules|\.env[^/]*|\.npmrc|\.pypirc|auth\.json|credentials[^/]*|config\.local\.json|mcp-[^/]*\.json|id_rsa[^/]*)(/|$)') { return $null }
++    $ancestor = $full
++    while ($ancestor) {
++      if (Test-Path -LiteralPath $ancestor) {
++        $item = Get-Item -LiteralPath $ancestor -Force -ErrorAction Stop
++        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $null }
++      }
++      $parent = [IO.Path]::GetDirectoryName($ancestor)
++      if ($parent -eq $ancestor) { break }; $ancestor = $parent
++    }
++    return @{ Full=$full; Relative=$relative }
++  } catch { return $null }
++}
++
++function Read-CodexCaptureText([string]$Path) {
++  try {
++    if (-not (Test-Path -LiteralPath $Path)) { return @{ Ok=$true; Text='' } }
++    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
++    if ($item.PSIsContainer -or $item.Length -gt 262144) { return @{ Ok=$false; Text='' } }
++    $text = [IO.File]::ReadAllText($Path, (New-Object Text.UTF8Encoding($false, $true)))
++    if ($text.IndexOf([char]0) -ge 0) { return @{ Ok=$false; Text='' } }
++    return @{ Ok=$true; Text=$text }
++  } catch { return @{ Ok=$false; Text='' } }
++}
++
++function New-CodexFileBaseline([string]$WorkspaceRoot) {
++  try {
++    $root = [IO.Path]::GetFullPath($WorkspaceRoot).TrimEnd('\','/')
++    if (-not (Resolve-CodexCapturePath $root '__capture_boundary_check__')) { return $null }
++    $top = Invoke-CodexCaptureGit $root @('rev-parse','--show-toplevel')
++    if (-not $top.Ok -or [IO.Path]::GetFullPath($top.Text.Trim()).TrimEnd('\','/') -ine $root) { return $null }
++    $head = Invoke-CodexCaptureGit $root @('rev-parse','--verify','HEAD')
++    $tracked = Invoke-CodexCaptureGit $root @('ls-files','-z')
++    $untracked = Invoke-CodexCaptureGit $root @('ls-files','--others','--exclude-standard','-z')
++    $dirty = if ($head.Ok) { Invoke-CodexCaptureGit $root @('diff','--no-ext-diff','--no-textconv','--name-only','-z','HEAD','--') } else { @{ Ok=$true; Text='' } }
++    if (-not $untracked.Ok -or -not $dirty.Ok -or -not $tracked.Ok) { return $null }
++    $paths = @((($dirty.Text + $untracked.Text) -split "`0") | Where-Object { $_ } | Select-Object -Unique)
++    if ($paths.Count -gt 5000) { return $null }
++    $state = @{ Root=$root; Head=$(if ($head.Ok) { $head.Text.Trim() } else { '' }); Files=@{}; Tracked=@{} }
++    foreach ($path in ($tracked.Text -split "`0")) { if ($path) { $state.Tracked[$path]=$true } }
++    $budget = 8388608
++    foreach ($path in $paths) {
++      $resolved = Resolve-CodexCapturePath $root $path
++      if (-not $resolved) { continue }
++      $read = if ($budget -gt 0) { Read-CodexCaptureText $resolved.Full } else { @{ Ok=$false; Text='' } }
++      $budget -= $read.Text.Length * 2
++      $state.Files[$resolved.Relative] = $read
++    }
++    return $state
++  } catch { return $null }
++}
++
++function Get-CodexFileChangeInput($Baseline, [string]$Path, [string]$Kind='update') {
++  $inputObject = @{ file_path=$Path }
++  if (-not $Baseline) { return $inputObject }
++  $resolved = Resolve-CodexCapturePath $Baseline.Root $Path
++  if (-not $resolved) { return $inputObject }
++  $ignored = Invoke-CodexCaptureGit $Baseline.Root @('check-ignore','-q','--',$resolved.Relative)
++  if ($ignored.Ok -or $ignored.ExitCode -ne 1) { return $inputObject }
++  $before = $Baseline.Files[$resolved.Relative]
++  if (-not $Baseline.Files.ContainsKey($resolved.Relative)) {
++    $before = @{ Ok=($Kind -eq 'add'); Text='' }
++    if ($Baseline.Tracked.ContainsKey($resolved.Relative)) {
++      $object = $Baseline.Head + ':' + $resolved.Relative
++      $size = Invoke-CodexCaptureGit $Baseline.Root @('cat-file','-s',$object)
++      $length = 0L
++      if (-not $size.Ok -or -not [long]::TryParse($size.Text.Trim(),[ref]$length) -or $length -gt 262144) { return $inputObject }
++      $before = Invoke-CodexCaptureGit $Baseline.Root @('show','--no-ext-diff','--no-textconv',$object)
++    }
++  }
++  $after = Read-CodexCaptureText $resolved.Full
++  $Baseline.Files[$resolved.Relative] = $after
++  if (-not $before.Ok -or -not $after.Ok -or $before.Text.Length -gt 262144 -or $before.Text.IndexOf([char]0) -ge 0) { return $inputObject }
++  $beforeText = ([string]$before.Text).Replace("`r`n","`n")
++  $afterText = ([string]$after.Text).Replace("`r`n","`n")
++  if ([string]::Equals($beforeText,$afterText,[StringComparison]::Ordinal)) { $inputObject.capture_unchanged=$true; return $inputObject }
++  # Remove common outer lines before payload limits are applied. Changes near the
++  # end of a long file must not turn into two identical truncated prefixes.
++  $old = [regex]::Split($beforeText,'(?<=\n)')
++  $new = [regex]::Split($afterText,'(?<=\n)')
++  $start = 0
++  while ($start -lt [Math]::Min($old.Length,$new.Length) -and [string]::Equals($old[$start],$new[$start],[StringComparison]::Ordinal)) { $start++ }
++  $suffix = 0
++  while ($suffix -lt [Math]::Min($old.Length,$new.Length)-$start -and [string]::Equals($old[$old.Length-1-$suffix],$new[$new.Length-1-$suffix],[StringComparison]::Ordinal)) { $suffix++ }
++  $from = [Math]::Max(0,$start-2)
++  $oldEnd = [Math]::Min($old.Length,$old.Length-$suffix+2)
++  $newEnd = [Math]::Min($new.Length,$new.Length-$suffix+2)
++  $oldText = if ($oldEnd -gt $from) { [string]::Join('',[string[]]$old[$from..($oldEnd-1)]) } else { '' }
++  $newText = if ($newEnd -gt $from) { [string]::Join('',[string[]]$new[$from..($newEnd-1)]) } else { '' }
++  if ($oldText.Length -gt 12000 -or $newText.Length -gt 12000) { return $inputObject }
++  $inputObject.old_string=Protect-CodexCaptureText $oldText
++  $inputObject.new_string=Protect-CodexCaptureText $newText
++  if ($after.Text.Length -le 12000) { $inputObject.content=Protect-CodexCaptureText $after.Text }
++  return $inputObject
++}
++
++function Protect-CodexCaptureText([string]$Text) {
++  $Text = $Text -replace '(?i)(x-access-token:)[^@\s"'']+', '${1}REDACTED'
++  $Text = $Text -replace '(?i)(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9._~-]+', '${1}REDACTED'
++  $Text = $Text -replace '\bgh[pousr]_[A-Za-z0-9_]{20,}\b|\bgithub_pat_[A-Za-z0-9_]+\b', 'GITHUB_TOKEN_REDACTED'
++  return ($Text -replace '\bpfat_[A-Za-z0-9._~-]{16,}\b', 'PROJECTSFLOW_TOKEN_REDACTED')
++}
+diff --git a/codex-file-edits.tests.ps1 b/codex-file-edits.tests.ps1
+new file mode 100644
+index 0000000..ece6da4
+--- /dev/null
++++ b/codex-file-edits.tests.ps1
+@@ -0,0 +1,76 @@
++﻿$ErrorActionPreference='Stop'
++Import-Module (Join-Path $PSScriptRoot 'codex-engine.psm1') -Force
++$passed=0
++function Assert-Capture($Condition,$Message) { if (-not $Condition) { throw "ASSERT FAILED: $Message" }; $script:passed++; Write-Host "PASS $Message" }
++$tempBase=[IO.Path]::GetFullPath([IO.Path]::GetTempPath())
++$root=Join-Path $tempBase ('pf-live-edits-'+[guid]::NewGuid().ToString('N'))
++$outside=Join-Path $tempBase ('pf-live-outside-'+[guid]::NewGuid().ToString('N'))
++$original=(Get-Location).Path
++$utf8=New-Object Text.UTF8Encoding($false)
++function Write-Source($Name,$Text) { [IO.File]::WriteAllText((Join-Path $root $Name),$Text,$utf8) }
++function Event-Json($Id,$Type,$Path,$Kind='update',$Status='completed') { return (@{type=$Type;item=@{id=$Id;type='file_change';changes=@(@{path=$Path;kind=$Kind});status=$Status}} | ConvertTo-Json -Depth 8 -Compress) }
++function Edit-Input($State,$Id,$Path,$Kind='update') {
++  $events=@(ConvertFrom-CodexEventLine (Event-Json $Id 'item.completed' $Path $Kind) $State | ForEach-Object { $_ | ConvertFrom-Json })
++  return $events[0].message.content[0].input
++}
++try {
++  New-Item -ItemType Directory -Path $root,$outside | Out-Null
++  Set-Location $root
++  & git init -q
++  & git config user.email 'tests@example.test'
++  & git config user.name 'LIVE capture tests'
++  & git config core.autocrlf false
++  Write-Source 'file.ts' "Было`n"
++  Write-Source 'long.ts' ((('context '+('x'*20)+"`n")*1800)+"Было в конце`n")
++  Write-Source 'space name.ts' "Исходный текст`n"
++  & git add -- file.ts long.ts 'space name.ts'
++  & git -c core.hooksPath=NUL commit -qm baseline
++  Write-Source 'file.ts' "Чужая незакоммиченная правка`r`n"
++  Write-Source 'existing.ts' "Существующий новый файл`n"
++  Write-Source '.env' 'private-test-value'
++  $state=New-CodexEventState 'gpt-6.1-sol'
++  Assert-Capture ($null -ne $state.FileBaseline) 'baseline captured in the real workspace'
++  $started=@(ConvertFrom-CodexEventLine (Event-Json 'edit-1' 'item.started' 'file.ts' 'update' 'in_progress') $state)
++  Assert-Capture ($started.Count -eq 0) 'no empty diff before the file is written'
++  Write-Source 'file.ts' "Стало: русский текст`r`n"
++  $first=Edit-Input $state 'edit-1' 'file.ts'
++  Assert-Capture ($first.old_string -eq "Чужая незакоммиченная правка`n" -and $first.new_string -eq "Стало: русский текст`n") 'uses initial dirty content, retaining Cyrillic and normalizing CRLF'
++  Assert-Capture (@(ConvertFrom-CodexEventLine (Event-Json 'edit-1' 'item.completed' 'file.ts') $state).Count -eq 0) 'duplicate completion does not duplicate the edit'
++  Write-Source 'file.ts' "Следующая правка`n"
++  $second=Edit-Input $state 'edit-2' 'file.ts'
++  Assert-Capture ($second.old_string -eq $first.new_string -and $second.new_string -eq "Следующая правка`n") 'successive edits compare with the preceding captured version'
++  Write-Source 'existing.ts' "Изменён существующий новый файл`n"
++  $existing=Edit-Input $state 'existing' 'existing.ts'
++  Assert-Capture ($existing.old_string -eq "Существующий новый файл`n") 'pre-existing untracked files are not invented as additions'
++  Write-Source 'new.ts' "Новый файл`n"
++  $new=Edit-Input $state 'new' 'new.ts' 'add'
++  Assert-Capture ($new.content -eq "Новый файл`n" -and $new.old_string -eq '') 'new files carry their real content'
++  Write-Source 'long.ts' ((('context '+('x'*20)+"`n")*1800)+"Стало в конце`n")
++  $long=Edit-Input $state 'long' 'long.ts'
++  Assert-Capture ($long.old_string -match 'Было в конце' -and $long.new_string -match 'Стало в конце' -and $long.new_string.Length -lt 12000) 'long common prefix cannot swallow a change near the end'
++  Write-Source 'space name.ts' "Текст с пробелом в пути`n"
++  $spaced=Edit-Input $state 'space' (Join-Path $root 'space name.ts')
++  Assert-Capture ($spaced.old_string -eq "Исходный текст`n" -and $spaced.new_string -match 'пробелом') 'absolute paths and spaces resolve safely'
++  $secret=Edit-Input $state 'secret' '.env'
++  Assert-Capture (-not $secret.PSObject.Properties['old_string'] -and -not $secret.PSObject.Properties['content']) 'secret configuration is not read into LIVE'
++  [IO.File]::WriteAllBytes((Join-Path $root 'binary.bin'),[byte[]](1,0,3))
++  $binary=Edit-Input $state 'binary' 'binary.bin'
++  Assert-Capture (-not $binary.PSObject.Properties['new_string']) 'binary content is not rendered as text'
++  $escaped=Edit-Input $state 'outside' (Join-Path $outside 'private.ts')
++  Assert-Capture (-not $escaped.PSObject.Properties['new_string']) 'paths outside the workspace are not read'
++  New-Item -ItemType Junction -Path (Join-Path $root 'linked') -Target $outside | Out-Null
++  $linked=Edit-Input $state 'link' 'linked/private.ts'
++  Assert-Capture (-not $linked.PSObject.Properties['new_string']) 'junction escape is rejected'
++  $failed=@(ConvertFrom-CodexEventLine (Event-Json 'failed' 'item.completed' 'file.ts' 'update' 'failed') $state | ForEach-Object { $_ | ConvertFrom-Json })
++  Assert-Capture ($failed.Count -eq 1 -and $failed[0].type -eq 'user') 'failed file writes show an error, never a successful edit'
++  Assert-Capture (@(ConvertFrom-CodexEventLine (Event-Json 'same' 'item.completed' 'file.ts') $state).Count -eq 0) 'unchanged file events do not create phantom diffs'
++  Write-Host "OK: $passed checks"
++} finally {
++  Set-Location $original
++  if (Test-Path -LiteralPath (Join-Path $root 'linked')) { [IO.Directory]::Delete((Join-Path $root 'linked')) }
++  foreach ($directory in @($root,$outside)) {
++    $resolved=[IO.Path]::GetFullPath($directory)
++    if (-not $resolved.StartsWith($tempBase,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName($resolved) -notmatch '^pf-live-(edits|outside)-[a-f0-9]{32}$') { throw 'Unsafe test cleanup path' }
++    if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
++  }
++}
+-- 
+2.53.0.windows.2
+

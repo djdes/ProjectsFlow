@@ -1,4 +1,21 @@
 import type { LiveFileEditPayload } from './LiveEvent';
+import type { LiveFileDiff } from './LiveFileDiff';
+
+// Historical Codex events carry an absolute path but only the session's final
+// comparison has text. Never substitute another run or guess by basename alone.
+export function finalDiffForFileEdit(path: string, files: readonly LiveFileDiff[]): LiveFileDiff | undefined {
+  const windows = /^[a-z]:[\\/]|^\\\\/i.test(path);
+  const normalize = (value: string): string => {
+    const normalized = value.replace(/\\/g, '/').replace(/^\.\//, '');
+    return windows ? normalized.toLowerCase() : normalized;
+  };
+  const target = normalize(path);
+  const matches = files.filter(file => {
+    const candidate = normalize(file.path);
+    return target === candidate || (candidate.includes('/') && !candidate.startsWith('/') && !/^[a-z]:/i.test(candidate) && target.endsWith('/' + candidate));
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)

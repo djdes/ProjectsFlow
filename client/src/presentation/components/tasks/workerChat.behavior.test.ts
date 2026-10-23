@@ -13,6 +13,7 @@ import type { LiveSession } from '@/domain/live/LiveSession';
 import type { LiveEvent } from '@/domain/live/LiveEvent';
 import type { LiveRepository } from '@/application/live/LiveRepository';
 import type { TaskWorkerActivity } from '@/domain/live/TaskWorkerActivity';
+import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const state: Record<string, unknown> = {};
@@ -178,6 +179,39 @@ test('worker chat keeps the user message between runs and follows the new stream
     try { assert.match(reopened.host.textContent ?? '', /Первый результат.*Отправь тестовое сообщение.*Тест отправлен/s); }
     finally { await reopened.close(); }
   } finally { if (view.host.isConnected) await view.close(); }
+});
+
+test('file edits show real before/after text; historical metadata uses only its own run final diff without empty panels', async () => {
+  const View = await component('LiveTab');
+  const file = (text: string): LiveFileDiff => ({ path: 'client/src/file.ts', change: 'modified', additions: 1, deletions: 1, unifiedDiff: `@@ -1 +1 @@\n-Было ${text}\n+Стало ${text}`, isBinary: false, truncated: false });
+  const edit = (seq: number, payload: unknown, minute: number): LiveEvent => ({ seq, kind: 'file_edit', text: null, payload, createdAt: at(minute) });
+  state.container = {
+    liveRepository: {
+      async listSessions() { return [run('old-files', 1, 'completed'), run('new-files', 4, 'completed')]; },
+      async listEvents(_p: string, _t: string, id: string) { return id === 'old-files' ? [
+        edit(1, { path: 'C:\\worker\\project\\client\\src\\file.ts', edits: [{ old: '', new: '' }] }, 1),
+        edit(2, { path: 'C:\\worker\\project\\unavailable.ts', edits: [] }, 1),
+        { ...edit(3, { path: 'missing-new.ts' }, 1), kind: 'file_write' },
+      ] : [edit(1, { path: 'client/src/file.ts', edits: [{ old: 'Было прямо перед правкой', new: 'Стало сразу после правки' }] }, 4)]; },
+      async listFileDiffs(_p: string, _t: string, id: string) { return [file(id === 'old-files' ? 'первый запуск' : 'другой запуск')]; },
+    },
+    taskRepository: { async listComments() { return []; } },
+    projectRepository: { async listMembers() { return []; } },
+  };
+  const view = await mount(View, { task: { id: 'task', projectId: 'project', status: 'pending_approval' } as Task, backlogTail: null, todoTail: null });
+  try {
+    assert.doesNotMatch(view.host.textContent ?? '', /Нет текста для сравнения/);
+    assert.match(view.host.textContent ?? '', /Изменён файл.*unavailable\.ts/s);
+    assert.match(view.host.textContent ?? '', /Изменён файл.*missing-new\.ts/s);
+    assert.match(view.host.textContent ?? '', /Было прямо перед правкой/);
+    assert.match(view.host.textContent ?? '', /Стало сразу после правки/);
+    const caption = [...view.host.querySelectorAll('p')].find(p => p.textContent === 'Итоговые изменения файла за запуск');
+    assert.ok(caption);
+    const notice = caption.parentElement!;
+    await act(async () => notice.querySelector('button')!.click());
+    assert.match(notice.textContent ?? '', /первый запуск/);
+    assert.doesNotMatch(notice.textContent ?? '', /другой запуск/);
+  } finally { await view.close(); }
 });
 
 test('failed and cancelled AI answers stop waiting; a retry sends the original question', async () => {
