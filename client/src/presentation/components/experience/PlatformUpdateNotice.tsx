@@ -18,6 +18,7 @@ export function DeploymentStatusNotice({ status, browserBuild, observedRun, onRe
   const available = !!status && newerDeploymentAvailable(status, browserBuild);
   const active = !!status && deploymentIsActive(status.phase);
   const observed = observedRun === key;
+  const uncertain = !!status && status.phase === 'unknown' && observed;
   useEffect(() => {
     if (!status || status.stale || status.phase !== 'success' || available || !observed) return;
     const timer = window.setTimeout(() => setDismissed(key), 8000);
@@ -25,10 +26,10 @@ export function DeploymentStatusNotice({ status, browserBuild, observedRun, onRe
   }, [status, key, available, observed]);
   const recentFailure = !!status && ['failed', 'canceled'].includes(status.phase) && !!status.updatedAt
     && (observed || new Date(status.checkedAt).getTime() - new Date(status.updatedAt).getTime() < 15 * 60_000);
-  if (!status || dismissed === key || (!active && !available && !recentFailure && !(observed && status.phase === 'success'))) return null;
+  if (!status || dismissed === key || (!active && !available && !uncertain && !recentFailure && !(observed && status.phase === 'success'))) return null;
   const failed = status.phase === 'failed' || status.phase === 'canceled';
   const confirmed = status.phase === 'success' && !status.stale;
-  const title = failed ? 'Обновление не завершено' : active || status.stale ? 'Обновление сайта' : confirmed ? 'Сайт обновлён' : 'Доступна новая версия';
+  const title = failed ? 'Обновление не завершено' : active || status.stale || uncertain ? 'Обновление сайта' : 'Сайт обновлён';
   const detail = status.stale ? 'Статус временно недоступен — перепроверяем' : available && !active && !failed ? 'Можно обновить страницу' : PHASE[status.phase];
   const Icon = failed ? TriangleAlert : confirmed ? Check : Sparkles;
   return <div className="pf-platform-update" data-phase={status.phase} data-active={active && !status.stale} role="status" aria-live="polite" aria-atomic="true">

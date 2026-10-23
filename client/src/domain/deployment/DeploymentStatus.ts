@@ -16,6 +16,7 @@ export function deploymentIsActive(phase: DeploymentPhase): boolean {
 }
 
 export function newerDeploymentAvailable(status: DeploymentStatus, browserBuild: string): boolean {
-  return /^[a-f0-9]{7,40}$/i.test(browserBuild) && !!status.deployedRevision
+  return status.phase === 'success' && !status.stale
+    && /^[a-f0-9]{7,40}$/i.test(browserBuild) && !!status.deployedRevision
     && !status.deployedRevision.toLowerCase().startsWith(browserBuild.toLowerCase());
 }

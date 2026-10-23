@@ -19,14 +19,16 @@ export class GetDeploymentStatus {
     const now = this.deps.now();
     try {
       const [run, deployedRevision] = await Promise.all([this.deps.source.latest(), this.deps.revision.read()]);
+      const phase = deploymentPhase(run, deployedRevision);
       this.cached = {
-        phase: deploymentPhase(run, deployedRevision), runId: run?.id ?? null, attempt: run?.attempt ?? 0,
-        targetRevision: run?.revision ?? null, deployedRevision,
+        phase, runId: run?.id ?? null, attempt: run?.attempt ?? 0,
+        // Older clients also must not offer reload during artifact copy/restart.
+        targetRevision: run?.revision ?? null, deployedRevision: phase === 'success' ? deployedRevision : null,
         startedAt: run?.startedAt ?? null, updatedAt: run?.updatedAt ?? null, checkedAt: now.toISOString(), stale: false,
       };
     } catch {
       // A rate limit/network failure is not a successful or failed deployment.
-      this.cached = this.cached ? { ...this.cached, stale: true } : {
+      this.cached = this.cached ? { ...this.cached, deployedRevision: null, stale: true } : {
         phase: 'unknown', runId: null, attempt: 0, targetRevision: null, deployedRevision: null,
         startedAt: null, updatedAt: null, checkedAt: now.toISOString(), stale: true,
       };

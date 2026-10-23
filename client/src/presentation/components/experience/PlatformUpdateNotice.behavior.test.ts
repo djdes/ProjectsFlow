@@ -19,15 +19,16 @@ test('indicator follows real phases, preserves an uncertain status and reloads o
     React.createElement(DeploymentStatusNotice, { status: { ...base, ...patch }, browserBuild: oldRevision.slice(0, 7), observedRun, onReload: () => { reloads++; } })));
   try {
     for (const [phase, label] of [['queued', 'Ожидаем запуска'], ['checking', 'Проверяем изменения'], ['building', 'Собираем новую версию'], ['deploying', 'Устанавливаем новую версию'], ['verifying', 'Подтверждаем публикацию']] as const) {
-      await show({ phase }); assert.match(host.textContent ?? '', new RegExp(label));
+      await show({ phase, deployedRevision: nextRevision }); assert.match(host.textContent ?? '', new RegExp(label));
       assert.equal(host.querySelector('[aria-label="Скрыть статус обновления"]'), null);
       assert.doesNotMatch(host.textContent ?? '', /Сайт обновлён|\d+%/);
+      assert.ok(![...host.querySelectorAll('button')].some(button => button.textContent?.includes('Обновить')), 'an installed client artifact must not offer a reload before CI finishes');
     }
     await show({ phase: 'deploying', stale: true });
     assert.match(host.textContent ?? '', /Статус временно недоступен/);
     assert.equal(host.querySelector('[data-active]')?.getAttribute('data-active'), 'false');
     await show({ phase: 'unknown', deployedRevision: nextRevision });
-    assert.match(host.textContent ?? '', /Доступна новая версия/);
+    assert.match(host.textContent ?? '', /Проверяем статус/);
     assert.doesNotMatch(host.textContent ?? '', /Сайт обновлён/);
     await show({ phase: 'success', deployedRevision: nextRevision });
     assert.match(host.textContent ?? '', /Сайт обновлён/); assert.equal(reloads, 0);
