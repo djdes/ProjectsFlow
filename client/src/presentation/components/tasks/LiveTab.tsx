@@ -332,7 +332,7 @@ function TaskLiveChat({
       <div className="shrink-0">
         {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }} onChanged={onTaskChanged} />}
         {isWorking || task.status === 'in_progress' ? (
-          <CancelWorkButton task={task} onChanged={handleCancelChanged} />
+          <CancelWorkButton task={task} workerRunning={isWorking} onChanged={handleCancelChanged} />
         ) : task.status === 'awaiting_clarification' ? (
           <>
             <CancelWorkButton task={task} onChanged={handleCancelChanged} />
@@ -507,6 +507,8 @@ function Dot({ tone }: { tone: string }): React.ReactElement {
 // === Ряд ленты — рендер по kind ===
 function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles?: readonly LiveFileDiff[] }): React.ReactElement | null {
   switch (event.kind) {
+    case 'worker_notice':
+      return <p role="status" className="px-1 py-1.5 text-xs text-muted-foreground">{event.text}</p>;
     case 'assistant_text': {
       const text = event.text ?? '';
       if (text.trim().length === 0) return null;

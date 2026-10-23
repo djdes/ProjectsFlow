@@ -21,6 +21,7 @@ export type GitTokenAccessContext =
   | 'link_commit'
   | 'sync_commits'
   | 'deployment_status'
+  | 'live_diff'
   | 'kb_write';
 
 export type LogGitTokenAccessInput = {

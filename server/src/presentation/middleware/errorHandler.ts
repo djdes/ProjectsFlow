@@ -94,6 +94,7 @@ import {
   InboxOwnerRequiredError,
 } from '../../domain/task/errors.js';
 import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
+import { CommitTaskMismatchError } from '../../application/task/LinkCommit.js';
 import { RalphCancelNotRequestedByYouError } from '../../application/task/RevokeRalphCancel.js';
 import {
   AgentDeviceCodeAlreadyApprovedError,
@@ -649,6 +650,10 @@ export function errorHandler(
   }
   if (err instanceof TaskNotActiveError) {
     res.status(409).json({ error: 'task_not_active', message: err.message });
+    return;
+  }
+  if (err instanceof CommitTaskMismatchError) {
+    res.status(409).json({ error: 'commit_task_mismatch', message: err.message });
     return;
   }
 

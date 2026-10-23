@@ -51,13 +51,15 @@ test('bulk requeue clears cancellation, bulk active moves preserve it', async ()
   }
 });
 
-test('late cancellation cannot flag an already requeued task', async () => {
+test('late cancellation requires an active task or a matching running session, and never done', async () => {
   const h = harness();
   await h.repository.requestRalphCancel('task', 'user');
   const condition = h.conditions[0]!;
-  assert.match(condition.sql, /`tasks`.`status` in/);
+  assert.match(condition.sql, /`tasks`.`status` IN/);
   assert.match(condition.sql, /`tasks`.`ralph_cancel_requested_at` IS NULL/);
-  assert.ok(condition.params.includes('in_progress'));
-  assert.ok(condition.params.includes('awaiting_clarification'));
-  assert.ok(!condition.params.includes('todo'));
+  assert.match(condition.sql, /'in_progress', 'awaiting_clarification'/);
+  assert.match(condition.sql, /`tasks`.`status` <> 'done' AND EXISTS/);
+  assert.match(condition.sql, /`live_sessions`.`task_id` = `tasks`.`id`/);
+  assert.match(condition.sql, /`live_sessions`.`project_id` = `tasks`.`project_id`/);
+  assert.match(condition.sql, /`live_sessions`.`status` = 'running'/);
 });

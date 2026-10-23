@@ -4,14 +4,12 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
+import type { LiveRepository } from '../live/LiveRepository.js';
 
-// Сценарий когда отмена бессмысленна (см. spec §2):
-//  - backlog/todo — worker ещё не взял задачу, никого убивать
-//  - done       — задача уже завершена
-// Только in_progress / awaiting_clarification имеют активного worker'а.
+// A resumed worker can still be running after it moved the task for review.
 export class TaskNotActiveError extends Error {
   constructor(public readonly status: string) {
-    super(`Task is not active (status=${status}); ralph-cancel only applies to in_progress / awaiting_clarification`);
+    super(`Task is not active (status=${status}); no running worker to stop`);
     this.name = 'TaskNotActiveError';
   }
 }
@@ -20,6 +18,7 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  readonly live: Pick<LiveRepository, 'listSessions'>;
 };
 
 export type RequestRalphCancelCommand = {
@@ -42,13 +41,16 @@ export class RequestRalphCancel {
       throw new TaskNotFoundError(input.taskId);
     }
     if (existing.status !== 'in_progress' && existing.status !== 'awaiting_clarification') {
-      throw new TaskNotActiveError(existing.status);
+      const running = existing.status !== 'done' && (await this.deps.live.listSessions(input.taskId))
+        .some(session => session.projectId === input.projectId && session.status === 'running');
+      if (!running) throw new TaskNotActiveError(existing.status);
     }
 
     // Repository — идемпотентно: UPDATE WHERE ralph_cancel_requested_at IS NULL.
     // Если уже установлено — оставляем как есть и просто возвращаем актуальное состояние.
     const updated = await this.deps.tasks.requestRalphCancel(input.taskId, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
+    if (!updated.ralphCancelRequestedAt) throw new TaskNotActiveError(updated.status);
     return updated;
   }
 }

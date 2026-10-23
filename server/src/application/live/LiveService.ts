@@ -13,6 +13,7 @@ import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.
 import type { TaskBillingAttributionRepository } from '../usage/TaskBillingAttributionRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { ReportTelegramWorkerResult } from '../telegram/ReportTelegramWorkerResult.js';
+import type { GetTaskRunDiffs } from './GetTaskRunDiffs.js';
 
 export type LiveServiceDeps = {
   readonly repo: LiveRepository;
@@ -34,6 +35,7 @@ export type LiveServiceDeps = {
   readonly legacyAttribution: TaskBillingAttributionRepository;
   readonly tasks: TaskRepository;
   readonly workerResults?: Pick<ReportTelegramWorkerResult, 'request'>;
+  readonly runDiffs?: Pick<GetTaskRunDiffs, 'execute'>;
   // TTL retention сессии (lazy-GC по expires_at). default 30 дней.
   readonly sessionTtlSeconds?: number;
 };
@@ -182,7 +184,20 @@ export class LiveService {
 
     // Финальные git-диффы → события (kind='file_diff') + одно diff_summary. Продолжаем
     // нумерацию seq с курсора сессии.
-    const diffs = input.fileDiffs ?? [];
+    let diffs: readonly FinishSessionDiffInput[] = input.fileDiffs ?? [];
+    if (this.deps.runDiffs) {
+      // Do not substitute a checkout-wide diff when commit verification is unavailable.
+      try { diffs = await this.deps.runDiffs.execute(session, userId) ?? diffs; }
+      catch {
+        diffs = [];
+        const event = { seq: session.lastSeq + 1, kind: 'worker_notice',
+          text: 'Не удалось проверить итоговые изменения в GitHub. Общие изменения ветки не приписаны этой задаче.' };
+        if (await this.deps.repo.appendEvent({ projectId, taskId, sessionId, event })) {
+          await this.deps.repo.bumpSession(sessionId, event.seq, session.eventCount + 1);
+          this.deps.liveEventHub.publish(sessionId, [{ ...event, payload: null, createdAt: new Date() }]);
+        }
+      }
+    }
     if (diffs.length > 0) {
       let seq = session.lastSeq;
       const persisted: LiveEvent[] = [];

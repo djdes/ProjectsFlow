@@ -59,3 +59,36 @@ test('revoke applies the response without a parent refetch, errors retain pendin
     host.remove();
   }
 });
+
+test('a resumed worker remains stoppable in review; completed review has no stop control', async () => {
+  const task = { id: 't', projectId: 'p', status: 'pending_approval', ralphCancelRequestedAt: null,
+    assignee: { userId: 'u', displayName: 'Пользователь', avatarUrl: null }, createdAt: new Date(), updatedAt: new Date() } as Task;
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host);
+  const confirm = window.confirm;
+  const fetch = globalThis.fetch;
+  window.confirm = () => true;
+  let requests = 0;
+  globalThis.fetch = async (url, init) => {
+    assert.match(String(url), /\/projects\/p\/tasks\/t\/ralph-cancel$/);
+    assert.equal(init?.method, 'POST');
+    requests++;
+    return new Response(JSON.stringify({ task: { ...task, ralphCancelRequestedAt: new Date(), ralphCancelRequestedBy: 'u' } }), { headers: { 'Content-Type': 'application/json' } });
+  };
+  const render = async (workerRunning: boolean) => act(async () => {
+    root.render(React.createElement(ContainerProvider, null,
+      React.createElement(CancelWorkButton, { task, workerRunning, onChanged: () => {} })));
+  });
+  try {
+    await render(false);
+    assert.equal(host.querySelector('button'), null);
+    await render(true);
+    assert.match(host.textContent!, /Отменить работу/);
+    await act(async () => { host.querySelector('button')!.click(); });
+    assert.equal(requests, 1);
+    assert.match(host.textContent!, /Остановка ещё не подтверждена/);
+  } finally {
+    window.confirm = confirm; globalThis.fetch = fetch;
+    await act(async () => root.unmount()); host.remove();
+  }
+});

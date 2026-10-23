@@ -370,6 +370,7 @@ import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
 import { RequestRalphCancel } from './application/task/RequestRalphCancel.js';
+import { GetTaskRunDiffs } from './application/live/GetTaskRunDiffs.js';
 import { RevokeRalphCancel } from './application/task/RevokeRalphCancel.js';
 import { AckRalphCancel } from './application/task/AckRalphCancel.js';
 import { ListNotifications } from './application/notifications/ListNotifications.js';
@@ -1594,6 +1595,8 @@ const queryAppLogs = new QueryAppLogs({
   now,
 });
 const liveService = new LiveService({
+  runDiffs: new GetTaskRunDiffs({ projects: projectRepo, tokens: githubTokenRepo, delegations: gitTokenDelegationRepo,
+    users: userRepo, api: githubApi, commits: taskCommitRepo }),
   workerResults: reportTelegramWorkerResult,
   repo: liveRepo,
   access: { projects: projectRepo, members: projectMemberRepo },
@@ -2968,6 +2971,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
+      live: liveRepo,
     }),
     revokeRalphCancel: new RevokeRalphCancel({
       projects: projectRepo,

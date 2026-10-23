@@ -1246,6 +1246,7 @@ export function agentApiRouter(deps: Deps): Router {
           ownerUserId: req.user!.id,
           taskId,
           sha: body.sha,
+          requireTaskMarker: true,
         });
         res.status(201).json({ commit: commitToDto(commit) });
       } catch (e) {

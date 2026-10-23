@@ -369,6 +369,7 @@ function ContextBadge({
     link_commit: 'link',
     sync_commits: 'sync',
     deployment_status: 'обновление сайта',
+    live_diff: 'изменения воркера',
     kb_write: 'kb',
   };
   return (

@@ -9,6 +9,7 @@ type Props = {
   task: Task;
   // Notify the parent to refresh other views after applying the server response.
   onChanged: (task: Task) => void;
+  workerRunning?: boolean;
 };
 
 const TIME_FMT = new Intl.DateTimeFormat('ru-RU', {
@@ -35,7 +36,7 @@ function formatRelativeMinutes(date: Date): string {
 //   2. Запрос висит — амбер-badge «🛑 Отмена запрошена…» + кнопка «Отозвать».
 //      DELETE /ralph-cancel.
 // SSE task_changed обновит board ⇒ refetch ⇒ pending переключение в реалтайме.
-export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.ReactElement {
+export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = false }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ taskId: string; text: string } | null>(null);
@@ -51,8 +52,8 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
     if (busy) return;
     if (
       !window.confirm(
-        'Прервать работу Ralph? Локальные изменения worker\'а в репо останутся, ' +
-          'но коммит/пуш не пройдёт. Задача вернётся в черновики.',
+        'Отправить запрос на остановку воркера? Диспетчер подтвердит остановку. ' +
+          'Локальные изменения и уже опубликованные коммиты сохранятся.',
       )
     )
       return;
@@ -80,7 +81,7 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
     try {
       const updated = await taskRepository.revokeRalphCancel(task.projectId, task.id);
       setResult({ source: sourceTask, task: updated });
-      const text = ['in_progress', 'awaiting_clarification'].includes(updated.status)
+      const text = workerRunning || ['in_progress', 'awaiting_clarification'].includes(updated.status)
         ? 'Запрос на отмену отозван. Остановка больше не запрашивается.'
         : 'Запрос на отмену снят. Работа уже остановлена или завершена.';
       setFeedback({ taskId: task.id, text });
@@ -128,7 +129,7 @@ export function CancelWorkButton({ task: sourceTask, onChanged }: Props): React.
     <div className="border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
       {feedback?.taskId === task.id && <p role="status" className="mbe-2 rounded-md bg-done-soft px-3 py-2 text-xs text-done-ink">{feedback.text}</p>}
       {error && <p role="alert" className="mbe-2 text-xs text-destructive">{error}</p>}
-      {['in_progress', 'awaiting_clarification'].includes(task.status) && (
+      {(workerRunning || ['in_progress', 'awaiting_clarification'].includes(task.status)) && (
       <Button
         type="button"
         variant="destructive"

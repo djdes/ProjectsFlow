@@ -1,0 +1,515 @@
+From 6feb0e03a8135df0c72f170f3813873698b25de2 Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Fri, 23 Oct 2026 17:02:05 +0300
+Subject: [PATCH] fix(worker): preserve task context and guard checkout
+ publication
+
+---
+ codex-task-session.tests.ps1        |  14 ++-
+ worker-git-policy.integration.patch | 187 ++++++++++++++++++++++++++++
+ worker-git-policy.ps1               | 110 ++++++++++++++++
+ worker-git-policy.tests.ps1         | 112 +++++++++++++++++
+ worker-pre-push.ps1                 |  36 ++++++
+ 5 files changed, 455 insertions(+), 4 deletions(-)
+ create mode 100644 worker-git-policy.integration.patch
+ create mode 100644 worker-git-policy.ps1
+ create mode 100644 worker-git-policy.tests.ps1
+ create mode 100644 worker-pre-push.ps1
+
+diff --git a/codex-task-session.tests.ps1 b/codex-task-session.tests.ps1
+index f37f645..f01443a 100644
+--- a/codex-task-session.tests.ps1
++++ b/codex-task-session.tests.ps1
+@@ -48,13 +48,19 @@ process.stdin.resume();process.stdin.on('end',()=>{
+ });
+ '@)
+   $engineModule = Get-Module codex-engine
+-  & $engineModule { function script:Invoke-RestMethod { return @{task=@{id='native-task';projectId='project-1'};comments=@()} } }
+-  $run = @{Exe=(Get-Command node.exe).Source;AuthHome=$dir;Home=$dir;SessionTaskId='native-task';SessionProjectId='project-1';SessionAccountId='operator-1';SessionWorkDir=$PSScriptRoot;Args=@($fake,'exec','--ephemeral','-');Environment=@{PROJECTSFLOW_API_URL='https://example.test/api';PROJECTSFLOW_AGENT_TOKEN='test-only';PF_TEST_ARGV=(Join-Path $dir 'argv.json')}}
+-  $null = @(Invoke-CodexRawStream -Run $run -Prompt 'First prompt')
++  & $engineModule { function script:Invoke-RestMethod { return @{task=@{id='12345678-1234-1234-1234-123456789abc';projectId='project-1'};comments=@()} } }
++  $run = @{Exe=(Get-Command node.exe).Source;AuthHome=$dir;Home=$dir;SessionTaskId='12345678-1234-1234-1234-123456789abc';SessionProjectId='project-1';SessionAccountId='operator-1';SessionWorkDir=$PSScriptRoot;Args=@($fake,'exec','--ephemeral','-');Environment=@{PROJECTSFLOW_API_URL='https://example.test/api';PROJECTSFLOW_AGENT_TOKEN='test-only';PF_TEST_ARGV=(Join-Path $dir 'argv.json')}}
++  $firstStream = @(Invoke-CodexRawStream -Run $run -Prompt 'First prompt')
++  $context = @($firstStream | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object type -eq 'projectsflow.session')
++  Check ($context.Count -eq 1 -and -not $context[0].resumed) 'first launch reports a confirmed new context to LIVE'
+   $actual = [IO.File]::ReadAllText($run.Environment.PF_TEST_ARGV) | ConvertFrom-Json
+   Check ($actual -notcontains '--ephemeral' -and $actual -notcontains 'resume') 'first native task launch persists a new session'
+   $run.Args=@($fake,'exec','--ephemeral','-')
+-  $null = @(Invoke-CodexRawStream -Run $run -Prompt 'Follow-up prompt')
++  $followupStream = @(Invoke-CodexRawStream -Run $run -Prompt 'Follow-up prompt')
++  $context = @($followupStream | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object type -eq 'projectsflow.session')
++  Check ($context.Count -eq 1 -and $context[0].resumed) 'follow-up reports continuation only after the native CLI confirms the saved UUID'
++  $notice = @(ConvertFrom-CodexEventLine -Line ($context[0] | ConvertTo-Json -Compress) -State @{})
++  Check (($notice -join '') -match 'Предыдущая переписка и контекст Codex сохранены') 'the continuation is visible in the existing LIVE conversation'
+   $actual = [IO.File]::ReadAllText($run.Environment.PF_TEST_ARGV) | ConvertFrom-Json
+   Check ($actual[-3] -eq 'resume' -and $actual[-2] -eq 'abcdef12-1234-1234-1234-123456789abc') 'next native invocation actually resumes the persisted UUID'
+   & $engineModule { Remove-Item Function:script:Invoke-RestMethod }
+diff --git a/worker-git-policy.integration.patch b/worker-git-policy.integration.patch
+new file mode 100644
+index 0000000..42e2337
+--- /dev/null
++++ b/worker-git-policy.integration.patch
+@@ -0,0 +1,187 @@
++diff --git a/codex-engine.psm1 b/codex-engine.psm1
++index 92e5741a..34f85997 100644
++--- a/codex-engine.psm1
+++++ b/codex-engine.psm1
++@@ -5,6 +5,7 @@
++
++ Set-StrictMode -Off
++ . (Join-Path $PSScriptRoot 'codex-file-edits.ps1')
+++. (Join-Path $PSScriptRoot 'worker-git-policy.ps1')
++
++ # $ за 1M токенов (стандартный тариф API OpenAI, 06.10.2026): in / cached in / out.
++ # Нужен для «API-эквивалента» в статистике и бюджете — на подписке маржинальная цена 0.
++@@ -292,8 +293,11 @@ function Invoke-CodexRawStream {
++   param([Parameter(Mandatory = $true)]$Run, [Parameter(Mandatory = $true)][string]$Prompt)
++   $proc = $null
++   $sessionLock = $null; $binding = ''; $resetId = ''; $resumeId = ''
+++  $checkoutLease = $null; $gitHookDir = $null
++   try {
++     if ($Run.SessionTaskId) {
+++      $checkoutLease = Enter-WorkerCheckoutLease ([string]$Run.SessionWorkDir)
+++      $gitHookDir = New-WorkerGitPolicy -Repo ([string]$Run.SessionWorkDir) -TaskId ([string]$Run.SessionTaskId) -Directory ([string]$Run.Home)
++       Import-Module (Join-Path $PSScriptRoot 'codex-task-session.psm1') -Force
++       $apiUrl = [string]$Run.Environment.PROJECTSFLOW_API_URL
++       $binding = Get-CodexTaskSessionBinding -AuthHome $Run.AuthHome -AccountId $Run.SessionAccountId -ApiUrl $apiUrl -ProjectId $Run.SessionProjectId -TaskId $Run.SessionTaskId -WorkDir $Run.SessionWorkDir
++@@ -305,6 +309,8 @@ function Invoke-CodexRawStream {
++       $argsPersistent = @($Run.Args | Where-Object { $_ -ne '--ephemeral' })
++       if ($resumeId) { $argsPersistent = @($argsPersistent[0..($argsPersistent.Count - 2)]) + @('resume',$resumeId,'-') }
++       $Run.Args = $argsPersistent
+++      if ($resumeId) { $Prompt = "Это ПРОДОЛЖЕНИЕ прежней сессии Codex: весь предыдущий контекст сохранён. Выполни последнюю реплику пользователя, не повторяй уже выполненные шаги только из-за стартового шаблона ниже.`n`n" + $Prompt }
+++      $Prompt += "`n`nБезопасная публикация: один checkout занят только этой задачей. Не используй git add -A или git add .; добавляй явные файлы своей правки. Сохрани незакоммиченные изменения, существовавшие до запуска. Перед push получи актуальную удалённую ветку, интегрируй её без потери чужих изменений и повтори затронутые проверки. Не применяй force-push, reset --hard, clean, checkout --ours/--theirs или restore для решения конфликтов. При конфликте, смысл которого неясен, остановись с вопросом. Каждый свой коммит помечай [" + ([string]$Run.SessionTaskId).Substring(0,8) + "]."
++     }
++     # PS 5.1 native invocation strips TOML's embedded quotes from array arguments.
++     # Escape once for CreateProcess, exactly as the short-job runner does.
++@@ -321,6 +327,7 @@ function Invoke-CodexRawStream {
++       foreach ($key in $keys) { $psi.EnvironmentVariables[$key] = [string]$Run.Environment.$key }
++     }
++     if ($Run.PathDir) { $psi.EnvironmentVariables['PATH'] = ([string]$Run.PathDir) + ';' + $psi.EnvironmentVariables['PATH'] }
+++    Set-WorkerGitPolicyEnvironment $psi.EnvironmentVariables $gitHookDir
++     $proc = [Diagnostics.Process]::Start($psi)
++     $stderr = $proc.StandardError.ReadToEndAsync()
++     $writer = New-Object IO.StreamWriter($proc.StandardInput.BaseStream, (New-Object Text.UTF8Encoding($false)))
++@@ -336,6 +343,7 @@ function Invoke-CodexRawStream {
++           if ($sessionEvent.type -eq 'thread.started') {
++             if ($resumeId -and [string]$sessionEvent.thread_id -ne $resumeId) { throw 'codex_session_resume_mismatch: choose a new session explicitly' }
++             Save-CodexTaskSession $binding $resetId ([string]$sessionEvent.thread_id)
+++            Write-Output (@{type='projectsflow.session';resumed=[bool]$resumeId} | ConvertTo-Json -Compress)
++           }
++         }
++         Write-Output $line
++@@ -350,6 +358,7 @@ function Invoke-CodexRawStream {
++     if ($proc -and -not $proc.HasExited) { try { & taskkill /PID $proc.Id /T /F 2>$null | Out-Null } catch {} }
++     if ($proc) { $proc.Dispose() }
++     if ($sessionLock) { $sessionLock.Dispose() }
+++    if ($checkoutLease) { $checkoutLease.Dispose() }
++   }
++ }
++
++@@ -434,6 +443,12 @@ function ConvertFrom-CodexEventLine {
++   if (-not $ev -or -not $ev.type) { return $out }
++   $type = [string]$ev.type
++
+++  if ($type -eq 'projectsflow.session') {
+++    $note = if ($ev.resumed) { 'Сессия продолжена. Предыдущая переписка и контекст Codex сохранены.' } else { 'Начата новая сессия Codex для этой задачи.' }
+++    $out += New-ClaudeEventJson @{type='assistant';message=@{role='assistant';content=@(@{type='text';text=$note})}}
+++    return $out
+++  }
+++
++   if ($type -eq 'thread.started') {
++     $out += New-ClaudeEventJson @{ type = 'system'; subtype = 'init'; session_id = [string]$ev.thread_id; model = $State.Model }
++     return $out
++diff --git a/dispatch.ps1 b/dispatch.ps1
++index 28854940..c626e16b 100644
++--- a/dispatch.ps1
+++++ b/dispatch.ps1
++@@ -46,6 +46,7 @@ Import-Module (Join-Path $root 'codex-engine.psm1') -Force
++ Import-Module (Join-Path $root 'llm-client.psm1') -Force
++ . (Join-Path $root 'dispatch-queue-priority.ps1')
++ . (Join-Path $root 'worker-attachments.ps1')
+++. (Join-Path $root 'worker-git-policy.ps1')
++ $map  = Get-Content "$root\projects-map.json" -Raw | ConvertFrom-Json
++ $mcp  = Get-Content $map.mcpConfig -Raw | ConvertFrom-Json
++ $token = $mcp.mcpServers.projectsflow.env.PROJECTSFLOW_AGENT_TOKEN
++@@ -6146,53 +6147,8 @@ function Live-Finish($ctx, $status) {
++     $headAfter = $null
++     try { $ha = (& git -C $repo rev-parse HEAD 2>$null); if ($LASTEXITCODE -eq 0 -and $ha) { $headAfter = ([string]$ha).Trim() } } catch {}
++
++-    $fileDiffs = @()
++-    if ($repo -and $before -and $headAfter -and $before -ne $headAfter) {
++-      # numstat -> additions/deletions (+ детект бинарников: numstat даёт '-' для binary).
++-      $numstat = @{}
++-      try {
++-        $out = (& git -C $repo diff --numstat "$before..HEAD" 2>$null)
++-        if ($LASTEXITCODE -eq 0) {
++-          foreach ($ln in @($out)) {
++-            if (-not $ln) { continue }
++-            $p = ([string]$ln) -split "`t"; if ($p.Count -lt 3) { continue }
++-            $isBin = ($p[0] -eq '-' -or $p[1] -eq '-')
++-            $ins = 0; $del = 0; [void][int]::TryParse($p[0], [ref]$ins); [void][int]::TryParse($p[1], [ref]$del)
++-            $numstat[$p[2]] = @{ additions = $ins; deletions = $del; isBinary = $isBin }
++-          }
++-        }
++-      } catch {}
++-      # name-status -> change-тип (A/M/D/R...).
++-      $changes = @{}
++-      try {
++-        $ns = (& git -C $repo diff --name-status "$before..HEAD" 2>$null)
++-        if ($LASTEXITCODE -eq 0) {
++-          foreach ($ln in @($ns)) {
++-            if (-not $ln) { continue }
++-            $p = ([string]$ln) -split "`t"; if ($p.Count -lt 2) { continue }
++-            $code = ([string]$p[0]).Substring(0, 1)
++-            $name = $p[$p.Count - 1]   # для R даёт новое имя
++-            $chg = switch ($code) { 'A' { 'added' } 'D' { 'deleted' } 'R' { 'renamed' } default { 'modified' } }
++-            $changes[$name] = $chg
++-          }
++-        }
++-      } catch {}
++-      foreach ($name in $numstat.Keys) {
++-        $st = $numstat[$name]
++-        $chg = if ($changes.ContainsKey($name)) { $changes[$name] } else { 'modified' }
++-        $unified = $null; $truncated = $false
++-        if (-not $st.isBinary) {
++-          try {
++-            $d = (& git -C $repo diff "$before..HEAD" -- $name 2>$null) | Out-String
++-            if ($LASTEXITCODE -eq 0 -and $d) {
++-              if ($d.Length -gt $LIVE_DIFF_CAP) { $d = $d.Substring(0, $LIVE_DIFF_CAP); $truncated = $true }
++-              $unified = $d
++-            }
++-          } catch {}
++-        }
++-        $fileDiffs += @{ path = $name; change = $chg; additions = $st.additions; deletions = $st.deletions; unifiedDiff = $unified; isBinary = $st.isBinary; truncated = $truncated }
++-      }
++-    }
+++    $changes = Get-WorkerTaskChanges $repo $before $headAfter ([string]$ctx.Task.id) $LIVE_DIFF_CAP
+++    $fileDiffs = @($changes.FileDiffs)
++
++     $costUsd = $null; $tokensIn = $null; $tokensOut = $null
++     if ($ctx.Final) {
++@@ -6384,7 +6340,7 @@ function Finish-Worker {
++     else                 { $statusTxt = 'blocked'; $badge = '⚠️ blocked' }
++     $bg = if ($success) { '#1f883d' } elseif ($statusTxt -eq 'blocked') { '#9a6700' } else { '#cf222e' }
++
++-    $diff = Get-DiffStat $proj.Path $headBefore $headAfter
+++    $diff = Get-WorkerTaskChanges $proj.Path $headBefore $headAfter ([string]$task.id)
++     $fileBlock = ''
++     if ($diff.n -gt 0) {
++       $rows = @(); $cap = 40; $k = 0
++@@ -6427,12 +6383,11 @@ function Finish-Worker {
++     Set-AttemptCount $task.id 0
++     if ($script:AutomationTaskIds) { $script:AutomationTaskIds.Remove([string]$task.id) | Out-Null }  # авто-задача выполнена — снимаем origin-метку (не копим в памяти при 24/7)
++     # A6: авто-линковка коммитов задачи. Воркер закоммитил+запушил, но мог не позвать link-commit —
++-    # тогда commitCount оставался 0. Привязываем все новые коммиты (headBefore..headAfter), best-effort
+++    # тогда commitCount оставался 0. Привязываем только коммиты с отметкой этой задачи, best-effort
++     # (404 GithubApiError если коммит ещё не на GitHub — просто логируем, цикл не ломаем).
++     if ($headAfter -and $headBefore -and $headAfter -ne $headBefore) {
++       try {
++-        $newShas = @(& git -C $proj.Path log --format=%H "$headBefore..$headAfter" 2>$null)
++-        if ($LASTEXITCODE -ne 0) { Log-FileOnly "WARN auto-link $($proj.Name): git log $headBefore..$headAfter код $LASTEXITCODE — коммиты не привязаны" }
+++        $newShas = @((Get-WorkerTaskChanges $proj.Path $headBefore $headAfter ([string]$task.id)).Commits)
++         $linked = 0
++         foreach ($sha in $newShas) {
++           $sha = [string]$sha
++@@ -7611,7 +7566,7 @@ function Run-Verify($proj, $task, $headBefore, $headAfter) {
++   New-Item -ItemType Directory -Force $shotDir | Out-Null
++   $exeRel = [string](PropOr $v 'exePath' ''); $exeAbs = if ($exeRel) { Join-Path $proj.Path $exeRel } else { '' }
++   $diffText = ''
++-  try { $diffText = (& git -C $proj.Path diff --stat "$headBefore..$headAfter" 2>$null | Out-String) } catch {}
+++  try { $diffText = (Get-WorkerTaskChanges $proj.Path $headBefore $headAfter ([string]$task.id)).files | ConvertTo-Json -Compress } catch {}
++   if (-not $diffText) { $diffText = '(нет diff)' }
++
++   $tpl = [System.IO.File]::ReadAllText("$root\verify-prompt.md", [System.Text.Encoding]::UTF8)
++diff --git a/workspace-guard.ps1 b/workspace-guard.ps1
++index 8612537f..229cf2a2 100644
++--- a/workspace-guard.ps1
+++++ b/workspace-guard.ps1
++@@ -144,6 +144,11 @@ function Test-AllowedToolPath([string]$Value, [string]$CurrentDirectory, [switch
++ function Test-CommandBoundary([string]$Command, [string]$ToolName = '') {
++   if ([string]::IsNullOrWhiteSpace($Command)) { return 'empty_command' }
++
+++  # Publication policy is per child process; a worker cannot opt out of it.
+++  if ($Command -match '(?i)\bgit\b[^\r\n;&|]*\bpush\b[^\r\n;&|]*(?:--no-verify|--force(?:-with-lease|-if-includes)?\b|\s-[^-\s]*f[^-\s]*(?:\s|$))') { return 'git_unsafe_publication' }
+++  if ($Command -match '(?i)\bgit\b[^\r\n;&|]*core\.hookspath\s*=|\$env:GIT_CONFIG(?:_COUNT|_KEY_\d+|_VALUE_\d+)?\s*=|SetEnvironmentVariable\s*\(\s*["'']GIT_CONFIG') { return 'git_publication_policy_override' }
+++  if ($Command -match '(?i)\bgit\s+(?:reset\s+--hard\b|(?:restore|clean)\b|checkout\s+(?:--(?:ours|theirs|force)|-f\b|--\s))') { return 'git_destructive_recovery' }
+++
++   # Shell directory changes and alternate git contexts make cwd-based guarantees ambiguous.
++   if ($Command -match '(?im)(^|[;&|]\s*)(cd|chdir|pushd|popd|set-location|sl)\b') { return 'shell_directory_change' }
++   if ($Command -match '(?i)(^|\s)git\s+(?:-[^\s]+\s+)*(-C|--git-dir|--work-tree)\b') { return 'alternate_git_context' }
+diff --git a/worker-git-policy.ps1 b/worker-git-policy.ps1
+new file mode 100644
+index 0000000..a8ca917
+--- /dev/null
++++ b/worker-git-policy.ps1
+@@ -0,0 +1,110 @@
++﻿# A lease spans the native worker process. Different tasks/dispatchers cannot write
++# the same checkout concurrently. Hooks are scoped to this child, never git config.
++function Enter-WorkerCheckoutLease([string]$Repo) {
++  if (-not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) { return $null }
++  $gitDir = & git -C $Repo rev-parse --absolute-git-dir 2>$null
++  if ($LASTEXITCODE -ne 0) { throw 'worker_checkout_git_directory_unavailable' }
++  try { return [IO.File]::Open((Join-Path ([string]$gitDir).Trim() 'projectsflow-worker.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
++  catch { throw 'worker_checkout_busy: another worker owns this project checkout; retry after it finishes' }
++}
++
++function ConvertTo-WorkerHookArgument([string]$Value) {
++  return "'" + $Value.Replace("'", "'\''") + "'"
++}
++
++function New-WorkerGitPolicy([string]$Repo, [string]$TaskId, [string]$Directory) {
++  if (-not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) { return $null }
++  if ($TaskId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}$') { throw 'worker_git_policy_invalid_task_id' }
++  $gitDir = [string](& git -C $Repo rev-parse --absolute-git-dir 2>$null)
++  if ($LASTEXITCODE -ne 0) { throw 'worker_checkout_git_directory_unavailable' }
++  $original = [string](& git -C $Repo config --get core.hooksPath 2>$null)
++  if ($LASTEXITCODE -gt 1) { throw 'worker_git_policy_hook_configuration_unavailable' }
++  if (-not $original) { $original = Join-Path $gitDir 'hooks' }
++  elseif (-not [IO.Path]::IsPathRooted($original)) { $original = Join-Path $Repo $original }
++  # Never silently bypass an operator's publication policy.
++  if (Test-Path -LiteralPath (Join-Path $original 'pre-push')) { throw 'worker_git_policy_existing_pre_push: combine the operator hook before enabling this worker' }
++  $hookDir = Join-Path $Directory 'task-git-hooks'
++  [void][IO.Directory]::CreateDirectory($hookDir)
++  if (Test-Path -LiteralPath $original) {
++    foreach ($hook in @(Get-ChildItem -LiteralPath $original -File | Where-Object { $_.Name -notlike '*.sample' })) {
++      $proxy = "#!/bin/sh`nexec " + (ConvertTo-WorkerHookArgument ($hook.FullName -replace '\\','/')) + ' "$@"' + "`n"
++      [IO.File]::WriteAllText((Join-Path $hookDir $hook.Name), $proxy, (New-Object Text.UTF8Encoding($false)))
++    }
++  }
++  $dirty = @()
++  foreach ($gitArgs in @(@('diff','--name-only'), @('diff','--cached','--name-only'), @('ls-files','--others','--exclude-standard'))) {
++    $previousErrorAction = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
++    try { $paths = @(& git -C $Repo -c core.quotepath=false @gitArgs 2>$null); $gitExit = $LASTEXITCODE }
++    finally { $ErrorActionPreference = $previousErrorAction }
++    if ($gitExit -ne 0) { throw 'worker_git_policy_dirty_baseline_unavailable' }
++    $dirty += $paths
++  }
++  $dirty = @($dirty | Sort-Object -Unique)
++  $policy = Join-Path $hookDir 'policy.json'
++  [IO.File]::WriteAllText($policy, (@{Repo=$Repo;TaskId=$TaskId;DirtyPaths=@($dirty)} | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding($false)))
++  $guard = Join-Path $PSScriptRoot 'worker-pre-push.ps1'
++  $script = "#!/bin/sh`nexec powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File " + (ConvertTo-WorkerHookArgument ($guard -replace '\\','/')) + ' -Policy ' + (ConvertTo-WorkerHookArgument ($policy -replace '\\','/')) + "`n"
++  [IO.File]::WriteAllText((Join-Path $hookDir 'pre-push'), $script, (New-Object Text.UTF8Encoding($false)))
++  return $hookDir
++}
++
++function Set-WorkerGitPolicyEnvironment($Variables, [string]$HookDir) {
++  if (-not $HookDir) { return }
++  $count = 0
++  if ($Variables['GIT_CONFIG_COUNT'] -and -not [int]::TryParse($Variables['GIT_CONFIG_COUNT'], [ref]$count)) { throw 'worker_git_policy_invalid_environment' }
++  if ($count -lt 0 -or $count -gt 64) { throw 'worker_git_policy_invalid_environment' }
++  $Variables['GIT_CONFIG_COUNT'] = [string]($count + 1)
++  $Variables["GIT_CONFIG_KEY_$count"] = 'core.hooksPath'
++  $Variables["GIT_CONFIG_VALUE_$count"] = $HookDir -replace '\\','/'
++}
++
++function Get-WorkerTaskChanges([string]$Repo, [string]$Before, [string]$After, [string]$TaskId, [int]$DiffCap = 120000) {
++  $result = @{Commits=@();FileDiffs=@();n=0;totalIns=0;totalDel=0;files=@()}
++  if (-not $Before -or -not $After -or $Before -eq $After) { return $result }
++  if ($Before -notmatch '^[a-f0-9]{40}$' -or $After -notmatch '^[a-f0-9]{40}$' -or $TaskId -notmatch '^[a-fA-F0-9]{8}') { throw 'worker_task_diff_scope_invalid' }
++  $marker = '[' + $TaskId.Substring(0,8).ToLowerInvariant() + ']'
++  $candidates = @(& git -C $Repo log --reverse --format=%H "$Before..$After" 2>$null)
++  if ($LASTEXITCODE -ne 0) { throw 'worker_task_diff_history_unavailable' }
++  $files = @{}
++  foreach ($sha in $candidates) {
++    $message = (& git -C $Repo log -1 --format=%B $sha 2>$null | Out-String).ToLowerInvariant()
++    if ($LASTEXITCODE -ne 0) { throw 'worker_task_diff_commit_unavailable' }
++    if (-not $message.Contains($marker)) { continue }
++    $parents = ([string](& git -C $Repo rev-list --parents -n 1 $sha)).Split(' ')
++    if ($LASTEXITCODE -ne 0 -or $parents.Count -gt 2) { continue }
++    $result.Commits += [string]$sha
++    $stats = @(& git -C $Repo -c core.quotepath=false show --format= --numstat --no-renames $sha 2>$null)
++    if ($LASTEXITCODE -ne 0) { throw 'worker_task_diff_stat_unavailable' }
++    $types = @{}
++    foreach ($row in @(& git -C $Repo -c core.quotepath=false diff-tree --root --no-commit-id --name-status --no-renames -r $sha 2>$null)) {
++      $parts = ([string]$row) -split "`t",2
++      if ($parts.Count -eq 2) { $types[$parts[1]] = switch ($parts[0]) { 'A' {'added'} 'D' {'deleted'} default {'modified'} } }
++    }
++    foreach ($row in $stats) {
++      $parts = ([string]$row) -split "`t",3
++      if ($parts.Count -ne 3) { continue }
++      $name = $parts[2]; $binary = $parts[0] -eq '-'
++      $ins = 0; $del = 0
++      if (-not $binary) { $ins = [int]$parts[0]; $del = [int]$parts[1] }
++      if (-not $files.ContainsKey($name)) { $files[$name] = @{path=$name;change=$types[$name];additions=0;deletions=0;isBinary=$binary;unifiedDiff=$null;truncated=$false} }
++      $file = $files[$name]
++      $file.additions += $ins; $file.deletions += $del
++      if ($types[$name] -eq 'deleted') { $file.change = 'deleted' }
++      if (-not $binary) {
++        $patch = (& git -C $Repo show --format= --no-ext-diff --no-renames $sha -- $name 2>$null | Out-String)
++        if ($LASTEXITCODE -ne 0) { throw 'worker_task_diff_patch_unavailable' }
++        $combined = ([string]$file.unifiedDiff) + $patch
++        $file.unifiedDiff = $combined.Substring(0,[Math]::Min($DiffCap,$combined.Length))
++        $file.truncated = $file.truncated -or $combined.Length -gt $DiffCap
++      }
++    }
++  }
++  foreach ($name in @($files.Keys | Sort-Object)) {
++    $file = $files[$name]
++    $result.FileDiffs += $file
++    $result.files += @{name=$name;ins=$file.additions;del=$file.deletions}
++    $result.totalIns += $file.additions; $result.totalDel += $file.deletions
++  }
++  $result.n = $result.FileDiffs.Count
++  return $result
++}
+diff --git a/worker-git-policy.tests.ps1 b/worker-git-policy.tests.ps1
+new file mode 100644
+index 0000000..05229c5
+--- /dev/null
++++ b/worker-git-policy.tests.ps1
+@@ -0,0 +1,112 @@
++﻿$ErrorActionPreference = 'Stop'
++. (Join-Path $PSScriptRoot 'worker-git-policy.ps1')
++$root = Join-Path ([IO.Path]::GetTempPath()) ('pf-git-policy-' + [guid]::NewGuid().ToString('N'))
++[void][IO.Directory]::CreateDirectory($root)
++$taskId = '12345678-1234-1234-1234-123456789abc'
++$script:checks = 0; $script:cases = 0
++function Check([bool]$ok, [string]$label) { if (-not $ok) { throw $label }; $script:checks++; Write-Host "PASS $label" }
++function Invoke-FixtureGit([string]$Repo, [string[]]$Arguments) {
++  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
++  try { $script:lastOutput = @(& git -C $Repo @Arguments 2>&1); return $LASTEXITCODE }
++  finally { $ErrorActionPreference = $old }
++}
++function Fixture {
++  $script:cases++
++  $path = Join-Path $root ([string]$script:cases)
++  $bare = Join-Path $root (([string]$script:cases) + '.git')
++  [void][IO.Directory]::CreateDirectory($path)
++  Check ((Invoke-FixtureGit $path @('init','-b','main')) -eq 0) 'fixture repository initialized'
++  $null = Invoke-FixtureGit $path @('config','user.name','Policy Test')
++  $null = Invoke-FixtureGit $path @('config','user.email','policy@example.test')
++  [IO.File]::WriteAllText((Join-Path $path 'operator.txt'),'original')
++  $null = Invoke-FixtureGit $path @('add','operator.txt'); $null = Invoke-FixtureGit $path @('commit','-m','base')
++  $null = Invoke-FixtureGit $root @('init','--bare',$bare)
++  $null = Invoke-FixtureGit $path @('remote','add','origin',$bare)
++  Check ((Invoke-FixtureGit $path @('push','-u','origin','main')) -eq 0) 'fixture baseline published'
++  return @{Repo=$path;Bare=$bare}
++}
++function Commit([string]$Repo, [string]$File, [string]$Message) {
++  [IO.File]::WriteAllText((Join-Path $Repo $File),[guid]::NewGuid().ToString())
++  $null = Invoke-FixtureGit $Repo @('add','--',$File)
++  Check ((Invoke-FixtureGit $Repo @('commit','-m',$Message)) -eq 0) 'fixture change committed'
++}
++function WithPolicy($Fixture, [scriptblock]$Action) {
++  $hook = New-WorkerGitPolicy $Fixture.Repo $taskId (Join-Path $root ('hooks-' + $script:cases))
++  $vars = @{}; Set-WorkerGitPolicyEnvironment $vars $hook
++  $saved = @{}
++  try {
++    foreach ($key in $vars.Keys) { $saved[$key] = [Environment]::GetEnvironmentVariable($key); [Environment]::SetEnvironmentVariable($key,$vars[$key]) }
++    & $Action $Fixture
++  } finally { foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key,$saved[$key]) } }
++}
++try {
++  $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'workspace-guard.ps1'),[ref]$null,[ref]$null)
++  $function = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-CommandBoundary'},$true)
++  . ([scriptblock]::Create($function.Extent.Text))
++  foreach ($command in @('git push --force origin HEAD','git -c credential.helper= push origin HEAD --no-verify','git -c core.hooksPath=disabled push origin HEAD','$env:GIT_CONFIG_COUNT = 0; git push origin HEAD','git reset --hard','git checkout --ours file.ts')) {
++    Check ([bool](Test-CommandBoundary $command)) ('workspace guard rejects unsafe git recovery or policy bypass: ' + $command)
++  }
++  Check (-not (Test-CommandBoundary 'git push origin HEAD')) 'workspace guard preserves a normal task push'
++  $f = Fixture
++  $lease = Enter-WorkerCheckoutLease $f.Repo
++  $busy = $false; try { $other = Enter-WorkerCheckoutLease $f.Repo; $other.Dispose() } catch { $busy = $_.Exception.Message -match 'worker_checkout_busy' }
++  Check $busy 'another task or dispatcher cannot acquire the same checkout'
++  $lease.Dispose(); $lease = Enter-WorkerCheckoutLease $f.Repo; $lease.Dispose()
++  Check $true 'checkout lease is released after worker exit'
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'operator.txt'),'operator work, preserve it')
++  WithPolicy $f {
++    param($f)
++    Commit $f.Repo 'own.txt' 'fix: own change [12345678]'
++    Check ((Invoke-FixtureGit $f.Repo @('push','origin','HEAD:main')) -eq 0) ('valid task push accepted: ' + ($script:lastOutput -join ' '))
++    Check ([IO.File]::ReadAllText((Join-Path $f.Repo 'operator.txt')) -eq 'operator work, preserve it') 'unrelated dirty file is preserved'
++  }
++  $null = Invoke-FixtureGit $f.Repo @('config','--local','--get','core.hooksPath')
++  Check ($script:lastOutput.Count -eq 0) 'worker policy does not change persistent git configuration'
++
++  $f = Fixture
++  WithPolicy $f {
++    param($f)
++    Commit $f.Repo 'foreign.txt' 'fix: another task [abcdef12]'
++    Check ((Invoke-FixtureGit $f.Repo @('push','origin','HEAD:main')) -ne 0) 'foreign outgoing commit is rejected'
++    Check (($script:lastOutput -join ' ') -match 'foreign_commit_in_push') 'foreign commit rejection is explained'
++  }
++  $before = ([string](& git -C $f.Repo rev-parse HEAD~1)).Trim()
++  Commit $f.Repo 'own.txt' 'fix: this task [12345678]'
++  $after = ([string](& git -C $f.Repo rev-parse HEAD)).Trim()
++  $changes = Get-WorkerTaskChanges $f.Repo $before $after $taskId
++  Check ($changes.Commits.Count -eq 1 -and $changes.Commits[0] -eq $after) 'auto-link selects only the current task commit'
++  Check ($changes.n -eq 1 -and $changes.FileDiffs[0].path -eq 'own.txt') 'LIVE excludes files from fetched or other task commits'
++  Check ($changes.totalIns -eq 1 -and $changes.totalDel -eq 0) 'report statistics describe only task changes'
++
++  $f = Fixture
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'operator.txt'),'preexisting work')
++  WithPolicy $f {
++    param($f)
++    Commit $f.Repo 'operator.txt' 'fix: accidentally staged operator file [12345678]'
++    Check ((Invoke-FixtureGit $f.Repo @('push','origin','HEAD:main')) -ne 0) 'task marker cannot authorize publishing preexisting operator changes'
++    Check (($script:lastOutput -join ' ') -match 'preexisting_changes_in_commit') 'dirty baseline rejection is explained'
++  }
++
++  $f = Fixture
++  $base = ([string](& git -C $f.Repo rev-parse HEAD)).Trim()
++  Commit $f.Repo 'published.txt' 'published work [abcdef12]'
++  $null = Invoke-FixtureGit $f.Repo @('push','origin','HEAD:main')
++  # This is a disposable fixture, verified inside the task's temporary root.
++  if (-not ([IO.Path]::GetFullPath($f.Repo)).StartsWith($root + [IO.Path]::DirectorySeparatorChar)) { throw 'unsafe_fixture_path' }
++  $null = Invoke-FixtureGit $f.Repo @('reset','--hard',$base)
++  WithPolicy $f {
++    param($f)
++    Commit $f.Repo 'rewrite.txt' 'fix: attempted rewrite [12345678]'
++    Check ((Invoke-FixtureGit $f.Repo @('push','--force','origin','HEAD:main')) -ne 0) 'force flag cannot overwrite newer published history'
++    Check (($script:lastOutput -join ' ') -match 'remote_history_changed') 'published history rejection is explained'
++  }
++
++  $f = Fixture
++  [IO.File]::WriteAllText((Join-Path $f.Repo '.git/hooks/pre-push'),"#!/bin/sh`nexit 0`n")
++  $rejected = $false; try { $null = New-WorkerGitPolicy $f.Repo $taskId (Join-Path $root 'existing-hook') } catch { $rejected = $_.Exception.Message -match 'existing_pre_push' }
++  Check $rejected 'existing operator publication hooks are never bypassed'
++} finally {
++  $resolved = [IO.Path]::GetFullPath($root)
++  if ($resolved.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath())) -and [IO.Path]::GetFileName($resolved).StartsWith('pf-git-policy-')) { Remove-Item -LiteralPath $resolved -Recurse -Force }
++}
++Write-Host "$script:checks checks passed"
+diff --git a/worker-pre-push.ps1 b/worker-pre-push.ps1
+new file mode 100644
+index 0000000..cc8259d
+--- /dev/null
++++ b/worker-pre-push.ps1
+@@ -0,0 +1,36 @@
++﻿param([Parameter(Mandatory=$true)][string]$Policy)
++$ErrorActionPreference = 'Stop'
++try {
++  [Console]::OutputEncoding = [Text.Encoding]::UTF8
++  $p = [IO.File]::ReadAllText($Policy, [Text.Encoding]::UTF8) | ConvertFrom-Json
++  $repo = [string]$p.Repo
++  $marker = '[' + ([string]$p.TaskId).Substring(0,8).ToLowerInvariant() + ']'
++  while ($line = [Console]::In.ReadLine()) {
++    $parts = $line -split ' '
++    if ($parts.Count -ne 4) { throw 'invalid_push_input' }
++    $localRef, $local, $remoteRef, $remote = $parts
++    if ($local -match '^0+$') { throw 'branch_deletion_forbidden' }
++    if ($local -notmatch '^[a-f0-9]{40}$' -or $remote -notmatch '^[a-f0-9]{40}$' -or $remoteRef -notlike 'refs/heads/*') { throw 'only_task_branch_push_allowed' }
++    if ($remote -notmatch '^0+$') {
++      & git -C $repo merge-base --is-ancestor $remote $local 2>$null
++      if ($LASTEXITCODE -ne 0) { throw 'remote_history_changed: fetch and integrate current main; force-push is forbidden' }
++      $commits = @(& git -C $repo rev-list "$remote..$local" 2>$null)
++    } else { $commits = @(& git -C $repo rev-list $local --not --remotes 2>$null) }
++    if ($LASTEXITCODE -ne 0) { throw 'cannot_verify_outgoing_commits' }
++    foreach ($sha in $commits) {
++      $message = (& git -C $repo log -1 --format=%B $sha 2>$null | Out-String).ToLowerInvariant()
++      if ($LASTEXITCODE -ne 0 -or -not $message.Contains($marker)) { throw 'foreign_commit_in_push: publish only commits marked for this task' }
++      $parents = ([string](& git -C $repo rev-list --parents -n 1 $sha)).Split(' ')
++      if ($LASTEXITCODE -ne 0 -or $parents.Count -gt 2) { throw 'merge_commit_requires_review' }
++      $files = @(& git -C $repo -c core.quotepath=false diff-tree --root --no-commit-id --name-only -r $sha 2>$null)
++      if ($LASTEXITCODE -ne 0) { throw 'cannot_verify_commit_files' }
++      foreach ($file in $files) {
++        if (@($p.DirtyPaths) -contains $file) { throw 'preexisting_changes_in_commit: preserve operator files; request review before publishing them' }
++      }
++    }
++  }
++  exit 0
++} catch {
++  [Console]::Error.WriteLine('ProjectsFlow: push blocked: ' + $_.Exception.Message)
++  exit 1
++}

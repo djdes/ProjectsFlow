@@ -38,7 +38,15 @@ export type LinkCommitCommand = {
   readonly ownerUserId: string;
   readonly taskId: string;
   readonly sha: string;
+  readonly requireTaskMarker?: boolean;
 };
+
+export class CommitTaskMismatchError extends Error {
+  constructor() {
+    super('Автоматическая привязка отклонена: в коммите нет отметки этой задачи.');
+    this.name = 'CommitTaskMismatchError';
+  }
+}
 
 export class LinkCommit {
   constructor(private readonly deps: Deps) {}
@@ -70,6 +78,10 @@ export class LinkCommit {
       repo: parsed.repo,
       sha: input.sha,
     });
+
+    if (input.requireTaskMarker && !commit.message.toLowerCase().includes(`[${input.taskId.slice(0, 8).toLowerCase()}]`)) {
+      throw new CommitTaskMismatchError();
+    }
 
     // Audit-log: если использовали делегацию — owner увидит в access-log'е что
     // мы брали его токен для link_commit. Fire-and-forget — ошибки логирования

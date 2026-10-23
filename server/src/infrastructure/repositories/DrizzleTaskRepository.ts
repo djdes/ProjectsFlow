@@ -416,7 +416,11 @@ export class DrizzleTaskRepository implements TaskRepository {
       })
       .where(activeTasks(
         eq(tasks.id, taskId),
-        inArray(tasks.status, ['in_progress', 'awaiting_clarification']),
+        sql`(${tasks.status} IN ('in_progress', 'awaiting_clarification') OR
+          (${tasks.status} <> 'done' AND EXISTS (
+            SELECT 1 FROM ${liveSessions} WHERE ${liveSessions.taskId} = ${tasks.id}
+              AND ${liveSessions.projectId} = ${tasks.projectId} AND ${liveSessions.status} = 'running'
+          )))`,
         sql`${tasks.ralphCancelRequestedAt} IS NULL`,
       ));
     const updated = await this.getById(taskId);

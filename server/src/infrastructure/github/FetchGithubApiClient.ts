@@ -162,14 +162,29 @@ export class FetchGithubApiClient implements GithubApiClient {
 
   async getCommit(accessToken: string, input: GetCommitInput): Promise<GithubCommit> {
     const url = `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/commits/${encodeURIComponent(input.sha)}`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github+json',
-      },
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+    };
+    const res = await fetch(`${url}?per_page=100`, {
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
+      headers,
     });
     if (!res.ok) throw new GithubApiError(res.status, `get commit failed: ${await res.text()}`);
     const c = (await res.json()) as CommitRawResponse;
+    const files = c.files ? [...c.files] : undefined;
+    let next = /rel="next"/.test(res.headers.get('link') ?? '');
+    for (let page = 2; next; page++) {
+      if (page > 30) throw new GithubApiError(502, 'get commit file pagination limit');
+      // Construct the next URL ourselves; never forward credentials to a Link URL.
+      const response = await fetch(`${url}?per_page=100&page=${page}`, { headers, redirect: 'error', signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) throw new GithubApiError(response.status, 'get commit file page failed');
+      const data = await response.json() as CommitRawResponse;
+      if (data.sha !== c.sha || !data.files || !files) throw new GithubApiError(502, 'get commit file page mismatch');
+      files.push(...data.files);
+      next = /rel="next"/.test(response.headers.get('link') ?? '');
+    }
     return {
       sha: c.sha,
       message: c.commit.message,
@@ -180,8 +195,8 @@ export class FetchGithubApiClient implements GithubApiClient {
       htmlUrl: c.html_url,
       additions: c.stats?.additions ?? null,
       deletions: c.stats?.deletions ?? null,
-      changedFiles: c.files?.length ?? null,
-      files: c.files?.map((file) => ({
+      changedFiles: files?.length ?? null,
+      files: files?.map((file) => ({
         path: file.filename,
         status: file.status,
         additions: file.additions,
