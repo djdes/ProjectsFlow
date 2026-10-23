@@ -16,6 +16,7 @@ import {
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useProjects } from '@/presentation/hooks/useProjects';
@@ -79,6 +80,7 @@ export function Sidebar({
   const { open: openSearch } = useGlobalSearch();
   const { open: openAddTask } = useAddTaskDialog();
   const { user } = useCurrentUser();
+  const { workspace } = useCurrentWorkspace();
   const { data: projects } = useProjects();
   // Непрочитанное в ВИДИМОМ чате (активное пространство, с фолбэком на хаб владельца для
   // приглашённого) — совпадает с тем, что откроется по клику, и гасится при прочтении.
@@ -153,7 +155,13 @@ export function Sidebar({
   // справа icon-кнопки действий (Задача/Входящие/Поиск — без активного состояния,
   // клик = действие). Порядок в массиве задаёт и порядок внутри своей группы.
   const railItems: RailItem[] = [
-    { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" />, variant: 'tab' },
+    {
+      key: 'home',
+      label: workspace?.name || 'Пространство',
+      shortLabel: true,
+      icon: <AnimatedHome className="size-5" />,
+      variant: 'tab',
+    },
     { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread, variant: 'tab' },
     {
       // «Задача» (открывает AddTaskDialog) — первая в правой группе. Раньше была залитым

@@ -11,6 +11,8 @@ import { useMotion } from '@/presentation/components/motion/MotionProvider';
 export type RailItem = {
   readonly key: string;
   readonly label: string;
+  // Keep the workspace name compact while preserving its full accessible label.
+  readonly shortLabel?: boolean;
   readonly icon: React.ReactNode;
   readonly badge?: number;
   readonly variant?: 'tab' | 'action';
@@ -75,7 +77,7 @@ export function SidebarNavRail({
         onBlur={() => setHovered((h) => (h === index ? null : h))}
         aria-label={item.label}
         // Подписи на кнопке может не быть вовсе — нативная подсказка оставляет её мыши.
-        title={showLabel ? undefined : item.label}
+        title={showLabel && !item.shortLabel ? undefined : item.label}
         aria-current={active ? 'page' : undefined}
         className={cn(
           'group/nav relative flex items-center rounded-full text-sm font-medium',
@@ -123,7 +125,9 @@ export function SidebarNavRail({
           }}
           transition={animations ? { duration: 0.22, ease: 'easeOut' } : { duration: 0 }}
         >
-          {item.label}
+          {item.shortLabel ? (
+            <span className="block max-w-20 truncate">{item.label}</span>
+          ) : item.label}
         </motion.span>
       </button>
     );
