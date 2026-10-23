@@ -1,6 +1,57 @@
-import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+
+// Worker MCP receives a trusted root from the dispatcher. Standalone clients retain
+// their existing temporary cache, but a worker must never write outside its project.
+function checkedAttachmentPath(target: string): string {
+  const workspace = process.env['PROJECTSFLOW_WORKSPACE_ROOT'];
+  const path = resolve(workspace || process.cwd(), target);
+  if (!workspace) return path;
+  const root = realpathSync(workspace);
+  const inside = (candidate: string): boolean => {
+    const rel = relative(root, candidate);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  };
+  if (!inside(path)) throw new Error('attachment_path_outside_workspace');
+  if (relative(root, path).split(sep).some(part => part.toLowerCase() === '.git')) {
+    throw new Error('attachment_git_metadata_write');
+  }
+  let parent = path;
+  while (true) {
+    try { lstatSync(parent); break; } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const next = dirname(parent);
+      if (next === parent) throw new Error('attachment_parent_missing');
+      parent = next;
+    }
+  }
+  const actual = realpathSync(parent);
+  if (actual !== root && !inside(actual)) throw new Error('attachment_path_outside_workspace');
+  return path;
+}
+
+function excludeWorkerCacheFromGit(): void {
+  const workspace = process.env['PROJECTSFLOW_WORKSPACE_ROOT'];
+  if (!workspace) return;
+  const root = realpathSync(workspace);
+  const cache = checkedAttachmentPath(attachmentsRoot());
+  const git = join(root, '.git');
+  if (!existsSync(git)) return; // Snapshot projects ignore node_modules themselves.
+  const info = join(git, 'info'), exclude = join(info, 'exclude');
+  for (const target of [git, info, exclude]) {
+    try {
+      if (lstatSync(target).isSymbolicLink()) throw new Error('attachment_git_exclude_indirection');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  if (!lstatSync(git).isDirectory()) throw new Error('attachment_git_metadata_outside_workspace');
+  mkdirSync(info, { recursive: true });
+  const marker = `/${relative(root, cache).split(sep).join('/')}/`;
+  const content = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+  if (!content.split(/\r?\n/).includes(marker)) appendFileSync(exclude, `\n${marker}\n`, 'utf8');
+}
 
 // ============================================================
 // Материализация вложений задачи на диск.
@@ -55,26 +106,30 @@ export function saveAttachment(
   filename: string,
   data: Buffer,
 ): string {
-  const path = attachmentPath(taskId, attachmentId, filename);
+  const path = checkedAttachmentPath(attachmentPath(taskId, attachmentId, filename));
+  excludeWorkerCacheFromGit();
   mkdirSync(join(path, '..'), { recursive: true });
+  checkedAttachmentPath(path);
   writeFileSync(path, data);
   return path;
 }
 
 // Явный путь от юзера (saveTo у pf_read_task_attachment): относительный резолвим от cwd.
 export function saveAttachmentTo(target: string, data: Buffer): string {
-  const path = isAbsolute(target) ? target : resolve(process.cwd(), target);
+  const path = checkedAttachmentPath(target);
   mkdirSync(join(path, '..'), { recursive: true });
+  checkedAttachmentPath(path);
   writeFileSync(path, data);
   return path;
 }
 
 export function pruneAttachmentCache(now = Date.now()): void {
   try {
-    const root = attachmentsRoot();
+    const root = checkedAttachmentPath(attachmentsRoot());
     for (const entry of readdirSync(root, { withFileTypes: true })) {
-      const dir = join(root, entry.name);
+      const dir = checkedAttachmentPath(join(root, entry.name));
       try {
+        if (lstatSync(dir).isSymbolicLink()) continue;
         if (now - statSync(dir).mtimeMs > MAX_CACHE_AGE_MS) rmSync(dir, { recursive: true, force: true });
       } catch {
         // Гонка с другим процессом / занятый файл — пропускаем, это лишь уборка.

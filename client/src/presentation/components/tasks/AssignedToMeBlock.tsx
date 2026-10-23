@@ -94,6 +94,7 @@ import {
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
+import { userLabel } from '@/domain/user/userLabel';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import {
   endOfMonthYmd,
@@ -1746,7 +1747,7 @@ export function AssignedToMeBlock({
   // плитки с именем: в маленький кружок трудно попасть (задача 3a36e7e8).
   const people =
     user || members.length > 0 ? (
-      <div role="group" aria-label="Люди" className={cn('flex items-center gap-1.5', isWide && 'flex-wrap')}>
+      <div role="group" aria-label="Люди" className="flex max-w-full flex-wrap items-start gap-2">
         {user && <SelfDropAvatar user={user} dragging={dragActive} />}
         {members.map((m) => (
           <UserCube
@@ -1763,7 +1764,7 @@ export function AssignedToMeBlock({
                   filterActive: focusedMemberId === m.id,
                   onToggleFilter: () =>
                     setFocusedMember(
-                      focusedMemberId === m.id ? null : { userId: m.id, displayName: m.displayName },
+                      focusedMemberId === m.id ? null : { userId: m.id, displayName: userLabel(m) },
                     ),
                   hint: 'нажмите, чтобы открыть его входящие',
                 }
@@ -3736,6 +3737,7 @@ function UserCube({
   hint?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
+  const label = userLabel(member);
   if (dragging) {
     return (
       <div
@@ -3748,7 +3750,7 @@ function UserCube({
         )}
       >
         <UserAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} className="size-6 text-2xs" />
-        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : member.displayName}</span>
+        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : label}</span>
       </div>
     );
   }
@@ -3760,7 +3762,8 @@ function UserCube({
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-pressed={clickable ? filterActive : undefined}
-      aria-label={member.displayName}
+      aria-label={label}
+      title={label}
       onClick={clickable ? onToggleFilter : undefined}
       onKeyDown={
         clickable
@@ -3772,25 +3775,28 @@ function UserCube({
           : undefined
       }
       className={cn(
-        'relative grid size-11 shrink-0 place-items-center rounded-lg transition-shadow md:size-auto',
-        clickable && 'cursor-pointer',
+        'flex w-16 shrink-0 flex-col items-center gap-1 rounded-lg transition-shadow',
+        clickable && 'cursor-pointer active:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         filterActive && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
       )}
     >
-      <UserAvatarHover
-        displayName={member.displayName}
-        avatarUrl={member.avatarUrl}
-        subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
-          hint ? ` · ${hint}` : ''
-        }`}
-        triggerClassName="size-9 text-2xs sm:size-[30px]"
-      />
-      {hasApproval && (
-        <span
-          aria-hidden
-          className="absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 ring-background"
+      <span className="relative inline-flex">
+        <UserAvatarHover
+          displayName={label}
+          avatarUrl={member.avatarUrl}
+          subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
+            hint ? ` · ${hint}` : ''
+          }`}
+          triggerClassName={cn('size-9 text-2xs sm:size-[30px]', clickable && 'cursor-pointer')}
         />
-      )}
+        {hasApproval && (
+          <span
+            aria-hidden
+            className="absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 ring-background"
+          />
+        )}
+      </span>
+      <span className="block max-w-full break-words text-center text-2xs text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -3802,14 +3808,14 @@ function SelfDropAvatar({
   user,
   dragging,
 }: {
-  user: { id: string; displayName: string; avatarUrl?: string | null };
+  user: { id: string; displayName: string; email: string; avatarUrl?: string | null };
   dragging: boolean;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
     id: `user-${user.id}`,
     data: {
       type: 'user',
-      member: { id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl ?? null },
+      member: { id: user.id, displayName: userLabel(user), email: user.email, avatarUrl: user.avatarUrl ?? null },
     },
   });
   if (dragging) {
@@ -3829,14 +3835,15 @@ function SelfDropAvatar({
     );
   }
   return (
-    <div ref={setNodeRef} className="shrink-0">
+    <div ref={setNodeRef} className="flex w-16 shrink-0 flex-col items-center gap-1" title={userLabel(user)}>
       <UserAvatarHover
-        displayName={user.displayName}
+        displayName={userLabel(user)}
         avatarUrl={user.avatarUrl}
         you
         subtitle="перетащите сюда задачу, чтобы забрать себе"
         triggerClassName="size-9 text-2xs sm:size-[30px]"
       />
+      <span className="block max-w-full break-words text-center text-2xs text-muted-foreground">{userLabel(user)}</span>
     </div>
   );
 }

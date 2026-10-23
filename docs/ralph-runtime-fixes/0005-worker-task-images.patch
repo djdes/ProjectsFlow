@@ -1,0 +1,138 @@
+From 9204756cf4e778a8082ecb15aa682c295c8a51cf Mon Sep 17 00:00:00 2001
+From: ProjectsFlow <projectsflow@projectsflow.ru>
+Date: Fri, 23 Oct 2026 13:00:40 +0300
+Subject: [PATCH] fix(worker): expose task images inside the assigned workspace
+
+---
+ worker-attachments.integration.patch | 35 ++++++++++++++++++++++
+ worker-attachments.ps1               | 24 +++++++++++++++
+ worker-attachments.tests.ps1         | 44 ++++++++++++++++++++++++++++
+ 3 files changed, 103 insertions(+)
+ create mode 100644 worker-attachments.integration.patch
+ create mode 100644 worker-attachments.ps1
+ create mode 100644 worker-attachments.tests.ps1
+
+diff --git a/worker-attachments.integration.patch b/worker-attachments.integration.patch
+new file mode 100644
+index 0000000..3fe58f6
+--- /dev/null
++++ b/worker-attachments.integration.patch
+@@ -0,0 +1,35 @@
++diff --git a/dispatch.ps1 b/dispatch.ps1
++index 4e848be..2885494 100644
++--- a/dispatch.ps1
+++++ b/dispatch.ps1
++@@ -45,6 +45,7 @@ Import-Module (Join-Path $root 'workspace-isolation.psm1') -Force
++ Import-Module (Join-Path $root 'codex-engine.psm1') -Force
++ Import-Module (Join-Path $root 'llm-client.psm1') -Force
++ . (Join-Path $root 'dispatch-queue-priority.ps1')
+++. (Join-Path $root 'worker-attachments.ps1')
++ $map  = Get-Content "$root\projects-map.json" -Raw | ConvertFrom-Json
++ $mcp  = Get-Content $map.mcpConfig -Raw | ConvertFrom-Json
++ $token = $mcp.mcpServers.projectsflow.env.PROJECTSFLOW_AGENT_TOKEN
++@@ -6895,6 +6896,7 @@ function New-WorkerMcpLease($proj, $task, [bool]$includePlaywright = $false) {
++     } else {
++       $pfServer.env | Add-Member -NotePropertyName PROJECTSFLOW_AGENT_TOKEN -NotePropertyValue ([string]$issued.plaintext)
++     }
+++    Set-WorkerAttachmentEnvironment $pfServer $proj
++     $servers = [ordered]@{ projectsflow = $pfServer }
++     if ($includePlaywright) {
++       $servers.playwright = @{ command = 'npx'; args = @('-y', '@playwright/mcp@latest', '--headless') }
++diff --git a/worker-prompt.md b/worker-prompt.md
++index 8afe635..a462549 100644
++--- a/worker-prompt.md
+++++ b/worker-prompt.md
++@@ -115,7 +115,9 @@ status=blocked
++ Шаги:
++ 1. mcp__projectsflow__pf_get_task(projectId, taskId) — прочитай описание. Если attachmentCount>0 — обязательно изучи вложения (там критичный контекст: макеты, скриншоты ошибок, референсы).
++
++-   **Инлайн-скрины в описании.** Картинка в описании стоит как `<figure data-figure-image><img src="/api/attachments/<attachmentId>"/></figure>` РОВНО в своей позиции в тексте — то есть скрин относится к тому абзацу, после/рядом с которым он стоит. Не игнорируй позицию: она говорит, к какому месту задачи относится картинка. Сам бинарь: `pf_get_task` для мелких картинок уже отдаёт его inline-блоком в ответе; чтобы понять, КАКОЙ из приложенных бинарей соответствует этой позиции — достань `<attachmentId>` из `src` и сопоставь с полем `id` в списке `attachments` (там `id`/`filename`/`mimeType`; поля `url` нет — матчи по `id`).
+++   **Изображения задачи и комментариев.** `pf_get_task` сохраняет вложения в файлы внутри рабочей папки и возвращает `attachments[].localPath`. Каждую относящуюся к задаче картинку ОБЯЗАТЕЛЬНО открой инструментом `view_image` (или Read с поддержкой изображений) по этому пути. Список файлов, HTML, base64 и `cat`/`Get-Content` бинарного файла не означают, что картинка просмотрена. Если localPath отсутствует или файл удалён при установке зависимостей, вызови `pf_read_task_attachment` и открой полученный путь. Если просмотр недоступен, явно сообщи об этом и не утверждай, что проверил скриншот.
+++
+++   **Инлайн-скрины в описании.** `<figure data-figure-image><img src="/api/attachments/<attachmentId>"/></figure>` стоит в своей позиции в тексте и относится к соседнему абзацу. Сопоставляй attachmentId с `attachments[].id`, учитывай `commentId` для изображений в обсуждении. Позиция и содержимое изображения — часть требований задачи.
++
++    **ВАЖНО — прочитай ВСЕ комментарии задачи:** `mcp__projectsflow__pf_list_task_comments(projectId, taskId)` (без фильтра). Там критический контекст:
++    - **Комментарии от человека** — уточнения, дополнительные требования, «делай X, не трогай Y», ссылки на референсы.
+diff --git a/worker-attachments.ps1 b/worker-attachments.ps1
+new file mode 100644
+index 0000000..3243bf6
+--- /dev/null
++++ b/worker-attachments.ps1
+@@ -0,0 +1,24 @@
++﻿# Dot-sourced by dispatch.ps1; workspace-isolation.psm1 must already be imported.
++function Set-WorkerAttachmentEnvironment($Server, $Project) {
++  $workspace = Get-CanonicalWorkspacePath -Path ([string]$Project.Path)
++  if (-not $workspace) { throw 'attachment_workspace_missing' }
++  # node_modules is ignored by snapshot-sync; git projects also get a local exclude.
++  $cache = Join-Path $workspace 'node_modules\.cache\projectsflow-attachments'
++  if (-not (Test-WorkspacePathInside -Path $cache -Root $workspace -AllowMissing)) {
++    throw 'attachment_cache_outside_workspace'
++  }
++  if (-not $Server.env) { $Server | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) }
++  $Server.env | Add-Member -NotePropertyName PROJECTSFLOW_WORKSPACE_ROOT -NotePropertyValue $workspace -Force
++  $Server.env | Add-Member -NotePropertyName PROJECTSFLOW_ATTACHMENT_DIR -NotePropertyValue $cache -Force
++  $gitDirectory = Join-Path $workspace '.git'
++  if (Test-Path -LiteralPath $gitDirectory -PathType Container) {
++    $exclude = Join-Path $gitDirectory 'info\exclude'
++    if (-not (Test-WorkspacePathInside -Path $exclude -Root $workspace -AllowMissing)) { throw 'attachment_exclude_outside_workspace' }
++    $marker = '/node_modules/.cache/projectsflow-attachments/'
++    $content = if (Test-Path -LiteralPath $exclude) { [IO.File]::ReadAllText($exclude) } else { '' }
++    if (@($content -split '\r?\n') -notcontains $marker) {
++      [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($exclude))
++      [IO.File]::AppendAllText($exclude, "`n$marker`n", [Text.UTF8Encoding]::new($false))
++    }
++  }
++}
+diff --git a/worker-attachments.tests.ps1 b/worker-attachments.tests.ps1
+new file mode 100644
+index 0000000..1e934ee
+--- /dev/null
++++ b/worker-attachments.tests.ps1
+@@ -0,0 +1,44 @@
++﻿$ErrorActionPreference = 'Stop'
++Import-Module (Join-Path $PSScriptRoot 'workspace-isolation.psm1') -Force
++. (Join-Path $PSScriptRoot 'worker-attachments.ps1')
++$script:Checks = 0
++function Assert([bool]$ok, [string]$label) { if (-not $ok) { throw $label }; $script:Checks++ }
++$fixture = Join-Path ([IO.Path]::GetTempPath()) ('pf-worker-images-' + [guid]::NewGuid().ToString('N'))
++$workspace = Join-Path $fixture 'project'
++$outside = Join-Path $fixture 'other-project'
++New-Item -ItemType Directory -Force -Path $workspace, $outside, (Join-Path $workspace '.git\info') | Out-Null
++$junction = Join-Path $workspace 'node_modules'
++try {
++  $server = [pscustomobject]@{ env = [pscustomobject]@{ PROJECTSFLOW_ATTACHMENT_DIR = $outside } }
++  Set-WorkerAttachmentEnvironment $server @{Path=$workspace}
++  Assert ($server.env.PROJECTSFLOW_WORKSPACE_ROOT -eq $workspace) 'Worker receives its canonical workspace root'
++  Assert (Test-WorkspacePathInside -Root $workspace -Path $server.env.PROJECTSFLOW_ATTACHMENT_DIR -AllowMissing) 'Cache is readable within the project boundary'
++  Assert ($server.env.PROJECTSFLOW_ATTACHMENT_DIR -match 'node_modules\\\.cache\\projectsflow-attachments$') 'Snapshot-ignored cache namespace is used'
++  Set-WorkerAttachmentEnvironment $server @{Path=$workspace}
++  $exclude = [IO.File]::ReadAllText((Join-Path $workspace '.git\info\exclude'))
++  Assert (([regex]::Matches($exclude,'/node_modules/\.cache/projectsflow-attachments/')).Count -eq 1) 'Downloaded private images are excluded from git idempotently'
++  foreach ($case in @(@{Path=(Join-Path $workspace 'image.png');Denied=$false}, @{Path=(Join-Path $outside 'image.png');Denied=$true})) {
++    $inputJson = @{ tool_name='view_image';cwd=$workspace;tool_input=@{path=$case.Path} } | ConvertTo-Json -Compress
++    $savedPreference=$ErrorActionPreference; $ErrorActionPreference='Continue'
++    try {
++      $output=$inputJson | & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'workspace-guard.ps1') -WorkspaceRoot $workspace -ProjectId 'project' -Engine codex 2>$null
++      $code=$LASTEXITCODE
++    } finally {$ErrorActionPreference=$savedPreference}
++    $denied=($code -ne 0 -or (@($output)-join '') -match '"permissionDecision"\s*:\s*"deny"')
++    Assert ($denied -eq $case.Denied) 'Actual image-viewer hook enforces the project boundary'
++  }
++  New-Item -ItemType Junction -Path $junction -Target $outside | Out-Null
++  $rejected=$false
++  try { Set-WorkerAttachmentEnvironment $server @{Path=$workspace} } catch { $rejected=$_.Exception.Message -eq 'attachment_cache_outside_workspace' }
++  Assert $rejected 'A cache redirected to another checkout is rejected'
++  $syntaxErrors=$null
++  [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'dispatch.ps1'),[ref]$null,[ref]$syntaxErrors)
++  Assert ($syntaxErrors.Count -eq 0) 'Dispatcher integration parses in PowerShell 5.1'
++  Write-Host "OK: $($script:Checks) worker image checks"
++} finally {
++  if (Test-Path -LiteralPath $junction) { [IO.Directory]::Delete($junction, $false) }
++  $fullFixture=[IO.Path]::GetFullPath($fixture)
++  $tempPrefix=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\'
++  if (-not $fullFixture.StartsWith($tempPrefix,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName($fullFixture) -notmatch '^pf-worker-images-[a-f0-9]{32}$') {throw 'Unsafe fixture cleanup path'}
++  [IO.Directory]::Delete($fullFixture,$true)
++}
+-- 
+2.53.0.windows.2
+

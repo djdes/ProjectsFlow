@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),{createRequire}=require('node:module');
 test('the installed MCP advertises approval and custom columns and actually submits approval to the API',async()=>{
- const entry=path.resolve(__dirname,'../dist/index.js');
+ const entry=process.env.PF_MCP_TEST_ENTRY||path.resolve(__dirname,'../dist/index.js');
  const requireMcp=createRequire(path.resolve(entry));
  const {Client}=requireMcp('@modelcontextprotocol/sdk/client/index.js'),{StdioClientTransport}=requireMcp('@modelcontextprotocol/sdk/client/stdio.js');
  const requests=[];
