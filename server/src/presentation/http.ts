@@ -145,6 +145,7 @@ import type { ListTaskAttachments } from '../application/task/ListTaskAttachment
 import type { GetTaskAttachment } from '../application/task/GetTaskAttachment.js';
 import type { ListTaskComments } from '../application/task/ListTaskComments.js';
 import type { AcknowledgeTaskComment } from '../application/task/AcknowledgeTaskComment.js';
+import type { GetProjectWorkerActivity } from '../application/live/GetProjectWorkerActivity.js';
 import type { ListTaskCommentsForAgent } from '../application/task/ListTaskCommentsForAgent.js';
 import type { MaybeReopenForClarification } from '../application/task/MaybeReopenForClarification.js';
 import type { TaskRepository } from '../application/task/TaskRepository.js';
@@ -355,6 +356,7 @@ type AppDeps = {
     readonly maxBlobBytes: number;
   };
   readonly live: {
+    readonly activity: GetProjectWorkerActivity;
     readonly service: LiveService;
     readonly liveEventHub: LiveEventHub;
   };
@@ -994,6 +996,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     liveUserRouter({
       service: deps.live.service,
       liveEventHub: deps.live.liveEventHub,
+      activity: deps.live.activity,
     }),
   );
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.

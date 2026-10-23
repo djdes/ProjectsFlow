@@ -18,7 +18,7 @@ test('running tasks API requires authentication and project access before readin
   } as unknown as LiveServiceDeps);
   const app = express();
   app.use((req, _res, next) => { if (req.headers['x-test-user']) req.user = { id: String(req.headers['x-test-user']) } as NonNullable<typeof req.user>; next(); });
-  app.use('/api/projects', liveUserRouter({ service, liveEventHub: {} as never }));
+  app.use('/api/projects', liveUserRouter({ service, liveEventHub: {} as never, activity: {} as never }));
   app.use(errorHandler);
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));

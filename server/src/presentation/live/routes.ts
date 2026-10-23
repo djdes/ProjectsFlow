@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/requireAuth.js';
 import type { LiveService } from '../../application/live/LiveService.js';
+import type { GetProjectWorkerActivity } from '../../application/live/GetProjectWorkerActivity.js';
 import type { LiveEventHub } from '../../infrastructure/realtime/LiveEventHub.js';
 import type { LiveSession, LiveSessionFinalStatus } from '../../domain/live/LiveSession.js';
 import type { LiveEvent } from '../../domain/live/LiveEvent.js';
@@ -10,6 +11,7 @@ import { LiveSessionGoneError } from '../../domain/live/errors.js';
 export type LiveUserRouterDeps = {
   readonly service: LiveService;
   readonly liveEventHub: LiveEventHub;
+  readonly activity: GetProjectWorkerActivity;
 };
 
 // Сколько после завершения сессии ещё разрешаем live-стрим (потом 410 → клиент читает историю).
@@ -96,6 +98,11 @@ export function liveUserRouter(deps: LiveUserRouterDeps): Router {
   const router = Router();
   router.use(requireAuth);
   const svc = deps.service;
+
+  router.get('/:projectId/live/activity', async (req, res, next) => {
+    try { res.json({ activities: await deps.activity.execute(pid(req), uid(req)) }); }
+    catch (error) { next(error); }
+  });
 
   router.get('/:projectId/live/running', async (req, res, next) => {
     try { res.json({ taskIds: await svc.listRunningTaskIds(pid(req), uid(req)) }); }

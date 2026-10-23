@@ -14,7 +14,7 @@ test('SSE for an attempt receives only that attempt, even when another run of th
     async getSessionForStream() { return { id: 'attempt-1', status: 'running', endedAt: null }; },
     async listEvents() { return []; },
   };
-  app.use('/api/projects', liveUserRouter({ service: service as never, liveEventHub: hub }));
+  app.use('/api/projects', liveUserRouter({ service: service as never, liveEventHub: hub, activity: {} as never }));
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const controller = new AbortController();

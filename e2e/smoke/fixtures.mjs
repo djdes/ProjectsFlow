@@ -398,6 +398,15 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/commits$/, () => json({ commits: [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/versions$/, ([, , taskId]) =>
       json({ plan: 'vip', cutoffAt: null, versions: [], taskId })],
+    [/^\/projects\/([^/]+)\/live\/activity$/, ([, projectId]) => {
+      const latest = new Map();
+      for (const session of Object.values(state.liveSessions ?? {}).flat().filter(s => s.projectId === projectId)) {
+        const previous = latest.get(session.taskId);
+        if (!previous || new Date(session.startedAt) >= new Date(previous.startedAt)) latest.set(session.taskId, session);
+      }
+      return json({ activities: [...latest.values()].filter(s => ['running','failed','timeout'].includes(s.status))
+        .map(s => ({ taskId:s.taskId,state:s.status==='running'?'running':'error',sessionId:s.id,questionCommentId:null })) });
+    }],
     [/^\/projects\/([^/]+)\/live\/running$/, ([, projectId]) => json({ taskIds: Object.values(state.liveSessions ?? {}).flat().filter(s => s.projectId === projectId && s.status === 'running').map(s => s.taskId) })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions$/, ([, , taskId]) => json({ sessions: state.liveSessions?.[taskId] ?? [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/events$/, ([, , , sessionId]) => json({ events: state.liveEvents?.[sessionId] ?? [] })],

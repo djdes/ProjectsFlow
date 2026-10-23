@@ -340,6 +340,8 @@ import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
 import { ListTaskComments } from './application/task/ListTaskComments.js';
 import { AcknowledgeTaskComment } from './application/task/AcknowledgeTaskComment.js';
 import { MysqlCommentAcknowledgementRepository } from './infrastructure/repositories/MysqlCommentAcknowledgementRepository.js';
+import { GetProjectWorkerActivity } from './application/live/GetProjectWorkerActivity.js';
+import { MysqlTaskWorkerActivityRepository } from './infrastructure/repositories/MysqlTaskWorkerActivityRepository.js';
 import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsForAgent.js';
 import { MaybeReopenForClarification } from './application/task/MaybeReopenForClarification.js';
 import { HttpTelegramClient } from './infrastructure/telegram/HttpTelegramClient.js';
@@ -2218,6 +2220,7 @@ const { app, devProxyUpgrade } = createApp({
     maxBlobBytes: SYNC_MAX_BLOB_BYTES,
   },
   live: {
+    activity: new GetProjectWorkerActivity({ projects: projectRepo, members: projectMemberRepo, activity: new MysqlTaskWorkerActivityRepository(pool) }),
     service: liveService,
     liveEventHub,
   },

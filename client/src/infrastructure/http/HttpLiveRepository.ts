@@ -2,6 +2,7 @@ import type { LiveRepository } from '@/application/live/LiveRepository';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type { LiveEvent } from '@/domain/live/LiveEvent';
 import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
+import type { TaskWorkerActivity } from '@/domain/live/TaskWorkerActivity';
 import { httpClient } from './httpClient';
 
 // Wire-DTO: даты — ISO-строки (как в HttpTaskRepository). Поля nullable graceful.
@@ -29,6 +30,10 @@ function eventFromDto(dto: LiveEventDto): LiveEvent {
 }
 
 export class HttpLiveRepository implements LiveRepository {
+  async listTaskActivity(projectId: string): Promise<TaskWorkerActivity[]> {
+    const { activities } = await httpClient.get<{ activities: TaskWorkerActivity[] }>(`/projects/${projectId}/live/activity`);
+    return activities;
+  }
   async listRunningTaskIds(projectId: string): Promise<string[]> {
     const { taskIds } = await httpClient.get<{ taskIds: string[] }>(`/projects/${projectId}/live/running`);
     return taskIds;

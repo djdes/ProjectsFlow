@@ -12,6 +12,7 @@ import type { Task } from '@/domain/task/Task';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type { LiveEvent } from '@/domain/live/LiveEvent';
 import type { LiveRepository } from '@/application/live/LiveRepository';
+import type { TaskWorkerActivity } from '@/domain/live/TaskWorkerActivity';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const state: Record<string, unknown> = {};
@@ -138,7 +139,7 @@ test('worker chat keeps the user message between runs and follows the new stream
   const repository: LiveRepository = {
     async listSessions() { return sessions; },
     async listEvents(_p, _t, id, after = 0) { return (events.get(id) ?? []).filter(e => e.seq > after); },
-    async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; },
+    async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; }, async listTaskActivity() { return []; },
   };
   state.container = { liveRepository: repository, taskRepository: { async listComments() { return comments; } }, projectRepository: { async listMembers() { return []; } } };
   state.nextComment = message();
@@ -308,20 +309,30 @@ test('a missed lifecycle event is recovered on focus and a late previous-task re
   } finally { await view.close(); }
 });
 
-test('activity badges recover running work on page open, share the project snapshot and clear on finish', async () => {
+test('cards recover worker activity, errors and questions from one project snapshot and update after an answer', async () => {
   const Badge = await component('WorkerActivityBadge');
   let calls = 0;
-  let active = ['task'];
-  state.container = { liveRepository: { async listRunningTaskIds() { calls++; return active; } } };
+  const activity = (taskId: string, kind: TaskWorkerActivity['state']): TaskWorkerActivity => ({ taskId, state: kind, sessionId: null, questionCommentId: kind === 'question' ? 'question-comment' : null });
+  let active = [activity('task', 'running')];
+  state.container = { liveRepository: { async listTaskActivity() { calls++; return active; } } };
   const Pair = () => React.createElement(React.Fragment, null, React.createElement(Badge, { projectId: 'project', taskId: 'task' }), React.createElement(Badge, { projectId: 'project', taskId: 'other' }));
   const view = await mount(Pair);
   try {
     assert.equal(calls, 1);
     assert.equal(view.host.querySelectorAll('[aria-label="Воркер работает над задачей"]').length, 1);
+    active = [activity('task', 'error')];
+    await act(async () => { window.dispatchEvent(new CustomEvent('pf:live-changed', { detail: { projectId: 'project', taskId: 'task', status: 'failed' } })); });
+    assert.equal(view.host.querySelector('[data-worker-state="error"]')?.textContent, 'Ошибка воркера');
+    active = [activity('task', 'error'), activity('other', 'question')];
+    await act(async () => { window.dispatchEvent(new CustomEvent('pf:task-changed', { detail: { projectId: 'project' } })); });
+    assert.match(view.host.textContent ?? '', /Вопрос диспетчера/);
+    active = [activity('task', 'running')];
+    await act(async () => { window.dispatchEvent(new CustomEvent('pf:task-changed', { detail: { projectId: 'project' } })); });
+    assert.doesNotMatch(view.host.textContent ?? '', /Вопрос диспетчера|Ошибка воркера/);
     active = [];
     await act(async () => { window.dispatchEvent(new CustomEvent('pf:live-changed', { detail: { projectId: 'project', taskId: 'task', status: 'completed' } })); });
     assert.equal(view.host.textContent, '');
-    active = ['other'];
+    active = [activity('other', 'running')];
     await act(async () => { window.dispatchEvent(new Event('focus')); });
     assert.match(view.host.textContent ?? '', /Воркер работает/);
   } finally { await view.close(); }
