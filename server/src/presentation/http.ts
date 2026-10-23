@@ -327,8 +327,11 @@ import type { GenerateLlmText } from '../application/llm/LlmTextGenerator.js';
 import { llmAdminRouter } from './llm/adminRoutes.js';
 import { llmGatewayRouter } from './llm/gatewayRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
+import type { GetDeploymentStatus } from '../application/deployment/GetDeploymentStatus.js';
+import { deploymentRouter } from './deployment/routes.js';
 
 type AppDeps = {
+  readonly deployment?: GetDeploymentStatus;
   readonly imageGeneration?: ImageGenerationService;
   readonly workspaceScope?: RequestHandler;
   readonly emailActions: {
@@ -905,6 +908,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
   });
+  if (deps.deployment) app.use('/api/platform/deployment', deploymentRouter(deps.deployment));
 
   // Публичные one-click страницы действий из писем-сводок (авторизация по opaque-токену).
   app.use('/api/email-actions', emailActionsRouter(deps.emailActions));

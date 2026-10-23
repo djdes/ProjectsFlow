@@ -104,8 +104,11 @@ import type { UsageRepository } from "@/application/usage/UsageRepository";
 import type { AiConversationRepository } from "@/application/ai-chat/AiConversationRepository";
 import type { AiActionBatchRepository } from "@/application/ai-action/AiActionBatchRepository";
 import { HttpAiActionBatchRepository } from "@/infrastructure/http/HttpAiActionBatchRepository";
+import { HttpDeploymentRepository } from '@/infrastructure/http/HttpDeploymentRepository';
+import type { DeploymentRepository } from '@/application/deployment/DeploymentRepository';
 
 type Container = {
+  deploymentRepository: DeploymentRepository;
   listProjects: ListProjects;
   getProject: GetProject;
   createProject: CreateProject;
@@ -173,6 +176,7 @@ type Container = {
 };
 
 function buildContainer(): Container {
+  const deploymentRepo = new HttpDeploymentRepository();
   const projectRepo = new HttpProjectRepository();
   const projectCodeRepo = new HttpProjectCodeRepository();
   const userRepo = new HttpUserRepository();
@@ -264,6 +268,7 @@ function buildContainer(): Container {
     listRecentTaskViews: new ListRecentTaskViews(recentTaskViewRepo),
     helpRepository: helpRepo,
     submitSupport: new SubmitSupport(helpRepo),
+    deploymentRepository: deploymentRepo,
     usageRepository: usageRepo,
     getUsage: new GetUsage(usageRepo),
     changePlan: new ChangePlan(usageRepo),

@@ -49,11 +49,12 @@ import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { SidebarResizingContext } from './sidebarResizingContext';
 import { Sidebar } from './Sidebar';
 import { useEdgeSwipe } from '@/presentation/hooks/useEdgeSwipe';
+import { PlatformUpdateNotice } from '@/presentation/components/experience/PlatformUpdateNotice';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 
 export function AppShell(): React.ReactElement {
-  return <WorkspacesProvider><WorkspaceBoundary><WorkspaceShell /></WorkspaceBoundary></WorkspacesProvider>;
+  return <WorkspacesProvider><PlatformUpdateNotice /><WorkspaceBoundary><WorkspaceShell /></WorkspaceBoundary></WorkspacesProvider>;
 }
 
 function WorkspaceShell(): React.ReactElement {

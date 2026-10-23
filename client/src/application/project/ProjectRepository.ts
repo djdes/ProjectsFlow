@@ -94,6 +94,7 @@ export type GitTokenAccessContext =
   | "git_token_fetch"
   | "link_commit"
   | "sync_commits"
+  | "deployment_status"
   | "kb_write";
 
 export type GitTokenAccessLogEntry = {

@@ -10,6 +10,11 @@ export default defineConfig({
     __PF_BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)),
   },
   plugins: [react(), {
+    name: 'release-version',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify({ revision: process.env.GITHUB_SHA ?? null }) });
+    },
+  }, {
     name: 'inline-boot-recovery',
     transformIndexHtml() {
       return [

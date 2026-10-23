@@ -9,6 +9,10 @@ import { workspaceScope } from './presentation/middleware/workspaceScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
 import { resolve as resolvePath } from 'node:path';
+import { GetDeploymentStatus } from './application/deployment/GetDeploymentStatus.js';
+import { GithubActionsDeploymentRepository } from './infrastructure/deployment/GithubActionsDeploymentRepository.js';
+import { FileDeployedRevision } from './infrastructure/deployment/FileDeployedRevision.js';
+import { resolveEffectiveGithubToken, logDelegatedUsage } from './application/github/resolveEffectiveGithubToken.js';
 import { db, pool } from './infrastructure/db/index.js';
 import { Argon2PasswordHasher } from './infrastructure/crypto/Argon2PasswordHasher.js';
 import { idGenerator, shortIdGenerator } from './infrastructure/id/idGenerator.js';
@@ -2179,7 +2183,33 @@ const aiActionBatchService = new AiActionBatchService({
   },
 });
 
+const deploymentAuditRuns = new Set<string>();
 const { app, devProxyUpgrade } = createApp({
+  deployment: new GetDeploymentStatus({
+    now,
+    revision: new FileDeployedRevision(new URL('../../client/dist/build.json', import.meta.url)),
+    source: new GithubActionsDeploymentRepository({
+      repository: 'djdes/ProjectsFlow', workflow: 'deploy.yml',
+      getCredential: async () => {
+        const projectId = process.env.PLATFORM_DEPLOY_PROJECT_ID;
+        if (!projectId) return null;
+        const project = await projectRepo.getById(projectId);
+        if (!project || !/github\.com[/:]djdes\/ProjectsFlow(?:\.git)?\/?$/i.test(project.gitRepoUrl ?? '')) return null;
+        const caller = project.dispatcherUserId ?? project.ownerId;
+        const deps = { tokens: githubTokenRepo, projects: projectRepo, delegations: gitTokenDelegationRepo, users: userRepo };
+        const credential = await resolveEffectiveGithubToken(deps, caller, projectId);
+        if (!credential) return null;
+        return { accessToken: credential.accessToken, onUsed: async (runId) => {
+          // Audit the ongoing monitor once per run and credential, not once per tab/poll.
+          const key = `${runId}:${credential.grantedBy}`;
+          if (deploymentAuditRuns.has(key)) return;
+          await logDelegatedUsage(gitTokenDelegationRepo, projectId, caller, credential, 'deployment_status');
+          deploymentAuditRuns.add(key);
+          if (deploymentAuditRuns.size > 32) deploymentAuditRuns.delete(deploymentAuditRuns.values().next().value!);
+        } };
+      },
+    }),
+  }),
   imageGeneration: new ImageGenerationService({
     conversations: aiConversationService,
     jobs: new MysqlImageGenerationRepository(pool),

@@ -1,0 +1,59 @@
+.pf-platform-update {
+  --deployment-accent: oklch(var(--primary));
+  position: fixed;
+  z-index: 140;
+  inset-block-start: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  inline-size: max-content;
+  max-inline-size: min(32rem, calc(100vw - 1rem));
+  min-block-size: 3rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in oklch, var(--deployment-accent) 30%, oklch(var(--border)));
+  border-radius: 1rem;
+  background: color-mix(in oklch, oklch(var(--popover)) 96%, var(--deployment-accent));
+  color: oklch(var(--popover-foreground));
+  box-shadow: 0 4px 24px oklch(0% 0 none / 0.12);
+  font-size: 0.75rem;
+}
+.pf-platform-update[data-phase="success"] { --deployment-accent: oklch(var(--done)); }
+.pf-platform-update:is([data-phase="failed"], [data-phase="canceled"]) { --deployment-accent: oklch(var(--destructive)); }
+.pf-platform-update-copy { display: flex; flex-direction: column; gap: 0.125rem; min-inline-size: 0; }
+.pf-platform-update-copy strong { font-weight: 600; }
+.pf-platform-update-copy > span { overflow: clip; text-overflow: ellipsis; white-space: nowrap; color: oklch(var(--muted-foreground)); font-size: 0.6875rem; }
+.pf-platform-update-orbit { position: relative; display: grid; place-items: center; flex: none; inline-size: 2em; block-size: 2em; color: var(--deployment-accent); }
+.pf-platform-update-orbit > svg { inline-size: 1.4em; block-size: 1.4em; }
+.pf-platform-update[data-active="true"] .pf-platform-update-orbit::after {
+  content: ''; position: absolute; inset: -0.2rem; border: 1px solid color-mix(in oklch, var(--deployment-accent) 15%, transparent);
+  border-block-start-color: var(--deployment-accent); border-radius: 50%;
+}
+.pf-platform-update button { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 0.375em; min-block-size: 2rem; padding-inline: 0.5rem; border-radius: 0.5rem; }
+.pf-platform-update button::after { content: ''; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+.pf-platform-update button > svg { inline-size: 1.2em; block-size: 1.2em; flex: none; }
+.pf-platform-update button:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+.pf-platform-update button:active { opacity: 0.7; }
+.pf-platform-update-action { color: var(--deployment-accent); background: color-mix(in oklch, var(--deployment-accent) 10%, transparent); font-weight: 600; }
+.pf-platform-update-close { color: oklch(var(--muted-foreground)); }
+.pf-platform-update-rail { position: absolute; inset-block-end: 0; inset-inline: 1rem; block-size: 2px; overflow: clip; border-radius: 999px; background: color-mix(in oklch, var(--deployment-accent) 12%, transparent); }
+.pf-platform-update-rail::after { content: ''; display: block; block-size: 100%; inline-size: 35%; background: linear-gradient(90deg, transparent, var(--deployment-accent), transparent); }
+@media (hover: hover) and (pointer: fine) {
+  .pf-platform-update button:hover { background: color-mix(in oklch, var(--deployment-accent) 15%, transparent); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-platform-update[data-active="true"] .pf-platform-update-orbit::after { animation: pf-deployment-orbit 2s linear infinite; }
+  .pf-platform-update[data-active="true"] .pf-platform-update-rail::after { animation: pf-deployment-travel 1.6s var(--pf-ease-in-out, ease-in-out) infinite; }
+  .pf-platform-update { animation: pf-deployment-appear 200ms var(--pf-ease, ease-out) both; }
+}
+@keyframes pf-deployment-orbit { to { rotate: 1turn; } }
+@keyframes pf-deployment-travel { from { translate: -100% 0; } to { translate: 385% 0; } }
+@keyframes pf-deployment-appear { from { opacity: 0; transform: translateY(-0.5rem); } to { opacity: 1; transform: translateY(0); } }
+html.pf-no-motion .pf-platform-update,
+html.pf-no-motion .pf-platform-update-orbit::after,
+html.pf-no-motion .pf-platform-update-rail::after { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pf-platform-update-rail::after { inline-size: 100%; }
+}
+html.pf-no-motion .pf-platform-update-rail::after { inline-size: 100%; }

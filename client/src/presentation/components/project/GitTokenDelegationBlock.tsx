@@ -368,6 +368,7 @@ function ContextBadge({
     git_token_fetch: 'fetch',
     link_commit: 'link',
     sync_commits: 'sync',
+    deployment_status: 'обновление сайта',
     kb_write: 'kb',
   };
   return (
