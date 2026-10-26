@@ -15,6 +15,10 @@ It is the shared source for architecture, commands, migrations and deployment ru
 - Run relevant tests, typecheck and lint. Distinguish existing failures from regressions.
 - After completing the requested work and required checks, always commit and push
   the task changes unless the user explicitly asks otherwise. Preserve unrelated work.
+- Production deploys only through pull requests. Never push directly to `main`:
+  push to a feature branch (`feat/…`, `fix/…`, `chore/…`) and open a PR into `main`.
+  Merge only after the PR checks are green and the repository owner approves.
+  Do not run manual deploys (`npm run deploy`, workflow dispatch) unless the owner asks.
 - Do not change nginx or commit credentials. Follow the commit/kanban workflow in
   `CLAUDE.md` when a commit is requested; do not move tasks to done without authorization.
 

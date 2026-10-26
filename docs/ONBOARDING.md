@@ -422,7 +422,7 @@ claude
 ## 8. Git workflow
 
 - `main` — то, что на проде.
-- Фича → ветка → (по возможности ревью) → merge в `main` → `npm run deploy`.
+- Фича → ветка → PR в `main` на GitHub (`djdes/ProjectsFlow`) → зелёные проверки (`checks.yml`) → merge → автодеплой (`deploy.yml`). Прямые push в `main` запрещены, см. [CLAUDE.md](../CLAUDE.md) → «Деплой».
 - Bare-репозиторий на сервере, второго remote (GitHub и т.п.) пока нет — добавь при необходимости.
 
 ---

@@ -1,0 +1,74 @@
+name: Checks
+
+# Проверки без выкладки. Запускаются на каждом PR в main и переиспользуются деплоем
+# (deploy.yml → jobs.checks), поэтому в прод попадает только то, что прошло эти шаги.
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Worker chat and AI composer tests
+        working-directory: client
+        run: node --import tsx --test src/presentation/components/tasks/workerChat.behavior.test.ts src/presentation/components/tasks/CancelWorkButton.behavior.test.ts src/domain/live/fileEditPayload.test.ts src/presentation/components/experience/PlatformUpdateNotice.behavior.test.ts src/presentation/components/tasks/CommentAcknowledgement.behavior.test.ts src/presentation/hooks/AwaitingReplyProvider.behavior.test.ts src/infrastructure/http/HttpTaskRepository.acknowledgement.test.ts src/presentation/components/ai/AiComposer.behavior.test.ts src/presentation/hooks/useNotificationStream.behavior.test.ts src/presentation/hooks/CompletedTodayProvider.behavior.test.ts src/lib/notificationTaskTarget.test.ts
+
+      # Красный серверный тест останавливает выкладку: прод остаётся на прошлой версии.
+      - name: Server tests
+        run: npm run test:server
+
+      - name: MCP contract tests
+        run: npm run test -w @projectsflow/mcp-server
+
+      - name: Build client
+        run: npm run build:client
+
+      # Смоук-тесты собранного клиента (e2e/smoke): браузер с подменённым /api проходит
+      # ключевые страницы на десктопе и телефоне. Красный смоук останавливает выкладку,
+      # как и серверные тесты. Chrome на ubuntu-latest предустановлен; если его не окажется,
+      # SMOKE_ALLOW_SKIP пропускает шаг с предупреждением, а не роняет деплой.
+      - name: Smoke tests
+        run: npm run test:smoke
+        env:
+          SMOKE_ALLOW_SKIP: '1'
+
+      - name: Upload smoke artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: e2e/smoke/.artifacts/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build landing
+        run: npm run build:landing
+
+      - name: Build server
+        run: npm run build:server

@@ -30,7 +30,7 @@ Playwright. Читай файл ДО первого вызова браузер�
 - **Где живёт.** FastPanel на VPS `projectsflow.ru` (Azure Ubuntu 24.04).
   Код приложения: `/var/www/projectsflow/data/www/projectsflow.ru/`.
 - **Статус.** В переходе: лендинг снесён, платформа строится в `client/` (UI) и `server/`
-  (backend появился в Spec #2). Катим на прод по мере готовности (push в `main` → автодеплой).
+  (backend появился в Spec #2). Катим на прод по мере готовности: PR → merge в `main` → автодеплой.
 
 ## Стек
 
@@ -134,16 +134,19 @@ npm run deploy       # node scripts/deploy.mjs
 
 ## Деплой
 
-```bash
-npm run deploy
-```
+> **В прод — только через PR.** Прямые push в `main` запрещены, в том числе для AI-ассистентов.
+> Работа идёт в отдельной ветке (`feat/…`, `fix/…`, `chore/…`), затем открывается PR в `main`.
+> Merge делается только после зелёных проверок и с согласия владельца репозитория.
 
-Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4. Push в `main` триггерит
-автодеплой на прод (`.github/workflows/deploy.yml`) — катим по мере готовности. Перед сборкой
-CI гоняет typecheck, lint и серверные тесты (`npm run test:server`): красный тест останавливает
-выкладку, прод остаётся на прошлой версии. После сборки клиента CI так же гоняет смоук-тесты
-интерфейса (`e2e/smoke`, локально — `npm run build:client && npm run test:smoke`). Перед пушем
-прогоняй их локально.
+- **PR в `main`** → `.github/workflows/checks.yml`: typecheck, lint, тесты клиента, серверные и
+  MCP-тесты, сборка клиента/лендинга/сервера, смоук-тесты интерфейса (`e2e/smoke`). Выкладки нет.
+- **Merge в `main`** → `.github/workflows/deploy.yml`: те же проверки ещё раз (переиспользует
+  `checks.yml`), и только при зелёном результате — сборка, выкладка на сервер, миграции,
+  `pm2 startOrReload`. Красная проверка останавливает выкладку, прод остаётся на прошлой версии.
+- Перед открытием PR прогоняй проверки локально: `npm run typecheck`, `npm run lint`,
+  `npm run test:server`, `npm run build:client && npm run test:smoke`.
+- Ручная выкладка (`npm run deploy`, «Run workflow» в Actions) — только в аварийной ситуации и
+  только по явному указанию владельца. Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4.
 
 ## SSH / Git / доступы
 
@@ -151,7 +154,7 @@ CI гоняет typecheck, lint и серверные тесты (`npm run test:
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
 Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
-Workflow: фича → ветка → merge в `main` → автодеплой (или `npm run deploy` вручную).
+Workflow: фича → ветка → PR в `main` → зелёные проверки → merge → автодеплой (см. «Деплой»).
 
 ## Ритуал коммита: sync с kanban-задачами через MCP
 
