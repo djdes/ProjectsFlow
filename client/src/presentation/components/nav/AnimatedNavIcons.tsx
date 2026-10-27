@@ -81,6 +81,26 @@ export function AnimatedInbox({ active, className }: IconProps): React.ReactElem
   );
 }
 
+// «Все входящие» (задачи всех пространств): глобус, меридиан которого «поворачивается»
+// при активации — сжимается к оси и раскрывается обратно.
+export function AnimatedGlobe({ active, className }: IconProps): React.ReactElement {
+  const { animations } = useMotion();
+  const live = active && animations;
+  return (
+    <svg className={className} {...SVG_PROPS} aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20" />
+      <motion.path
+        d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"
+        style={fillBox}
+        initial={false}
+        animate={live ? { scaleX: [1, 0.15, 1] } : { scaleX: 1 }}
+        transition={{ duration: 0.6, ease: 'easeInOut' }}
+      />
+    </svg>
+  );
+}
+
 export function AnimatedFolder({ active, className }: IconProps): React.ReactElement {
   const { animations } = useMotion();
   const live = active && animations;

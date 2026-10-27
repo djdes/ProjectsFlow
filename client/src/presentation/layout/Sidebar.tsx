@@ -25,7 +25,7 @@ import { SidebarNavRail, type RailItem } from '@/presentation/components/nav/Sid
 import {
   AnimatedHome,
   AnimatedChat,
-  AnimatedInbox,
+  AnimatedGlobe,
   AnimatedSearch,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { CommunicationPanel } from '@/presentation/chat/CommunicationPanel';
@@ -182,7 +182,7 @@ export function Sidebar({
     {
       key: 'inbox',
       label: 'Входящие',
-      icon: <AnimatedInbox className="size-5" />,
+      icon: <AnimatedGlobe className="size-5" />,
       // Счётчик = задачи, назначенные на меня и ни разу мной не открытые (окно 14 дней,
       // см. ListUnreadTasks). Гаснет по одной, когда задачу открывают.
       badge: unreadTaskCount,
@@ -230,7 +230,7 @@ export function Sidebar({
             <AnimatedSearch className="size-4" />
           </RailButton>
           <RailNavLink to="/" end label="Входящие" badge={unreadTaskCount} animated>
-            <AnimatedInbox className="size-4" />
+            <AnimatedGlobe className="size-4" />
           </RailNavLink>
           <RailButton
             onClick={() => {

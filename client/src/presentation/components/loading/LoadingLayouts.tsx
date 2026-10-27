@@ -345,7 +345,8 @@ export function PageSkeleton({
     );
   if (layout === 'inbox') return <div className="min-h-full min-w-0" data-pf-page-skeleton="inbox">
     <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex"><Skeleton className="h-3 w-40" /></div>
-    <div className="px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9"><InboxLoadingLayout /></div>
+    {/* Заголовок «Все входящие» над блоком текущего пространства — как в InboxPage. */}
+    <div className="space-y-3 px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9"><Skeleton className="h-7 w-44" /><InboxLoadingLayout /></div>
   </div>;
   const narrow = ['overview', 'task'].includes(layout);
   return (

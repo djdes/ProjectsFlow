@@ -21,14 +21,18 @@ type Options = {
   readonly method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   readonly body?: unknown;
   readonly timeoutMs?: number;
+  // Per-request workspace override: reads another workspace the user belongs to without
+  // switching the tab. The server rejects non-member workspaces with 404.
+  readonly workspaceId?: string;
 };
 
 async function request<T>(path: string, opts: Options = {}): Promise<T> {
+  const workspace = opts.workspaceId ?? requestWorkspace;
   const init: RequestInit = {
     method: opts.method ?? 'GET',
     credentials: 'include',
     headers: { Accept: 'application/json',
-      ...(requestWorkspace && !/^\/(auth|workspaces)(\/|$)/.test(path) ? { 'X-Workspace-Id': requestWorkspace } : {}),
+      ...(workspace && !/^\/(auth|workspaces)(\/|$)/.test(path) ? { 'X-Workspace-Id': workspace } : {}),
     },
   };
 
@@ -85,8 +89,11 @@ async function mutate<T>(path: string, opts: Options): Promise<T> {
 }
 
 export const httpClient = {
-  get: <T>(path: string, options?: Pick<Options, 'timeoutMs'>) =>
-    reads.get(`${requestWorkspace ?? 'account'}:${path}:${options?.timeoutMs ?? 45000}`, () => request<T>(path, options)),
+  get: <T>(path: string, options?: Pick<Options, 'timeoutMs' | 'workspaceId'>) =>
+    reads.get(
+      `${options?.workspaceId ?? requestWorkspace ?? 'account'}:${path}:${options?.timeoutMs ?? 45000}`,
+      () => request<T>(path, options),
+    ),
   post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),

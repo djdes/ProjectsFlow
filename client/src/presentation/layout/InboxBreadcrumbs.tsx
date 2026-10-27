@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
+import { AnimatedGlobe } from '@/presentation/components/nav/AnimatedNavIcons';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useSwitchWorkspace } from '@/presentation/hooks/useSwitchWorkspace';
@@ -129,6 +129,6 @@ export function WorkspaceCrumbs({
 
 export function InboxBreadcrumbs(): React.ReactElement {
   return (
-    <WorkspaceCrumbs icon={<AnimatedInbox active className="size-3.5 shrink-0" />} label="Входящие" />
+    <WorkspaceCrumbs icon={<AnimatedGlobe active className="size-3.5 shrink-0" />} label="Все входящие" />
   );
 }

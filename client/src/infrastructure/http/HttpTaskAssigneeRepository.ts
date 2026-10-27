@@ -40,6 +40,10 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
     return this.fetchAssignedList('/assignees/mine');
   }
 
+  async listMineInWorkspace(workspaceId: string): Promise<AssignedTask[]> {
+    return this.fetchAssignedList('/assignees/mine', workspaceId);
+  }
+
   async listOthers(): Promise<AssignedTask[]> {
     return this.fetchAssignedList('/assignees/others');
   }
@@ -64,8 +68,11 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
     }));
   }
 
-  private async fetchAssignedList(path: string): Promise<AssignedTask[]> {
-    const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(path);
+  private async fetchAssignedList(path: string, workspaceId?: string): Promise<AssignedTask[]> {
+    const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(
+      path,
+      workspaceId ? { workspaceId } : undefined,
+    );
     return items.map(fromAssignedDto);
   }
 }
