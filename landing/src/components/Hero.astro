@@ -1,43 +1,22 @@
 ---
 import KanbanBoard from './KanbanBoard.tsx';
-import { nbspDash } from '@/lib/typo';
 
 // Лендинг и SPA — один Express в prod, пути относительные.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
-
-// Три опоры продукта — тихий ряд под доской.
-const points = [
-  {
-    key: 'llm',
-    title: 'Подписка на Claude — уже внутри',
-    text: 'Онлайн-доступ к ведущим LLM. Без VPN и без своих API-ключей — просто работаешь.',
-  },
-  {
-    key: 'money',
-    title: 'Прибыль и траты — понятным языком',
-    text: 'Видно, сколько проект заработал и сколько потратил. Без таблиц и лишних терминов.',
-  },
-  {
-    key: 'auto',
-    title: 'Автоматизации из коробки',
-    text: 'Автоулучшения, проверки безопасности и доска, где задачи выполняет AI.',
-  },
-];
 ---
 
+<!-- Hero «Banner»: фраза во всю ширину контейнера, под линией 2px лид и старт. Доска
+     начинается выше сгиба: она и есть главный визуальный ход. -->
 <section class="hero" aria-labelledby="hero-title">
   <div class="pf-container">
-    <div class="hero__top">
-      <h1 id="hero-title" class="hero__title">Опиши идею&nbsp;— получи готовый продукт</h1>
+    <h1 id="hero-title" class="hero__title">Опиши идею.<br />Получи готовый продукт.</h1>
 
-      <div class="hero__side">
-        <p class="hero__lead">
-          Подписка на Claude уже внутри, проект на автопилоте, а прибыль и траты — понятным
-          языком. Без VPN, своих ключей и лишней настройки.
-        </p>
+    <div class="hero__foot">
+      <p class="hero__lead">Подписка на Claude уже внутри: без VPN, своих ключей и&nbsp;лишней настройки.</p>
 
+      <div class="hero__start">
         <form class="hero__form" data-auth-anon data-hero-start data-app-base={appBase}>
-          <label class="sr-only" for="hero-email">E-mail для старта</label>
+          <label class="visually-hidden" for="hero-email">E-mail для старта</label>
           <input
             id="hero-email"
             type="email"
@@ -51,174 +30,146 @@ const points = [
         <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg hero__authed">
           Открыть приложение
         </a>
-
         <p class="hero__note">
-          Первый час на Прайме — бесплатно и без карты. Не зашло — вернём деньги, а проект
-          в любом случае остаётся твоим.
-        </p>
-        <p class="hero__login" data-auth-anon>
-          Уже есть аккаунт? <a href={`${appBase}/login`} class="pf-link">Войти</a>
+          Первый час на Прайме бесплатно и без карты.
+          <span data-auth-anon class="hero__login">Уже есть аккаунт? <a href={`${appBase}/login`} class="pf-link">Войти</a></span>
         </p>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="hero__board">
-      <KanbanBoard client:visible />
-      <p class="hero__caption">
-        Это живая доска. Нажми на задачу — её возьмёт AI.
-        <span class="hero__caption-fine">Перетащи карточку в «Сейчас» — сделаешь сам.</span>
-        <span class="hero__caption-touch">Удерживай карточку и тащи в «Сейчас» — сделаешь сам.</span>
+<section class="stage" aria-label="Живая доска">
+  <div class="pf-container">
+    <figure class="stage__figure">
+      <div class="stage__sign">
+        <span class="stage__name">Это живая доска.</span>
+        <span class="stage__how">Нажми на задачу: её возьмёт AI.</span>
+      </div>
+      <div class="stage__frame pf-product">
+        <KanbanBoard client:visible />
+      </div>
+      <figcaption class="stage__caption">
+        <span class="stage__fine">Перетащи карточку в «Сейчас»: сделаешь сам.</span>
+        <span class="stage__touch">Удерживай карточку и тащи в «Сейчас»: сделаешь сам.</span>
         Готовое приходит на утверждение.
-      </p>
-    </div>
-
-    <ul class="hero__points">
-      {
-        points.map((p) => (
-          <li class="hero__point">
-            <svg class="hero__point-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-              {p.key === 'llm' && <path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" stroke-linecap="round" stroke-linejoin="round" />}
-              {p.key === 'money' && <path d="M4 19V9m5 10V5m5 14v-6m5 6V8" stroke-linecap="round" stroke-linejoin="round" />}
-              {p.key === 'auto' && (
-                <>
-                  <circle cx="12" cy="12" r="3.2" />
-                  <path
-                    d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"
-                    stroke-linecap="round"
-                  />
-                </>
-              )}
-            </svg>
-            <p class="hero__point-title">{nbspDash(p.title)}</p>
-            <p class="hero__point-text">{p.text}</p>
-          </li>
-        ))
-      }
-    </ul>
+      </figcaption>
+    </figure>
   </div>
 </section>
 
 <style>
   .hero {
-    padding-block: clamp(2.5rem, 1.5rem + 3vw, 4rem) var(--section-y);
+    padding-block: var(--space-xl);
+  }
+  /* Wayfind: моно идёт широко, поэтому фраза не выше 4.75rem; пробел моно — целая клетка,
+     её поджимаем, чтобы между словами не зияло. */
+  .hero__title {
+    max-inline-size: none;
+    font-size: min(var(--text-display), 4.75rem);
+    line-height: 0.96;
+    word-spacing: -0.2em;
+    text-wrap: balance;
   }
 
-  /* Заголовок слева, справа — лид и старт. На узких экранах — столбиком. */
-  .hero__top {
+  /* Под фразой — линия 2px; слева лид, справа старт. На узких — столбиком. */
+  .hero__foot {
     display: grid;
-    gap: 1.5rem 3rem;
+    gap: var(--space-lg) var(--gap-columns);
     align-items: start;
+    margin-block-start: var(--space-lg);
+    padding-block-start: var(--space-lg);
+    border-block-start: var(--rule-bar) solid var(--color-ink);
   }
-  @media (min-width: 960px) {
-    .hero__top { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-  }
-  .hero__title {
-    font-size: clamp(2.25rem, 1.5rem + 2.6vw, 3.5rem);
-    font-weight: 700;
-    line-height: 1.06;
-    letter-spacing: var(--tracking-display);
-    color: oklch(var(--foreground));
-  }
-  .hero__side {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  @media (min-width: 60rem) {
+    .hero__foot { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: calc(var(--gap-columns) * 3); }
   }
   .hero__lead {
-    max-inline-size: var(--measure);
+    max-inline-size: 42ch;
     font-size: var(--text-lead);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+    font-weight: 500;
+    line-height: 1.4;
   }
 
+  .hero__start {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
   .hero__form {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    max-inline-size: 30rem;
+    gap: var(--space-xs);
   }
   .hero__email {
-    flex: 1 1 13rem;
+    flex: 1 1 14rem;
     min-inline-size: 0;
-    min-block-size: 2.75rem;
-    padding-inline: 0.75rem;
-    border: 1px solid oklch(var(--input));
-    border-radius: var(--r-md);
-    background: oklch(var(--field));
-    color: oklch(var(--foreground));
-    font: inherit;
-    font-size: max(16px, 1rem);
-    transition: border-color var(--dur-fast) var(--ease-out);
+    min-block-size: 52px;
+    padding-inline: var(--space-md);
+    border: var(--rule-bar) solid var(--color-ink);
+    border-radius: 0;
+    background: var(--color-paper-3);
+    color: var(--color-ink);
+    font-size: max(16px, var(--text-md));
+    outline: 2px solid transparent;
+    outline-offset: -5px;
   }
-  .hero__email::placeholder { color: oklch(var(--muted-foreground)); }
-  .hero__email:focus-visible {
-    border-color: oklch(var(--primary));
-    outline: 3px solid color-mix(in oklch, oklch(var(--primary)) 28%, transparent);
-    outline-offset: 0;
-  }
+  .hero__email::placeholder { color: var(--color-muted); opacity: 1; }
+  .hero__email:focus-visible { outline-color: var(--color-focus); }
   .hero__form .pf-btn { flex: 1 0 auto; }
   .hero__authed { align-self: flex-start; }
 
-  .hero__note,
-  .hero__login {
-    max-inline-size: 30rem;
+  .hero__note {
     font-size: var(--text-sm);
-    line-height: var(--leading-snug);
-    color: oklch(var(--muted-foreground));
+    line-height: 1.5;
+    color: var(--color-muted);
   }
-  .hero__login { margin-block-start: -0.375rem; }
+  .hero__login { white-space: nowrap; }
 
-  /* Доска — главный визуальный ход: сам продукт на всю ширину контейнера. */
-  .hero__board {
-    display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
-    margin-block-start: clamp(2rem, 1.25rem + 2.5vw, 3rem);
-  }
-  .hero__caption-touch { display: none; }
-  @media (pointer: coarse) {
-    .hero__caption-fine { display: none; }
-    .hero__caption-touch { display: inline; }
-  }
-  .hero__caption {
-    max-inline-size: 46rem;
+  /* Доска под вывеской: табличка чернилами сверху, рамка 2px, внутри — вид приложения. */
+  .stage { padding-block-end: var(--section-gap-s); }
+  .stage__figure { margin: 0; }
+  .stage__sign {
+    display: grid;
+    gap: var(--space-2xs) var(--gap-columns);
+    padding: var(--space-sm) var(--space-md);
+    border: var(--rule-bar) solid var(--color-ink);
+    background: var(--color-band);
+    color: var(--color-band-ink);
     font-size: var(--text-sm);
-    line-height: var(--leading-snug);
-    color: oklch(var(--muted-foreground));
+    line-height: 1.45;
   }
-
-  /* Три опоры — тихий ряд без карточек. */
-  .hero__points {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-    gap: 1.75rem 2.5rem;
-    margin: clamp(3rem, 2rem + 3vw, 4.5rem) 0 0;
-    padding: 0;
-    list-style: none;
+  @media (min-width: 60rem) {
+    .stage__sign { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; }
   }
-  .hero__point {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.25rem 0.75rem;
-    align-items: start;
-  }
-  .hero__point-ic {
-    grid-row: span 2;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
-    margin-block-start: 0.125rem;
-    color: oklch(var(--muted-foreground));
-  }
-  .hero__point-title {
-    font-size: var(--text-base);
-    font-weight: 600;
-    line-height: var(--leading-snug);
-    color: oklch(var(--foreground));
-  }
-  .hero__point-text {
+  .stage__name {
     font-size: var(--text-md);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+    color: var(--color-band-ink);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    letter-spacing: var(--tracking-display);
+    white-space: nowrap;
+  }
+  .stage__how { color: var(--color-band-muted); }
+  .stage__touch { display: none; }
+  @media (pointer: coarse) {
+    .stage__fine { display: none; }
+    .stage__touch { display: inline; }
+  }
+  .stage__frame {
+    border: var(--rule-bar) solid var(--color-ink);
+    border-block-start: 0;
+  }
+  .stage__caption {
+    margin-block-start: var(--space-sm);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
+  /* Своя рамка доски (скругление и тень окна) не нужна: окно держит рамка вывески. */
+  .stage__frame :global(.kb) {
+    border-radius: 0;
+    box-shadow: none;
   }
 </style>
 

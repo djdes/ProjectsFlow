@@ -1,0 +1,90 @@
+/* Hallmark base: what the Floor already decided, in Tailwind's base layer (after Preflight,
+   under the utilities). Wayfind: one mono face, tabular figures, square everything. */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { overflow-x: clip; }
+  html {
+    background: var(--color-paper);
+    scrollbar-color: var(--color-muted) var(--color-paper);
+    /* Anchors land below the sticky masthead. */
+    scroll-padding-top: calc(var(--nav-h) + var(--space-lg));
+    -webkit-text-size-adjust: 100%;
+    interpolate-size: allow-keywords;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+  body {
+    margin: 0;
+    min-block-size: 100svh;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-stretch: var(--stretch-body);
+    font-size: var(--text-md);
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    caret-color: var(--color-accent);
+    overflow-wrap: break-word;
+  }
+  ::selection { background: var(--color-accent-2); color: var(--color-on-amber); }
+  :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+  a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.16em; }
+  h1, h2, h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-stretch: var(--stretch-display);
+    font-weight: var(--display-weight, 700);
+    font-synthesis: none;
+    letter-spacing: var(--tracking-display);
+    line-height: 0.98;
+    overflow-wrap: break-word;
+    min-width: 0;
+    text-wrap: balance;
+  }
+  h1 { max-width: 20ch; font-size: var(--text-display); }
+  h2 { max-width: 24ch; font-size: var(--text-section); }
+  h3 { max-width: 40ch; font-size: var(--text-title); line-height: 1.1; }
+  .lead { font-size: var(--text-lead); line-height: 1.45; max-width: 52ch; }
+  p { margin: 0; text-wrap: pretty; }
+  p:not([class]) { max-width: 65ch; }
+  img, video { max-width: 100%; height: auto; display: block; }
+  [hidden] { display: none !important; }
+  button, input, select, textarea { font: inherit; letter-spacing: inherit; }
+  .num, .figure, td.num { font-variant-numeric: tabular-nums; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  [data-slot] { position: relative; overflow: hidden; background: var(--color-paper-3); }
+  [data-slot] > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+  [data-slot]:has(> img) > :not(img):not([data-keep]) { display: none !important; }
+
+  /* Skip link: off screen until a keyboard reaches it. */
+  .skip-link {
+    position: absolute;
+    inset-inline-start: var(--space-md);
+    inset-block-start: -100px;
+    z-index: var(--z-tooltip);
+    padding: var(--space-xs) var(--space-md);
+    border: var(--rule-bar) solid var(--color-ink);
+    background: var(--color-paper-3);
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .skip-link:focus-visible { inset-block-start: var(--space-sm); }
+
+  @media (max-width: 60rem) { :root { --gutter: 24px; --section-gap-s: 80px; --section-gap: 96px; --section-gap-l: 120px; --nav-h: 4rem; } }
+  @media (max-width: 40rem) { :root { --gutter: 16px; --section-gap-s: 56px; --section-gap: 72px; --section-gap-l: 96px; --gap-columns: 16px; } }
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.keep-motion), *:not(.keep-motion)::before, *:not(.keep-motion)::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

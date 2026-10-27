@@ -1,0 +1,59 @@
+/* Hallmark · Wayfind (colourway: platform, night under prefers-color-scheme: dark).
+   Page tokens of the landing and the blog. The product itself (the live board and the
+   sample windows) keeps the app's own C4 tokens from ../tokens.css under .pf-product.
+   Accent: the brand blue of the logo (C4 --primary-fill, hue 252.7) takes Wayfind's
+   cobalt role; amber marks figures on ink. Face: Martian Mono, which has Cyrillic
+   (Chivo Mono, the theme's face, has none). */
+:root {
+  color-scheme: light;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.8125rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.25rem; --text-xl: 1.5625rem; --text-2xl: 1.953rem; --text-3xl: 2.441rem;
+  --text-display-s: clamp(2.25rem, 4vw + 0.5rem, 3.75rem);
+  /* Marquee head: sized to the container so the long line hugs both edges, capped at 1440. */
+  --text-display: clamp(2.5rem, calc((min(100vw, var(--container)) - 2 * var(--gutter)) / 13.4), 6.125rem);
+  --text-section: clamp(2rem, 2.5vw + 1rem, 3.5rem); --text-title: clamp(1.25rem, 0.75vw + 0.875rem, 1.625rem); --text-lead: clamp(1.125rem, 0.35vw + 1rem, 1.375rem);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --nav-h: 4.5rem;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+
+  --color-paper: oklch(95.5% 0.006 250); --color-paper-2: oklch(91% 0.009 250); --color-paper-3: oklch(99.5% 0.005 250);
+  --color-ink: oklch(16% 0.014 262); --color-ink-2: oklch(29% 0.014 262); --color-muted: oklch(45% 0.016 260);
+  --color-rule: oklch(80% 0.011 250); --color-ink-rule: oklch(34% 0.014 262);
+  --color-accent: oklch(52.5% 0.16 252.7); --color-accent-hover: oklch(46% 0.15 252.7);
+  --color-accent-2: oklch(81% 0.16 82); --color-accent-ink: oklch(99.5% 0.003 250); --color-on-amber: oklch(16% 0.014 262);
+  --color-focus: oklch(53% 0.19 252.7);
+  /* The ink band: blue-black field, paper type, amber figures. */
+  --color-band: var(--color-ink); --color-band-ink: var(--color-paper); --color-band-muted: oklch(78% 0.012 250); --color-band-rule: var(--color-ink-rule);
+  /* The product's own status colours, set as a network's line squares. */
+  --color-line-draft: oklch(68.62% 0.004 91.47); --color-line-queue: oklch(60.58% 0.167 252.7);
+  --color-line-approval: oklch(58.14% 0.12 309.5); --color-line-manual: oklch(62.55% 0.123 77.93);
+  --color-line-done: oklch(55.79% 0.085 158.39);
+
+  --font-display: "Martian Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace; --font-body: var(--font-display); --font-outlier: var(--font-body);
+  --stretch-display: 75%; --stretch-body: 100%;
+  --radius-card: 0; --radius-pill: 999px; --rule-hair: 1px; --rule-bar: 2px;
+  --shadow-card: 0 24px 40px -24px oklch(8% 0.01 260 / 0.6);
+  --tracking-display: -0.03em; --display-weight: 800;
+  --measure: 62ch;
+}
+
+/* Night colourway: dark paper, light ink; the brand blue lifts to the app's dark periwinkle. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-paper: oklch(15% 0.012 262); --color-paper-2: oklch(19% 0.013 262); --color-paper-3: oklch(20.5% 0.013 262);
+    --color-ink: oklch(96% 0.005 250); --color-ink-2: oklch(86% 0.008 250); --color-muted: oklch(73% 0.014 255);
+    --color-rule: oklch(31% 0.014 262); --color-ink-rule: oklch(40% 0.014 262);
+    --color-accent: oklch(68.09% 0.169 275.03); --color-accent-hover: oklch(74% 0.14 275.03);
+    --color-accent-ink: oklch(19.65% 0.068 275.73);
+    --color-focus: oklch(70% 0.18 275.03);
+    --color-band: oklch(20.5% 0.014 262); --color-band-ink: oklch(96% 0.005 250); --color-band-muted: oklch(76% 0.012 255); --color-band-rule: oklch(34% 0.014 262);
+    --color-line-draft: oklch(70.97% 0.015 272.62); --color-line-queue: oklch(68.09% 0.169 275.03);
+    --color-line-approval: oklch(73.68% 0.142 299.36); --color-line-manual: oklch(81.65% 0.14 80.1);
+    --color-line-done: oklch(77.67% 0.143 155.36);
+    --shadow-card: 0 24px 40px -24px oklch(4% 0.01 260 / 0.8);
+    }
+}

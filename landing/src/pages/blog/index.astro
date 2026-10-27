@@ -4,7 +4,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import Nav from '@/components/Nav.astro';
 import Footer from '@/components/Footer.astro';
 import PostCard from '@/components/PostCard.astro';
-import { readingMinutes, topicTone } from '@/lib/blog';
+import { readingMinutes } from '@/lib/blog';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
@@ -34,7 +34,7 @@ const topics = Array.from(new Set(cards.map((c) => c.topic))).map((t) => ({
         <h1 class="blog__title">Как строить продукты с&nbsp;AI</h1>
         <p class="pf-lead">
           Короткие полезные заметки о практике, продукте, деньгах и автоматизации.
-          Без воды — то, что пригодится, когда строишь своё.
+          Без воды: то, что пригодится, когда строишь своё.
         </p>
       </header>
 
@@ -44,8 +44,7 @@ const topics = Array.from(new Set(cards.map((c) => c.topic))).map((t) => ({
         </button>
         {
           topics.map((t) => (
-            <button type="button" class={`chip ${topicTone(t.name)}`} data-topic-filter={t.name} aria-pressed="false">
-              <span class="chip__dot" aria-hidden="true" />
+            <button type="button" class="chip" data-topic-filter={t.name} aria-pressed="false">
               {t.name} <span class="chip__count">{t.count}</span>
             </button>
           ))
@@ -78,86 +77,67 @@ const topics = Array.from(new Set(cards.map((c) => c.topic))).map((t) => ({
 
 <style>
   .blog {
-    padding-block: clamp(2.5rem, 1.5rem + 3vw, 4rem) var(--section-y);
+    padding-block: var(--space-2xl) var(--section-gap-s);
   }
   .blog__head {
-    display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
-    max-inline-size: 46rem;
-    margin-block-end: 2rem;
+    display: grid;
+    gap: var(--space-md);
+    margin-block-end: var(--space-xl);
+    padding-block-end: var(--space-lg);
+    border-block-end: var(--rule-bar) solid var(--color-ink);
   }
   .blog__title {
-    font-size: clamp(2.25rem, 1.75rem + 2vw, 3rem);
-    font-weight: 700;
-    line-height: var(--leading-tight);
-    letter-spacing: var(--tracking-display);
-    color: oklch(var(--foreground));
+    max-inline-size: none;
+    font-size: var(--text-display-s);
   }
 
-  /* Чипы-фильтры: 28px, рамка, точка тона темы, счётчик серым; выбранный — синяя подложка. */
+  /* Фильтр тем — квадратные клетки на общих рамках 2px; выбранная — чернилами. */
   .blog__filters {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
-    margin-block-end: 1.75rem;
+    margin-block-end: var(--space-xl);
+    padding-inline-start: var(--rule-bar);
   }
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.375rem;
-    min-block-size: 1.75rem;
-    padding-inline: 0.625rem;
-    border: 1px solid oklch(var(--border));
-    border-radius: var(--r-md);
+    gap: var(--space-xs);
+    min-block-size: 44px;
+    margin-inline-start: calc(-1 * var(--rule-bar));
+    padding-inline: var(--space-md);
+    border: var(--rule-bar) solid var(--color-ink);
+    border-radius: 0;
     background: transparent;
-    color: oklch(var(--foreground));
-    font: inherit;
-    font-size: var(--text-ui);
-    font-weight: 500;
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+    font-weight: 800;
     cursor: pointer;
-    transition:
-      background-color var(--dur-fast) var(--ease-out),
-      border-color var(--dur-fast) var(--ease-out);
-  }
-  .chip__dot {
-    flex: none;
-    inline-size: 0.4375rem;
-    block-size: 0.4375rem;
-    border-radius: 2px;
-    background: var(--tone);
+    transition: background-color var(--dur-micro) steps(1), color var(--dur-micro) steps(1);
   }
   .chip__count {
-    color: oklch(var(--muted-foreground));
-    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    color: var(--color-muted);
   }
-  .chip[aria-pressed='true'] {
-    border-color: oklch(var(--primary));
-    background: var(--primary-soft);
-  }
-  /* Серый счётчик на мягкой синей подложке не дотягивает до AA — берём синий текст (4.7:1). */
-  .chip[aria-pressed='true'] .chip__count { color: oklch(var(--primary-ink)); }
-  .chip:active { background: var(--active); }
+  .chip[aria-pressed='true'] { background: var(--color-ink); color: var(--color-paper); }
+  .chip[aria-pressed='true'] .chip__count { color: var(--color-paper-2); }
+  .chip:focus-visible { position: relative; z-index: var(--z-raised); outline-offset: 3px; }
+  .chip:active { transform: translateY(1px); }
   @media (hover: hover) and (pointer: fine) {
-    .chip:hover { background: var(--hover); }
-    .chip[aria-pressed='true']:hover { background: var(--primary-soft); }
-  }
-  @media (pointer: coarse) {
-    .chip { min-block-size: 2.5rem; }
+    .chip[aria-pressed='false']:hover { background: var(--color-paper-2); }
   }
 
   .blog__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
-    gap: 1rem 1.25rem;
+    gap: var(--gap-columns);
     margin: 0;
     padding: 0;
     list-style: none;
   }
   .blog__item[hidden] { display: none; }
   .blog__empty {
-    margin-block-start: 2rem;
-    color: oklch(var(--muted-foreground));
+    margin-block-start: var(--space-xl);
+    color: var(--color-muted);
   }
 </style>
 

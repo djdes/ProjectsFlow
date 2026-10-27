@@ -10,9 +10,11 @@ const inBlog = Astro.url.pathname.startsWith('/blog');
 const isCurrent = (href: string): boolean => inBlog && href === '/blog';
 ---
 
+<!-- Мастхед: слово по центру над линией 2px, слева пункты, справа вход. На узких — слово
+     слева, пункты и вход в панели бургера. -->
 <header class="pf-nav">
   <nav class="pf-container pf-nav__inner" aria-label="Основная навигация">
-    <Logo />
+    <Logo class="pf-nav__logo" />
 
     <div class="pf-nav__links">
       {NAV_LINKS.map((l) => (
@@ -25,7 +27,7 @@ const isCurrent = (href: string): boolean => inBlog && href === '/blog';
     <div class="pf-nav__actions">
       {/* Десктопные кнопки; на мобиле действия живут в панели бургера. */}
       <div class="pf-nav__cta">
-        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--secondary">Войти</a>
+        <a href={`${appBase}/login`} data-auth-anon class="pf-nav__link pf-nav__login">Войти</a>
         <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary">Создать аккаунт</a>
         {/* Видна, если /api/auth/me ответил 200 (BaseLayout ставит html[data-auth="authed"]). */}
         <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary">Открыть приложение</a>
@@ -69,116 +71,137 @@ const isCurrent = (href: string): boolean => inBlog && href === '/blog';
   .pf-nav {
     position: sticky;
     inset-block-start: 0;
-    z-index: 50;
-    background: oklch(var(--background));
-    border-block-end: 1px solid oklch(var(--border));
+    z-index: var(--z-sticky-nav);
+    background: var(--color-paper);
+    border-block-end: var(--rule-bar) solid var(--color-ink);
   }
   .pf-nav__inner {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    block-size: var(--nav-h);
+    gap: var(--space-lg);
+    min-block-size: var(--nav-h);
   }
-  .pf-nav__links {
-    display: none;
-    align-items: center;
-    gap: 0.125rem;
-  }
+  .pf-nav__links { display: none; }
   .pf-nav__link {
-    padding: 0.375rem 0.625rem;
-    border-radius: var(--r-md);
-    color: oklch(var(--muted-foreground));
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 44px;
+    padding-inline: var(--space-xs);
+    color: var(--color-ink-2);
     font-size: var(--text-sm);
     font-weight: 500;
     text-decoration: none;
-    transition:
-      background-color var(--dur-fast) var(--ease-out),
-      color var(--dur-fast) var(--ease-out);
+    white-space: nowrap;
+    transition: color var(--dur-micro) steps(1);
   }
-  .pf-nav__link[aria-current='page'] { color: oklch(var(--foreground)); }
+  .pf-nav__link[aria-current='page'] {
+    color: var(--color-ink);
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.35em;
+  }
   .pf-nav__actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-xs);
     margin-inline-start: auto;
   }
   .pf-nav__cta { display: none; }
 
-  /* Бургер — только на узких экранах. */
+  /* Бургер — только на узких экранах: три полосы 2px в квадратной клетке. */
   .pf-nav__burger {
     display: inline-flex;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    inline-size: 2.75rem;
-    block-size: 2.75rem;
-    padding-inline: 0.75rem;
-    border: 0;
-    border-radius: var(--r-md);
+    gap: var(--space-2xs);
+    inline-size: 48px;
+    block-size: 48px;
+    padding-inline: 12px;
+    border: var(--rule-bar) solid var(--color-ink);
+    border-radius: 0;
     background: transparent;
-    color: oklch(var(--foreground));
+    color: var(--color-ink);
     cursor: pointer;
   }
-  .pf-nav__burger:active { background: var(--active); }
+  .pf-nav__burger:active { background: var(--color-paper-2); }
   .pf-nav__burger span {
     display: block;
-    block-size: 1.5px;
-    border-radius: 2px;
+    block-size: 2px;
     background: currentColor;
   }
-  .pf-nav__burger[aria-expanded='true'] span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+  .pf-nav__burger[aria-expanded='true'] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
   .pf-nav__burger[aria-expanded='true'] span:nth-child(2) { opacity: 0; }
-  .pf-nav__burger[aria-expanded='true'] span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+  .pf-nav__burger[aria-expanded='true'] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
   @media (prefers-reduced-motion: no-preference) {
-    .pf-nav__burger span { transition: transform var(--dur) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+    .pf-nav__burger span { transition: transform var(--dur-short) var(--ease-out), opacity var(--dur-micro) var(--ease-out); }
   }
 
   /* Мобильная панель под полосой. */
   .pf-nav__mobile {
-    border-block-start: 1px solid oklch(var(--border));
-    background: oklch(var(--background));
+    border-block-start: var(--rule-hair) solid var(--color-rule);
+    background: var(--color-paper);
   }
   .pf-nav__mobile[hidden] { display: none; }
   .pf-nav__mobile-inner {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
-    padding-block: 0.75rem 1rem;
+    padding-block: var(--space-xs) var(--space-lg);
   }
   .pf-nav__mobile-link {
     display: flex;
     align-items: center;
-    min-block-size: 2.75rem;
-    padding-inline: 0.625rem;
-    margin-inline: -0.625rem;
-    border-radius: var(--r-md);
-    color: oklch(var(--foreground));
-    font-size: var(--text-base);
-    font-weight: 500;
+    min-block-size: 52px;
+    border-block-end: var(--rule-hair) solid var(--color-rule);
+    color: var(--color-ink);
+    font-size: var(--text-lg);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    letter-spacing: var(--tracking-display);
     text-decoration: none;
   }
-  .pf-nav__mobile-link:active { background: var(--active); }
+  .pf-nav__mobile-link[aria-current='page'] { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
+  .pf-nav__mobile-link:active { background: var(--color-paper-2); }
   .pf-nav__mobile-actions {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    margin-block-start: 0.75rem;
-    padding-block-start: 1rem;
-    border-block-start: 1px solid oklch(var(--border));
+    gap: var(--space-xs);
+    margin-block-start: var(--space-lg);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .pf-nav__link:hover { background: var(--hover); color: oklch(var(--foreground)); }
-    .pf-nav__burger:hover { background: var(--hover); }
-    .pf-nav__mobile-link:hover { background: var(--hover); }
+    .pf-nav__link:hover { color: var(--color-accent); }
+    .pf-nav__burger:hover { background: var(--color-paper-2); }
   }
 
-  /* Десктоп: ссылки и кнопки в полосе, бургер и панель скрыты. */
-  @media (min-width: 880px) {
-    .pf-nav__links { display: flex; }
-    .pf-nav__cta { display: flex; align-items: center; gap: 0.5rem; }
+  /* Средние экраны: кнопки в полосе, пункты — в бургере. */
+  @media (min-width: 48rem) {
+    .pf-nav__cta { display: flex; align-items: center; gap: var(--space-xs); }
+    .pf-nav__mobile-actions { display: none; }
+  }
+
+  /* Пункты в полосе: слово слева, пункты за ним, вход справа. */
+  @media (min-width: 75rem) {
+    .pf-nav__links {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2xs);
+    }
     .pf-nav__burger { display: none; }
     .pf-nav__mobile { display: none !important; }
+  }
+  /* Мастхед, когда пункты помещаются слева от центра: слово ровно посередине. */
+  @media (min-width: 90rem) {
+    .pf-nav__inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+    .pf-nav__links {
+      grid-column: 1;
+      grid-row: 1;
+      margin-inline-start: calc(-1 * var(--space-xs));
+    }
+    .pf-nav__logo { grid-column: 2; grid-row: 1; }
+    .pf-nav__actions { grid-column: 3; grid-row: 1; justify-content: flex-end; }
   }
 </style>
 
@@ -206,7 +229,7 @@ const isCurrent = (href: string): boolean => inBlog && href === '/blog';
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closePanel(true);
     });
-    window.matchMedia('(min-width: 880px)').addEventListener('change', (e) => {
+    window.matchMedia('(min-width: 75rem)').addEventListener('change', (e) => {
       if (e.matches) closePanel();
     });
   }

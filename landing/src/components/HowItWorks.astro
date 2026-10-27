@@ -1,108 +1,161 @@
 ---
-// Путь задачи от идеи до запуска. У каждого шага — метка статуса из приложения: те же
-// цвета, что на доске в hero (черновик → AI делает → на утверждении → готово).
+// Путь задачи от идеи до запуска — табло на чернильной полосе. У каждой строки — квадрат
+// цвета статуса из приложения, как цвет ветки на схеме метро (черновик → AI делает →
+// на утверждении → готово), номер янтарём и тот, кто сейчас действует.
 const steps = [
   {
     title: 'Опиши идею',
     body: 'Просто словами расскажи, что хочешь получить. Никаких форм с двадцатью полями.',
     tag: 'Черновик',
-    tone: 'pf-tone-gray',
+    line: 'pf-line--draft',
+    who: 'Ты',
   },
   {
     title: 'AI берётся за дело',
     body: 'Платформа разбивает задумку на задачи и доводит их до готового результата сама.',
     tag: 'AI делает',
-    tone: 'pf-tone-queue',
+    line: 'pf-line--queue',
+    who: 'AI',
   },
   {
     title: 'Смотришь, как растёт',
     body: 'Видишь прогресс в реальном времени и сколько всё стоит, в рублях. Готовое приходит тебе на утверждение.',
     tag: 'На утверждении',
-    tone: 'pf-tone-approval',
+    line: 'pf-line--approval',
+    who: 'Ты',
   },
   {
     title: 'Запускаешь',
-    body: 'Готовый продукт — у тебя на руках. Дальше развивай новыми идеями, когда захочешь.',
+    body: 'Готовый продукт у тебя на руках. Дальше развивай новыми идеями, когда захочешь.',
     tag: 'Готово',
-    tone: 'pf-tone-done',
+    line: 'pf-line--done',
+    who: 'Ты',
   },
 ];
 ---
 
-<section id="how" class="pf-section">
+<section id="how" class="pf-section pf-band route" aria-labelledby="how-title">
   <div class="pf-container">
-    <div class="pf-head">
-      <h2 class="pf-h2">Четыре шага&nbsp;— от идеи до запуска</h2>
+    <div class="pf-head pf-head--split">
+      <h2 id="how-title" class="pf-h2">Четыре шага от идеи до запуска</h2>
       <p class="pf-lead">
         Ты остаёшься на уровне идей и решений. Всё, что между задумкой и готовым продуктом,
         платформа берёт на себя.
       </p>
     </div>
 
-    <ol class="how">
-      {
-        steps.map((s, i) => (
-          <li class="how__step">
-            <span class="how__n" aria-hidden="true">{i + 1}</span>
-            <span class={`pf-tag ${s.tone} how__tag`}>
-              <span class="pf-tag__text">{s.tag}</span>
-            </span>
-            <h3 class="how__title">{s.title}</h3>
-            <p class="how__body">{s.body}</p>
-          </li>
-        ))
-      }
-    </ol>
+    <div class="route__board">
+      <div class="route__heads" aria-hidden="true">
+        <span>Шаг</span>
+        <span>Статус</span>
+        <span>Что происходит</span>
+        <span class="route__heads-who">Кто</span>
+      </div>
+      <ol class="route__rows">
+        {
+          steps.map((s, i) => (
+            <li class="route__row">
+              <span class="route__n" aria-hidden="true">{i + 1}</span>
+              <span class="route__status">
+                <span class:list={['pf-line', s.line]} aria-hidden="true" />
+                {s.tag}
+              </span>
+              <div class="route__what">
+                <h3 class="route__title">{s.title}</h3>
+                <p class="route__body">{s.body}</p>
+              </div>
+              <span class="route__who">
+                <span class="visually-hidden">Делает: </span>
+                {s.who}
+              </span>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
   </div>
 </section>
 
 <style>
-  /* Дорожка: шаги стоят на одной линии, номер — на линии. На телефоне — столбиком. */
-  .how {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-    gap: 2rem 1.5rem;
+  /* Табло: шапка столбцов над линией 2px, строки — через тонкую линию. */
+  .route__board { border-block-start: var(--rule-bar) solid var(--color-band-ink); }
+  .route__heads { display: none; }
+  .route__rows {
     margin: 0;
     padding: 0;
     list-style: none;
   }
-  .how__step {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-    padding-block-start: 1.75rem;
-    border-block-start: 1px solid oklch(var(--border));
-    position: relative;
-  }
-  .how__n {
-    position: absolute;
-    inset-block-start: -0.8125rem;
-    inset-inline-start: 0;
+  .route__row {
     display: grid;
-    place-items: center;
-    inline-size: 1.625rem;
-    block-size: 1.625rem;
-    border: 1px solid oklch(var(--border));
-    border-radius: 50%;
-    background: oklch(var(--background));
-    font-size: var(--text-ui);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: oklch(var(--foreground));
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+    gap: var(--space-sm) var(--space-md);
+    align-items: baseline;
+    padding-block: var(--space-lg);
+    border-block-end: var(--rule-hair) solid var(--color-band-rule);
   }
-  .how__title {
-    margin-block-start: 0.25rem;
-    font-size: var(--text-h3);
-    font-weight: 700;
-    line-height: var(--leading-snug);
-    letter-spacing: var(--tracking-heading);
-    color: oklch(var(--foreground));
+  .route__n {
+    grid-row: span 2;
+    font-size: var(--text-section);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    line-height: 0.9;
+    color: var(--color-accent-2);
   }
-  .how__body {
-    max-inline-size: 30rem;
-    font-size: var(--text-md);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+  .route__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-band-ink);
+    white-space: nowrap;
+  }
+  .route__what {
+    grid-column: 2 / -1;
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .route__title {
+    max-inline-size: none;
+    color: var(--color-band-ink);
+  }
+  .route__body {
+    max-inline-size: 52ch;
+    color: var(--color-band-muted);
+  }
+  .route__who {
+    grid-column: 3;
+    grid-row: 1;
+    font-size: var(--text-sm);
+    font-weight: 800;
+    color: var(--color-band-ink);
+    text-align: end;
+  }
+
+  @media (min-width: 60rem) {
+    .route__heads,
+    .route__row {
+      display: grid;
+      grid-template-columns: 6rem 15rem minmax(0, 1fr) 6rem;
+      column-gap: var(--gap-columns);
+    }
+    .route__heads {
+      padding-block: var(--space-sm);
+      border-block-end: var(--rule-hair) solid var(--color-band-rule);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--color-band-muted);
+    }
+    .route__heads-who { text-align: end; }
+    .route__row { align-items: start; padding-block: var(--space-xl); }
+    .route__n { grid-row: auto; font-size: var(--text-display-s); }
+    .route__status { padding-block-start: var(--space-xs); }
+    .route__what {
+      grid-column: 3;
+      grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+      column-gap: var(--gap-columns);
+      align-items: baseline;
+    }
+    .route__who { grid-column: 4; grid-row: auto; padding-block-start: var(--space-xs); }
   }
 </style>

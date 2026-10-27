@@ -1,216 +1,120 @@
 ---
 // Снятие риска: только реальные обещания — возврат денег, нет лок-ина, старт без карты,
-// помощь. Никаких выдуманных цифр результата.
-
+// помощь. Никаких выдуманных цифр результата. Стоит сразу под тарифами, на той же полосе:
+// четыре таблички и бонусы. Печать «Не зашло — вернём деньги» и список «Что получаешь»
+// сняты: они повторяли табличку «Вернём деньги» и возможности выше (гейт 69 Hallmark).
 import { nbspDash } from '@/lib/typo';
-
-const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
 const risks = [
   {
-    icon: 'trial',
-    title: 'Первый час — бесплатно',
+    title: 'Первый час бесплатно',
     body: 'Прайм можно попробовать час без карты. Первый результат увидишь уже в первый час.',
   },
   {
-    icon: 'refund',
     title: 'Вернём деньги',
-    body: 'Платный тариф не подошёл — оформим возврат. Без допросов и мелкого шрифта.',
+    body: 'Платный тариф не подошёл, оформим возврат. Без допросов и мелкого шрифта.',
   },
   {
-    icon: 'help',
-    title: 'Не получилось — поможем',
-    body: 'Застрял или что-то не вышло — поможем бесплатно. Не бросаем наедине с проблемой.',
+    title: 'Не получилось? Поможем',
+    body: 'Застрял или что-то не вышло, поможем бесплатно. Не бросаем наедине с проблемой.',
   },
   {
-    icon: 'lock',
     title: 'Никакого лок-ина',
-    body: 'Всё, что создаёшь, — твоё. Уходишь — забираешь с собой. Ничего не запираем.',
+    body: 'Всё, что создаёшь, твоё. Уходишь, забираешь с собой. Ничего не запираем.',
   },
-];
-
-const iconPaths: Record<string, string> = {
-  trial: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
-  refund: 'M4 9a8 8 0 0114-5.3M20 4v4h-4M20 15a8 8 0 01-14 5.3M4 20v-4h4',
-  help: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM5 5l4 4M15 15l4 4M19 5l-4 4M9 15l-4 4',
-  lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v9H5z',
-};
-
-const coreStack = [
-  'Идеи превращаются в готовый результат',
-  'Проект на автопилоте — задачи делаются сами',
-  'Claude онлайн — ключи и настройка не нужны',
-  'Всё по проекту в одном месте',
 ];
 
 const bonuses = [
-  'Поможем запустить первый проект — проведём за руку',
+  'Поможем запустить первый проект: проведём за руку',
   'Готовые шаблоны и стартеры, чтобы начать быстрее',
   'Приоритетная поддержка в Telegram',
 ];
-
-const check = 'M20 6 9 17l-5-5';
 ---
 
-<section id="guarantee" class="pf-section pf-section--alt">
+<section id="guarantee" class="pf-band--paper guarantee" aria-labelledby="guarantee-title">
   <div class="pf-container">
-    <div class="pf-head">
-      <h2 class="pf-h2">Почему не страшно начать</h2>
-      <p class="pf-lead">
-        Мы убрали риск со своей стороны: начинаешь бесплатно, платишь — только если зашло,
-        а результат всегда остаётся твоим.
-      </p>
-    </div>
-
-    <div class="gr">
-      <aside class="gr__seal" aria-labelledby="gr-seal-title">
-        <svg class="gr__shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-          <path d="M12 2.5l7 3v5.5c0 5-3.2 8.6-7 10.5-3.8-1.9-7-5.5-7-10.5V5.5l7-3z" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M8.5 12l2.3 2.3L16 9" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <h3 class="gr__seal-title" id="gr-seal-title">Не&nbsp;зашло&nbsp;— вернём деньги</h3>
-        <p class="gr__seal-body">
-          Начни бесплатно, без карты — первый результат увидишь в первый час. Не зашло — вернём
-          деньги, без вопросов и мелкого шрифта. Проверить ProjectsFlow не стоит ничего.
-        </p>
-        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg gr__cta">Начать бесплатно</a>
-        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg gr__cta">Открыть приложение</a>
-        <p class="gr__seal-note">Первый час Прайма — бесплатно и без карты.</p>
-      </aside>
-
-      <div class="gr__stack">
-        <h3 class="gr__stack-title">Что получаешь</h3>
-        <ul class="pf-checks gr__list">
-          {
-            coreStack.map((s) => (
-              <li>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                  <path d={check} stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <span>{s}</span>
-              </li>
-            ))
-          }
-        </ul>
-
-        <h3 class="gr__stack-title gr__stack-title--next">Бонусы&nbsp;— бесплатно</h3>
-        <ul class="pf-checks gr__list">
-          {
-            bonuses.map((s) => (
-              <li>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                  <path d={check} stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <span>{s}</span>
-              </li>
-            ))
-          }
-        </ul>
-      </div>
-    </div>
-
-    <ul class="gr__risks">
+    <h2 id="guarantee-title" class="guarantee__title">Почему не страшно начать</h2>
+    <ul class="guarantee__plates">
       {
         risks.map((r) => (
-          <li class="gr__risk">
-            <svg class="gr__risk-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-              <path d={iconPaths[r.icon]} stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <h3 class="gr__risk-title">{nbspDash(r.title)}</h3>
-            <p class="gr__risk-body">{r.body}</p>
+          <li class="guarantee__plate">
+            <h3 class="guarantee__plate-title">{nbspDash(r.title)}</h3>
+            <p class="guarantee__plate-body">{r.body}</p>
           </li>
         ))
       }
     </ul>
+
+    <div class="guarantee__bonus">
+      <h3 class="guarantee__bonus-title">Бонусы бесплатно</h3>
+      <ul class="guarantee__bonus-list">
+        {bonuses.map((b) => <li>{b}</li>)}
+      </ul>
+    </div>
   </div>
 </section>
 
 <style>
-  .gr {
+  .guarantee { padding-block: 0 var(--section-gap-s); }
+  .guarantee__title {
+    max-inline-size: none;
+    font-size: var(--text-title);
+  }
+
+  /* Четыре таблички на общих рамках 2px: одно обещание в каждой. */
+  .guarantee__plates {
     display: grid;
-    gap: 1.5rem 3rem;
-    align-items: start;
-  }
-  @media (min-width: 900px) {
-    .gr { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
-  }
-
-  /* Карточка гарантии — единственная белая плитка секции, с главной кнопкой. */
-  .gr__seal {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: clamp(1.5rem, 1.25rem + 1vw, 2rem);
-    border-radius: var(--r-2xl);
-    background: oklch(var(--card));
-    box-shadow: var(--shadow-card);
-  }
-  .gr__shield {
-    inline-size: 2rem;
-    block-size: 2rem;
-    color: oklch(var(--done));
-  }
-  .gr__seal-title {
-    font-size: clamp(1.375rem, 1.2rem + 0.75vw, 1.75rem);
-    font-weight: 700;
-    line-height: var(--leading-tight);
-    letter-spacing: var(--tracking-display);
-    color: oklch(var(--foreground));
-  }
-  .gr__seal-body {
-    font-size: var(--text-md);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
-  }
-  .gr__cta { margin-block-start: 0.5rem; }
-  .gr__seal-note {
-    font-size: var(--text-sm);
-    color: oklch(var(--muted-foreground));
-  }
-
-  .gr__stack { padding-block: 0.5rem; }
-  .gr__stack-title {
-    font-size: var(--text-base);
-    font-weight: 600;
-    color: oklch(var(--foreground));
-  }
-  .gr__stack-title--next {
-    margin-block-start: 1.75rem;
-    padding-block-start: 1.5rem;
-    border-block-start: 1px solid oklch(var(--border));
-  }
-  .gr__list {
-    margin-block-start: 0.875rem;
-    font-size: var(--text-base);
-    color: oklch(var(--foreground));
-  }
-
-  /* Четыре снятия риска — ряд без карточек, под линией. */
-  .gr__risks {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-    gap: 1.75rem 2rem;
-    margin: clamp(2.5rem, 2rem + 2vw, 3.5rem) 0 0;
-    padding: clamp(2rem, 1.5rem + 1.5vw, 2.5rem) 0 0;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    margin: var(--space-lg) 0 0;
+    padding: 0;
     list-style: none;
-    border-block-start: 1px solid oklch(var(--border));
+    border-block-start: var(--rule-bar) solid var(--color-ink);
+    border-inline-start: var(--rule-bar) solid var(--color-ink);
   }
-  .gr__risk-ic {
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
-    color: oklch(var(--muted-foreground));
+  .guarantee__plate {
+    display: grid;
+    align-content: start;
+    gap: var(--space-sm);
+    padding: var(--space-lg);
+    border-inline-end: var(--rule-bar) solid var(--color-ink);
+    border-block-end: var(--rule-bar) solid var(--color-ink);
+    background: var(--color-paper-3);
   }
-  .gr__risk-title {
-    margin-block-start: 0.75rem;
-    font-size: var(--text-base);
-    font-weight: 600;
-    color: oklch(var(--foreground));
+  .guarantee__plate-title { font-size: var(--text-lg); }
+  .guarantee__plate-body {
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
   }
-  .gr__risk-body {
-    margin-block-start: 0.375rem;
-    font-size: var(--text-md);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+
+  .guarantee__bonus {
+    display: grid;
+    gap: var(--space-sm) var(--gap-columns);
+    margin-block-start: var(--space-xl);
+  }
+  @media (min-width: 60rem) {
+    .guarantee__bonus { grid-template-columns: minmax(0, 3fr) minmax(0, 9fr); align-items: baseline; }
+  }
+  .guarantee__bonus-title {
+    max-inline-size: none;
+    font-size: var(--text-lg);
+  }
+  .guarantee__bonus-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-xl);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+  .guarantee__bonus-list li {
+    display: flex;
+    gap: var(--space-xs);
+    align-items: baseline;
+  }
+  .guarantee__bonus-list li::before {
+    content: '+';
+    font-weight: 800;
+    color: var(--color-accent);
   }
 </style>
