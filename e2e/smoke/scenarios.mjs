@@ -1123,6 +1123,17 @@ export const scenarios = [
         await t.visible(page.getByRole('button', { name: 'Открыть пустой чат' }), 'кнопка «Открыть пустой чат»');
         await t.visible(page.locator('[contenteditable="true"], textarea').first(), 'поле ввода запроса');
       });
+      await t.check('подсказка «Генерация фото» переносится внутри поля', async () => {
+        await page.getByRole('button', { name: 'Генерация фото', exact: true }).click();
+        const hint = page.getByText('Опишите фотографию, которую хотите создать', { exact: true });
+        await t.visible(hint, 'подсказка генерации фото');
+        const box = await hint.evaluate((el) => {
+          const own = el.getBoundingClientRect();
+          const field = el.parentElement.getBoundingClientRect();
+          return { overflow: el.scrollWidth - el.clientWidth, right: own.right, fieldRight: field.right };
+        });
+        t.assert(box.overflow <= 0 && box.right <= box.fieldRight + 0.5, `подсказка вылезает из поля: ${JSON.stringify(box)}`);
+      });
       await t.pageChecks('ИИ');
     },
   },

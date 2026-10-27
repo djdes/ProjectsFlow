@@ -262,10 +262,12 @@ export function AiComposer({
           <span className="min-w-0 truncate text-2xs leading-4 text-muted-foreground">Выделенная зона</span>
         </div>
       )}
-      <div className="relative">
+      {/* Плейсхолдер и поле лежат в одной ячейке сетки: длинная подсказка переносится,
+          как набранный текст, и растягивает поле, а не обрезается у правого края. */}
+      <div className="grid grid-cols-1">
         {/* Плейсхолдер прячем по факту непустого DOM, а не по trim: иначе он ляжет под набранные пробелы. */}
         {body === '' && (
-          <span aria-hidden="true" className="pointer-events-none absolute start-[14px] inset-bs-3 select-none truncate text-base leading-6 text-muted-foreground/70">
+          <span aria-hidden="true" className="pointer-events-none col-start-1 row-start-1 min-w-0 select-none whitespace-pre-wrap break-words ps-[14px] pe-3 pbs-3 text-base leading-6 text-muted-foreground/70">
             {photoMode ? 'Опишите фотографию, которую хотите создать' : modeSwitch ? placeholderFor(mode, Boolean(selection)) : 'О чём хотите подумать или что сделать?'}
           </span>
         )}
@@ -277,7 +279,7 @@ export function AiComposer({
           tabIndex={0}
           aria-multiline="true"
           aria-label={photoMode ? 'Описание фотографии' : 'Сообщение для ИИ'}
-          className="max-h-[40vh] min-h-6 w-full overflow-y-auto whitespace-pre-wrap break-words pbe-0 ps-[14px] pe-3 pbs-3 text-base leading-6 outline-none"
+          className="col-start-1 row-start-1 max-h-[40vh] min-h-6 w-full min-w-0 overflow-y-auto whitespace-pre-wrap break-words pbe-0 ps-[14px] pe-3 pbs-3 text-base leading-6 outline-none"
           onInput={syncFromEditor}
           onKeyDown={(event) => {
             // IME: во время набора иероглифов Enter подтверждает вариант, а не переносит строку.
