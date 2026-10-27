@@ -280,7 +280,7 @@ export function BulkActionBar({
           <DropdownMenuContent align="start" className="min-w-[240px]">
             {(members ?? []).length > 0 ? (
               <>
-                <DropdownMenuLabel className="text-2xs uppercase tracking-wide text-muted-foreground">
+                <DropdownMenuLabel className="text-2xs text-muted-foreground">
                   Назначить ответственного
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />

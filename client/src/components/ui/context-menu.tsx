@@ -169,7 +169,7 @@ export function ContextMenuShortcut({
 }: React.HTMLAttributes<HTMLSpanElement>): React.ReactElement {
   return (
     <span
-      className={cn('ms-auto ps-4 text-xs tracking-widest text-muted-foreground', className)}
+      className={cn('ms-auto ps-4 text-xs text-muted-foreground', className)}
       {...props}
     />
   );

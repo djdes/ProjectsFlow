@@ -152,7 +152,7 @@ export function FinancePage(): React.ReactElement {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{l.employeeName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatRub(l.monthlySalaryKopecks)}/мес · {l.allocationPercent}% · c {fmtDate(l.startedAt)}
+                      {formatRub(l.monthlySalaryKopecks)}/мес, {l.allocationPercent}%, c {fmtDate(l.startedAt)}
                       {l.endedAt ? ` по ${fmtDate(l.endedAt)}` : ''}
                     </p>
                   </div>
@@ -291,7 +291,7 @@ function Stat({
   return (
     <Card>
       <CardContent className="py-3">
-        <p className="truncate text-2xs uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="truncate text-2xs text-muted-foreground">{label}</p>
         <p className={cn('truncate font-mono text-lg font-semibold tabular-nums', valueClass)}>{value}</p>
         {hint && <p className="truncate text-2xs text-muted-foreground">{hint}</p>}
       </CardContent>

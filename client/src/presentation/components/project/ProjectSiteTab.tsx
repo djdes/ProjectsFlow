@@ -117,7 +117,7 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
           {/* Полоса заполнения квоты. */}
           <div className="mbs-1.5 h-1.5 w-full overflow-clip rounded-full bg-foreground/10">
             <div
-              className="h-full rounded-full bg-done motion-safe:transition-[width]"
+              className="h-full rounded-full bg-done"
               style={{
                 width: `${Math.min(100, appBackend.storageLimitBytes > 0 ? (appBackend.usageBytes / appBackend.storageLimitBytes) * 100 : 0)}%`,
               }}

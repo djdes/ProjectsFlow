@@ -122,12 +122,12 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
         ) : (
           <div className="space-y-5 p-5">
             <section className="space-y-2 rounded-xl border bg-panel p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Содержимое</p>
+              <p className="text-xs font-medium text-muted-foreground">Содержимое</p>
               <Input key={`${element?.locator.selector}:text`} defaultValue={element?.locator.text ?? ''} disabled={!element} onBlur={(event) => { if (event.target.value !== (element?.locator.text ?? '')) onPatch({ kind: 'text', value: event.target.value }); }} aria-label="Текст элемента" />
             </section>
 
             <section className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Вычисленные стили</p>
+              <p className="text-xs font-medium text-muted-foreground">Вычисленные стили</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {styleEntries.length ? styleEntries.map(([property, value]) => (
                   <label key={`${element?.locator.selector}:${property}`} className="min-w-0 rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
@@ -139,7 +139,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
             </section>
 
             <section className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Атрибуты</p>
+              <p className="text-xs font-medium text-muted-foreground">Атрибуты</p>
               <div className="space-y-2">
                 {attributeEntries.map(([name, value]) => (
                   <label key={`${element?.locator.selector}:attr:${name}`} className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2 rounded-lg border bg-background px-3 py-2 text-xs">

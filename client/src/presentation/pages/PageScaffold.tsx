@@ -36,7 +36,7 @@ export function PageMessage({
       <div className="flex max-w-md flex-col items-center gap-2 text-center">
         {icon && <div className="mbe-1">{icon}</div>}
         {eyebrow && (
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{eyebrow}</p>
+          <p className="text-sm font-medium tabular-nums text-muted-foreground">{eyebrow}</p>
         )}
         <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

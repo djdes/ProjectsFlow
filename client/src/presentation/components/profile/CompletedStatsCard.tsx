@@ -62,7 +62,7 @@ export function CompletedStatsCard(): React.ReactElement {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[20rem] text-sm">
               <thead>
-                <tr className="text-start text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="text-start text-xs text-muted-foreground">
                   <th className="py-1.5 pe-3 font-medium">Пространство</th>
                   <th className="w-20 py-1.5 pe-3 text-end font-medium">Всего</th>
                   <th className="w-24 py-1.5 text-end font-medium">За 30 дней</th>

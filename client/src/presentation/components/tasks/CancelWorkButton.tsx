@@ -103,7 +103,7 @@ export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = 
     return (
       <div className="space-y-2 border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
         <div className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-ink">
-          <p className="font-medium">🛑 Отмена запрошена ({formatRelativeMinutes(when)})</p>
+          <p className="flex items-center gap-1.5 font-medium"><Octagon className="size-3.5 shrink-0" aria-hidden="true" />Отмена запрошена ({formatRelativeMinutes(when)})</p>
           {who && <p className="mbs-0.5 opacity-80">{who}</p>}
           <p className="mbs-1 text-2xs opacity-70">
             Остановка ещё не подтверждена. Диспетчер обработает запрос, когда будет на связи.

@@ -1,4 +1,4 @@
-import { BellRing, Plus } from 'lucide-react';
+import { BellRing, CircleAlert, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { relativeTime } from '@/lib/relativeTime';
@@ -68,7 +68,8 @@ export function ProjectHealthSummary({
       )}
       {alerts.length > 0 && (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
-          🔴 {plural(alerts.length, 'алерт', 'алерта', 'алертов')}
+          <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
+          {plural(alerts.length, 'алерт', 'алерта', 'алертов')}
           {critical > 0 && <span className="text-muted-foreground">({critical} critical)</span>}
         </span>
       )}

@@ -133,7 +133,7 @@ export function ProjectViewsChart({
       onMouseMove={onMove}
       onMouseLeave={() => setHi(null)}
     >
-      <svg width={W} height={H} className="block">
+      <svg width={W} height={H} className="block" role="img" aria-label="График просмотров по дням">
         <defs>
           <linearGradient id="pf-views-blue" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={BLUE} stopOpacity="0.22" />

@@ -2265,7 +2265,7 @@ export function TaskDrawer({
             <div className="flex h-11 shrink-0 items-center gap-2 border-be bg-background/95 px-3">
               {renderCloseButton()}
               {renderMaximizeButton()}
-              <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
                 {projectName ? `${projectName} · ` : ''}Новая задача
               </span>
             </div>

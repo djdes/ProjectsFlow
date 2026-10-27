@@ -202,7 +202,7 @@ function FilePreviewChip({ file, onRemove }: { file: File; onRemove: () => void 
       {url ? (
         <img src={url} alt={file.name} className="size-9 rounded object-cover" />
       ) : (
-        <span className="truncate px-1.5 py-0.5">📎 {file.name}</span>
+        <span className="flex min-w-0 items-center gap-1 px-1.5 py-0.5"><Paperclip className="size-3 shrink-0" aria-hidden="true" /><span className="truncate">{file.name}</span></span>
       )}
       <button
         type="button"
