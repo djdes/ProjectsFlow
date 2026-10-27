@@ -41,16 +41,16 @@ function createHorizontalSlabTexture(
   canvas.height = 768;
   const ctx = canvas.getContext('2d')!;
 
-  // 1. Deep obsidian/titanium surface gradient
+  // 1. Rich vibrant multi-stop surface gradient
   const grad = ctx.createLinearGradient(0, 0, 1024, 768);
   if (isFocused) {
-    grad.addColorStop(0, '#121826');
+    grad.addColorStop(0, layer.primaryColor);
     grad.addColorStop(0.55, layer.secondaryColor);
-    grad.addColorStop(1, '#070a12');
+    grad.addColorStop(1, '#12071d');
   } else {
-    grad.addColorStop(0, '#0f1420');
-    grad.addColorStop(0.6, '#0a0e17');
-    grad.addColorStop(1, '#06080e');
+    grad.addColorStop(0, '#241136');
+    grad.addColorStop(0.6, '#150922');
+    grad.addColorStop(1, '#0c0514');
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 1024, 768);
@@ -309,13 +309,13 @@ const ExplodedStackMesh: React.FC<ExplodedStackMeshProps> = ({
               {/* Main Beveled Titanium/Glass Plate */}
               <RoundedBox args={[3.35, 0.22, 2.45]} radius={0.07} smoothness={4}>
                 <meshPhysicalMaterial
-                  color={isFocused ? '#1e293b' : '#0f172a'}
+                  color={isFocused ? layer.primaryColor : '#251238'}
                   emissive={layer.primaryColor}
-                  emissiveIntensity={isFocused ? 0.22 : 0.04}
-                  roughness={0.18}
-                  metalness={0.62}
+                  emissiveIntensity={isFocused ? 0.28 : 0.06}
+                  roughness={0.16}
+                  metalness={0.45}
                   clearcoat={1}
-                  clearcoatRoughness={0.12}
+                  clearcoatRoughness={0.1}
                 />
               </RoundedBox>
 

@@ -39,106 +39,93 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
 
   return (
     <div className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-14 space-y-20">
-      {/* 1. ARCHITECTURAL GUARANTEES BENTO GRID (inspired by Quantix & Solane Pinterest boards) */}
+      {/* 1. 3 CLEAN GUARANTEES CARDS */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div
           onClick={() => onSelectLayer?.('layer-claude')}
-          className="rounded-[28px] p-7 bg-[#090e1b]/90 border border-white/15 hover:border-purple-400/50 transition-all cursor-pointer flex flex-col justify-between"
+          className="rounded-[28px] p-7 bg-[#140720]/90 border border-white/15 hover:border-purple-400/50 transition-all cursor-pointer flex flex-col justify-between"
         >
           <div>
             <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 mb-5">
               <Cpu className="w-6 h-6" />
             </div>
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-purple-300 block mb-1.5">
-              ГАРАНТИЯ СЛОЯ 01 · БЕЗ БАРЬЕРОВ
-            </span>
-            <h3 className="font-display font-black text-xl text-white mb-2.5">
-              Claude уже внутри — 0 минут на настройку
+            <h3 className="font-display font-black text-xl text-white mb-2">
+              Claude уже внутри без VPN
             </h3>
-            <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
-              Забудьте про блокировки аккаунтов, зарубежные карты и поиск прокси. На тарифах
-              «Прайм» и «VIP» подписка работает сразу из коробки, а первый час на «Прайме» — бесплатный.
+            <p className="text-sm text-white/70 leading-relaxed">
+              На тарифах «Прайм» и «VIP» подписка работает сразу из браузера, а первый час на «Прайме» — бесплатный.
             </p>
           </div>
           <span className="mt-5 font-mono text-xs font-bold text-purple-300 inline-flex items-center gap-1">
-            Показать Слой 01 в 3D <ArrowUpRight className="w-3.5 h-3.5" />
+            Показать в 3D <ArrowUpRight className="w-3.5 h-3.5" />
           </span>
         </div>
 
         <div
           onClick={() => onSelectLayer?.('layer-deploy')}
-          className="rounded-[28px] p-7 bg-[#090e1b]/90 border border-white/15 hover:border-sky-400/50 transition-all cursor-pointer flex flex-col justify-between"
+          className="rounded-[28px] p-7 bg-[#140720]/90 border border-white/15 hover:border-rose-400/50 transition-all cursor-pointer flex flex-col justify-between"
         >
           <div>
-            <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 mb-5">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-300 mb-5">
               <Code2 className="w-6 h-6" />
             </div>
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-sky-300 block mb-1.5">
-              ГАРАНТИЯ СЛОЯ 04 · ПОЛНАЯ СВОБОДА
-            </span>
-            <h3 className="font-display font-black text-xl text-white mb-2.5">
-              100% исходного кода и Git остаются вашими
+            <h3 className="font-display font-black text-xl text-white mb-2">
+              100% ваш код и Git
             </h3>
-            <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
-              Никакой привязки к закрытому конструктору. Вы получаете чистый современный
-              стек (React, TypeScript, Node.js, SQL) и можете выгрузить репозиторий в любой момент.
+            <p className="text-sm text-white/70 leading-relaxed">
+              Никакой привязки к закрытому конструктору. Чистый стек React, TypeScript и Node.js в вашем репозитории.
             </p>
           </div>
-          <span className="mt-5 font-mono text-xs font-bold text-sky-300 inline-flex items-center gap-1">
-            Показать Слой 04 в 3D <ArrowUpRight className="w-3.5 h-3.5" />
+          <span className="mt-5 font-mono text-xs font-bold text-rose-300 inline-flex items-center gap-1">
+            Показать в 3D <ArrowUpRight className="w-3.5 h-3.5" />
           </span>
         </div>
 
         <div
           onClick={() => onSelectLayer?.('layer-finance')}
-          className="rounded-[28px] p-7 bg-[#090e1b]/90 border border-white/15 hover:border-emerald-400/50 transition-all cursor-pointer flex flex-col justify-between"
+          className="rounded-[28px] p-7 bg-[#140720]/90 border border-white/15 hover:border-amber-400/50 transition-all cursor-pointer flex flex-col justify-between"
         >
           <div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 mb-5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 mb-5">
               <Lock className="w-6 h-6" />
             </div>
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-300 block mb-1.5">
-              ГАРАНТИЯ СЛОЯ 03 · БЕЗОПАСНЫЙ РЕЛИЗ
-            </span>
-            <h3 className="font-display font-black text-xl text-white mb-2.5">
-              Возврат средств, если платформа не подошла
+            <h3 className="font-display font-black text-xl text-white mb-2">
+              Гарантия возврата средств
             </h3>
-            <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
-              Проверьте «Прайм» на своей реальной задаче в течение бесплатного первого часа.
-              Если после оплаты что-то не устроит — вернём деньги без бюрократии, а код останется у вас.
+            <p className="text-sm text-white/70 leading-relaxed">
+              Если после оплаты что-то не подойдёт — вернём деньги без вопросов, а весь созданный код останется у вас.
             </p>
           </div>
-          <span className="mt-5 font-mono text-xs font-bold text-emerald-300 inline-flex items-center gap-1">
-            Показать Слой 03 в 3D <ArrowUpRight className="w-3.5 h-3.5" />
+          <span className="mt-5 font-mono text-xs font-bold text-amber-300 inline-flex items-center gap-1">
+            Показать в 3D <ArrowUpRight className="w-3.5 h-3.5" />
           </span>
         </div>
       </section>
 
-      {/* 2. INTERACTIVE FAQ ACCORDION (#faq) */}
+      {/* 2. FAQ ACCORDION (#faq) */}
       <section id="faq" className="scroll-mt-24">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-5">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/15 mb-3">
-              <HelpCircle className="w-3.5 h-3.5 text-lime-400" />
-              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
-                Ответы на частые вопросы
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 mb-3">
+              <HelpCircle className="w-3.5 h-3.5 text-rose-400" />
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/90">
+                Частые вопросы
               </span>
             </div>
             <h2 className="font-display font-black uppercase text-3xl sm:text-5xl leading-[0.96] tracking-[-0.03em] text-white mb-4">
-              ВСЁ О РАБОТЕ{' '}
-              <span className="text-lime-400">В PROJECTSFLOW</span>
+              ОТВЕТЫ НА{' '}
+              <span className="text-rose-400">ВОПРОСЫ</span>
             </h2>
-            <p className="text-white/70 text-sm sm:text-base leading-relaxed mb-6">
-              Собрали главные детали о встроенной подписке на Claude, бесплатном часе на
-              тарифе «Прайм», безопасности кода и учёте финансов в рублях.
+            <p className="text-white/75 text-sm sm:text-base leading-relaxed mb-6">
+              Главное о встроенной подписке на Claude, бесплатном часе на «Прайме» и правах на код.
             </p>
 
             <a
               href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
-              className="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-white text-[#060911] font-extrabold text-sm hover:bg-slate-100 transition-all shadow-lg"
+              className="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-white text-[#140720] font-extrabold text-sm hover:bg-rose-50 transition-all shadow-lg"
             >
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-              <span>Проверить на своём проекте</span>
+              <Sparkles className="w-4 h-4 text-rose-600" />
+              <span>Начать бесплатно</span>
               <ArrowUpRight className="w-4 h-4" />
             </a>
           </div>
@@ -151,8 +138,8 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
                   key={item.q}
                   className={`rounded-2xl border transition-all overflow-hidden ${
                     isOpen
-                      ? 'bg-[#0c1324] border-white/35 shadow-xl'
-                      : 'bg-[#080d18]/80 border-white/12 hover:border-white/25'
+                      ? 'bg-[#1c0a2b] border-white/40 shadow-xl'
+                      : 'bg-[#12061c]/80 border-white/15 hover:border-white/30'
                   }`}
                 >
                   <button
@@ -165,7 +152,7 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
                     </span>
                     <ChevronDown
                       className={`w-5 h-5 text-white/60 shrink-0 transition-transform ${
-                        isOpen ? 'rotate-180 text-lime-400' : ''
+                        isOpen ? 'rotate-180 text-rose-400' : ''
                       }`}
                     />
                   </button>
@@ -178,7 +165,7 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.22 }}
                       >
-                        <div className="px-6 pb-5 text-xs sm:text-sm text-white/75 leading-relaxed border-t border-white/10 pt-4">
+                        <div className="px-6 pb-5 text-sm text-white/75 leading-relaxed border-t border-white/10 pt-4">
                           {item.a}
                         </div>
                       </motion.div>
@@ -191,20 +178,19 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
         </div>
       </section>
 
-      {/* 3. ENGINEERING BLOG TEASER (#blog) */}
+      {/* 3. BLOG TEASER (#blog) */}
       {posts.length > 0 && (
         <section id="blog" className="scroll-mt-24">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
             <div>
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/15 mb-3">
-                <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
-                  Инженерный журнал ProjectsFlow
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 mb-3">
+                <BookOpen className="w-3.5 h-3.5 text-rose-400" />
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/90">
+                  Журнал ProjectsFlow
                 </span>
               </div>
               <h2 className="font-display font-black uppercase text-2xl sm:text-4xl text-white">
-                СТАТЬИ И РАЗБОРЫ{' '}
-                <span className="text-sky-400">КОМАНДЫ</span>
+                СТАТЬИ И <span className="text-rose-400">РАЗБОРЫ</span>
               </h2>
             </div>
 
@@ -212,7 +198,7 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
               href="/blog/"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white transition-all self-start sm:self-auto"
             >
-              <span>Все статьи журнала</span>
+              <span>Все статьи</span>
               <ArrowUpRight className="w-4 h-4" />
             </a>
           </div>
@@ -222,16 +208,16 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
               <a
                 key={post.slug}
                 href={`/blog/${post.slug}/`}
-                className="group rounded-[26px] p-6 bg-[#080d18]/85 border border-white/15 hover:border-sky-400/50 transition-all flex flex-col justify-between"
+                className="group rounded-[26px] p-6 bg-[#140720]/85 border border-white/15 hover:border-rose-400/50 transition-all flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 text-xs font-mono text-white/50 mb-3">
+                  <div className="flex items-center justify-between gap-2 text-xs font-mono text-white/55 mb-3">
                     <span>{post.dateFormatted} · {post.minutes} мин</span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-white/[0.06] text-sky-300">
+                    <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-rose-300">
                       #{post.topic}
                     </span>
                   </div>
-                  <h3 className="font-bold text-base sm:text-lg text-white group-hover:text-sky-300 transition-colors mb-2 line-clamp-2">
+                  <h3 className="font-bold text-base sm:text-lg text-white group-hover:text-rose-300 transition-colors mb-2 line-clamp-2">
                     {post.title}
                   </h3>
                   <p className="text-xs sm:text-sm text-white/65 leading-relaxed line-clamp-3">
@@ -239,8 +225,8 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
                   </p>
                 </div>
 
-                <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-mono font-bold text-white/80 group-hover:text-white">
-                  Читать разбор <ArrowUpRight className="w-3.5 h-3.5" />
+                <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-mono font-bold text-white/85 group-hover:text-white">
+                  Читать статью <ArrowUpRight className="w-3.5 h-3.5" />
                 </span>
               </a>
             ))}

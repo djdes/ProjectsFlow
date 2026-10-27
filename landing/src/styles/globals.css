@@ -75,11 +75,10 @@
   .skip-link:focus-visible { inset-block-start: 0.75rem; }
 }
 
-/* Эффект вырезанного текста на матовом стекле (референс AFRICAN FOREST / Interactive 3D Showcase) */
+/* Акцентный градиентный заголовок на матовом стекле (без -webkit-text-stroke артефактов и без зеленого) */
 .knockout-frosted-text {
   color: transparent;
-  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.88);
-  background: linear-gradient(135deg, rgba(163, 247, 59, 0.75) 0%, rgba(255, 255, 255, 0.24) 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #fda4af 48%, #ff2e63 100%);
   -webkit-background-clip: text;
   background-clip: text;
 }

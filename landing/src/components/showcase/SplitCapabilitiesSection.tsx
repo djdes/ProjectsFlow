@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  ArrowRight,
   ArrowUpRight,
   CheckCircle2,
   Cpu,
   Layers,
   Play,
   ShieldCheck,
-  Terminal,
-  TrendingUp,
+  Sparkles,
   Zap,
 } from 'lucide-react';
 import {
@@ -30,314 +30,239 @@ export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> =
 }) => {
   const [activePresetId, setActivePresetId] = useState<string>(PROMPT_PRESETS[0]!.id);
   const [executionMode, setExecutionMode] = useState<'autopilot' | 'step'>('autopilot');
-  const [customPrompt, setCustomPrompt] = useState<string>(PROMPT_PRESETS[0]!.promptText);
 
   const activePreset: PromptPreset =
     PROMPT_PRESETS.find((p) => p.id === activePresetId) ?? PROMPT_PRESETS[0]!;
 
   const handleSelectPreset = (preset: PromptPreset) => {
     setActivePresetId(preset.id);
-    setCustomPrompt(preset.promptText);
     onSelectLayer(preset.layerFocus);
   };
 
   return (
     <section
       id="prompt-sandbox"
-      className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-12 scroll-mt-24"
+      className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-14 scroll-mt-24"
     >
-      {/* Split Frosted-Glass Terminal & Live Blueprint Generator */}
-      <div className="relative rounded-[36px] overflow-hidden border border-white/20 shadow-[0_32px_100px_rgba(0,0,0,0.65)] bg-[#070b14]">
-        {/* Ambient Isometric Circuit Background on Right Half */}
+      {/* Clean Split Frosted-Glass Stage with Instant Visual Focus */}
+      <div className="relative rounded-[40px] overflow-hidden border border-white/20 shadow-[0_32px_100px_rgba(0,0,0,0.6)] bg-[#12071b]">
+        {/* Ambient Crimson/Violet Glow */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'radial-gradient(circle at 75% 30%, rgba(56, 189, 248, 0.16) 0%, rgba(16, 185, 129, 0.10) 42%, rgba(6, 9, 17, 0.98) 88%)',
+              'radial-gradient(circle at 78% 32%, rgba(255, 46, 99, 0.28) 0%, rgba(157, 78, 221, 0.22) 45%, rgba(14, 6, 24, 0.98) 90%)',
           }}
         />
 
-        {/* LEFT 46% FROSTED GLASS SHUTTER (Mechanic C adapted for AI Prompt Terminal) */}
-        <div className="hidden lg:block absolute inset-y-0 left-0 w-[46%] bg-[#0b1220]/75 backdrop-blur-2xl border-r border-white/20 z-10 pointer-events-none">
-          {/* Glowing seam connector nodes */}
-          <div className="absolute top-28 -right-3 w-6 h-6 rounded-lg rotate-45 bg-sky-400/30 border border-sky-300/60 shadow-[0_0_20px_rgba(56,189,248,0.6)]" />
-          <div className="absolute bottom-32 -right-3 w-6 h-6 rounded-lg rotate-45 bg-lime-400/30 border border-lime-300/60 shadow-[0_0_20px_rgba(163,230,53,0.6)]" />
-        </div>
+        {/* LEFT 45% FROSTED GLASS CURTAIN */}
+        <div className="hidden lg:block absolute inset-y-0 left-0 w-[45%] bg-white/[0.04] backdrop-blur-2xl border-r border-white/15 z-10 pointer-events-none" />
 
-        {/* Content Container Spanning Across the 46% Split Seam */}
-        <div className="relative z-20 p-6 sm:p-10 lg:p-12">
-          {/* Cross-Boundary Giant Headline */}
-          <div className="mb-8">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.07] border border-white/15 mb-4">
-              <Terminal className="w-3.5 h-3.5 text-lime-400" />
-              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
-                Интерактивная песочница · От текста до живого релиза
-              </span>
-            </div>
-
-            <h2 className="font-display font-black uppercase text-3xl sm:text-5xl xl:text-[64px] leading-[0.94] tracking-[-0.03em]">
-              <span className="knockout-frosted-text block sm:inline">
-                ФОРМУЛИРУЙ ЦЕЛЬ —{' '}
-              </span>
-              <span className="text-white drop-shadow-[0_18px_40px_rgba(0,0,0,0.6)]">
-                ПОЛУЧАЙ ПРОДУКТ И P&L
-              </span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* LEFT HALF (5 cols inside the 46% Frosted Shutter): Scenario Presets + Prompt Input + Mode Toggle */}
-            <div className="lg:col-span-5 flex flex-col gap-5">
-              {/* 1. Scenario Selector */}
-              <div>
-                <span className="font-mono text-[11px] uppercase tracking-wider text-white/55 block mb-2.5">
-                  1. Выберите готовый сценарий или опишите свой:
+        <div className="relative z-20 p-7 sm:p-12 lg:p-14">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+            {/* LEFT COLUMN (5 cols): Clear, Minimal Controls (1 Headline + 3 Big Tabs + 1 CTA) */}
+            <div className="lg:col-span-5 flex flex-col items-start">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/15 border border-rose-400/30 mb-5">
+                <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-rose-200">
+                  От идеи до готового продукта
                 </span>
-                <div className="space-y-2">
-                  {PROMPT_PRESETS.map((preset) => {
-                    const active = preset.id === activePreset.id;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => handleSelectPreset(preset)}
-                        className={`w-full text-left px-4 py-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+              </div>
+
+              <h2 className="font-display font-black uppercase text-3xl sm:text-5xl leading-[0.96] tracking-[-0.03em] text-white mb-4">
+                ОДНА ФРАЗА —{' '}
+                <span className="knockout-frosted-text block mt-1">
+                  ГОТОВЫЙ БИЗНЕС
+                </span>
+              </h2>
+
+              <p className="text-white/75 text-sm sm:text-base leading-relaxed mb-7">
+                Выберите пример проекта ниже и посмотрите, как ProjectsFlow сам собирает
+                код, проверяет качество и считает чистую прибыль в рублях.
+              </p>
+
+              {/* 3 Large Tactile Scenario Pills (Clean, 1-line each) */}
+              <div className="w-full space-y-2.5 mb-7">
+                {PROMPT_PRESETS.map((preset) => {
+                  const active = preset.id === activePreset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleSelectPreset(preset)}
+                      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                        active
+                          ? 'bg-white text-[#14071e] border-white shadow-[0_16px_40px_rgba(255,46,99,0.28)] scale-[1.01]'
+                          : 'bg-white/[0.06] text-white border-white/15 hover:bg-white/[0.12]'
+                      }`}
+                    >
+                      <span className="font-bold text-base">{preset.shortTab}</span>
+                      <span
+                        className={`font-mono text-xs font-extrabold px-3 py-1 rounded-full ${
                           active
-                            ? 'bg-white text-[#070b14] border-white shadow-lg font-bold'
-                            : 'bg-white/[0.05] text-white/80 border-white/15 hover:bg-white/[0.1]'
+                            ? 'bg-rose-500 text-white'
+                            : 'bg-white/10 text-white/75'
                         }`}
                       >
-                        <div className="min-w-0">
-                          <span
-                            className={`font-mono text-[10px] uppercase tracking-wider block ${
-                              active ? 'text-emerald-700 font-extrabold' : 'text-sky-300/80'
-                            }`}
-                          >
-                            {preset.category}
-                          </span>
-                          <span className="text-sm font-bold truncate block">
-                            {preset.title}
-                          </span>
-                        </div>
-                        <ArrowUpRight
-                          className={`w-4 h-4 shrink-0 ${
-                            active ? 'text-[#070b14]' : 'text-white/40'
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
+                        {preset.estimatedTime}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* 2. Editable Prompt Box */}
-              <div className="rounded-2xl p-4 bg-[#050811]/90 border border-white/20">
-                <div className="flex items-center justify-between text-[11px] font-mono text-white/55 mb-2">
-                  <span>ВХОДНОЙ ЗАПРОС (НА РУССКОМ ЯЗЫКЕ)</span>
-                  <span className="text-lime-400 font-bold">Claude Онлайн · Встроен</span>
-                </div>
-                <textarea
-                  rows={3}
-                  value={customPrompt}
-                  onChange={(e) => setCustomPrompt(e.target.value)}
-                  className="w-full bg-transparent text-white text-sm leading-relaxed focus:outline-none resize-none"
-                />
-              </div>
-
-              {/* 3. Execution Speed Mode Toggle */}
-              <div>
-                <span className="font-mono text-[11px] uppercase tracking-wider text-white/55 block mb-2">
-                  2. Режим ведения проекта:
-                </span>
-                <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black/40 border border-white/15">
+              {/* Simple 2-way Mode Switcher + CTA */}
+              <div className="w-full flex flex-wrap items-center gap-3">
+                <div className="inline-flex p-1 rounded-2xl bg-black/40 border border-white/15">
                   <button
                     type="button"
                     onClick={() => setExecutionMode('autopilot')}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
                       executionMode === 'autopilot'
-                        ? 'bg-lime-400 text-[#070b14] shadow-md'
-                        : 'text-white/75 hover:text-white'
+                        ? 'bg-rose-500 text-white shadow'
+                        : 'text-white/70 hover:text-white'
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Автопилот под ключ</span>
+                    <span>Автопилот</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setExecutionMode('step')}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
                       executionMode === 'step'
-                        ? 'bg-sky-400 text-[#070b14] shadow-md'
-                        : 'text-white/75 hover:text-white'
+                        ? 'bg-purple-500 text-white shadow'
+                        : 'text-white/70 hover:text-white'
                     }`}
                   >
                     <Layers className="w-3.5 h-3.5" />
                     <span>Шаг за шагом</span>
                   </button>
                 </div>
-              </div>
-
-              {/* CTA */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div>
-                  <span className="font-mono text-xs font-bold text-lime-400 block">
-                    {activePreset.estimatedTime}
-                  </span>
-                  <span className="text-xs text-white/60">
-                    {activePreset.estimatedSavedRub}
-                  </span>
-                </div>
 
                 <a
                   href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
-                  className="inline-flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white text-[#070b14] font-extrabold text-xs uppercase tracking-wider hover:bg-slate-100 transition-all shadow-lg"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white text-[#14071e] font-extrabold text-xs uppercase tracking-wider hover:bg-rose-50 transition-all shadow-lg ml-auto"
                 >
-                  <Play className="w-3.5 h-3.5 fill-[#070b14]" />
-                  <span>Запустить этот проект</span>
+                  <Play className="w-3.5 h-3.5 fill-[#14071e]" />
+                  <span>Запустить</span>
                 </a>
               </div>
             </div>
 
-            {/* RIGHT HALF (7 cols on Clear Stage): Live Generated Architecture, Kanban Tasks, 4 Checks & RUB P&L */}
+            {/* RIGHT COLUMN (7 cols): ONE Focal Visual Showcase Card with Giant Numbers & 3-Step Visual Flow */}
             <div className="lg:col-span-7">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`${activePreset.id}-${executionMode}`}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-                  className="space-y-4"
+                  initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -14, scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  className="rounded-[32px] p-7 sm:p-9 bg-[#190b28]/90 border border-white/20 backdrop-blur-2xl shadow-2xl space-y-7"
                 >
-                  {/* Top Bar: Pipeline Header */}
-                  <div className="rounded-2xl p-4 bg-white/[0.06] border border-white/20 backdrop-blur-xl flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-sky-400/20 border border-sky-400/40 flex items-center justify-center text-sky-300">
-                        <Cpu className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-sky-300 block">
-                          ЖИВОЙ ПЛАН РЕАЛИЗАЦИИ · {executionMode === 'autopilot' ? 'ПОЛНЫЙ АВТОПИЛОТ' : 'КОНТРОЛЬ КАЖДОГО ШАГА'}
-                        </span>
-                        <h3 className="font-bold text-base text-white">
-                          {activePreset.title}
-                        </h3>
-                      </div>
+                  {/* 1. Prompt Quote Bubble */}
+                  <div className="rounded-2xl p-5 bg-white/[0.06] border border-white/15">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5" />
+                        Что вы пишете в ProjectsFlow:
+                      </span>
+                      <span className="font-mono text-[11px] font-bold text-amber-300">
+                        Claude Онлайн · Без VPN
+                      </span>
                     </div>
-
-                    <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 font-mono text-xs font-bold text-emerald-300">
-                      Claude 3.7 Встроен · 0 ключей
-                    </span>
+                    <p className="text-base sm:text-lg font-bold text-white leading-snug">
+                      «{activePreset.promptText}»
+                    </p>
                   </div>
 
-                  {/* Generated Kanban Backlog Cards */}
-                  <div className="rounded-2xl p-5 bg-[#0a101d]/90 border border-white/15 space-y-2.5">
-                    <div className="flex items-center justify-between text-xs font-mono text-white/60 mb-1">
-                      <span>АВТОМАТИЧЕСКАЯ ДЕКОМПОЗИЦИЯ НА ДОСКЕ</span>
-                      <span>4 ЭТАПА СПРИНТА</span>
+                  {/* 2. Giant 3-Column Visual Impact Numbers (Instant Eye Focus) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="rounded-2xl p-5 bg-gradient-to-br from-rose-500/25 to-purple-900/30 border border-rose-400/40">
+                      <span className="font-mono text-[11px] uppercase text-rose-200 block mb-1">
+                        Чистая маржа
+                      </span>
+                      <span className="font-display font-black text-xl xl:text-2xl text-white block whitespace-nowrap">
+                        {activePreset.heroMetricValue}
+                      </span>
+                      <span className="text-xs text-white/70 mt-1 block">
+                        {activePreset.heroMetricLabel}
+                      </span>
                     </div>
 
-                    {activePreset.generatedTasks.map((task) => (
-                      <div
-                        key={task.code}
-                        className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-white shrink-0">
-                            {task.code}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-white truncate">
-                              {task.title}
-                            </p>
-                            <span className="text-[11px] font-mono text-white/55">
-                              Исполнитель: {task.role} · Время: {task.duration}
-                            </span>
-                          </div>
-                        </div>
+                    <div className="rounded-2xl p-5 bg-white/[0.05] border border-white/15">
+                      <span className="font-mono text-[11px] uppercase text-purple-300 block mb-1">
+                        Время сборки
+                      </span>
+                      <span className="font-display font-black text-xl xl:text-2xl text-white block whitespace-nowrap">
+                        {activePreset.estimatedTime}
+                      </span>
+                      <span className="text-xs text-white/70 mt-1 block">
+                        Режим: {executionMode === 'autopilot' ? 'Автопилот' : 'Шаг за шагом'}
+                      </span>
+                    </div>
 
-                        <span
-                          className={`shrink-0 px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold uppercase ${
-                            task.status === 'done'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
-                              : task.status === 'running'
-                                ? 'bg-lime-400/20 text-lime-300 border border-lime-400/40 animate-pulse'
-                                : 'bg-white/10 text-white/65'
-                          }`}
+                    <div className="rounded-2xl p-5 bg-white/[0.05] border border-white/15">
+                      <span className="font-mono text-[11px] uppercase text-amber-300 block mb-1">
+                        Контроль релиза
+                      </span>
+                      <span className="font-display font-black text-xl xl:text-2xl text-white block whitespace-nowrap">
+                        4 / 4 PASS
+                      </span>
+                      <span className="text-xs text-white/70 mt-1 block">
+                        Живой стенд готов
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3. Visual 3-Step Pipeline Strip (Instead of a cluttered table) */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-mono text-white/55 mb-3">
+                      <span>АВТОМАТИЧЕСКИЕ ЭТАПЫ НА ДОСКЕ</span>
+                      <span className="text-amber-300 font-bold">{activePreset.estimatedSavedRub}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {activePreset.generatedTasks.map((task, idx) => (
+                        <div
+                          key={task.code}
+                          className="rounded-2xl p-4 bg-white/[0.05] border border-white/12 flex flex-col justify-between"
                         >
-                          {task.status === 'done'
-                            ? '✓ Готово'
-                            : task.status === 'running'
-                              ? '⚡ В работе'
-                              : executionMode === 'step'
-                                ? 'Ждёт одобрения'
-                                : 'В очереди'}
-                        </span>
-                      </div>
-                    ))}
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-display font-black text-sm text-rose-400">
+                              ШАГ {task.code}
+                            </span>
+                            {idx < 2 ? (
+                              <CheckCircle2 className="w-4 h-4 text-amber-300" />
+                            ) : (
+                              <ShieldCheck className="w-4 h-4 text-sky-300" />
+                            )}
+                          </div>
+                          <p className="font-bold text-sm text-white leading-snug mb-2">
+                            {task.title}
+                          </p>
+                          <div className="flex items-center justify-between text-[11px] font-mono text-white/55 pt-2 border-t border-white/10">
+                            <span>{task.role}</span>
+                            <span className="text-white font-bold">{task.duration}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
-                  {/* Bottom 2-Column Row: 4-Stage QA Shield + RUB P&L Forecast */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* 4-Stage QA Shield */}
-                    <div className="rounded-2xl p-4 bg-[#0a101d]/90 border border-white/15">
-                      <div className="flex items-center gap-2 text-xs font-mono uppercase text-sky-300 font-bold mb-3">
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>4 контура автопроверки</span>
-                      </div>
-                      <div className="space-y-2">
-                        {activePreset.checks.map((c) => (
-                          <div
-                            key={c.name}
-                            className="flex items-center justify-between text-xs py-1 border-b border-white/10 last:border-0"
-                          >
-                            <span className="text-white/75 flex items-center gap-1.5">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                              {c.name}
-                            </span>
-                            <span className="font-mono font-bold text-emerald-300">
-                              {c.status}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* RUB P&L Unit Economics Preview */}
-                    <div className="rounded-2xl p-4 bg-gradient-to-br from-emerald-950/60 to-[#0a101d] border border-emerald-400/30 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between text-xs font-mono uppercase text-emerald-300 font-bold mb-3">
-                          <span className="flex items-center gap-1.5">
-                            <TrendingUp className="w-4 h-4" />
-                            Прогноз P&L в рублях
-                          </span>
-                          <span>СЛОЙ 03</span>
-                        </div>
-                        <div className="space-y-1.5 text-xs">
-                          <div className="flex justify-between text-white/75">
-                            <span>Целевой оборот:</span>
-                            <span className="font-mono font-bold text-white">
-                              {activePreset.pnlPreview.expectedRevenue}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-white/75">
-                            <span>Затраты на ProjectsFlow + ИИ:</span>
-                            <span className="font-mono font-bold text-emerald-300">
-                              {activePreset.pnlPreview.infraCost}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-3 border-t border-white/15 flex items-baseline justify-between">
-                        <span className="text-xs font-bold text-white/80">
-                          Чистый результат:
-                        </span>
-                        <span className="font-display font-black text-lg text-lime-300">
-                          {activePreset.pnlPreview.netMargin}
-                        </span>
-                      </div>
-                    </div>
+                  {/* Bottom Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/15 text-xs">
+                    <span className="text-white/70">
+                      Тариф в расчёте: <strong className="text-white">{activePreset.pnlPreview.infraCost}</strong> · Весь код 100% ваш
+                    </span>
+                    <a
+                      href="#live-board"
+                      className="inline-flex items-center gap-1.5 font-bold text-rose-300 hover:text-white transition-colors"
+                    >
+                      <span>Открыть живую доску</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </motion.div>
               </AnimatePresence>
