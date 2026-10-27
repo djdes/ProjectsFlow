@@ -3931,7 +3931,7 @@ function AssigneePerson({
 }): React.ReactElement {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-      <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+      <span className="text-2xs font-medium text-muted-foreground/70">
         {label}
       </span>
       <UserAvatarHover

@@ -38,7 +38,7 @@ export function PreviewEmptyState({
           </p>
 
           <div className="mbs-5 rounded-lg border bg-background/60 px-4 py-3 text-start">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               Что об этом говорит код
             </p>
             <ul className="mbs-2 space-y-1.5">

@@ -4,6 +4,10 @@ import { cn } from '@/lib/utils';
 
 export const Tabs = TabsPrimitive.Root;
 
+// Базовая ширина подложки активной вкладки: настоящую ширину даёт scaleX, чтобы переезд
+// между вкладками шёл одним transform, без анимации left/width.
+const TAB_INDICATOR_BASE = 100;
+
 export function TabsList({
   className,
   children,
@@ -14,10 +18,9 @@ export function TabsList({
   const list = React.useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = React.useState<{
     left: number;
-    right: number;
+    width: number;
     top: number;
     height: number;
-    direction: 'left' | 'right';
   } | null>(null);
   React.useLayoutEffect(() => {
     const element = list.current;
@@ -34,8 +37,7 @@ export function TabsList({
         parent = element.getBoundingClientRect();
       const next = {
         left: rect.left - parent.left + element.scrollLeft,
-        right:
-          element.clientWidth - (rect.right - parent.left + element.scrollLeft),
+        width: rect.width,
         top: rect.top - parent.top + element.scrollTop,
         height: rect.height,
       };
@@ -47,11 +49,7 @@ export function TabsList({
             next[key as keyof typeof next],
         )
           ? previous
-          : {
-              ...next,
-              direction:
-                previous && next.left < previous.left ? 'left' : 'right',
-            },
+          : next,
       );
     };
     update();
@@ -86,13 +84,14 @@ export function TabsList({
       {indicator && (
         <span
           aria-hidden="true"
-          data-direction={indicator.direction}
           className="pf-tab-indicator pointer-events-none absolute rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
           style={{
-            left: indicator.left,
-            right: indicator.right,
-            top: indicator.top,
+            left: 0,
+            top: 0,
+            width: TAB_INDICATOR_BASE,
             height: indicator.height,
+            transformOrigin: '0 0',
+            transform: `translate(${indicator.left}px, ${indicator.top}px) scaleX(${indicator.width / TAB_INDICATOR_BASE})`,
           }}
         />
       )}

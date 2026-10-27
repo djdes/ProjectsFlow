@@ -136,7 +136,7 @@ export function ConnectGithubDialog({ open, onOpenChange }: Props): React.ReactE
         {status === 'waiting' && start && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="text-xs font-medium text-muted-foreground">
                 Введи этот код:
               </p>
               <div className="flex items-center gap-2">

@@ -285,7 +285,7 @@ function SearchModal({
         </div>
         <div className="flex h-[min(60vh,26rem)]">
           <div className="w-full overflow-y-auto border-e p-2 sm:w-1/2">
-            <p className="px-2 pbe-1 pbs-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="px-2 pbe-1 pbs-0.5 text-2xs font-medium text-muted-foreground">
               Задачи
             </p>
             {results.length === 0 ? (

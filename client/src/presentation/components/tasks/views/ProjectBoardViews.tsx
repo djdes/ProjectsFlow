@@ -1274,7 +1274,7 @@ export function ProjectBoardViews({
           Панель «Настройки отображения» — В ПОТОКЕ справа (Notion): контент поджимается. */}
       <div className="flex min-h-0 flex-1 items-start gap-0">
       <div
-        className="min-w-0 flex-1 transition-[width] motion-reduce:transition-none"
+        className="min-w-0 flex-1 motion-reduce:transition-none"
         style={{ transitionDuration: '240ms', transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)' }}
       >
       {isKanban ? (

@@ -202,7 +202,7 @@ export function BulkCredentialDialog({
             )}
 
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="text-xs font-medium text-muted-foreground">
                 Поля ({preview.fields.length})
               </p>
               <p className="text-xs text-muted-foreground">
@@ -221,7 +221,7 @@ export function BulkCredentialDialog({
                     />
                     <label
                       htmlFor={`secret-${f.key}`}
-                      className="cursor-pointer text-xs uppercase tracking-widest text-muted-foreground"
+                      className="cursor-pointer text-xs text-muted-foreground"
                     >
                       секрет
                     </label>

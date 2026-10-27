@@ -1671,7 +1671,7 @@ export function TableView({
                 горизонтальный scroller до неё и открывает её меню; «⋯» —
                 «Видимость свойств» (глазки/поиск/Скрыть все). */}
             <div
-              className="absolute inset-bs-1/2 flex -translate-y-1/2 items-center gap-1 transition-[right] duration-200 motion-reduce:transition-none"
+              className="absolute inset-bs-1/2 flex -translate-y-1/2 items-center gap-1 motion-reduce:transition-none"
               style={{ right: newPropertyOpen ? 318 : 4 }}
             >
               <Popover open={newPropertyOpen} onOpenChange={setPropertyCreatorOpen}>
@@ -2887,7 +2887,7 @@ function TableRow({
               type="button"
               onClick={onOpen}
               aria-label={`Открыть задачу «${taskTitle(task)}»`}
-              className="invisible ms-auto inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md bg-raised px-2.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground opacity-0 shadow-card transition-[background-color,color,opacity] hover:bg-hover hover:text-foreground focus:visible focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:min-h-11 [@media(hover:none)]:opacity-100"
+              className="invisible ms-auto inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md bg-raised px-2.5 text-2xs font-semibold text-muted-foreground opacity-0 shadow-card transition-[background-color,color,opacity] hover:bg-hover hover:text-foreground focus:visible focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:min-h-11 [@media(hover:none)]:opacity-100"
             >
               <PanelRight className="size-3" />
               Открыть

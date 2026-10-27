@@ -84,27 +84,22 @@
   .pf-switch-thumb {
     transition:
       transform 260ms var(--pf-ease),
-      width 160ms var(--pf-ease);
+      scale 160ms var(--pf-ease);
   }
 }
+/* Нажатие растягивает ползунок в сторону хода — масштабом, а не шириной (ширину не анимируем). */
 .pf-switch:active:not(:disabled) .pf-switch-thumb {
-  width: 23px;
+  scale: 1.15 1;
+  transform-origin: left center;
 }
 .pf-switch[aria-checked="true"]:active:not(:disabled) .pf-switch-thumb {
-  transform: translateX(19px);
+  transform-origin: right center;
 }
-/* Подложку активной вкладки двигает скрипт (left/right/top/height в style) — физические
-   свойства тут честные: это координаты из getBoundingClientRect. Переезд — движение. */
+/* Подложку активной вкладки двигает скрипт: координаты из getBoundingClientRect уходят в
+   transform (сдвиг + масштаб по ширине от базовых 100px), поэтому переезд — только transform. */
 @media (prefers-reduced-motion: no-preference) {
   .pf-tab-indicator {
-    transition:
-      left 260ms var(--pf-ease),
-      right 320ms var(--pf-ease),
-      top 220ms var(--pf-ease),
-      height 220ms var(--pf-ease);
-  }
-  .pf-tab-indicator[data-direction="right"] {
-    transition-duration: 320ms, 260ms, 220ms, 220ms;
+    transition: transform 260ms var(--pf-ease);
   }
 }
 [data-pf-motion-surface] {

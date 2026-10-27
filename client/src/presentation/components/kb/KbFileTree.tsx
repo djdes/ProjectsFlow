@@ -52,7 +52,7 @@ export function KbFileTree({
         const items = byFolder.get(folder) ?? [];
         return (
           <div key={folder}>
-            <div className="group flex items-center gap-1.5 px-2 py-1 text-2xs uppercase tracking-widest text-muted-foreground">
+            <div className="group flex items-center gap-1.5 px-2 py-1 text-2xs text-muted-foreground">
               <Folder className="size-3 shrink-0" />
               <span className="flex-1">{folder}</span>
               {onBulkCreate && folder === 'credentials' && (

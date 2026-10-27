@@ -311,7 +311,7 @@ export function ProjectChangesAnalytics({
                     <span className="text-xs tabular-nums text-muted-foreground">{item.count}</span>
                     <span className="col-span-2 mbs-1 h-1.5 overflow-clip rounded-full bg-muted">
                       <span
-                        className="block h-full rounded-full bg-primary/70 transition-[width]"
+                        className="block h-full rounded-full bg-primary/70"
                         style={{ width: `${Math.max(4, (item.count / maxBreakdown) * 100)}%` }}
                       />
                     </span>

@@ -70,7 +70,7 @@ function DiffColumn({
     <div className={cn('overflow-x-auto', isDel ? 'bg-destructive/10' : 'border-s border-border bg-done/10')}>
       <div
         className={cn(
-          'sticky start-0 inset-bs-0 z-[1] border-be border-border bg-card/90 px-2 py-1 text-2xs font-semibold uppercase tracking-wider backdrop-blur',
+          'sticky start-0 inset-bs-0 z-[1] border-be border-border bg-card/90 px-2 py-1 text-2xs font-semibold backdrop-blur',
           isDel ? 'text-destructive' : 'text-done',
         )}
       >

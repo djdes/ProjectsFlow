@@ -530,7 +530,7 @@ function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles
         <div className="flex gap-2">
           <Dot tone="pf-tone-blue bg-tone" />
           <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card">
-            <div className="border-be border-border bg-muted/60 px-2.5 py-1 text-2xs uppercase tracking-wider text-muted-foreground">
+            <div className="border-be border-border bg-muted/60 px-2.5 py-1 text-2xs text-muted-foreground">
               терминал
             </div>
             <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-2xs leading-relaxed text-foreground"
@@ -548,7 +548,7 @@ function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles
         <div className="flex gap-2">
           <Dot tone="bg-destructive" />
           <div className="min-w-0 flex-1 overflow-hidden rounded-md bg-destructive-soft">
-            <div className="px-2.5 py-1 text-2xs font-medium uppercase tracking-wider text-destructive">
+            <div className="px-2.5 py-1 text-2xs font-medium text-destructive">
               ошибка инструмента
             </div>
             <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-1.5 font-mono text-2xs leading-relaxed text-foreground">
@@ -680,7 +680,7 @@ function FinalDiffs({
       <div className="mbe-2 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
         <span
           className={cn(
-            'rounded-sm px-1.5 py-0.5 font-medium uppercase tracking-wider',
+            'rounded-sm px-1.5 py-0.5 font-medium',
             session.status === 'completed'
               ? 'bg-done-soft text-done-ink'
               : session.status === 'canceled'
@@ -701,11 +701,11 @@ function FinalDiffs({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
+        className="flex w-full items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
         aria-expanded={open}
       >
         <ChevronRight className={cn('size-3.5 shrink-0 motion-safe:transition-transform', open && 'rotate-90')} />
-        <span>Изменения · {files.length} файл(ов)</span>
+        <span>Изменения: {files.length} файл(ов)</span>
         <span className="ms-1 normal-case tracking-normal text-done">+{totalAdd}</span>
         <span className="normal-case tracking-normal text-destructive">−{totalDel}</span>
       </button>

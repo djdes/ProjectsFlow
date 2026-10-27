@@ -301,12 +301,12 @@ function GrantorRow({
       <span className="flex-1 truncate font-medium">
         {m.displayName}
         {m.isOwner && (
-          <span className="ms-1.5 rounded bg-primary-soft px-1 text-2xs font-medium uppercase tracking-wide text-primary-ink">
+          <span className="ms-1.5 rounded bg-primary-soft px-1 text-2xs font-medium text-primary-ink">
             owner
           </span>
         )}
         {isCurrentDispatcher && (
-          <span className="ms-1.5 rounded bg-muted px-1 text-2xs uppercase tracking-wide text-muted-foreground">
+          <span className="ms-1.5 rounded bg-muted px-1 text-2xs text-muted-foreground">
             dispatcher
           </span>
         )}

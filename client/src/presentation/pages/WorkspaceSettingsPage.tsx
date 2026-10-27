@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   CalendarClock,
   ChevronDown,
+  Folder,
   History,
   Loader2,
   RefreshCw,
@@ -28,6 +29,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
@@ -1201,7 +1203,9 @@ function AssigneeDigestCard({
                                 disabled={!canManage}
                                 onCheckedChange={() => toggleCommitProject(project.id)}
                               />
-                              <span>{project.icon ?? '📁'}</span>
+                              <span className="grid size-4 shrink-0 place-items-center overflow-hidden rounded-sm text-sm">
+                                {project.icon ? <ProjectIconView icon={project.icon} pixelSize={14} /> : <Folder className="size-3.5" aria-hidden="true" />}
+                              </span>
                               <span className="min-w-0 flex-1 truncate">{project.name}</span>
                             </label>
                           ))}
@@ -1314,7 +1318,9 @@ function AssigneeDigestCard({
                         disabled={!canManage}
                         onCheckedChange={() => toggleProject(project.id)}
                       />
-                      <span>{project.icon ?? '📁'}</span>
+                      <span className="grid size-4 shrink-0 place-items-center overflow-hidden rounded-sm text-sm">
+                                {project.icon ? <ProjectIconView icon={project.icon} pixelSize={14} /> : <Folder className="size-3.5" aria-hidden="true" />}
+                              </span>
                       <span className="min-w-0 flex-1 truncate">{project.name}</span>
                     </label>
                   ))}

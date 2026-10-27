@@ -52,7 +52,7 @@ export function StatusTimeline({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-2xs uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center justify-between text-2xs text-muted-foreground">
         <span>Здоровье · 24ч</span>
         {loading && <span>загрузка…</span>}
       </div>

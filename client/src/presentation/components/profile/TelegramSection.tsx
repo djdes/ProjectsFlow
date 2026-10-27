@@ -212,7 +212,7 @@ export function TelegramSection(): React.ReactElement {
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Что присылать
               </p>
               <div className="rounded-md border">

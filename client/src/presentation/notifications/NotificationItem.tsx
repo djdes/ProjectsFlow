@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { plainDescription, plainTaskTitle } from '@/lib/taskTitleBody';
@@ -335,7 +336,12 @@ export function NotificationItem({
       {view.details}
       {/* Задача из payload'а в корзине: текст уведомления сохраняем, но предупреждаем, что
           перехода не будет — иначе клик выглядел бы поломкой. */}
-      {n.taskDeleted && <p className="text-meta text-muted-foreground">🗑️ Задача удалена</p>}
+      {n.taskDeleted && (
+        <p className="flex items-center gap-1 text-meta text-muted-foreground">
+          <Trash2 className="size-3 shrink-0" aria-hidden="true" />
+          Задача удалена
+        </p>
+      )}
       {controls}
     </FeedRow>
   );

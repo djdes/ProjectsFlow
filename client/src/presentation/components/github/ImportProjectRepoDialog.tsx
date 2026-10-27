@@ -367,7 +367,7 @@ export function ImportProjectRepoDialog({
           {saving && (
             <div className="space-y-1.5">
               <div className="h-1.5 overflow-clip rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary motion-safe:transition-[width]" style={{ width: `${Math.max(8, progress)}%` }} />
+                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(8, progress)}%` }} />
               </div>
               <p className="text-xs text-muted-foreground">
                 {progress < 100

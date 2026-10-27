@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, SmilePlus, X } from 'lucide-react';
+import { Download, Paperclip, SmilePlus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
@@ -182,9 +182,10 @@ export function ChatBubble({
                     target="_blank"
                     rel="noreferrer"
                     download={a.filename}
-                    className="truncate rounded-md bg-foreground/[0.04] px-2 py-1 text-xs underline-offset-2 hover:underline"
+                    className="flex min-w-0 items-center gap-1 rounded-md bg-foreground/[0.04] px-2 py-1 text-xs underline-offset-2 hover:underline"
                   >
-                    📎 {a.filename}
+                    <Paperclip className="size-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{a.filename}</span>
                   </a>
                 ),
               )}

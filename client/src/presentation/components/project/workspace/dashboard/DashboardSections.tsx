@@ -519,7 +519,7 @@ export function OverviewSection({
             aria-valuenow={Math.round(usagePercent)}
           >
             <span
-              className="block h-full rounded-full bg-primary motion-safe:transition-[width]"
+              className="block h-full rounded-full bg-primary"
               style={{ width: `${usagePercent}%` }}
             />
           </div>
@@ -1598,7 +1598,7 @@ export function MarketingSection({
                   className="rounded-xl border p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-xs font-semibold text-muted-foreground">
                       {channels[index] ?? `Публикация ${index + 1}`}
                     </p>
                     <Button

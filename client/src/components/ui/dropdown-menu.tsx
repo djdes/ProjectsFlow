@@ -294,7 +294,7 @@ export function DropdownMenuShortcut({
 }: React.HTMLAttributes<HTMLSpanElement>): React.ReactElement {
   return (
     <span
-      className={cn('ms-auto text-xs tracking-widest opacity-60', className)}
+      className={cn('ms-auto text-xs opacity-60', className)}
       {...props}
     />
   );

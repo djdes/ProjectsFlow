@@ -64,7 +64,7 @@ export function ProjectModeMenu({ projectId, mode }: { projectId: string; mode: 
       {open && (
         <div role="menu" aria-label="Режим проекта" className="absolute end-0 inset-bs-10 z-[90] w-[292px] origin-top-right animate-in fade-in-0 motion-safe:zoom-in-95 rounded-xl bg-popover p-2 shadow-menu" onFocus={show} onBlur={hide}>
           <div className="px-2 pbe-2 pbs-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Режим проекта</p>
+            <p className="text-xs font-semibold text-muted-foreground">Режим проекта</p>
             <p className="mbs-1 text-xs leading-4 text-muted-foreground">Задачи и создание результата живут рядом и сохраняют общий контекст.</p>
           </div>
           {([

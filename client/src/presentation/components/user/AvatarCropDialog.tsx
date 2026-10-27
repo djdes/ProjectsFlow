@@ -209,7 +209,7 @@ export function AvatarCropDialog({
                   className={cn(
                     'pointer-events-none absolute max-w-none origin-top-left',
                     dragging ? 'cursor-grabbing' : 'cursor-grab',
-                    !dragging && animations && 'transition-[width,height,left,top] duration-200 ease-out',
+                    !dragging && animations && 'ease-out',
                   )}
                   style={{ left: offset.x, top: offset.y, width: sw, height: sh }}
                 />

@@ -119,7 +119,7 @@ export function ServerDetailSheet({
             <div className="flex items-center gap-2 pe-8">
               <Server className="size-4 shrink-0 text-muted-foreground" />
               <SheetTitle className="truncate text-base">{server.name}</SheetTitle>
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                 {server.kind}
               </span>
               <StatusBadge status={latest?.status ?? server.lastStatus ?? 'unknown'} />
