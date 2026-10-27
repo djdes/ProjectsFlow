@@ -1,6 +1,8 @@
 import { RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
+import { rememberedSkeletonSize } from '@/lib/loadingLayout';
 import { PageLoadError } from '@/presentation/components/loading/PageLoadError';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Image as ImageIcon, Loader2, Paintbrush, Text } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
@@ -169,6 +171,28 @@ export function TasksPage(): React.ReactElement {
     return () => { cancelled = true; };
   }, [projectId, projectFinanceRepository, monitoringRepository]);
 
+  // Плашки проекта приходят отдельными запросами после данных проекта. Пока они не
+  // ответили, их место держит высота с прошлого визита — доска ниже не прыгает. Высоты
+  // шапки и плашек запоминаются для скелетона следующей загрузки (только размеры).
+  const bannersRef = useRef<HTMLDivElement>(null);
+  const coverRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  const [settledBanners, setSettledBanners] = useState<Record<string, true>>({});
+  const settleBanner = useCallback((key: string): void => {
+    setSettledBanners((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  }, []);
+  const canEditProject = data ? hasOwnerRights(data.role) || data.role === 'editor' : false;
+  const onboardingShown = Boolean(data) && !bannersHidden && !data?.isInbox && canEditProject;
+  const bannersSettled =
+    Boolean(data) &&
+    (!onboardingShown || settledBanners[`${data?.id}:onboarding`] === true) &&
+    (bannersHidden || settledBanners[`${data?.id}:published`] === true);
+  const sizeScope = data ? `project:${data.id}` : null;
+  const sizeDeps = [data?.id, bannersSettled, Boolean(data?.coverUrl)];
+  useRememberSkeletonSize(bannersSettled ? sizeScope : null, 'project-banners', [bannersRef], sizeDeps);
+  useRememberSkeletonSize(bannersSettled ? sizeScope : null, 'project-head', [bannersRef, coverRef, headRef], sizeDeps);
+  const reservedBanners = sizeScope && !bannersSettled ? rememberedSkeletonSize(sizeScope, 'project-banners') : null;
+
   if (loading) return <RouteSkeleton />;
   if (error) return <PageLoadError />;
 
@@ -320,7 +344,9 @@ export function TasksPage(): React.ReactElement {
           bg-background — непрозрачная подложка под полупрозрачными плашками: иначе на
           десктопе уезжающие под закреплённую плашку карточки просвечивали сквозь её текст. */}
       <div
+        ref={bannersRef}
         id="pf-sticky-banners"
+        style={reservedBanners ? { minHeight: reservedBanners } : undefined}
         className={cn(
           'relative z-[35] isolate bg-background sm:sticky sm:inset-bs-11',
           // pf-sticky-surface рисует тень при скролле — у пустого (0px) контейнера она
@@ -330,23 +356,32 @@ export function TasksPage(): React.ReactElement {
       >
         {!bannersHidden && !data.isInbox && canEdit && (
           <ProjectGithubOnboardingBanner
+            onSettled={() => settleBanner(`${data.id}:onboarding`)}
             projectId={data.id}
             projectName={data.name}
             gitRepoUrl={data.gitRepoUrl}
             shiftForOverlay
           />
         )}
-        {!bannersHidden && <ProjectPublishedBanner projectId={data.id} shiftForOverlay />}
+        {!bannersHidden && (
+          <ProjectPublishedBanner
+            projectId={data.id}
+            shiftForOverlay
+            onSettled={() => settleBanner(`${data.id}:published`)}
+          />
+        )}
       </div>
 
       {/* #3: обложка проекта — во всю ширину, над заголовком (если задана). */}
       {data.coverUrl && (
-        <ProjectCover
-          projectId={data.id}
-          coverUrl={data.coverUrl}
-          coverPosition={data.coverPosition}
-          canEdit={canEdit}
-        />
+        <div ref={coverRef}>
+          <ProjectCover
+            projectId={data.id}
+            coverUrl={data.coverUrl}
+            coverPosition={data.coverPosition}
+            canEdit={canEdit}
+          />
+        </div>
       )}
 
       {/* Тело страницы: крупный заголовок с большими отступами по краям (Notion-style).
@@ -355,6 +390,7 @@ export function TasksPage(): React.ReactElement {
       {/* #2: заголовок проекта — крупный, с большим отступом сверху и по бокам (как в Notion).
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
+        ref={headRef}
         className={cn(
           // Вертикальный ритм Notion (десктоп, MEASURED.md §2): низ строки крошек → верх
           // названия = 36px; низ ПОСЛЕДНЕГО ВИДИМОГО элемента шапки → ряд вкладок = 12px.

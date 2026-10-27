@@ -220,45 +220,79 @@ export const scenarios = [
   ...workspaceIsolationScenarios,
   {
     id: 'loading-skeleton',
-    title: 'Загрузка «Входящих»: один скелетон с первой отрисовки',
+    title: 'Загрузка «Входящих» и доски: один скелетон на местах итоговой страницы',
     matrix: [['desktop', 'light'], ['phone', 'light']],
     async run(t) {
       const { page } = t;
-      // Slow answers keep every loading stage on screen: sign-in check, workspace, tasks.
-      t.state.delays = { 'ws-team:/auth/me': 300, 'ws-team:/workspaces': 300, 'ws-team:/assignees/mine': 500 };
+      // Every frame until the first task card: which skeleton is shown, and where the first
+      // board column (skeleton or real) and the first sidebar project row are.
       await page.addInitScript(() => {
+        const at = (e) => {
+          const r = e.getBoundingClientRect();
+          return [Math.round(r.left), Math.round(r.top)];
+        };
+        window.__pfMeasure = () => {
+          const panel = [...document.querySelectorAll('[data-pf-main] .bg-panel, .pf-loading-shell .bg-panel')]
+            .find((e) => !e.closest('aside') && e.getBoundingClientRect().width > 200 && e.getBoundingClientRect().height > 40);
+          const side = document.querySelector('aside [data-pf-loading] .pf-skeleton.size-5, aside nav a .size-5');
+          return {
+            panel: panel ? at(panel) : null,
+            side: side && side.getBoundingClientRect().width > 0 ? at(side) : null,
+            boot: Boolean(panel?.closest('#pf-boot')),
+            page: panel?.closest('[data-pf-page-skeleton]')?.getAttribute('data-pf-page-skeleton') ?? null,
+            shell: Boolean(document.querySelector('[data-pf-shell-skeleton], [data-pf-main]')),
+          };
+        };
         const frames = [];
         window.__pfSkeletonFrames = frames;
         const sample = () => {
           if (document.querySelector('[data-pf-task-id]')) return;
-          const column = document.querySelector('[data-pf-loading] .bg-panel');
-          if (column) {
-            const r = column.getBoundingClientRect();
-            frames.push({
-              boot: Boolean(column.closest('#pf-boot')),
-              page: column.closest('[data-pf-page-skeleton]')?.getAttribute('data-pf-page-skeleton') ?? null,
-              shell: Boolean(document.querySelector('[data-pf-shell-skeleton], [data-pf-main]')),
-              rect: [r.left, r.top, r.width, r.height].map(Math.round).join(','),
-            });
-          }
+          const frame = window.__pfMeasure();
+          if (frame.panel) frames.push(frame);
           requestAnimationFrame(sample);
         };
         new MutationObserver(sample).observe(document, { childList: true, subtree: true });
         requestAnimationFrame(sample);
       });
-      await t.goto('/', { ready: () => page.locator('[data-pf-task-id]'), readyName: 'задачи «Входящих» после задержки' });
-      const frames = await page.evaluate(() => window.__pfSkeletonFrames);
+      // Slow answers keep every loading stage on screen: sign-in check, workspace, data.
+      const delays = { 'ws-team:/auth/me': 300, 'ws-team:/workspaces': 300, 'ws-team:/assignees/mine': 500, 'ws-team:/projects/p-site': 400 };
+      // The first visit remembers the sizes of data-dependent rows; the second one is measured.
+      const load = async (path, name) => {
+        t.state.delays = {};
+        await t.goto(path, { ready: () => page.locator('[data-pf-task-id]'), readyName: `${name}: первый визит` });
+        await page.waitForTimeout(300);
+        t.state.delays = delays;
+        await t.goto(path, { ready: () => page.locator('[data-pf-task-id]'), readyName: `${name}: повторный визит с задержками` });
+        await page.waitForTimeout(300);
+        return { frames: await page.evaluate(() => window.__pfSkeletonFrames), final: await page.evaluate(() => window.__pfMeasure()) };
+      };
+      const near = (a, b) => a && b && Math.abs(a[0] - b[0]) <= 1 && Math.abs(a[1] - b[1]) <= 1;
+      const stable = (frames, final, key, what) => {
+        const moved = frames.find((f) => !near(f[key], final[key]));
+        t.assert(!moved, `${what}: в скелетоне ${JSON.stringify(moved?.[key])}, на странице ${JSON.stringify(final[key])}`);
+      };
+
+      const inbox = await load('/', '«Входящие»');
       await t.check('первый кадр — готовый скелетон «Входящих» из index.html', async () => {
-        t.assert(frames.length > 0, 'скелетон не появлялся');
-        t.assert(frames[0].boot && frames[0].page === 'inbox', `первый скелетон: ${JSON.stringify(frames[0])}`);
+        t.assert(inbox.frames.length > 0, 'скелетон не появлялся');
+        t.assert(inbox.frames[0].boot && inbox.frames[0].page === 'inbox', `первый скелетон: ${JSON.stringify(inbox.frames[0])}`);
       });
       await t.check('скелетон всё время внутри оболочки (сайдбар или шапка с нижней навигацией)', async () => {
-        const bare = frames.find((f) => !f.shell);
+        const bare = inbox.frames.find((f) => !f.shell);
         t.assert(!bare, `кадр без оболочки: ${JSON.stringify(bare)}`);
       });
-      await t.check('геометрия скелетона не меняется до появления задач', async () => {
-        const rects = [...new Set(frames.map((f) => f.rect))];
-        t.assert(rects.length === 1, `колонка скелетона прыгала: ${rects.join(' → ')}`);
+      await t.check('«Входящие»: колонка скелетона на месте колонки страницы', async () => {
+        stable(inbox.frames, inbox.final, 'panel', 'первая колонка');
+      });
+      if (!t.isMobile) {
+        await t.check('сайдбар: строки проектов скелетона на местах настоящих', async () => {
+          stable(inbox.frames.filter((f) => f.side), inbox.final, 'side', 'первая строка проекта');
+        });
+      }
+      const board = await load(`/projects/${BOARD_PROJECT_ID}`, 'доска проекта');
+      await t.check('доска: скелетон колонок на месте доски, плашки и описание не сдвигают её', async () => {
+        t.assert(board.frames.length > 0, 'скелетон доски не появлялся');
+        stable(board.frames, board.final, 'panel', 'доска');
       });
     },
   },

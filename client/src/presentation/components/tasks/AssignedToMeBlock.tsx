@@ -2,6 +2,7 @@ import { selectInboxView } from './inbox/selectInboxView';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
+import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -1557,9 +1558,14 @@ export function AssignedToMeBlock({
     setDragActive(false);
   };
 
+  // Высота строки людей (их число и перенос имён) — для скелетона следующей загрузки.
+  const inboxHeadRef = useRef<HTMLDivElement>(null);
+  const inboxReady = !(loading || membersLoading || boardTasks === null);
+  useRememberSkeletonSize('inbox', 'inbox-head', [inboxHeadRef], [isWide, inboxReady, loadError]);
+
   // Пока грузится — заголовок страницы уже на месте, под ним скелетон доски: при появлении
   // данных строка заголовка не «прыгает».
-  if (loading || membersLoading || boardTasks === null) {
+  if (!inboxReady) {
     return (
       <section id="assigned-to-me" className="flex flex-col gap-3">
         <InboxLoadingLayout heading={heading} />
@@ -1809,7 +1815,7 @@ export function AssignedToMeBlock({
   // появляется по лупе (и остаётся, пока в нём есть текст).
   const searchVisible = searchOpen || query !== '';
   const headRow = isWide ? (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-3 gap-y-2">
       {heading}
       {hasAny && tabsOrFocus}
       {hasAny && people}
@@ -1833,7 +1839,7 @@ export function AssignedToMeBlock({
         {actions}
       </div>
       {hasAny && (
-        <div className="flex min-w-0 items-center gap-2">
+        <div ref={inboxHeadRef} className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 max-w-[55%] shrink-0">{tabsOrFocus}</div>
           <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1 px-1 pf-scrollbar-hide">{people}</div>
         </div>

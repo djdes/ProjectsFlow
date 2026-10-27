@@ -17,6 +17,8 @@ type Props = {
   // открытого справа окна задачи, ширина берётся из CSS-переменной --pf-drawer-open-w).
   // Ставим только у плашки основного вида; у плашки ВНУТРИ окна — нет.
   shiftForOverlay?: boolean;
+  /** The first answer is known: the banner shows or stays hidden (layout reservation). */
+  onSettled?: () => void;
 };
 
 // Собственной памяти о закрытии у плашки больше нет: раньше крестик писал projectId в модульный
@@ -36,12 +38,14 @@ const BTN =
 // публичную доску (доска включается тумблером в окне «Поделиться»). Появляется, только когда воркер
 // уже что-то задеплоил (site-артефакт, self-serve воркер-раннер, M3). Пока результата нет — тихо
 // поллим (воркер до-деплоивает асинхронно), чтобы плашка всплыла сама, без ручного refresh.
-export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
+export function ProjectPublishedBanner({ projectId, shiftForOverlay = false, onSettled }: Props): React.ReactElement | null {
   const { projectRepository } = useContainer();
   const rightPanelWidth = useRightPanelWidth();
   // siteSlug есть у каждого проекта ещё до первого результата, поэтому одного slug недостаточно:
   // плашку показываем только после реального деплоя воркера (deployedAt).
   const [site, setSite] = useState<{ slug: string } | null>(null);
+  // The first answer arrived (layout reservation on the project page).
+  const [checkedProject, setCheckedProject] = useState<string | null>(null);
 
   // Гейт стоит и здесь, а не только у места рендера: эту же плашку рисует выехавшее справа
   // окно задачи, и после закрытия крестиком не должна остаться видимой ни одна копия.
@@ -58,6 +62,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
         .getProjectSite(projectId)
         .then((s) => {
           if (cancelled) return;
+          setCheckedProject(projectId);
           if (!s.siteSlug || !s.deployedAt) {
             setSite(null);
             return;
@@ -71,6 +76,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
         })
         .catch(() => {
           /* нет доступа — просто ждём следующий тик */
+          if (!cancelled) setCheckedProject(projectId);
         });
     };
     load();
@@ -91,6 +97,11 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
     window.addEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
     return () => window.removeEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
   }, [projectId]);
+
+  const settled = bannersHidden || checkedProject === projectId;
+  useEffect(() => {
+    if (settled) onSettled?.();
+  }, [settled, onSettled]);
 
   if (bannersHidden) return null;
   if (!site) return null;

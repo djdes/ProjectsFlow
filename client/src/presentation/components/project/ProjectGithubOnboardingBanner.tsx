@@ -44,6 +44,8 @@ type Props = {
   projectName: string;
   gitRepoUrl: string | null;
   shiftForOverlay?: boolean;
+  /** The first answer is known: the banner shows or stays hidden (layout reservation). */
+  onSettled?: () => void;
 };
 
 type LaunchBannerProps = Pick<Props, 'projectId' | 'shiftForOverlay'>;
@@ -215,6 +217,7 @@ export function ProjectGithubOnboardingBanner({
   projectName,
   gitRepoUrl,
   shiftForOverlay = false,
+  onSettled,
 }: Props): React.ReactElement | null {
   const { connection } = useGithubConnection();
   const { projectRepository } = useContainer();
@@ -302,6 +305,11 @@ export function ProjectGithubOnboardingBanner({
     }
     openAction(action);
   };
+
+  const settled = bannersHidden || !gitRepoUrl || siteState !== 'checking';
+  useEffect(() => {
+    if (settled) onSettled?.();
+  }, [settled, onSettled]);
 
   if (bannersHidden) return null;
 

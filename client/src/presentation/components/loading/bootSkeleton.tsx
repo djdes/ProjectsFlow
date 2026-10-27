@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PageSkeleton, ShellSkeleton } from './LoadingLayouts';
 import {
+  applySkeletonSizes,
   bootSkeletonKey,
   installBannerExpected,
   loadingLayoutForPath,
@@ -33,6 +34,7 @@ export function renderBootSkeleton(): string {
     routeLoadingLayout,
     bootSkeletonKey,
     installBannerExpected,
+    applySkeletonSizes,
   ]
     .map(String)
     .join('\n');
@@ -41,6 +43,7 @@ export function renderBootSkeleton(): string {
 (function () {
 ${rules}
   if (installBannerExpected()) document.documentElement.dataset.pfInstall = '';
+  applySkeletonSizes(location.pathname);
   var key = 'shell:board';
   try { key = bootSkeletonKey(location.pathname, location.search, location.host); } catch (_) { /* default */ }
   var parts = key.split(':');
