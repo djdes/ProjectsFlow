@@ -438,6 +438,26 @@ export const scenarios = [
         );
         await expectGone(t, `${NOW} ${card('t-doctors')}`, 'карточка осталась на полке «На утверждении»');
       });
+
+      await t.check('«Передать воркеру»: только в колонке проекта, POST move → todo', async () => {
+        const handoff = 'button[aria-label="Передать воркеру"]';
+        const manualCard = page.locator(`${NOW} ${card('t-form')}`);
+        await t.visible(manualCard, `карточка «${taskTitle(state, 't-form')}» во «Вручную»`);
+        await manualCard.hover();
+        t.assert((await manualCard.locator(handoff).count()) === 0, '«Передать воркеру» на полке «Вручную»');
+        t.assert(
+          (await page.locator(`${QUEUE} ${card('t-domain')} ${handoff}`).count()) === 0,
+          '«Передать воркеру» у личной задачи',
+        );
+        const queueCard = page.locator(`${QUEUE} ${card('t-home')}`);
+        await t.visible(queueCard, `карточка «${taskTitle(state, 't-home')}» в очереди`);
+        await queueCard.hover();
+        await queueCard.locator(`${handoff}:visible`).click();
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === '/projects/p-site/tasks/t-home/move' && m.body?.targetStatus === 'todo',
+          'нет POST /api/projects/p-site/tasks/t-home/move с targetStatus "todo"',
+        );
+      });
     },
   },
 

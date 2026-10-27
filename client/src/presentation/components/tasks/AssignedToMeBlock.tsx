@@ -22,7 +22,8 @@ import {
   type Modifier,
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
-import { STATUS_LABEL, canTakeToManual } from './statusLabels';
+import { STATUS_LABEL, canSendToWorker, canTakeToManual } from './statusLabels';
+import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
 import {
   applyPatches,
   settledPatchIds,
@@ -341,6 +342,8 @@ export function AssignedToMeBlock({
   const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
   // Без воркера «В работе» ставят люди — такие задачи на полке «Вручную» (isHandWork).
   const workerEnabled = useWorkerEnabled();
+  // «Передать воркеру» на карточке очереди — те же условия, что у кнопки на доске проекта.
+  const workerHandoffAvailable = useWorkerHandoffAvailable();
   const isApprover =
     approvalEnabled && (currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner');
   // Руководитель пространства смотрит доску сотрудника: клик по кубику переводит блок на
@@ -1357,8 +1360,9 @@ export function AssignedToMeBlock({
   // Взять в работу / убрать из работы. 'manual' — «делаю руками», агент такие задачи
   // никогда не подхватывает; backlog — «Черновики», нейтральное «не занимаюсь сейчас».
   // Возврат НЕ в todo: в личных входящих это колонка «Воркер», задачу забрал бы Ralph.
+  // 'todo' — только явная кнопка «Передать воркеру» на проектной карточке очереди.
   const setWorkStatus = useCallback(
-    async (item: InboxBlockTask, next: 'manual' | 'backlog'): Promise<void> => {
+    async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo'): Promise<void> => {
       if (item.status === next) return;
       // Карточка переезжает на полку сразу, ещё до ответа сервера — иначе после дропа она
       // секунду висит на старом месте и жест читается как неудавшийся.
@@ -1373,7 +1377,8 @@ export function AssignedToMeBlock({
         });
         // Отмена из тоста возвращает прежний статус: жест мог быть промахом.
         const prev = item.status;
-        toast.success(next === 'manual' ? 'Взята в работу' : 'Вернули в очередь', {
+        const message = next === 'manual' ? 'Взята в работу' : next === 'todo' ? 'Передана воркеру' : 'Вернули в очередь';
+        toast.success(message, {
           description: plainTaskTitle(item.description ?? '') || undefined,
           duration: 8000,
           action: { label: 'Отменить', onClick: () => void restoreStatus(item, prev) },
@@ -1581,6 +1586,20 @@ export function AssignedToMeBlock({
         <Play className="size-3 fill-current" />
       </QuickAction>
     ) : null;
+  // «Передать воркеру» — только проектные задачи очереди: полки «Вручную»/«На утверждении»
+  // рендерят свои действия, а в «Личных» колонка «Воркер» не для этого.
+  const canHandOff = (item: InboxBlockTask): boolean =>
+    workerHandoffAvailable && item.canModify && !item.isInbox && canSendToWorker(item.status);
+  const workerHandoffAction = (item: InboxBlockTask): React.ReactNode =>
+    canHandOff(item) ? (
+      <QuickAction
+        label={WORKER_HANDOFF_LABEL}
+        className="text-primary"
+        onClick={() => void setWorkStatus(item, 'todo')}
+      >
+        <WorkerHandoffIcon className="size-3.5" />
+      </QuickAction>
+    ) : null;
   // Свайп вправо на тач-экране — «дальше по процессу»: карточка очереди → в работу; карточка
   // «Вручную» → на утверждение (своя, где работу принимает руководитель) или в готово.
   const queueSwipe = (item: InboxBlockTask): SwipeAction | null =>
@@ -1608,7 +1627,12 @@ export function AssignedToMeBlock({
         onOpen={() => setDrawerTask(item)}
         onChanged={handleToggled}
         onDelete={() => handleDelete(item)}
-        extraActions={takeToWorkAction(item)}
+        extraActions={
+          <>
+            {takeToWorkAction(item)}
+            {workerHandoffAction(item)}
+          </>
+        }
         showCreatedAt={opts.showCreatedAt ?? false}
         hideProjectLabel={opts.hideProjectLabel ?? false}
         selecting={selectionActive}

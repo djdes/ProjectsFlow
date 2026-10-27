@@ -69,7 +69,7 @@ import { WorkerLockOffer } from './WorkerLockOffer';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useUsage } from '@/presentation/usage/UsageProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
-import { isFree } from '@/domain/usage/Usage';
+import { isWorkerLockedByPlan } from './workerHandoff';
 import { BulkActionBar } from './BulkActionBar';
 import {
   nextAnchor,
@@ -310,7 +310,7 @@ export function KanbanBoard({
   // безлимитного доступа не гейтится. В inbox воркера нет — там замок не нужен.
   const { usage } = useUsage();
   const { open: openUpgrade } = useUpgradeDialog();
-  const workerLocked = !isInbox && usage !== null && isFree(usage.plan) && !usage.isAdmin;
+  const workerLocked = !isInbox && isWorkerLockedByPlan(usage);
   // Воркер выключен в пространстве (db/152) — колонки «Воркер» на доске нет вообще: ни
   // среди видимых, ни в меню скрытых, ни как цель drag'а. Задачи в 'todo' туда попасть уже
   // не могут (сервер их не принимает), а лежавшие раньше увёл в «Черновики» сам тумблер.

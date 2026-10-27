@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { ArrowRight, Bot, Check, ImageIcon, ListChecks, MessageSquare, Play, Trash2, Undo2 } from 'lucide-react';
+import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Play, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -23,6 +23,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
+import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon } from './workerHandoff';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
@@ -327,10 +328,10 @@ function KanbanCardImpl({
           e.stopPropagation();
           onQuickPromote(task, 'todo');
         }}
-        aria-label="Передать воркеру"
-        title="Передать воркеру"
+        aria-label={WORKER_HANDOFF_LABEL}
+        title={WORKER_HANDOFF_LABEL}
       >
-        <Bot className={big ? 'size-4' : 'size-3'} />
+        <WorkerHandoffIcon className={big ? 'size-4' : 'size-3'} />
       </Button>
     ) : null;
     const withdrawButton = canWithdraw ? (
