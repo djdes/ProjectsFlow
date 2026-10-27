@@ -1,154 +1,184 @@
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, ShieldCheck, ArrowUpRight, BookOpen } from 'lucide-react';
-import { USE_CASE_CATALOG } from '@/data/showcaseData';
-import { FAQ } from '@/data/faq';
+import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  ArrowUpRight,
+  BookOpen,
+  ChevronDown,
+  Code2,
+  Cpu,
+  HelpCircle,
+  Lock,
+  Sparkles,
+} from 'lucide-react';
+import { FAQ_ITEMS, type StackLayerId } from '../../data/showcaseData';
 
-export interface BlogPostPreview {
-  readonly slug: string;
-  readonly title: string;
-  readonly topic: string;
-  readonly dateIso: string;
-  readonly dateFormatted: string;
-  readonly minutes: number;
-  readonly description: string;
+export interface BlogTeaserItem {
+  slug: string;
+  title: string;
+  topic: 'Практика' | 'Продукт' | 'Деньги' | 'Автоматизация';
+  dateIso: string;
+  dateFormatted: string;
+  minutes: number;
+  description: string;
 }
 
 interface CatalogFaqSectionProps {
-  posts?: readonly BlogPostPreview[];
-  appBase?: string;
+  posts: BlogTeaserItem[];
+  isAuthed: boolean;
+  appBase: string;
+  onSelectLayer?: (id: StackLayerId) => void;
 }
 
 export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
-  posts = [],
-  appBase = '',
+  posts,
+  isAuthed,
+  appBase,
+  onSelectLayer,
 }) => {
-  const [query, setQuery] = useState<string>('');
-  const [openFaq, setOpenFaq] = useState<number>(0);
-
-  const filteredCatalog = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return USE_CASE_CATALOG;
-    return USE_CASE_CATALOG.filter(
-      (item) =>
-        item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.priceHint.toLowerCase().includes(q) ||
-        item.tags.some((t) => t.toLowerCase().includes(q)),
-    );
-  }, [query]);
+  const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
 
   return (
-    <section id="faq" className="scroll-mt-24 max-w-[1440px] mx-auto my-20 px-4 sm:px-9 space-y-12">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
-        {/* Левая стеклянная панель: Живой поиск по задачам и гарантии */}
-        <div className="p-6 sm:p-9 rounded-[32px] bg-[#100b1d]/65 border border-white/22 backdrop-blur-2xl shadow-2xl flex flex-col justify-between gap-6">
+    <div className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-14 space-y-20">
+      {/* 1. ARCHITECTURAL GUARANTEES BENTO GRID (inspired by Quantix & Solane Pinterest boards) */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div
+          onClick={() => onSelectLayer?.('layer-claude')}
+          className="rounded-[28px] p-7 bg-[#090e1b]/90 border border-white/15 hover:border-purple-400/50 transition-all cursor-pointer flex flex-col justify-between"
+        >
           <div>
-            <span className="text-xs font-extrabold tracking-[0.14em] text-amber-300 block mb-2">
-              КАТАЛОГ ВОЗМОЖНОСТЕЙ И ЗАДАЧ
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 mb-5">
+              <Cpu className="w-6 h-6" />
+            </div>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-purple-300 block mb-1.5">
+              ГАРАНТИЯ СЛОЯ 01 · БЕЗ БАРЬЕРОВ
             </span>
-            <h3 className="font-display font-black text-2xl sm:text-3xl text-white mb-2">
-              Что можно поручить ProjectsFlow
+            <h3 className="font-display font-black text-xl text-white mb-2.5">
+              Claude уже внутри — 0 минут на настройку
             </h3>
-            <p className="text-xs sm:text-sm text-white/80 mb-5">
-              Введите задачу или модуль (например, лендинг, бот, СБП, Claude, финансы, мониторинг), чтобы увидеть, как платформа решает её на автопилоте.
+            <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
+              Забудьте про блокировки аккаунтов, зарубежные карты и поиск прокси. На тарифах
+              «Прайм» и «VIP» подписка работает сразу из коробки, а первый час на «Прайме» — бесплатный.
             </p>
-
-            <div className="flex items-center gap-3 px-4 py-3 rounded-[16px] bg-white/10 border border-white/25 mb-4">
-              <Search className="w-4 h-4 text-white/70 shrink-0" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Лендинг, Telegram-бот, оплата СБП, Claude, финансы..."
-                className="w-full bg-transparent text-sm text-white placeholder:text-white/50 outline-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2.5 max-h-[320px] overflow-y-auto pr-1">
-              {filteredCatalog.map((item) => (
-                <div
-                  key={item.name}
-                  className="flex items-center justify-between gap-3 p-3.5 rounded-[16px] bg-white/6 border border-white/12 hover:bg-white/12 transition"
-                >
-                  <div className="min-w-0">
-                    <strong className="block text-sm font-bold text-white truncate">
-                      {item.name}
-                    </strong>
-                    <span className="text-xs text-white/75">
-                      {item.category} · {item.priceHint}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 shrink-0">
-                    {item.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="px-2.5 py-1 rounded-full bg-white/16 text-[11px] font-bold text-white"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
-
-          {/* Плашка снятия риска (Гарантии) */}
-          <div className="p-4.5 rounded-[22px] bg-[#0e241b]/80 border border-[#94f23c]/40 flex items-start gap-3.5">
-            <ShieldCheck className="w-6 h-6 text-[#94f23c] shrink-0 mt-0.5" />
-            <div>
-              <strong className="block text-sm font-bold text-white">
-                Первый час бесплатно · Не зашло — вернём деньги
-              </strong>
-              <p className="text-xs text-white/80 leading-relaxed mt-1">
-                Начинаешь без карты. Платный тариф не подошёл — возвращаем оплату без мелкого шрифта. Весь созданный код и проект на 100% остаются твоими.
-              </p>
-            </div>
-          </div>
+          <span className="mt-5 font-mono text-xs font-bold text-purple-300 inline-flex items-center gap-1">
+            Показать Слой 01 в 3D <ArrowUpRight className="w-3.5 h-3.5" />
+          </span>
         </div>
 
-        {/* Правая стеклянная панель: Плавный аккордеон FAQ */}
-        <div className="p-6 sm:p-9 rounded-[32px] bg-[#100b1d]/65 border border-white/22 backdrop-blur-2xl shadow-2xl">
-          <span className="text-xs font-extrabold tracking-[0.14em] text-amber-300 block mb-2">
-            ЧАСТЫЕ ВОПРОСЫ
+        <div
+          onClick={() => onSelectLayer?.('layer-deploy')}
+          className="rounded-[28px] p-7 bg-[#090e1b]/90 border border-white/15 hover:border-sky-400/50 transition-all cursor-pointer flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 mb-5">
+              <Code2 className="w-6 h-6" />
+            </div>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-sky-300 block mb-1.5">
+              ГАРАНТИЯ СЛОЯ 04 · ПОЛНАЯ СВОБОДА
+            </span>
+            <h3 className="font-display font-black text-xl text-white mb-2.5">
+              100% исходного кода и Git остаются вашими
+            </h3>
+            <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
+              Никакой привязки к закрытому конструктору. Вы получаете чистый современный
+              стек (React, TypeScript, Node.js, SQL) и можете выгрузить репозиторий в любой момент.
+            </p>
+          </div>
+          <span className="mt-5 font-mono text-xs font-bold text-sky-300 inline-flex items-center gap-1">
+            Показать Слой 04 в 3D <ArrowUpRight className="w-3.5 h-3.5" />
           </span>
-          <h3 className="font-display font-black text-2xl sm:text-3xl text-white mb-5">
-            Честные ответы перед стартом
-          </h3>
+        </div>
 
-          <div className="flex flex-col gap-3">
-            {FAQ.map((item, idx) => {
-              const isOpen = openFaq === idx;
+        <div
+          onClick={() => onSelectLayer?.('layer-finance')}
+          className="rounded-[28px] p-7 bg-[#090e1b]/90 border border-white/15 hover:border-emerald-400/50 transition-all cursor-pointer flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 mb-5">
+              <Lock className="w-6 h-6" />
+            </div>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-300 block mb-1.5">
+              ГАРАНТИЯ СЛОЯ 03 · БЕЗОПАСНЫЙ РЕЛИЗ
+            </span>
+            <h3 className="font-display font-black text-xl text-white mb-2.5">
+              Возврат средств, если платформа не подошла
+            </h3>
+            <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
+              Проверьте «Прайм» на своей реальной задаче в течение бесплатного первого часа.
+              Если после оплаты что-то не устроит — вернём деньги без бюрократии, а код останется у вас.
+            </p>
+          </div>
+          <span className="mt-5 font-mono text-xs font-bold text-emerald-300 inline-flex items-center gap-1">
+            Показать Слой 03 в 3D <ArrowUpRight className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      </section>
+
+      {/* 2. INTERACTIVE FAQ ACCORDION (#faq) */}
+      <section id="faq" className="scroll-mt-24">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-5">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/15 mb-3">
+              <HelpCircle className="w-3.5 h-3.5 text-lime-400" />
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
+                Ответы на частые вопросы
+              </span>
+            </div>
+            <h2 className="font-display font-black uppercase text-3xl sm:text-5xl leading-[0.96] tracking-[-0.03em] text-white mb-4">
+              ВСЁ О РАБОТЕ{' '}
+              <span className="text-lime-400">В PROJECTSFLOW</span>
+            </h2>
+            <p className="text-white/70 text-sm sm:text-base leading-relaxed mb-6">
+              Собрали главные детали о встроенной подписке на Claude, бесплатном часе на
+              тарифе «Прайм», безопасности кода и учёте финансов в рублях.
+            </p>
+
+            <a
+              href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
+              className="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-white text-[#060911] font-extrabold text-sm hover:bg-slate-100 transition-all shadow-lg"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span>Проверить на своём проекте</span>
+              <ArrowUpRight className="w-4 h-4" />
+            </a>
+          </div>
+
+          <div className="lg:col-span-7 space-y-3">
+            {FAQ_ITEMS.map((item, idx) => {
+              const isOpen = openFaqIdx === idx;
               return (
                 <div
                   key={item.q}
-                  className="rounded-[18px] bg-white/8 border border-white/18 overflow-hidden"
+                  className={`rounded-2xl border transition-all overflow-hidden ${
+                    isOpen
+                      ? 'bg-[#0c1324] border-white/35 shadow-xl'
+                      : 'bg-[#080d18]/80 border-white/12 hover:border-white/25'
+                  }`}
                 >
                   <button
                     type="button"
-                    onClick={() => setOpenFaq(isOpen ? -1 : idx)}
-                    className="w-full p-4 flex items-center justify-between gap-4 text-left font-bold text-sm sm:text-[15px] text-white cursor-pointer"
+                    onClick={() => setOpenFaqIdx(isOpen ? null : idx)}
+                    className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 cursor-pointer"
                   >
-                    <span>{item.q}</span>
-                    <span
-                      className={`w-7 h-7 rounded-full grid place-items-center shrink-0 transition-transform ${
-                        isOpen ? 'rotate-45 bg-white text-[#120b1d]' : 'bg-white/15 text-white'
-                      }`}
-                    >
-                      <Plus className="w-4 h-4" />
+                    <span className="font-bold text-sm sm:text-base text-white">
+                      {item.q}
                     </span>
+                    <ChevronDown
+                      className={`w-5 h-5 text-white/60 shrink-0 transition-transform ${
+                        isOpen ? 'rotate-180 text-lime-400' : ''
+                      }`}
+                    />
                   </button>
+
                   <AnimatePresence initial={false}>
                     {isOpen && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                        className="overflow-hidden"
+                        transition={{ duration: 0.22 }}
                       >
-                        <div className="px-4 pb-4 text-xs sm:text-sm leading-relaxed text-white/80">
+                        <div className="px-6 pb-5 text-xs sm:text-sm text-white/75 leading-relaxed border-t border-white/10 pt-4">
                           {item.a}
                         </div>
                       </motion.div>
@@ -159,102 +189,64 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
             })}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Секция блога (3 свежие статьи + переход в /blog) */}
+      {/* 3. ENGINEERING BLOG TEASER (#blog) */}
       {posts.length > 0 && (
-        <div
-          id="blog"
-          className="scroll-mt-24 p-6 sm:p-10 rounded-[32px] bg-[#100b1d]/65 border border-white/22 backdrop-blur-2xl shadow-2xl"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <section id="blog" className="scroll-mt-24">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
             <div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-[0.14em] text-[#a3f73b] mb-1.5">
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>БЛОГ И ПРАКТИКА</span>
-              </span>
-              <h2 className="font-display font-black text-2xl sm:text-3xl text-white">
-                Идеи и практика для тех, кто строит с AI
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/15 mb-3">
+                <BookOpen className="w-3.5 h-3.5 text-sky-400" />
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
+                  Инженерный журнал ProjectsFlow
+                </span>
+              </div>
+              <h2 className="font-display font-black uppercase text-2xl sm:text-4xl text-white">
+                СТАТЬИ И РАЗБОРЫ{' '}
+                <span className="text-sky-400">КОМАНДЫ</span>
               </h2>
             </div>
+
             <a
-              href="/blog"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/14 hover:bg-white/24 border border-white/25 text-xs sm:text-sm font-bold text-white transition"
+              href="/blog/"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white transition-all self-start sm:self-auto"
             >
-              <span>Все статьи блога</span>
+              <span>Все статьи журнала</span>
               <ArrowUpRight className="w-4 h-4" />
             </a>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {posts.map((post) => (
               <a
                 key={post.slug}
                 href={`/blog/${post.slug}/`}
-                className="group p-5 rounded-[24px] bg-white/8 border border-white/15 hover:bg-white/14 hover:border-white/30 transition flex flex-col justify-between gap-4 text-left"
+                className="group rounded-[26px] p-6 bg-[#080d18]/85 border border-white/15 hover:border-sky-400/50 transition-all flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 text-xs text-white/70 mb-2.5">
-                    <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-white font-semibold">
-                      {post.topic}
+                  <div className="flex items-center justify-between gap-2 text-xs font-mono text-white/50 mb-3">
+                    <span>{post.dateFormatted} · {post.minutes} мин</span>
+                    <span className="px-2.5 py-0.5 rounded-md bg-white/[0.06] text-sky-300">
+                      #{post.topic}
                     </span>
-                    <span>{post.minutes} мин чтения</span>
                   </div>
-                  <h3 className="font-bold text-base sm:text-lg text-white group-hover:text-[#a3f73b] transition leading-snug mb-2">
+                  <h3 className="font-bold text-base sm:text-lg text-white group-hover:text-sky-300 transition-colors mb-2 line-clamp-2">
                     {post.title}
                   </h3>
-                  <p className="text-xs sm:text-sm text-white/75 line-clamp-3 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-white/65 leading-relaxed line-clamp-3">
                     {post.description}
                   </p>
                 </div>
-                <div className="flex items-center justify-between text-xs text-white/60 pt-2 border-t border-white/10">
-                  <time dateTime={post.dateIso}>{post.dateFormatted}</time>
-                  <span className="font-bold text-white group-hover:translate-x-0.5 transition">
-                    Читать →
-                  </span>
-                </div>
+
+                <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-mono font-bold text-white/80 group-hover:text-white">
+                  Читать разбор <ArrowUpRight className="w-3.5 h-3.5" />
+                </span>
               </a>
             ))}
           </div>
-        </div>
+        </section>
       )}
-
-      {/* Финальный CTA-блок */}
-      <div className="p-8 sm:p-12 rounded-[36px] bg-gradient-to-r from-[#1d1138]/90 via-[#13252c]/90 to-[#0e261c]/90 border border-white/25 backdrop-blur-2xl shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 text-center lg:text-left">
-        <div className="max-w-xl">
-          <h2 className="font-display font-black text-2xl sm:text-4xl text-white tracking-tight mb-2">
-            Попробуй на своей идее уже сегодня
-          </h2>
-          <p className="text-sm sm:text-base text-white/80">
-            Начни бесплатно и без карты — первый результат увидишь уже в первый час. Не зашло — вернём деньги, а код и проект всегда остаются твоими.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 shrink-0">
-          <a
-            href={`${appBase}/register`}
-            data-auth-anon
-            className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-white text-[#120b1d] font-extrabold text-sm sm:text-base shadow-xl hover:scale-105 transition"
-          >
-            <span>Начать бесплатно</span>
-            <ArrowUpRight className="w-4 h-4" />
-          </a>
-          <a
-            href={`${appBase}/login`}
-            data-auth-anon
-            className="inline-flex items-center gap-2 px-6 py-4 rounded-full bg-white/12 border border-white/25 text-white font-bold text-sm hover:bg-white/20 transition"
-          >
-            <span>Войти</span>
-          </a>
-          <a
-            href={`${appBase}/`}
-            data-auth-authed
-            className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-white text-[#120b1d] font-extrabold text-sm sm:text-base shadow-xl hover:scale-105 transition"
-          >
-            <span>Открыть приложение</span>
-            <ArrowUpRight className="w-4 h-4" />
-          </a>
-        </div>
-      </div>
-    </section>
+    </div>
   );
 };

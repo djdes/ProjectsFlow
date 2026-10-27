@@ -1,13 +1,21 @@
 import React, { useEffect, useRef } from 'react';
 
 interface AuroraCanvasProps {
-  colors: [string, string, string];
+  glowRgb: [number, number, number];
 }
 
-export const AuroraCanvas: React.FC<AuroraCanvasProps> = ({ colors }) => {
+/**
+ * Caustic Horizon Grid & Volumetric Vertical Glass Columns Canvas
+ * Dealt by deal-showcase.mjs: `caustic-water-grid` + Pinterest references (Solane V-beam + Recognito vertical columns)
+ */
+export const AuroraCanvas: React.FC<AuroraCanvasProps> = ({ glowRgb }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const colorsRef = useRef(colors);
-  colorsRef.current = colors;
+  const currentRgb = useRef<[number, number, number]>([...glowRgb]);
+  const targetRgb = useRef<[number, number, number]>([...glowRgb]);
+
+  useEffect(() => {
+    targetRgb.current = [...glowRgb];
+  }, [glowRgb]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -15,83 +23,148 @@ export const AuroraCanvas: React.FC<AuroraCanvasProps> = ({ colors }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let animId = 0;
-    let t = 0;
+    let time = 0;
 
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
+    const handleResize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    resize();
-    window.addEventListener('resize', resize);
+    handleResize();
+    window.addEventListener('resize', handleResize);
 
-    const renderFrame = () => {
+    const render = () => {
+      time += 0.012;
       const w = window.innerWidth;
       const h = window.innerHeight;
+
+      currentRgb.current[0] += (targetRgb.current[0] - currentRgb.current[0]) * 0.06;
+      currentRgb.current[1] += (targetRgb.current[1] - currentRgb.current[1]) * 0.06;
+      currentRgb.current[2] += (targetRgb.current[2] - currentRgb.current[2]) * 0.06;
+
+      const r = Math.round(currentRgb.current[0]);
+      const g = Math.round(currentRgb.current[1]);
+      const b = Math.round(currentRgb.current[2]);
+
       ctx.clearRect(0, 0, w, h);
-
-      const [c1, c2, c3] = colorsRef.current;
-      const ribbons = [
-        { color: c1, amp: 68, freq: 0.0022, speed: 1.0, yOffset: h * 0.62, width: 84, alpha: 0.28 },
-        { color: c2, amp: 52, freq: 0.0028, speed: 1.35, yOffset: h * 0.56, width: 56, alpha: 0.34 },
-        { color: c3, amp: 38, freq: 0.0034, speed: 1.7, yOffset: h * 0.5, width: 32, alpha: 0.42 },
-      ];
-
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
 
-      for (const r of ribbons) {
+      // 1. Recognito-inspired vertical glass columns with subtle wave modulation
+      const colCount = 12;
+      const colWidth = w / colCount;
+      for (let i = 0; i < colCount; i++) {
+        const wave = Math.sin(time * 1.1 + i * 0.55) * 0.5 + 0.5;
+        const colAlpha = 0.018 + wave * 0.035;
+        const x = i * colWidth;
+
+        const colGrad = ctx.createLinearGradient(x, 0, x, h);
+        colGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+        colGrad.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${colAlpha})`);
+        colGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+        ctx.fillStyle = colGrad;
+        ctx.fillRect(x, 0, colWidth - 1, h);
+
+        // Subtle column divider line
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.025)`;
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let x = -40; x <= w + 40; x += 24) {
-          const diagonalLift = (x / w - 0.5) * -h * 0.38;
-          const wave =
-            Math.sin(x * r.freq + t * r.speed) * r.amp +
-            Math.cos(x * r.freq * 0.6 - t * 0.8) * (r.amp * 0.45);
-          const y = r.yOffset + diagonalLift + wave;
-          if (x === -40) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.strokeStyle = r.color;
-        ctx.lineWidth = r.width;
-        ctx.lineCap = 'round';
-        ctx.shadowColor = r.color;
-        ctx.shadowBlur = 42;
-        ctx.globalAlpha = r.alpha;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
         ctx.stroke();
       }
 
+      // 2. Perspective Horizon Grid (caustic-water-grid)
+      const horizonY = h * 0.58;
+      const vanishX = w * 0.62; // Aligned with the 3D Exploded Stack stage on the right
+      const gridLines = 14;
+
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.11)`;
+      ctx.lineWidth = 1;
+
+      for (let i = -gridLines; i <= gridLines; i++) {
+        ctx.beginPath();
+        ctx.moveTo(vanishX + i * 28, horizonY);
+        ctx.lineTo(vanishX + i * 195, h + 40);
+        ctx.stroke();
+      }
+
+      // Animated horizontal perspective scanlines moving forward
+      const rowCount = 9;
+      const offset = (time * 0.35) % 1;
+      for (let row = 0; row < rowCount; row++) {
+        const t = (row + offset) / rowCount;
+        const easedT = t * t; // perspective foreshortening
+        const y = horizonY + easedT * (h - horizonY);
+        const alpha = (1 - t) * 0.16;
+
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // 3. Solane-inspired luminous converging energy arcs
+      for (let arcIdx = 0; arcIdx < 2; arcIdx++) {
+        ctx.beginPath();
+        const dir = arcIdx === 0 ? -1 : 1;
+        const startX = arcIdx === 0 ? -40 : w + 40;
+        const startY = h * (0.28 + Math.sin(time + arcIdx) * 0.04);
+        const ctrlX = vanishX + dir * 180;
+        const ctrlY = horizonY + 40;
+        const endX = vanishX;
+        const endY = horizonY + 90;
+
+        ctx.moveTo(startX, startY);
+        ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.18)`;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = `rgb(${r}, ${g}, ${b})`;
+        ctx.shadowBlur = 28;
+        ctx.stroke();
+      }
+
+      // 4. Pulsing concentric energy ring under the 3D stack
+      const pulseRadius = 140 + Math.sin(time * 1.8) * 18;
+      const radialGlow = ctx.createRadialGradient(
+        vanishX,
+        horizonY + 20,
+        10,
+        vanishX,
+        horizonY + 20,
+        pulseRadius * 2.2
+      );
+      radialGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.22)`);
+      radialGlow.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.06)`);
+      radialGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+      ctx.fillStyle = radialGlow;
+      ctx.beginPath();
+      ctx.arc(vanishX, horizonY + 20, pulseRadius * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.restore();
+      animId = window.requestAnimationFrame(render);
     };
 
-    if (prefersReduced) {
-      renderFrame();
-      return () => {
-        window.removeEventListener('resize', resize);
-      };
-    }
-
-    const loop = () => {
-      t += 0.012;
-      renderFrame();
-      animId = requestAnimationFrame(loop);
-    };
-
-    animId = requestAnimationFrame(loop);
+    animId = window.requestAnimationFrame(render);
     return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener('resize', resize);
+      window.cancelAnimationFrame(animId);
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 w-screen h-screen pointer-events-none z-0 opacity-90"
       aria-hidden="true"
+      className="fixed inset-0 w-full h-full pointer-events-none z-0 opacity-90"
     />
   );
 };

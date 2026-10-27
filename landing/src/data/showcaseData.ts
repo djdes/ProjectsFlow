@@ -1,358 +1,532 @@
-export type PillarCode = 'AI' | 'CL' | 'FN' | 'DP';
-export type ExtendedPillarCode = PillarCode | 'LV' | 'TM';
+export type StackLayerId = 'layer-claude' | 'layer-autopilot' | 'layer-finance' | 'layer-deploy';
+export type ChassisMode = 'exploded' | 'compact' | 'gyro';
 
-export interface TariffOption {
-  readonly id: 'free' | 'prime' | 'vip';
-  readonly label: string;
-  readonly shortLabel: string;
-  readonly priceRub: number;
-  readonly priceNote: string;
-  readonly badge: string;
-  readonly href: string;
-  readonly ctaLabel: string;
-  readonly popular?: boolean;
+export interface StackLayerSpec {
+  id: StackLayerId;
+  index: number; // 0 (bottom) to 3 (top)
+  code: string;
+  shortName: string;
+  layerTag: string;
+  giantWord: string;
+  headline: string;
+  accentHeadline: string;
+  description: string;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  glowRgb: [number, number, number];
+  stageGradient: string;
+  leftBracketTitle: string;
+  leftBracketSub: string;
+  rightBracketTitle: string;
+  rightBracketSub: string;
+  SlabSpec: {
+    topLabel: string;
+    centerMetric: string;
+    subMetric: string;
+    statusCode: string;
+    circuitPattern: 'neural' | 'kanban' | 'finance' | 'deploy';
+  };
+  metrics: {
+    label: string;
+    value: string;
+    delta: string;
+  }[];
+  bullets: string[];
 }
 
-export interface PillarConfig {
-  readonly code: PillarCode;
-  readonly nameRu: string;
-  readonly iconEmoji: string;
-  readonly giantWord: string;
-  readonly splitLeft: string;
-  readonly splitRight: string;
-  readonly splitSubword: string;
-  readonly tagline: string;
-  readonly mindlyTitle: string;
-  readonly mindlyDesc: string;
-  readonly story: string;
-  // Цвета сцены и 3D-материалов (в стиле Planet BOLD / Mindly / GrowTree)
-  readonly stageBgGradient: string;
-  readonly orbGradient: string;
-  readonly cardColorPrimary: string;
-  readonly cardColorSecondary: string;
-  readonly cardAccentHex: string;
-  readonly auroraColors: [string, string, string];
-  readonly satellite1: { readonly title: string; readonly sub: string };
-  readonly satellite2: { readonly title: string; readonly sub: string };
-  readonly metrics: [
-    { readonly label: string; readonly value: string },
-    { readonly label: string; readonly value: string },
-    { readonly label: string; readonly value: string }
-  ];
-  readonly cardTelemetry: {
-    readonly topChip: string;
-    readonly centerHeadline: string;
-    readonly centerSub: string;
-    readonly footerCode: string;
+export interface TariffOption {
+  id: 'free' | 'prime' | 'vip';
+  name: string;
+  badge: string;
+  priceRub: number;
+  priceFormatted: string;
+  period: string;
+  claudeQuota: string;
+  autopilotMode: string;
+  summary: string;
+  highlight?: boolean;
+  ctaText: string;
+  features: string[];
+}
+
+export interface PromptPreset {
+  id: string;
+  title: string;
+  category: string;
+  promptText: string;
+  layerFocus: StackLayerId;
+  estimatedTime: string;
+  estimatedSavedRub: string;
+  generatedTasks: {
+    code: string;
+    title: string;
+    role: string;
+    status: 'done' | 'running' | 'queued';
+    duration: string;
+  }[];
+  checks: {
+    name: string;
+    status: string;
+  }[];
+  pnlPreview: {
+    expectedRevenue: string;
+    infraCost: string;
+    netMargin: string;
   };
 }
 
-export const TARIFF_OPTIONS: readonly TariffOption[] = [
+export interface DesktopScreenStep {
+  id: string;
+  stepNum: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  layerId: StackLayerId;
+  accentColor: string;
+  terminalCommand: string;
+  windowTitle: string;
+  windowUrl: string;
+  kpis: { label: string; value: string; tone: string }[];
+  uiBlocks: {
+    title: string;
+    badge: string;
+    lines: string[];
+  }[];
+}
+
+export const STACK_LAYERS: StackLayerSpec[] = [
+  {
+    id: 'layer-deploy',
+    index: 3,
+    code: 'L4 · RELEASE',
+    shortName: 'Релиз и Живой Превью',
+    layerTag: 'СЛОЙ 04 · ЧТО ВИДЯТ ПОЛЬЗОВАТЕЛИ',
+    giantWord: 'ДЕПЛОЙ CI',
+    headline: 'ЧЕТЫРЕ ЩИТА ПРОВЕРКИ',
+    accentHeadline: 'И РЕЛИЗ В 1 КЛИК',
+    description:
+      'Верхний уровень стека ProjectsFlow: каждая задача проходит 4 автоматических контура проверки (сборка, типы, безопасность, живой стенд) прежде чем попасть к клиентам.',
+    primaryColor: '#38bdf8',
+    secondaryColor: '#0284c7',
+    accentColor: '#a3e635',
+    glowRgb: [56, 189, 248],
+    stageGradient:
+      'radial-gradient(circle at 64% 26%, #0c2d48 0%, #071629 45%, #050811 90%)',
+    leftBracketTitle: 'Живой стенд и UI',
+    leftBracketSub: 'Мгновенное превью каждой ветки в браузере',
+    rightBracketTitle: '4 контура защиты',
+    rightBracketSub: 'Typecheck · Lint · Тесты · Секреты',
+    SlabSpec: {
+      topLabel: 'LAYER 04 // LIVE PRODUCTION & QA GATE',
+      centerMetric: '4 / 4 PASS',
+      subMetric: 'ZERO DOWNTIME · AUTO PREVIEW URL',
+      statusCode: 'SSL: ACTIVE · GIT: 100% YOURS',
+      circuitPattern: 'deploy',
+    },
+    metrics: [
+      { label: 'Автопроверки до релиза', value: '4 из 4', delta: 'Без сломанных сборок' },
+      { label: 'Живой стенд по ссылке', value: '< 15 сек', delta: 'Готов для показа клиенту' },
+      { label: 'Права на Git и код', value: '100%', delta: 'Никакого vendor-lock' },
+    ],
+    bullets: [
+      'Автоматический прогон сборки, тестов и проверки безопасности перед выкладкой',
+      'Готовая ссылка на живой просмотр результата прямо из карточки задачи',
+      'Полная синхронизация с вашим Git-репозиторием и моментальный откат в 1 клик',
+    ],
+  },
+  {
+    id: 'layer-finance',
+    index: 2,
+    code: 'L3 · FINANCE ₽',
+    shortName: 'Юнит-экономика в ₽',
+    layerTag: 'СЛОЙ 03 · ДЕНЬГИ И ОКУПАЕМОСТЬ',
+    giantWord: 'ФИНАНСЫ ₽',
+    headline: 'ПРИБЫЛЬ И РАСХОДЫ',
+    accentHeadline: 'ПРОЗРАЧНО В РУБЛЯХ',
+    description:
+      'Финансовый слой прямо внутри рабочего пространства: доходы, себестоимость генерации, подписки, ФОТ и чистая маржа по каждому проекту считаются автоматически в рублях.',
+    primaryColor: '#10b981',
+    secondaryColor: '#047857',
+    accentColor: '#fde047',
+    glowRgb: [16, 185, 129],
+    stageGradient:
+      'radial-gradient(circle at 64% 26%, #093529 0%, #061c17 45%, #050811 90%)',
+    leftBracketTitle: 'P&L дашборд проекта',
+    leftBracketSub: 'Доходы, расходы и чистая прибыль в ₽',
+    rightBracketTitle: 'Контроль юнит-маржи',
+    rightBracketSub: 'Себестоимость ИИ и часов команды',
+    SlabSpec: {
+      topLabel: 'LAYER 03 // RUB UNIT ECONOMICS & P&L',
+      centerMetric: '+214 000 ₽',
+      subMetric: 'ЧИСТАЯ ПРИБЫЛЬ · МАРЖА 71.4%',
+      statusCode: 'P&L: REALTIME · CURRENCY: RUB',
+      circuitPattern: 'finance',
+    },
+    metrics: [
+      { label: 'Чистая прибыль проекта', value: '+214 000 ₽', delta: '+34% к прошлому месяцу' },
+      { label: 'Учёт расходов на ИИ', value: 'До 1 ₽', delta: 'Без скрытых списаний в $' },
+      { label: 'Сводка для руководителя', value: 'За 1 сек', delta: 'Без таблиц Excel' },
+    ],
+    bullets: [
+      'Наглядный баланс доходов, выплат и затрат по каждому проекту в рублях',
+      'Понимание окупаемости каждой фичи ещё до того, как она уйдёт в разработку',
+      'Все расчёты и тарифы в ₽ — никаких двойных конвертаций и зарубежных карт',
+    ],
+  },
+  {
+    id: 'layer-autopilot',
+    index: 1,
+    code: 'L2 · AUTOPILOT',
+    shortName: 'Автопилот и Канбан',
+    layerTag: 'СЛОЙ 02 · ОРКЕСТРАЦИЯ ЗАДАЧ',
+    giantWord: 'АВТОПИЛОТ',
+    headline: 'ОПИШИ ИДЕЮ — ДОСКА',
+    accentHeadline: 'ДВИЖЕТСЯ САМА',
+    description:
+      'Слой автономного исполнения: вы пишете цель своими словами, а ProjectsFlow сам декомпозирует её в карточки Канбана, пишет код, проверяет результат и двигает задачи до «Готово».',
+    primaryColor: '#a3e635',
+    secondaryColor: '#4d7c0f',
+    accentColor: '#38bdf8',
+    glowRgb: [163, 230, 53],
+    stageGradient:
+      'radial-gradient(circle at 64% 26%, #1f3312 0%, #0e1a0b 45%, #050811 90%)',
+    leftBracketTitle: 'Умная декомпозиция',
+    leftBracketSub: 'Из 1 абзаца текста в готовый план работ',
+    rightBracketTitle: '2 режима скорости',
+    rightBracketSub: 'Полный автопилот или шаг за шагом',
+    SlabSpec: {
+      topLabel: 'LAYER 02 // AUTONOMOUS KANBAN ENGINE',
+      centerMetric: '10.6× ТЕМП',
+      subMetric: 'IDEA -> PLAN -> CODE -> REVIEW',
+      statusCode: 'MODE: AUTOPILOT + STEP-BY-STEP',
+      circuitPattern: 'kanban',
+    },
+    metrics: [
+      { label: 'Старт по 1 описанию', value: '3 сек', delta: 'Готовый бэклог и архитектура' },
+      { label: 'Скорость до релиза', value: '10.6×', delta: 'Быстрее ручной рутины' },
+      { label: 'Режим контроля', value: 'Гибкий', delta: 'Автопилот / Шаг за шагом' },
+    ],
+    bullets: [
+      'Два режима на выбор: полный «Автопилот» от идеи до превью или вдумчивый «Шаг за шагом»',
+      'Понятная визуальная доска: всегда видно, какая задача пишется, а какая проходит ревью',
+      'Командная работа: владельцы бизнеса, разработчики и ИИ-агенты работают в одном окне',
+    ],
+  },
+  {
+    id: 'layer-claude',
+    index: 0,
+    code: 'L1 · CLAUDE CORE',
+    shortName: 'Ядро Claude Онлайн',
+    layerTag: 'СЛОЙ 01 · ФУНДАМЕНТ ИИ БЕЗ VPN',
+    giantWord: 'CLAUDE AI',
+    headline: 'ПОДПИСКА CLAUDE',
+    accentHeadline: 'УЖЕ ВСТРОЕНА ВНУТРИ',
+    description:
+      'Фундаментальный слой платформы: на тарифах «Прайм» и «VIP» передовые модели Claude уже включены. Не нужно искать зарубежные карты, настраивать VPN или покупать отдельные API-ключи.',
+    primaryColor: '#c084fc',
+    secondaryColor: '#6d28d9',
+    accentColor: '#38bdf8',
+    glowRgb: [192, 132, 252],
+    stageGradient:
+      'radial-gradient(circle at 64% 26%, #2b164d 0%, #120b29 45%, #050811 90%)',
+    leftBracketTitle: 'Claude без VPN и ключей',
+    leftBracketSub: 'Работает сразу после входа в аккаунт',
+    rightBracketTitle: 'Гибкое подключение',
+    rightBracketSub: 'Встроенный Claude или свой аккаунт',
+    SlabSpec: {
+      topLabel: 'LAYER 01 // BUILT-IN CLAUDE NEURAL CORE',
+      centerMetric: '0 КЛЮЧЕЙ',
+      subMetric: 'CLAUDE ОНЛАЙН ОТ НАС · БЕЗ VPN',
+      statusCode: 'LATENCY: LOW · QUOTA: INCLUDED',
+      circuitPattern: 'neural',
+    },
+    metrics: [
+      { label: 'Настройка ключей и VPN', value: '0 мин', delta: 'Включено в Прайм и VIP' },
+      { label: 'Тест-драйв Прайма', value: '1 час', delta: 'Бесплатно при старте' },
+      { label: 'Свой Claude при желании', value: 'В 1 клик', delta: 'Полная свобода выбора' },
+    ],
+    bullets: [
+      'Онлайн-подписка на Claude уже встроена в «Прайм» и «VIP» — открываете браузер и работаете',
+      'Первый час на тарифе «Прайм» доступен бесплатно, чтобы проверить скорость на реальной задаче',
+      'Если у вас уже есть собственный Claude — подключите его на бесплатном тарифе без ограничений',
+    ],
+  },
+];
+
+export const TARIFF_OPTIONS: TariffOption[] = [
   {
     id: 'free',
-    label: 'Бесплатный · 0 ₽',
-    shortLabel: '0 ₽ · Старт',
+    name: 'Бесплатный',
+    badge: 'СТАРТ · СВОЙ CLAUDE',
     priceRub: 0,
-    priceNote: 'навсегда · на своей подписке Claude',
-    badge: 'БЕЗ КАРТЫ НА СТАРТЕ',
-    href: '/register',
-    ctaLabel: 'Начать бесплатно за 0 ₽',
+    priceFormatted: '0 ₽',
+    period: 'навсегда',
+    claudeQuota: 'Свой подключённый Claude',
+    autopilotMode: 'Доска + Шаг за шагом',
+    summary: 'Идеально для старта: канбан-доска, учёт финансов в ₽ и работа со своим подключённым аккаунтом Claude.',
+    ctaText: 'Начать бесплатно',
+    features: [
+      'Канбан-доска проектов и декомпозиция задач',
+      'Подключение своего аккаунта Claude без наценок',
+      'Базовый учёт доходов и расходов проекта в рублях',
+      '100% прав на исходный код и Git-репозиторий',
+    ],
   },
   {
     id: 'prime',
-    label: 'Прайм · 1 900 ₽',
-    shortLabel: '1 900 ₽ · Прайм',
+    name: 'Прайм',
+    badge: 'ХИТ · 1 ЧАС БЕСПЛАТНО',
     priceRub: 1900,
-    priceNote: 'в месяц · 1 час тест-драйва бесплатно',
-    badge: 'CLAUDE ОНЛАЙН ОТ НАС · ХИТ',
-    href: '/register?plan=prime',
-    ctaLabel: 'Попробовать Прайм (1 час бесплатно)',
-    popular: true,
+    priceFormatted: '1 900 ₽',
+    period: 'в месяц',
+    claudeQuota: 'Встроенный Claude Онлайн от нас',
+    autopilotMode: 'Полный Автопилот + Шаг за шагом',
+    summary: 'Встроенная подписка на Claude без VPN и ключей, полный Автопилот, 4 контура проверки и P&L-аналитика.',
+    highlight: true,
+    ctaText: 'Попробовать Прайм (1 час бесплатно)',
+    features: [
+      'Встроенная онлайн-подписка на Claude от нас (без VPN и ключей)',
+      '1 час тест-драйва бесплатно прямо на вашем проекте',
+      'Режимы «Автопилот» и «Шаг за шагом» без ограничений',
+      'Все 4 этапа автопроверок и живой просмотр стенда',
+      'Полный финансовый дашборд P&L и маржинальности в ₽',
+    ],
   },
   {
     id: 'vip',
-    label: 'VIP · 3 900 ₽',
-    shortLabel: '3 900 ₽ · VIP',
+    name: 'VIP',
+    badge: 'МАКСИМУМ · КОМАНДЫ И СТУДИИ',
     priceRub: 3900,
-    priceNote: 'в месяц · расширенный бюджет для команд',
-    badge: 'УДВОЕННЫЙ AI-БЮДЖЕТ · VIP',
-    href: '/register?plan=vip',
-    ctaLabel: 'Подключить VIP (3 900 ₽/мес)',
-  },
-] as const;
-
-export const PILLARS_DATA: Record<PillarCode, PillarConfig> = {
-  AI: {
-    code: 'AI',
-    nameRu: 'Автопилот',
-    iconEmoji: '⚡',
-    giantWord: 'AUTOPILOT',
-    splitLeft: 'АВТО',
-    splitRight: 'ПИЛОТ',
-    splitSubword: 'IDEA TO PRODUCT · 24/7',
-    tagline: 'Вайб-кодинг без рутины · Бросаешь задачу — делается сама',
-    mindlyTitle: 'Автопилот задач AI · Хит',
-    mindlyDesc:
-      'Опиши словами, что нужно сделать. Платформа сама разбивает цель на шаги и присылает готовое на утверждение.',
-    story:
-      'Включаешь автопилот — и ProjectsFlow сам придумывает и выполняет шаги к твоей цели, пока ты занят продуктом или отдыхаешь. Возвращаешься в доску «Входящие» — а задачи уже ждут в колонке «На утверждении».',
-    stageBgGradient:
-      'radial-gradient(circle at 52% 32%, #f43b68 0%, #b8144d 45%, #160613 92%)',
-    orbGradient: 'linear-gradient(135deg, #ff2e63 0%, #ff9966 100%)',
-    cardColorPrimary: '#ff2e63',
-    cardColorSecondary: '#6d0e3c',
-    cardAccentHex: '#ffe66d',
-    auroraColors: ['#ff4d79', '#ff9a5a', '#ffe66d'],
-    satellite1: { title: 'Живой ход (LIVE)', sub: '84% готово · 3,20 ₽ за задачу' },
-    satellite2: { title: 'На утверждении', sub: 'Принимай результат в 1 клик' },
-    metrics: [
-      { label: 'Старт работы AI', value: 'За 3 секунды' },
-      { label: 'Тест-драйв Прайма', value: '1 час бесплатно' },
-      { label: 'Владение кодом', value: '100% у тебя' },
+    priceFormatted: '3 900 ₽',
+    period: 'в месяц',
+    claudeQuota: 'Максимальный приоритет Claude X3',
+    autopilotMode: 'Мульти-проектный Автопилот + Команда',
+    summary: 'Увеличенный резерв генераций Claude, приоритетная очередь сборок, командные роли и сводный P&L по портфелю.',
+    ctaText: 'Включить VIP-режим',
+    features: [
+      'Все возможности «Прайм» + утроенный лимит встроенного Claude',
+      'Приоритетные вычислительные слоты для параллельных проектов',
+      'Командный доступ, роли участников и аудит действий',
+      'Портфельная P&L-сводка по всем проектам студии или бизнеса',
     ],
-    cardTelemetry: {
-      topChip: 'PROJECTSFLOW · AUTOPILOT',
-      centerHeadline: 'AI ДЕЛАЕТ',
-      centerSub: 'ОТ ИДЕИ ДО ГОТОВОГО ПРОДУКТА САМ',
-      footerCode: 'LIVE: 4/4 CHECKS · 84%',
+  },
+];
+
+export const PROMPT_PRESETS: PromptPreset[] = [
+  {
+    id: 'preset-tg-shop',
+    title: 'Telegram WebApp магазин с оплатой в ₽',
+    category: 'E-Commerce / Bot',
+    promptText:
+      'Собери витрину букетов и подарков в Telegram WebApp: каталог с фильтрами, корзина, оплата по СБП в рублях, уведомления курьеру и панель учёта маржи с каждого заказа.',
+    layerFocus: 'layer-autopilot',
+    estimatedTime: '22 мин на Автопилоте',
+    estimatedSavedRub: 'Экономия ~65 000 ₽ на старте',
+    generatedTasks: [
+      { code: 'PF-101', title: 'Схема каталога, корзины и статусов заказа', role: 'Архитектор AI', status: 'done', duration: '40 сек' },
+      { code: 'PF-102', title: 'Интерфейс Telegram WebApp + витрина и фильтры', role: 'Frontend AI', status: 'done', duration: '4 мин' },
+      { code: 'PF-103', title: 'Шлюз СБП в ₽ и вебхуки подтверждения оплаты', role: 'Backend AI', status: 'running', duration: '6 мин' },
+      { code: 'PF-104', title: 'Автопроверка безопасности и деплой превью-стенда', role: 'QA Shield', status: 'queued', duration: '2 мин' },
+    ],
+    checks: [
+      { name: 'Типизация TypeScript', status: 'PASS · 0 ошибок' },
+      { name: 'Защита вебхуков оплаты', status: 'PASS · HMAC проверен' },
+      { name: 'Мобильный экран 390px', status: 'PASS · 0px overflow' },
+      { name: 'Живой стенд предпросмотра', status: 'ONLINE · Готов' },
+    ],
+    pnlPreview: {
+      expectedRevenue: '380 000 ₽ / мес',
+      infraCost: '1 900 ₽ (тариф Прайм)',
+      netMargin: '+294 000 ₽ чистыми',
     },
   },
-  CL: {
-    code: 'CL',
-    nameRu: 'Claude Онлайн',
-    iconEmoji: '🧠',
-    giantWord: 'CLAUDE AI',
-    splitLeft: 'КЛОД',
-    splitRight: 'ОНЛАЙН',
-    splitSubword: 'ZERO API KEYS · NO VPN',
-    tagline: 'Подписка на Claude уже внутри · Без VPN и своих API-ключей',
-    mindlyTitle: 'Claude онлайн от нас',
-    mindlyDesc:
-      'На Прайме и VIP ведущие модели работают прямо из коробки — без зарубежных карт, прокси и ручной настройки.',
-    story:
-      'Забудь про покупку зарубежных карт, блокировки аккаунтов и сложные API-ключи. На тарифах Прайм и VIP онлайн-подписка уже встроена в платформу, а на Бесплатном тарифе можно в два клика подключить собственную подписку.',
-    stageBgGradient:
-      'radial-gradient(circle at 52% 32%, #198765 0%, #0b4f3f 46%, #061713 92%)',
-    orbGradient: 'linear-gradient(135deg, #1db954 0%, #9ef01a 100%)',
-    cardColorPrimary: '#1db954',
-    cardColorSecondary: '#083d2c',
-    cardAccentHex: '#9ef01a',
-    auroraColors: ['#1db954', '#70e000', '#a3f73b'],
-    satellite1: { title: 'Без VPN и ключей', sub: 'Встроенная онлайн-подписка' },
-    satellite2: { title: 'Свой или наш Claude', sub: 'Гибкое переключение в 1 клик' },
-    metrics: [
-      { label: 'Настройка ключей', value: '0 минут (внутри)' },
-      { label: 'Тариф Бесплатный', value: '0 ₽ навсегда' },
-      { label: 'Тариф Прайм', value: '1 900 ₽/мес' },
+  {
+    id: 'preset-saas-crm',
+    title: 'SaaS-кабинет аналитики и заявок для селлеров',
+    category: 'B2B SaaS / CRM',
+    promptText:
+      'Нужен личный кабинет для селлеров: импорт остатков, расчёт юнит-экономики по артикулам в рублях, канбан заявок на закупку и роли для менеджеров.',
+    layerFocus: 'layer-finance',
+    estimatedTime: '28 мин на Автопилоте',
+    estimatedSavedRub: 'Экономия ~90 000 ₽ на разработке',
+    generatedTasks: [
+      { code: 'PF-201', title: 'Модель данных артикулов, партий и ролей доступа', role: 'Архитектор AI', status: 'done', duration: '55 сек' },
+      { code: 'PF-202', title: 'Дашборд P&L по каждому SKU в рублях', role: 'Finance AI', status: 'done', duration: '5 мин' },
+      { code: 'PF-203', title: 'Канбан закупок и уведомления о низком остатке', role: 'Fullstack AI', status: 'running', duration: '7 мин' },
+      { code: 'PF-204', title: 'API-тесты прав доступа и публикация стенда', role: 'QA Shield', status: 'queued', duration: '3 мин' },
     ],
-    cardTelemetry: {
-      topChip: 'CLAUDE ONLINE · BUILT-IN',
-      centerHeadline: 'CLAUDE PRO',
-      centerSub: 'РАБОТАЕТ ОНЛАЙН БЕЗ VPN И КЛЮЧЕЙ',
-      footerCode: 'MODEL: READY · 0 KEYS',
+    checks: [
+      { name: 'Изоляция ролей (RBAC)', status: 'PASS · 14 тестов' },
+      { name: 'Точность расчёта маржи ₽', status: 'PASS · Сверка 100%' },
+      { name: 'Сборка клиента и сервера', status: 'PASS · Чисто' },
+      { name: 'Стенд для демонстрации', status: 'ONLINE · Готов' },
+    ],
+    pnlPreview: {
+      expectedRevenue: '520 000 ₽ / мес',
+      infraCost: '3 900 ₽ (тариф VIP)',
+      netMargin: '+445 000 ₽ чистыми',
     },
   },
-  FN: {
-    code: 'FN',
-    nameRu: 'Финансы в ₽',
-    iconEmoji: '💎',
-    giantWord: 'FINANCE',
-    splitLeft: 'ДЕНЬГИ',
-    splitRight: 'ПРОЕКТА',
-    splitSubword: 'TRANSPARENT RUB MARGINS',
-    tagline: 'Прибыль, доходы и AI-расходы по проекту — на виду в рублях',
-    mindlyTitle: 'Деньги с одного взгляда',
-    mindlyDesc:
-      'Видно, сколько каждый проект заработал и сколько потратил на AI, домен и хостинг — без таблиц и сюрпризов.',
-    story:
-      'Каждый шаг AI и каждая операция проекта учитываются в рублях. Ты всегда видишь реальную экономику: доход от клиентов, себестоимость AI-задач, расходы на инфраструктуру и чистую маржу по месяцам.',
-    stageBgGradient:
-      'radial-gradient(circle at 52% 32%, #1d84b5 0%, #0e4d8a 46%, #061322 92%)',
-    orbGradient: 'linear-gradient(135deg, #00b4d8 0%, #ffd166 100%)',
-    cardColorPrimary: '#00b4d8',
-    cardColorSecondary: '#023e8a',
-    cardAccentHex: '#ffd166',
-    auroraColors: ['#00b4d8', '#48cae4', '#ffd166'],
-    satellite1: { title: 'Прибыль +128 400 ₽', sub: 'Маржинальность проекта 60%' },
-    satellite2: { title: 'Точный учёт AI', sub: 'От 3,20 ₽ за готовую фичу' },
-    metrics: [
-      { label: 'Доход проекта', value: '214 000 ₽' },
-      { label: 'Расходы и AI', value: '85 600 ₽' },
-      { label: 'Чистая прибыль', value: '128 400 ₽ (60%)' },
+  {
+    id: 'preset-ai-support',
+    title: 'Внутренний AI-портал базы знаний и тикетов',
+    category: 'AI Workspace',
+    promptText:
+      'Создай портал для команды поддержки: поиск ответов по регламентам через встроенный Claude, карточка обращения клиента, подсказки оператору и отчёт по скорости ответа.',
+    layerFocus: 'layer-claude',
+    estimatedTime: '19 мин на Автопилоте',
+    estimatedSavedRub: 'Экономия ~55 000 ₽ + 0 ₽ за VPN',
+    generatedTasks: [
+      { code: 'PF-301', title: 'Индексация регламентов и контур встроенного Claude', role: 'Claude Core', status: 'done', duration: '45 сек' },
+      { code: 'PF-302', title: 'Рабочее место оператора с быстрыми ответами ИИ', role: 'Frontend AI', status: 'done', duration: '4 мин' },
+      { code: 'PF-303', title: 'Метрики SLA и стоимости обработки тикета в ₽', role: 'Analytics AI', status: 'running', duration: '4 мин' },
+      { code: 'PF-304', title: 'Проверка отсутствия утечек данных и релиз', role: 'QA Shield', status: 'queued', duration: '2 мин' },
     ],
-    cardTelemetry: {
-      topChip: 'UNIT ECONOMICS · RUB',
-      centerHeadline: '+128 400 ₽',
-      centerSub: 'ПРОЗРАЧНАЯ ПРИБЫЛЬ И МАРЖА 60%',
-      footerCode: 'MARGIN: 60% · RUB LIVE',
+    checks: [
+      { name: 'Канал Claude Онлайн', status: 'PASS · Без VPN' },
+      { name: 'Фильтрация приватных данных', status: 'PASS · Защищено' },
+      { name: 'Отклик интерфейса', status: 'PASS · < 50 мс' },
+      { name: 'Живой стенд команды', status: 'ONLINE · Готов' },
+    ],
+    pnlPreview: {
+      expectedRevenue: 'Экономия 140 000 ₽ ФОТ',
+      infraCost: '1 900 ₽ (тариф Прайм)',
+      netMargin: '+138 100 ₽ выгоды',
     },
   },
-  DP: {
-    code: 'DP',
-    nameRu: 'Проверки и Релиз',
-    iconEmoji: '🛡️',
-    giantWord: 'SHIPPING',
-    splitLeft: 'ЧИСТЫЙ',
-    splitRight: 'РЕЛИЗ',
-    splitSubword: '4/4 CHECKS · ZERO LOCK-IN',
-    tagline: 'Автопроверки перед выкаткой · Никакого лок-ина, код 100% твой',
-    mindlyTitle: '4 из 4 проверок перед релизом',
-    mindlyDesc:
-      'Сборка, линтер, отсутствие секретов в коде и адаптив на телефоне проверяются автоматически перед деплоем.',
-    story:
-      'Платформа не просто пишет код — она проверяет сборку, типы, безопасность секретов и мобильную вёрстку до того, как изменения попадут в прод. А весь созданный продукт целиком принадлежит тебе.',
-    stageBgGradient:
-      'radial-gradient(circle at 52% 32%, #6831b8 0%, #3a1078 46%, #0c0721 92%)',
-    orbGradient: 'linear-gradient(135deg, #7b2cbf 0%, #00d2ff 100%)',
-    cardColorPrimary: '#7b2cbf',
-    cardColorSecondary: '#1e0b42',
-    cardAccentHex: '#72efdd',
-    auroraColors: ['#9d4edd', '#00d2ff', '#72efdd'],
-    satellite1: { title: 'Автопроверки 4/4', sub: 'Сборка · Типы · Секреты · Мобила' },
-    satellite2: { title: 'Гарантия возврата', sub: 'Не зашло — вернём деньги' },
-    metrics: [
-      { label: 'Контроль качества', value: '4 из 4 автопроверок' },
-      { label: 'Лок-ин платформы', value: '0% (всё твоё)' },
-      { label: 'Гарантия Прайм/VIP', value: '100% возврат денег' },
-    ],
-    cardTelemetry: {
-      topChip: 'QUALITY GATE · DEPLOY',
-      centerHeadline: '4 / 4 PASS',
-      centerSub: 'СБОРКА И БЕЗОПАСНОСТЬ ПРОВЕРЕНЫ',
-      footerCode: 'DEPLOY: GREEN · 0 LOCK-IN',
-    },
-  },
-};
+];
 
-export const EXTRA_SPLIT_PILLARS: Record<
-  'LV' | 'TM',
+export const DESKTOP_WORKFLOW_STEPS: DesktopScreenStep[] = [
   {
-    readonly code: 'LV' | 'TM';
-    readonly nameRu: string;
-    readonly iconEmoji: string;
-    readonly splitLeft: string;
-    readonly splitRight: string;
-    readonly splitSubword: string;
-    readonly story: string;
-    readonly metrics: [
-      { readonly label: string; readonly value: string },
-      { readonly label: string; readonly value: string },
-      { readonly label: string; readonly value: string }
-    ];
-  }
-> = {
-  LV: {
-    code: 'LV',
-    nameRu: 'Живой стрим LIVE',
-    iconEmoji: '🔴',
-    splitLeft: 'ЖИВОЙ',
-    splitRight: 'ПРОГРЕСС',
-    splitSubword: 'REALTIME AI STREAM · SSE',
-    story:
-      'Вкладка LIVE показывает в реальном времени каждую мысль и действие AI-воркера: какие файлы он читает, какие страницы верстает и сколько копеек стоил текущий запуск. Полная прозрачность без «чёрного ящика».',
-    metrics: [
-      { label: 'Стрим действий', value: 'В реальном времени' },
-      { label: 'История запусков', value: 'Единая лента чата' },
-      { label: 'Стоимость шага', value: 'Видна до копейки' },
+    id: 'step-01',
+    stepNum: '01',
+    title: 'Формулировка идеи и декомпозиция',
+    subtitle: 'Слой 01–02 · Встроенный Claude + Канбан',
+    description:
+      'Вы описываете продукт обычным русским языком. Встроенный Claude мгновенно разбивает цель на понятные этапы, создаёт структуру БД, API и задачи на доске.',
+    layerId: 'layer-claude',
+    accentColor: '#c084fc',
+    terminalCommand: 'projectsflow init --mode=autopilot --claude=builtin-prime',
+    windowTitle: 'ProjectsFlow Studio — Декомпозиция идеи с Claude Онлайн',
+    windowUrl: 'https://projectsflow.ru/workspace/new-project',
+    kpis: [
+      { label: 'Статус Claude', value: 'Онлайн · Встроен', tone: '#c084fc' },
+      { label: 'Задач создано', value: '12 карточек', tone: '#a3e635' },
+      { label: 'Время старта', value: '2.8 сек', tone: '#38bdf8' },
+    ],
+    uiBlocks: [
+      {
+        title: 'Входящий запрос владельца продукта',
+        badge: 'PROMPT -> SPEC',
+        lines: [
+          '«Сделать сервис бронирования студий с предоплатой в рублях, календарём слотов и Telegram-уведомлениями»',
+          '✓ Сформирована архитектура: 4 таблицы, 6 REST-маршрутов, 5 экранов клиента',
+        ],
+      },
+      {
+        title: 'Автоматический бэклог Канбана',
+        badge: 'READY TO RUN',
+        lines: [
+          '[PF-01] Схема слотов и броней в БД — Готово к запуску',
+          '[PF-02] Календарь выбора времени и оплата в ₽ — В очереди Автопилота',
+        ],
+      },
     ],
   },
-  TM: {
-    code: 'TM',
-    nameRu: 'Команда и Telegram',
-    iconEmoji: '✈️',
-    splitLeft: 'КОМАНДА',
-    splitRight: 'И ТЕЛЕГРАМ',
-    splitSubword: 'ROLES · ALERTS · MONITORING',
-    story:
-      'Приглашай партнёров и разработчиков в проект, раздавай роли, храни заметки и доступы в едином хабе. А сводки, упоминания и алерты мониторинга серверов мгновенно прилетают прямо в Telegram.',
-    metrics: [
-      { label: 'Уведомления', value: 'Прямо в Telegram' },
-      { label: 'Мониторинг серверов', value: '24/7 авто-проверка' },
-      { label: 'Доступы и база знаний', value: 'В одном месте' },
+  {
+    id: 'step-02',
+    stepNum: '02',
+    title: 'Автопилот или Шаг за шагом',
+    subtitle: 'Слой 02 · Живое исполнение на доске',
+    description:
+      'Выберите темп: на «Автопилоте» платформа сама берёт карточки в работу и пишет код. В режиме «Шаг за шагом» вы подтверждаете каждое архитектурное решение.',
+    layerId: 'layer-autopilot',
+    accentColor: '#a3e635',
+    terminalCommand: 'projectsflow autopilot run --parallel=3 --verify-each',
+    windowTitle: 'ProjectsFlow Studio — Живая Канбан-доска Автопилота',
+    windowUrl: 'https://projectsflow.ru/workspace/board',
+    kpis: [
+      { label: 'Режим доски', value: 'Автопилот ON', tone: '#a3e635' },
+      { label: 'В работе сейчас', value: '3 агента', tone: '#38bdf8' },
+      { label: 'Готовность спринта', value: '84%', tone: '#10b981' },
+    ],
+    uiBlocks: [
+      {
+        title: 'Колонка «В работе» (ИИ-исполнение)',
+        badge: 'LIVE CODING',
+        lines: [
+          '⚡ Генерация компонента расписания и валидации пересечений слотов...',
+          '⚡ Подключение серверных проверок прав доступа и API-тестов...',
+        ],
+      },
+      {
+        title: 'Колонка «Проверка качества»',
+        badge: 'QA GATE 4/4',
+        lines: [
+          '✓ Сборка клиента и сервера без ошибок (0 warnings)',
+          '✓ Стендовое окружение обновлено: preview-booking.projectsflow.ru',
+        ],
+      },
     ],
   },
-};
+  {
+    id: 'step-03',
+    stepNum: '03',
+    title: 'Юнит-экономика в ₽ и релиз в продакшен',
+    subtitle: 'Слой 03–04 · Финансы P&L + Живой продукт',
+    description:
+      'Прежде чем выкатить релиз в 1 клик, вы видите полную финансовую картину проекта в рублях: сколько стоила разработка, какая маржа и как выглядит живой сайт.',
+    layerId: 'layer-finance',
+    accentColor: '#10b981',
+    terminalCommand: 'projectsflow release --target=production --pnl-report=rub',
+    windowTitle: 'ProjectsFlow Studio — P&L Финансы в ₽ и Релиз',
+    windowUrl: 'https://projectsflow.ru/workspace/finance-and-release',
+    kpis: [
+      { label: 'Чистая прибыль', value: '+214 000 ₽', tone: '#10b981' },
+      { label: 'Рентабельность', value: '71.4% маржа', tone: '#fde047' },
+      { label: 'Статус релиза', value: 'LIVE · HTTPS', tone: '#38bdf8' },
+    ],
+    uiBlocks: [
+      {
+        title: 'Финансовая сводка проекта (в рублях)',
+        badge: 'P&L REALTIME',
+        lines: [
+          'Выручка по оплаченным заказам: +299 600 ₽ | Затраты на инфраструктуру и ИИ: −1 900 ₽',
+          'Чистый финансовый результат: +214 000 ₽ (окупаемость тарифа Прайм — с первого дня)',
+        ],
+      },
+      {
+        title: 'Готовый релиз и передача прав',
+        badge: '100% YOUR CODE',
+        lines: [
+          '✓ Продакшен-сборка опубликована, SSL-сертификат активен',
+          '✓ Весь исходный код синхронизирован с вашим Git-репозиторием',
+        ],
+      },
+    ],
+  },
+];
 
-export const WALKTHROUGH_STEPS = [
+export const FAQ_ITEMS = [
   {
-    step: '01',
-    title: 'Опиши идею словами — доска «Входящие»',
-    desc: 'Бросаешь задачу простым языком без сложных ТЗ. Нажми на карточку — её заберёт AI, или перетащи в колонку «Сейчас», если хочешь сделать шаг сам.',
-    caption: 'Экран 1 · Живая доска «Входящие» и очередь AI',
-    badge: 'Черновик → В очереди',
-    screenType: 'board' as const,
-    shotUrl: '/shots/app-board.png',
-    demoPrompt: 'Собери современный лендинг кофейни с меню из 12 позиций и формой брони в Telegram',
+    q: 'Нужен ли мне VPN или зарубежная карта, чтобы пользоваться Claude внутри ProjectsFlow?',
+    a: 'Нет. На тарифах «Прайм» (1 900 ₽/мес) и «VIP» (3 900 ₽/мес) онлайн-подписка на Claude уже встроена от нас. Вы оплачиваете тариф в рублях и сразу работаете из браузера без VPN и покупки внешних API-ключей.',
   },
   {
-    step: '02',
-    title: 'Живой ход работы (LIVE) и автопроверки',
-    desc: 'Смотри в реальном времени, как AI читает структуру проекта, собирает компоненты, сжимает графику и прогоняет 4 из 4 предрелизных проверок.',
-    caption: 'Экран 2 · LIVE-стрим выполнения (84% · 3,20 ₽) и 4/4 проверок',
-    badge: 'AI делает → 4/4 проверок',
-    screenType: 'live' as const,
-    shotUrl: '/shots/app-board.png',
-    demoPrompt: 'Добавь тёмную тему по системной настройке и проверь мобильную вёрстку на iPhone',
+    q: 'Как работает бесплатный пробный час на тарифе «Прайм»?',
+    a: 'После регистрации вы можете активировать 1 час работы на «Прайме» бесплатно. Этого достаточно, чтобы описать идею своего проекта, увидеть автоматическую декомпозицию на доске и получить первое живое превью.',
   },
   {
-    step: '03',
-    title: 'Деньги, расходы и чистая прибыль в рублях',
-    desc: 'Вся экономика проекта как на ладони: оплаты от клиентов (+214 000 ₽), расходы на AI и хостинг (−85 600 ₽) и чистая прибыль (+128 400 ₽, маржа 60%).',
-    caption: 'Экран 3 · Финансы проекта, операции и график прибыли',
-    badge: 'Маржа 60% · +128 400 ₽',
-    screenType: 'finance' as const,
-    shotUrl: '/shots/app-finance.png',
-    demoPrompt: 'Подключи оплату через СБП с предоплатой 30% и выведи аналитику выручки по месяцам',
-  },
-] as const;
-
-export const USE_CASE_CATALOG = [
-  {
-    name: 'Собрать лендинг или сайт для запуска',
-    category: 'Веб и маркетинг',
-    priceHint: 'Готово за 15–30 мин · от 15 ₽ AI-бюджета',
-    tags: ['AI', 'CL', 'DP'],
+    q: 'Чем отличается режим «Автопилот» от режима «Шаг за шагом»?',
+    a: 'На «Автопилоте» платформа самостоятельно проводит задачи по всей доске — от архитектуры и кода до 4 проверок и живого стенда. В режиме «Шаг за шагом» ИИ ждёт вашего одобрения на каждом ключевом переходе.',
   },
   {
-    name: 'Подключить Telegram-бота и уведомления',
-    category: 'Боты и автоматизация',
-    priceHint: 'Заявки, алерты и запись клиентов в TG',
-    tags: ['AI', 'TM'],
+    q: 'Могу ли я подключить свой собственный аккаунт Claude на бесплатном тарифе?',
+    a: 'Да! Тариф «Бесплатный» (0 ₽) позволяет подключить ваш собственный аккаунт Claude и пользоваться канбан-доской, декомпозицией и базовым финансовым учётом без абонентской платы.',
   },
   {
-    name: 'Добавить экран оплаты и приём платежей',
-    category: 'Финтех и e-commerce',
-    priceHint: 'Тарифы, корзина, СБП и вебхуки',
-    tags: ['AI', 'FN', 'DP'],
+    q: 'Кому принадлежит код проекта и можно ли забрать его к себе?',
+    a: 'Весь созданный код, миграции базы данных и конфигурация на 100% принадлежат вам. Вы в любой момент можете синхронизировать проект со своим GitHub/GitLab или развернуть его на собственном сервере.',
   },
-  {
-    name: 'Включить автопилот развития продукта',
-    category: 'Автопилот 24/7',
-    priceHint: 'Сам предлагает и делает улучшения',
-    tags: ['AI', 'CL', 'LV'],
-  },
-  {
-    name: 'Сделать тёмную тему и адаптив под iPhone',
-    category: 'UX/UI и дизайн-система',
-    priceHint: 'С автопроверкой вёрстки без съезжаний',
-    tags: ['AI', 'DP'],
-  },
-  {
-    name: 'Вести доходы, расходы и маржу проекта в ₽',
-    category: 'Финансы и аналитика',
-    priceHint: 'Видно каждую трату на AI, домен и сервер',
-    tags: ['FN', 'TM'],
-  },
-  {
-    name: 'Мониторинг серверов и защита секретов',
-    category: 'Инфраструктура и DevOps',
-    priceHint: '4/4 проверок до выкатки + алерты 24/7',
-    tags: ['DP', 'TM'],
-  },
-  {
-    name: 'Работать на встроенном Claude без VPN',
-    category: 'Онлайн-подписка LLM',
-    priceHint: 'Прайм 1 900 ₽/мес · 1 час тест-драйва 0 ₽',
-    tags: ['CL', 'AI'],
-  },
-] as const;
+];

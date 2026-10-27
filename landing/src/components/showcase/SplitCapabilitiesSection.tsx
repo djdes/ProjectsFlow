@@ -1,275 +1,348 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  PILLARS_DATA,
-  EXTRA_SPLIT_PILLARS,
-  type ExtendedPillarCode,
-  type PillarCode,
-} from '@/data/showcaseData';
+  ArrowUpRight,
+  CheckCircle2,
+  Cpu,
+  Layers,
+  Play,
+  ShieldCheck,
+  Terminal,
+  TrendingUp,
+  Zap,
+} from 'lucide-react';
+import {
+  PROMPT_PRESETS,
+  type PromptPreset,
+  type StackLayerId,
+} from '../../data/showcaseData';
 
 interface SplitCapabilitiesSectionProps {
-  onSyncHeroPillar: (code: PillarCode) => void;
-  appBase?: string;
+  onSelectLayer: (layerId: StackLayerId) => void;
+  isAuthed: boolean;
+  appBase: string;
 }
 
-const ALL_SIX_CODES: ExtendedPillarCode[] = ['AI', 'CL', 'FN', 'DP', 'LV', 'TM'];
-
 export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> = ({
-  onSyncHeroPillar,
-  appBase = '',
+  onSelectLayer,
+  isAuthed,
+  appBase,
 }) => {
-  const [selectedCode, setSelectedCode] = useState<ExtendedPillarCode>('AI');
+  const [activePresetId, setActivePresetId] = useState<string>(PROMPT_PRESETS[0]!.id);
+  const [executionMode, setExecutionMode] = useState<'autopilot' | 'step'>('autopilot');
+  const [customPrompt, setCustomPrompt] = useState<string>(PROMPT_PRESETS[0]!.promptText);
 
-  const currentData =
-    selectedCode === 'LV' || selectedCode === 'TM'
-      ? EXTRA_SPLIT_PILLARS[selectedCode]
-      : PILLARS_DATA[selectedCode];
+  const activePreset: PromptPreset =
+    PROMPT_PRESETS.find((p) => p.id === activePresetId) ?? PROMPT_PRESETS[0]!;
 
-  const handleSelect = (code: ExtendedPillarCode) => {
-    setSelectedCode(code);
-    if (code === 'AI' || code === 'CL' || code === 'FN' || code === 'DP') {
-      onSyncHeroPillar(code);
-    }
-  };
-
-  const stepSlide = (dir: -1 | 1) => {
-    const idx = ALL_SIX_CODES.indexOf(selectedCode);
-    const next = ALL_SIX_CODES[(idx + dir + ALL_SIX_CODES.length) % ALL_SIX_CODES.length]!;
-    handleSelect(next);
+  const handleSelectPreset = (preset: PromptPreset) => {
+    setActivePresetId(preset.id);
+    setCustomPrompt(preset.promptText);
+    onSelectLayer(preset.layerFocus);
   };
 
   return (
     <section
-      id="features"
-      className="scroll-mt-24 relative max-w-[1440px] mx-auto my-16 px-4 sm:px-9"
+      id="prompt-sandbox"
+      className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-12 scroll-mt-24"
     >
-      <div className="relative min-h-[760px] rounded-[36px] overflow-hidden border border-white/25 shadow-[0_38px_90px_rgba(0,0,0,0.5)] flex items-center">
-        {/* Атмосферный кибер-фон с перспективой и свечением */}
-        <div className="absolute inset-0 z-0 bg-[#061411]">
-          <div
-            className="absolute inset-0 opacity-90 transition-all duration-700"
-            style={{
-              background:
-                'radial-gradient(circle at 72% 35%, rgba(29, 185, 84, 0.36) 0%, rgba(11, 56, 44, 0.65) 45%, rgba(6, 18, 28, 0.96) 95%)',
-            }}
-          />
-          {/* Световая сетка горизонта */}
-          <div
-            className="absolute inset-0 opacity-25"
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, rgba(163,247,59,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(163,247,59,0.18) 1px, transparent 1px)',
-              backgroundSize: '56px 56px',
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#071a14]/80 via-[#0b261e]/55 to-[#081220]/75" />
-        </div>
-
-        {/* Левая матовая стеклянная створка 46% ширины (референс AFRICAN FOREST) */}
+      {/* Split Frosted-Glass Terminal & Live Blueprint Generator */}
+      <div className="relative rounded-[36px] overflow-hidden border border-white/20 shadow-[0_32px_100px_rgba(0,0,0,0.65)] bg-[#070b14]">
+        {/* Ambient Isometric Circuit Background on Right Half */}
         <div
-          className="hidden lg:block absolute inset-y-0 left-0 w-[46%] bg-[#0d1c18]/65 backdrop-blur-2xl border-r border-white/25 z-10"
-          aria-hidden="true"
-        >
-          {/* Декоративные 3D-лепестки на границе раздела как в AFRICAN FOREST */}
-          <div className="absolute top-10 -right-7 flex flex-col gap-2.5">
-            <span className="w-14 h-7 rounded-tl-3xl rounded-br-3xl bg-gradient-to-br from-[#a3f73b] to-[#1db954] shadow-xl -rotate-12 block" />
-            <span className="w-10 h-5 rounded-tl-2xl rounded-br-2xl bg-gradient-to-br from-[#a3f73b] to-[#1db954] shadow-lg rotate-12 -translate-x-3 block opacity-85" />
-          </div>
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle at 75% 30%, rgba(56, 189, 248, 0.16) 0%, rgba(16, 185, 129, 0.10) 42%, rgba(6, 9, 17, 0.98) 88%)',
+          }}
+        />
+
+        {/* LEFT 46% FROSTED GLASS SHUTTER (Mechanic C adapted for AI Prompt Terminal) */}
+        <div className="hidden lg:block absolute inset-y-0 left-0 w-[46%] bg-[#0b1220]/75 backdrop-blur-2xl border-r border-white/20 z-10 pointer-events-none">
+          {/* Glowing seam connector nodes */}
+          <div className="absolute top-28 -right-3 w-6 h-6 rounded-lg rotate-45 bg-sky-400/30 border border-sky-300/60 shadow-[0_0_20px_rgba(56,189,248,0.6)]" />
+          <div className="absolute bottom-32 -right-3 w-6 h-6 rounded-lg rotate-45 bg-lime-400/30 border border-lime-300/60 shadow-[0_0_20px_rgba(163,230,53,0.6)]" />
         </div>
 
-        {/* Основной контент поверх границы матового стекла */}
-        <div className="relative z-20 w-full px-6 sm:px-14 py-14">
-          <div className="text-xs sm:text-sm font-extrabold tracking-[0.18em] italic text-[#a3f73b] mb-3">
-            6 ОПОР ПЛАТФОРМЫ PROJECTSFLOW · ДЛЯ ТЕХ, КТО СТРОИТ С AI
-          </div>
-
-          {/* Двухслойный гигантский заголовок на стыке матового стекла (AFRICAN FOREST эффект) */}
+        {/* Content Container Spanning Across the 46% Split Seam */}
+        <div className="relative z-20 p-6 sm:p-10 lg:p-12">
+          {/* Cross-Boundary Giant Headline */}
           <div className="mb-8">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={selectedCode}
-                initial={{ opacity: 0, y: 22 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -22 }}
-                transition={{ type: 'spring', stiffness: 250, damping: 24 }}
-              >
-                <h2 className="font-display font-black uppercase text-4xl sm:text-7xl xl:text-[102px] leading-[0.94] tracking-tight">
-                  <span className="knockout-frosted-text">{currentData.splitLeft}</span>
-                  <span className="text-white drop-shadow-[0_18px_44px_rgba(0,0,0,0.5)]">
-                    {currentData.splitRight}
-                  </span>
-                </h2>
-                <div className="font-display font-black text-xl sm:text-3xl xl:text-4xl text-white/30 tracking-tight mt-1.5">
-                  {currentData.splitSubword}
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[42%_1fr] gap-10 lg:gap-14 items-start">
-            {/* Левая колонка внутри матового стекла */}
-            <div className="flex flex-col gap-5">
-              <p className="text-sm sm:text-[15.5px] leading-relaxed text-white/85">
-                {currentData.story}
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {currentData.metrics.map((m) => (
-                  <div
-                    key={m.label}
-                    className="p-3 rounded-[18px] bg-white/10 border border-white/20 backdrop-blur-md"
-                  >
-                    <span className="block text-[11px] text-white/65 mb-1">{m.label}</span>
-                    <strong className="text-xs sm:text-sm font-bold text-white">{m.value}</strong>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-1 flex flex-wrap gap-3">
-                <a
-                  href={`${appBase}/register`}
-                  data-auth-anon
-                  className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-[#a3f73b] text-[#09190e] font-extrabold text-xs sm:text-sm tracking-wide shadow-lg hover:scale-105 transition"
-                >
-                  <span>ЗАПУСТИТЬ СВОЙ ПРОЕКТ БЕСПЛАТНО</span>
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-                <a
-                  href={`${appBase}/`}
-                  data-auth-authed
-                  className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-[#a3f73b] text-[#09190e] font-extrabold text-xs sm:text-sm tracking-wide shadow-lg hover:scale-105 transition"
-                >
-                  <span>ОТКРЫТЬ ПРИЛОЖЕНИЕ</span>
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-              </div>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.07] border border-white/15 mb-4">
+              <Terminal className="w-3.5 h-3.5 text-lime-400" />
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
+                Интерактивная песочница · От текста до живого релиза
+              </span>
             </div>
 
-            {/* Правая колонка: Интерактивные стеклянные карточки 6 возможностей */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pr-0 lg:pr-10">
-              {[
-                {
-                  code: 'AI' as const,
-                  icon: '⚡',
-                  title: 'Автопилот задач (AI)',
-                  badge: '24/7 Сама',
-                  sub: 'Опиши идею словами — платформа доведёт до готового',
-                },
-                {
-                  code: 'CL' as const,
-                  icon: '🧠',
-                  title: 'Claude онлайн (CL)',
-                  badge: 'Без ключей',
-                  sub: 'Встроенная подписка без VPN или подключение своей',
-                },
-                {
-                  code: 'FN' as const,
-                  icon: '💎',
-                  title: 'Деньги и маржа (FN)',
-                  badge: 'В рублях',
-                  sub: 'Доходы, расходы на AI и прибыль с одного взгляда',
-                },
-                {
-                  code: 'DP' as const,
-                  icon: '🛡️',
-                  title: 'Автопроверки (DP)',
-                  badge: '4 из 4 Pass',
-                  sub: 'Сборка, типы, секреты и мобильный адаптив до выкатки',
-                },
-                {
-                  code: 'LV' as const,
-                  icon: '🔴',
-                  title: 'Живой стрим (LIVE)',
-                  badge: 'Реалтайм',
-                  sub: 'Видно каждый шаг AI-воркера и точную цену запуска',
-                },
-                {
-                  code: 'TM' as const,
-                  icon: '✈️',
-                  title: 'Команда и Telegram',
-                  badge: 'Всё рядом',
-                  sub: 'Роли, заметки, доступы, алерты и мониторинг серверов',
-                },
-              ].map((item) => {
-                const isSelected = selectedCode === item.code;
-                return (
-                  <motion.button
-                    key={item.code}
-                    whileHover={{ y: -3 }}
-                    type="button"
-                    onClick={() => handleSelect(item.code)}
-                    className={`p-4 sm:p-4.5 rounded-[24px] text-left border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-white text-[#0e1722] border-white shadow-2xl'
-                        : 'bg-[#0c1420]/65 text-white border-white/20 hover:bg-[#0c1420]/85 backdrop-blur-xl'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-2xl">{item.icon}</span>
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                          isSelected
-                            ? 'bg-[#0e1722] text-white'
-                            : 'bg-[#a3f73b]/20 text-[#b8ff5c]'
+            <h2 className="font-display font-black uppercase text-3xl sm:text-5xl xl:text-[64px] leading-[0.94] tracking-[-0.03em]">
+              <span className="knockout-frosted-text block sm:inline">
+                ФОРМУЛИРУЙ ЦЕЛЬ —{' '}
+              </span>
+              <span className="text-white drop-shadow-[0_18px_40px_rgba(0,0,0,0.6)]">
+                ПОЛУЧАЙ ПРОДУКТ И P&L
+              </span>
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* LEFT HALF (5 cols inside the 46% Frosted Shutter): Scenario Presets + Prompt Input + Mode Toggle */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              {/* 1. Scenario Selector */}
+              <div>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-white/55 block mb-2.5">
+                  1. Выберите готовый сценарий или опишите свой:
+                </span>
+                <div className="space-y-2">
+                  {PROMPT_PRESETS.map((preset) => {
+                    const active = preset.id === activePreset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleSelectPreset(preset)}
+                        className={`w-full text-left px-4 py-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                          active
+                            ? 'bg-white text-[#070b14] border-white shadow-lg font-bold'
+                            : 'bg-white/[0.05] text-white/80 border-white/15 hover:bg-white/[0.1]'
                         }`}
                       >
-                        {item.badge}
-                      </span>
+                        <div className="min-w-0">
+                          <span
+                            className={`font-mono text-[10px] uppercase tracking-wider block ${
+                              active ? 'text-emerald-700 font-extrabold' : 'text-sky-300/80'
+                            }`}
+                          >
+                            {preset.category}
+                          </span>
+                          <span className="text-sm font-bold truncate block">
+                            {preset.title}
+                          </span>
+                        </div>
+                        <ArrowUpRight
+                          className={`w-4 h-4 shrink-0 ${
+                            active ? 'text-[#070b14]' : 'text-white/40'
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Editable Prompt Box */}
+              <div className="rounded-2xl p-4 bg-[#050811]/90 border border-white/20">
+                <div className="flex items-center justify-between text-[11px] font-mono text-white/55 mb-2">
+                  <span>ВХОДНОЙ ЗАПРОС (НА РУССКОМ ЯЗЫКЕ)</span>
+                  <span className="text-lime-400 font-bold">Claude Онлайн · Встроен</span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  className="w-full bg-transparent text-white text-sm leading-relaxed focus:outline-none resize-none"
+                />
+              </div>
+
+              {/* 3. Execution Speed Mode Toggle */}
+              <div>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-white/55 block mb-2">
+                  2. Режим ведения проекта:
+                </span>
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black/40 border border-white/15">
+                  <button
+                    type="button"
+                    onClick={() => setExecutionMode('autopilot')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      executionMode === 'autopilot'
+                        ? 'bg-lime-400 text-[#070b14] shadow-md'
+                        : 'text-white/75 hover:text-white'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Автопилот под ключ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExecutionMode('step')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      executionMode === 'step'
+                        ? 'bg-sky-400 text-[#070b14] shadow-md'
+                        : 'text-white/75 hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Шаг за шагом</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <div>
+                  <span className="font-mono text-xs font-bold text-lime-400 block">
+                    {activePreset.estimatedTime}
+                  </span>
+                  <span className="text-xs text-white/60">
+                    {activePreset.estimatedSavedRub}
+                  </span>
+                </div>
+
+                <a
+                  href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
+                  className="inline-flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white text-[#070b14] font-extrabold text-xs uppercase tracking-wider hover:bg-slate-100 transition-all shadow-lg"
+                >
+                  <Play className="w-3.5 h-3.5 fill-[#070b14]" />
+                  <span>Запустить этот проект</span>
+                </a>
+              </div>
+            </div>
+
+            {/* RIGHT HALF (7 cols on Clear Stage): Live Generated Architecture, Kanban Tasks, 4 Checks & RUB P&L */}
+            <div className="lg:col-span-7">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${activePreset.id}-${executionMode}`}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+                  className="space-y-4"
+                >
+                  {/* Top Bar: Pipeline Header */}
+                  <div className="rounded-2xl p-4 bg-white/[0.06] border border-white/20 backdrop-blur-xl flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-sky-400/20 border border-sky-400/40 flex items-center justify-center text-sky-300">
+                        <Cpu className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-sky-300 block">
+                          ЖИВОЙ ПЛАН РЕАЛИЗАЦИИ · {executionMode === 'autopilot' ? 'ПОЛНЫЙ АВТОПИЛОТ' : 'КОНТРОЛЬ КАЖДОГО ШАГА'}
+                        </span>
+                        <h3 className="font-bold text-base text-white">
+                          {activePreset.title}
+                        </h3>
+                      </div>
                     </div>
-                    <div className="font-bold text-base">{item.title}</div>
-                    <div
-                      className={`text-xs mt-0.5 ${
-                        isSelected ? 'text-[#0e1722]/75' : 'text-white/75'
-                      }`}
-                    >
-                      {item.sub}
+
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 font-mono text-xs font-bold text-emerald-300">
+                      Claude 3.7 Встроен · 0 ключей
+                    </span>
+                  </div>
+
+                  {/* Generated Kanban Backlog Cards */}
+                  <div className="rounded-2xl p-5 bg-[#0a101d]/90 border border-white/15 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs font-mono text-white/60 mb-1">
+                      <span>АВТОМАТИЧЕСКАЯ ДЕКОМПОЗИЦИЯ НА ДОСКЕ</span>
+                      <span>4 ЭТАПА СПРИНТА</span>
                     </div>
-                  </motion.button>
-                );
-              })}
+
+                    {activePreset.generatedTasks.map((task) => (
+                      <div
+                        key={task.code}
+                        className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-white shrink-0">
+                            {task.code}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-white truncate">
+                              {task.title}
+                            </p>
+                            <span className="text-[11px] font-mono text-white/55">
+                              Исполнитель: {task.role} · Время: {task.duration}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold uppercase ${
+                            task.status === 'done'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                              : task.status === 'running'
+                                ? 'bg-lime-400/20 text-lime-300 border border-lime-400/40 animate-pulse'
+                                : 'bg-white/10 text-white/65'
+                          }`}
+                        >
+                          {task.status === 'done'
+                            ? '✓ Готово'
+                            : task.status === 'running'
+                              ? '⚡ В работе'
+                              : executionMode === 'step'
+                                ? 'Ждёт одобрения'
+                                : 'В очереди'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bottom 2-Column Row: 4-Stage QA Shield + RUB P&L Forecast */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* 4-Stage QA Shield */}
+                    <div className="rounded-2xl p-4 bg-[#0a101d]/90 border border-white/15">
+                      <div className="flex items-center gap-2 text-xs font-mono uppercase text-sky-300 font-bold mb-3">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>4 контура автопроверки</span>
+                      </div>
+                      <div className="space-y-2">
+                        {activePreset.checks.map((c) => (
+                          <div
+                            key={c.name}
+                            className="flex items-center justify-between text-xs py-1 border-b border-white/10 last:border-0"
+                          >
+                            <span className="text-white/75 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              {c.name}
+                            </span>
+                            <span className="font-mono font-bold text-emerald-300">
+                              {c.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* RUB P&L Unit Economics Preview */}
+                    <div className="rounded-2xl p-4 bg-gradient-to-br from-emerald-950/60 to-[#0a101d] border border-emerald-400/30 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between text-xs font-mono uppercase text-emerald-300 font-bold mb-3">
+                          <span className="flex items-center gap-1.5">
+                            <TrendingUp className="w-4 h-4" />
+                            Прогноз P&L в рублях
+                          </span>
+                          <span>СЛОЙ 03</span>
+                        </div>
+                        <div className="space-y-1.5 text-xs">
+                          <div className="flex justify-between text-white/75">
+                            <span>Целевой оборот:</span>
+                            <span className="font-mono font-bold text-white">
+                              {activePreset.pnlPreview.expectedRevenue}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-white/75">
+                            <span>Затраты на ProjectsFlow + ИИ:</span>
+                            <span className="font-mono font-bold text-emerald-300">
+                              {activePreset.pnlPreview.infraCost}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-white/15 flex items-baseline justify-between">
+                        <span className="text-xs font-bold text-white/80">
+                          Чистый результат:
+                        </span>
+                        <span className="font-display font-black text-lg text-lime-300">
+                          {activePreset.pnlPreview.netMargin}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
-        </div>
-
-        {/* Вертикальные ромбы справа как на референсе AFRICAN FOREST */}
-        <div className="hidden sm:flex flex-col items-center gap-3.5 absolute right-6 top-1/2 -translate-y-1/2 z-30">
-          <span className="w-0.5 h-9 bg-white/45" />
-          {ALL_SIX_CODES.map((code) => {
-            const active = selectedCode === code;
-            return (
-              <button
-                key={code}
-                type="button"
-                onClick={() => handleSelect(code)}
-                aria-label={`Выбрать модуль ${code}`}
-                className={`w-3 h-3 rotate-45 border-2 border-white transition cursor-pointer ${
-                  active ? 'bg-white scale-125' : 'bg-transparent hover:bg-white/40'
-                }`}
-              />
-            );
-          })}
-          <span className="w-0.5 h-9 bg-white/45" />
-        </div>
-
-        {/* Квадратные кнопки стрелок в правом нижнем углу (AFRICAN FOREST) */}
-        <div className="absolute right-8 bottom-6 z-30 flex gap-2.5">
-          <button
-            type="button"
-            onClick={() => stepSlide(-1)}
-            className="w-11 h-11 rounded-[10px] bg-white/85 text-[#0e1916] hover:bg-white grid place-items-center font-bold shadow-lg transition cursor-pointer"
-            aria-label="Предыдущая возможность"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => stepSlide(1)}
-            className="w-11 h-11 rounded-[10px] bg-[#0e1916]/85 text-white border border-white/30 hover:bg-[#0e1916] grid place-items-center font-bold shadow-lg transition cursor-pointer"
-            aria-label="Следующая возможность"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
         </div>
       </div>
     </section>

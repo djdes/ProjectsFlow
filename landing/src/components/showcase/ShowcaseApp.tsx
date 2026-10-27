@@ -1,250 +1,311 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import Lenis from 'lenis';
 import { ArrowUpRight, Layers, Menu, X } from 'lucide-react';
-import '@fontsource-variable/unbounded';
-import '@fontsource-variable/golos-text';
-import '@fontsource-variable/jetbrains-mono';
-import { PILLARS_DATA, type PillarCode } from '@/data/showcaseData';
+import {
+  STACK_LAYERS,
+  TARIFF_OPTIONS,
+  type ChassisMode,
+  type StackLayerId,
+  type StackLayerSpec,
+  type TariffOption,
+} from '../../data/showcaseData';
 import { AuroraCanvas } from './AuroraCanvas';
 import { HeroShowcase } from './HeroShowcase';
 import { SplitCapabilitiesSection } from './SplitCapabilitiesSection';
 import { GrowCalculatorSection } from './GrowCalculatorSection';
 import { ProductWalkthroughSection } from './ProductWalkthroughSection';
-import { CatalogFaqSection, type BlogPostPreview } from './CatalogFaqSection';
+import { CatalogFaqSection, type BlogTeaserItem } from './CatalogFaqSection';
 
-interface ShowcaseAppProps {
-  posts?: readonly BlogPostPreview[];
+export interface ShowcaseAppProps {
+  posts?: BlogTeaserItem[];
   appBase?: string;
 }
 
-const NAV_ITEMS = [
-  { href: '#showcase', label: '3D Витрина' },
-  { href: '#features', label: '6 Опор' },
-  { href: '#live-board', label: 'Живая доска' },
-  { href: '#pricing', label: 'Тарифы 3D' },
-  { href: '#how', label: 'Экраны' },
-  { href: '#faq', label: 'Вопросы' },
-  { href: '/blog', label: 'Блог' },
-] as const;
-
-export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({ posts = [], appBase = '' }) => {
-  const [activePillar, setActivePillar] = useState<PillarCode>('AI');
-  const [scrolled, setScrolled] = useState<boolean>(false);
+export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
+  posts = [],
+  appBase = '',
+}) => {
+  const [activeLayerId, setActiveLayerId] = useState<StackLayerId>('layer-autopilot');
+  const [activeTariff, setActiveTariff] = useState<TariffOption>(TARIFF_OPTIONS[1]!);
+  const [chassisMode, setChassisMode] = useState<ChassisMode>('exploded');
+  const [spinTrigger, setSpinTrigger] = useState<number>(0);
+  const [activeNav, setActiveNav] = useState<string>('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [isAuthed, setIsAuthed] = useState<boolean>(false);
 
-  const pillarConfig = PILLARS_DATA[activePillar];
-  const currentYear = new Date().getFullYear();
+  const activeLayer: StackLayerSpec =
+    STACK_LAYERS.find((l) => l.id === activeLayerId) ?? STACK_LAYERS[0]!;
 
   useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let lenis: Lenis | null = null;
-    let rafId = 0;
+    const prefersReducedMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+    if (prefersReducedMotion) return;
 
-    if (!prefersReduced) {
-      lenis = new Lenis({
-        duration: 1.12,
-        smoothWheel: true,
-      });
-      const raf = (time: number) => {
-        lenis?.raf(time);
-        rafId = requestAnimationFrame(raf);
-      };
+    const lenis = new Lenis({
+      duration: 1.05,
+      smoothWheel: true,
+      wheelMultiplier: 0.95,
+    });
+
+    let rafId = 0;
+    function raf(time: number) {
+      lenis.raf(time);
       rafId = requestAnimationFrame(raf);
     }
-
-    const onScroll = () => {
-      setScrolled(window.scrollY > 24);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
+    rafId = requestAnimationFrame(raf);
 
     return () => {
       cancelAnimationFrame(rafId);
-      lenis?.destroy();
-      window.removeEventListener('scroll', onScroll);
+      lenis.destroy();
     };
   }, []);
 
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((res) => {
+        if (res.ok) setIsAuthed(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSelectLayer = (id: StackLayerId) => {
+    setActiveLayerId(id);
+    setSpinTrigger((prev) => prev + 1);
+  };
+
+  const handleSelectTariff = (tariff: TariffOption) => {
+    setActiveTariff(tariff);
+    setSpinTrigger((prev) => prev + 1);
+  };
+
+  const handleChangeChassisMode = (mode: ChassisMode) => {
+    setChassisMode(mode);
+    setSpinTrigger((prev) => prev + 1);
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveNav(sectionId);
+    setMobileMenuOpen(false);
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const navItems = [
+    { id: 'hero', label: '3D Стек' },
+    { id: 'prompt-sandbox', label: 'Песочница ИИ' },
+    { id: 'walkthrough', label: 'Узлы 01–03' },
+    { id: 'live-board', label: 'Живая доска' },
+    { id: 'grow-calculator', label: 'Реактор ₽' },
+    { id: 'pricing', label: 'Тарифы' },
+    { id: 'faq', label: 'FAQ' },
+  ];
+
   return (
     <div
-      className="min-h-screen text-white transition-[background] duration-700 relative font-sans selection:bg-white selection:text-black overflow-x-clip"
-      style={{ backgroundImage: pillarConfig.stageBgGradient }}
+      className="min-h-screen w-full text-white transition-all duration-700 relative overflow-x-clip bg-[#050811]"
+      style={{ backgroundColor: '#050811', backgroundImage: activeLayer.stageGradient }}
     >
-      {/* Анимированная световая волна в стиле референса Mindly */}
-      <AuroraCanvas colors={pillarConfig.auroraColors} />
+      {/* Fixed Caustic Horizon Grid & Vertical Glass Columns */}
+      <AuroraCanvas glowRgb={activeLayer.glowRgb} />
 
-      {/* Плавающая стеклянная шапка (Mindly + Planet BOLD) */}
-      <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'py-3 px-4 sm:px-9 bg-[#0e0918]/80 backdrop-blur-2xl border-b border-white/15'
-            : 'py-5 px-4 sm:px-9'
-        }`}
-      >
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-4">
+      {/* Top Glass Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#050811]/75 border-b border-white/12">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-4">
           <a
-            href="#showcase"
-            className="inline-flex items-center gap-2.5 font-display font-black text-base sm:text-lg tracking-tight text-white"
+            href="#hero"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection('hero');
+            }}
+            className="flex items-center gap-3 group cursor-pointer"
           >
-            <span className="w-9 h-9 rounded-[12px] bg-white/18 border border-white/30 grid place-items-center shadow-lg">
-              <Layers className="w-5 h-5 text-white" />
-            </span>
-            <span>ProjectsFlow</span>
+            <div
+              className="w-10 h-10 rounded-xl border border-white/25 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105"
+              style={{ backgroundColor: `${activeLayer.primaryColor}22` }}
+            >
+              <Layers
+                className="w-5 h-5"
+                style={{ color: activeLayer.primaryColor }}
+              />
+            </div>
+            <div>
+              <span className="font-display font-black text-base sm:text-lg tracking-tight text-white block leading-none">
+                ProjectsFlow
+              </span>
+              <span className="font-mono text-[10px] text-white/55 tracking-wider uppercase block mt-0.5">
+                AI Architecture OS
+              </span>
+            </div>
           </a>
 
+          {/* Desktop Navigation Pills */}
           <nav
             aria-label="Основная навигация"
-            className="hidden lg:flex items-center gap-1 p-1.5 rounded-full bg-white/12 border border-white/20 backdrop-blur-xl"
+            className="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl bg-white/[0.05] border border-white/12"
           >
-            {NAV_ITEMS.map((item, idx) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition ${
-                  idx === 0
-                    ? 'bg-white text-[#120b1d] shadow'
-                    : 'text-white/85 hover:text-white hover:bg-white/15'
-                }`}
-              >
-                {item.label}
-              </a>
-            ))}
+            {navItems.map((item) => {
+              const isActive = activeNav === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => scrollToSection(item.id)}
+                  className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    isActive
+                      ? 'text-[#050811]'
+                      : 'text-white/75 hover:text-white'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="topNavActivePill"
+                      transition={{ type: 'spring', stiffness: 340, damping: 24 }}
+                      className="absolute inset-0 rounded-xl bg-white shadow"
+                    />
+                  )}
+                  <span className="relative z-10">{item.label}</span>
+                </button>
+              );
+            })}
+            <a
+              href="/blog/"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors"
+            >
+              Журнал
+            </a>
           </nav>
 
+          {/* Right Auth / CTA Buttons */}
           <div className="flex items-center gap-2.5">
+            {!isAuthed && (
+              <a
+                href={`${appBase}/login`}
+                data-auth-anon=""
+                className="hidden sm:inline-flex items-center px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.14] border border-white/15 text-xs font-bold text-white transition-all"
+              >
+                Войти
+              </a>
+            )}
             <a
-              href={`${appBase}/login`}
-              data-auth-anon
-              className="hidden sm:inline-flex items-center px-4 py-2 rounded-full bg-white/12 border border-white/25 text-white font-semibold text-xs sm:text-sm hover:bg-white/20 transition"
+              href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
+              data-auth-authed={isAuthed ? '' : undefined}
+              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#050811] font-extrabold text-xs hover:bg-slate-100 transition-all shadow-md"
             >
-              Войти
-            </a>
-            <a
-              href={`${appBase}/register`}
-              data-auth-anon
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-full bg-white text-[#120b1d] font-bold text-xs sm:text-sm shadow-xl hover:scale-105 transition"
-            >
-              <span>Начать бесплатно</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </a>
-            <a
-              href={`${appBase}/`}
-              data-auth-authed
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-full bg-white text-[#120b1d] font-bold text-xs sm:text-sm shadow-xl hover:scale-105 transition"
-            >
-              <span>Открыть приложение</span>
-              <ArrowUpRight className="w-4 h-4" />
+              <span>{isAuthed ? 'В проекты' : '1 час Прайма бесплатно'}</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
             </a>
 
             <button
               type="button"
+              aria-label="Открыть меню"
               onClick={() => setMobileMenuOpen((v) => !v)}
-              aria-label="Меню навигации"
-              aria-expanded={mobileMenuOpen}
-              className="lg:hidden w-10 h-10 rounded-full bg-white/14 border border-white/25 grid place-items-center text-white cursor-pointer"
+              className="xl:hidden w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white cursor-pointer"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
-        {/* Выпадающее мобильное меню */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden mt-3 p-4 rounded-[24px] bg-[#100b1d]/95 border border-white/25 backdrop-blur-2xl flex flex-col gap-2 shadow-2xl">
-            {NAV_ITEMS.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className="px-4 py-2.5 rounded-[14px] text-sm font-semibold text-white hover:bg-white/12 transition"
-              >
-                {item.label}
-              </a>
-            ))}
-            <div className="pt-2 mt-1 border-t border-white/15 flex flex-col gap-2">
-              <a
-                href={`${appBase}/register`}
-                data-auth-anon
-                className="w-full py-2.5 rounded-full bg-white text-[#120b1d] font-bold text-sm text-center"
-              >
-                Создать аккаунт
-              </a>
-              <a
-                href={`${appBase}/login`}
-                data-auth-anon
-                className="w-full py-2.5 rounded-full bg-white/12 border border-white/25 text-white font-semibold text-sm text-center"
-              >
-                Войти
-              </a>
-              <a
-                href={`${appBase}/`}
-                data-auth-authed
-                className="w-full py-2.5 rounded-full bg-white text-[#120b1d] font-bold text-sm text-center"
-              >
-                Открыть приложение
-              </a>
-            </div>
-          </div>
-        )}
+        {/* Mobile Drawer */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="xl:hidden overflow-hidden bg-[#060a15]/95 border-b border-white/15 px-4 pb-4"
+            >
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {navItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => scrollToSection(item.id)}
+                    className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-left text-xs font-bold text-white"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                <a
+                  href="/blog/"
+                  className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-left text-xs font-bold text-white"
+                >
+                  Журнал
+                </a>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
-      <main id="main" className="relative z-10">
-        {/* Экран 1: 3D Showcase Hero (Planet BOLD + GROW + Mindly) */}
+      {/* Main Content */}
+      <main>
         <HeroShowcase
-          activePillar={activePillar}
-          onSelectPillar={setActivePillar}
+          activeLayer={activeLayer}
+          activeTariff={activeTariff}
+          chassisMode={chassisMode}
+          spinTrigger={spinTrigger}
+          isAuthed={isAuthed}
+          appBase={appBase}
+          onSelectLayer={handleSelectLayer}
+          onSelectTariff={handleSelectTariff}
+          onChangeChassisMode={handleChangeChassisMode}
+          onScrollToSection={scrollToSection}
+        />
+
+        <SplitCapabilitiesSection
+          onSelectLayer={handleSelectLayer}
+          isAuthed={isAuthed}
           appBase={appBase}
         />
 
-        {/* Экран 2: Split Frosted Glass Stage (AFRICAN FOREST) */}
-        <SplitCapabilitiesSection onSyncHeroPillar={setActivePillar} appBase={appBase} />
+        <ProductWalkthroughSection onSelectLayer={handleSelectLayer} />
 
-        {/* Экран 3: Живая Канбан-доска + 3D Конструктор проекта и тарифов (GROWTREE) */}
-        <GrowCalculatorSection appBase={appBase} />
+        <GrowCalculatorSection
+          activeLayer={activeLayer}
+          activeTariff={activeTariff}
+          spinTrigger={spinTrigger}
+          isAuthed={isAuthed}
+          appBase={appBase}
+          onSelectLayer={handleSelectLayer}
+          onSelectTariff={handleSelectTariff}
+        />
 
-        {/* Экран 4: 3D-веер из трёх экранов платформы */}
-        <ProductWalkthroughSection />
-
-        {/* Экран 5: Поиск по возможностям, гарантии, FAQ и блог */}
-        <CatalogFaqSection posts={posts} appBase={appBase} />
+        <CatalogFaqSection
+          posts={posts}
+          isAuthed={isAuthed}
+          appBase={appBase}
+          onSelectLayer={handleSelectLayer}
+        />
       </main>
 
-      <footer className="relative z-10 max-w-[1440px] mx-auto px-5 sm:px-9 py-10 border-t border-white/15 text-xs sm:text-sm text-white/75">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <strong className="text-white font-bold block">
-              © {currentYear} ProjectsFlow · Платформа для тех, кто строит с AI
-            </strong>
-            <span>
-              Опиши идею — получи готовый продукт · Встроенный Claude онлайн · Прозрачные финансы в ₽
-            </span>
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-white/12 bg-[#04060c]/90 backdrop-blur-xl mt-12">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/55">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
+              <Layers className="w-4 h-4 text-sky-400" />
+            </div>
+            <span className="font-bold text-white">ProjectsFlow</span>
+            <span>© {new Date().getFullYear()} · Все расчёты в ₽ · Код принадлежит вам</span>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <a
-              href="/blog"
-              className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-semibold transition"
-            >
-              Блог
+
+          <div className="flex flex-wrap items-center gap-5">
+            <a href="#hero" className="hover:text-white transition-colors">
+              3D Архитектура
             </a>
-            <a
-              href={`${appBase}/login`}
-              data-auth-anon
-              className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-semibold transition"
-            >
-              Войти
+            <a href="#prompt-sandbox" className="hover:text-white transition-colors">
+              Песочница ИИ
             </a>
-            <a
-              href={`${appBase}/register`}
-              data-auth-anon
-              className="px-4 py-2 rounded-full bg-white/18 hover:bg-white/28 text-white font-bold transition"
-            >
-              Начать бесплатно ↗
+            <a href="#pricing" className="hover:text-white transition-colors">
+              Тарифы
             </a>
-            <a
-              href={`${appBase}/`}
-              data-auth-authed
-              className="px-4 py-2 rounded-full bg-white/18 hover:bg-white/28 text-white font-bold transition"
-            >
-              Открыть приложение ↗
+            <a href="/blog/" className="hover:text-white transition-colors">
+              Журнал
             </a>
           </div>
         </div>

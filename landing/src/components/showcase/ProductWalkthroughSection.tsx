@@ -1,197 +1,292 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Check, Sparkles } from 'lucide-react';
-import { WALKTHROUGH_STEPS } from '@/data/showcaseData';
+import {
+  Check,
+  Copy,
+  Cpu,
+  Globe,
+  Layers,
+  ShieldCheck,
+  Terminal,
+  TrendingUp,
+} from 'lucide-react';
+import {
+  DESKTOP_WORKFLOW_STEPS,
+  type StackLayerId,
+} from '../../data/showcaseData';
 
-export const ProductWalkthroughSection: React.FC = () => {
-  const [activeStep, setActiveStep] = useState<number>(0);
+interface ProductWalkthroughSectionProps {
+  onSelectLayer?: (layerId: StackLayerId) => void;
+}
+
+export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps> = ({
+  onSelectLayer,
+}) => {
+  const [activeIdx, setActiveIdx] = useState<number>(0);
   const [copied, setCopied] = useState<boolean>(false);
 
-  const currentPrompt = WALKTHROUGH_STEPS[activeStep]?.demoPrompt ?? WALKTHROUGH_STEPS[0]!.demoPrompt;
+  const activeStep = DESKTOP_WORKFLOW_STEPS[activeIdx] ?? DESKTOP_WORKFLOW_STEPS[0]!;
 
-  const handleCopyDemo = async () => {
-    try {
-      await navigator.clipboard.writeText(currentPrompt);
-    } catch {
-      // Fallback
+  const handleSelectStep = (idx: number) => {
+    setActiveIdx(idx);
+    const step = DESKTOP_WORKFLOW_STEPS[idx];
+    if (step && onSelectLayer) {
+      onSelectLayer(step.layerId);
+    }
+  };
+
+  const handleCopyCommand = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(activeStep.terminalCommand).catch(() => {});
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2200);
+    setTimeout(() => setCopied(false), 1800);
   };
 
   return (
-    <section id="how" className="scroll-mt-24 max-w-[1440px] mx-auto my-24 px-4 sm:px-9">
-      <div className="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-3.5">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/12 border border-white/25 backdrop-blur-xl text-xs sm:text-sm font-medium text-white">
-          <Sparkles className="w-4 h-4 text-amber-300" />
-          <span>Реальные экраны платформы · От идеи до прибыли</span>
+    <section
+      id="walkthrough"
+      className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-14 scroll-mt-24"
+    >
+      {/* Section Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/15 mb-3">
+            <Layers className="w-3.5 h-3.5 text-sky-400" />
+            <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-white/85">
+              Маршрут проекта · 3 изометрических узла
+            </span>
+          </div>
+          <h2 className="font-display font-black uppercase text-3xl sm:text-5xl leading-[0.96] tracking-[-0.03em] text-white">
+            КАК РАБОТАЕТ СТУДИЯ{' '}
+            <span className="text-sky-400">PROJECTSFLOW</span>
+          </h2>
         </div>
-        <h2 className="font-display font-black text-3xl sm:text-5xl tracking-tight text-white">
-          Три шага внутри ProjectsFlow
-        </h2>
-        <p className="text-sm sm:text-base text-white/80 leading-relaxed">
-          Ты остаёшься на уровне идей и решений. Доска задач, живой стрим работы AI, предрелизные проверки и финансовая аналитика собраны в одном окне.
+
+        <p className="text-white/70 text-sm sm:text-base max-w-md">
+          Переключайте узлы <span className="text-white font-bold">01 → 02 → 03</span>, чтобы
+          развернуть соответствующее окно рабочей станции в 3D-перспективе.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-10 items-center">
-        {/* Левая колонка: Интерактивные карточки шагов */}
-        <div className="flex flex-col gap-3.5">
-          {WALKTHROUGH_STEPS.map((item, idx) => {
-            const isSelected = activeStep === idx;
-            return (
-              <motion.button
-                key={item.step}
-                whileHover={{ x: 6 }}
-                type="button"
-                onClick={() => setActiveStep(idx)}
-                className={`flex items-start gap-4 p-5 rounded-[24px] text-left border transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-white text-[#120b1d] border-white shadow-2xl'
-                    : 'bg-white/8 text-white border-white/18 hover:bg-white/14 backdrop-blur-xl'
-                }`}
-              >
-                <div
-                  className={`w-10 h-10 rounded-[12px] font-mono font-bold text-sm grid place-items-center shrink-0 ${
-                    isSelected ? 'bg-[#120b1d] text-white' : 'bg-white/15 text-white'
-                  }`}
-                >
-                  {item.step}
-                </div>
-                <div>
-                  <div className="font-bold text-base mb-1">{item.title}</div>
-                  <p
-                    className={`text-xs sm:text-sm leading-relaxed ${
-                      isSelected ? 'text-[#120b1d]/80' : 'text-white/80'
-                    }`}
-                  >
-                    {item.desc}
-                  </p>
-                </div>
-              </motion.button>
-            );
-          })}
+      {/* Isometric 01 -> 02 -> 03 Node Selector Rail (inspired by Pinterest pin-03.jpg) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        {DESKTOP_WORKFLOW_STEPS.map((step, idx) => {
+          const isSelected = idx === activeIdx;
+          return (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => handleSelectStep(idx)}
+              className={`group relative text-left p-5 rounded-[26px] border transition-all cursor-pointer overflow-hidden ${
+                isSelected
+                  ? 'bg-[#0e1628] border-white/45 shadow-[0_24px_60px_rgba(0,0,0,0.55)] -translate-y-1'
+                  : 'bg-[#080d18]/75 border-white/12 hover:bg-[#0c1322] hover:border-white/25'
+              }`}
+            >
+              {/* Top glowing accent bar */}
+              <div
+                className="h-1 w-full rounded-full mb-4 transition-all"
+                style={{
+                  backgroundColor: isSelected ? step.accentColor : 'rgba(255,255,255,0.1)',
+                  boxShadow: isSelected ? `0 0 16px ${step.accentColor}` : 'none',
+                }}
+              />
 
-          {/* Демо-виджет копирования готовой постановки задачи */}
-          <div className="mt-2 p-5 rounded-[24px] bg-[#100b1d]/70 border border-white/25 backdrop-blur-xl">
-            <div className="flex items-center justify-between text-xs text-white/75 mb-2.5">
-              <span>Пример постановки задачи для AI:</span>
-              <span className="font-bold text-[#94f23c]">
-                {copied ? '✓ Скопировано в буфер!' : 'Попробуй на старте'}
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <span
+                  className="font-display font-black text-2xl sm:text-3xl tracking-tight"
+                  style={{ color: isSelected ? step.accentColor : 'rgba(255,255,255,0.4)' }}
+                >
+                  {step.stepNum}
+                </span>
+                <span className="font-mono text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg bg-white/[0.06] text-white/75 border border-white/10">
+                  {step.subtitle}
+                </span>
+              </div>
+
+              <h3 className="font-bold text-base sm:text-lg text-white mb-1.5">
+                {step.title}
+              </h3>
+              <p className="text-xs text-white/65 leading-relaxed line-clamp-2">
+                {step.description}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main 3D Desktop Studio Matrix Stage (4 cols Telemetry + 8 cols 3D Wide Workstation Stack) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        {/* Left 4 cols: Active Step Details & Command Bar */}
+        <div className="lg:col-span-4 space-y-5">
+          <div className="rounded-[28px] p-6 bg-[#090e1a]/90 border border-white/20 backdrop-blur-2xl shadow-2xl">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: activeStep.accentColor }}
+              />
+              <span className="font-mono text-xs font-bold uppercase text-white/75">
+                УЗЕЛ {activeStep.stepNum} · {activeStep.subtitle}
               </span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <code className="font-mono font-semibold text-xs sm:text-sm text-white/95 leading-snug">
-                «{currentPrompt}»
+
+            <h3 className="font-display font-black text-xl sm:text-2xl text-white mb-3">
+              {activeStep.title}
+            </h3>
+
+            <p className="text-sm text-white/75 leading-relaxed mb-5">
+              {activeStep.description}
+            </p>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-3 gap-2 mb-5">
+              {activeStep.kpis.map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className="rounded-xl p-2.5 bg-white/[0.04] border border-white/10"
+                >
+                  <span
+                    className="font-mono text-xs font-extrabold block truncate"
+                    style={{ color: kpi.tone }}
+                  >
+                    {kpi.value}
+                  </span>
+                  <span className="text-[10px] text-white/55 block truncate mt-0.5">
+                    {kpi.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Interactive Terminal Command Copier */}
+            <div className="rounded-2xl p-3.5 bg-black/60 border border-white/15">
+              <div className="flex items-center justify-between text-[10px] font-mono text-white/50 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Terminal className="w-3 h-3 text-lime-400" />
+                  КОНТУР АВТОМАТИЗАЦИИ
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyCommand}
+                  className="inline-flex items-center gap-1 text-sky-300 hover:text-white cursor-pointer"
+                >
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Скопировано' : 'Копировать'}</span>
+                </button>
+              </div>
+              <code className="font-mono text-xs text-lime-300 block break-all">
+                $ {activeStep.terminalCommand}
               </code>
-              <button
-                type="button"
-                onClick={handleCopyDemo}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-white text-[#130b1d] text-xs font-bold hover:scale-105 transition cursor-pointer shrink-0"
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Скопировано' : 'Скопировать'}</span>
-              </button>
             </div>
           </div>
         </div>
 
-        {/* Правая колонка: 3D-веер из трёх титановых капсул с экранами ProjectsFlow */}
+        {/* Right 8 cols: 3D Perspective Wide Desktop Studio Stack */}
         <div
-          className="relative h-[540px] sm:h-[600px] flex items-center justify-center overflow-hidden sm:overflow-visible"
-          style={{ perspective: '1400px' }}
+          className="lg:col-span-8 relative h-[440px] sm:h-[470px] flex items-center justify-center select-none"
+          style={{ perspective: '1600px' }}
         >
-          {WALKTHROUGH_STEPS.map((item, idx) => {
-            const offset = idx - activeStep;
-            const isCenter = offset === 0;
-            const translateX = offset * 175;
-            const translateZ = isCenter ? 60 : -70;
-            const rotateY = offset * -22;
-            const scale = isCenter ? 1 : 0.86;
+          {DESKTOP_WORKFLOW_STEPS.map((step, idx) => {
+            const offset = idx - activeIdx;
+            const isFront = offset === 0;
 
             return (
               <motion.div
-                key={item.step}
-                onClick={() => setActiveStep(idx)}
+                key={step.id}
+                onClick={() => handleSelectStep(idx)}
                 animate={{
-                  x: translateX,
-                  z: translateZ,
-                  rotateY,
-                  scale,
-                  opacity: isCenter ? 1 : 0.72,
+                  x: offset * 56,
+                  y: offset * -26,
+                  z: isFront ? 40 : -Math.abs(offset) * 110,
+                  rotateY: offset * -12,
+                  rotateX: isFront ? 2 : 6,
+                  scale: isFront ? 1 : 0.9,
+                  opacity: isFront ? 1 : 0.55,
                 }}
-                transition={{ type: 'spring', stiffness: 240, damping: 26 }}
-                style={{ zIndex: isCenter ? 20 : 10 - Math.abs(offset) }}
-                className="absolute w-[305px] sm:w-[370px] cursor-pointer select-none"
+                transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+                style={{ zIndex: 30 - Math.abs(offset) * 10 }}
+                className="absolute w-full max-w-[720px] cursor-pointer"
               >
-                <div className="relative rounded-[34px] p-3 bg-gradient-to-b from-[#3d404a] to-[#15171e] border-2 border-white/40 shadow-[0_34px_75px_rgba(0,0,0,0.6)]">
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 w-16 h-3.5 rounded-full bg-black z-10" />
-                  <div className="w-full h-[400px] sm:h-[430px] rounded-[24px] bg-[#0a0d14] overflow-hidden flex flex-col justify-between p-3 pt-7 border border-white/10">
-                    {/* Верхний бейдж статуса внутри 3D-экрана */}
-                    <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[12px] bg-white/8 border border-white/12 text-[11px]">
-                      <span className="font-bold text-white truncate">ProjectsFlow · {item.step}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-[#94f23c]/20 text-[#b8ff66] font-semibold">
-                        {item.badge}
+                {/* Wide Titanium Desktop Studio Window Bezel */}
+                <div
+                  className="rounded-[28px] p-2.5 sm:p-3 bg-gradient-to-b from-[#273249] to-[#0a0f1c] border-2 shadow-[0_32px_90px_rgba(0,0,0,0.75)]"
+                  style={{
+                    borderColor: isFront ? step.accentColor : 'rgba(255,255,255,0.2)',
+                  }}
+                >
+                  <div className="rounded-[20px] bg-[#070b14] border border-white/10 overflow-hidden h-[380px] sm:h-[400px] flex flex-col justify-between">
+                    {/* macOS / Studio Top Window Bar */}
+                    <div className="px-4 py-3 bg-[#0d1424] border-b border-white/10 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-rose-500/80" />
+                        <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+                        <span className="w-3 h-3 rounded-full bg-emerald-400/80" />
+                        <span className="ml-2 font-mono text-xs font-bold text-white/85 truncate">
+                          {step.windowTitle}
+                        </span>
+                      </div>
+
+                      <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-white/60">
+                        <Globe className="w-3 h-3 text-sky-400" />
+                        <span>{step.windowUrl}</span>
+                      </div>
+                    </div>
+
+                    {/* Studio Window Body */}
+                    <div className="p-5 sm:p-6 space-y-4 flex-1 flex flex-col justify-center">
+                      {step.uiBlocks.map((block) => (
+                        <div
+                          key={block.title}
+                          className="rounded-2xl p-4 bg-white/[0.04] border border-white/12"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="font-bold text-sm text-white flex items-center gap-2">
+                              <Cpu
+                                className="w-4 h-4"
+                                style={{ color: step.accentColor }}
+                              />
+                              {block.title}
+                            </span>
+                            <span
+                              className="font-mono text-[10px] font-bold px-2.5 py-0.5 rounded-md uppercase"
+                              style={{
+                                backgroundColor: `${step.accentColor}25`,
+                                color: step.accentColor,
+                              }}
+                            >
+                              {block.badge}
+                            </span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {block.lines.map((line, lIdx) => (
+                              <p
+                                key={lIdx}
+                                className="text-xs sm:text-[13px] text-white/80 font-mono leading-relaxed"
+                              >
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Studio Window Footer Telemetry */}
+                    <div className="px-5 py-3 bg-[#0b1120] border-t border-white/10 flex items-center justify-between text-xs font-mono">
+                      <span className="text-white/60 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        Контур проверок: 4 / 4 активны
+                      </span>
+                      <span
+                        className="font-bold flex items-center gap-1.5"
+                        style={{ color: step.accentColor }}
+                      >
+                        <TrendingUp className="w-4 h-4" />
+                        Узел {step.stepNum} синхронизирован с 3D-стеком
                       </span>
                     </div>
-
-                    {/* Скриншот реального интерфейса с единым контейнером */}
-                    <div className="my-auto py-2 flex items-center justify-center overflow-hidden rounded-[14px]">
-                      <img
-                        src={item.shotUrl}
-                        alt={item.caption}
-                        className="max-w-full max-h-[210px] w-auto h-auto object-contain rounded-[12px] border border-white/15 shadow-lg"
-                        loading="lazy"
-                      />
-                    </div>
-
-                    {/* Живая телеметрия конкретного шага в нижней части экрана */}
-                    {item.screenType === 'board' && (
-                      <div className="p-3 rounded-[16px] bg-white/6 border border-white/12 text-xs text-white/90 space-y-1.5">
-                        <div className="flex items-center justify-between font-semibold">
-                          <span>Сайт кофейни · 12 задач</span>
-                          <span className="text-amber-300">На утверждении: 1</span>
-                        </div>
-                        <div className="text-[11px] text-white/70">
-                          Кликни по задаче — её заберёт AI-воркер и пришлёт готовый коммит.
-                        </div>
-                      </div>
-                    )}
-
-                    {item.screenType === 'live' && (
-                      <div className="p-3 rounded-[16px] bg-white/6 border border-white/12 text-xs text-white/90 space-y-2">
-                        <div className="flex items-center justify-between font-semibold">
-                          <span>✓ Сборка и типы · 4/4 Pass</span>
-                          <span className="font-mono text-[#94f23c]">84% · 3,20 ₽</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-white/15 overflow-hidden">
-                          <div className="w-[84%] h-full bg-[#94f23c] rounded-full" />
-                        </div>
-                      </div>
-                    )}
-
-                    {item.screenType === 'finance' && (
-                      <div className="grid grid-cols-3 gap-1.5 text-center">
-                        <div className="p-2 rounded-[12px] bg-white/6 border border-white/12">
-                          <span className="block text-[10px] text-white/60">Доход</span>
-                          <strong className="text-xs text-white">+214k ₽</strong>
-                        </div>
-                        <div className="p-2 rounded-[12px] bg-white/6 border border-white/12">
-                          <span className="block text-[10px] text-white/60">Расходы</span>
-                          <strong className="text-xs text-white/85">−85,6k ₽</strong>
-                        </div>
-                        <div className="p-2 rounded-[12px] bg-[#94f23c]/20 border border-[#94f23c]/40">
-                          <span className="block text-[10px] text-[#caff85]">Прибыль</span>
-                          <strong className="text-xs text-[#94f23c]">+128,4k ₽</strong>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                </div>
-                <div className="text-center mt-3">
-                  <span className="inline-block px-3.5 py-1 rounded-full bg-black/55 border border-white/25 text-xs font-bold text-white">
-                    {item.caption}
-                  </span>
                 </div>
               </motion.div>
             );
