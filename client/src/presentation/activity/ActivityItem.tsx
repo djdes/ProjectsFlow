@@ -266,14 +266,14 @@ export function ActivityItem({
   if (changes.length > 0) {
     const inline = changes.map((change, i) => (
       <span key={`${change.field}-${i}`}>
-        {i > 0 && ' · '}
+        {i > 0 && ', '}
         <ChangeInline change={change} />
       </span>
     ));
     meta = (
       <>
         {who}
-        {' · '}
+        {': '}
         {taskId || !isTaskEvent ? (
           <ActLink
             onClick={() => (taskId ? openTask(changes[0]?.field) : openProject())}
@@ -286,7 +286,7 @@ export function ActivityItem({
         )}
       </>
     );
-    metaTitle = `${actor} · ${changes.map(changeText).join(' · ')}`;
+    metaTitle = `${actor}: ${changes.map(changeText).join(', ')}`;
   } else if (comment) {
     meta = (
       <>

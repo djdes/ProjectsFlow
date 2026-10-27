@@ -8,13 +8,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
      Рекомендуемый выделен словом и главной кнопкой, не цветом строки. -->
 <section id="pricing" class="pf-section pf-band--paper pricing" aria-labelledby="pricing-title">
   <div class="pf-container">
-    <div class="pf-head pf-head--split">
-      <h2 id="pricing-title" class="pf-h2">Простые тарифы. Начни бесплатно.</h2>
-      <p class="pf-lead">
-        На бесплатном подключаешь свою подписку Claude. На Прайме и VIP Claude работает онлайн
-        от нас, ключи не нужны.
-      </p>
-    </div>
+    <h2 id="pricing-title" class="pf-h2 pricing__title">Простые тарифы. Начни бесплатно.</h2>
 
     <div class="plans">
       <div class="plans__heads" aria-hidden="true">
@@ -70,6 +64,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
 <style>
   .pricing { padding-block-end: var(--space-2xl); }
+  .pricing__title { margin-block-end: var(--space-2xl); }
 
   /* Таблица тарифов: шапка над линией 2px, строки через тонкую линию. */
   .plans { border-block-start: var(--rule-bar) solid var(--color-ink); }
@@ -146,15 +141,17 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
-  @media (min-width: 40rem) and (max-width: 74.99rem) {
+  @media (min-width: 40rem) and (max-width: 79.99rem) {
     .plan { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--gap-columns); }
   }
 
-  /* Четыре столбца — только там, где самая длинная кнопка помещается в свой. */
-  @media (min-width: 75rem) {
+  /* Четыре столбца — только там, где самая длинная кнопка помещается в свой. Цена и
+     действия — фиксированные дорожки: столбцы совпадают во всех строках таблицы
+     (у max-content каждая строка посчитала бы свои). */
+  @media (min-width: 80rem) {
     .plans__heads,
     .plan {
-      grid-template-columns: minmax(0, 3fr) minmax(0, 3.5fr) minmax(0, 2.5fr) minmax(0, 3fr);
+      grid-template-columns: minmax(0, 3fr) minmax(0, 3.5fr) 15rem 20.5rem;
       column-gap: var(--gap-columns);
     }
     .plans__heads {

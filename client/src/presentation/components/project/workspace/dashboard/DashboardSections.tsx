@@ -1138,7 +1138,7 @@ function AppTrafficView({
                     height: `${Math.max(day.visits ? 6 : 2, (day.visits / dailyMax) * 132)}px`,
                   }}
                 />
-                <span className="hidden text-[9px] text-muted-foreground xl:block">
+                <span className="hidden text-2xs text-muted-foreground xl:block">
                   {day.date.slice(5)}
                 </span>
               </div>
@@ -1229,7 +1229,7 @@ function ProjectCardAnalyticsView({
                   height: `${Math.max(day.count ? 6 : 2, (day.count / dailyMax) * 132)}px`,
                 }}
               />
-              <span className="hidden text-[9px] text-muted-foreground xl:block">
+              <span className="hidden text-2xs text-muted-foreground xl:block">
                 {day.date.slice(5)}
               </span>
             </div>
@@ -2322,12 +2322,12 @@ function WorkerRunRow({
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">
           {run.agentName ?? "Воркер"}
-          {run.attempt > 1 ? ` · попытка ${run.attempt}` : ""}
+          {run.attempt > 1 ? `, попытка ${run.attempt}` : ""}
         </p>
         <p className="mbs-0.5 truncate text-xs text-muted-foreground">
           {formatWorkerTime(run.startedAt)}
-          {run.model ? ` · ${run.model}` : ""}
-          {run.costUsd != null ? ` · $${run.costUsd.toFixed(4)}` : ""}
+          {run.model ? `, ${run.model}` : ""}
+          {run.costUsd != null ? `, $${run.costUsd.toFixed(4)}` : ""}
         </p>
       </div>
       <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
@@ -2459,8 +2459,8 @@ export function AgentsSection({
               <option value="">Работа вручную</option>
               {candidates.map((candidate) => (
                 <option key={candidate.userId} value={candidate.userId}>
-                  {candidate.displayName} · {candidate.activeTokenCount}{" "}
-                  токен(а){candidate.isAdmin ? " · admin" : ""}
+                  {candidate.displayName}, {candidate.activeTokenCount}{" "}
+                  токен(а){candidate.isAdmin ? ", admin" : ""}
                 </option>
               ))}
             </select>

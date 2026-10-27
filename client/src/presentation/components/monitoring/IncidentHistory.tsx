@@ -40,8 +40,8 @@ export function IncidentHistory({ projectId }: { projectId: string }): React.Rea
             <div className="min-w-0 flex-1">
               <p className="text-sm">{a.message}</p>
               <p className="text-xs text-muted-foreground">
-                {a.ruleKind} · решён {a.resolvedAt ? relativeTime(a.resolvedAt) : '—'}
-                {durationMin !== null ? ` · длился ~${durationMin} мин` : ''}
+                {a.ruleKind}, решён {a.resolvedAt ? relativeTime(a.resolvedAt) : '—'}
+                {durationMin !== null ? `, длился ~${durationMin} мин` : ''}
               </p>
             </div>
           </li>

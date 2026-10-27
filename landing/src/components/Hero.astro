@@ -12,7 +12,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     <h1 id="hero-title" class="hero__title">Опиши идею.<br />Получи готовый продукт.</h1>
 
     <div class="hero__foot">
-      <p class="hero__lead">Подписка на Claude уже внутри: без VPN, своих ключей и&nbsp;лишней настройки.</p>
+      <p class="hero__lead">Claude уже внутри, проект на автопилоте, прибыль и&nbsp;траты понятным языком.</p>
 
       <div class="hero__start">
         <form class="hero__form" data-auth-anon data-hero-start data-app-base={appBase}>
@@ -31,7 +31,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
           Открыть приложение
         </a>
         <p class="hero__note">
-          Первый час на Прайме бесплатно и без карты.
+          Первый час на Прайме бесплатно и без карты. Не зашло, вернём деньги.
           <span data-auth-anon class="hero__login">Уже есть аккаунт? <a href={`${appBase}/login`} class="pf-link">Войти</a></span>
         </p>
       </div>
@@ -67,7 +67,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
   .hero__title {
     max-inline-size: none;
     font-size: min(var(--text-display), 4.75rem);
-    line-height: 0.96;
+    line-height: 1.02;
     word-spacing: -0.2em;
     text-wrap: balance;
   }
@@ -151,6 +151,12 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     white-space: nowrap;
   }
   .stage__how { color: var(--color-band-muted); }
+  /* На широких экранах под карточкой на утверждении есть запас до сгиба: вывеска крупнее. */
+  @media (min-width: 90rem) {
+    .stage__sign { padding: var(--space-md) var(--space-lg); }
+    .stage__name { font-size: var(--text-title); }
+    .stage__how { font-size: var(--text-md); }
+  }
   .stage__touch { display: none; }
   @media (pointer: coarse) {
     .stage__fine { display: none; }

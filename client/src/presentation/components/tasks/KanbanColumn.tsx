@@ -641,7 +641,7 @@ export function KanbanColumn({
                       title={STATUS_SUBTITLE[status]}
                       // На мобиле прячем совсем (там колонки уже, а подпись — второстепенная):
                       // название «Воркер» гарантированно не режется. На десктопе показываем «Opus».
-                      className="hidden min-w-0 flex-1 truncate text-[10px] leading-4 text-muted-foreground/60 sm:inline"
+                      className="hidden min-w-0 flex-1 truncate text-2xs leading-4 text-muted-foreground sm:inline"
                     >
                       {STATUS_SUBTITLE[status]}
                     </span>

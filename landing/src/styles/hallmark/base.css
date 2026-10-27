@@ -41,7 +41,9 @@
     font-weight: var(--display-weight, 700);
     font-synthesis: none;
     letter-spacing: var(--tracking-display);
-    line-height: 0.98;
+    /* 1.04, не меньше: у «й» и «ё» бревис и точки, у «д», «у», «р» выносные — строкам
+       нужен зазор, иначе они касаются. */
+    line-height: 1.04;
     overflow-wrap: break-word;
     min-width: 0;
     text-wrap: balance;

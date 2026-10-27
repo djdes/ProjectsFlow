@@ -12,7 +12,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   manual: 'Вручную',
   todo: 'Воркер',
   in_progress: 'В работе',
-  awaiting_clarification: '🤔 На уточнении',
+  awaiting_clarification: 'На уточнении',
   pending_approval: 'На утверждении',
   done: 'Готово',
   // Кастомные колонки (db/154): настоящее название задаёт проект в kanban_settings —

@@ -36,13 +36,7 @@ const steps = [
 
 <section id="how" class="pf-section pf-band route" aria-labelledby="how-title">
   <div class="pf-container">
-    <div class="pf-head pf-head--split">
-      <h2 id="how-title" class="pf-h2">Четыре шага от идеи до запуска</h2>
-      <p class="pf-lead">
-        Ты остаёшься на уровне идей и решений. Всё, что между задумкой и готовым продуктом,
-        платформа берёт на себя.
-      </p>
-    </div>
+    <h2 id="how-title" class="pf-h2 route__title-main">Четыре шага от идеи до запуска</h2>
 
     <div class="route__board">
       <div class="route__heads" aria-hidden="true">
@@ -72,11 +66,26 @@ const steps = [
           ))
         }
       </ol>
+      <p class="route__caption">
+        Ты остаёшься на уровне идей и решений. Всё, что между задумкой и готовым продуктом,
+        платформа берёт на себя.
+      </p>
     </div>
   </div>
 </section>
 
 <style>
+  .route__title-main {
+    max-inline-size: none;
+    margin-block-end: var(--space-xl);
+    color: var(--color-band-ink);
+  }
+  .route__caption {
+    max-inline-size: 60ch;
+    margin-block-start: var(--space-lg);
+    font-size: var(--text-md);
+    color: var(--color-band-muted);
+  }
   /* Табло: шапка столбцов над линией 2px, строки — через тонкую линию. */
   .route__board { border-block-start: var(--rule-bar) solid var(--color-band-ink); }
   .route__heads { display: none; }

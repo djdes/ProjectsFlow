@@ -3,6 +3,7 @@
  * axes: light/mono/cool · posture: committed · contrast: pass · fold: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R3 V5 · weakest: R, the kept content ran to ten sections; merged the features and the screens into one switcher and cut every fact printed three times */
 /* Hallmark · hero-review: fix · 5 findings · 4 resolved 1 partial (the phone's first screen shows the board's columns, its first card just under the fold) */
+/* Hallmark · finish-review: subagent · fix · 8 findings · 7 resolved, 1 kept (the night accent is the app's own dark brand periwinkle, the logo mark follows it as in the app) · gap: the kept section heads are generic, rewording them is the owner's call */
 /* Hallmark · waive 24b · seven lengths, all in board.css and Screenshots.astro under .pf-product · the live board and the app windows keep the app's own dense spacing (7 by 10px cards, 6px columns) so they match the real product */
 /* Hallmark · waive 39b · button.kb-btn at 28px, only inside the board under .pf-product · Принять and Вернуть are the app's own card buttons inside a working demo, not page controls */
 /* Hallmark · waive 59 · the one 40px gap is the hero to the board stage, every other seam is 105px or more · the Banner posture keeps the live board above the fold, so the stage hangs off the hero */

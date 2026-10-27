@@ -87,16 +87,15 @@
       scale 160ms var(--pf-ease);
   }
 }
-/* Нажатие растягивает ползунок в сторону хода — масштабом, а не шириной (ширину не анимируем). */
+/* Нажатие растягивает ползунок в сторону хода — масштабом, а не шириной (ширину не анимируем).
+   Точка масштаба стоит и в покое: на отпускании ползунок сжимается к тому же краю. */
+.pf-switch-thumb { transform-origin: left center; }
+.pf-switch[aria-checked="true"] .pf-switch-thumb { transform-origin: right center; }
 .pf-switch:active:not(:disabled) .pf-switch-thumb {
   scale: 1.15 1;
-  transform-origin: left center;
-}
-.pf-switch[aria-checked="true"]:active:not(:disabled) .pf-switch-thumb {
-  transform-origin: right center;
 }
 /* Подложку активной вкладки двигает скрипт: координаты из getBoundingClientRect уходят в
-   transform (сдвиг + масштаб по ширине от базовых 100px), поэтому переезд — только transform. */
+   transform (сдвиг), ширина ставится сразу, поэтому переезд — только transform. */
 @media (prefers-reduced-motion: no-preference) {
   .pf-tab-indicator {
     transition: transform 260ms var(--pf-ease);

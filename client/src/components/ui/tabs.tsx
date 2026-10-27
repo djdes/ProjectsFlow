@@ -4,9 +4,6 @@ import { cn } from '@/lib/utils';
 
 export const Tabs = TabsPrimitive.Root;
 
-// Базовая ширина подложки активной вкладки: настоящую ширину даёт scaleX, чтобы переезд
-// между вкладками шёл одним transform, без анимации left/width.
-const TAB_INDICATOR_BASE = 100;
 
 export function TabsList({
   className,
@@ -85,13 +82,13 @@ export function TabsList({
         <span
           aria-hidden="true"
           className="pf-tab-indicator pointer-events-none absolute rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
+          // Ширина и высота ставятся сразу, переезжает только transform: left/width не анимируем.
           style={{
             left: 0,
             top: 0,
-            width: TAB_INDICATOR_BASE,
+            width: indicator.width,
             height: indicator.height,
-            transformOrigin: '0 0',
-            transform: `translate(${indicator.left}px, ${indicator.top}px) scaleX(${indicator.width / TAB_INDICATOR_BASE})`,
+            transform: `translate(${indicator.left}px, ${indicator.top}px)`,
           }}
         />
       )}
