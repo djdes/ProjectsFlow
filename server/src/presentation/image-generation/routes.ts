@@ -25,6 +25,8 @@ export function imageGenerationRouter(service: ImageGenerationService, authentic
   });
   r.use(requireAuth);
   r.get('/',wrap(async(req,res)=>{const conversationId=z.string().uuid().optional().parse(req.query.conversationId);res.json({items:(await service.list(req.user!.id,conversationId)).map(dto)});}));
+  // Register the literal path before /:id; "quota" is not a job UUID.
+  r.get('/quota',wrap(async(req,res)=>{res.set('Cache-Control','private, no-store').json(await service.quota(req.user!.id));}));
   const references=multer({storage:multer.memoryStorage(),limits:{files:8,fileSize:6*1024*1024,fields:3,fieldSize:32000}});
   r.post('/',references.array('images',8),wrap(async(req,res)=>{
     const size=z.coerce.number().int().min(256).max(4096).optional();

@@ -39,6 +39,7 @@ export class ImageGenerationService {
     if (job.conversationId) await this.requireConversation(userId, job.conversationId);
     return job;
   }
+  quota(userId: string) { return this.deps.jobs.quota(userId); }
   async image(userId: string, id: string): Promise<Buffer> {
     const job = await this.owned(userId, id);
     if (job.status !== 'succeeded' || !job.storageKey) throw new ImageGenerationError(409, 'Фотография ещё не готова');

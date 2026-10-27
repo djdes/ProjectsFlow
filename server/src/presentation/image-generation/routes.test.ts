@@ -24,6 +24,7 @@ async function withApi(run: (url: string) => Promise<void>) {
       },
     },
     jobs: {
+      async quota(userId) { return { active: 0, remaining: userId === 'owner' ? 8 : 10, releaseAfterSeconds: userId === 'owner' ? [20, 60] : [] }; },
       async create(input) { return { ...job, ...input, status: 'queued', storageKey: null }; },
       async list(userId, chatId) { return userId === job.userId && (!chatId || chatId === job.conversationId) ? [job] : []; },
       async get(key) { return key === id ? job : null; },

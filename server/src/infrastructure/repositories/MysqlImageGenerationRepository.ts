@@ -4,6 +4,17 @@ import { ImageGenerationError, type ImageGeneration } from '../../domain/image-g
 const fields = `id, user_id AS userId, conversation_id AS conversationId, dispatcher_user_id AS dispatcherUserId, prompt, status, claim_token AS claimToken, storage_key AS storageKey, error_message AS errorMessage, created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
 export class MysqlImageGenerationRepository implements ImageGenerationRepository {
   constructor(private readonly pool: Pool) {}
+  async quota(userId: string) {
+    await this.expire();
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      `SELECT status, GREATEST(1, CEIL(TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(3), created_at + INTERVAL 1 DAY) / 1000000)) AS releaseAfterSeconds
+       FROM image_generation_jobs WHERE user_id=? AND created_at >= UTC_TIMESTAMP(3) - INTERVAL 1 DAY ORDER BY created_at`, [userId]);
+    return {
+      active: rows.filter(row => row.status === 'queued' || row.status === 'running').length,
+      remaining: Math.max(0, 10 - rows.length),
+      releaseAfterSeconds: rows.map(row => Number(row.releaseAfterSeconds)),
+    };
+  }
   async create(job: Pick<ImageGeneration, 'id'|'userId'|'dispatcherUserId'|'prompt'|'conversationId'>): Promise<ImageGeneration> {
     const connection = await this.pool.getConnection();
     try {
