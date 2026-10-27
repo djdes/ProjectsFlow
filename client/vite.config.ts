@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { createServer, defineConfig, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -21,6 +21,26 @@ export default defineConfig({
         { tag: 'script', children: readFileSync(new URL('./src/boot/recovery.js', import.meta.url), 'utf8'), injectTo: 'head-prepend' as const },
         { tag: 'style', children: readFileSync(new URL('./src/boot/recovery.css', import.meta.url), 'utf8'), injectTo: 'head-prepend' as const },
       ];
+    },
+  }, {
+    // The first HTML paint shows the same skeleton React renders while the app loads
+    // (presentation/components/loading/bootSkeleton.tsx), instead of a hand-made copy.
+    name: 'prerender-boot-skeleton',
+    async transformIndexHtml(html, ctx) {
+      const server: ViteDevServer = ctx.server ?? await createServer({
+        configFile: false,
+        root: __dirname,
+        logLevel: 'error',
+        appType: 'custom',
+        server: { middlewareMode: true, hmr: false, ws: false },
+        resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+      });
+      try {
+        const mod = await server.ssrLoadModule('/src/presentation/components/loading/bootSkeleton.tsx');
+        return html.replace('<!--pf-boot-skeleton-->', (mod.renderBootSkeleton as () => string)());
+      } finally {
+        if (!ctx.server) await server.close();
+      }
     },
   }],
   resolve: {

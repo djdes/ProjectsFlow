@@ -219,6 +219,51 @@ export const scenarios = [
   ...quickTaskSettingsScenarios,
   ...workspaceIsolationScenarios,
   {
+    id: 'loading-skeleton',
+    title: 'Загрузка «Входящих»: один скелетон с первой отрисовки',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      // Slow answers keep every loading stage on screen: sign-in check, workspace, tasks.
+      t.state.delays = { 'ws-team:/auth/me': 300, 'ws-team:/workspaces': 300, 'ws-team:/assignees/mine': 500 };
+      await page.addInitScript(() => {
+        const frames = [];
+        window.__pfSkeletonFrames = frames;
+        const sample = () => {
+          if (document.querySelector('[data-pf-task-id]')) return;
+          const column = document.querySelector('[data-pf-loading] .bg-panel');
+          if (column) {
+            const r = column.getBoundingClientRect();
+            frames.push({
+              boot: Boolean(column.closest('#pf-boot')),
+              page: column.closest('[data-pf-page-skeleton]')?.getAttribute('data-pf-page-skeleton') ?? null,
+              shell: Boolean(document.querySelector('[data-pf-shell-skeleton], [data-pf-main]')),
+              rect: [r.left, r.top, r.width, r.height].map(Math.round).join(','),
+            });
+          }
+          requestAnimationFrame(sample);
+        };
+        new MutationObserver(sample).observe(document, { childList: true, subtree: true });
+        requestAnimationFrame(sample);
+      });
+      await t.goto('/', { ready: () => page.locator('[data-pf-task-id]'), readyName: 'задачи «Входящих» после задержки' });
+      const frames = await page.evaluate(() => window.__pfSkeletonFrames);
+      await t.check('первый кадр — готовый скелетон «Входящих» из index.html', async () => {
+        t.assert(frames.length > 0, 'скелетон не появлялся');
+        t.assert(frames[0].boot && frames[0].page === 'inbox', `первый скелетон: ${JSON.stringify(frames[0])}`);
+      });
+      await t.check('скелетон всё время внутри оболочки (сайдбар или шапка с нижней навигацией)', async () => {
+        const bare = frames.find((f) => !f.shell);
+        t.assert(!bare, `кадр без оболочки: ${JSON.stringify(bare)}`);
+      });
+      await t.check('геометрия скелетона не меняется до появления задач', async () => {
+        const rects = [...new Set(frames.map((f) => f.rect))];
+        t.assert(rects.length === 1, `колонка скелетона прыгала: ${rects.join(' → ')}`);
+      });
+    },
+  },
+
+  {
     id: 'auth',
     title: 'Вход, регистрация, сброс пароля',
     auth: false,

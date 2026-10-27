@@ -60,12 +60,20 @@
   overflow: hidden;
   background: oklch(var(--sidebar, 97.06% 0.002 67.8));
 }
+/* The mobile install banner (InstallAppPrompt) is expected when the boot script set
+   data-pf-install: not installed and not dismissed. */
+.pf-loading-install {
+  display: none;
+}
 @media (max-width: 767px) {
   .pf-loading-shell {
     grid-template-columns: minmax(0, 1fr);
   }
   .pf-loading-sidebar {
     display: none;
+  }
+  html[data-pf-install] .pf-loading-install {
+    display: flex;
   }
 }
 .pf-button {

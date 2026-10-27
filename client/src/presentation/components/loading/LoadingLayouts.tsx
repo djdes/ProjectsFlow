@@ -2,8 +2,8 @@ import { useLocation } from 'react-router-dom';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
-  loadingLayoutForPath,
   projectLoadingLayout,
+  routeLoadingLayout,
   type LoadingLayout,
 } from '@/lib/loadingLayout';
 
@@ -348,6 +348,13 @@ export function PageSkeleton({
     {/* Заголовок «Все входящие» над блоком текущего пространства — как в InboxPage. */}
     <div className="space-y-3 px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9"><Skeleton className="h-7 w-44" /><InboxLoadingLayout /></div>
   </div>;
+  if (
+    layout === 'board' ||
+    layout === 'table' ||
+    layout === 'list' ||
+    layout === 'calendar'
+  )
+    return <ProjectPageSkeleton layout={layout} />;
   const narrow = ['overview', 'task'].includes(layout);
   return (
     <div className="min-h-full min-w-0" data-pf-page-skeleton={layout}>
@@ -382,12 +389,6 @@ export function PageSkeleton({
               </div>
             </div>
           </LoadingRegion>
-          {layout === 'board' && (
-            <BoardSkeleton />
-          )}
-          {layout === 'table' && <TableSkeleton />}
-          {layout === 'list' && <ListSkeleton />}
-          {layout === 'calendar' && <CalendarSkeleton />}
           {layout === 'overview' && (
             <>
               <div className="space-y-5 rounded-xl border p-5">
@@ -423,13 +424,53 @@ export function PageSkeleton({
   );
 }
 
+// The project page (TasksPage) without a cover or banners: mobile project row or desktop
+// crumbs, the title block and the view tabs row, so its own board skeleton lands in place.
+function ProjectPageSkeleton({
+  layout,
+}: {
+  layout: 'board' | 'table' | 'list' | 'calendar';
+}): React.ReactElement {
+  return (
+    <div className="min-h-full min-w-0" data-pf-page-skeleton={layout}>
+      <div className="flex min-h-12 items-center justify-between gap-2 px-4 sm:hidden">
+        <Skeleton className="h-3.5 w-32" />
+        <div className="flex gap-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="size-5" />
+          ))}
+        </div>
+      </div>
+      <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-32" />
+      </div>
+      <div className="px-4 pbe-10 sm:px-14 sm:pbe-12 lg:px-24">
+        <LoadingRegion label="Загружаем страницу…" className="pbe-3 pbs-2 sm:pbs-1">
+          <div className="hidden h-7 sm:mbe-1 sm:block" />
+          <div className="flex h-12 items-center sm:h-[38px]">
+            <Skeleton className="h-8 w-2/3 max-w-sm" />
+          </div>
+          <div className="flex h-6 items-center mbs-1 sm:mbs-0 sm:ps-3">
+            <Skeleton className="h-3.5 w-1/2 max-w-xs" />
+          </div>
+        </LoadingRegion>
+        <div className="flex h-11 items-center justify-between gap-2 mbe-3 md:h-10 md:mbe-2">
+          <Skeleton className="h-11 w-32 rounded-lg sm:h-9 md:h-7 md:w-24" />
+          <Skeleton className="h-11 w-28 rounded-lg sm:h-9 md:h-7 md:w-24" />
+        </div>
+        {layout === 'board' && <BoardSkeleton />}
+        {layout === 'table' && <TableSkeleton />}
+        {layout === 'list' && <ListSkeleton />}
+        {layout === 'calendar' && <CalendarSkeleton />}
+      </div>
+    </div>
+  );
+}
+
 export function RouteSkeleton(): React.ReactElement {
   const { pathname, search } = useLocation();
-  const project = /^\/projects\/([^/]+)\/?$/.exec(pathname);
-  const layout = project
-    ? projectLoadingLayout(project[1], new URLSearchParams(search).get('view'))
-    : loadingLayoutForPath(pathname);
-  return <PageSkeleton layout={layout} />;
+  return <PageSkeleton layout={routeLoadingLayout(pathname, search)} />;
 }
 
 export function SidebarSkeleton(): React.ReactElement {
@@ -450,7 +491,21 @@ export function SidebarSkeleton(): React.ReactElement {
   );
 }
 
+/** The app shell before it can render: the same skeleton from the first HTML paint
+ * (prerendered into index.html), through sign-in check, code and workspace loading. */
 export function AppShellSkeleton(): React.ReactElement {
+  const { pathname, search } = useLocation();
+  return <ShellSkeleton layout={routeLoadingLayout(pathname, search)} />;
+}
+
+export function ShellSkeleton({
+  layout,
+  page,
+}: {
+  layout: LoadingLayout;
+  /** Boot prerender only: a placeholder replaced by the page skeleton. */
+  page?: React.ReactNode;
+}): React.ReactElement {
   return (
     <div className="pf-loading-shell" data-pf-shell-skeleton="true">
       <aside className="pf-loading-sidebar">
@@ -466,12 +521,31 @@ export function AppShellSkeleton(): React.ReactElement {
         <Skeleton className="mx-3 h-8" />
         <SidebarSkeleton />
       </aside>
-      <div className="min-w-0 overflow-hidden">
-        <div className="flex h-11 items-center gap-3 border-be px-3 md:hidden">
-          <Skeleton className="size-6" />
-          <Skeleton className="h-3 w-32" />
+      {/* Same rows as the mobile AppShell: header, install banner, main, bottom navigation. */}
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <div className="flex min-h-12 shrink-0 items-center gap-2 border-be px-3 pbs-[env(safe-area-inset-top,0px)] md:hidden">
+          <span className="grid size-9 shrink-0 place-items-center"><Skeleton className="size-5" /></span>
+          <Skeleton className="h-4 w-36" />
+          <span className="flex-1" />
+          <span className="grid size-11 shrink-0 place-items-center"><Skeleton className="size-5" /></span>
         </div>
-        <RouteSkeleton />
+        <div className="pf-loading-install min-h-10 shrink-0 items-center gap-2 border-be bg-primary/5 ps-3">
+          <Skeleton className="size-6" />
+          <Skeleton className="h-3 w-36" />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {page ?? <PageSkeleton layout={layout} />}
+        </div>
+        <div className="shrink-0 border-bs bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2 md:hidden">
+          <div className="mx-auto flex max-w-md rounded-xl bg-foreground/[0.05] p-1 dark:border dark:border-border dark:bg-panel">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 px-2 py-1.5">
+                <Skeleton className="size-5" />
+                <Skeleton className="h-[11px] w-12" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

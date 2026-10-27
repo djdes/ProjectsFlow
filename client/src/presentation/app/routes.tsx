@@ -5,7 +5,7 @@ import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { AppShellSkeleton, RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 
 // Code-splitting (A4): каждая страница уезжает в свой chunk и грузится по требованию.
 // Раньше весь SPA (dnd-kit, motion, admin, monitoring, finance, tiptap) шёл одним
@@ -16,8 +16,8 @@ function RouteFallback(): ReactElement {
   return <RouteSkeleton />;
 }
 
-function el(node: ReactElement): ReactElement {
-  return <Suspense fallback={<RouteFallback />}>{node}</Suspense>;
+function el(node: ReactElement, fallback: ReactElement = <RouteFallback />): ReactElement {
+  return <Suspense fallback={fallback}>{node}</Suspense>;
 }
 
 // Редирект старого пути с СОХРАНЕНИЕМ query-строки. Обычный <Navigate to="/"> её теряет,
@@ -124,7 +124,8 @@ export const router = createBrowserRouter(
     path: '/',
     element: (
       <ProtectedRoute>
-        {el(<AppShell />)}
+        {/* Shell code is loading: keep the shell skeleton of the boot screen, not a bare page. */}
+        {el(<AppShell />, <AppShellSkeleton />)}
       </ProtectedRoute>
     ),
     children: [
