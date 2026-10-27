@@ -1360,6 +1360,7 @@ export function KanbanBoard({
                 onQuickPromote={canEdit ? handleQuickPromote : undefined}
                 onTaskChanged={() => void refetch()}
                 showCheckbox={canEdit}
+                showWorkerAction={!isInbox && !workerLocked}
                 lastDoneTaskId={lastDoneTaskId}
                 lastTodoTaskId={lastTodoTaskId}
                 onMove={move}

@@ -67,6 +67,11 @@ export function canTakeToManual(status: TaskStatus): boolean {
   );
 }
 
+// Only draft and custom project columns offer a new worker handoff.
+export function canSendToWorker(status: TaskStatus): boolean {
+  return status === 'backlog' || isCustomKanbanSlot(status);
+}
+
 // Optional small subtitle rendered next to the main label in column header.
 // Только для `todo` (Воркер): модель воркера, коротко — длинная подпись отъедала ширину
 // у названия и резалась многоточием. null/undefined = без подписи.

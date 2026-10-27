@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Play, Trash2, Undo2 } from 'lucide-react';
+import { ArrowRight, Bot, Check, ImageIcon, ListChecks, MessageSquare, Play, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -22,7 +22,7 @@ import { DeadlineBadge } from './DeadlineBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { checklistProgress } from '@/lib/checklist';
-import { STATUS_LABEL, canTakeToManual, quickPromoteNext } from './statusLabels';
+import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
@@ -53,6 +53,7 @@ type Props = {
   // Показывать действие «выполнено» первым в hover-панели карточки. Только для inbox
   // и только если задача не в работе у Ralph.
   showCheckbox?: boolean;
+  showWorkerAction?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
   // Оптимистичный useTasks().move родителя. Прокидывается в чекбокс «выполнено»/«принять
@@ -107,6 +108,7 @@ function KanbanCardImpl({
   onQuickPromote,
   onTaskChanged,
   showCheckbox = false,
+  showWorkerAction = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
   onMove,
@@ -312,6 +314,25 @@ function KanbanCardImpl({
         <Play className={cn('fill-current', big ? 'size-4' : 'size-3')} />
       </Button>
     ) : null;
+    const worker = showWorkerAction && workerEnabled && onQuickPromote && canSendToWorker(task.status) ? (
+      <Button
+        key="worker"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'shrink-0 cursor-pointer rounded-[5px] text-primary hover:bg-hover',
+          big ? bigAction : 'size-6',
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onQuickPromote(task, 'todo');
+        }}
+        aria-label="Передать воркеру"
+        title="Передать воркеру"
+      >
+        <Bot className={big ? 'size-4' : 'size-3'} />
+      </Button>
+    ) : null;
     const withdrawButton = canWithdraw ? (
       <Button
         key="withdraw"
@@ -355,8 +376,8 @@ function KanbanCardImpl({
     // «по середине» попадал в «выполнено»: задача закрывалась вместо того, чтобы открыться.
     // Корзина же только спрашивает подтверждение — промах по ней ничего не ломает.
     return big
-      ? [remove, withdrawButton, promote, take, complete]
-      : [complete, take, promote, withdrawButton, remove];
+      ? [remove, withdrawButton, promote, worker, take, complete]
+      : [complete, take, worker, promote, withdrawButton, remove];
   };
 
   // Мета-бейджи (срок / приоритет / чеклист / комменты / статус / ответственный) — нижняя

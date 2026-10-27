@@ -114,6 +114,7 @@ type Props = {
   // Inbox-only: показывать круглый чекбокс «выполнено» на каждой карточке.
   // Также пробрасывает lastDoneTaskId/lastTodoTaskId для afterTaskId при move'е.
   showCheckbox?: boolean;
+  showWorkerAction?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
   // Прокидывается в KanbanCard → InboxCheckbox: оптимистичный useTasks().move доски,
@@ -208,6 +209,7 @@ export function KanbanColumn({
   onTaskChanged,
   headerExtra,
   showCheckbox = false,
+  showWorkerAction = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
   onMove,
@@ -410,6 +412,7 @@ export function KanbanColumn({
       onQuickPromote={onQuickPromote}
       onTaskChanged={onTaskChanged}
       showCheckbox={showCheckbox}
+      showWorkerAction={showWorkerAction}
       lastDoneTaskId={lastDoneTaskId}
       lastTodoTaskId={lastTodoTaskId}
       onMove={onMove}
