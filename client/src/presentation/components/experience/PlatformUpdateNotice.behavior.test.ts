@@ -18,7 +18,11 @@ test('indicator follows real phases, preserves an uncertain status and reloads o
   const show = (patch: Partial<DeploymentStatus>, observedRun: string | null = 'run:1') => act(async () => root.render(
     React.createElement(DeploymentStatusNotice, { status: { ...base, ...patch }, browserBuild: oldRevision.slice(0, 7), observedRun, onReload: () => { reloads++; } })));
   try {
-    for (const [phase, label] of [['queued', 'Ожидаем запуска'], ['checking', 'Проверяем изменения'], ['building', 'Собираем новую версию'], ['deploying', 'Устанавливаем новую версию'], ['verifying', 'Подтверждаем публикацию']] as const) {
+    for (const phase of ['queued', 'checking', 'building'] as const) {
+      await show({ phase, deployedRevision: nextRevision }, null);
+      assert.equal(host.textContent, '');
+    }
+    for (const [phase, label] of [['deploying', 'Устанавливаем новую версию'], ['verifying', 'Подтверждаем публикацию']] as const) {
       await show({ phase, deployedRevision: nextRevision }); assert.match(host.textContent ?? '', new RegExp(label));
       assert.equal(host.querySelector('[aria-label="Скрыть статус обновления"]'), null);
       assert.doesNotMatch(host.textContent ?? '', /Сайт обновлён|\d+%/);
@@ -36,7 +40,8 @@ test('indicator follows real phases, preserves an uncertain status and reloads o
     assert.ok(refresh); await act(async () => refresh.click()); assert.equal(reloads, 1);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Скрыть статус обновления"]')!.click());
     assert.equal(host.textContent, '');
-    await show({ runId: 'next-run', phase: 'failed' }); assert.match(host.textContent ?? '', /Не удалось завершить обновление/);
+    await show({ runId: 'next-run', phase: 'failed' }, null); assert.equal(host.textContent, '');
+    await show({ runId: 'next-run', phase: 'failed' }, 'next-run:1'); assert.match(host.textContent ?? '', /Не удалось завершить обновление/);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
 

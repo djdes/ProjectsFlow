@@ -266,7 +266,7 @@ const listCommentsQuerySchema = z.object({
     .transform((v) => (v ? new Date(v) : undefined)),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   has_marker: z
-    .enum(['ralph-question', 'ralph-answer', 'ralph-grillme-summary'])
+    .enum(['ralph-question', 'ralph-answer', 'ralph-grillme-summary', 'ralph-plan'])
     .optional(),
 });
 
