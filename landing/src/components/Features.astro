@@ -8,13 +8,13 @@ const PANELS = [
   {
     key: 'idea',
     tab: 'Задача',
-    views: ['idea', 'live'],
+    views: ['live', 'idea'],
     caption: 'Видно каждый шаг: что AI делает прямо сейчас и во что это обходится.',
   },
   {
     key: 'autopilot',
     tab: 'Автопилот',
-    views: ['autopilot', 'checks'],
+    views: ['checks', 'autopilot'],
     caption: 'Проверки перед выкаткой: сборка, линтер, секреты. Всё зелёное, можно выкатывать.',
   },
   {
@@ -32,8 +32,9 @@ const PANELS = [
 ] as const;
 
 const featureOf = (key: string) => FEATURES.find((f) => f.icon === key)!;
-// Финансы и живой прогресс уже показаны во вкладках — в ряду их не повторяем.
-const more = SECONDARY_FEATURES.filter((f) => f.icon !== 'finance' && f.icon !== 'live');
+// Ряд «Ещё» показывает все шесть: тот, кто только листает, без кликов по вкладкам тоже
+// видит финансы и живой прогресс.
+const more = SECONDARY_FEATURES;
 ---
 
 <section id="features" class="pf-section pf-section--m feat" aria-labelledby="features-title">
@@ -83,14 +84,15 @@ const more = SECONDARY_FEATURES.filter((f) => f.icon !== 'finance' && f.icon !==
                 <div class:list={['feat__windows', p.views.length > 1 && 'feat__windows--pair']}>
                   {p.views.map((v) => <Screenshots view={v} />)}
                 </div>
-                <figcaption class="feat__caption" data-keep>{p.caption}</figcaption>
+                <figcaption class="feat__caption" data-keep>
+                  {p.caption} <span class="feat__sample">Цифры и задачи в окнах для примера.</span>
+                </figcaption>
               </figure>
             </section>
           );
         })
       }
     </div>
-    <p class="feat__sample">Цифры и задачи в окнах для примера: у тебя будут свои.</p>
 
     <div class="feat__more">
       <h3 class="feat__more-title">Ещё в ProjectsFlow</h3>
@@ -112,10 +114,12 @@ const more = SECONDARY_FEATURES.filter((f) => f.icon !== 'finance' && f.icon !==
   /* Вкладки: квадратные клетки на общих рамках 2px; выбранная — чернилами. */
   .feat__tabs { display: none; }
   :global(.js) .feat__tabs {
-    display: flex;
-    overflow-x: auto;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-block-end: var(--space-lg);
+  }
+  @media (min-width: 40rem) {
+    :global(.js) .feat__tabs { display: flex; }
   }
   .feat__tab {
     flex: 0 0 auto;
@@ -131,7 +135,13 @@ const more = SECONDARY_FEATURES.filter((f) => f.icon !== 'finance' && f.icon !==
     cursor: pointer;
     transition: background-color var(--dur-micro) steps(1), color var(--dur-micro) steps(1);
   }
-  .feat__tab + .feat__tab { margin-inline-start: calc(-1 * var(--rule-bar)); }
+  /* Соседние клетки делят рамку 2px: в сетке 2×2 и в ряд. */
+  .feat__tab:nth-child(even) { margin-inline-start: calc(-1 * var(--rule-bar)); }
+  .feat__tab:nth-child(n + 3) { margin-block-start: calc(-1 * var(--rule-bar)); }
+  @media (min-width: 40rem) {
+    .feat__tab + .feat__tab { margin-inline-start: calc(-1 * var(--rule-bar)); }
+    .feat__tab:nth-child(n + 3) { margin-block-start: 0; }
+  }
   .feat__tab[aria-selected='true'] { background: var(--color-ink); color: var(--color-paper); }
   .feat__tab:focus-visible { position: relative; z-index: var(--z-raised); outline-offset: 3px; }
   .feat__tab:active { transform: translateY(1px); }
@@ -169,25 +179,23 @@ const more = SECONDARY_FEATURES.filter((f) => f.icon !== 'finance' && f.icon !==
     gap: var(--space-md);
     align-items: start;
   }
-  /* Пара окон — ступенькой, без перекрытия: фрагмент слева прижат к низу, главное окно
-     справа выше него. Ничего не закрывает чужой текст. */
+  /* Главное окно — во всю ширину визуальной колонки, второе — под ним, со сдвигом вправо:
+     ступенька без перекрытия, ничего не закрывает чужой текст. */
+  .feat__windows > :global(:first-child) { min-block-size: 15rem; }
   @media (min-width: 48rem) {
     .feat__windows--pair {
-      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-      align-items: end;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: var(--space-md) 0;
     }
-    .feat__windows--pair > :global(:first-child) { margin-block-start: var(--space-2xl); }
+    .feat__windows--pair > :global(:first-child) { grid-column: 1 / -1; }
+    .feat__windows--pair > :global(:last-child) { grid-column: 4 / -1; }
   }
   .feat__caption {
     margin-block-start: var(--space-sm);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
-  .feat__sample {
-    margin-block-start: var(--space-lg);
-    font-size: var(--text-sm);
-    color: var(--color-muted);
-  }
+  .feat__sample { color: var(--color-ink-2); }
 
   /* Ещё — ряд из четырёх клеток под линией 2px, между клетками тонкие линии. */
   .feat__more {
@@ -207,11 +215,13 @@ const more = SECONDARY_FEATURES.filter((f) => f.icon !== 'finance' && f.icon !==
     padding: var(--space-lg) var(--space-lg) var(--space-lg) 0;
     border-block-end: var(--rule-hair) solid var(--color-rule);
   }
+  /* Шесть пунктов — сетка 3 × 2: тонкие линии между клетками, без карточек. */
   @media (min-width: 60rem) {
-    .feat__more-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .feat__more-item { border-block-end: 0; padding-inline-start: var(--space-lg); }
-    .feat__more-item:first-child { padding-inline-start: 0; }
-    .feat__more-item + .feat__more-item { border-inline-start: var(--rule-hair) solid var(--color-rule); }
+    .feat__more-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .feat__more-item { padding-inline-start: var(--space-lg); }
+    .feat__more-item:nth-child(3n + 1) { padding-inline-start: 0; }
+    .feat__more-item:not(:nth-child(3n + 1)) { border-inline-start: var(--rule-hair) solid var(--color-rule); }
+    .feat__more-item:nth-child(n + 4) { border-block-end: 0; }
   }
   .feat__more-item dt {
     font-size: var(--text-md);

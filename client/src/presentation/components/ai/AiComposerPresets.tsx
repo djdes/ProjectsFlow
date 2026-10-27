@@ -34,9 +34,9 @@ export function AiComposerPresets({
             type="button"
             disabled={disabled}
             onClick={() => onPick(prompt)}
-            className="flex min-h-16 flex-col items-start gap-1.5 rounded-lg bg-card px-3 py-2.5 text-start shadow-card transition-[background-color,box-shadow,opacity] hover:shadow-card-hover disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-card-hover"
+            className="flex min-h-16 items-start gap-2 rounded-lg bg-card px-3 py-2.5 text-start shadow-card transition-[background-color,box-shadow,opacity] hover:shadow-card-hover disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-card-hover"
           >
-            <span className="grid size-7 place-items-center rounded-lg bg-muted"><Icon className="size-3.5" /></span>
+            <Icon className="mbs-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="text-xs font-medium leading-4">{title}</span>
           </button>
         ))}

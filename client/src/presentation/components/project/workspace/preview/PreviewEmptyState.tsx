@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Loader2, Monitor, ServerCog } from 'lucide-react';
+import { Loader2, Monitor, ServerCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -123,7 +123,6 @@ function ConvertButton({ projectId }: { projectId: string }): React.ReactElement
         className="mbs-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary-ink hover:underline"
       >
         Открыть задачу на перевод
-        <ArrowRight className="size-4" />
       </a>
     );
   }

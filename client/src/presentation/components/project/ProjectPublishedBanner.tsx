@@ -100,7 +100,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
 
   return (
     <div
-      className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-be border-border bg-primary-soft transition-[margin] duration-300 ease-in-out"
+      className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-be border-border bg-primary-soft"
       style={shiftForOverlay ? { marginRight: rightPanelWidth } : undefined}
     >
       <div

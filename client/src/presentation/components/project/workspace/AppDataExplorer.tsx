@@ -268,7 +268,7 @@ export function AppDataExplorer({
           <div className="flex flex-wrap items-center gap-1.5 border-be bg-muted/15 px-3 py-2">
             {filters.map((filter, index) => (
               <span key={`${filter.column}-${index}`} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
-                {filter.column} · {OPERATOR_LABEL[filter.operator]}{filter.value !== undefined ? ` · ${String(filter.value)}` : ''}
+                {filter.column} {OPERATOR_LABEL[filter.operator]}{filter.value !== undefined ? ` ${String(filter.value)}` : ''}
                 <button type="button" onClick={() => setFilters(filters.filter((_, item) => item !== index))} aria-label="Убрать фильтр"><X className="size-3" /></button>
               </span>
             ))}

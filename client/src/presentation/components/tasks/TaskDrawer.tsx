@@ -3064,7 +3064,7 @@ function CommentItem({
             </span>
           ) : isSystem ? (
             <span className="truncate rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
-              ⚙ Система
+              Система
             </span>
           ) : (
             <span className="max-w-full truncate text-sm font-medium">{displayName}</span>

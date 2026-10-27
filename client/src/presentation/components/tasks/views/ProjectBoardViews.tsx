@@ -839,7 +839,7 @@ export function ProjectBoardViews({
       <div
         id="pf-views-tabs-row"
         style={{ marginRight: rightPanelWidth }}
-        className="group/tabs relative z-30 flex min-w-0 items-center gap-2 bg-background pbe-3 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none md:gap-0.5 md:pbe-2"
+        className="group/tabs relative z-30 flex min-w-0 items-center gap-2 bg-background pbe-3 md:gap-0.5 md:pbe-2"
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">

@@ -842,8 +842,8 @@ function AssigneeDigestCard({
         return;
       }
       toast.success(
-        `Отправлено сообщений: ${result.sentCount} · задач: ${result.taskCount}` +
-          (result.approvalTaskCount ? ` · на утверждении: ${result.approvalTaskCount}` : ''),
+        `Отправлено сообщений: ${result.sentCount}, задач: ${result.taskCount}` +
+          (result.approvalTaskCount ? `, на утверждении: ${result.approvalTaskCount}` : ''),
       );
       if (result.skippedRecipientUserIds.length > 0) {
         toast.warning(

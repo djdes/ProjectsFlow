@@ -126,10 +126,11 @@ export function ServerDetailSheet({
             </div>
             <SheetDescription className="text-xs">
               {latest ? `обновлено ${relativeTime(latest.collectedAt)}` : 'нет данных'}
-              {server.host ? ` · ${server.host}` : ''}
+              {server.host ? `, ${server.host}` : ''}
               {isMuted && server.mutedUntil && (
                 <span className="ms-1 text-warning">
-                  · 🔕 тихо до{' '}
+                  <BellOff className="me-1 inline size-3 align-[-2px]" aria-hidden="true" />
+                  тихо до{' '}
                   {server.mutedUntil.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}

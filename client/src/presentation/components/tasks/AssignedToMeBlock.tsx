@@ -3166,7 +3166,7 @@ function RejectApprovalDialog({
                     className="size-16 rounded-md border object-cover"
                   />
                 ) : (
-                  <div className="grid size-16 place-items-center rounded-md border px-1 text-center text-[10px] leading-tight text-muted-foreground">
+                  <div className="grid size-16 place-items-center rounded-md border px-1 text-center text-2xs leading-tight text-muted-foreground">
                     <span className="line-clamp-3 break-all">{f.file.name}</span>
                   </div>
                 )}
@@ -3782,8 +3782,8 @@ function UserCube({
         <UserAvatarHover
           displayName={label}
           avatarUrl={member.avatarUrl}
-          subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
-            hint ? ` · ${hint}` : ''
+          subtitle={`участник пространства. Перетащите сюда задачу, чтобы назначить${
+            hint ? `. ${hint}` : ''
           }`}
           triggerClassName={cn('size-9 text-2xs sm:size-[30px]', clickable && 'cursor-pointer')}
         />

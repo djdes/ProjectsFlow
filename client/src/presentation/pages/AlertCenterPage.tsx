@@ -21,7 +21,7 @@ function AlertRow({ a, resolved }: { a: AlertCenterEntry; resolved?: boolean }):
         <p className="text-sm">{a.message}</p>
         <p className="text-xs text-muted-foreground">
           {a.projectName}
-          {a.serverName ? ` · ${a.serverName}` : ''} · {a.ruleKind} ·{' '}
+          {a.serverName ? `, ${a.serverName}` : ''}, {a.ruleKind},{' '}
           {resolved && a.resolvedAt
             ? `решён ${relativeTime(a.resolvedAt)}`
             : `с ${relativeTime(a.firstSeenAt)}`}

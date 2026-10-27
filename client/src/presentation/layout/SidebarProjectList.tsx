@@ -540,7 +540,7 @@ export function SidebarProjectList(): React.ReactElement {
       >
         <ChevronDown
           className={cn(
-            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100',
+            'order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100',
             mainCollapsed && '-rotate-90',
           )}
         />
@@ -665,7 +665,7 @@ export function SidebarProjectList(): React.ReactElement {
           >
             <ChevronDown
               className={cn(
-                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100',
+                'order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -720,7 +720,7 @@ export function SidebarProjectList(): React.ReactElement {
             className="group sticky inset-bs-0 z-10 flex w-full items-center rounded bg-sidebar px-2 py-1.5 text-start text-xs font-medium text-muted-foreground/80 hover:text-foreground"
           >
             <ChevronDown
-              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
+              className={cn('order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
             {archived.length > 0 && <span className="ms-1.5 tabular-nums opacity-70">{archived.length}</span>}
