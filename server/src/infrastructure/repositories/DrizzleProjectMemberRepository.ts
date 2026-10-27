@@ -247,9 +247,10 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${projects.workspaceId} AND (wm2.role IN ('owner', 'lead') OR NOT EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = wm2.workspace_id AND x.project_id = ${projects.id} AND x.user_id = wm2.user_id)))`,
         // deleted_at IS NULL (db/134): задачи из корзины не должны раздувать счётчик.
         taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
-        // Избранное теперь ВЫЧИСЛЯЕМОЕ: проект в избранном, если у пользователя есть незавершённая
-        // назначенная задача в нём. Ручное избранное (колонки db/040 is_favorite/favorite_sort_order)
-        // больше не читаем — они остаются в схеме, но игнорируются.
+        // Избранное ВЫЧИСЛЯЕМОЕ: проект в избранном, если у пользователя есть незавершённая
+        // назначенная задача в нём. Колонки db/040 is_favorite/favorite_sort_order больше не
+        // читаем; ручная поправка из меню проекта — favorite_override (db/172), см. ниже.
+        favoriteOverride: projectMembers.favoriteOverride,
         isFavorite: sql<number>`EXISTS (SELECT 1 FROM tasks tf WHERE tf.project_id = ${projects.id} AND tf.assignee_user_id = ${userId} AND tf.status <> 'done' AND tf.deleted_at IS NULL)`,
       })
       .from(projects)
@@ -280,7 +281,8 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
           memberCount: r.project.isInbox ? 1 : Number(r.memberCount),
           taskCount: Number(r.taskCount),
           // Inbox никогда не попадает в избранное (как и раньше — его нельзя было отметить).
-          isFavorite: !r.project.isInbox && Boolean(r.isFavorite),
+          // Ручная поправка пользователя (закрепить/скрыть) важнее вычисленного значения.
+          isFavorite: !r.project.isInbox && (r.favoriteOverride ?? Boolean(r.isFavorite)),
           // Ручной порядок избранного убран — поле оставлено в типе как 0 (клиент больше не сортирует по нему).
           favoriteSortOrder: 0,
         },
@@ -445,12 +447,14 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   }
 
   async setFavorite(projectId: string, userId: string, favorite: boolean): Promise<void> {
+    // Избранное вычисляется по назначенным задачам, поэтому выбор пользователя хранится
+    // поправкой favorite_override (db/172). Строки может ещё не быть — нужен upsert и при
+    // снятии: иначе вычисленное избранное не убрать.
     if (!favorite) {
-      // Нет строки — и так не favorite: обычного UPDATE достаточно.
       await this.db
-        .update(projectMembers)
-        .set({ isFavorite: false })
-        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+        .insert(projectMembers)
+        .values({ projectId, userId, role: 'editor', isFavorite: false, favoriteOverride: false })
+        .onDuplicateKeyUpdate({ set: { isFavorite: false, favoriteOverride: false } });
       return;
     }
     // favorite=true: ленивый upsert строки + favorite_sort_order = MAX+1 одной транзакцией.
@@ -470,8 +474,11 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
           role: 'editor',
           isFavorite: true,
           favoriteSortOrder: nextOrder,
+          favoriteOverride: true,
         })
-        .onDuplicateKeyUpdate({ set: { isFavorite: true, favoriteSortOrder: nextOrder } });
+        .onDuplicateKeyUpdate({
+          set: { isFavorite: true, favoriteSortOrder: nextOrder, favoriteOverride: true },
+        });
     });
   }
 

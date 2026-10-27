@@ -1010,6 +1010,22 @@ export const scenarios = [
         const path = new URL(page.url()).pathname;
         if (path !== '/') throw new Error(`после броска открылся ${path} вместо «Входящих»`);
       });
+      await t.check('меню проекта: «Настройки» и переключатель избранного', async () => {
+        // 27.10.2026: в меню проекта (правая кнопка и «⋯») не было настроек и избранного.
+        const menu = page.getByRole('menu');
+        await aside.getByText('CRM-интеграция', { exact: true }).click({ button: 'right' });
+        await t.visible(menu.getByRole('menuitem', { name: 'Настройки' }), 'пункт «Настройки»');
+        await menu.getByRole('menuitem', { name: 'Добавить в избранное' }).click();
+        await t.waitForMutation(
+          (m) => m.method === 'PUT' && m.path === '/projects/p-crm/favorite' && m.body?.favorite === true,
+          'нет PUT избранного',
+        );
+        await t.visible(aside.getByRole('button', { name: 'Избранное' }), 'секция «Избранное»');
+        await aside.getByRole('button', { name: 'Действия проекта «CRM-интеграция»' }).first().click();
+        await t.visible(menu.getByRole('menuitem', { name: 'Убрать из избранного' }), 'пункт «Убрать из избранного»');
+        await menu.getByRole('menuitem', { name: 'Настройки' }).click();
+        await t.waitFor(() => new URL(page.url()).pathname === '/projects/p-crm/overview', 'адрес не настроек проекта');
+      });
     },
   },
 

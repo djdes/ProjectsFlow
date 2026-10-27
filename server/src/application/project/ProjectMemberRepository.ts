@@ -54,10 +54,9 @@ export interface ProjectMemberRepository {
   // игнорируются (UPDATE по (projectId,userId) просто не затронет строк).
   reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void>;
 
-  // Toggle favorite-флага для (projectId,userId). При favorite=true репо ставит
-  // favorite_sort_order = MAX(favorite_sort_order среди favorites юзера) + 1 — новый
-  // избранный встаёт в конец секции, не схлопываясь в 0. При favorite=false — просто
-  // сбрасывает флаг (favorite_sort_order остаётся как мусор, но не влияет на UI).
+  // Ручной выбор пользователя «в избранное / убрать из избранного» для (projectId,userId).
+  // Избранное вычисляется по назначенным задачам; выбор хранится поправкой поверх него
+  // (db/172) и побеждает вычисленное значение в listProjectsForUser.
   setFavorite(projectId: string, userId: string, favorite: boolean): Promise<void>;
 
   // Пересортировка favorites юзера. Симметрично reorderForUser, но пишет
