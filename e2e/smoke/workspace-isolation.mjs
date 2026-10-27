@@ -143,6 +143,16 @@ export const workspaceIsolationScenarios = [
         await t.pageChecks(`пространство ${id}`);
         if (id === 'ws-other') await t.screenshot('workspace-other');
       }
+      await t.check('шестерёнка в меню открывает настройки другого пространства без переключения', async () => {
+        const other = t.state.workspaces.find((w) => w.id === 'ws-other');
+        await openWorkspaceMenu(t);
+        const gear = t.page.getByRole('menuitem', { name: `Настройки пространства «${other.name}»`, exact: true });
+        await t.visible(gear, 'шестерёнка видна без наведения');
+        t.assert(Number(await gear.evaluate((el) => getComputedStyle(el).opacity)) === 1, 'шестерёнка прозрачная');
+        await gear.click();
+        await t.waitFor(() => new URL(t.page.url()).pathname === '/workspaces/ws-other/settings', 'не открылись настройки ws-other');
+        t.assert(t.state.activeWorkspaceId === WORKSPACE_ID, 'клик по шестерёнке переключил пространство');
+      });
     },
   },
   {
