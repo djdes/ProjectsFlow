@@ -8,6 +8,7 @@
 
 /* --- Рамка «окна» приложения ---------------------------------------------- */
 .kb {
+  --sticky-shadow: var(--board-sticky-shadow);
   container: kb / inline-size;
   position: relative;
   border-radius: var(--r-2xl);
@@ -23,16 +24,16 @@
 .kb__bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   block-size: 2.75rem;
-  padding-inline: 0.625rem 0.75rem;
+  padding-inline: 0.625rem var(--space-sm);
   border-block-end: 1px solid oklch(var(--border));
   font-size: var(--text-ui);
 }
 .kb__crumbs {
   display: flex;
   align-items: center;
-  gap: 0.125rem;
+  gap: var(--space-3xs);
   min-inline-size: 0;
   color: oklch(var(--muted-foreground));
 }
@@ -41,7 +42,7 @@
   align-items: center;
   gap: 0.375rem;
   min-inline-size: 0;
-  padding: 0.25rem 0.375rem;
+  padding: var(--space-2xs) 0.375rem;
   border-radius: var(--r-md);
   white-space: nowrap;
 }
@@ -67,7 +68,7 @@
   gap: 0.375rem;
   block-size: 1.5rem;
   margin-inline-start: auto;
-  padding-inline: 0.5rem;
+  padding-inline: var(--space-xs);
   border-radius: var(--r-md);
   background: var(--done-soft);
   color: oklch(var(--done-ink));
@@ -77,7 +78,7 @@
 .kb__done-label { font-weight: 500; }
 
 /* Заголовок страницы 22px. */
-.kb__head { padding: 1.125rem 1rem 0.75rem; }
+.kb__head { padding: 1.125rem var(--space-md) var(--space-sm); }
 .kb__title {
   font-size: 1.375rem;
   font-weight: 700;
@@ -91,11 +92,11 @@
   display: flex;
   align-items: stretch;
   gap: 0.625rem;
-  padding: 0 1rem 1rem;
+  padding: 0 var(--space-md) var(--space-md);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  scroll-padding-inline: 1rem;
+  scroll-padding-inline: var(--space-md);
   scrollbar-width: thin;
   scrollbar-color: oklch(var(--muted-foreground) / 0.35) transparent;
 }
@@ -115,7 +116,7 @@
     z-index: 2;
     box-shadow:
       0 0 0 0.625rem oklch(var(--background)),
-      0.625rem 0 1rem -0.5rem var(--sticky-shadow, oklch(16.84% 0 none / 0.12));
+      0.625rem 0 1rem -0.5rem var(--sticky-shadow);
   }
 }
 
@@ -150,9 +151,8 @@
   padding: 6px;
   border-radius: var(--r-xl);
   background: oklch(var(--panel));
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    outline-color var(--dur-fast) var(--ease-out);
+  /* Кольцо фокуса появляется сразу: плавно меняется только подложка. */
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 .kb-col__head {
   display: flex;
@@ -160,7 +160,7 @@
   gap: 0.375rem;
   min-inline-size: 0;
   block-size: 1.75rem;
-  padding-inline: 0.25rem;
+  padding-inline: var(--space-2xs);
 }
 .kb-col__name {
   font-size: var(--text-ui);
@@ -200,7 +200,7 @@
   align-items: center;
   gap: 0.375rem;
   block-size: 1.5rem;
-  padding-inline: 0.25rem;
+  padding-inline: var(--space-2xs);
 }
 
 .kb-list {
@@ -213,7 +213,7 @@
 }
 .kb-empty {
   margin: 0;
-  padding: 0.25rem 0.375rem 0.375rem;
+  padding: var(--space-2xs) 0.375rem 0.375rem;
   font-size: var(--text-meta);
   line-height: var(--leading-snug);
   color: oklch(var(--muted-foreground));
@@ -223,7 +223,7 @@
   place-items: center;
   min-block-size: 2.75rem;
   margin-block-start: auto;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-xs) var(--space-sm);
   border: 1.5px dashed oklch(var(--drop-line));
   border-radius: var(--r-lg);
   font-size: var(--text-meta);
@@ -241,7 +241,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--space-3xs);
   padding: 7px 10px;
   border-radius: var(--r-lg);
   background: oklch(var(--card));
@@ -273,8 +273,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.5rem;
-  margin-block-start: 0.25rem;
+  gap: var(--space-2xs) var(--space-xs);
+  margin-block-start: var(--space-2xs);
   font-size: var(--text-xs);
 }
 
@@ -286,7 +286,7 @@
 .kb-due {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-2xs);
   color: oklch(var(--muted-foreground));
 }
 .kb-due .kb-ic { inline-size: 0.75rem; block-size: 0.75rem; }
@@ -370,13 +370,13 @@
 .kb-card--manual {
   flex-direction: row;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-xs);
 }
 .kb-card__handle {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-3xs);
   min-inline-size: 0;
   cursor: grab;
   border-radius: var(--r-sm);
@@ -422,7 +422,7 @@
 
 /* На утверждении: метка проекта, результат, «Принять» / «Вернуть». */
 .kb-card--approval { gap: 3px; }
-.kb-card--approval > .pf-tag { margin-block-end: 2px; }
+.kb-card--approval > .pf-tag { margin-block-end: var(--space-3xs); }
 .kb-card__actions {
   display: flex;
   flex-wrap: wrap;
@@ -491,7 +491,7 @@
   z-index: 5;
   display: flex;
   justify-content: center;
-  padding-inline: 0.75rem;
+  padding-inline: var(--space-sm);
   pointer-events: none;
 }
 .kb-toast {
@@ -499,7 +499,7 @@
   align-items: center;
   gap: 0.625rem;
   max-inline-size: 100%;
-  padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+  padding: 0.375rem 0.375rem 0.375rem var(--space-sm);
   border-radius: var(--r-lg);
   background: oklch(var(--toast));
   color: oklch(var(--toast-foreground));
@@ -518,7 +518,7 @@
 .kb-toast__undo {
   flex: none;
   min-block-size: 1.75rem;
-  padding-inline: 0.5rem;
+  padding-inline: var(--space-xs);
   border: 0;
   border-radius: var(--r-md);
   background: transparent;
@@ -546,8 +546,8 @@
 @media (prefers-color-scheme: dark) {
   .kb__done {
     background: transparent;
-    padding-inline: 0.25rem;
+    padding-inline: var(--space-2xs);
     color: oklch(var(--done));
   }
-  .kb__lane > .kb-col--now { --sticky-shadow: oklch(0% 0 none / 0.45); }
+  .kb__lane > .kb-col--now { --sticky-shadow: var(--board-sticky-shadow-dark); }
 }

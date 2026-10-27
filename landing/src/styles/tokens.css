@@ -7,6 +7,10 @@
    Цвета — тройки OKLCH (`--x: L% C H`, в коде `oklch(var(--x))`), производные — color-mix.
    В комментариях — исходный HEX из спецификации
    docs/superpowers/specs/2026-10-10-redesign-c4-design.md.
+   С редизайна по Hallmark (Wayfind) страница лендинга живёт на токенах из hallmark/tokens.css,
+   а эти — материал продукта: живая доска и окна приложения. Имена, которые совпадают со
+   шкалой страницы (размеры текста, трекинг, кривые, тень карточки), объявлены только внутри
+   .pf-product, остальное — на :root, как раньше.
    ============================================================================= */
 :root {
   color-scheme: light;
@@ -65,7 +69,6 @@
   --selection: color-mix(in oklch, oklch(var(--primary)) 14%, transparent);
 
   /* --- Тени. Карточка на светлом — кольцо 1px + мягкая тень вместо рамки. --- */
-  --shadow-card: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 1px 3px oklch(16.84% 0 none / 0.06);
   --shadow-card-hover: 0 0 0 1px oklch(16.84% 0 none / 0.1), 0 3px 8px oklch(16.84% 0 none / 0.12);
   --shadow-float: 0 10px 30px oklch(16.84% 0 none / 0.18);
   --shadow-menu: 0 0 0 1px oklch(16.84% 0 none / 0.05), 0 3px 6px oklch(16.84% 0 none / 0.1),
@@ -73,6 +76,9 @@
   /* Крупная рамка «окна» приложения в hero. */
   --shadow-frame: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 2px 4px oklch(16.84% 0 none / 0.04),
     0 24px 56px -20px oklch(16.84% 0 none / 0.2);
+  /* Тень закреплённой колонки «Сейчас» над уезжающими под неё проектами (доска в hero). */
+  --board-sticky-shadow: oklch(16.84% 0 none / 0.12);
+  --board-sticky-shadow-dark: oklch(0% 0 none / 0.45);
 
   /* --- Шрифт: системный стек Notion, без веб-шрифтов ------------------------ */
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI',
@@ -83,29 +89,17 @@
   /* --- Шкала текста (как в приложении) + плавающие заголовки ----------------
      h1: 36px на 390px → 64px от 1224px; h2: 28px → 40px. Отношение max/min < 2.5. */
   --text-2xs: 0.6875rem;   /* 11 — счётчики, мелкие метки */
-  --text-xs: 0.75rem;      /* 12 */
   --text-meta: 0.78125rem; /* 12.5 — подпись карточки */
   --text-ui: 0.8125rem;    /* 13 — крошки, кнопки доски */
   --text-card: 0.84375rem; /* 13.5 — заголовок карточки */
-  --text-sm: 0.875rem;     /* 14 */
-  --text-md: 0.9375rem;    /* 15 */
   --text-base: 1rem;       /* 16 */
-  --text-lead: 1.0625rem;  /* 17 — лид под заголовком */
   --text-h3: 1.25rem;      /* 20 */
   --text-h2: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem);
   --text-h1: clamp(2.25rem, 1.5rem + 3.2vw, 4rem);
   --leading-tight: 1.1;
   --leading-snug: 1.35;
   --leading-body: 1.6;
-  --tracking-display: -0.025em;
   --tracking-heading: -0.015em;
-
-  /* --- Сетка и ритм --------------------------------------------------------- */
-  --container: 75rem;                                  /* 1200px */
-  --gutter: clamp(1rem, 0.5rem + 2.5vw, 2rem);         /* 16px на телефоне → 32px */
-  --section-y: clamp(3.5rem, 2.25rem + 4vw, 6rem);     /* 56px → 96px */
-  --nav-h: 3.5rem;                                     /* 56px — полоса навигации */
-  --measure: 38rem;                                    /* длина строки лида < 80 символов */
 
   /* --- Радиусы: метка 4 · кнопка/поле 6 · карточка 8 · колонка 10 · панель 12 */
   --r-sm: 4px;
@@ -116,8 +110,6 @@
   --r-full: 999px;
 
   /* --- Движение: только функциональное ------------------------------------- */
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --dur-fast: 140ms;
   --dur: 200ms;
 }
@@ -172,11 +164,38 @@
     --active: color-mix(in oklch, oklch(100% 0 none) 10%, transparent);
     --selection: color-mix(in oklch, oklch(68.09% 0.169 275.03) 30%, transparent);
 
-    --shadow-card: 0 0 0 1px oklch(31.05% 0.015 274.41);
     --shadow-card-hover: 0 0 0 1px oklch(36.87% 0.018 272.29);
     --shadow-float: 0 12px 32px oklch(0% 0 none / 0.5);
     --shadow-menu: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 12px 32px oklch(0% 0 none / 0.5);
     --shadow-frame: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 24px 56px -20px oklch(0% 0 none / 0.6);
+  }
+}
+
+/* =============================================================================
+   Область продукта (.pf-product): живая доска в hero, окна приложения, карточка в руке.
+   Здесь — шрифт и шкала приложения; снаружи их перекрывает шкала страницы Hallmark.
+   ============================================================================= */
+.pf-product {
+  --text-xs: 0.75rem;      /* 12 */
+  --text-sm: 0.875rem;     /* 14 */
+  --text-md: 0.9375rem;    /* 15 */
+  --text-lead: 1.0625rem;  /* 17 */
+  --tracking-display: -0.025em;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --shadow-card: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 1px 3px oklch(16.84% 0 none / 0.06);
+
+  font-family: var(--font-sans);
+  font-stretch: normal;
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  font-variant-numeric: normal;
+  color: oklch(var(--foreground));
+  letter-spacing: normal;
+}
+@media (prefers-color-scheme: dark) {
+  .pf-product {
+    --shadow-card: 0 0 0 1px oklch(31.05% 0.015 274.41);
   }
 }
 

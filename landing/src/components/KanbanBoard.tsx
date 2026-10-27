@@ -77,16 +77,16 @@ const PROJECT: Record<ProjectId, Project> = {
 };
 
 const INITIAL: readonly Task[] = [
-  { id: 't1', project: 'cafe', title: 'Главная страница', note: '', result: 'Вёрстка и тексты готовы — проверь', status: 'approval' },
+  { id: 't1', project: 'cafe', title: 'Главная страница', note: '', result: 'Вёрстка и тексты готовы, проверь', status: 'approval' },
   { id: 't2', project: 'cafe', title: 'Купить домен kofeinya.ru', note: 'Нужна оплата картой', result: 'Домен куплен и подключён', status: 'manual', due: 'today' },
   { id: 't3', project: 'bot', title: 'Ответить первым клиентам', note: 'Три сообщения в Telegram', result: 'Ответы отправлены', status: 'manual', due: 'yesterday' },
   { id: 't4', project: 'cafe', title: 'Меню с ценами и фото', note: '12 позиций, фото с телефона', result: 'Меню собрано: 12 позиций с фото', status: 'running' },
-  { id: 't5', project: 'cafe', title: 'Форма брони столика', note: 'Заявки — в Telegram', result: 'Форма работает, заявки идут в Telegram', status: 'queued' },
+  { id: 't5', project: 'cafe', title: 'Форма брони столика', note: 'Заявки идут в Telegram', result: 'Форма работает, заявки идут в Telegram', status: 'queued' },
   { id: 't6', project: 'cafe', title: 'Отзывы гостей на главной', note: 'Из Яндекс Карт', result: 'Блок отзывов добавлен', status: 'idle', due: 'fri' },
   { id: 't7', project: 'bot', title: 'Напоминание за час до записи', note: 'Клиенту и мастеру', result: 'Напоминания настроены', status: 'queued', due: 'today' },
   { id: 't8', project: 'bot', title: 'Оплата через СБП', note: 'Предоплата 30%', result: 'Оплата подключена, тест прошёл', status: 'idle' },
   { id: 't9', project: 'bot', title: 'Отмена записи в один тап', note: 'Слот снова свободен', result: 'Кнопка отмены работает', status: 'idle' },
-  { id: 't10', project: 'launch', title: 'Экран тарифов', note: 'Три тарифа и сравнение', result: 'Экран собран — сверь цены', status: 'idle', due: 'yesterday' },
+  { id: 't10', project: 'launch', title: 'Экран тарифов', note: 'Три тарифа и сравнение', result: 'Экран собран, сверь цены', status: 'idle', due: 'yesterday' },
   { id: 't11', project: 'launch', title: 'Письмо после регистрации', note: 'Коротко, с первым шагом', result: 'Письмо написано и подключено', status: 'queued' },
   { id: 't12', project: 'launch', title: 'Тёмная тема', note: 'По настройке системы', result: 'Тёмная тема включена', status: 'idle' },
 ];
@@ -196,7 +196,7 @@ const makeKeyboardCoordinates =
 
 const screenReaderInstructions: ScreenReaderInstructions = {
   draggable:
-    'Enter — отдать задачу AI. Пробел — взять карточку, стрелками выбрать колонку, пробелом положить, Esc — отменить.',
+    'Enter: отдать задачу AI. Пробел: взять карточку, стрелками выбрать колонку, пробелом положить, Esc: отменить.',
 };
 
 /* --- Иконки (lucide, как в приложении) ------------------------------------- */
@@ -499,7 +499,7 @@ function NowColumn({
           </ul>
         )}
         <div className="kb-dropzone" aria-hidden="true">
-          {target ? 'Отпусти — сделаешь сам' : 'Перетащи сюда, что сделаешь сам'}
+          {target ? 'Отпусти: сделаешь сам' : 'Перетащи сюда, что сделаешь сам'}
         </div>
       </div>
     </div>
@@ -541,9 +541,9 @@ function ProjectColumn({
           ))}
         </ul>
       ) : (
-        <p className="kb-empty">Пусто — всё у AI или у тебя</p>
+        <p className="kb-empty">Пусто: всё у AI или у тебя</p>
       )}
-      {target && <div className="kb-dropzone" aria-hidden="true">Отпусти — задачу возьмёт AI</div>}
+      {target && <div className="kb-dropzone" aria-hidden="true">Отпусти: задачу возьмёт AI</div>}
     </div>
   );
 }
@@ -763,13 +763,13 @@ export default function KanbanBoard(): ReactElement {
 
   const titleOf = (id: UniqueIdentifier): string => tasksRef.current.find((t) => t.id === id)?.title ?? 'задача';
   const zoneName = (id: UniqueIdentifier): string => {
-    if (id === NOW) return 'в «Сейчас» — сделаешь сам';
+    if (id === NOW) return 'в «Сейчас», сделаешь сам';
     const project = PROJECTS.find((p) => colId(p.id) === id);
-    return project ? `в проект «${project.name}» — её возьмёт AI` : 'на место';
+    return project ? `в проект «${project.name}», её возьмёт AI` : 'на место';
   };
   const announcements: Announcements = {
     onDragStart: ({ active }) =>
-      `Задача «${titleOf(active.id)}» взята. Стрелками выбери колонку, пробелом положи, Esc — отмена.`,
+      `Задача «${titleOf(active.id)}» взята. Стрелками выбери колонку, пробелом положи, Esc: отмена.`,
     onDragOver: ({ over }) => (over ? `Над колонкой: ${zoneName(over.id)}.` : 'Не над колонкой.'),
     onDragEnd: ({ active, over }) =>
       over ? `Задача «${titleOf(active.id)}» перенесена ${zoneName(over.id)}.` : `Задача «${titleOf(active.id)}» осталась на месте.`,
@@ -852,7 +852,7 @@ export default function KanbanBoard(): ReactElement {
             с overflow её не обрезает. */}
         {mounted &&
           createPortal(
-            <DragOverlay dropAnimation={null} zIndex={9999} modifiers={[snapCenterToCursor]}>
+            <DragOverlay className="pf-product" dropAnimation={null} zIndex={9999} modifiers={[snapCenterToCursor]}>
               {dragged ? (
                 <div className={cx('kb-card kb-card--overlay', dragged.status === 'manual' && 'kb-card--manual')}>
                   {dragged.status === 'manual' ? (

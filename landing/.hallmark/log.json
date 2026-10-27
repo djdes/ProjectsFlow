@@ -1,0 +1,47 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "site",
+  "shape": "Marquee Hero",
+  "theme": "wayfind",
+  "axes": "light/mono/cool",
+  "hero": "Banner",
+  "nav": "masthead",
+  "footer": "letter close",
+  "imagery": "product (live board, built app windows)",
+  "photos": [],
+  "entry": "/",
+  "fingerprint": {
+   "heading": "hanging",
+   "body": "asymmetric spans",
+   "divider": "hairline and 2px rule, ink bands",
+   "button": "solid",
+   "image": "tightly cropped to the grid",
+   "reveal": "none"
+  },
+  "sections": [
+   "hero",
+   "board stage",
+   "route table on ink",
+   "feature switcher",
+   "pricing table",
+   "guarantee plates",
+   "faq rows",
+   "blog index",
+   "close band with requests"
+  ],
+  "signature": "the live board under a station sign",
+  "waived": [
+   "24b",
+   "39b",
+   "59",
+   "84",
+   "79",
+   "49b"
+  ],
+  "prompt": "примени скилл hallmark на лендинге и внутри, сделай лендинг креативнее смелее без ии слопа",
+  "draw": "b5cb47",
+  "date": "2026-10-27"
+ }
+]

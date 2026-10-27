@@ -1,7 +1,8 @@
 ---
-// Карточка статьи блога: метка темы, заголовок-ссылка (вся карточка кликабельна через неё),
-// описание, дата и время чтения. Одна на главную, список блога и «Читайте также».
-import { topicTone, formatDate } from '@/lib/blog';
+// Карточка статьи блога: тема, заголовок-ссылка (вся карточка кликабельна через неё),
+// описание, дата и время чтения. Список блога и «Читайте также»; на главной статьи идут
+// строками (BlogTeaser.astro). Wayfind: квадратная табличка в рамке 2px.
+import { formatDate } from '@/lib/blog';
 import { nbspDash } from '@/lib/typo';
 
 interface Props {
@@ -19,7 +20,7 @@ const Heading = level === 2 ? 'h2' : 'h3';
 ---
 
 <article class="pf-card post-card">
-  <span class={`pf-tag ${topicTone(topic)}`}><span class="pf-tag__text">{topic}</span></span>
+  <span class="pf-pill post-card__topic">{topic}</span>
   <Heading class="post-card__title">
     <a class="pf-card-link post-card__link" href={`/blog/${slug}`}>{nbspDash(title)}</a>
   </Heading>
@@ -35,17 +36,18 @@ const Heading = level === 2 ? 'h2' : 'h3';
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.625rem;
+    gap: var(--space-sm);
     block-size: 100%;
-    padding: 1.25rem;
-    border-radius: var(--r-xl);
+    padding: var(--space-lg);
+    border: var(--rule-bar) solid var(--color-ink);
+    background: var(--color-paper-3);
+    transition: background-color var(--dur-micro) steps(1);
   }
+  .post-card__topic { color: var(--color-ink-2); }
   .post-card__title {
-    font-size: var(--text-lead);
-    font-weight: 700;
-    line-height: var(--leading-snug);
-    letter-spacing: var(--tracking-heading);
-    color: oklch(var(--foreground));
+    max-inline-size: none;
+    font-size: var(--text-lg);
+    line-height: 1.3;
   }
   .post-card__link {
     color: inherit;
@@ -56,19 +58,22 @@ const Heading = level === 2 ? 'h2' : 'h3';
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     overflow: clip;
-    font-size: var(--text-md);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
   }
   .post-card__meta {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: 0.25rem 1rem;
+    gap: var(--space-2xs) var(--space-md);
     inline-size: 100%;
     margin-block-start: auto;
-    padding-block-start: 0.5rem;
-    font-size: var(--text-sm);
-    color: oklch(var(--muted-foreground));
+    padding-block-start: var(--space-sm);
+    border-block-start: var(--rule-hair) solid var(--color-rule);
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .post-card:has(.pf-card-link):hover { background: var(--color-paper-2); }
   }
 </style>
