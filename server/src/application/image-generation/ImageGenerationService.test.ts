@@ -6,7 +6,7 @@ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42
 function fixture(){
   const job:ImageGeneration={id:'job',userId:'owner',dispatcherUserId:'dispatcher',prompt:'Фото',status:'running',claimToken:'lease',storageKey:null,errorMessage:null,createdAt:new Date(),startedAt:new Date(),finishedAt:null};
   let stored:Buffer|undefined;let updates=0;
-  const service=new ImageGenerationService({jobs:{async create(input){return {...job,...input,status:'queued'};},async get(){return job;},async list(user){return user===job.userId?[job]:[];},async claim(){return job;},async complete(_id,_token,key,error){updates++;Object.assign(job,{status:key?'succeeded':'failed',storageKey:key,errorMessage:error});return true;}},storage:{async put(input){stored=input.data;},async read(){return stored?{data:stored,mimeType:'image/png'}:null;},async delete(){}},dispatcherUserId:'dispatcher',idGen:()=> 'job'});
+  const service=new ImageGenerationService({jobs:{async quota(){return {active:0,remaining:10,releaseAfterSeconds:[]};},async create(input){return {...job,...input,status:'queued'};},async get(){return job;},async list(user){return user===job.userId?[job]:[];},async claim(){return job;},async complete(_id,_token,key,error){updates++;Object.assign(job,{status:key?'succeeded':'failed',storageKey:key,errorMessage:error});return true;}},storage:{async put(input){stored=input.data;},async read(){return stored?{data:stored,mimeType:'image/png'}:null;},async delete(){}},dispatcherUserId:'dispatcher',idGen:()=> 'job'});
   return {job,service,updates:()=>updates};
 }
 test('only the author can read generated files; the dispatcher cannot bypass ownership',async()=>{
@@ -34,6 +34,7 @@ test('conversation images use the existing conversation authorization and surviv
   let allowed = true;
   const deps = {
     jobs: {
+      async quota() { return { active: 0, remaining: 10, releaseAfterSeconds: [] }; },
       async create(input: Pick<ImageGeneration, 'id'|'userId'|'dispatcherUserId'|'prompt'|'conversationId'>) {
         const job = { ...fixture().job, ...input, status: 'queued' as const };
         jobs.set(job.id, job); return job;

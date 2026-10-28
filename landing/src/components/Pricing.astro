@@ -4,31 +4,32 @@ import { PLANS, formatRub } from '@/data/pricing';
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 ---
 
-<section id="pricing" class="pf-section">
+<!-- Тарифы — таблицей, как табло: тариф строкой, цена крупно, действие у правого края.
+     Рекомендуемый выделен словом и главной кнопкой, не цветом строки. -->
+<section id="pricing" class="pf-section pf-band--paper pricing" aria-labelledby="pricing-title">
   <div class="pf-container">
-    <div class="pf-head">
-      <h2 class="pf-h2">Простые тарифы&nbsp;— начни бесплатно</h2>
-      <p class="pf-lead">
-        На бесплатном — подключаешь свою подписку Claude. На Прайме и VIP — Claude работает
-        онлайн от нас, ключи не нужны. Не зашло — вернём деньги.
-      </p>
-    </div>
+    <h2 id="pricing-title" class="pf-h2 pricing__title">Простые тарифы. Начни бесплатно.</h2>
 
     <div class="plans">
+      <div class="plans__heads" aria-hidden="true">
+        <span>Тариф</span>
+        <span>Что внутри</span>
+        <span>Цена</span>
+      </div>
       {
         PLANS.map((plan) => (
           <article class:list={['plan', plan.highlight && 'plan--pop']} aria-labelledby={`plan-${plan.id}`}>
             <div class="plan__head">
-              <h3 class="plan__name" id={`plan-${plan.id}`}>
-                {plan.name}
-                {plan.badge && (
-                  <span class="pf-tag pf-tone-queue plan__badge">
-                    <span class="pf-tag__text">{plan.badge}</span>
-                  </span>
-                )}
-              </h3>
+              <div class="plan__title">
+                <h3 class="plan__name" id={`plan-${plan.id}`}>{plan.name}</h3>
+                {plan.badge && <span class="pf-pill plan__badge">{plan.badge}</span>}
+              </div>
               <p class="plan__tagline">{plan.tagline}</p>
             </div>
+
+            <ul class="plan__features">
+              {plan.features.map((f) => <li>{f}</li>)}
+            </ul>
 
             <p class="plan__price">
               <span class="plan__amount">{formatRub(plan.priceRub)}&nbsp;₽</span>
@@ -50,123 +51,117 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
                   {plan.trialCta}
                 </button>
               )}
+              {(plan.note || plan.requestOnly) && (
+                <p class="plan__note">{plan.note ?? 'Подключаем вручную, не самостоятельно.'}</p>
+              )}
             </div>
-
-            <ul class="pf-checks plan__features">
-              {plan.features.map((f) => (
-                <li>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-                    <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-
-            {(plan.note || plan.requestOnly) && (
-              <p class="plan__note">{plan.note ?? 'Подключаем вручную, не самостоятельно.'}</p>
-            )}
           </article>
         ))
       }
     </div>
-
-    <p class="plans__guarantee">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-        <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span>Гарантия возврата на платных тарифах: <strong>не подошло — вернём деньги</strong>.</span>
-    </p>
   </div>
 </section>
 
 <style>
-  /* Карточки тарифов делят строки сетки (subgrid): кнопки и списки на одной высоте. */
-  .plans {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-    gap: 1rem 1.25rem;
-  }
+  .pricing { padding-block-end: var(--space-2xl); }
+  .pricing__title { margin-block-end: var(--space-2xl); }
+
+  /* Таблица тарифов: шапка над линией 2px, строки через тонкую линию. */
+  .plans { border-block-start: var(--rule-bar) solid var(--color-ink); }
+  .plans__heads { display: none; }
   .plan {
     display: grid;
-    grid-row: span 5;
-    grid-template-rows: subgrid;
-    row-gap: 1.25rem;
-    align-content: start;
-    padding: 1.5rem;
-    border-radius: var(--r-2xl);
-    background: oklch(var(--card));
-    box-shadow: var(--shadow-card);
+    gap: var(--space-md);
+    padding-block: var(--space-xl);
+    border-block-end: var(--rule-hair) solid var(--color-rule);
   }
-  /* Рекомендуемый — синее кольцо 2px вместо тени-кольца; без свечений и подъёма. */
-  .plan--pop {
-    box-shadow:
-      0 0 0 2px oklch(var(--primary)),
-      0 1px 3px oklch(16.84% 0 none / 0.06);
-  }
+  .plan--pop { border-block-end: var(--rule-bar) solid var(--color-ink); }
+  .plan:has(+ .plan--pop) { border-block-end: var(--rule-bar) solid var(--color-ink); }
 
-  .plan__name {
+  .plan__title {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    font-size: var(--text-lead);
-    font-weight: 700;
-    line-height: var(--leading-snug);
-    color: oklch(var(--foreground));
+    gap: var(--space-xs) var(--space-sm);
   }
+  .plan__name {
+    max-inline-size: none;
+    font-size: var(--text-2xl);
+  }
+  .plan__badge { border-color: var(--color-accent); }
   .plan__tagline {
-    margin-block-start: 0.375rem;
+    margin-block-start: var(--space-xs);
     font-size: var(--text-sm);
-    line-height: var(--leading-snug);
-    color: oklch(var(--muted-foreground));
+    color: var(--color-ink-2);
+  }
+  .plan__features {
+    display: grid;
+    gap: var(--space-xs);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+  .plan__features li {
+    display: grid;
+    grid-template-columns: 0.75rem minmax(0, 1fr);
+    gap: var(--space-sm);
+    align-items: baseline;
+  }
+  .plan__features li::before {
+    content: '';
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    background: var(--color-ink);
   }
   .plan__price {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.25rem 0.5rem;
+    gap: var(--space-2xs) var(--space-xs);
   }
   .plan__amount {
-    font-size: clamp(2rem, 1.75rem + 1vw, 2.5rem);
-    font-weight: 700;
-    line-height: 1;
+    font-size: var(--text-display-s);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    line-height: 0.95;
     letter-spacing: var(--tracking-display);
-    font-variant-numeric: tabular-nums;
-    color: oklch(var(--foreground));
+    white-space: nowrap;
   }
   .plan__per {
     font-size: var(--text-sm);
-    color: oklch(var(--muted-foreground));
+    color: var(--color-ink-2);
   }
   .plan__actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .plan__features {
-    font-size: var(--text-md);
-    color: oklch(var(--foreground));
+    display: grid;
+    gap: var(--space-xs);
+    align-content: start;
   }
   .plan__note {
     font-size: var(--text-sm);
-    color: oklch(var(--muted-foreground));
+    color: var(--color-muted);
+  }
+  @media (min-width: 40rem) and (max-width: 79.99rem) {
+    .plan { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--gap-columns); }
   }
 
-  .plans__guarantee {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin-block-start: 1.75rem;
-    font-size: var(--text-md);
-    line-height: var(--leading-snug);
-    color: oklch(var(--muted-foreground));
-  }
-  .plans__guarantee strong { font-weight: 600; color: oklch(var(--foreground)); }
-  .plans__guarantee svg {
-    flex: none;
-    inline-size: 1.125rem;
-    block-size: 1lh;
+  /* Четыре столбца — только там, где самая длинная кнопка помещается в свой. Цена и
+     действия — фиксированные дорожки: столбцы совпадают во всех строках таблицы
+     (у max-content каждая строка посчитала бы свои). */
+  @media (min-width: 80rem) {
+    .plans__heads,
+    .plan {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 3.5fr) 15rem 20.5rem;
+      column-gap: var(--gap-columns);
+    }
+    .plans__heads {
+      display: grid;
+      padding-block: var(--space-sm);
+      border-block-end: var(--rule-hair) solid var(--color-rule);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--color-muted);
+    }
+    .plan { align-items: start; }
   }
 </style>

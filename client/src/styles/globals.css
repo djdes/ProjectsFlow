@@ -1,3 +1,6 @@
+/* Hallmark · checked: 2026-10-27 · genre: modern-minimal (inferred) · shape: app screen · copy: verbatim
+ * floor: fixed 67 (57 tracked-caps labels), 10a and 10b (no width, left, top or margin animates), 30a (icons for emoji), 63 (meta strings joined by commas), 3, 33, 12, 74 · left on purpose: emoji that are content (reactions, the icon picker), text a test pins (✅ Привязан, the 404 label, three dot-joined strings), dashes in the owner's copy
+ * built: the project · redesign: polish · v2.0.0 */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -446,7 +446,7 @@ function EmojiSection({
 }): React.ReactElement {
   return (
     <div className="mbe-2 last:mbe-0">
-      <p className="mbe-1 px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+      <p className="mbe-1 px-1 text-2xs font-medium text-muted-foreground/70">
         {label}
       </p>
       <EmojiGridInner emojis={emojis} current={current} onPick={onPick} />

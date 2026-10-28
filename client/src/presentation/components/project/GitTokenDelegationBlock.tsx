@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Bot, ChevronDown, ChevronRight, Github, Loader2, ShieldAlert } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronRight, Github, Loader2, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -213,7 +213,8 @@ export function GitTokenDelegationBlock({
           </ul>
           {selectedGrantorId === null && (
             <p className="mbs-2 text-xs text-warning">
-              ⚠ Сейчас никто не будет выбран — все включённые грантеры либо без GH,
+              <TriangleAlert className="me-1 inline size-3 align-[-2px]" aria-hidden="true" />
+              Сейчас никто не будет выбран — все включённые грантеры либо без GH,
               либо являются текущим диспетчером.
             </p>
           )}
@@ -301,12 +302,12 @@ function GrantorRow({
       <span className="flex-1 truncate font-medium">
         {m.displayName}
         {m.isOwner && (
-          <span className="ms-1.5 rounded bg-primary-soft px-1 text-2xs font-medium uppercase tracking-wide text-primary-ink">
+          <span className="ms-1.5 rounded bg-primary-soft px-1 text-2xs font-medium text-primary-ink">
             owner
           </span>
         )}
         {isCurrentDispatcher && (
-          <span className="ms-1.5 rounded bg-muted px-1 text-2xs uppercase tracking-wide text-muted-foreground">
+          <span className="ms-1.5 rounded bg-muted px-1 text-2xs text-muted-foreground">
             dispatcher
           </span>
         )}
@@ -320,8 +321,9 @@ function GrantorRow({
         )}
       </span>
       {isSelected ? (
-        <span className="shrink-0 rounded bg-done-soft px-1.5 py-0.5 font-mono text-2xs text-done-ink">
-          ✓ выбран
+        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-done-soft px-1.5 py-0.5 text-2xs text-done-ink">
+          <Check className="size-3" aria-hidden="true" />
+          выбран
         </span>
       ) : (
         <span

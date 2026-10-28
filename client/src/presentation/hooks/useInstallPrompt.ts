@@ -59,6 +59,7 @@ export function useInstallPrompt(): {
       setDeferred(e as BeforeInstallPromptEvent);
     };
     const onInstalled = (): void => {
+      delete document.documentElement.dataset.pfInstall;
       setIsStandalone(true);
       setDeferred(null);
     };
@@ -88,6 +89,8 @@ export function useInstallPrompt(): {
 
   const dismiss = useCallback((): void => {
     setDismissed(true);
+    // Later shell skeletons (workspace switch) must not reserve the banner row.
+    delete document.documentElement.dataset.pfInstall;
     try {
       localStorage.setItem(DISMISS_KEY, '1');
     } catch {

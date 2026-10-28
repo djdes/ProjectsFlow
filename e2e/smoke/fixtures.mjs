@@ -655,6 +655,12 @@ function mutate(state, method, path, body) {
   }
   if (method === 'PUT' && path === '/me/kanban-colors') return json({ colors: body?.colors ?? {} });
   if (method === 'PUT' && path === '/projects/reorder') return noContent();
+  const favoriteMatch = method === 'PUT' && path.match(/^\/projects\/([^/]+)\/favorite$/);
+  if (favoriteMatch) {
+    const project = state.projects.find((p) => p.id === favoriteMatch[1]);
+    if (project) project.isFavorite = body?.favorite === true;
+    return noContent();
+  }
   if (method === 'POST' && /^\/notifications\/[^/]+\/read$/.test(path)) return noContent();
   if (method === 'POST' && path === '/notifications/read-all') return json({ updated: 0 });
   if (method === 'POST' && path === '/recent-task-views') return noContent();

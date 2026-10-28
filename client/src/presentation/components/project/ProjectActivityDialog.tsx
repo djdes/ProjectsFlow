@@ -408,7 +408,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                         {showDay ? (
                           <li
                             role="presentation"
-                            className="sticky inset-bs-0 z-20 -mx-3 border-be bg-background/95 px-5 py-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
+                            className="sticky inset-bs-0 z-20 -mx-3 border-be bg-background/95 px-5 py-2 text-2xs font-semibold text-muted-foreground backdrop-blur"
                           >
                             {activityDayLabel(item.createdAt)}
                           </li>

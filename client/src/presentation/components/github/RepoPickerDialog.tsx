@@ -164,7 +164,7 @@ export function RepoPickerDialog({
                           />
                         )}
                         {isCurrent && (
-                          <span className="ms-auto rounded-md border bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-widest text-muted-foreground">
+                          <span className="ms-auto rounded-md border bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                             подключён
                           </span>
                         )}

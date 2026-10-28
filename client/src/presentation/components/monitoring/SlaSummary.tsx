@@ -43,7 +43,7 @@ export function SlaSummary({
 
   return (
     <div className="flex items-center gap-4 text-xs">
-      <span className="uppercase tracking-wide text-muted-foreground">Аптайм</span>
+      <span className="text-muted-foreground">Аптайм</span>
       <span className="flex items-center gap-1">
         <span className="text-muted-foreground">24ч</span>
         <span className={cn('font-medium tabular-nums', pctClass(d1))}>{fmt(d1)}</span>

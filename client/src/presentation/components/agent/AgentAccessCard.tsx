@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Bot, Check, Copy, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Bot, Check, Copy, Loader2, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -300,8 +300,9 @@ function NewTokenRevealDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-ink">
-            ⚠️ Этот токен даёт доступ ко всем твоим credentials. Не публикуй его, храни в надёжном месте.
+          <div className="flex gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-ink">
+            <TriangleAlert className="mbs-px size-3.5 shrink-0" aria-hidden="true" />
+            <span>Этот токен даёт доступ ко всем твоим credentials. Не публикуй его, храни в надёжном месте.</span>
           </div>
 
           {/* Способ 1: промпт для Claude Code (рекомендуется) */}

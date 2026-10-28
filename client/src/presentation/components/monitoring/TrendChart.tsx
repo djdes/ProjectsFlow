@@ -69,7 +69,7 @@ export function TrendChart({
       {path ? (
         // Цвет — через style, а не SVG-атрибуты: в атрибутах var() (токены, --tone)
         // поддерживается не во всех браузерах, в CSS-свойствах — везде.
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-11 w-full" preserveAspectRatio="none">
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-11 w-full" preserveAspectRatio="none" aria-hidden="true">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" style={{ stopColor: color }} stopOpacity="0.25" />

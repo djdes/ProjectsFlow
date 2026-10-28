@@ -1,30 +1,58 @@
+import { useLayoutEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
-  loadingLayoutForPath,
+  applySkeletonSizes,
   projectLoadingLayout,
+  routeLoadingLayout,
   type LoadingLayout,
 } from '@/lib/loadingLayout';
 
 const widths = ['w-3/4', 'w-1/2', 'w-2/3'];
 
-// Match the inbox toolbar rows, so loading data does not move the first task panel.
-export function InboxLoadingLayout({ heading }: { heading?: React.ReactNode }): React.ReactElement {
-  return <div className="min-w-0 space-y-3" data-pf-inbox-loading>
-    <div className="flex min-h-11 items-center gap-2">
-      {heading ?? <Skeleton className="h-6 w-32" />}
-      <span className="flex-1" /><Skeleton className="size-11 rounded-lg md:size-8" /><Skeleton className="size-11 rounded-lg md:size-8" />
-    </div>
-    <div className="flex h-12 items-center gap-2">
-      <Skeleton className="h-12 w-[48%] max-w-52 rounded-lg" />
-      <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
-        {[0, 1, 2].map((i) => <Skeleton key={i} className="size-9 shrink-0 rounded-lg" />)}
+// Remembered heights of data-dependent rows (--pf-skel-*) for the current route; the boot
+// screen sets them before the first paint, client-side navigation here.
+function useSkeletonSizes(): void {
+  useLayoutEffect(() => applySkeletonSizes(window.location.pathname), []);
+}
+
+// People cubes of the inbox: 32px avatar and one line of the name (64×51).
+function PeopleSkeleton(): React.ReactElement {
+  return <div className="flex min-w-0 flex-1 gap-2 overflow-hidden px-1 py-1 md:flex-none md:p-0">
+    {[0, 1, 2].map((i) => (
+      <div key={i} className="flex w-16 shrink-0 flex-col items-center gap-1">
+        <Skeleton className="size-8 rounded-full" />
+        <span className="flex h-[15px] items-center"><Skeleton className="h-2.5 w-12" /></span>
       </div>
+    ))}
+  </div>;
+}
+
+// The rows of AssignedToMeBlock at their real sizes: on a phone the heading row, tabs with
+// people, the section switch and the due chips; from 768px one toolbar row and the chips.
+// The people row keeps the height remembered from the last visit (--pf-skel-inbox-head-*).
+export function InboxLoadingLayout({ heading }: { heading?: React.ReactNode }): React.ReactElement {
+  useSkeletonSizes();
+  const title = heading ?? <Skeleton className="h-6 w-40" />;
+  return <div className="flex min-w-0 flex-col gap-2.5 md:gap-3" data-pf-inbox-loading>
+    <div className="flex min-h-10 items-center gap-1 md:hidden">
+      {title}
+      <span className="flex-1" /><Skeleton className="size-11 rounded-lg" /><Skeleton className="size-11 rounded-lg" />
     </div>
-    <div className="flex h-12 gap-2 md:hidden"><Skeleton className="h-full flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" /></div>
-    <div className="grid grid-cols-3 gap-2 md:max-w-sm">
-      {[0, 1, 2].map((i) => <Skeleton key={i} className="h-11 rounded-lg md:h-7" />)}
+    <div className="flex min-h-[var(--pf-skel-inbox-head-m)] min-w-0 items-center gap-2 md:min-h-[var(--pf-skel-inbox-head-d)] md:flex-wrap md:gap-x-3 md:gap-y-2">
+      <span className="hidden md:contents">{title}</span>
+      <Skeleton className="h-12 w-[114px] shrink-0 rounded-lg md:h-8" />
+      <PeopleSkeleton />
+      <span className="hidden flex-1 md:block" />
+      <Skeleton className="hidden h-8 w-60 md:block" />
+      <div className="hidden gap-1 md:flex"><Skeleton className="h-8 w-[87px]" /><Skeleton className="h-8 w-[97px]" /></div>
+    </div>
+    <div className="flex h-[60px] items-center gap-2 md:hidden">
+      <Skeleton className="h-12 flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" />
+    </div>
+    <div className="grid grid-cols-3 gap-1.5 md:flex">
+      {['md:w-[115px]', 'md:w-[89px]', 'md:w-[98px]'].map((w) => <Skeleton key={w} className={cn('h-11 rounded-lg md:h-7', w)} />)}
     </div>
     <BoardSkeleton shelf={false} now />
   </div>;
@@ -96,6 +124,13 @@ export function BoardSkeleton({
             ))}
           </div>
         )}
+        {/* Inbox queue: its header row sits above the project columns. */}
+        <div className={cn('min-w-0', now && 'flex flex-col gap-2')}>
+        {now && columns > 0 && (
+          <div className="hidden h-7 items-center px-0.5 md:flex">
+            <Skeleton className="h-4 w-36" />
+          </div>
+        )}
         <div className="flex gap-2 overflow-hidden">
         {Array.from({ length: columns }, (_, col) => (
           <div
@@ -125,6 +160,7 @@ export function BoardSkeleton({
             ))}
           </div>
         ))}
+        </div>
         </div>
       </div>
     </LoadingRegion>
@@ -241,6 +277,7 @@ export function PageSkeleton({
 }: {
   layout?: LoadingLayout;
 }): React.ReactElement {
+  useSkeletonSizes();
   if (layout === 'studio')
     return (
       <LoadingRegion
@@ -345,8 +382,16 @@ export function PageSkeleton({
     );
   if (layout === 'inbox') return <div className="min-h-full min-w-0" data-pf-page-skeleton="inbox">
     <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex"><Skeleton className="h-3 w-40" /></div>
-    <div className="px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9"><InboxLoadingLayout /></div>
+    {/* Заголовок «Все входящие» над блоком текущего пространства — как в InboxPage. */}
+    <div className="space-y-3 px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9">{/* Line box of PageTitle: text-h1 × leading-tight. */}<Skeleton className="h-[calc(1.375rem*1.25)] w-44" /><InboxLoadingLayout /></div>
   </div>;
+  if (
+    layout === 'board' ||
+    layout === 'table' ||
+    layout === 'list' ||
+    layout === 'calendar'
+  )
+    return <ProjectPageSkeleton layout={layout} />;
   const narrow = ['overview', 'task'].includes(layout);
   return (
     <div className="min-h-full min-w-0" data-pf-page-skeleton={layout}>
@@ -381,12 +426,6 @@ export function PageSkeleton({
               </div>
             </div>
           </LoadingRegion>
-          {layout === 'board' && (
-            <BoardSkeleton />
-          )}
-          {layout === 'table' && <TableSkeleton />}
-          {layout === 'list' && <ListSkeleton />}
-          {layout === 'calendar' && <CalendarSkeleton />}
           {layout === 'overview' && (
             <>
               <div className="space-y-5 rounded-xl border p-5">
@@ -422,55 +461,146 @@ export function PageSkeleton({
   );
 }
 
-export function RouteSkeleton(): React.ReactElement {
-  const { pathname, search } = useLocation();
-  const project = /^\/projects\/([^/]+)\/?$/.exec(pathname);
-  const layout = project
-    ? projectLoadingLayout(project[1], new URLSearchParams(search).get('view'))
-    : loadingLayoutForPath(pathname);
-  return <PageSkeleton layout={layout} />;
-}
-
-export function SidebarSkeleton(): React.ReactElement {
+// The project page (TasksPage) without a cover or banners: mobile project row or desktop
+// crumbs, the title block and the view tabs row, so its own board skeleton lands in place.
+function ProjectPageSkeleton({
+  layout,
+}: {
+  layout: 'board' | 'table' | 'list' | 'calendar';
+}): React.ReactElement {
   return (
-    <LoadingRegion label="Загружаем проекты…" className="space-y-6 px-2 py-4">
-      {[0, 1].map((section) => (
-        <div key={section} className="space-y-4">
-          <Skeleton className="h-3 w-24" />
-          {[0, 1, 2].map((row) => (
-            <div key={row} className="flex items-center gap-2.5">
-              <Skeleton className="size-6 shrink-0" />
-              <Skeleton className={cn('h-3', widths[row])} />
-            </div>
+    <div className="min-h-full min-w-0" data-pf-page-skeleton={layout}>
+      <div className="flex min-h-12 items-center justify-between gap-2 px-4 sm:hidden">
+        <Skeleton className="h-3.5 w-32" />
+        <div className="flex gap-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="size-5" />
           ))}
         </div>
-      ))}
+      </div>
+      <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-32" />
+      </div>
+      <div className="px-4 pbe-10 sm:px-14 sm:pbe-12 lg:px-24">
+        {/* Plates, cover and a long description from the last visit (--pf-skel-project-head-*)
+            sit above the title, so the title stays at the bottom of the reserved block. */}
+        <div className="flex min-h-[var(--pf-skel-project-head-m)] flex-col justify-end md:min-h-[var(--pf-skel-project-head-d)]">
+          <LoadingRegion label="Загружаем страницу…" className="pbe-3 pbs-2 sm:pbs-1">
+            <div className="hidden h-7 sm:mbe-1 sm:block" />
+            <div className="flex h-12 items-center sm:h-[38px]">
+              <Skeleton className="h-8 w-2/3 max-w-sm" />
+            </div>
+            <div className="flex h-6 items-center mbs-1 sm:mbs-0 sm:ps-3">
+              <Skeleton className="h-3.5 w-1/2 max-w-xs" />
+            </div>
+          </LoadingRegion>
+        </div>
+        <div className="flex h-11 items-center justify-between gap-2 mbe-3 md:h-10 md:mbe-2">
+          <Skeleton className="h-11 w-32 rounded-lg sm:h-9 md:h-7 md:w-24" />
+          <Skeleton className="h-11 w-28 rounded-lg sm:h-9 md:h-7 md:w-24" />
+        </div>
+        {layout === 'board' && <BoardSkeleton />}
+        {layout === 'table' && <TableSkeleton />}
+        {layout === 'list' && <ListSkeleton />}
+        {layout === 'calendar' && <CalendarSkeleton />}
+      </div>
+    </div>
+  );
+}
+
+export function RouteSkeleton(): React.ReactElement {
+  const { pathname, search } = useLocation();
+  return <PageSkeleton layout={routeLoadingLayout(pathname, search)} />;
+}
+
+// The project list of the Sidebar row for row: search field, «Мои проекты» header and
+// 32px project rows, so the list does not move when the real sidebar replaces the shell one.
+export function SidebarSkeleton(): React.ReactElement {
+  return (
+    <LoadingRegion label="Загружаем проекты…" className="flex flex-col gap-2">
+      <Skeleton className="h-8 w-full" />
+      <div className="space-y-1">
+        <div className="flex h-9 items-center justify-between px-2">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="size-4" />
+        </div>
+        {[0, 1, 2, 3, 4].map((row) => (
+          <div key={row} className="flex h-8 items-center gap-2.5 px-2">
+            <Skeleton className="size-5 shrink-0" />
+            <Skeleton className={cn('h-3', widths[row % 3])} />
+          </div>
+        ))}
+      </div>
     </LoadingRegion>
   );
 }
 
+/** The app shell before it can render: the same skeleton from the first HTML paint
+ * (prerendered into index.html), through sign-in check, code and workspace loading. */
 export function AppShellSkeleton(): React.ReactElement {
+  const { pathname, search } = useLocation();
+  return <ShellSkeleton layout={routeLoadingLayout(pathname, search)} />;
+}
+
+export function ShellSkeleton({
+  layout,
+  page,
+}: {
+  layout: LoadingLayout;
+  /** Boot prerender only: a placeholder replaced by the page skeleton. */
+  page?: React.ReactNode;
+}): React.ReactElement {
   return (
     <div className="pf-loading-shell" data-pf-shell-skeleton="true">
+      {/* The rows of Sidebar: workspace switcher, navigation rail, project list, new task. */}
       <aside className="pf-loading-sidebar">
-        <div className="flex h-11 items-center gap-2 px-3">
-          <Skeleton className="size-7" />
-          <Skeleton className="h-3 w-24" />
+        <div className="grid h-full grid-rows-[auto_auto_1fr_auto] gap-2 px-2.5 pbe-3">
+          <div className="flex h-11 items-center gap-1">
+            <div className="flex flex-1 items-center gap-2 px-2">
+              <Skeleton className="size-6" />
+              <Skeleton className="h-3.5 w-24" />
+            </div>
+            <span className="grid size-8 place-items-center"><Skeleton className="size-5" /></span>
+          </div>
+          <div className="flex h-8 items-center justify-between gap-1">
+            <div className="flex gap-1">
+              <Skeleton className="h-8 w-[110px] rounded-full" />
+              <Skeleton className="size-8 rounded-full" />
+            </div>
+            <div className="flex gap-0.5">
+              {[0, 1, 2].map((i) => <Skeleton key={i} className="size-8 rounded-full" />)}
+            </div>
+          </div>
+          <div className="min-h-0 overflow-hidden"><SidebarSkeleton /></div>
+          <div className="flex justify-end pbs-1"><Skeleton className="size-10 rounded-full" /></div>
         </div>
-        <div className="flex h-12 items-center gap-3 px-3">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="size-6" />
-          ))}
-        </div>
-        <Skeleton className="mx-3 h-8" />
-        <SidebarSkeleton />
       </aside>
-      <div className="min-w-0 overflow-hidden">
-        <div className="flex h-11 items-center gap-3 border-be px-3 md:hidden">
-          <Skeleton className="size-6" />
-          <Skeleton className="h-3 w-32" />
+      {/* Same rows as the mobile AppShell: header, install banner, main, bottom navigation. */}
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <div className="flex min-h-12 shrink-0 items-center gap-2 border-be px-3 pbs-[env(safe-area-inset-top,0px)] md:hidden">
+          <span className="grid size-9 shrink-0 place-items-center"><Skeleton className="size-5" /></span>
+          <Skeleton className="h-4 w-36" />
+          <span className="flex-1" />
+          <span className="grid size-11 shrink-0 place-items-center"><Skeleton className="size-5" /></span>
         </div>
-        <RouteSkeleton />
+        <div className="pf-loading-install min-h-10 shrink-0 items-center gap-2 border-be bg-primary/5 ps-3">
+          <Skeleton className="size-6" />
+          <Skeleton className="h-3 w-36" />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {page ?? <PageSkeleton layout={layout} />}
+        </div>
+        <div className="shrink-0 border-bs bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2 md:hidden">
+          <div className="mx-auto flex max-w-md rounded-xl bg-foreground/[0.05] p-1 dark:border dark:border-border dark:bg-panel">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 px-2 py-1.5">
+                <Skeleton className="size-5" />
+                <Skeleton className="h-[11px] w-12" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -17,7 +17,7 @@ function worstSeverity(alerts: ServerAlert[]): ServerAlert['severity'] {
 function Metric({ label, text, tone }: { label: string; text: string; tone: HealthTone }): React.ReactElement {
   return (
     <div className="flex w-14 flex-col items-end leading-tight">
-      <span className="text-2xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-2xs text-muted-foreground">{label}</span>
       <span className={cn('text-xs font-medium tabular-nums', metricTextClass(tone))}>{text}</span>
     </div>
   );
@@ -52,7 +52,7 @@ export function ServerRow({
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate text-sm font-medium">{server.name}</span>
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
           {server.kind}
         </span>
         <StatusBadge status={status} />

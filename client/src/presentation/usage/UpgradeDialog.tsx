@@ -161,7 +161,7 @@ export function UpgradeDialog({
                 </div>
                 <p className="mbs-1 text-xs leading-snug text-muted-foreground">{p.tagline}</p>
 
-                <div className="mbs-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">
+                <div className="mbs-3 text-2xs font-medium text-muted-foreground/60">
                   Что входит
                 </div>
                 <ul className="mbs-1.5 flex-1 space-y-1.5 text-sm">

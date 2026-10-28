@@ -4,6 +4,9 @@ import type { AwaitingReplyTask } from '@/domain/task/AwaitingReplyTask';
 export interface TaskAssigneeRepository {
   // Все задачи, где caller — текущий обязательный ответственный.
   listMine(): Promise<AssignedTask[]>;
+  // То же для другого пространства, где caller — участник («Все входящие»): активное
+  // пространство вкладки не меняется. Не участнику сервер отвечает 404.
+  listMineInWorkspace(workspaceId: string): Promise<AssignedTask[]>;
   // Все видимые caller'у задачи, где отвечает другой участник.
   listOthers(): Promise<AssignedTask[]>;
   // Личные (inbox) задачи коллег — тех, с кем есть общее рабочее пространство.

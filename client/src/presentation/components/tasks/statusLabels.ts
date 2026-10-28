@@ -12,7 +12,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   manual: 'Вручную',
   todo: 'Воркер',
   in_progress: 'В работе',
-  awaiting_clarification: '🤔 На уточнении',
+  awaiting_clarification: 'На уточнении',
   pending_approval: 'На утверждении',
   done: 'Готово',
   // Кастомные колонки (db/154): настоящее название задаёт проект в kanban_settings —
@@ -65,6 +65,11 @@ export function canTakeToManual(status: TaskStatus): boolean {
     status !== 'in_progress' &&
     status !== 'awaiting_clarification'
   );
+}
+
+// Only draft and custom project columns offer a new worker handoff.
+export function canSendToWorker(status: TaskStatus): boolean {
+  return status === 'backlog' || isCustomKanbanSlot(status);
 }
 
 // Optional small subtitle rendered next to the main label in column header.

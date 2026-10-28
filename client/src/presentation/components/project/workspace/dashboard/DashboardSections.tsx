@@ -519,7 +519,7 @@ export function OverviewSection({
             aria-valuenow={Math.round(usagePercent)}
           >
             <span
-              className="block h-full rounded-full bg-primary motion-safe:transition-[width]"
+              className="block h-full rounded-full bg-primary"
               style={{ width: `${usagePercent}%` }}
             />
           </div>
@@ -1138,7 +1138,7 @@ function AppTrafficView({
                     height: `${Math.max(day.visits ? 6 : 2, (day.visits / dailyMax) * 132)}px`,
                   }}
                 />
-                <span className="hidden text-[9px] text-muted-foreground xl:block">
+                <span className="hidden text-2xs text-muted-foreground xl:block">
                   {day.date.slice(5)}
                 </span>
               </div>
@@ -1229,7 +1229,7 @@ function ProjectCardAnalyticsView({
                   height: `${Math.max(day.count ? 6 : 2, (day.count / dailyMax) * 132)}px`,
                 }}
               />
-              <span className="hidden text-[9px] text-muted-foreground xl:block">
+              <span className="hidden text-2xs text-muted-foreground xl:block">
                 {day.date.slice(5)}
               </span>
             </div>
@@ -1598,7 +1598,7 @@ export function MarketingSection({
                   className="rounded-xl border p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-xs font-semibold text-muted-foreground">
                       {channels[index] ?? `Публикация ${index + 1}`}
                     </p>
                     <Button
@@ -2322,12 +2322,12 @@ function WorkerRunRow({
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">
           {run.agentName ?? "Воркер"}
-          {run.attempt > 1 ? ` · попытка ${run.attempt}` : ""}
+          {run.attempt > 1 ? `, попытка ${run.attempt}` : ""}
         </p>
         <p className="mbs-0.5 truncate text-xs text-muted-foreground">
           {formatWorkerTime(run.startedAt)}
-          {run.model ? ` · ${run.model}` : ""}
-          {run.costUsd != null ? ` · $${run.costUsd.toFixed(4)}` : ""}
+          {run.model ? `, ${run.model}` : ""}
+          {run.costUsd != null ? `, $${run.costUsd.toFixed(4)}` : ""}
         </p>
       </div>
       <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
@@ -2459,8 +2459,8 @@ export function AgentsSection({
               <option value="">Работа вручную</option>
               {candidates.map((candidate) => (
                 <option key={candidate.userId} value={candidate.userId}>
-                  {candidate.displayName} · {candidate.activeTokenCount}{" "}
-                  токен(а){candidate.isAdmin ? " · admin" : ""}
+                  {candidate.displayName}, {candidate.activeTokenCount}{" "}
+                  токен(а){candidate.isAdmin ? ", admin" : ""}
                 </option>
               ))}
             </select>

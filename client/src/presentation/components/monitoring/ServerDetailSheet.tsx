@@ -119,17 +119,18 @@ export function ServerDetailSheet({
             <div className="flex items-center gap-2 pe-8">
               <Server className="size-4 shrink-0 text-muted-foreground" />
               <SheetTitle className="truncate text-base">{server.name}</SheetTitle>
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                 {server.kind}
               </span>
               <StatusBadge status={latest?.status ?? server.lastStatus ?? 'unknown'} />
             </div>
             <SheetDescription className="text-xs">
               {latest ? `обновлено ${relativeTime(latest.collectedAt)}` : 'нет данных'}
-              {server.host ? ` · ${server.host}` : ''}
+              {server.host ? `, ${server.host}` : ''}
               {isMuted && server.mutedUntil && (
                 <span className="ms-1 text-warning">
-                  · 🔕 тихо до{' '}
+                  <BellOff className="me-1 inline size-3 align-[-2px]" aria-hidden="true" />
+                  тихо до{' '}
                   {server.mutedUntil.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}

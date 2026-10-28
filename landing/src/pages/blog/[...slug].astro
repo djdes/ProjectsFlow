@@ -4,7 +4,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import Nav from '@/components/Nav.astro';
 import Footer from '@/components/Footer.astro';
 import PostCard from '@/components/PostCard.astro';
-import { readingMinutes, topicTone, formatDate } from '@/lib/blog';
+import { readingMinutes, formatDate } from '@/lib/blog';
 import { nbspDash } from '@/lib/typo';
 
 // Лендинг и SPA — один Express в prod; в dev можно указать PUBLIC_APP_URL.
@@ -72,7 +72,7 @@ const jsonLd = {
       </nav>
 
       <header class="post__head">
-        <span class={`pf-tag ${topicTone(post.data.topic)}`}><span class="pf-tag__text">{post.data.topic}</span></span>
+        <span class="pf-pill post__topic">{post.data.topic}</span>
         <h1 class="post__title">{nbspDash(post.data.title)}</h1>
         <p class="post__desc">{post.data.description}</p>
         <p class="post__meta">
@@ -99,7 +99,7 @@ const jsonLd = {
         {
           toc.length > 1 && (
             <aside class="post__aside" aria-label="Содержание статьи">
-              <nav class="post__toc">
+              <div class="post__toc">
                 <p class="post__toc-title">Содержание</p>
                 <ul>
                   {toc.map((h) => (
@@ -110,7 +110,7 @@ const jsonLd = {
                     </li>
                   ))}
                 </ul>
-              </nav>
+              </div>
             </aside>
           )
         }
@@ -118,7 +118,7 @@ const jsonLd = {
 
       <div class="post__cta">
         <div>
-          <h2 class="post__cta-title">Хватит читать — попробуй сам</h2>
+          <h2 class="post__cta-title">Хватит читать, попробуй сам</h2>
           <p class="post__cta-text">Опиши идею и получи первый результат в первый час. Без карты.</p>
         </div>
         <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg">Начать бесплатно</a>
@@ -145,86 +145,83 @@ const jsonLd = {
 </BaseLayout>
 
 <style>
-  /* Прогресс чтения — функциональная полоса акцента, без свечения. */
+  /* Прогресс чтения — полоса синего бренда 2px под мастхедом, растёт трансформацией. */
   .read-progress {
     position: fixed;
     inset: 0 0 auto 0;
     block-size: 2px;
-    z-index: 60;
+    z-index: var(--z-toast);
     pointer-events: none;
   }
   .read-progress span {
     display: block;
     block-size: 100%;
-    inline-size: 0%;
-    background: oklch(var(--primary));
+    background: var(--color-accent);
+    transform: scaleX(0);
+    transform-origin: left center;
   }
 
   .post {
-    padding-block: 1.25rem var(--section-y);
+    padding-block: var(--space-lg) var(--section-gap-s);
   }
 
-  /* Крошки — как в шапке страницы приложения. */
+  /* Крошки — указатель: «Блог» ссылкой, тема текстом. */
   .post__crumbs {
     display: flex;
     align-items: center;
-    gap: 0.125rem;
-    margin-block-end: clamp(1.5rem, 1rem + 2vw, 2.5rem);
-    margin-inline: -0.375rem;
-    font-size: var(--text-ui);
-    color: oklch(var(--muted-foreground));
+    gap: var(--space-2xs);
+    margin-block-end: var(--space-xl);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
   .post__crumb {
-    padding: 0.25rem 0.375rem;
-    border-radius: var(--r-md);
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 44px;
     color: inherit;
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
-  .post__crumb--current { color: oklch(var(--foreground)); }
+  .post__crumb--current { color: var(--color-ink); text-decoration: none; }
   @media (hover: hover) and (pointer: fine) {
-    a.post__crumb:hover { background: var(--hover); color: oklch(var(--foreground)); }
-  }
-  @media (pointer: coarse) {
-    a.post__crumb { padding-block: 0.75rem; }
+    a.post__crumb:hover { color: var(--color-accent); }
   }
   .post__sep {
     flex: none;
     inline-size: 0.875rem;
     block-size: 0.875rem;
-    opacity: 0.7;
   }
 
   .post__head {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.875rem;
-    max-inline-size: 46rem;
+    display: grid;
+    justify-items: start;
+    gap: var(--space-md);
+    padding-block-end: var(--space-xl);
+    border-block-end: var(--rule-bar) solid var(--color-ink);
   }
+  .post__topic { color: var(--color-ink-2); }
   .post__title {
-    font-size: clamp(2rem, 1.6rem + 1.75vw, 2.75rem);
-    font-weight: 700;
-    line-height: var(--leading-tight);
-    letter-spacing: var(--tracking-display);
-    color: oklch(var(--foreground));
+    max-inline-size: 22ch;
+    font-size: var(--text-display-s);
+    text-wrap: balance;
   }
   .post__desc {
+    max-inline-size: 60ch;
     font-size: var(--text-lead);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+    line-height: 1.45;
+    color: var(--color-ink-2);
   }
   .post__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem 1.25rem;
-    margin-block-start: 0.25rem;
+    gap: var(--space-xs) var(--space-lg);
     font-size: var(--text-sm);
-    color: oklch(var(--muted-foreground));
+    color: var(--color-muted);
   }
   .post__meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--space-xs);
   }
   .post__meta-item svg {
     flex: none;
@@ -238,209 +235,192 @@ const jsonLd = {
     /* minmax(0, …): широкая таблица или строка кода не раздвигают колонку — они
        прокручиваются внутри своей обёртки. */
     grid-template-columns: minmax(0, 1fr);
-    gap: 3rem;
-    margin-block-start: clamp(2rem, 1.5rem + 2vw, 3rem);
-    padding-block-start: clamp(2rem, 1.5rem + 2vw, 3rem);
-    border-block-start: 1px solid oklch(var(--border));
+    gap: var(--space-2xl);
+    margin-block-start: var(--space-xl);
   }
-  @media (min-width: 1040px) {
-    .post__layout { grid-template-columns: minmax(0, 1fr) 15rem; align-items: start; }
+  @media (min-width: 65rem) {
+    .post__layout { grid-template-columns: minmax(0, 1fr) 16rem; align-items: start; }
   }
-  /* ~70 символов в строке при 17px. */
-  .post__content { max-inline-size: 40rem; }
+  .post__content { max-inline-size: 64ch; }
 
   /* Проза из Markdown: ритм задаёт родитель, у детей своих внешних отступов нет. */
   .post__content > :global(*) { margin-block: 0; }
   .post__content > :global(* + *) { margin-block-start: var(--flow, 1.1em); }
   .post__content > :global(:is(h2, h3)) { --flow: 2em; }
   .post__content > :global(:is(h2, h3) + *) { --flow: 0.6em; }
+  .post__content :global(:is(h2, h3)) { text-wrap: balance; }
   .post__content :global(h2) {
-    font-size: clamp(1.375rem, 1.2rem + 0.75vw, 1.75rem);
-    font-weight: 700;
-    line-height: var(--leading-snug);
-    letter-spacing: var(--tracking-heading);
-    color: oklch(var(--foreground));
-    scroll-margin-block-start: calc(var(--nav-h) + 1.5rem);
+    max-inline-size: none;
+    font-size: var(--text-2xl);
+    line-height: 1.05;
+    scroll-margin-block-start: calc(var(--nav-h) + var(--space-lg));
   }
   .post__content :global(h3) {
-    font-size: var(--text-h3);
-    font-weight: 600;
-    line-height: var(--leading-snug);
-    color: oklch(var(--foreground));
-    scroll-margin-block-start: calc(var(--nav-h) + 1.5rem);
+    max-inline-size: none;
+    font-size: var(--text-lg);
+    line-height: 1.15;
+    scroll-margin-block-start: calc(var(--nav-h) + var(--space-lg));
   }
   .post__content :global(p),
   .post__content :global(li) {
-    font-size: var(--text-lead);
+    font-size: var(--text-md);
     line-height: 1.7;
-    color: oklch(var(--foreground));
   }
-  .post__content :global(strong) { font-weight: 700; }
+  .post__content :global(strong) { font-weight: 800; }
   .post__content :global(a) {
-    color: oklch(var(--primary-ink));
+    color: inherit;
     text-decoration: underline;
-    text-decoration-color: color-mix(in oklch, oklch(var(--primary-ink)) 35%, transparent);
-    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .post__content :global(a:hover) { color: var(--color-accent); }
   }
   .post__content :global(:is(ul, ol)) {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
+    gap: var(--space-xs);
     padding-inline-start: 1.4rem;
   }
-  .post__content :global(li::marker) { color: oklch(var(--muted-foreground)); }
-  /* Цитата — серая выноска, как в Notion: без полосы слева. */
+  .post__content :global(li::marker) { color: var(--color-muted); }
+  /* Цитата — табличка в рамке 2px. */
   .post__content :global(blockquote) {
-    padding: 1rem 1.25rem;
-    border-radius: var(--r-lg);
-    background: oklch(var(--panel));
+    padding: var(--space-md) var(--space-lg);
+    border: var(--rule-bar) solid var(--color-ink);
+    background: var(--color-paper-3);
   }
   .post__content :global(blockquote p) { margin: 0; }
   .post__content :global(code) {
     padding: 0.1em 0.35em;
-    border-radius: var(--r-sm);
-    background: var(--hover);
-    font-family: var(--font-mono);
-    font-size: 0.88em;
+    background: var(--color-paper-2);
+    font-size: 0.92em;
   }
   .post__content :global(pre) {
-    padding: 1rem 1.125rem;
-    border-radius: var(--r-lg);
-    background: oklch(var(--panel));
+    padding: var(--space-md);
+    border: var(--rule-bar) solid var(--color-ink);
     overflow-x: auto;
     font-size: var(--text-sm);
     line-height: 1.65;
   }
   .post__content :global(pre code) { padding: 0; background: none; font-size: inherit; }
-  /* Shiki пишет фон и цвета инлайном: фон — подложка панели, цвета токенов — по теме. */
-  .post__content :global(pre.astro-code) { background-color: oklch(var(--panel)) !important; }
+  /* Shiki пишет фон и цвета инлайном: фон — бумага страницы, цвета токенов — по теме. */
+  .post__content :global(pre.astro-code) { background-color: var(--color-paper-3) !important; }
   @media (prefers-color-scheme: dark) {
     .post__content :global(.astro-code span) { color: var(--shiki-dark) !important; }
   }
   .post__content :global(hr) {
-    block-size: 1px;
+    block-size: var(--rule-bar);
     border: 0;
-    background: oklch(var(--border));
+    background: var(--color-ink);
   }
   .post__content :global(img) {
     display: block;
     max-inline-size: 100%;
     block-size: auto;
-    border-radius: var(--r-lg);
-    box-shadow: var(--shadow-card);
+    border: var(--rule-bar) solid var(--color-ink);
   }
 
   /* Таблицы — скрипт оборачивает <table> в .post__table (прокрутка на узких экранах). */
   .post__content :global(.post__table) {
     overflow-x: auto;
-    border-radius: var(--r-lg);
-    box-shadow: var(--shadow-card);
+    border-block-start: var(--rule-bar) solid var(--color-ink);
   }
   .post__content :global(table) {
     inline-size: 100%;
     min-inline-size: 30rem;
     border-collapse: collapse;
     font-size: var(--text-sm);
-    background: oklch(var(--card));
   }
   .post__content :global(:is(th, td)) {
-    padding: 0.625rem 0.875rem;
-    border-block-end: 1px solid oklch(var(--border));
+    padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
+    border-block-end: var(--rule-hair) solid var(--color-rule);
     text-align: start;
     vertical-align: top;
-    line-height: var(--leading-snug);
-    color: oklch(var(--foreground));
+    line-height: 1.4;
     overflow-wrap: anywhere;
   }
   .post__content :global(thead th) {
-    background: oklch(var(--panel));
-    font-weight: 600;
-    color: oklch(var(--muted-foreground));
+    font-weight: 500;
+    color: var(--color-muted);
   }
-  .post__content :global(tbody tr:last-child td) { border-block-end: 0; }
 
-  /* Оглавление: тонкая линия, активный пункт — основным цветом. */
+  /* Оглавление: линия 2px слева, текущий пункт — жирным с чернильной меткой. */
   .post__aside { display: none; }
-  @media (min-width: 1040px) {
+  @media (min-width: 65rem) {
     .post__aside {
       display: block;
       position: sticky;
-      inset-block-start: calc(var(--nav-h) + 1.5rem);
+      inset-block-start: calc(var(--nav-h) + var(--space-lg));
       align-self: start;
     }
   }
   .post__toc-title {
-    margin-block-end: 0.5rem;
+    margin-block-end: var(--space-xs);
     font-size: var(--text-sm);
-    font-weight: 600;
-    color: oklch(var(--foreground));
+    font-weight: 500;
+    color: var(--color-muted);
   }
   .post__toc ul {
     margin: 0;
     padding: 0;
     list-style: none;
-    border-inline-start: 1px solid oklch(var(--border));
+    border-inline-start: var(--rule-hair) solid var(--color-rule);
   }
   .post__toc a {
     display: block;
-    padding: 0.3125rem 0.75rem;
+    padding: var(--space-2xs) var(--space-sm);
     margin-inline-start: -1px;
-    border-inline-start: 2px solid transparent;
-    font-size: var(--text-ui);
-    line-height: var(--leading-snug);
-    color: oklch(var(--muted-foreground));
+    border-inline-start: var(--rule-bar) solid transparent;
+    font-size: var(--text-xs);
+    line-height: 1.4;
+    color: var(--color-muted);
     text-decoration: none;
-    transition:
-      color var(--dur-fast) var(--ease-out),
-      border-color var(--dur-fast) var(--ease-out);
+    transition: color var(--dur-micro) steps(1), border-color var(--dur-micro) steps(1);
   }
-  .post__toc-sub a { padding-inline-start: 1.5rem; }
+  .post__toc-sub a { padding-inline-start: var(--space-lg); }
   @media (hover: hover) and (pointer: fine) {
-    .post__toc a:hover { color: oklch(var(--foreground)); }
+    .post__toc a:hover { color: var(--color-ink); }
   }
   .post__toc a:global(.is-active) {
-    color: oklch(var(--foreground));
-    border-inline-start-color: oklch(var(--foreground));
-    font-weight: 500;
+    color: var(--color-ink);
+    border-inline-start-color: var(--color-ink);
+    font-weight: 800;
   }
 
-  /* Призыв в конце статьи — серая панель, как финальный блок на главной. */
+  /* Призыв в конце статьи — чернильная табличка, как вывеска над доской на главной. */
   .post__cta {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1.25rem 2rem;
-    max-inline-size: 40rem;
-    margin-block-start: clamp(3rem, 2rem + 3vw, 4.5rem);
-    padding: clamp(1.25rem, 1rem + 1vw, 1.75rem);
-    border-radius: var(--r-2xl);
-    background: oklch(var(--panel));
+    gap: var(--space-lg) var(--space-xl);
+    max-inline-size: 64ch;
+    margin-block-start: var(--space-3xl);
+    padding: var(--space-lg);
+    background: var(--color-band);
+    color: var(--color-band-ink);
   }
   .post__cta-title {
-    font-size: var(--text-h3);
-    font-weight: 700;
-    letter-spacing: var(--tracking-heading);
-    color: oklch(var(--foreground));
+    max-inline-size: none;
+    font-size: var(--text-xl);
+    color: var(--color-band-ink);
   }
   .post__cta-text {
-    margin-block-start: 0.375rem;
-    font-size: var(--text-md);
-    color: oklch(var(--muted-foreground));
+    margin-block-start: var(--space-xs);
+    font-size: var(--text-sm);
+    color: var(--color-band-muted);
   }
 
-  .post__related { margin-block-start: clamp(3rem, 2rem + 3vw, 4.5rem); }
+  .post__related { margin-block-start: var(--space-3xl); }
   .post__related-title {
-    margin-block-end: 1.25rem;
-    font-size: var(--text-h3);
-    font-weight: 700;
-    letter-spacing: var(--tracking-heading);
-    color: oklch(var(--foreground));
+    max-inline-size: none;
+    margin-block-end: var(--space-lg);
+    font-size: var(--text-title);
   }
   .post__related-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-    gap: 1rem 1.25rem;
+    gap: var(--gap-columns);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -456,7 +436,7 @@ const jsonLd = {
       const rect = article.getBoundingClientRect();
       const total = rect.height - window.innerHeight;
       const pct = total > 0 ? Math.min(100, Math.max(0, (-rect.top / total) * 100)) : 0;
-      bar.style.inlineSize = `${pct}%`;
+      bar.style.transform = `scaleX(${pct / 100})`;
     };
     update();
     window.addEventListener('scroll', update, { passive: true });

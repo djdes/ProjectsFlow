@@ -2116,10 +2116,10 @@ export function TaskDrawer({
               {/* Лёгкие вкладки на разделителе: без вложенных «капсул», в том же стиле,
                   что вкладки «Активность / Аналитика» в окне проекта. */}
               <div className="px-4 pbs-2.5">
-                <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-be border-border bg-transparent p-0">
+                <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-be border-border bg-transparent p-0 dark:border-s-0 dark:border-e-0 dark:border-bs-0 dark:bg-transparent [&>.pf-tab-indicator]:hidden">
                   <TabsTrigger
                     value="discussion"
-                    className="relative -mbe-px h-10 gap-1.5 rounded-none border-be-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="relative -mbe-px h-10 shrink-0 gap-1.5 rounded-none border-be-2 border-transparent bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     <MessageSquare aria-hidden className="size-3.5" />
                     Обсуждение
@@ -2131,7 +2131,7 @@ export function TaskDrawer({
                   </TabsTrigger>
                   <TabsTrigger
                     value="live"
-                    className="relative -mbe-px h-10 gap-1.5 rounded-none border-be-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="relative -mbe-px h-10 shrink-0 gap-1.5 rounded-none border-be-2 border-transparent bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     <Activity aria-hidden className="size-3.5" />
                     LIVE
@@ -2265,7 +2265,7 @@ export function TaskDrawer({
             <div className="flex h-11 shrink-0 items-center gap-2 border-be bg-background/95 px-3">
               {renderCloseButton()}
               {renderMaximizeButton()}
-              <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
                 {projectName ? `${projectName} · ` : ''}Новая задача
               </span>
             </div>
@@ -3064,7 +3064,7 @@ function CommentItem({
             </span>
           ) : isSystem ? (
             <span className="truncate rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
-              ⚙ Система
+              Система
             </span>
           ) : (
             <span className="max-w-full truncate text-sm font-medium">{displayName}</span>

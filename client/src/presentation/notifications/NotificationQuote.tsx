@@ -21,7 +21,7 @@ export function NotificationQuote({ author, text }: { author: string; text?: str
             unwrapDisallowed
             components={{
               a: ({ children }) => <span>{children}</span>,
-              img: ({ alt }) => <span>🖼 {alt || 'изображение'}</span>,
+              img: ({ alt }) => <span>[{alt || 'изображение'}]</span>,
               input: () => null,
             }}
           >{applyInlineMarkSyntax(preview)}</ReactMarkdown>

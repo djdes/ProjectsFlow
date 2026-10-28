@@ -616,6 +616,9 @@ export const projectMembers = mysqlTable(
     // favoriteSortOrder имеет смысл только при isFavorite=true; для не-favorites игнорируется.
     isFavorite: boolean('is_favorite').notNull().default(false),
     favoriteSortOrder: int('favorite_sort_order').notNull().default(0),
+    // Ручная поправка вычисляемого избранного (db/172): true — закреплён, false — скрыт,
+    // NULL — как вычислено по назначенным задачам.
+    favoriteOverride: boolean('favorite_override'),
   },
   (t) => [
     uniqueIndex('pk_project_members').on(t.projectId, t.userId),

@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import {
-  AnimatedInbox,
+  AnimatedGlobe,
   AnimatedUser,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
@@ -185,7 +185,7 @@ export function MobileBottomNav(): React.ReactElement {
           >
             <span className="relative inline-flex">
               {index === 0 ? (
-                <AnimatedInbox className="size-5" active={item.active} />
+                <AnimatedGlobe className="size-5" active={item.active} />
               ) : index === 2 ? (
                 <AnimatedUser className="size-5" active={item.active} />
               ) : (

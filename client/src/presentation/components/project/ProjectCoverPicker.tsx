@@ -114,7 +114,7 @@ export function ProjectCoverPicker({
         {/* Галерея: арт-обложки + одноцветные градиенты (всё — чистый CSS) */}
         <TabsContent value="gallery" className="max-h-[50vh] space-y-3 overflow-y-auto p-3">
           <div>
-            <p className="mbe-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mbe-1.5 text-2xs font-medium text-muted-foreground">
               Обложки
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -131,7 +131,7 @@ export function ProjectCoverPicker({
             </div>
           </div>
           <div>
-            <p className="mbe-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mbe-1.5 text-2xs font-medium text-muted-foreground">
               Цвета и градиенты
             </p>
             <div className="grid grid-cols-4 gap-2">
@@ -172,7 +172,7 @@ export function ProjectCoverPicker({
             }}
           />
           <p className="text-center text-xs text-muted-foreground">
-            jpg, png, webp, gif · до 20&nbsp;МБ · лучше шире 1500&nbsp;px
+            jpg, png, webp, gif до 20&nbsp;МБ, лучше шире 1500&nbsp;px
             <br />
             или просто вставьте картинку через&nbsp;Ctrl+V
           </p>

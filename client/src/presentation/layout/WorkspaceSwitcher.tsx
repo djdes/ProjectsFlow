@@ -207,7 +207,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                 <Tooltip key={ws.id}>
                   {/* Триггер — вся строка: тултип встаёт у ПРАВОГО края всего окна. */}
                   <TooltipTrigger asChild>
-                    <div className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent">
+                    <div className="flex items-center gap-1 rounded-md ps-2 pe-1 py-1 text-sm transition-colors hover:bg-accent">
                       <button
                         type="button"
                         onClick={() => handleSwitch(ws.id)}
@@ -222,23 +222,21 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                           </span>
                         )}
                       </button>
-                      {/* Правый край: галочка (текущее) → на hover сменяется кнопкой настроек. */}
-                      <div className="relative size-6 shrink-0">
-                        {ws.isCurrent && (
-                          <Check className="absolute inset-0 m-auto size-4 text-foreground transition-opacity group-hover/row:opacity-0" />
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openSettings(ws.id);
-                          }}
-                          aria-label={`Настройки пространства «${ws.name}»`}
-                          className="absolute inset-0 grid place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
-                        >
-                          <Settings className="size-3.5" />
-                        </button>
-                      </div>
+                      {/* Правый край: галочка текущего (место держим и у остальных, чтобы
+                          шестерёнки стояли в столбик) → кнопка настроек. Настройки открываются
+                          для любого пространства по id, переключаться в него не нужно. */}
+                      <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
+                        {ws.isCurrent && <Check className="size-4 text-foreground" />}
+                      </span>
+                      {/* Пункт меню, а не простая кнопка: Radix-меню не пускает Tab внутрь,
+                          стрелки и Enter работают только по пунктам. */}
+                      <DropdownMenuItem
+                        onSelect={() => openSettings(ws.id)}
+                        aria-label={`Настройки пространства «${ws.name}»`}
+                        className="size-7 shrink-0 justify-center p-0 text-muted-foreground focus:bg-muted focus:text-foreground sm:p-0 max-sm:size-9 [&_svg]:size-3.5"
+                      >
+                        <Settings aria-hidden="true" />
+                      </DropdownMenuItem>
                     </div>
                   </TooltipTrigger>
                   {/* Всегда справа за окном (avoidCollisions=false → не перекидывается). */}

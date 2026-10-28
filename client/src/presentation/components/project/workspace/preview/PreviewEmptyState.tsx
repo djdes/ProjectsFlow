@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Loader2, Monitor, ServerCog } from 'lucide-react';
+import { Loader2, Monitor, ServerCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -38,7 +38,7 @@ export function PreviewEmptyState({
           </p>
 
           <div className="mbs-5 rounded-lg border bg-background/60 px-4 py-3 text-start">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               Что об этом говорит код
             </p>
             <ul className="mbs-2 space-y-1.5">
@@ -123,7 +123,6 @@ function ConvertButton({ projectId }: { projectId: string }): React.ReactElement
         className="mbs-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary-ink hover:underline"
       >
         Открыть задачу на перевод
-        <ArrowRight className="size-4" />
       </a>
     );
   }

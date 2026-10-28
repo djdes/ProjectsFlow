@@ -1,5 +1,5 @@
 import { SidebarSkeleton } from '@/presentation/components/loading/LoadingLayouts';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -31,8 +31,12 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Settings,
+  Star,
+  StarOff,
   Trash2,
   Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
@@ -63,6 +67,8 @@ import { DeleteProjectDialog } from '@/presentation/components/project/DeletePro
 import type { Project } from '@/domain/project/Project';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
+import { useContainer } from '@/infrastructure/di/container';
+import { buildSidebarProjectMenu, type SidebarProjectMenuAction } from './sidebarProjectMenu';
 
 type MoveDir = 'up' | 'down';
 type Bucket = 'favorites' | 'main';
@@ -166,17 +172,16 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
 }): React.ReactElement {
   const navigate = useNavigate();
   const location = useLocation();
-  const { refresh: refreshProjects } = useProjectsContext();
+  const { refresh: refreshProjects, applyToggleFavorite } = useProjectsContext();
+  const { toggleProjectFavorite } = useContainer();
   const { submit: updateProject } = useUpdateProject();
   const { submit: duplicateProject } = useDuplicateProject();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const isArchived = project.status === 'archived';
   // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
-  // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
+  // нельзя в принципе — диалог не монтируем, пункт меню прячет buildSidebarProjectMenu.
   const canDelete = hasOwnerRights(project.role) && !project.isInbox;
-  // Архивировать/дублировать — editor+ (viewer не может менять проект). Inbox исключаем.
-  const canManage = project.role !== 'viewer' && !project.isInbox;
 
   const handleSetArchived = async (archived: boolean): Promise<void> => {
     try {
@@ -194,6 +199,71 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
       navigate(`/projects/${created.id}`);
     } catch (e) {
       toast.error(`Не удалось дублировать проект: ${(e as Error).message}`);
+    }
+  };
+
+  // Optimistic: the sidebar section updates at once, a failed request rolls it back.
+  const handleToggleFavorite = async (): Promise<void> => {
+    const next = !project.isFavorite;
+    applyToggleFavorite(project.id, next);
+    try {
+      await toggleProjectFavorite.execute(project.id, next);
+      toast.success(next ? 'Добавлено в избранное' : 'Убрано из избранного');
+    } catch (e) {
+      applyToggleFavorite(project.id, !next);
+      toast.error(`Не удалось изменить избранное: ${(e as Error).message}`);
+    }
+  };
+
+  const menuItems = buildSidebarProjectMenu({
+    project,
+    canMoveUp: reorderable && !isFirst,
+    canMoveDown: reorderable && !isLast,
+  });
+  const menuIcons: Record<SidebarProjectMenuAction, LucideIcon> = {
+    rename: Pencil,
+    settings: Settings,
+    favorite: project.isFavorite ? StarOff : Star,
+    kb: BookOpen,
+    share: Users,
+    moveUp: ArrowUp,
+    moveDown: ArrowDown,
+    duplicate: Copy,
+    archive: isArchived ? ArchiveRestore : Archive,
+    delete: Trash2,
+  };
+  const runMenuAction = (action: SidebarProjectMenuAction): void => {
+    switch (action) {
+      case 'rename':
+        setRenameOpen(true);
+        return;
+      case 'settings':
+        navigate(`/projects/${project.id}/overview`);
+        return;
+      case 'favorite':
+        void handleToggleFavorite();
+        return;
+      case 'kb':
+        navigate(`/projects/${project.id}/kb`);
+        return;
+      case 'share':
+        navigate(`/projects/${project.id}/overview`);
+        return;
+      case 'moveUp':
+        onMove(project.id, 'up');
+        return;
+      case 'moveDown':
+        onMove(project.id, 'down');
+        return;
+      case 'duplicate':
+        void handleDuplicate();
+        return;
+      case 'archive':
+        void handleSetArchived(!isArchived);
+        return;
+      case 'delete':
+        setDeleteOpen(true);
+        return;
     }
   };
 
@@ -305,66 +375,24 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
             <MoreHorizontal className="size-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="start" className="w-48">
-          <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
-            <Pencil />
-            Изменить имя
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate(`/projects/${project.id}/kb`)}>
-            <BookOpen />
-            База знаний
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate(`/projects/${project.id}/overview`)}>
-            <Users />
-            Общий доступ
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={!reorderable || isFirst}
-            onSelect={() => onMove(project.id, 'up')}
-          >
-            <ArrowUp />
-            Переместить выше
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!reorderable || isLast}
-            onSelect={() => onMove(project.id, 'down')}
-          >
-            <ArrowDown />
-            Переместить ниже
-          </DropdownMenuItem>
-          {canManage && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void handleDuplicate()}>
-                <Copy />
-                Дублировать
-              </DropdownMenuItem>
-              {isArchived ? (
-                <DropdownMenuItem onSelect={() => void handleSetArchived(false)}>
-                  <ArchiveRestore />
-                  Вернуть из архива
+        <DropdownMenuContent side="right" align="start" className="w-52">
+          {menuItems.map((item, i) => {
+            const Icon = menuIcons[item.action];
+            const prev = menuItems[i - 1];
+            return (
+              <Fragment key={item.action}>
+                {prev && prev.section !== item.section && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  disabled={item.disabled}
+                  onSelect={() => runMenuAction(item.action)}
+                  className={cn(item.destructive && 'text-destructive focus:text-destructive')}
+                >
+                  <Icon />
+                  {item.label}
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onSelect={() => void handleSetArchived(true)}>
-                  <Archive />
-                  В архив
-                </DropdownMenuItem>
-              )}
-            </>
-          )}
-          {canDelete && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => setDeleteOpen(true)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 />
-                Удалить проект…
-              </DropdownMenuItem>
-            </>
-          )}
+              </Fragment>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -540,7 +568,7 @@ export function SidebarProjectList(): React.ReactElement {
       >
         <ChevronDown
           className={cn(
-            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100',
+            'order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100',
             mainCollapsed && '-rotate-90',
           )}
         />
@@ -574,8 +602,9 @@ export function SidebarProjectList(): React.ReactElement {
   const searching = q.length > 0;
   const matches = (p: Project): boolean => matchesKeyboardLayoutQuery(p.name, q);
 
-  // Секция «Избранное» — теперь ВЫЧИСЛЯЕМАЯ: проекты, где у пользователя есть незавершённая
-  // назначенная задача (isFavorite приходит с сервера уже вычисленным; обновляется на
+  // Секция «Избранное» — ВЫЧИСЛЯЕМАЯ: проекты, где у пользователя есть незавершённая
+  // назначенная задача, с ручной поправкой из меню проекта «Добавить в избранное / Убрать
+  // из избранного» (isFavorite приходит с сервера уже вычисленным; обновляется на
   // TASK_CHANGED — ProjectsProvider перечитывает список). Порядок — как в основном списке
   // (sort_order), ручной reorder убран. Дубликат project.id ожидаем — проект виден И в
   // «Избранное», И в «Мои проекты».
@@ -665,7 +694,7 @@ export function SidebarProjectList(): React.ReactElement {
           >
             <ChevronDown
               className={cn(
-                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100',
+                'order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -720,7 +749,7 @@ export function SidebarProjectList(): React.ReactElement {
             className="group sticky inset-bs-0 z-10 flex w-full items-center rounded bg-sidebar px-2 py-1.5 text-start text-xs font-medium text-muted-foreground/80 hover:text-foreground"
           >
             <ChevronDown
-              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
+              className={cn('order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
             {archived.length > 0 && <span className="ms-1.5 tabular-nums opacity-70">{archived.length}</span>}

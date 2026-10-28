@@ -135,7 +135,7 @@ function SupportTab(): React.ReactElement {
                 {t.submitterEmail && (
                   <span className="truncate text-xs text-muted-foreground">{t.submitterEmail}</span>
                 )}
-                <span className="rounded-sm bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
+                <span className="rounded-sm bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                   {t.source === 'landing' ? 'лендинг' : 'приложение'}
                 </span>
                 {t.status === 'closed' && (
@@ -412,12 +412,12 @@ function UsersTab(): React.ReactElement {
                   {u.displayName}
                   {/* Метки — данные о человеке, а не статусы: тоны палитры меток (pf-tag). */}
                   {u.isAdmin && (
-                    <span className="pf-tag pf-tone-blue shrink-0 text-2xs font-medium uppercase tracking-wide">
+                    <span className="pf-tag pf-tone-blue shrink-0 text-2xs font-medium">
                       admin
                     </span>
                   )}
                   {u.plan !== 'free' && (
-                    <span className="pf-tag pf-tone-yellow shrink-0 text-2xs font-medium uppercase tracking-wide">
+                    <span className="pf-tag pf-tone-yellow shrink-0 text-2xs font-medium">
                       {planNameRu(u.plan)}
                       {u.subscriptionExpiresAt
                         ? ` до ${new Date(u.subscriptionExpiresAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`

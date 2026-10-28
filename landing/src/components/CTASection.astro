@@ -1,60 +1,91 @@
 ---
-// Финальный призыв: одна главная кнопка + вариант «Открыть приложение» для вошедших.
+// Финал: то, что можно поручить, — живыми фразами на чернильной полосе, рядом главная кнопка
+// и вариант «Открыть приложение» для вошедших. Ввод продукта — обычная фраза, поэтому
+// страница заканчивается фразами, а не формой подписки.
 // Пути относительные — лендинг и SPA отдаются одним Express'ом; PUBLIC_APP_URL — только для dev.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+const examples = [
+  'Собери лендинг для запуска',
+  'Добавь экран оплаты',
+  'Сделай тёмную тему',
+  'Подключи Telegram-бота',
+  'Почини баг и выкати',
+  'Автоматизируй рутину проекта',
+];
 ---
 
-<section class="pf-section cta" aria-labelledby="cta-title">
-  <div class="pf-container">
-    <div class="cta__panel">
-      <div class="cta__text">
-        <h2 id="cta-title" class="pf-h2">Преврати идею в продукт уже сегодня</h2>
-        <p class="cta__sub">
-          Опиши, что хочешь получить, — остальное платформа берёт на себя. Бесплатно и без
-          карты, а на Прайм переходишь, только если зашло.
-        </p>
-      </div>
+<section class="pf-section pf-section--l pf-band cta" aria-labelledby="cta-title">
+  <div class="pf-container cta__grid">
+    <div class="cta__text">
+      <h2 id="cta-title" class="pf-h2">Преврати идею в продукт уже сегодня</h2>
+      <p class="cta__sub">
+        Опиши, что хочешь получить: остальное платформа берёт на себя. На Прайм переходишь,
+        только если зашло.
+      </p>
       <div class="cta__actions">
         <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg">Начать бесплатно</a>
         <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg">Открыть приложение</a>
-        <p class="cta__fine">Без карты. Не зашло — вернём деньги. Проект остаётся твоим.</p>
       </div>
+    </div>
+
+    <div class="cta__asks">
+      <h3 class="cta__asks-title">Что можно поручить</h3>
+      <ul class="cta__list">
+        {examples.map((e) => <li class="cta__item">«{e}»</li>)}
+      </ul>
     </div>
   </div>
 </section>
 
 <style>
-  .cta__panel {
+  .cta__grid {
     display: grid;
-    gap: 1.5rem 3rem;
-    align-items: center;
-    padding: clamp(1.5rem, 1rem + 2.5vw, 3rem);
-    border-radius: var(--r-2xl);
-    background: oklch(var(--panel));
+    gap: var(--space-2xl) var(--gap-columns);
+    align-items: start;
   }
-  @media (min-width: 900px) {
-    .cta__panel { grid-template-columns: minmax(0, 1fr) auto; }
+  @media (min-width: 60rem) {
+    .cta__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
   }
-  @media (prefers-color-scheme: dark) {
-    .cta__panel { box-shadow: var(--shadow-card); }
+  .cta__text {
+    display: grid;
+    gap: var(--space-lg);
+    justify-items: start;
   }
+  .cta__text .pf-h2 { color: var(--color-band-ink); }
   .cta__sub {
-    max-inline-size: var(--measure);
-    margin-block-start: 0.875rem;
+    max-inline-size: 40ch;
     font-size: var(--text-lead);
-    line-height: var(--leading-body);
-    color: oklch(var(--muted-foreground));
+    line-height: 1.45;
+    color: var(--color-band-muted);
   }
-  .cta__actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.625rem;
-  }
-  .cta__fine {
-    max-inline-size: 22rem;
+  .cta__actions { margin-block-start: var(--space-xs); }
+
+  /* Фразы — строками табло: тонкие линии, крупный жирный текст. */
+  .cta__asks-title {
+    max-inline-size: none;
+    padding-block-end: var(--space-sm);
+    border-block-end: var(--rule-bar) solid var(--color-band-ink);
     font-size: var(--text-sm);
-    line-height: var(--leading-snug);
-    color: oklch(var(--muted-foreground));
+    font-stretch: var(--stretch-body);
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.5;
+    color: var(--color-band-muted);
+  }
+  .cta__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .cta__item {
+    padding-block: var(--space-md);
+    border-block-end: var(--rule-hair) solid var(--color-band-rule);
+    font-size: var(--text-xl);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    letter-spacing: var(--tracking-display);
+    line-height: 1.15;
+    color: var(--color-band-ink);
   }
 </style>

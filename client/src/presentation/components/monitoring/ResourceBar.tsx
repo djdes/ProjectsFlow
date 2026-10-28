@@ -23,7 +23,7 @@ export function ResourceBar({
         </span>
       </div>
       <div className="h-1.5 w-full overflow-clip rounded-full bg-muted">
-        <div className={cn('h-full rounded-full motion-safe:transition-[width]', color)} style={{ width: `${value ?? 0}%` }} />
+        <div className={cn('h-full rounded-full', color)} style={{ width: `${value ?? 0}%` }} />
       </div>
     </div>
   );

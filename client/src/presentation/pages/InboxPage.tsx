@@ -11,6 +11,9 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import type { Task } from '@/domain/task/Task';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
+import { OtherWorkspaceInboxes } from '@/presentation/components/tasks/OtherWorkspaceInboxes';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
+import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 
@@ -19,12 +22,14 @@ function loadHideDone(): boolean {
   return window.localStorage.getItem(HIDE_DONE_STORAGE_KEY) === '1';
 }
 
-// «Входящие» — задачи без привязки к конкретному проекту. Под капотом обычный проект
-// с флагом isInbox=true; сервер создаёт его лениво при первом GET /api/inbox.
-// Отображение — только канбан (drag-drop по статусам); сортировку/группировку блока
-// ответственных выбирают в «Сортировке». Режим списка убран.
+// «Все входящие» — блоки по пространствам сверху вниз. Первый — полные входящие текущего
+// пространства (канбан с drag-drop по статусам; сортировку/группировку выбирают в
+// «Сортировке»). Под ним — компактные блоки остальных пространств (OtherWorkspaceInboxes).
+// Личные задачи живут в обычном проекте с флагом isInbox=true; сервер создаёт его лениво
+// при первом GET /api/inbox.
 export function InboxPage(): React.ReactElement {
   const { projectRepository, taskRepository } = useContainer();
+  const { workspace } = useCurrentWorkspace();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,20 +113,22 @@ export function InboxPage(): React.ReactElement {
     // проекта). Тогда закреплённый снизу горизонтальный скролл-бар доски (SyncedStickyScrollbar)
     // прилипает к низу вьюпорта так же, как на проектах, — а не к внутреннему скролл-порту.
     <div className="flex min-h-full flex-col">
-      {/* Шапка страницы (дизайн C4): крошки «<Пространство> ▾ › Входящие» и счётчик
+      {/* Шапка страницы (дизайн C4): крошки «<Пространство> ▾ › Все входящие» и счётчик
           «сделано сегодня», линия снизу. На мобиле — своя шапка приложения. */}
       <PageTopBar className="hidden sm:flex" end={<HeaderCompletedTodayPill />}>
         <InboxBreadcrumbs />
       </PageTopBar>
 
       {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
-          ответственных: заголовок, вкладки, люди и поиск он ставит в одну строку сам. */}
-      <div className="flex flex-1 flex-col px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
+          ответственных текущего пространства: название пространства, вкладки, люди и поиск
+          он ставит в одну строку сам. Ниже — блоки других пространств. */}
+      <div className="flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
+        <PageTitle>Все входящие</PageTitle>
         <AssignedToMeBlock
           boardTasks={boardTasks}
           inboxProjectId={project.id}
           onChanged={() => void reloadInboxTasks(project.id)}
-          heading={<PageTitle className="me-1">Входящие</PageTitle>}
+          heading={<CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />}
           actions={
             // Выделение задач блока: режим включается сразу во всех его колонках, в шапке
             // каждой появляются «Все»/«Очистить», снизу — панель действий.
@@ -144,8 +151,20 @@ export function InboxPage(): React.ReactElement {
           selectionActive={selectionActive}
           onSelectionActiveChange={setSelectionActive}
         />
+        <OtherWorkspaceInboxes />
       </div>
     </div>
+  );
+}
+
+// Заголовок первого блока — текущее пространство. Тот же вид, что у блоков других
+// пространств ниже, чтобы страница читалась как список пространств.
+function CurrentWorkspaceHeading({ name, icon }: { name: string; icon: string | null }): React.ReactElement {
+  return (
+    <h2 className="me-1 flex min-w-0 items-center gap-2 text-base font-semibold">
+      <WorkspaceIcon name={name} icon={icon} className="size-6" />
+      <span className="min-w-0 truncate">{name}</span>
+    </h2>
   );
 }
 

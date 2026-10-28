@@ -42,7 +42,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
           <ImageIcon className="size-7 text-muted-foreground/60" aria-hidden />
           <div className="h-1.5 w-full max-w-md overflow-clip rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary duration-200 ease-out motion-safe:transition-[width]"
+              className="h-full rounded-full bg-primary duration-200 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -69,7 +69,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
           {uploading ? (
             <div className="absolute inset-x-3 inset-be-3 overflow-clip rounded-full bg-black/25 p-0.5 backdrop-blur-sm">
               <div
-                className="h-1.5 rounded-full bg-primary duration-200 ease-out motion-safe:transition-[width]"
+                className="h-1.5 rounded-full bg-primary duration-200 ease-out"
                 style={{ width: `${progress}%` }}
               />
             </div>

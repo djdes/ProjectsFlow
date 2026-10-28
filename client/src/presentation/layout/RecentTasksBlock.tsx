@@ -36,7 +36,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
         className="group flex w-full items-center rounded px-2 py-1.5 text-start text-xs font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
       >
         <ChevronDown
-          className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[width,margin-inline-end,opacity,transform] group-hover:me-1.5 group-hover:w-3 group-hover:opacity-100', collapsed && '-rotate-90')}
+          className={cn('order-last ms-1.5 h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 ease-out motion-safe:transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100', collapsed && '-rotate-90')}
         />
         <span>Недавнее</span>
       </button>

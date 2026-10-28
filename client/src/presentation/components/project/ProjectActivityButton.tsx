@@ -122,7 +122,7 @@ export function ProjectActivityButton({
         {summary && (
           <TooltipContent side="bottom" align="end" className="w-64 p-0">
             <div className="p-2">
-              <p className="px-1.5 pbe-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-1.5 pbe-1 text-2xs font-semibold text-muted-foreground">
                 Активность
               </p>
               {summary.lastEditedAt && (

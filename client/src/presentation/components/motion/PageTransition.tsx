@@ -11,7 +11,12 @@ export function PageTransition({
   const { animations } = useMotion();
   const { pathname } = useLocation();
   const element = useRef<HTMLDivElement>(null);
+  const shownPath = useRef(pathname);
   useLayoutEffect(() => {
+    // The first page appears over the identical loading skeleton: fading it in would
+    // blink the skeleton. Only real navigations fade.
+    if (shownPath.current === pathname) return;
+    shownPath.current = pathname;
     if (!animations || !element.current?.animate) return;
     // Opacity does not create a transformed containing block for fixed task panels.
     const animation = element.current.animate(

@@ -2,6 +2,7 @@ import { selectInboxView } from './inbox/selectInboxView';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
+import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -22,7 +23,8 @@ import {
   type Modifier,
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
-import { STATUS_LABEL, canTakeToManual } from './statusLabels';
+import { STATUS_LABEL, canSendToWorker, canTakeToManual } from './statusLabels';
+import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
 import {
   applyPatches,
   settledPatchIds,
@@ -341,6 +343,8 @@ export function AssignedToMeBlock({
   const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
   // Без воркера «В работе» ставят люди — такие задачи на полке «Вручную» (isHandWork).
   const workerEnabled = useWorkerEnabled();
+  // «Передать воркеру» на карточке очереди — те же условия, что у кнопки на доске проекта.
+  const workerHandoffAvailable = useWorkerHandoffAvailable();
   const isApprover =
     approvalEnabled && (currentWorkspace?.role === 'lead' || currentWorkspace?.role === 'owner');
   // Руководитель пространства смотрит доску сотрудника: клик по кубику переводит блок на
@@ -1357,8 +1361,9 @@ export function AssignedToMeBlock({
   // Взять в работу / убрать из работы. 'manual' — «делаю руками», агент такие задачи
   // никогда не подхватывает; backlog — «Черновики», нейтральное «не занимаюсь сейчас».
   // Возврат НЕ в todo: в личных входящих это колонка «Воркер», задачу забрал бы Ralph.
+  // 'todo' — только явная кнопка «Передать воркеру» на проектной карточке очереди.
   const setWorkStatus = useCallback(
-    async (item: InboxBlockTask, next: 'manual' | 'backlog'): Promise<void> => {
+    async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo'): Promise<void> => {
       if (item.status === next) return;
       // Карточка переезжает на полку сразу, ещё до ответа сервера — иначе после дропа она
       // секунду висит на старом месте и жест читается как неудавшийся.
@@ -1373,7 +1378,8 @@ export function AssignedToMeBlock({
         });
         // Отмена из тоста возвращает прежний статус: жест мог быть промахом.
         const prev = item.status;
-        toast.success(next === 'manual' ? 'Взята в работу' : 'Вернули в очередь', {
+        const message = next === 'manual' ? 'Взята в работу' : next === 'todo' ? 'Передана воркеру' : 'Вернули в очередь';
+        toast.success(message, {
           description: plainTaskTitle(item.description ?? '') || undefined,
           duration: 8000,
           action: { label: 'Отменить', onClick: () => void restoreStatus(item, prev) },
@@ -1552,9 +1558,14 @@ export function AssignedToMeBlock({
     setDragActive(false);
   };
 
+  // Высота строки людей (их число и перенос имён) — для скелетона следующей загрузки.
+  const inboxHeadRef = useRef<HTMLDivElement>(null);
+  const inboxReady = !(loading || membersLoading || boardTasks === null);
+  useRememberSkeletonSize('inbox', 'inbox-head', [inboxHeadRef], [isWide, inboxReady, loadError]);
+
   // Пока грузится — заголовок страницы уже на месте, под ним скелетон доски: при появлении
   // данных строка заголовка не «прыгает».
-  if (loading || membersLoading || boardTasks === null) {
+  if (!inboxReady) {
     return (
       <section id="assigned-to-me" className="flex flex-col gap-3">
         <InboxLoadingLayout heading={heading} />
@@ -1579,6 +1590,20 @@ export function AssignedToMeBlock({
         onClick={() => void setWorkStatus(item, 'manual')}
       >
         <Play className="size-3 fill-current" />
+      </QuickAction>
+    ) : null;
+  // «Передать воркеру» — только проектные задачи очереди: полки «Вручную»/«На утверждении»
+  // рендерят свои действия, а в «Личных» колонка «Воркер» не для этого.
+  const canHandOff = (item: InboxBlockTask): boolean =>
+    workerHandoffAvailable && item.canModify && !item.isInbox && canSendToWorker(item.status);
+  const workerHandoffAction = (item: InboxBlockTask): React.ReactNode =>
+    canHandOff(item) ? (
+      <QuickAction
+        label={WORKER_HANDOFF_LABEL}
+        className="text-primary"
+        onClick={() => void setWorkStatus(item, 'todo')}
+      >
+        <WorkerHandoffIcon className="size-3.5" />
       </QuickAction>
     ) : null;
   // Свайп вправо на тач-экране — «дальше по процессу»: карточка очереди → в работу; карточка
@@ -1608,7 +1633,12 @@ export function AssignedToMeBlock({
         onOpen={() => setDrawerTask(item)}
         onChanged={handleToggled}
         onDelete={() => handleDelete(item)}
-        extraActions={takeToWorkAction(item)}
+        extraActions={
+          <>
+            {takeToWorkAction(item)}
+            {workerHandoffAction(item)}
+          </>
+        }
         showCreatedAt={opts.showCreatedAt ?? false}
         hideProjectLabel={opts.hideProjectLabel ?? false}
         selecting={selectionActive}
@@ -1785,7 +1815,7 @@ export function AssignedToMeBlock({
   // появляется по лупе (и остаётся, пока в нём есть текст).
   const searchVisible = searchOpen || query !== '';
   const headRow = isWide ? (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-3 gap-y-2">
       {heading}
       {hasAny && tabsOrFocus}
       {hasAny && people}
@@ -1809,7 +1839,7 @@ export function AssignedToMeBlock({
         {actions}
       </div>
       {hasAny && (
-        <div className="flex min-w-0 items-center gap-2">
+        <div ref={inboxHeadRef} className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 max-w-[55%] shrink-0">{tabsOrFocus}</div>
           <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1 px-1 pf-scrollbar-hide">{people}</div>
         </div>
@@ -3166,7 +3196,7 @@ function RejectApprovalDialog({
                     className="size-16 rounded-md border object-cover"
                   />
                 ) : (
-                  <div className="grid size-16 place-items-center rounded-md border px-1 text-center text-[10px] leading-tight text-muted-foreground">
+                  <div className="grid size-16 place-items-center rounded-md border px-1 text-center text-2xs leading-tight text-muted-foreground">
                     <span className="line-clamp-3 break-all">{f.file.name}</span>
                   </div>
                 )}
@@ -3782,8 +3812,8 @@ function UserCube({
         <UserAvatarHover
           displayName={label}
           avatarUrl={member.avatarUrl}
-          subtitle={`участник пространства · перетащите сюда задачу, чтобы назначить${
-            hint ? ` · ${hint}` : ''
+          subtitle={`участник пространства. Перетащите сюда задачу, чтобы назначить${
+            hint ? `. ${hint}` : ''
           }`}
           triggerClassName={cn('size-9 text-2xs sm:size-[30px]', clickable && 'cursor-pointer')}
         />
@@ -3931,7 +3961,7 @@ function AssigneePerson({
 }): React.ReactElement {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-      <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+      <span className="text-2xs font-medium text-muted-foreground/70">
         {label}
       </span>
       <UserAvatarHover

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Archive,
-  ArrowRight,
   CheckCircle2,
   Github,
   Link2,
@@ -45,6 +44,8 @@ type Props = {
   projectName: string;
   gitRepoUrl: string | null;
   shiftForOverlay?: boolean;
+  /** The first answer is known: the banner shows or stays hidden (layout reservation). */
+  onSettled?: () => void;
 };
 
 type LaunchBannerProps = Pick<Props, 'projectId' | 'shiftForOverlay'>;
@@ -152,7 +153,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
       <div data-pf-project-setup className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-2.5 sm:px-8 sm:py-3 sm:pe-24">
         <ProjectBannerDismissButton className="end-1 inset-bs-2 size-11 rounded-lg sm:end-16 sm:size-7" />
         <div
-          className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-6 gap-y-2 pe-7 transition-[margin] duration-300 max-sm:flex-nowrap max-sm:gap-x-3 max-sm:pe-11"
+          className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-6 gap-y-2 pe-7 max-sm:flex-nowrap max-sm:gap-x-3 max-sm:pe-11"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
         >
           <div className="flex min-w-0 basis-full items-center gap-3 max-sm:flex-1 max-sm:basis-auto sm:flex-1 sm:basis-64">
@@ -181,9 +182,6 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
             )}
             <span className="sm:hidden">{shortActionLabel}</span>
             <span className="hidden sm:inline">{actionLabel}</span>
-            {!loading && !activeLaunchTask && (
-              <ArrowRight className="size-3.5 opacity-60 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
-            )}
           </Button>
         </div>
       </div>
@@ -219,6 +217,7 @@ export function ProjectGithubOnboardingBanner({
   projectName,
   gitRepoUrl,
   shiftForOverlay = false,
+  onSettled,
 }: Props): React.ReactElement | null {
   const { connection } = useGithubConnection();
   const { projectRepository } = useContainer();
@@ -307,6 +306,11 @@ export function ProjectGithubOnboardingBanner({
     openAction(action);
   };
 
+  const settled = bannersHidden || !gitRepoUrl || siteState !== 'checking';
+  useEffect(() => {
+    if (settled) onSettled?.();
+  }, [settled, onSettled]);
+
   if (bannersHidden) return null;
 
   if (gitRepoUrl) {
@@ -319,7 +323,7 @@ export function ProjectGithubOnboardingBanner({
       <div className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 pe-12 sm:px-8 sm:pe-24">
         <ProjectBannerDismissButton className="end-1 inset-bs-1 size-11 rounded-lg sm:end-16 sm:inset-bs-2 sm:size-7" />
         <div
-          className="mx-auto flex max-w-[1180px] flex-col gap-3 transition-[margin] duration-300 xl:flex-row xl:items-center xl:justify-between"
+          className="mx-auto flex max-w-[1180px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
         >
           <div className="min-w-0">
@@ -351,7 +355,6 @@ export function ProjectGithubOnboardingBanner({
             >
               <Github className="size-4" />
               Создать на GitHub
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             </button>
             <button
               type="button"
@@ -362,7 +365,6 @@ export function ProjectGithubOnboardingBanner({
               {/* «Импортировать» одним словом не помещалось в плитку на 320px. */}
               <span className="sm:hidden">Импорт ZIP</span>
               <span className="hidden sm:inline">Импортировать ZIP</span>
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             </button>
             <button
               type="button"
@@ -371,7 +373,6 @@ export function ProjectGithubOnboardingBanner({
             >
               <Link2 className="size-4" />
               Привязать репозиторий
-              <ArrowRight className="size-3.5 opacity-50 transition-[color,background-color,border-color,box-shadow,opacity] motion-safe:transition motion-safe:group-hover:translate-x-0.5 group-hover:opacity-100 max-sm:hidden" />
             </button>
           </div>
         </div>

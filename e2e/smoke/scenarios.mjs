@@ -219,6 +219,85 @@ export const scenarios = [
   ...quickTaskSettingsScenarios,
   ...workspaceIsolationScenarios,
   {
+    id: 'loading-skeleton',
+    title: 'Загрузка «Входящих» и доски: один скелетон на местах итоговой страницы',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      // Every frame until the first task card: which skeleton is shown, and where the first
+      // board column (skeleton or real) and the first sidebar project row are.
+      await page.addInitScript(() => {
+        const at = (e) => {
+          const r = e.getBoundingClientRect();
+          return [Math.round(r.left), Math.round(r.top)];
+        };
+        window.__pfMeasure = () => {
+          const panel = [...document.querySelectorAll('[data-pf-main] .bg-panel, .pf-loading-shell .bg-panel')]
+            .find((e) => !e.closest('aside') && e.getBoundingClientRect().width > 200 && e.getBoundingClientRect().height > 40);
+          const side = document.querySelector('aside [data-pf-loading] .pf-skeleton.size-5, aside nav a .size-5');
+          return {
+            panel: panel ? at(panel) : null,
+            side: side && side.getBoundingClientRect().width > 0 ? at(side) : null,
+            boot: Boolean(panel?.closest('#pf-boot')),
+            page: panel?.closest('[data-pf-page-skeleton]')?.getAttribute('data-pf-page-skeleton') ?? null,
+            shell: Boolean(document.querySelector('[data-pf-shell-skeleton], [data-pf-main]')),
+          };
+        };
+        const frames = [];
+        window.__pfSkeletonFrames = frames;
+        const sample = () => {
+          if (document.querySelector('[data-pf-task-id]')) return;
+          const frame = window.__pfMeasure();
+          if (frame.panel) frames.push(frame);
+          requestAnimationFrame(sample);
+        };
+        new MutationObserver(sample).observe(document, { childList: true, subtree: true });
+        requestAnimationFrame(sample);
+      });
+      // Slow answers keep every loading stage on screen: sign-in check, workspace, data.
+      const delays = { 'ws-team:/auth/me': 300, 'ws-team:/workspaces': 300, 'ws-team:/assignees/mine': 500, 'ws-team:/projects/p-site': 400 };
+      // The first visit remembers the sizes of data-dependent rows; the second one is measured.
+      const load = async (path, name) => {
+        t.state.delays = {};
+        await t.goto(path, { ready: () => page.locator('[data-pf-task-id]'), readyName: `${name}: первый визит` });
+        await page.waitForTimeout(300);
+        t.state.delays = delays;
+        await t.goto(path, { ready: () => page.locator('[data-pf-task-id]'), readyName: `${name}: повторный визит с задержками` });
+        await page.waitForTimeout(300);
+        return { frames: await page.evaluate(() => window.__pfSkeletonFrames), final: await page.evaluate(() => window.__pfMeasure()) };
+      };
+      const near = (a, b) => a && b && Math.abs(a[0] - b[0]) <= 1 && Math.abs(a[1] - b[1]) <= 1;
+      const stable = (frames, final, key, what) => {
+        const moved = frames.find((f) => !near(f[key], final[key]));
+        t.assert(!moved, `${what}: в скелетоне ${JSON.stringify(moved?.[key])}, на странице ${JSON.stringify(final[key])}`);
+      };
+
+      const inbox = await load('/', '«Входящие»');
+      await t.check('первый кадр — готовый скелетон «Входящих» из index.html', async () => {
+        t.assert(inbox.frames.length > 0, 'скелетон не появлялся');
+        t.assert(inbox.frames[0].boot && inbox.frames[0].page === 'inbox', `первый скелетон: ${JSON.stringify(inbox.frames[0])}`);
+      });
+      await t.check('скелетон всё время внутри оболочки (сайдбар или шапка с нижней навигацией)', async () => {
+        const bare = inbox.frames.find((f) => !f.shell);
+        t.assert(!bare, `кадр без оболочки: ${JSON.stringify(bare)}`);
+      });
+      await t.check('«Входящие»: колонка скелетона на месте колонки страницы', async () => {
+        stable(inbox.frames, inbox.final, 'panel', 'первая колонка');
+      });
+      if (!t.isMobile) {
+        await t.check('сайдбар: строки проектов скелетона на местах настоящих', async () => {
+          stable(inbox.frames.filter((f) => f.side), inbox.final, 'side', 'первая строка проекта');
+        });
+      }
+      const board = await load(`/projects/${BOARD_PROJECT_ID}`, 'доска проекта');
+      await t.check('доска: скелетон колонок на месте доски, плашки и описание не сдвигают её', async () => {
+        t.assert(board.frames.length > 0, 'скелетон доски не появлялся');
+        stable(board.frames, board.final, 'panel', 'доска');
+      });
+    },
+  },
+
+  {
     id: 'auth',
     title: 'Вход, регистрация, сброс пароля',
     auth: false,
@@ -281,8 +360,8 @@ export const scenarios = [
       const { page, state } = t;
       await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
       await checkDarkTheme(t);
-      await t.check('заголовок «Входящие»', () =>
-        t.visible(page.getByRole('heading', { name: 'Входящие', level: 1 }), 'h1 «Входящие»'),
+      await t.check('заголовок «Все входящие»', () =>
+        t.visible(page.getByRole('heading', { name: 'Все входящие', level: 1 }), 'h1 «Все входящие»'),
       );
       await t.check('«В работе»: полки «На утверждении» и «Вручную» с карточками', async () => {
         const now = page.locator(NOW);
@@ -438,6 +517,26 @@ export const scenarios = [
         );
         await expectGone(t, `${NOW} ${card('t-doctors')}`, 'карточка осталась на полке «На утверждении»');
       });
+
+      await t.check('«Передать воркеру»: только в колонке проекта, POST move → todo', async () => {
+        const handoff = 'button[aria-label="Передать воркеру"]';
+        const manualCard = page.locator(`${NOW} ${card('t-form')}`);
+        await t.visible(manualCard, `карточка «${taskTitle(state, 't-form')}» во «Вручную»`);
+        await manualCard.hover();
+        t.assert((await manualCard.locator(handoff).count()) === 0, '«Передать воркеру» на полке «Вручную»');
+        t.assert(
+          (await page.locator(`${QUEUE} ${card('t-domain')} ${handoff}`).count()) === 0,
+          '«Передать воркеру» у личной задачи',
+        );
+        const queueCard = page.locator(`${QUEUE} ${card('t-home')}`);
+        await t.visible(queueCard, `карточка «${taskTitle(state, 't-home')}» в очереди`);
+        await queueCard.hover();
+        await queueCard.locator(`${handoff}:visible`).click();
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === '/projects/p-site/tasks/t-home/move' && m.body?.targetStatus === 'todo',
+          'нет POST /api/projects/p-site/tasks/t-home/move с targetStatus "todo"',
+        );
+      });
     },
   },
 
@@ -494,8 +593,8 @@ export const scenarios = [
         readyName: 'карточки «Входящих» видны',
       });
       await checkDarkTheme(t);
-      await t.check('заголовок «Входящие»', () =>
-        t.visible(page.getByRole('heading', { name: 'Входящие', level: 1 }), 'h1 «Входящие»'),
+      await t.check('заголовок «Все входящие»', () =>
+        t.visible(page.getByRole('heading', { name: 'Все входящие', level: 1 }), 'h1 «Все входящие»'),
       );
       await t.pageChecks('Входящие');
 
@@ -990,6 +1089,22 @@ export const scenarios = [
         const path = new URL(page.url()).pathname;
         if (path !== '/') throw new Error(`после броска открылся ${path} вместо «Входящих»`);
       });
+      await t.check('меню проекта: «Настройки» и переключатель избранного', async () => {
+        // 27.10.2026: в меню проекта (правая кнопка и «⋯») не было настроек и избранного.
+        const menu = page.getByRole('menu');
+        await aside.getByText('CRM-интеграция', { exact: true }).click({ button: 'right' });
+        await t.visible(menu.getByRole('menuitem', { name: 'Настройки' }), 'пункт «Настройки»');
+        await menu.getByRole('menuitem', { name: 'Добавить в избранное' }).click();
+        await t.waitForMutation(
+          (m) => m.method === 'PUT' && m.path === '/projects/p-crm/favorite' && m.body?.favorite === true,
+          'нет PUT избранного',
+        );
+        await t.visible(aside.getByRole('button', { name: 'Избранное' }), 'секция «Избранное»');
+        await aside.getByRole('button', { name: 'Действия проекта «CRM-интеграция»' }).first().click();
+        await t.visible(menu.getByRole('menuitem', { name: 'Убрать из избранного' }), 'пункт «Убрать из избранного»');
+        await menu.getByRole('menuitem', { name: 'Настройки' }).click();
+        await t.waitFor(() => new URL(page.url()).pathname === '/projects/p-crm/overview', 'адрес не настроек проекта');
+      });
     },
   },
 
@@ -1007,7 +1122,7 @@ export const scenarios = [
       for (const [label, path, ready] of [
         ['ИИ', '/ai', () => page.getByRole('heading', { name: 'ProjectsFlow ИИ', level: 1 })],
         ['Профиль', '/profile', () => page.getByText('Личные данные', { exact: true })],
-        ['Входящие', '/', () => page.getByRole('heading', { name: 'Входящие', level: 1 })],
+        ['Входящие', '/', () => page.getByRole('heading', { name: 'Все входящие', level: 1 })],
       ]) {
         await t.check(`нижняя панель: «${label}» открывает ${path}`, async () => {
           const button = nav.getByRole('button', { name: label, exact: true });
@@ -1122,6 +1237,17 @@ export const scenarios = [
       await t.check('поле ввода и «Открыть пустой чат»', async () => {
         await t.visible(page.getByRole('button', { name: 'Открыть пустой чат' }), 'кнопка «Открыть пустой чат»');
         await t.visible(page.locator('[contenteditable="true"], textarea').first(), 'поле ввода запроса');
+      });
+      await t.check('подсказка «Генерация фото» переносится внутри поля', async () => {
+        await page.getByRole('button', { name: 'Генерация фото', exact: true }).click();
+        const hint = page.getByText('Опишите фотографию, которую хотите создать', { exact: true });
+        await t.visible(hint, 'подсказка генерации фото');
+        const box = await hint.evaluate((el) => {
+          const own = el.getBoundingClientRect();
+          const field = el.parentElement.getBoundingClientRect();
+          return { overflow: el.scrollWidth - el.clientWidth, right: own.right, fieldRight: field.right };
+        });
+        t.assert(box.overflow <= 0 && box.right <= box.fieldRight + 0.5, `подсказка вылезает из поля: ${JSON.stringify(box)}`);
       });
       await t.pageChecks('ИИ');
     },

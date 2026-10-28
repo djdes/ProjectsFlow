@@ -1,13 +1,14 @@
 ---
 // Логотип ProjectsFlow: та же марка, что у иконки приложения (client/public/pf-icon.svg),
-// в цвете акцента темы — синий в светлой, барвинок в тёмной.
+// в синем бренда. Слово — сжатым Martian Mono, как надпись на табло.
 interface Props {
   class?: string;
+  size?: 'md' | 'lg';
 }
-const { class: className = '' } = Astro.props as Props;
+const { class: className = '', size = 'md' } = Astro.props as Props;
 ---
 
-<a href="/" class={`pf-logo ${className}`} aria-label="ProjectsFlow — на главную">
+<a href="/" class:list={['pf-logo', `pf-logo--${size}`, className]} aria-label="ProjectsFlow, на главную">
   <svg class="pf-logo__mark" viewBox="0 0 512 512" aria-hidden="true">
     <rect class="pf-logo__bg" width="512" height="512" rx="112"></rect>
     <g class="pf-logo__glyph" transform="translate(102 109) scale(6.4)">
@@ -23,22 +24,25 @@ const { class: className = '' } = Astro.props as Props;
   .pf-logo {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    min-block-size: 2.25rem;
-    color: oklch(var(--foreground));
+    gap: var(--space-xs);
+    min-block-size: 44px;
+    color: var(--color-ink);
     text-decoration: none;
-    border-radius: var(--r-md);
   }
   .pf-logo__mark {
     flex: none;
-    inline-size: 1.375rem;
-    block-size: 1.375rem;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
   }
   .pf-logo__bg { fill: oklch(var(--primary-fill)); }
   .pf-logo__glyph { fill: oklch(var(--primary-foreground)); }
   .pf-logo__word {
-    font-size: var(--text-md);
-    font-weight: 700;
-    letter-spacing: var(--tracking-heading);
+    font-size: var(--text-lg);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    letter-spacing: var(--tracking-display);
+    line-height: 1;
   }
+  .pf-logo--lg .pf-logo__mark { inline-size: 2.5rem; block-size: 2.5rem; }
+  .pf-logo--lg .pf-logo__word { font-size: var(--text-3xl); }
 </style>

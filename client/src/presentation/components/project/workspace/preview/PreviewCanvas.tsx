@@ -21,7 +21,7 @@ export const PreviewCanvas = forwardRef<HTMLIFrameElement, {
   const highlight = selected ?? hovered;
   return (
     <div className={cn('relative overflow-auto bg-panel', fillAvailable ? 'min-h-0 flex-1 p-0' : 'min-h-[620px] p-3 sm:p-5')}>
-      <div className={cn('relative mx-auto overflow-hidden border bg-white transition-[width] duration-300 ease-out motion-reduce:transition-none dark:bg-zinc-950', fillAvailable && device === 'desktop' ? 'h-full min-h-0 border-0' : 'min-h-[580px]')} style={{ width: frame.width, maxWidth: '100%' }}>
+      <div className={cn('relative mx-auto overflow-hidden border bg-background', fillAvailable && device === 'desktop' ? 'h-full min-h-0 border-0' : 'min-h-[580px]')} style={{ width: frame.width, maxWidth: '100%' }}>
         {loading && <div className="absolute inset-0 z-50 grid place-items-center bg-background"><div className="text-center text-sm text-muted-foreground"><Loader2 className="mx-auto mbe-2 size-5 motion-safe:animate-spin" />{slow ? 'Сайт загружается дольше обычного…' : 'Загружаем результат…'}</div></div>}
         {/*
           sandbox содержит allow-scripts + allow-same-origin одновременно. Обычно эта пара

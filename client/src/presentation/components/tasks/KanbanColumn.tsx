@@ -114,6 +114,7 @@ type Props = {
   // Inbox-only: показывать круглый чекбокс «выполнено» на каждой карточке.
   // Также пробрасывает lastDoneTaskId/lastTodoTaskId для afterTaskId при move'е.
   showCheckbox?: boolean;
+  showWorkerAction?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
   // Прокидывается в KanbanCard → InboxCheckbox: оптимистичный useTasks().move доски,
@@ -208,6 +209,7 @@ export function KanbanColumn({
   onTaskChanged,
   headerExtra,
   showCheckbox = false,
+  showWorkerAction = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
   onMove,
@@ -410,6 +412,7 @@ export function KanbanColumn({
       onQuickPromote={onQuickPromote}
       onTaskChanged={onTaskChanged}
       showCheckbox={showCheckbox}
+      showWorkerAction={showWorkerAction}
       lastDoneTaskId={lastDoneTaskId}
       lastTodoTaskId={lastTodoTaskId}
       onMove={onMove}
@@ -641,7 +644,7 @@ export function KanbanColumn({
                       title={STATUS_SUBTITLE[status]}
                       // На мобиле прячем совсем (там колонки уже, а подпись — второстепенная):
                       // название «Воркер» гарантированно не режется. На десктопе показываем «Opus».
-                      className="hidden min-w-0 flex-1 truncate text-[10px] leading-4 text-muted-foreground/60 sm:inline"
+                      className="hidden min-w-0 flex-1 truncate text-2xs leading-4 text-muted-foreground sm:inline"
                     >
                       {STATUS_SUBTITLE[status]}
                     </span>

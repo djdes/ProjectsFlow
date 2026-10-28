@@ -71,7 +71,7 @@ function ManualCodeEntry({ onSubmit }: { onSubmit: (code: string) => void }): Re
             placeholder="ABCD-1234"
             autoFocus
             maxLength={9}
-            className={cn(authFieldClass, 'font-mono uppercase tracking-widest')}
+            className={cn(authFieldClass, 'font-mono text-lg uppercase')}
           />
           <p className="text-xs text-muted-foreground">
             Код живёт 10&nbsp;минут с момента запуска setup.
@@ -145,7 +145,7 @@ function DeviceFlow({
       <AuthFormCard
         icon={<StateIcon tone="neutral"><Loader2 className="motion-safe:animate-spin" /></StateIcon>}
         title="Проверяем код…"
-        description={<span className="font-mono tracking-widest">{userCode}</span>}
+        description={<span className="font-mono font-medium">{userCode}</span>}
       />
     );
   }

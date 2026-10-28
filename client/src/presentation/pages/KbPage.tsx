@@ -91,7 +91,7 @@ export function KbPage(): React.ReactElement {
           </Link>
         </Button>
       </div>
-      <p className="px-2 pbe-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+      <p className="px-2 pbe-2 text-xs font-medium text-muted-foreground">
         {project.name} / KB
       </p>
       <KbSearchBar value={searchQuery} onChange={setSearchQuery} />

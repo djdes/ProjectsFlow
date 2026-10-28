@@ -1,5 +1,7 @@
 ---
-// Шрифт — системный стек Notion (--font-sans в tokens.css), веб-шрифты не грузим.
+// Шрифт страницы — Martian Mono (кириллица, оси насыщенности и ширины), без CDN.
+// Доска и окна приложения внутри страницы — на системном стеке приложения (.pf-product).
+import '@fontsource-variable/martian-mono/standard.css';
 import '@/styles/globals.css';
 // Общие классы секций лендинга (контейнер, кнопки, карточки, метки).
 import '@/styles/landing.css';
@@ -27,8 +29,8 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#16171b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#edf0f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#080b10" media="(prefers-color-scheme: dark)" />
     <!-- Тёмная тема — по системной настройке: браузер сразу красит холст нужным цветом. -->
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -53,6 +55,14 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta name="twitter:image" content={ogImage} />
 
     <title>{title}</title>
+    <!-- Скриптовые раскладки (переключатель вкладок) включаются только при живом JS;
+         без него всё содержимое видно подряд. -->
+    <script is:inline>document.documentElement.classList.add('js');</script>
+    <!-- Дубль правила из hallmark/base.css прямо в документе: широкий блок не даёт
+         прокрутки вбок даже до загрузки таблицы стилей. -->
+    <style is:global>
+      html, body { overflow-x: clip; }
+    </style>
   </head>
   <body>
     <a href="#main" class="skip-link">К содержимому</a>

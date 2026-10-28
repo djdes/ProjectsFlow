@@ -247,7 +247,7 @@ function AutomationCard({
 // Заголовок группы контролов внутри карточки (для подсекций: «Критерии», «Лимит» и т.д.).
 function FieldGroupLabel({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+    <p className="text-2xs font-medium text-muted-foreground">
       {children}
     </p>
   );
@@ -717,7 +717,7 @@ export function AutomationDialog({
                         {c.enabled && (
                           <div className="space-y-2 border-bs px-3 py-2.5">
                             <div className="space-y-1">
-                              <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                              <Label className="text-2xs text-muted-foreground">
                                 Системный промпт
                               </Label>
                               <AutoGrowTextarea
@@ -731,7 +731,7 @@ export function AutomationDialog({
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                              <Label className="text-2xs text-muted-foreground">
                                 Уточнение (что именно хотите)
                               </Label>
                               <AutoGrowTextarea
@@ -880,7 +880,7 @@ export function AutomationDialog({
                   {draft.gitAuthorMode === 'custom' && (
                     <div className="space-y-2 rounded-md border bg-background px-3 py-2.5">
                       <div className="space-y-1">
-                        <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                        <Label className="text-2xs text-muted-foreground">
                           Имя автора
                         </Label>
                         <Input
@@ -892,7 +892,7 @@ export function AutomationDialog({
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                        <Label className="text-2xs text-muted-foreground">
                           Email автора
                         </Label>
                         <Input
@@ -964,7 +964,7 @@ export function AutomationDialog({
                   </RadioGroup>
                   {draft.deployMethod === 'ssh_manual' && (
                     <div className="space-y-1">
-                      <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                      <Label className="text-2xs text-muted-foreground">
                         Команда деплоя (в корне проекта, после каждой задачи)
                       </Label>
                       <Input
@@ -1111,7 +1111,7 @@ export function AutomationDialog({
                   <div className="space-y-2">
                     {/* chat_id + история ранее введённых групп */}
                     <div className="space-y-1">
-                      <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                      <Label className="text-2xs text-muted-foreground">
                         chat_id
                       </Label>
                       <div className="flex items-center gap-1.5">
@@ -1167,7 +1167,7 @@ export function AutomationDialog({
                     </div>
                     {/* Название + резолв названия через бота */}
                     <div className="space-y-1">
-                      <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                      <Label className="text-2xs text-muted-foreground">
                         Название (опц.)
                       </Label>
                       <div className="flex items-center gap-1.5">
@@ -1235,7 +1235,7 @@ export function AutomationDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                    <Label className="text-2xs text-muted-foreground">
                       Дни отправки
                     </Label>
                     <ScheduleDayPicker
