@@ -188,7 +188,7 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
         }
         if (task.column === 'running') {
           setToastMessage(`Готов превью-стенд (4/4 PASS): «${task.title}»`);
-          onSelectLayer('layer-quality');
+          onSelectLayer('layer-deploy');
           return {
             ...task,
             column: 'review',
@@ -198,7 +198,7 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
         }
         if (task.column === 'review') {
           setToastMessage(`Выкачено в прод: «${task.title}»`);
-          onSelectLayer('layer-pnl');
+          onSelectLayer('layer-finance');
           return { ...task, column: 'done', checks: 'В проде' };
         }
         return task;
