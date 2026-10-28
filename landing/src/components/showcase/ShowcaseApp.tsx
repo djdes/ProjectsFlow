@@ -199,19 +199,13 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => scrollToSection(item.id)}
-                  className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                  aria-current={isActive ? 'location' : undefined}
+                  className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
                     isActive
-                      ? 'text-[#12061c]'
-                      : 'text-white/75 hover:text-white'
+                      ? 'bg-white text-[#12061c] shadow-md scale-[1.02]'
+                      : 'text-white/75 hover:text-white hover:bg-white/[0.08]'
                   }`}
                 >
-                  {isActive && (
-                    <motion.span
-                      layoutId="topNavActivePill"
-                      transition={{ type: 'spring', stiffness: 340, damping: 24 }}
-                      className="absolute inset-0 rounded-xl bg-white shadow"
-                    />
-                  )}
                   <span className="relative z-10">{item.label}</span>
                 </button>
               );
