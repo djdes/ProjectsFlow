@@ -1,4 +1,4 @@
-# CLAUDE.md — правила работы в репозитории ProjectsFlow
+﻿# CLAUDE.md — правила работы в репозитории ProjectsFlow
 
 Этот файл читают AI-ассистенты (Claude Code, Copilot, и т.д.) и любой
 новый разработчик. Он короткий — не разрастаемся.
@@ -154,7 +154,9 @@ npm run deploy       # node scripts/deploy.mjs
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
 Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
-Workflow: фича → ветка → PR в `main` → зелёные проверки → merge → автодеплой (см. «Деплой»).
+Workflow: `git fetch origin --prune` → актуализация веток и коммитов относительно `origin/main` → фича → ветка от свежего `origin/main` → PR в `main` → зелёные проверки → merge → автодеплой (см. «Деплой»).
+
+- **Обязательный `git fetch` и актуализация веток:** перед началом любой работы, созданием новой ветки, коммитом или пушем обязательно выполняй `git fetch origin --prune`, обновляй локальную `main` (`git checkout main && git pull --ff-only origin main`) и ребейзь/мержи актуальный `origin/main` в рабочую ветку (`git rebase origin/main` или `git merge origin/main`), чтобы коммиты и ветки не отставали от удалённого репозитория.
 
 ## Ритуал коммита: sync с kanban-задачами через MCP
 
@@ -250,6 +252,7 @@ MCP и агентский REST не передают задачи воркеру
    Chakra и т.д.) без обсуждения. Текущий стек выбирался сознательно.
 9. **Если есть ProjectsFlow MCP** — перед коммитом синкай с kanban-задачами по ритуалу
    выше. Не молча: всегда подтверждай move у юзера через AskUserQuestion.
+10. **Актуализация git (`git fetch`):** всегда начинай работу, создание веток и подготовку коммита/PR с `git fetch origin --prune` и актуализации локальной `main` и рабочей ветки относительно `origin/main` (`git pull --ff-only origin main`, `git rebase origin/main`), чтобы коммиты и ветки никогда не отставали от удалённого репозитория.
 
 ## LLM: подписка ChatGPT по коду (модуль `llm`, db/157)
 
@@ -356,3 +359,9 @@ Cursor-style лента действий воркера (`claude -p`) в реа�
 | 502 от nginx | `pm2 ls` на сервере → если процесс мёртв, `pm2 logs projectsflow` покажет причину. |
 | Тёмная тема мерцает белым на загрузке | проверь блокирующий FOUC-скрипт в `client/index.html` (выполняется до React). |
 | Telegram-бот молчит, в `projectsflow.err-0.log` — `[tg-poller] getUpdates failed … Proxy response (403)` | прокси режет `*.telegram.org` по имени хоста. `TELEGRAM_PROXY_CONNECT_HOST=149.154.167.220` в `.env` + `pm2 reload projectsflow` (туннель к IP, Host/SNI — домен) или другой прокси. |
+
+
+## Работа с Git: обязательный `git fetch` и актуализация коммитов и веток
+
+- **Перед началом любой работы в git-репозитории (и в начале сессии):** обязательно выполняй `git fetch --all --prune`, проверяй статус веток и свежие коммиты (`git status -sb`, `git branch -vv`, `git log --oneline -n 5 HEAD..origin/main` или `origin/master`) и актуализируй локальную ветку (`git pull --rebase --autostash`), чтобы никогда не работать поверх устаревшей ревизии и не создавать конфликтов с удалёнными коммитами и CI/CD.
+- **Новые ветки** создавай только от актуального состояния `origin/main` (`origin/master`).

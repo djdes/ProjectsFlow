@@ -1,10 +1,14 @@
-# Codex project instructions
+﻿# Codex project instructions
 
 ## Repository workflow
 
 Read `CLAUDE.md` before changing this repository and follow its project conventions.
 It is the shared source for architecture, commands, migrations and deployment rules.
 
+- Always start work by running `git fetch origin --prune` and updating local branches and
+  commits against `origin/main` (`git checkout main && git pull --ff-only origin main`,
+  create feature branches off fresh `origin/main`, and rebase/merge `origin/main` into active
+  feature branches before committing or pushing so branches never lag behind remote).
 - Keep the existing React/Vite client and Express/MariaDB server stack.
 - Implement features from domain and application ports through infrastructure to UI.
   Presentation accesses HTTP repositories through the DI container.
@@ -35,3 +39,9 @@ and follow it as the primary procedure for the whole flow.
 - Use a separate tab for local ProjectsFlow verification and retain the required reference/actual/diff artifacts.
 
 The latest user message defines `COPY_PROJECT` and `COPY_ZONE`. If it names multiple projects, research only the stated zone in each reference and combine the observed interaction patterns into an original ProjectsFlow implementation.
+
+
+## Работа с Git: обязательный `git fetch` и актуализация коммитов и веток
+
+- **Перед началом любой работы в git-репозитории (и в начале сессии):** обязательно выполняй `git fetch --all --prune`, проверяй статус веток и свежие коммиты (`git status -sb`, `git branch -vv`, `git log --oneline -n 5 HEAD..origin/main` или `origin/master`) и актуализируй локальную ветку (`git pull --rebase --autostash`), чтобы никогда не работать поверх устаревшей ревизии и не создавать конфликтов с удалёнными коммитами и CI/CD.
+- **Новые ветки** создавай только от актуального состояния `origin/main` (`origin/master`).
