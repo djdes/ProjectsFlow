@@ -1,13 +1,9 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import Nav from '@/components/Nav.astro';
-import Footer from '@/components/Footer.astro';
-import PostCard from '@/components/PostCard.astro';
 import { readingMinutes, formatDate } from '@/lib/blog';
 import { nbspDash } from '@/lib/typo';
 
-// Лендинг и SPA — один Express в prod; в dev можно указать PUBLIC_APP_URL.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
 export async function getStaticPaths() {
@@ -19,21 +15,24 @@ const { post } = Astro.props;
 const { Content, headings } = await render(post);
 
 const minutes = readingMinutes(post.body ?? '');
-// Оглавление: h2 как разделы, h3 — вложенные подпункты.
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
 
-// «Читайте также»: сначала статьи той же темы, потом остальные — 3 штуки (перелинковка + SEO).
 const all = (await getCollection('blog', ({ data }) => !data.draft))
   .filter((p) => p.id !== post.id)
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
 const related = [
   ...all.filter((p) => p.data.topic === post.data.topic),
   ...all.filter((p) => p.data.topic !== post.data.topic),
 ]
   .slice(0, 3)
-  .map((p) => ({ slug: p.id, minutes: readingMinutes(p.body ?? ''), ...p.data }));
+  .map((p) => ({
+    slug: p.id,
+    minutes: readingMinutes(p.body ?? ''),
+    dateFormatted: formatDate(p.data.date),
+    ...p.data,
+  }));
 
-// Разметка для поисковиков (rich results).
 const canonical = `https://projectsflow.ru/blog/${post.id}/`;
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -55,56 +54,134 @@ const jsonLd = {
 };
 ---
 
-<BaseLayout title={`${post.data.title} — Блог ProjectsFlow`} description={post.data.description}>
-  <!-- Прогресс чтения: тонкая полоса сверху, заполняется по мере прокрутки статьи. -->
+<BaseLayout title={`${post.data.title} — Журнал ProjectsFlow`} description={post.data.description}>
   <div class="read-progress" aria-hidden="true"><span data-read-bar></span></div>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />
 
-  <Nav />
-  <main id="main" class="post">
-    <div class="pf-container">
-      <nav class="post__crumbs" aria-label="Хлебные крошки">
-        <a href="/blog" class="post__crumb">Блог</a>
-        <svg class="post__sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <span class="post__crumb post__crumb--current" aria-current="page">{post.data.topic}</span>
+  <div
+    class="min-h-screen w-full text-white relative overflow-x-clip bg-[#0b0414]"
+    style="background-image: radial-gradient(circle at 60% 15%, #9b133d 0%, #3d0c45 45%, #0b0414 90%);"
+  >
+    <!-- Top Frosted Glass Header -->
+    <header class="sticky top-0 z-50 backdrop-blur-2xl bg-[#0c0514]/80 border-b border-white/15">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-4">
+        <a href="/" class="flex items-center gap-3 group">
+          <div class="w-10 h-10 rounded-xl bg-rose-500/25 border border-white/25 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105">
+            <svg class="w-5 h-5 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/>
+              <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/>
+              <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
+            </svg>
+          </div>
+          <div>
+            <span class="font-display font-black text-base sm:text-lg tracking-tight text-white block leading-none">
+              ProjectsFlow
+            </span>
+            <span class="font-mono text-[10px] text-white/60 tracking-wider uppercase block mt-0.5">
+              AI Architecture OS
+            </span>
+          </div>
+        </a>
+
+        <nav aria-label="Основная навигация" class="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl bg-white/[0.06] border border-white/15">
+          <a href="/#hero" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors">
+            3D Стек
+          </a>
+          <a href="/#prompt-sandbox" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors">
+            Песочница ИИ
+          </a>
+          <a href="/#walkthrough" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors">
+            Узлы 01–03
+          </a>
+          <a href="/#live-board" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors">
+            Живая доска
+          </a>
+          <a href="/#pricing" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors">
+            Тарифы
+          </a>
+          <a href="/#faq" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors">
+            FAQ
+          </a>
+          <a href="/blog/" aria-current="page" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-[#12061c] shadow">
+            Журнал
+          </a>
+        </nav>
+
+        <div class="flex items-center gap-2.5">
+          <a
+            href={`${appBase}/login`}
+            data-auth-anon=""
+            class="hidden sm:inline-flex items-center px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.14] border border-white/15 text-xs font-bold text-white transition-all"
+          >
+            Войти
+          </a>
+          <a
+            href={`${appBase}/login`}
+            data-auth-anon=""
+            class="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
+          >
+            <span>1 час Прайма бесплатно</span>
+          </a>
+          <a
+            href={`${appBase}/projects`}
+            data-auth-authed=""
+            class="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
+          >
+            <span>В проекты</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="max-w-[1280px] mx-auto px-4 sm:px-8 py-12">
+      <!-- Breadcrumbs -->
+      <nav class="flex items-center gap-2 text-xs font-mono text-white/60 mb-6" aria-label="Хлебные крошки">
+        <a href="/" class="hover:text-white transition-colors">Главная</a>
+        <span>/</span>
+        <a href="/blog/" class="hover:text-white transition-colors">Журнал</a>
+        <span>/</span>
+        <span class="text-rose-300 font-bold" aria-current="page">{post.data.topic}</span>
       </nav>
 
-      <header class="post__head">
-        <span class="pf-pill post__topic">{post.data.topic}</span>
-        <h1 class="post__title">{nbspDash(post.data.title)}</h1>
-        <p class="post__desc">{post.data.description}</p>
-        <p class="post__meta">
-          <span class="post__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" stroke-linecap="round" stroke-linejoin="round" /></svg>
-            {post.data.author}
-          </span>
-          <span class="post__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke-linecap="round" stroke-linejoin="round" /></svg>
-            <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
-          </span>
-          <span class="post__meta-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-            {minutes} мин чтения
-          </span>
+      <!-- Article Header Card -->
+      <header class="rounded-[34px] p-7 sm:p-11 bg-[#160824]/85 border border-white/20 backdrop-blur-2xl shadow-2xl mb-10">
+        <span class="inline-block px-3.5 py-1 rounded-full bg-rose-500/20 border border-rose-400/35 font-mono text-xs font-bold text-rose-200 mb-4">
+          #{post.data.topic}
+        </span>
+        <h1 class="font-display font-black text-2xl sm:text-4xl xl:text-5xl leading-[1.08] tracking-tight text-white mb-4">
+          {nbspDash(post.data.title)}
+        </h1>
+        <p class="text-white/75 text-base sm:text-lg leading-relaxed max-w-3xl mb-6">
+          {post.data.description}
         </p>
+        <div class="flex flex-wrap items-center gap-5 text-xs font-mono text-white/60 pt-4 border-t border-white/10">
+          <span>Автор: <strong class="text-white">{post.data.author}</strong></span>
+          <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+          <span class="text-amber-300 font-bold">{minutes} мин чтения</span>
+        </div>
       </header>
 
-      <div class="post__layout">
-        <article class="post__content">
+      <!-- Layout: Article + Sticky TOC -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <article class="lg:col-span-8 rounded-[32px] p-7 sm:p-11 bg-[#13061f]/90 border border-white/15 backdrop-blur-xl shadow-2xl post__content">
           <Content />
         </article>
 
         {
           toc.length > 1 && (
-            <aside class="post__aside" aria-label="Содержание статьи">
-              <div class="post__toc">
-                <p class="post__toc-title">Содержание</p>
-                <ul>
+            <aside class="hidden lg:block lg:col-span-4 sticky top-28" aria-label="Содержание статьи">
+              <div class="rounded-[26px] p-6 bg-[#160824]/85 border border-white/15 backdrop-blur-xl">
+                <p class="font-mono text-xs font-bold uppercase tracking-wider text-rose-300 mb-4">
+                  Содержание статьи
+                </p>
+                <ul class="space-y-2 list-none p-0 m-0">
                   {toc.map((h) => (
-                    <li class={h.depth === 3 ? 'post__toc-sub' : ''}>
-                      <a href={`#${h.slug}`} data-toc-link={h.slug}>
+                    <li class={h.depth === 3 ? 'pl-4' : ''}>
+                      <a
+                        href={`#${h.slug}`}
+                        data-toc-link={h.slug}
+                        class="toc-item block text-xs sm:text-sm text-white/65 hover:text-white transition-colors py-1 border-l-2 border-transparent pl-3"
+                      >
                         {h.text}
                       </a>
                     </li>
@@ -116,319 +193,188 @@ const jsonLd = {
         }
       </div>
 
-      <div class="post__cta">
+      <!-- CTA Box -->
+      <div class="rounded-[32px] p-8 sm:p-10 bg-gradient-to-r from-rose-500/25 via-purple-900/40 to-[#160824] border border-rose-400/40 shadow-2xl mt-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div>
-          <h2 class="post__cta-title">Хватит читать, попробуй сам</h2>
-          <p class="post__cta-text">Опиши идею и получи первый результат в первый час. Без карты.</p>
+          <h2 class="font-display font-black text-xl sm:text-2xl text-white mb-1.5">
+            Попробуйте ProjectsFlow на своей идее
+          </h2>
+          <p class="text-sm text-white/75">
+            Подписка на Claude уже встроена, а первый час на тарифе «Прайм» — бесплатно.
+          </p>
         </div>
-        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg">Начать бесплатно</a>
-        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg">Открыть приложение</a>
+        <a
+          href={`${appBase}/login`}
+          class="shrink-0 inline-flex items-center gap-2 px-7 py-4 rounded-2xl bg-white text-[#12061c] font-extrabold text-sm hover:bg-rose-50 transition-all shadow-lg"
+        >
+          <span>Начать бесплатно</span>
+          <span>→</span>
+        </a>
       </div>
 
+      <!-- Related Articles -->
       {
         related.length > 0 && (
-          <section class="post__related" aria-labelledby="related-title">
-            <h2 class="post__related-title" id="related-title">Читайте также</h2>
-            <ul class="post__related-grid">
+          <section class="mt-16" aria-labelledby="related-title">
+            <h2 class="font-display font-black uppercase text-2xl sm:text-3xl text-white mb-6" id="related-title">
+              Читайте также
+            </h2>
+            <ul class="grid grid-cols-1 md:grid-cols-3 gap-6 list-none p-0 m-0">
               {related.map((r) => (
                 <li>
-                  <PostCard slug={r.slug} title={r.title} topic={r.topic} date={r.date} minutes={r.minutes} />
+                  <a
+                    href={`/blog/${r.slug}/`}
+                    class="group h-full rounded-[26px] p-6 bg-[#150722]/85 border border-white/15 hover:border-rose-400/60 transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div class="flex items-center justify-between text-xs font-mono text-white/55 mb-3">
+                        <span class="text-rose-300 font-bold">#{r.topic}</span>
+                        <span>{r.minutes} мин</span>
+                      </div>
+                      <h3 class="font-bold text-base sm:text-lg text-white group-hover:text-rose-300 transition-colors mb-2 line-clamp-2">
+                        {r.title}
+                      </h3>
+                      <p class="text-xs sm:text-sm text-white/65 line-clamp-3">
+                        {r.description}
+                      </p>
+                    </div>
+                    <span class="mt-4 inline-block text-xs font-mono font-bold text-rose-300 group-hover:text-white">
+                      Читать →
+                    </span>
+                  </a>
                 </li>
               ))}
             </ul>
           </section>
         )
       }
-    </div>
-  </main>
-  <Footer />
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/15 bg-[#0a0412]/90 backdrop-blur-xl mt-16">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/60">
+        <div class="flex items-center gap-3">
+          <span class="font-bold text-white">ProjectsFlow</span>
+          <span>© {new Date().getFullYear()} · Все расчёты в ₽ · Код принадлежит вам</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-5">
+          <a href="/" class="hover:text-white transition-colors">На главную 3D-витрину</a>
+          <a href="/blog/" class="hover:text-white transition-colors">Все статьи</a>
+          <a href="/#pricing" class="hover:text-white transition-colors">Тарифы</a>
+        </div>
+      </div>
+    </footer>
+  </div>
 </BaseLayout>
 
 <style>
-  /* Прогресс чтения — полоса синего бренда 2px под мастхедом, растёт трансформацией. */
   .read-progress {
     position: fixed;
     inset: 0 0 auto 0;
-    block-size: 2px;
-    z-index: var(--z-toast);
+    block-size: 3px;
+    z-index: 60;
     pointer-events: none;
   }
   .read-progress span {
     display: block;
     block-size: 100%;
-    background: var(--color-accent);
+    background: linear-gradient(90deg, #ff2e63, #ffe66d);
     transform: scaleX(0);
     transform-origin: left center;
   }
 
-  .post {
-    padding-block: var(--space-lg) var(--section-gap-s);
-  }
-
-  /* Крошки — указатель: «Блог» ссылкой, тема текстом. */
-  .post__crumbs {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2xs);
-    margin-block-end: var(--space-xl);
-    font-size: var(--text-sm);
-    color: var(--color-muted);
-  }
-  .post__crumb {
-    display: inline-flex;
-    align-items: center;
-    min-block-size: 44px;
-    color: inherit;
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-  .post__crumb--current { color: var(--color-ink); text-decoration: none; }
-  @media (hover: hover) and (pointer: fine) {
-    a.post__crumb:hover { color: var(--color-accent); }
-  }
-  .post__sep {
-    flex: none;
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
-  }
-
-  .post__head {
-    display: grid;
-    justify-items: start;
-    gap: var(--space-md);
-    padding-block-end: var(--space-xl);
-    border-block-end: var(--rule-bar) solid var(--color-ink);
-  }
-  .post__topic { color: var(--color-ink-2); }
-  .post__title {
-    max-inline-size: 22ch;
-    font-size: var(--text-display-s);
-    text-wrap: balance;
-  }
-  .post__desc {
-    max-inline-size: 60ch;
-    font-size: var(--text-lead);
-    line-height: 1.45;
-    color: var(--color-ink-2);
-  }
-  .post__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs) var(--space-lg);
-    font-size: var(--text-sm);
-    color: var(--color-muted);
-  }
-  .post__meta-item {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
-  }
-  .post__meta-item svg {
-    flex: none;
-    inline-size: 0.9375rem;
-    block-size: 0.9375rem;
-  }
-
-  /* Раскладка: текст + липкое оглавление справа. */
-  .post__layout {
-    display: grid;
-    /* minmax(0, …): широкая таблица или строка кода не раздвигают колонку — они
-       прокручиваются внутри своей обёртки. */
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-2xl);
-    margin-block-start: var(--space-xl);
-  }
-  @media (min-width: 65rem) {
-    .post__layout { grid-template-columns: minmax(0, 1fr) 16rem; align-items: start; }
-  }
-  .post__content { max-inline-size: 64ch; }
-
-  /* Проза из Markdown: ритм задаёт родитель, у детей своих внешних отступов нет. */
   .post__content > :global(*) { margin-block: 0; }
-  .post__content > :global(* + *) { margin-block-start: var(--flow, 1.1em); }
-  .post__content > :global(:is(h2, h3)) { --flow: 2em; }
-  .post__content > :global(:is(h2, h3) + *) { --flow: 0.6em; }
-  .post__content :global(:is(h2, h3)) { text-wrap: balance; }
+  .post__content > :global(* + *) { margin-block-start: 1.15em; }
   .post__content :global(h2) {
-    max-inline-size: none;
-    font-size: var(--text-2xl);
-    line-height: 1.05;
-    scroll-margin-block-start: calc(var(--nav-h) + var(--space-lg));
+    font-family: 'Unbounded Variable', system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    color: #ffffff;
+    margin-block-start: 1.8em;
+    scroll-margin-block-start: 6.5rem;
   }
   .post__content :global(h3) {
-    max-inline-size: none;
-    font-size: var(--text-lg);
-    line-height: 1.15;
-    scroll-margin-block-start: calc(var(--nav-h) + var(--space-lg));
+    font-weight: 700;
+    font-size: 1.2rem;
+    line-height: 1.3;
+    color: #fda4af;
+    margin-block-start: 1.5em;
+    scroll-margin-block-start: 6.5rem;
   }
   .post__content :global(p),
   .post__content :global(li) {
-    font-size: var(--text-md);
-    line-height: 1.7;
+    font-size: 1.02rem;
+    line-height: 1.75;
+    color: rgba(255, 255, 255, 0.84);
   }
-  .post__content :global(strong) { font-weight: 800; }
+  .post__content :global(strong) {
+    color: #ffffff;
+    font-weight: 800;
+  }
   .post__content :global(a) {
-    color: inherit;
+    color: #fda4af;
     text-decoration: underline;
-    text-decoration-thickness: 1px;
     text-underline-offset: 0.2em;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .post__content :global(a:hover) { color: var(--color-accent); }
   }
   .post__content :global(:is(ul, ol)) {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: 0.45rem;
     padding-inline-start: 1.4rem;
   }
-  .post__content :global(li::marker) { color: var(--color-muted); }
-  /* Цитата — табличка в рамке 2px. */
   .post__content :global(blockquote) {
-    padding: var(--space-md) var(--space-lg);
-    border: var(--rule-bar) solid var(--color-ink);
-    background: var(--color-paper-3);
+    padding: 1rem 1.25rem;
+    border-left: 4px solid #ff2e63;
+    border-radius: 0.85rem;
+    background: rgba(255, 255, 255, 0.05);
   }
-  .post__content :global(blockquote p) { margin: 0; }
   .post__content :global(code) {
-    padding: 0.1em 0.35em;
-    background: var(--color-paper-2);
-    font-size: 0.92em;
+    padding: 0.15em 0.4em;
+    border-radius: 0.35rem;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.9em;
+    color: #fde047;
   }
   .post__content :global(pre) {
-    padding: var(--space-md);
-    border: var(--rule-bar) solid var(--color-ink);
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #090310 !important;
     overflow-x: auto;
-    font-size: var(--text-sm);
+    font-size: 0.9rem;
     line-height: 1.65;
   }
-  .post__content :global(pre code) { padding: 0; background: none; font-size: inherit; }
-  /* Shiki пишет фон и цвета инлайном: фон — бумага страницы, цвета токенов — по теме. */
-  .post__content :global(pre.astro-code) { background-color: var(--color-paper-3) !important; }
-  @media (prefers-color-scheme: dark) {
-    .post__content :global(.astro-code span) { color: var(--shiki-dark) !important; }
+  .post__content :global(pre code) {
+    padding: 0;
+    background: none;
+    color: inherit;
   }
-  .post__content :global(hr) {
-    block-size: var(--rule-bar);
-    border: 0;
-    background: var(--color-ink);
-  }
-  .post__content :global(img) {
-    display: block;
-    max-inline-size: 100%;
-    block-size: auto;
-    border: var(--rule-bar) solid var(--color-ink);
-  }
-
-  /* Таблицы — скрипт оборачивает <table> в .post__table (прокрутка на узких экранах). */
   .post__content :global(.post__table) {
     overflow-x: auto;
-    border-block-start: var(--rule-bar) solid var(--color-ink);
+    border-radius: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 0.5rem;
   }
   .post__content :global(table) {
     inline-size: 100%;
     min-inline-size: 30rem;
     border-collapse: collapse;
-    font-size: var(--text-sm);
+    font-size: 0.9rem;
   }
   .post__content :global(:is(th, td)) {
-    padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
-    border-block-end: var(--rule-hair) solid var(--color-rule);
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     text-align: start;
-    vertical-align: top;
-    line-height: 1.4;
-    overflow-wrap: anywhere;
   }
-  .post__content :global(thead th) {
-    font-weight: 500;
-    color: var(--color-muted);
-  }
-
-  /* Оглавление: линия 2px слева, текущий пункт — жирным с чернильной меткой. */
-  .post__aside { display: none; }
-  @media (min-width: 65rem) {
-    .post__aside {
-      display: block;
-      position: sticky;
-      inset-block-start: calc(var(--nav-h) + var(--space-lg));
-      align-self: start;
-    }
-  }
-  .post__toc-title {
-    margin-block-end: var(--space-xs);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-muted);
-  }
-  .post__toc ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    border-inline-start: var(--rule-hair) solid var(--color-rule);
-  }
-  .post__toc a {
-    display: block;
-    padding: var(--space-2xs) var(--space-sm);
-    margin-inline-start: -1px;
-    border-inline-start: var(--rule-bar) solid transparent;
-    font-size: var(--text-xs);
-    line-height: 1.4;
-    color: var(--color-muted);
-    text-decoration: none;
-    transition: color var(--dur-micro) steps(1), border-color var(--dur-micro) steps(1);
-  }
-  .post__toc-sub a { padding-inline-start: var(--space-lg); }
-  @media (hover: hover) and (pointer: fine) {
-    .post__toc a:hover { color: var(--color-ink); }
-  }
-  .post__toc a:global(.is-active) {
-    color: var(--color-ink);
-    border-inline-start-color: var(--color-ink);
-    font-weight: 800;
-  }
-
-  /* Призыв в конце статьи — чернильная табличка, как вывеска над доской на главной. */
-  .post__cta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg) var(--space-xl);
-    max-inline-size: 64ch;
-    margin-block-start: var(--space-3xl);
-    padding: var(--space-lg);
-    background: var(--color-band);
-    color: var(--color-band-ink);
-  }
-  .post__cta-title {
-    max-inline-size: none;
-    font-size: var(--text-xl);
-    color: var(--color-band-ink);
-  }
-  .post__cta-text {
-    margin-block-start: var(--space-xs);
-    font-size: var(--text-sm);
-    color: var(--color-band-muted);
-  }
-
-  .post__related { margin-block-start: var(--space-3xl); }
-  .post__related-title {
-    max-inline-size: none;
-    margin-block-end: var(--space-lg);
-    font-size: var(--text-title);
-  }
-  .post__related-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-    gap: var(--gap-columns);
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .toc-item:global(.is-active) {
+    color: #ffffff;
+    border-left-color: #ff2e63;
+    font-weight: 700;
   }
 </style>
 
 <script>
-  // 1) Прогресс чтения: доля прокрутки в пределах статьи.
   const bar = document.querySelector<HTMLElement>('[data-read-bar]');
   const article = document.querySelector<HTMLElement>('.post__content');
   if (bar && article) {
@@ -443,7 +389,6 @@ const jsonLd = {
     window.addEventListener('resize', update, { passive: true });
   }
 
-  // 2) Подсветка текущего раздела в оглавлении.
   const tocLinks = new Map<string, HTMLAnchorElement>();
   document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]').forEach((a) => {
     const id = a.getAttribute('data-toc-link');
@@ -461,26 +406,22 @@ const jsonLd = {
       activeId = id;
       tocLinks.forEach((a, key) => {
         a.classList.toggle('is-active', key === id);
-        if (key === id) a.setAttribute('aria-current', 'location');
-        else a.removeAttribute('aria-current');
       });
     };
 
     const io = new IntersectionObserver(
       (entries) => {
-        // Активен самый верхний заголовок в «полосе чтения» у верха экрана.
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (visible[0]) setActive(visible[0].target.id);
       },
-      { rootMargin: '-84px 0px -66% 0px', threshold: 0 },
+      { rootMargin: '-96px 0px -66% 0px', threshold: 0 },
     );
     heads.forEach((h) => io.observe(h));
     if (heads[0]) setActive(heads[0].id);
   }
 
-  // 3) Широкие таблицы — в контейнер с горизонтальной прокруткой.
   if (article) {
     article.querySelectorAll('table').forEach((t) => {
       if (t.parentElement?.classList.contains('post__table')) return;

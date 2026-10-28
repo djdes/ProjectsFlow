@@ -1,10 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import Nav from '@/components/Nav.astro';
-import Footer from '@/components/Footer.astro';
-import PostCard from '@/components/PostCard.astro';
-import { readingMinutes } from '@/lib/blog';
+import { formatDate, readingMinutes } from '@/lib/blog';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
@@ -13,136 +10,172 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
 const cards = posts.map((post) => ({
   slug: post.id,
   minutes: readingMinutes(post.body ?? ''),
+  dateLabel: formatDate(post.data.date),
   ...post.data,
 }));
 
-// Темы для фильтра (в порядке появления) со счётчиком статей.
 const topics = Array.from(new Set(cards.map((c) => c.topic))).map((t) => ({
   name: t,
   count: cards.filter((c) => c.topic === t).length,
 }));
+
+const appBase = (import.meta.env.PUBLIC_APP_ORIGIN ?? '').replace(/\/$/, '');
 ---
 
 <BaseLayout
-  title="Блог ProjectsFlow — как строить продукты с AI"
-  description="Практика, продукт, деньги и автоматизация для тех, кто строит с AI. Короткие полезные статьи от команды ProjectsFlow."
+  title="Журнал ProjectsFlow — как строить продукты с AI"
+  description="Практика, архитектура, экономика и ИИ-агенты для тех, кто запускает цифровые продукты. Инженерный журнал команды ProjectsFlow."
 >
-  <Nav />
-  <main id="main" class="blog">
-    <div class="pf-container">
-      <header class="blog__head">
-        <h1 class="blog__title">Как строить продукты с&nbsp;AI</h1>
-        <p class="pf-lead">
-          Короткие полезные заметки о практике, продукте, деньгах и автоматизации.
-          Без воды: то, что пригодится, когда строишь своё.
-        </p>
-      </header>
+  <div
+    class="min-h-screen w-full text-white relative overflow-x-clip bg-[#050811]"
+    style="background-image: radial-gradient(circle at 18% 18%, #64113f 0%, transparent 50%), radial-gradient(circle at 82% 28%, #3c096c 0%, transparent 55%), linear-gradient(160deg, #1b0624 0%, #2d0b38 48%, #0f051d 100%);"
+  >
+    <!-- Top Glass Header matching ShowcaseApp -->
+    <header class="sticky top-0 z-50 backdrop-blur-2xl bg-[#0c0514]/85 border-b border-white/15">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-4">
+        <a href="/" class="flex items-center gap-3 group">
+          <div class="w-10 h-10 rounded-xl border border-white/25 bg-[#ff2e63]/20 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105">
+            <svg class="w-5 h-5 text-[#ff758f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <span class="font-display font-black text-base sm:text-lg tracking-tight text-white block leading-none">
+              ProjectsFlow
+            </span>
+            <span class="font-mono text-[10px] text-white/60 tracking-wider uppercase block mt-0.5">
+              AI Architecture OS
+            </span>
+          </div>
+        </a>
 
-      <div class="blog__filters" role="group" aria-label="Фильтр по темам">
-        <button type="button" class="chip" data-topic-filter="Все" aria-pressed="true">
-          Все <span class="chip__count">{cards.length}</span>
-        </button>
-        {
-          topics.map((t) => (
-            <button type="button" class="chip" data-topic-filter={t.name} aria-pressed="false">
-              {t.name} <span class="chip__count">{t.count}</span>
-            </button>
-          ))
-        }
+        <nav aria-label="Основная навигация" class="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl bg-white/[0.06] border border-white/15">
+          <a href="/#hero" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">3D Стек</a>
+          <a href="/#prompt-sandbox" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">Песочница ИИ</a>
+          <a href="/#walkthrough" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">Узлы 01–03</a>
+          <a href="/#live-board" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">Живая доска</a>
+          <a href="/#grow-calculator" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">Реактор ₽</a>
+          <a href="/#pricing" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">Тарифы</a>
+          <a href="/#faq" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white hover:bg-white/[0.08] transition-colors">FAQ</a>
+          <a href="/blog/" aria-current="page" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-[#12061c] shadow-md">Журнал</a>
+        </nav>
+
+        <div class="flex items-center gap-2.5">
+          <a
+            href="/"
+            class="hidden sm:inline-flex items-center px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.14] border border-white/15 text-xs font-bold text-white transition-all"
+          >
+            ← На главную
+          </a>
+          <a
+            href={`${appBase}/login`}
+            class="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
+          >
+            <span>1 час Прайма бесплатно</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="max-w-[1440px] mx-auto px-4 sm:px-8 py-14 sm:py-20">
+      <!-- Header Banner -->
+      <div class="glass-stage-card rounded-[28px] p-8 sm:p-12 border border-white/20 mb-10 relative overflow-hidden">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-mono uppercase tracking-widest text-rose-200 mb-4">
+          ИНЖЕНЕРНЫЙ ЖУРНАЛ PROJECTSFLOW · {cards.length} СТАТЕЙ
+        </div>
+        <h1 class="font-display font-black text-3xl sm:text-5xl tracking-tight text-white max-w-3xl leading-[1.06]">
+          Как строить и масштабировать продукты с ИИ-агентами
+        </h1>
+        <p class="mt-4 text-sm sm:text-base text-white/75 max-w-2xl leading-relaxed">
+          Короткие практические разборы архитектуры, юнит-экономики, деплоя и автономной разработки в облачных песочницах.
+        </p>
+
+        <!-- Topic Filters -->
+        <div class="flex flex-wrap items-center gap-2 mt-8" role="group" aria-label="Фильтр по темам">
+          <button
+            type="button"
+            class="blog-chip px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border bg-white text-[#12061c] border-white shadow"
+            data-topic-filter="Все"
+            aria-pressed="true"
+          >
+            Все <span class="ml-1 opacity-70">{cards.length}</span>
+          </button>
+          {
+            topics.map((t) => (
+              <button
+                type="button"
+                class="blog-chip px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border bg-white/[0.06] text-white/80 border-white/15 hover:bg-white/[0.12] hover:text-white"
+                data-topic-filter={t.name}
+                aria-pressed="false"
+              >
+                {t.name} <span class="ml-1 opacity-60">{t.count}</span>
+              </button>
+            ))
+          }
+        </div>
       </div>
 
-      <ul class="blog__grid">
+      <!-- Cards Grid -->
+      <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 list-none p-0 m-0">
         {
           cards.map((c) => (
             <li class="blog__item" data-topic={c.topic}>
-              <PostCard
-                slug={c.slug}
-                title={c.title}
-                topic={c.topic}
-                date={c.date}
-                minutes={c.minutes}
-                description={c.description}
-                level={2}
-              />
+              <a
+                href={`/blog/${c.slug}/`}
+                class="group glass-stage-card rounded-[24px] p-6 border border-white/15 hover:border-rose-400/50 transition-all flex flex-col justify-between h-full"
+              >
+                <div>
+                  <div class="flex items-center justify-between gap-2 text-xs font-mono text-white/60 mb-3">
+                    <span class="px-2.5 py-1 rounded-md bg-rose-500/20 text-rose-200 border border-rose-400/30 font-bold">
+                      {c.topic}
+                    </span>
+                    <span>
+                      {c.dateLabel} · {c.minutes} мин
+                    </span>
+                  </div>
+                  <h2 class="font-display font-black text-lg sm:text-xl text-white group-hover:text-rose-200 transition-colors leading-snug">
+                    {c.title}
+                  </h2>
+                  <p class="mt-3 text-sm text-white/70 leading-relaxed line-clamp-3">
+                    {c.description}
+                  </p>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-white/10 inline-flex items-center justify-between text-xs font-bold text-rose-300 group-hover:text-white transition-colors">
+                  <span>Читать разбор</span>
+                  <span class="transition-transform group-hover:translate-x-1">→</span>
+                </div>
+              </a>
             </li>
           ))
         }
       </ul>
 
-      <p class="blog__empty" data-blog-empty hidden>По этой теме пока нет статей.</p>
-    </div>
-  </main>
-  <Footer />
+      <p class="text-center text-white/60 py-12" data-blog-empty hidden>
+        По этой теме пока нет статей.
+      </p>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/15 bg-[#0a0412]/90 backdrop-blur-xl mt-12">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/60">
+        <div class="flex items-center gap-3">
+          <span class="font-bold text-white">ProjectsFlow</span>
+          <span>© {new Date().getFullYear()} · Все расчёты в ₽ · Код принадлежит вам</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-5">
+          <a href="/" class="hover:text-white transition-colors">На главную</a>
+          <a href="/#pricing" class="hover:text-white transition-colors">Тарифы</a>
+          <a href="/#faq" class="hover:text-white transition-colors">FAQ</a>
+        </div>
+      </div>
+    </footer>
+  </div>
 </BaseLayout>
 
-<style>
-  .blog {
-    padding-block: var(--space-2xl) var(--section-gap-s);
-  }
-  .blog__head {
-    display: grid;
-    gap: var(--space-md);
-    margin-block-end: var(--space-xl);
-    padding-block-end: var(--space-lg);
-    border-block-end: var(--rule-bar) solid var(--color-ink);
-  }
-  .blog__title {
-    max-inline-size: none;
-    font-size: var(--text-display-s);
-  }
-
-  /* Фильтр тем — квадратные клетки на общих рамках 2px; выбранная — чернилами. */
-  .blog__filters {
-    display: flex;
-    flex-wrap: wrap;
-    margin-block-end: var(--space-xl);
-    padding-inline-start: var(--rule-bar);
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
-    min-block-size: 44px;
-    margin-inline-start: calc(-1 * var(--rule-bar));
-    padding-inline: var(--space-md);
-    border: var(--rule-bar) solid var(--color-ink);
-    border-radius: 0;
-    background: transparent;
-    color: var(--color-ink);
-    font-size: var(--text-sm);
-    font-weight: 800;
-    cursor: pointer;
-    transition: background-color var(--dur-micro) steps(1), color var(--dur-micro) steps(1);
-  }
-  .chip__count {
-    font-weight: 500;
-    color: var(--color-muted);
-  }
-  .chip[aria-pressed='true'] { background: var(--color-ink); color: var(--color-paper); }
-  .chip[aria-pressed='true'] .chip__count { color: var(--color-paper-2); }
-  .chip:focus-visible { position: relative; z-index: var(--z-raised); outline-offset: 3px; }
-  .chip:active { transform: translateY(1px); }
-  @media (hover: hover) and (pointer: fine) {
-    .chip[aria-pressed='false']:hover { background: var(--color-paper-2); }
-  }
-
-  .blog__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
-    gap: var(--gap-columns);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .blog__item[hidden] { display: none; }
-  .blog__empty {
-    margin-block-start: var(--space-xl);
-    color: var(--color-muted);
-  }
-</style>
-
 <script>
-  // Фильтр по темам: переключает видимость карточек по data-topic.
   const filters = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-topic-filter]'));
   const items = Array.from(document.querySelectorAll<HTMLElement>('.blog__item'));
   const empty = document.querySelector<HTMLElement>('[data-blog-empty]');
@@ -159,7 +192,17 @@ const topics = Array.from(new Set(cards.map((c) => c.topic))).map((t) => ({
 
   for (const btn of filters) {
     btn.addEventListener('click', () => {
-      filters.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      filters.forEach((b) => {
+        const active = b === btn;
+        b.setAttribute('aria-pressed', String(active));
+        if (active) {
+          b.className =
+            'blog-chip px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border bg-white text-[#12061c] border-white shadow';
+        } else {
+          b.className =
+            'blog-chip px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border bg-white/[0.06] text-white/80 border-white/15 hover:bg-white/[0.12] hover:text-white';
+        }
+      });
       apply(btn.dataset.topicFilter ?? 'Все');
     });
   }

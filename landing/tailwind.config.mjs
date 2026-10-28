@@ -14,8 +14,16 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // Системный стек Notion — без веб-шрифтов.
+        display: [
+          '"Unbounded Variable"',
+          '"Unbounded"',
+          'ui-sans-serif',
+          'system-ui',
+          'sans-serif',
+        ],
         sans: [
+          '"Golos Text Variable"',
+          '"Golos Text"',
           'ui-sans-serif',
           '-apple-system',
           'BlinkMacSystemFont',
@@ -27,7 +35,16 @@ export default {
           '"Apple Color Emoji"',
           '"Segoe UI Emoji"',
         ],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', '"Liberation Mono"', 'monospace'],
+        mono: [
+          '"JetBrains Mono Variable"',
+          '"JetBrains Mono"',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          '"Liberation Mono"',
+          'monospace',
+        ],
       },
       fontSize: {
         '2xs': 'var(--text-2xs)',

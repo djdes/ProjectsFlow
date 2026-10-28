@@ -1,10 +1,8 @@
 ---
-// Шрифт страницы — Martian Mono (кириллица, оси насыщенности и ширины), без CDN.
-// Доска и окна приложения внутри страницы — на системном стеке приложения (.pf-product).
-import '@fontsource-variable/martian-mono/standard.css';
+import '@fontsource-variable/unbounded';
+import '@fontsource-variable/golos-text';
+import '@fontsource-variable/jetbrains-mono';
 import '@/styles/globals.css';
-// Общие классы секций лендинга (контейнер, кнопки, карточки, метки).
-import '@/styles/landing.css';
 
 interface Props {
   title?: string;
@@ -19,20 +17,17 @@ const {
     'результата сама. Без настройки и технической возни. Прозрачные расходы, старт бесплатно.',
 } = Astro.props;
 const ogImage = new URL('/og.png', SITE).href;
-// Канонический URL/og:url — по текущему пути (иначе статьи блога самоканонятся в корень).
 const canonical = new URL(Astro.url.pathname, SITE).href;
 ---
 
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#edf0f4" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#080b10" media="(prefers-color-scheme: dark)" />
-    <!-- Тёмная тема — по системной настройке: браузер сразу красит холст нужным цветом. -->
-    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0b0414" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
 
@@ -55,36 +50,30 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta name="twitter:image" content={ogImage} />
 
     <title>{title}</title>
-    <!-- Скриптовые раскладки (переключатель вкладок) включаются только при живом JS;
-         без него всё содержимое видно подряд. -->
     <script is:inline>document.documentElement.classList.add('js');</script>
-    <!-- Дубль правила из hallmark/base.css прямо в документе: широкий блок не даёт
-         прокрутки вбок даже до загрузки таблицы стилей. -->
     <style is:global>
-      html, body { overflow-x: clip; }
+      html, body {
+        overflow-x: clip;
+        background-color: #0b0414;
+        color: #ffffff;
+        font-family: 'Golos Text Variable', system-ui, -apple-system, sans-serif;
+      }
+      html[data-auth="authed"] [data-auth-anon] { display: none !important; }
+      html:not([data-auth="authed"]) [data-auth-authed] { display: none !important; }
     </style>
   </head>
   <body>
     <a href="#main" class="skip-link">К содержимому</a>
     <slot />
 
-    {/* ===== Чат-виджет помощи (P2) =====================================
-        Остров создаёт P2 (HelpWidget*). Когда он появится в main — раскомментировать
-        строку ниже (один импорт + монтаж снизу справа), island грузится отложенно.
-        До готовности P2 — плейсхолдер, не блокируемся (см. план §3, §H п.12).
-        TODO(P2): <HelpWidget client:idle /> + import в frontmatter. */}
-
     <script>
-      // Auth-aware UI: чекаем /api/auth/me. 200 → выставляем html[data-auth="authed"],
-      // CSS в landing.css переключает видимость [data-auth-anon]/[data-auth-authed].
-      // На 401/ошибке ничего не делаем — дефолт уже anonymous.
       (async () => {
         try {
           const res = await fetch('/api/auth/me', { credentials: 'include' });
           if (!res.ok) return;
           document.documentElement.dataset.auth = 'authed';
         } catch {
-          // Сеть недоступна или эндпоинт не отвечает — оставляем anonymous-дефолты.
+          // anonymous
         }
       })();
     </script>

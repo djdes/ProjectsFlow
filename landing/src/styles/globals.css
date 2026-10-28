@@ -1,29 +1,4 @@
-/* Hallmark · shape: Marquee Hero · genre: modern-minimal · theme: Wayfind (deal 2/3, seed platform-where-non-developer-describes-ce3f·2f754f77·2026-10-27·r0) · redesign: full · job: sign up · draw: b5cb47
- * hero: Banner · nav: masthead · footer: letter close · imagery: the product (the live board, built app windows) · signature: the live board under a station sign, the one thing on the page you can work · wayfind: platform, night under prefers-color-scheme dark
- * axes: light/mono/cool · posture: committed · contrast: pass · fold: pass · v2.0.0 */
-/* Hallmark · pre-emit critique: P4 H4 E4 S4 R3 V5 · weakest: R, the kept content ran to ten sections; merged the features and the screens into one switcher and cut every fact printed three times */
-/* Hallmark · hero-review: fix · 5 findings · 4 resolved 1 partial (the phone's first screen shows the board's columns, its first card just under the fold) */
-/* Hallmark · finish-review: subagent · fix · 8 findings · 7 resolved, 1 kept (the night accent is the app's own dark brand periwinkle, the logo mark follows it as in the app) · gap: the kept section heads are generic, rewording them is the owner's call */
-/* Hallmark · waive 24b · seven lengths, all in board.css and Screenshots.astro under .pf-product · the live board and the app windows keep the app's own dense spacing (7 by 10px cards, 6px columns) so they match the real product */
-/* Hallmark · waive 39b · button.kb-btn at 28px, only inside the board under .pf-product · Принять and Вернуть are the app's own card buttons inside a working demo, not page controls */
-/* Hallmark · waive 59 · the one 40px gap is the hero to the board stage, every other seam is 105px or more · the Banner posture keeps the live board above the fold, so the stage hangs off the hero */
-/* Hallmark · waive 84 · the board is a React island with click, drag, accept and undo, the windows sit in data-slots · a capture could not be worked, and the windows show worker states the fixture app cannot reach */
-/* Hallmark · waive 79 · /blog and each article open with their head, the list or the text starts under it above the fold · they are an index and a long document, not a landing hero */
-/* Hallmark · waive 49b · the article contents list wraps at 1280, each entry two lines at most · the entries are the article's own section heads and cannot shorten */
-/* Hallmark · answered F19 · weight 600 lives only inside the product's own windows and board, the app's card titles; the page itself runs 400, 500 and 800 */
-/* Hallmark · dismissed 41 · .kb-col sits inside .pf-product, which sets the app's foreground for every column in both themes */
-/* Hallmark · dismissed 77 · /blog and the articles are an index and a long document with their own head, not a landing strip of six to nine sections */
-/* Hallmark · dismissed 59 · the tenth section is the guarantee, the tail of the pricing band on the same paper */
-/* Hallmark · reworded "Опиши идею — получи готовый продукт", "Меньше рутины — больше готового", "Бросаешь задачу — делается сама", "Claude онлайн — или свой", "Четыре шага — от идеи до запуска", "Простые тарифы — начни бесплатно", "Бонусы — бесплатно", "Первый час — бесплатно", "Не получилось — поможем" to the same words with a full stop, a comma or a question mark · 19 names the dash */
-/* Hallmark · dropped "Как это выглядит в работе", "Видно каждый шаг", "Проверки перед выкаткой", "Деньги с одного взгляда", "Расходы и доходы — по строкам", product · the four app windows moved into the feature switcher, their heads became its captions */
-/* Hallmark · reworded "Прайм Популярный" to "Прайм" · 38iii names a pill inside a head, the badge now sits beside it */
-/* Hallmark · dropped "Не зашло — вернём деньги", "Что получаешь", gr-seal-title, the hero's three points, the CTA fine print · each repeated a fact the guarantee plates or the features already state (69) */
-
-/* Page system: Hallmark · Wayfind (hallmark/tokens.css, hallmark/base.css).
-   Product material (the live board, the app windows): the app's C4 tokens (tokens.css). */
 @import './tokens.css';
-@import './hallmark/tokens.css';
-@import './hallmark/base.css';
 
 @tailwind base;
 @tailwind components;
@@ -35,4 +10,26 @@
     user-select: none;
     -webkit-user-select: none;
   }
+
+  .skip-link {
+    position: absolute;
+    inset-inline-start: 1rem;
+    inset-block-start: -100px;
+    z-index: 100;
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.5rem;
+    background: #ff2e63;
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .skip-link:focus-visible { inset-block-start: 0.75rem; }
+}
+
+.knockout-frosted-text {
+  color: transparent;
+  background: linear-gradient(135deg, #ffffff 0%, #fda4af 48%, #ff2e63 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
 }

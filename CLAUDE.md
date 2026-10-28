@@ -1,4 +1,4 @@
-# CLAUDE.md — правила работы в репозитории ProjectsFlow
+﻿# CLAUDE.md — правила работы в репозитории ProjectsFlow
 
 Этот файл читают AI-ассистенты (Claude Code, Copilot, и т.д.) и любой
 новый разработчик. Он короткий — не разрастаемся.
@@ -30,7 +30,7 @@ Playwright. Читай файл ДО первого вызова браузер�
 - **Где живёт.** FastPanel на VPS `projectsflow.ru` (Azure Ubuntu 24.04).
   Код приложения: `/var/www/projectsflow/data/www/projectsflow.ru/`.
 - **Статус.** В переходе: лендинг снесён, платформа строится в `client/` (UI) и `server/`
-  (backend появился в Spec #2). Катим на прод по мере готовности (push в `main` → автодеплой).
+  (backend появился в Spec #2). Катим на прод по мере готовности: PR → merge в `main` → автодеплой.
 
 ## Стек
 
@@ -106,7 +106,9 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
 
 ## Переменные окружения
 
-Файл `.env` (НЕ коммитим, шаблон — `.env.example`).
+Файл `.env` (НЕ коммитим, шаблон — `.env.example`). Локально можно держать `.env-local`
+(тоже в `.gitignore`): dev-скрипты читают оба файла, значения из `.env-local` приоритетнее.
+Прод (PM2, CI) по-прежнему читает только `.env`.
 
 | Переменная | Локально | На сервере |
 | --- | --- | --- |
@@ -133,16 +135,19 @@ npm run deploy       # node scripts/deploy.mjs
 
 ## Деплой
 
-```bash
-npm run deploy
-```
+> **В прод — только через PR.** Прямые push в `main` запрещены, в том числе для AI-ассистентов.
+> Работа идёт в отдельной ветке (`feat/…`, `fix/…`, `chore/…`), затем открывается PR в `main`.
+> Merge делается только после зелёных проверок и с согласия владельца репозитория.
 
-Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4. Push в `main` триггерит
-автодеплой на прод (`.github/workflows/deploy.yml`) — катим по мере готовности. Перед сборкой
-CI гоняет typecheck, lint и серверные тесты (`npm run test:server`): красный тест останавливает
-выкладку, прод остаётся на прошлой версии. После сборки клиента CI так же гоняет смоук-тесты
-интерфейса (`e2e/smoke`, локально — `npm run build:client && npm run test:smoke`). Перед пушем
-прогоняй их локально.
+- **PR в `main`** → `.github/workflows/checks.yml`: typecheck, lint, тесты клиента, серверные и
+  MCP-тесты, сборка клиента/лендинга/сервера, смоук-тесты интерфейса (`e2e/smoke`). Выкладки нет.
+- **Merge в `main`** → `.github/workflows/deploy.yml`: те же проверки ещё раз (переиспользует
+  `checks.yml`), и только при зелёном результате — сборка, выкладка на сервер, миграции,
+  `pm2 startOrReload`. Красная проверка останавливает выкладку, прод остаётся на прошлой версии.
+- Перед открытием PR прогоняй проверки локально: `npm run typecheck`, `npm run lint`,
+  `npm run test:server`, `npm run build:client && npm run test:smoke`.
+- Ручная выкладка (`npm run deploy`, «Run workflow» в Actions) — только в аварийной ситуации и
+  только по явному указанию владельца. Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4.
 
 ## SSH / Git / доступы
 
@@ -150,7 +155,9 @@ CI гоняет typecheck, lint и серверные тесты (`npm run test:
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
 Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
-Workflow: фича → ветка → merge в `main` → автодеплой (или `npm run deploy` вручную).
+Workflow: `git fetch origin --prune` → актуализация веток и коммитов относительно `origin/main` → фича → ветка от свежего `origin/main` → PR в `main` → зелёные проверки → merge → автодеплой (см. «Деплой»).
+
+- **Обязательный `git fetch` и актуализация веток:** перед началом любой работы, созданием новой ветки, коммитом или пушем обязательно выполняй `git fetch origin --prune`, обновляй локальную `main` (`git checkout main && git pull --ff-only origin main`) и ребейзь/мержи актуальный `origin/main` в рабочую ветку (`git rebase origin/main` или `git merge origin/main`), чтобы коммиты и ветки не отставали от удалённого репозитория.
 
 ## Ритуал коммита: sync с kanban-задачами через MCP
 
@@ -246,6 +253,7 @@ MCP и агентский REST не передают задачи воркеру
    Chakra и т.д.) без обсуждения. Текущий стек выбирался сознательно.
 9. **Если есть ProjectsFlow MCP** — перед коммитом синкай с kanban-задачами по ритуалу
    выше. Не молча: всегда подтверждай move у юзера через AskUserQuestion.
+10. **Актуализация git (`git fetch`):** всегда начинай работу, создание веток и подготовку коммита/PR с `git fetch origin --prune` и актуализации локальной `main` и рабочей ветки относительно `origin/main` (`git pull --ff-only origin main`, `git rebase origin/main`), чтобы коммиты и ветки никогда не отставали от удалённого репозитория.
 
 ## LLM: подписка ChatGPT по коду (модуль `llm`, db/157)
 
@@ -352,3 +360,9 @@ Cursor-style лента действий воркера (`claude -p`) в реа�
 | 502 от nginx | `pm2 ls` на сервере → если процесс мёртв, `pm2 logs projectsflow` покажет причину. |
 | Тёмная тема мерцает белым на загрузке | проверь блокирующий FOUC-скрипт в `client/index.html` (выполняется до React). |
 | Telegram-бот молчит, в `projectsflow.err-0.log` — `[tg-poller] getUpdates failed … Proxy response (403)` | прокси режет `*.telegram.org` по имени хоста. `TELEGRAM_PROXY_CONNECT_HOST=149.154.167.220` в `.env` + `pm2 reload projectsflow` (туннель к IP, Host/SNI — домен) или другой прокси. |
+
+
+## Работа с Git: обязательный `git fetch` и актуализация коммитов и веток
+
+- **Перед началом любой работы в git-репозитории (и в начале сессии):** обязательно выполняй `git fetch --all --prune`, проверяй статус веток и свежие коммиты (`git status -sb`, `git branch -vv`, `git log --oneline -n 5 HEAD..origin/main` или `origin/master`) и актуализируй локальную ветку (`git pull --rebase --autostash`), чтобы никогда не работать поверх устаревшей ревизии и не создавать конфликтов с удалёнными коммитами и CI/CD.
+- **Новые ветки** создавай только от актуального состояния `origin/main` (`origin/master`).

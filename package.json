@@ -28,8 +28,8 @@
     "test:server": "npm run test -w @projectsflow/server",
     "test:smoke": "node e2e/smoke/run.mjs",
     "start": "node server/dist/index.js",
-    "db:migrate": "node --env-file=.env scripts/migrate.mjs",
-    "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
+    "db:migrate": "node --env-file-if-exists=.env --env-file-if-exists=.env-local scripts/migrate.mjs",
+    "db:seed-admin": "node --env-file-if-exists=.env --env-file-if-exists=.env-local scripts/seed-admin.mjs",
     "verify:project-views": "node scripts/verify-project-page-views.mjs",
     "deploy": "node scripts/deploy.mjs"
   },
