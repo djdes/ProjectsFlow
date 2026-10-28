@@ -111,8 +111,14 @@ export class GroqVoiceTranscriber implements VoiceTranscriber {
         type: input.mimeType || 'audio/ogg',
       }),
     );
-    form.set('model', this.model);
-    form.set('language', this.language);
+    const model = input.model?.trim() || this.model;
+    const language = input.language?.trim() || this.language;
+    const prompt = input.prompt?.trim() || '';
+    form.set('model', model);
+    form.set('language', language);
+    if (prompt) {
+      form.set('prompt', prompt);
+    }
     form.set('response_format', 'json');
     form.set('temperature', '0');
 
