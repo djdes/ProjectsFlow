@@ -858,6 +858,13 @@ export class TelegramComposerService {
         hint.projectId,
         parsedEff.assigneeQuery,
       );
+      if (!fallbackAssigneeUserId && parsedEff.projectQuery === null) {
+        const yielded = await this.assigneeOverImplicitProject(userId, hint.projectId, parsedEff.assigneeQuery);
+        if (yielded) {
+          fallbackAssigneeUserId = yielded;
+          hint = { ...hint, projectId: null };
+        }
+      }
     } catch (err) {
       // The durable raw fallback still works with the creator as assignee. AI/manual enrichment
       // will retry the richer resolution without making intake depend on this optional lookup.
@@ -1181,8 +1188,14 @@ export class TelegramComposerService {
     if (parsed.assigneeQuery !== null) {
       const candidates = await this.assigneeCandidates(userId, projectId);
       const r = await this.matchAssignee(parsed.assigneeQuery, candidates);
+      const yielded = r.unique || parsed.projectQuery !== null
+        ? null
+        : await this.assigneeOverImplicitProject(userId, projectId, parsed.assigneeQuery);
       if (r.unique) {
         assigneeUserId = r.unique.id;
+      } else if (yielded) {
+        assigneeUserId = yielded;
+        projectId = null;
       } else {
         const list = r.matches.length > 0 ? r.matches : candidates;
         offeredMembers = list.map((u) => ({ id: u.id, displayName: u.displayName }));
@@ -2121,6 +2134,23 @@ export class TelegramComposerService {
     return (await this.matchAssignee(assigneeQuery, candidates)).unique?.id ?? null;
   }
 
+  /**
+   * Проект, который текст не назвал явно (`+Проект`), а угадан по упоминанию («… в TasksFlow»)
+   * или взят из задачи, на которую ответили, уступает явному @ответственному. Человек, которого
+   * назвали, — более сильное указание: если его нет в угаданном проекте, он ищется среди всех
+   * коллег автора, а проект снимается. Иначе задача молча уходила на автора (прод, 28.10.2026:
+   * «@tepei_kms … будут в tasksflow.ru» → все задачи Денису в TasksFlow).
+   * Возвращает найденного ответственного или null — тогда всё остаётся как было.
+   */
+  private async assigneeOverImplicitProject(
+    userId: string,
+    projectId: string | null,
+    assigneeQuery: string | null,
+  ): Promise<string | null> {
+    if (!projectId || !assigneeQuery?.trim()) return null;
+    return this.resolveUniqueAssignee(userId, null, assigneeQuery);
+  }
+
   private now(): Date {
     return this.deps.now ? this.deps.now() : new Date();
   }
@@ -2250,7 +2280,50 @@ export class TelegramComposerService {
         sourceExcerpt: s.sourceExcerpt,
       });
     }
+    if (hintAssigneeUserId && hintAssigneeUserId !== creatorUserId && !hintProjectId) {
+      return this.keepAssigneeProjects(out, hintAssigneeUserId, creatorUserId);
+    }
     return out;
+  }
+
+  /**
+   * Явный @ответственный — указание на всё сообщение, а модель раскладывает его задачи по
+   * проектам сама и иногда кладёт одну в проект, где этого человека нет. CreateTask такую
+   * задачу отвергает, и она молча пропадала из пачки (прод, 28.10.2026: «Исправить просрочку
+   * в накладной Саба» ушла в «Производство» чужого пространства). Такой сегмент переносим
+   * в проект, куда легла большая часть остальных задач этого человека, а если такого нет —
+   * во «Входящие» (их пространство решается с учётом ответственного).
+   */
+  private async keepAssigneeProjects(
+    segments: TelegramDraftSegment[],
+    assigneeUserId: string,
+    creatorUserId: string,
+  ): Promise<TelegramDraftSegment[]> {
+    const membership = new Map<string, Promise<boolean>>();
+    const isMember = (projectId: string): Promise<boolean> => {
+      let known = membership.get(projectId);
+      if (!known) {
+        known = this.assigneeCandidates(creatorUserId, projectId)
+          .then((candidates) => candidates.some((c) => c.id === assigneeUserId))
+          // Справочник недоступен — не трогаем проект: лучше прежнее поведение, чем потеря.
+          .catch(() => true);
+        membership.set(projectId, known);
+      }
+      return known;
+    };
+    const fits = await Promise.all(
+      segments.map((s) => (s.projectId && !s.projectChoices ? isMember(s.projectId) : Promise.resolve(true))),
+    );
+    const votes = new Map<string, { count: number; name: string | null }>();
+    segments.forEach((s, i) => {
+      if (!s.projectId || !fits[i]) return;
+      const v = votes.get(s.projectId) ?? { count: 0, name: s.projectName };
+      votes.set(s.projectId, { count: v.count + 1, name: v.name ?? s.projectName });
+    });
+    const [fallbackId, fallback] = [...votes.entries()].sort((a, b) => b[1].count - a[1].count)[0] ?? [null, null];
+    return segments.map((s, i) =>
+      fits[i] ? s : { ...s, projectId: fallbackId, projectName: fallback?.name ?? null, existingTaskId: null },
+    );
   }
 
   // Модель переписывает id проекта из контекста и иногда портит его: в проде пришло

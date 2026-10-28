@@ -95,6 +95,8 @@ function makeHarness(opts?: {
   };
   // Пространство «Входящих» ответственного при делегировании (undefined — зависимость не задана).
   delegatedInboxWorkspace?: string | null;
+  // Кто из shared состоит в проекте (projectId → id). Без записи — все shared, как раньше.
+  projectMembers?: Record<string, string[]>;
 }) {
   const projects: { id: string; name: string; workspaceId?: string }[] = opts?.projects ?? [
     { id: 'p1', name: 'Альфа' },
@@ -336,12 +338,14 @@ function makeHarness(opts?: {
             role: 'owner',
             user: { id: 'u1', displayName: 'Создатель', email: 'c@e.com' },
           },
-          ...shared.map((user) => ({
-            projectId,
-            userId: user.id,
-            role: 'editor',
-            user,
-          })),
+          ...shared
+            .filter((user) => !opts?.projectMembers?.[projectId] || opts.projectMembers[projectId]!.includes(user.id))
+            .map((user) => ({
+              projectId,
+              userId: user.id,
+              role: 'editor',
+              user,
+            })),
         ] as any;
       },
       async findForProject(projectId: string) {
@@ -2466,4 +2470,54 @@ test('ИИ недоступен из-за лимита подписки — ка
   const card = h.edits.at(-1)?.text ?? h.sent.at(-1)?.text ?? '';
   assert.match(card, /лимит подписки ChatGPT/);
   assert.match(card, /Новая задача/);
+});
+
+
+// Прод, 28.10.2026: «@tepei_kms по нашим задачам маг производство … будут в tasksflow.ru».
+// Адрес сайта угадывался как проект TasksFlow, Михаила в нём нет — и все задачи уходили автору.
+test('явный @ответственный не теряется из-за угаданного по тексту проекта', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'tf', name: 'TasksFlow' }, { id: 'mag', name: 'MAG Производство' }],
+    shared: [{ id: 'u2', displayName: 'Михаил', email: 'm@e.com' }],
+    telegramUsernames: { tepei_kms: 'u2' },
+    projectMembers: { tf: [], mag: ['u2'] },
+    aiOutcome: 'enqueue-throw', // ручной путь
+  });
+  await h.service.startFromMessage(111, 500, '@tepei_kms проверить цены, сделать заказ в TasksFlow');
+  const draft = h.drafts.get([...h.drafts.keys()][0]!)!;
+  assert.equal(draft.assigneeUserId, 'u2');
+  assert.equal(draft.projectId, null);
+});
+
+test('явный +Проект не снимается ради ответственного', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'tf', name: 'TasksFlow' }],
+    shared: [{ id: 'u2', displayName: 'Михаил', email: 'm@e.com' }],
+    telegramUsernames: { tepei_kms: 'u2' },
+    projectMembers: { tf: [] },
+    aiOutcome: 'enqueue-throw',
+  });
+  await h.service.startFromMessage(111, 500, '+TasksFlow проверить цены @tepei_kms');
+  const draft = h.drafts.get([...h.drafts.keys()][0]!)!;
+  assert.equal(draft.projectId, 'tf');
+  assert.notEqual(draft.assigneeUserId, 'u2');
+});
+
+test('AI: сегмент в проекте без явного ответственного переезжает в его основной проект', async () => {
+  const seg = (id: string, projectId: string, projectName: string) => ({
+    id, title: `Задача ${id}`, simpleBody: 'Тело', projectId, projectName, confidence: 0.9,
+    assigneeUserId: 'u2', assigneeName: null, deadline: null,
+  });
+  const h = makeHarness({
+    projects: [{ id: 'mag', name: 'MAG Производство' }, { id: 'sub', name: 'Производство' }],
+    shared: [{ id: 'u2', displayName: 'Михаил', email: 'm@e.com' }],
+    telegramUsernames: { tepei_kms: 'u2' },
+    projectMembers: { mag: ['u2'], sub: [] },
+    aiSegments: [seg('s1', 'mag', 'MAG Производство'), seg('s2', 'sub', 'Производство'), seg('s3', 'mag', 'MAG Производство')],
+  });
+  await h.service.startFromMessage(111, 500, '@tepei_kms 1) цены 2) накладная 3) супы');
+  const draft = h.drafts.get([...h.drafts.keys()][0]!)!;
+  assert.deepEqual(draft.segments!.map((s) => [s.projectId, s.assigneeUserId]), [
+    ['mag', 'u2'], ['mag', 'u2'], ['mag', 'u2'],
+  ]);
 });

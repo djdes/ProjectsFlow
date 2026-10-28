@@ -15,3 +15,13 @@ test('natural references do not grant access or choose between ambiguous project
   assert.equal(matchProjectMention('в проджекте поправить кнопку', [{ id: 'a', name: 'ProjectsFlow' }, { id: 'b', name: 'ProjectsFlow' }]), null);
   assert.equal(matchProjectMention('написать слово проджект', [{ id: 'pf', name: 'ProjectsFlow' }]), null);
 });
+
+test('адрес сайта — не упоминание проекта, конец предложения — упоминание', () => {
+  const projects = [{ id: 'tf', name: 'TasksFlow' }, { id: 'pf', name: 'ProjectsFlow' }];
+  // Прод, 28.10.2026: «задачи … будут в tasksflow.ru» прикалывал всё сообщение к TasksFlow.
+  assert.equal(matchProjectMention('задачи которые повторяются ежедневно будут в tasksflow.ru', projects), null);
+  assert.equal(matchProjectMention('смотри в tasksflow/app', projects), null);
+  assert.equal(matchProjectMention('ссылка в projectsflow.ru', projects), null);
+  assert.equal(matchProjectMention('поправить кнопку в TasksFlow.', projects)?.id, 'tf');
+  assert.equal(matchProjectMention('в TasksFlow, срочно', projects)?.id, 'tf');
+});
