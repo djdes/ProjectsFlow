@@ -16,6 +16,16 @@ export type AssignedDisplayGroup = {
 // Влияет только на project-группировку inbox-задач (чьим именем подписывать «Личные»).
 export type AssigneeDirection = 'toMe' | 'byMe';
 
+// Display groups use synthetic inbox keys; transfers require the current user's
+// actual inbox project. Other people's inbox groups are never transfer targets.
+export function projectDropTarget(
+  group: Pick<AssignedDisplayGroup, 'key' | 'isInbox'>,
+  inboxProjectId: string,
+): string | null {
+  if (!group.isInbox) return group.key;
+  return group.key === 'inbox' ? inboxProjectId : null;
+}
+
 // Чистая функция группировки — вся логика бакетов здесь (тестируется без React/DOM).
 // `now` передаётся явно, чтобы границы дней («сегодня/вчера/неделя») были детерминированы.
 export function groupAssignedTasks(

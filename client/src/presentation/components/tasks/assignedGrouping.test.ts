@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dueKindOf, groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
+import { dueKindOf, groupAssignedByTime, groupAssignedTasks, projectDropTarget } from './assignedGrouping';
 import type { TaskPriority, TaskType } from '@/domain/task/Task';
 import {
   asAssignedInboxBlockTask,
@@ -9,6 +9,20 @@ import {
 } from './inboxBlockTasks';
 
 const NOW = new Date(2026, 5, 9, 12, 0, 0);
+
+test('project drop: personal display group resolves to the actual inbox, never a colleague inbox', () => {
+  const groups = groupAssignedTasks([
+    mk({ projectId: 'personal-project-id', isInbox: true }),
+    mk({ projectId: 'regular-project', isInbox: false }),
+  ], 'project', NOW);
+  assert.equal(projectDropTarget(groups[0]!, 'personal-project-id'), 'personal-project-id');
+  assert.equal(projectDropTarget(groups[1]!, 'personal-project-id'), 'regular-project');
+  const colleagueGroups = groupAssignedTasks([
+    mk({ projectId: 'colleague-inbox', isInbox: true }),
+  ], 'project', NOW, 'byMe');
+  assert.equal(projectDropTarget(colleagueGroups[0]!, 'personal-project-id'), null);
+});
+
 let seq = 0;
 
 function mk(overrides: {

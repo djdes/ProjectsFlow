@@ -103,6 +103,7 @@ import {
   endOfWeekYmd,
   groupAssignedByTime,
   groupAssignedTasks,
+  projectDropTarget,
   startOfDay,
   ymd,
   type AssigneeDirection,
@@ -1892,18 +1893,19 @@ export function AssignedToMeBlock({
   const groupView = (group: (typeof groups)[number], exiting: boolean) => {
     // Колонка = реальный проект (группировка по проекту). Своя «Личные» — тоже проект
     // (инбокс), в неё тоже можно перенести; чужие «Личные · имя» — нет.
-    const isProjectColumn = grouping === 'project' && (!group.isInbox || group.key === inboxProjectId);
+    const targetProjectId = grouping === 'project' ? projectDropTarget(group, inboxProjectId) : null;
+    const isProjectColumn = targetProjectId !== null;
     // Смысл дропа на группу: project → перенос задачи в проект; priority → смена приоритета
     // (только карточки доски). Призрак дроп не принимает.
     const dropData: Record<string, unknown> | null = exiting
       ? null
       : isProjectColumn
-        ? { type: 'group', grouping: 'project', projectId: group.key }
+        ? { type: 'group', grouping: 'project', projectId: targetProjectId }
         : grouping === 'priority' && boardDragActive
           ? { type: 'group', grouping: 'priority', priority: group.key }
           : null;
     const ownDropHere =
-      activeDrag !== null && isProjectColumn && activeDrag.canModify && activeDrag.projectId !== group.key;
+      activeDrag !== null && isProjectColumn && activeDrag.canModify && activeDrag.projectId !== targetProjectId;
     // «+» на колонке-проекте (не на «Личных» коллег): задача создаётся в этом проекте на
     // текущего юзера. Гейт по canModify ≈ право создавать.
     const canQuickAdd =
