@@ -2220,6 +2220,7 @@ const { app, devProxyUpgrade } = createApp({
     dispatcherUserId: process.env.IMAGE_DISPATCHER_USER_ID ?? '',
     idGen: idGenerator,
   }),
+  voiceTranscriber: groqVoiceTranscriber,
   workspaceScope: workspaceScope({ workspaces: workspaceRepo, run: (userId, workspace, next) => requestWorkspaceContext.run(userId, workspace, next) }),
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
   telegramDigestActions: { service: telegramDigestActionService },

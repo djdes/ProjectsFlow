@@ -6,6 +6,8 @@ import express, { type Express, type Request, type Response, type RequestHandler
 import { mountBuildAssets } from './staticAssets.js';
 import type { ImageGenerationService } from '../application/image-generation/ImageGenerationService.js';
 import { imageGenerationRouter, imageGenerationAgentRouter } from './image-generation/routes.js';
+import type { VoiceTranscriber } from '../application/telegram/VoiceTranscriber.js';
+import { voiceTranscriptionRouter } from './voice-transcription/routes.js';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
@@ -333,6 +335,7 @@ import { deploymentRouter } from './deployment/routes.js';
 type AppDeps = {
   readonly deployment?: GetDeploymentStatus;
   readonly imageGeneration?: ImageGenerationService;
+  readonly voiceTranscriber?: VoiceTranscriber;
   readonly workspaceScope?: RequestHandler;
   readonly emailActions: {
     readonly service: EmailActionService;
@@ -839,6 +842,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       tasks: deps.projects.tasks,
     }),
   );
+  app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], express.json({ limit: '35mb' }));
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
@@ -960,6 +964,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   if (deps.imageGeneration) {
     app.use('/api/ai/image-jobs', imageGenerationRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
     app.use('/api/agent/image-jobs', imageGenerationAgentRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
+  }
+  if (deps.voiceTranscriber) {
+    const sttRouter = voiceTranscriptionRouter(deps.voiceTranscriber, deps.agent.authenticateAgentToken);
+    app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], sttRouter);
   }
   app.use('/api/ai', aiConversationRouter(deps.aiConversations));
   // Журнал батчей действий ассистента: серверная идемпотентность плана и Undo,
