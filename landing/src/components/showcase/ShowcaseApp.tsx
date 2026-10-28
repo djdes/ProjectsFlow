@@ -70,6 +70,50 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
       .catch(() => {});
   }, []);
 
+  // Scroll-spy: automatically highlight active top navigation tab when scrolling
+  useEffect(() => {
+    const sectionIds = [
+      'hero',
+      'prompt-sandbox',
+      'walkthrough',
+      'live-board',
+      'grow-calculator',
+      'pricing',
+      'faq',
+      'blog',
+    ];
+
+    const handleScroll = () => {
+      const triggerY = window.innerHeight * 0.35;
+      let currentId = 'hero';
+
+      for (const id of sectionIds) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= triggerY) {
+          currentId = id;
+        }
+      }
+
+      // If scrolled near the bottom of the page, highlight 'blog'
+      if (
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 120
+      ) {
+        if (document.getElementById('blog')) {
+          currentId = 'blog';
+        }
+      }
+
+      setActiveNav((prev) => (prev === currentId ? prev : currentId));
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const handleSelectLayer = (id: StackLayerId) => {
     setActiveLayerId(id);
     setSpinTrigger((prev) => prev + 1);
@@ -102,6 +146,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
     { id: 'grow-calculator', label: 'Реактор ₽' },
     { id: 'pricing', label: 'Тарифы' },
     { id: 'faq', label: 'FAQ' },
+    { id: 'blog', label: 'Журнал' },
   ];
 
   return (
@@ -113,7 +158,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
       <AuroraCanvas glowRgb={activeLayer.glowRgb} />
 
       {/* Top Glass Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#050811]/75 border-b border-white/12">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#0c0514]/80 border-b border-white/15">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-4">
           <a
             href="#hero"
@@ -125,18 +170,18 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
           >
             <div
               className="w-10 h-10 rounded-xl border border-white/25 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105"
-              style={{ backgroundColor: `${activeLayer.primaryColor}22` }}
+              style={{ backgroundColor: `${activeLayer.primaryColor}28` }}
             >
               <Layers
                 className="w-5 h-5"
-                style={{ color: activeLayer.primaryColor }}
+                style={{ color: activeLayer.accentColor }}
               />
             </div>
             <div>
               <span className="font-display font-black text-base sm:text-lg tracking-tight text-white block leading-none">
                 ProjectsFlow
               </span>
-              <span className="font-mono text-[10px] text-white/55 tracking-wider uppercase block mt-0.5">
+              <span className="font-mono text-[10px] text-white/60 tracking-wider uppercase block mt-0.5">
                 AI Architecture OS
               </span>
             </div>
@@ -145,7 +190,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
           {/* Desktop Navigation Pills */}
           <nav
             aria-label="Основная навигация"
-            className="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl bg-white/[0.05] border border-white/12"
+            className="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl bg-white/[0.06] border border-white/15"
           >
             {navItems.map((item) => {
               const isActive = activeNav === item.id;
@@ -156,7 +201,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                   onClick={() => scrollToSection(item.id)}
                   className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                     isActive
-                      ? 'text-[#050811]'
+                      ? 'text-[#12061c]'
                       : 'text-white/75 hover:text-white'
                   }`}
                 >
@@ -171,12 +216,6 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                 </button>
               );
             })}
-            <a
-              href="/blog/"
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white/75 hover:text-white transition-colors"
-            >
-              Журнал
-            </a>
           </nav>
 
           {/* Right Auth / CTA Buttons */}
@@ -193,7 +232,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
             <a
               href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
               data-auth-authed={isAuthed ? '' : undefined}
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#050811] font-extrabold text-xs hover:bg-slate-100 transition-all shadow-md"
+              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
             >
               <span>{isAuthed ? 'В проекты' : '1 час Прайма бесплатно'}</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -217,7 +256,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="xl:hidden overflow-hidden bg-[#060a15]/95 border-b border-white/15 px-4 pb-4"
+              className="xl:hidden overflow-hidden bg-[#12061c]/95 border-b border-white/15 px-4 pb-4"
             >
               <div className="grid grid-cols-2 gap-2 pt-2">
                 {navItems.map((item) => (
@@ -225,17 +264,15 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => scrollToSection(item.id)}
-                    className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-left text-xs font-bold text-white"
+                    className={`px-3.5 py-2.5 rounded-xl border text-left text-xs font-bold ${
+                      activeNav === item.id
+                        ? 'bg-white text-[#12061c] border-white'
+                        : 'bg-white/[0.06] text-white border-white/10'
+                    }`}
                   >
                     {item.label}
                   </button>
                 ))}
-                <a
-                  href="/blog/"
-                  className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-left text-xs font-bold text-white"
-                >
-                  Журнал
-                </a>
               </div>
             </motion.div>
           )}
@@ -284,11 +321,11 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/12 bg-[#04060c]/90 backdrop-blur-xl mt-12">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/55">
+      <footer className="relative z-10 border-t border-white/15 bg-[#0a0412]/90 backdrop-blur-xl mt-12">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/60">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
-              <Layers className="w-4 h-4 text-sky-400" />
+            <div className="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-400/30 flex items-center justify-center">
+              <Layers className="w-4 h-4 text-rose-400" />
             </div>
             <span className="font-bold text-white">ProjectsFlow</span>
             <span>© {new Date().getFullYear()} · Все расчёты в ₽ · Код принадлежит вам</span>
@@ -305,7 +342,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
               Тарифы
             </a>
             <a href="/blog/" className="hover:text-white transition-colors">
-              Журнал
+              Все статьи журнала
             </a>
           </div>
         </div>
