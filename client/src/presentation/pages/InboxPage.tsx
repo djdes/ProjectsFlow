@@ -25,7 +25,7 @@ function loadHideDone(): boolean {
 // The globe opens AllWorkspaceTasksPage without changing the selected workspace.
 // Личные задачи живут в обычном проекте с флагом isInbox=true; сервер создаёт его лениво
 // при первом GET /api/inbox.
-export function InboxPage(): React.ReactElement {
+export function InboxPage({ embedded = false }: { embedded?: boolean }): React.ReactElement {
   const { projectRepository, taskRepository } = useContainer();
   const { workspace } = useCurrentWorkspace();
   const [project, setProject] = useState<Project | null>(null);
@@ -113,16 +113,19 @@ export function InboxPage(): React.ReactElement {
     <div className="flex min-h-full flex-col">
       {/* Шапка страницы: выбранное пространство и счётчик
           «сделано сегодня», линия снизу. На мобиле — своя шапка приложения. */}
-      <PageTopBar className="hidden sm:flex" end={<HeaderCompletedTodayPill />}>
+      {!embedded && <PageTopBar className="hidden sm:flex" end={<HeaderCompletedTodayPill />}>
         <InboxBreadcrumbs />
-      </PageTopBar>
+      </PageTopBar>}
 
       {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
           ответственных текущего пространства: название пространства, вкладки, люди и поиск
           он ставит в одну строку сам. */}
-      <div className="flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
-        <PageTitle>Задачи пространства</PageTitle>
+      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9'}>
+        {!embedded && <PageTitle>Задачи пространства</PageTitle>}
         <AssignedToMeBlock
+          regionId={embedded ? `workspace-board-${workspace?.id}` : undefined}
+          initialTab={embedded ? 'toMe' : undefined}
+          tabStorageKey={embedded ? `pf.inbox.global.${workspace?.id}.tab` : undefined}
           boardTasks={boardTasks}
           inboxProjectId={project.id}
           onChanged={() => void reloadInboxTasks(project.id)}

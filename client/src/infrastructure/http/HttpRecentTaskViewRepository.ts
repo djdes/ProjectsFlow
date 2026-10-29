@@ -28,12 +28,14 @@ function fromDto(dto: RecentTaskViewDto): RecentTaskView {
 }
 
 export class HttpRecentTaskViewRepository implements RecentTaskViewRepository {
+  constructor(private readonly client: typeof httpClient = httpClient) {}
+
   async record(taskId: string): Promise<void> {
-    await httpClient.post<void>('/recent-task-views', { taskId });
+    await this.client.post<void>('/recent-task-views', { taskId });
   }
 
   async list(limit: number): Promise<RecentTaskView[]> {
-    const res = await httpClient.get<{ recent: RecentTaskViewDto[] }>(
+    const res = await this.client.get<{ recent: RecentTaskViewDto[] }>(
       `/recent-task-views?limit=${limit}`,
     );
     return res.recent.map(fromDto);

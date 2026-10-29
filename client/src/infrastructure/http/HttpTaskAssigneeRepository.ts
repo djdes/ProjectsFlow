@@ -36,6 +36,8 @@ function fromAssignedDto(item: AssignedItemDto): AssignedTask {
 }
 
 export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
+  constructor(private readonly client: typeof httpClient = httpClient) {}
+
   async listMine(): Promise<AssignedTask[]> {
     return this.fetchAssignedList('/assignees/mine');
   }
@@ -65,7 +67,7 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
   }
 
   async listAwaitingReply(): Promise<AwaitingReplyTask[]> {
-    const { items } = await httpClient.get<{ items: AwaitingReplyItemDto[] }>('/assignees/awaiting-reply');
+    const { items } = await this.client.get<{ items: AwaitingReplyItemDto[] }>('/assignees/awaiting-reply');
     return items.map((item) => ({
       ...fromAssignedDto(item),
       question: { ...item.question, askedAt: new Date(item.question.askedAt) },
@@ -73,7 +75,7 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
   }
 
   private async fetchAssignedList(path: string, workspaceId?: string): Promise<AssignedTask[]> {
-    const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(
+    const { items } = await this.client.get<{ items: AssignedItemDto[] }>(
       path,
       workspaceId ? { workspaceId } : undefined,
     );

@@ -246,30 +246,32 @@ function taskVersionsFromDto(res: TaskVersionsDto): TaskVersionsResult {
 }
 
 export class HttpTaskRepository implements TaskRepository {
+  constructor(private readonly client: typeof httpClient = httpClient) {}
+
   async get(projectId: string, taskId: string): Promise<Task> {
-    const { task } = await httpClient.get<{ task: TaskDto }>(`/projects/${projectId}/tasks/${taskId}`);
+    const { task } = await this.client.get<{ task: TaskDto }>(`/projects/${projectId}/tasks/${taskId}`);
     return { ...fromDto(task), canEdit: task.canEdit };
   }
   async list(projectId: string): Promise<Task[]> {
-    const { tasks } = await httpClient.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);
+    const { tasks } = await this.client.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);
     return tasks.map(fromDto);
   }
   async create(projectId: string, input: CreateTaskInput): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
+    const { task } = await this.client.post<{ task: TaskDto }>(
       `/projects/${projectId}/tasks`,
       input,
     );
     return fromDto(task);
   }
   async update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task> {
-    const { task } = await httpClient.patch<{ task: TaskDto }>(
+    const { task } = await this.client.patch<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}`,
       input,
     );
     return fromDto(task);
   }
   async move(projectId: string, taskId: string, input: MoveTaskInput): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
+    const { task } = await this.client.post<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/move`,
       input,
     );
@@ -280,60 +282,60 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     comment: string,
   ): Promise<{ task: Task; commentId: string }> {
-    const { task, commentId } = await httpClient.post<{ task: TaskDto; commentId: string }>(
+    const { task, commentId } = await this.client.post<{ task: TaskDto; commentId: string }>(
       `/projects/${projectId}/tasks/${taskId}/approval/reject`,
       { comment },
     );
     return { task: fromDto(task), commentId };
   }
   async withdrawApproval(projectId: string, taskId: string): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
+    const { task } = await this.client.post<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/approval/withdraw`,
       {},
     );
     return fromDto(task);
   }
   async delete(projectId: string, taskId: string): Promise<void> {
-    await httpClient.delete<void>(`/projects/${projectId}/tasks/${taskId}`);
+    await this.client.delete<void>(`/projects/${projectId}/tasks/${taskId}`);
   }
   async getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult> {
-    const res = await httpClient.get<TaskVersionsDto>(
+    const res = await this.client.get<TaskVersionsDto>(
       `/projects/${projectId}/tasks/${taskId}/versions`,
     );
     return taskVersionsFromDto(res);
   }
   async getProjectVersions(projectId: string): Promise<TaskVersionsResult> {
-    const res = await httpClient.get<TaskVersionsDto>(`/projects/${projectId}/tasks/versions`);
+    const res = await this.client.get<TaskVersionsDto>(`/projects/${projectId}/tasks/versions`);
     return taskVersionsFromDto(res);
   }
   async restoreVersion(projectId: string, taskId: string, versionId: string): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
+    const { task } = await this.client.post<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/versions/${versionId}/restore`,
       {},
     );
     return { ...fromDto(task), canEdit: task.canEdit };
   }
   async listCommits(projectId: string, taskId: string): Promise<TaskCommit[]> {
-    const { commits } = await httpClient.get<{ commits: CommitDto[] }>(
+    const { commits } = await this.client.get<{ commits: CommitDto[] }>(
       `/projects/${projectId}/tasks/${taskId}/commits`,
     );
     return commits.map(commitFromDto);
   }
   async linkCommit(projectId: string, taskId: string, sha: string): Promise<TaskCommit> {
-    const { commit } = await httpClient.post<{ commit: CommitDto }>(
+    const { commit } = await this.client.post<{ commit: CommitDto }>(
       `/projects/${projectId}/tasks/${taskId}/commits`,
       { sha },
     );
     return commitFromDto(commit);
   }
   async unlinkCommit(projectId: string, taskId: string, sha: string): Promise<void> {
-    await httpClient.delete<void>(`/projects/${projectId}/tasks/${taskId}/commits/${sha}`);
+    await this.client.delete<void>(`/projects/${projectId}/tasks/${taskId}/commits/${sha}`);
   }
   async syncCommits(projectId: string): Promise<SyncCommitsResult> {
-    return httpClient.post<SyncCommitsResult>(`/projects/${projectId}/tasks/sync-commits`);
+    return this.client.post<SyncCommitsResult>(`/projects/${projectId}/tasks/sync-commits`);
   }
   async listAttachments(projectId: string, taskId: string): Promise<TaskAttachment[]> {
-    const { attachments } = await httpClient.get<{ attachments: AttachmentDto[] }>(
+    const { attachments } = await this.client.get<{ attachments: AttachmentDto[] }>(
       `/projects/${projectId}/tasks/${taskId}/attachments`,
     );
     return attachments.map(attachmentFromDto);
@@ -353,7 +355,7 @@ export class HttpTaskRepository implements TaskRepository {
     );
   }
   async deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void> {
-    await httpClient.delete<void>(
+    await this.client.delete<void>(
       `/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`,
     );
   }
@@ -374,20 +376,20 @@ export class HttpTaskRepository implements TaskRepository {
     commentId: string,
     attachmentId: string,
   ): Promise<void> {
-    await httpClient.delete<void>(
+    await this.client.delete<void>(
       `/projects/${projectId}/tasks/${taskId}/comments/${commentId}/attachments/${attachmentId}`,
     );
   }
   async setCommentAcknowledged(projectId: string, taskId: string, commentId: string, accepted: boolean): Promise<CommentAcknowledgement[]> {
     const path = `/projects/${projectId}/tasks/${taskId}/comments/${commentId}/acknowledgement`;
     const { acknowledgements } = accepted
-      ? await httpClient.put<{ acknowledgements: AcknowledgementDto[] }>(path)
-      : await httpClient.delete<{ acknowledgements: AcknowledgementDto[] }>(path);
+      ? await this.client.put<{ acknowledgements: AcknowledgementDto[] }>(path)
+      : await this.client.delete<{ acknowledgements: AcknowledgementDto[] }>(path);
     return acknowledgements.map(a => ({ ...a, acknowledgedAt: new Date(a.acknowledgedAt) }));
   }
 
   async listComments(projectId: string, taskId: string): Promise<TaskComment[]> {
-    const { comments } = await httpClient.get<{ comments: CommentDto[] }>(
+    const { comments } = await this.client.get<{ comments: CommentDto[] }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,
     );
     return comments.map(commentFromDto);
@@ -403,7 +405,7 @@ export class HttpTaskRepository implements TaskRepository {
     if (notify) payload['notify'] = notify;
     if (reply?.replyToCommentId) payload['replyToCommentId'] = reply.replyToCommentId;
     if (reply?.quotedText) payload['quotedText'] = reply.quotedText;
-    const { comment } = await httpClient.post<{ comment: CommentDto }>(
+    const { comment } = await this.client.post<{ comment: CommentDto }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,
       payload,
     );
@@ -414,7 +416,7 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     commentId: string,
   ): Promise<CommentNotifications> {
-    const res = await httpClient.get<{
+    const res = await this.client.get<{
       notifyMode: CommentNotifications['notifyMode'];
       recipients: CommentNotificationDto[];
     }>(`/projects/${projectId}/tasks/${taskId}/comments/${commentId}/notifications`);
@@ -437,20 +439,20 @@ export class HttpTaskRepository implements TaskRepository {
     commentId: string,
     body: string,
   ): Promise<TaskComment> {
-    const { comment } = await httpClient.patch<{ comment: CommentDto }>(
+    const { comment } = await this.client.patch<{ comment: CommentDto }>(
       `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
       { body },
     );
     return commentFromDto(comment);
   }
   async deleteComment(projectId: string, taskId: string, commentId: string): Promise<void> {
-    await httpClient.delete<void>(
+    await this.client.delete<void>(
       `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
     );
   }
 
   async requestRalphCancel(projectId: string, taskId: string): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
+    const { task } = await this.client.post<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/ralph-cancel`,
       {},
     );
@@ -458,14 +460,14 @@ export class HttpTaskRepository implements TaskRepository {
   }
 
   async revokeRalphCancel(projectId: string, taskId: string): Promise<Task> {
-    const { task } = await httpClient.delete<{ task: TaskDto }>(
+    const { task } = await this.client.delete<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/ralph-cancel`,
     );
     return fromDto(task);
   }
 
   async assignToProject(projectId: string, taskId: string, targetProjectId: string): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
+    const { task } = await this.client.post<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/assign-to-project`,
       { targetProjectId },
     );
@@ -473,7 +475,7 @@ export class HttpTaskRepository implements TaskRepository {
   }
 
   async assign(projectId: string, taskId: string, assigneeUserId: string): Promise<Task> {
-    const { task } = await httpClient.put<{ task: TaskDto }>(
+    const { task } = await this.client.put<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/assignee`,
       { assigneeUserId },
     );
@@ -481,6 +483,6 @@ export class HttpTaskRepository implements TaskRepository {
   }
 
   async digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult> {
-    return httpClient.post<TaskDigestResult>(`/projects/${projectId}/tasks/digest`, input);
+    return this.client.post<TaskDigestResult>(`/projects/${projectId}/tasks/digest`, input);
   }
 }

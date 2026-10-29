@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -165,4 +166,14 @@ export function useWorkspacesContext(): WorkspacesContextValue {
   const c = useContext(WorkspacesCtx);
   if (!c) throw new Error('useWorkspacesContext must be used inside <WorkspacesProvider>');
   return c;
+}
+
+// Local board context only. It never writes the account preference or HTTP default scope.
+export function WorkspaceViewProvider({ workspaceId, children }: { workspaceId: string; children: ReactNode }): React.ReactElement {
+  const parent = useWorkspacesContext();
+  const value = useMemo(() => {
+    const data = parent.data?.map((workspace) => ({ ...workspace, isCurrent: workspace.id === workspaceId })) ?? null;
+    return { ...parent, data, current: data?.find((workspace) => workspace.id === workspaceId) ?? null };
+  }, [parent, workspaceId]);
+  return <WorkspacesCtx.Provider value={value}>{children}</WorkspacesCtx.Provider>;
 }

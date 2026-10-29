@@ -28,7 +28,7 @@ function task(id: string, projectId: string, assigneeUserId: string): Task {
   } as Task;
 }
 
-type Proj = { id: string; name: string; isInbox: boolean; role: 'owner' | 'editor' | 'viewer' };
+type Proj = { workspaceId?: string; ownerId?: string; id: string; name: string; isInbox: boolean; role: 'owner' | 'editor' | 'viewer' };
 
 function makeList(input: {
   hubProjects: Proj[];
@@ -44,7 +44,7 @@ function makeList(input: {
       listProjectsForUser: async () => input.hubProjects,
       listProjectsForUserInWorkspace: async (_userId: string, workspaceId: string) => {
         askedWorkspace.push(workspaceId);
-        return input.workspaceProjects ?? input.hubProjects;
+        return (input.workspaceProjects ?? input.hubProjects).map((project) => ({ workspaceId: activeWorkspace?.id, ownerId: 'me', ...project }));
       },
     } as never,
     tasks: {
@@ -96,4 +96,20 @@ test('no active workspace yields an empty list', async () => {
   });
 
   assert.deepEqual(await list.execute('me'), []);
+});
+
+test('other assignees never reveal a colleague private inbox or a different workspace even if a read-model returns them', async () => {
+  const { list } = makeList({
+    hubProjects: [
+      { id: 'shared', name: 'Общий проект', isInbox: false, role: 'viewer' },
+      { id: 'private', name: 'Чужие накладные', isInbox: true, role: 'owner', ownerId: 'colleague' },
+      { id: 'outside', name: 'Другое пространство', isInbox: false, role: 'owner', workspaceId: 'outside' },
+    ],
+    tasksByProject: {
+      shared: [task('allowed', 'shared', 'colleague'), task('mismatched', 'private', 'colleague')],
+      private: [task('private-invoice', 'private', 'colleague')],
+      outside: [task('outside-task', 'outside', 'colleague')],
+    },
+  });
+  assert.deepEqual((await list.execute('me')).map((item) => item.task.id), ['allowed']);
 });
