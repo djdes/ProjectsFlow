@@ -2324,7 +2324,7 @@ export function AssignedToMeBlock({
               type="button"
               aria-label={searchVisible ? 'Закрыть поиск' : 'Поиск по проектам и задачам'}
               aria-expanded={searchVisible}
-              aria-controls="inbox-mobile-search"
+              aria-controls={`${regionId}-mobile-search`}
               onClick={() => {
                 setSearchOpen(!searchVisible);
                 if (searchVisible) setQuery('');
@@ -2338,7 +2338,7 @@ export function AssignedToMeBlock({
             </button>
           </div>
           {searchVisible && (
-            <InboxSearch id="inbox-mobile-search" value={query} onChange={setQuery} autoFocus={searchOpen} />
+            <InboxSearch id={`${regionId}-mobile-search`} value={query} onChange={setQuery} autoFocus={searchOpen} />
           )}
         </div>
       )}
