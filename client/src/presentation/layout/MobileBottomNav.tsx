@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import {
   AnimatedGlobe,
+  AnimatedHome,
   AnimatedUser,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
@@ -20,6 +21,7 @@ export function MobileBottomNav(): React.ReactElement {
   const { count } = useUnreadTasks();
   const items = [
     { path: '/', label: 'Входящие', active: pathname === '/', badge: count },
+    { path: '/all-tasks', label: 'Все задачи', active: pathname === '/all-tasks', badge: 0 },
     {
       path: '/ai',
       label: 'ИИ',
@@ -185,8 +187,10 @@ export function MobileBottomNav(): React.ReactElement {
           >
             <span className="relative inline-flex">
               {index === 0 ? (
+                <AnimatedHome className="size-5" active={item.active} />
+              ) : index === 1 ? (
                 <AnimatedGlobe className="size-5" active={item.active} />
-              ) : index === 2 ? (
+              ) : index === 3 ? (
                 <AnimatedUser className="size-5" active={item.active} />
               ) : (
                 <Sparkles className="size-5" />

@@ -48,6 +48,7 @@ export function lazyPage<M extends Record<string, unknown>>(
 
 const destinations: Array<[RegExp, string]> = [
   [/^\/$/, 'InboxPage'],
+  [/^\/all-tasks\/?$/, 'AllWorkspaceTasksPage'],
   [/^\/ai(?:\/|$)/, 'AiPage'],
   [/^\/profile(?:\/|$)/, 'ProfilePage'],
   [/^\/projects\/[^/]+\/?$/, 'TasksPage'],

@@ -44,6 +44,7 @@ const ProjectStudioPage = page(
 );
 const TaskDetailPage = page(() => import('@/presentation/pages/TaskDetailPage'), 'TaskDetailPage');
 const InboxPage = page(() => import('@/presentation/pages/InboxPage'), 'InboxPage');
+const AllWorkspaceTasksPage = page(() => import('@/presentation/pages/AllWorkspaceTasksPage'), 'AllWorkspaceTasksPage');
 const AiPage = page(() => import('@/presentation/pages/AiPage'), 'AiPage');
 const ProfilePage = page(() => import('@/presentation/pages/ProfilePage'), 'ProfilePage');
 const WorkspaceSettingsPage = page(
@@ -132,6 +133,7 @@ export const router = createBrowserRouter(
       // Главная после авторизации — «Входящие» (inbox). HomePage («Выберите проект»)
       // больше не используется как индекс.
       { index: true, element: el(<InboxPage />) },
+      { path: 'all-tasks', element: el(<AllWorkspaceTasksPage />) },
       { path: 'ai', element: el(<AiPage />) },
       { path: 'ai/c/:conversationId', element: el(<AiPage />) },
       // Старые ссылки на /inbox редиректим на канонический «/» — вместе с ?task=<id>,

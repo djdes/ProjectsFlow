@@ -37,9 +37,8 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { getInitials } from './projectIcons';
 import { projectToneClass } from '@/lib/tone';
 
-// Активная вкладка рейла (только переключатели слева): Главная показывает список проектов
-// в нижней области, Чат — общий чат пространства. Входящие/Поиск — это icon-кнопки действий
-// справа, они НЕ становятся активной вкладкой (просто выполняют переход/открывают поиск).
+// Home opens the selected workspace and shows its projects; Chat opens its communication panel.
+// The globe opens all workspace tasks without changing the selected workspace.
 type RailKey = 'home' | 'chat';
 const RAIL_ORDER: readonly RailKey[] = ['home', 'chat'];
 const RAIL_KEY = 'pf_sidebar_rail';
@@ -157,6 +156,7 @@ export function Sidebar({
   const railItems: RailItem[] = [
     {
       key: 'home',
+      active: !showChat && pathname !== '/all-tasks',
       label: workspace?.name || 'Пространство',
       shortLabel: true,
       icon: <AnimatedHome className="size-5" />,
@@ -181,13 +181,14 @@ export function Sidebar({
     },
     {
       key: 'inbox',
-      label: 'Входящие',
+      active: pathname === '/all-tasks',
+      label: 'Все задачи',
       icon: <AnimatedGlobe className="size-5" />,
       // Счётчик = задачи, назначенные на меня и ни разу мной не открытые (окно 14 дней,
       // см. ListUnreadTasks). Гаснет по одной, когда задачу открывают.
       badge: unreadTaskCount,
       variant: 'action',
-      onAction: () => navigate('/'),
+      onAction: () => { setRailPersist('home'); navigate('/all-tasks'); onNavigate?.(); },
     },
     {
       key: 'search',
@@ -200,13 +201,11 @@ export function Sidebar({
       },
     },
   ];
-  // Клик по вкладке-переключателю (только Главная/Чат) — ТОЛЬКО переключает нижнюю область
-  // сайдбара, НЕ навигирует. Раньше «Главная» дополнительно делала navigate('/') → на мобиле
-  // это меняло маршрут и AppShell закрывал drawer + открывались «Входящие» (жалоба юзера).
-  // Для перехода в инбокс есть отдельная кнопка «Входящие».
+  // Home returns to the selected workspace; the globe reads all workspaces independently.
   const onRailSelect = (i: number): void => {
     const key = RAIL_ORDER[i] ?? 'home';
     setRailPersist(key);
+    if (key === 'home') { navigate('/'); onNavigate?.(); }
   };
 
   if (collapsed) {
@@ -229,7 +228,10 @@ export function Sidebar({
           <RailButton onClick={openSearch} label="Глобальный поиск" animated>
             <AnimatedSearch className="size-4" />
           </RailButton>
-          <RailNavLink to="/" end label="Входящие" badge={unreadTaskCount} animated>
+          <RailNavLink to="/" end label="Задачи выбранного пространства" animated>
+            <AnimatedHome className="size-4" />
+          </RailNavLink>
+          <RailNavLink to="/all-tasks" end label="Все задачи" badge={unreadTaskCount} animated>
             <AnimatedGlobe className="size-4" />
           </RailNavLink>
           <RailButton

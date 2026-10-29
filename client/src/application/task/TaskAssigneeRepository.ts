@@ -9,6 +9,8 @@ export interface TaskAssigneeRepository {
   listMineInWorkspace(workspaceId: string): Promise<AssignedTask[]>;
   // Все видимые caller'у задачи, где отвечает другой участник.
   listOthers(): Promise<AssignedTask[]>;
+  // All readable tasks assigned to others in an explicit workspace, without switching it.
+  listOthersInWorkspace(workspaceId: string): Promise<AssignedTask[]>;
   // Личные (inbox) задачи коллег — тех, с кем есть общее рабочее пространство.
   // Только чтение: canModify у таких задач всегда false.
   listColleaguesPersonal(): Promise<AssignedTask[]>;

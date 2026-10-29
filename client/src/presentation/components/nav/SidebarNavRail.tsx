@@ -16,6 +16,7 @@ export type RailItem = {
   readonly icon: React.ReactNode;
   readonly badge?: number;
   readonly variant?: 'tab' | 'action';
+  readonly active?: boolean;
   // Только для variant: 'action' — обработчик клика-действия.
   readonly onAction?: () => void;
   // Иконка — «живая» AnimatedXxx (принимает active). false — обычная lucide-иконка: ей
@@ -63,8 +64,8 @@ export function SidebarNavRail({
 
   const renderButton = ({ item, index }: { item: RailItem; index: number }): React.ReactElement => {
     const isTab = item.variant !== 'action';
-    const active = isTab && index === activeIndex;
-    const showLabel = active && !compact;
+    const active = item.active ?? (isTab && index === activeIndex);
+    const showLabel = isTab && active && !compact;
     const hasBadge = item.badge !== undefined && item.badge > 0;
     return (
       <button
