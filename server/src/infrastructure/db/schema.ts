@@ -64,6 +64,7 @@ export const users = mysqlTable(
     avatarUrl: varchar('avatar_url', { length: 500 }),
     // Системный admin/root: глобальный доступ ко всем проектам + раздел управления.
     isAdmin: boolean('is_admin').notNull().default(false),
+    deletedAt: timestamp('deleted_at'),
     // Telegram-привязка через Login Widget. Все опциональны (юзер может не подключать TG).
     // См. db/033 и spec multi-user-telegram-notifications.md.
     telegramUserId: bigint('telegram_user_id', { mode: 'number' }),

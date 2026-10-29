@@ -35,6 +35,7 @@ export type AdminUserPatch = {
   readonly displayName?: string;
   readonly email?: string;
   readonly isAdmin?: boolean;
+  readonly avatarUrl?: null;
 };
 
 // Проект юзера + его текущий диспетчер (с резолвом имён) + флаг GitHub-делегации.
@@ -91,6 +92,7 @@ export interface AdminRepository {
   listProjects(): Promise<AdminProject[]>;
   listUsers(): Promise<AdminUser[]>;
   updateUser(id: string, patch: AdminUserPatch): Promise<void>;
+  deleteUser(id: string): Promise<void>;
   // Проекты юзера (где он owner) + текущие диспетчеры. Сменить диспетчера
   // admin может через обычный `projectRepository.setDispatcher` (admin-bypass).
   listUserProjectsWithDispatcher(userId: string): Promise<AdminUserProjectDispatcher[]>;
@@ -104,6 +106,6 @@ export interface AdminRepository {
   // Обращения в поддержку (раздел «Администрирование» → вкладка «Поддержка»).
   listSupportTickets(): Promise<AdminSupportTicket[]>;
   setSupportTicketStatus(id: string, status: 'open' | 'closed'): Promise<void>;
-  // Админ-выдача тарифа юзеру (prime/vip → фикс +30 дней; free → сброс).
-  setUserPlan(id: string, plan: PlanId): Promise<void>;
+  // Omitted expiry grants 30 days; null means unlimited. free resets the subscription.
+  setUserPlan(id: string, plan: PlanId, subscriptionExpiresAt?: string | null): Promise<void>;
 }
