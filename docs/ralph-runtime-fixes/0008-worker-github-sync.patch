@@ -1,0 +1,99 @@
+diff --git a/codex-engine.psm1 b/codex-engine.psm1
+--- a/codex-engine.psm1
++++ b/codex-engine.psm1
+@@ -6,6 +6,7 @@
+ Set-StrictMode -Off
+ . (Join-Path $PSScriptRoot 'codex-file-edits.ps1')
+ . (Join-Path $PSScriptRoot 'worker-git-policy.ps1')
++. (Join-Path $PSScriptRoot 'worker-github-sync.ps1')
+ 
+ # $ за 1M токенов (стандартный тариф API OpenAI, 06.10.2026): in / cached in / out.
+ # Нужен для «API-эквивалента» в статистике и бюджете — на подписке маржинальная цена 0.
+@@ -312,6 +313,7 @@
+       if ($resumeId) { $Prompt = (Format-CodexTaskResumePrepend $taskView) + "`n`n" + $Prompt }
+       $Prompt += "`n`nБезопасная публикация: один checkout занят только этой задачей. Не используй git add -A или git add .; добавляй явные файлы своей правки. Сохрани незакоммиченные изменения, существовавшие до запуска. Перед push получи актуальную удалённую ветку, интегрируй её без потери чужих изменений и повтори затронутые проверки. Не применяй force-push, reset --hard, clean, checkout --ours/--theirs или restore для решения конфликтов. При конфликте, смысл которого неясен, остановись с вопросом. Каждый свой коммит помечай [" + ([string]$Run.SessionTaskId).Substring(0,8) + "]."
+     }
++    $Prompt = Add-WorkerGitHubSyncInstructions $Prompt
+     # PS 5.1 native invocation strips TOML's embedded quotes from array arguments.
+     # Escape once for CreateProcess, exactly as the short-job runner does.
+     $psi = New-Object System.Diagnostics.ProcessStartInfo
+diff --git a/worker-prompt.md b/worker-prompt.md
+--- a/worker-prompt.md
++++ b/worker-prompt.md
+@@ -113,6 +113,7 @@
+ Это не «провал» — это правильное поведение. Лучше отказаться от потенциально опасной задачи, чем сломать инфраструктуру.
+ 
+ Шаги:
++0. **GitHub всегда (только git-режим).** Перед анализом кода и началом/продолжением задачи, перед commit/PR/push выполни `git fetch <github-remote> --prune` для фактического проверенного remote GitHub. `origin` может указывать на сервер и сам по себе не считается проверкой GitHub. Сравни HEAD с актуальными основной/рабочей ветками GitHub и безопасно интегрируй удалённые изменения по правилам проекта, сохранив чужие и исходные незакоммиченные правки. После интеграции повтори затронутые проверки. После push подтверди публикацию через `git ls-remote`. При ошибке сообщи точный блокер; не объявляй синхронизацию/публикацию успешной без проверки. Правило действует и при resume, и при IGNORE_CLAUDE_MD=true; force-push, destructive reset и потеря правок запрещены. В snapshot-режиме или без Git пропусти этот шаг.
+ 1. mcp__projectsflow__pf_get_task(projectId, taskId) — прочитай описание. Если attachmentCount>0 — обязательно изучи вложения (там критичный контекст: макеты, скриншоты ошибок, референсы).
+ 
+    **Изображения задачи и комментариев.** `pf_get_task` сохраняет вложения в файлы внутри рабочей папки и возвращает `attachments[].localPath`. Каждую относящуюся к задаче картинку ОБЯЗАТЕЛЬНО открой инструментом `view_image` (или Read с поддержкой изображений) по этому пути. Список файлов, HTML, base64 и `cat`/`Get-Content` бинарного файла не означают, что картинка просмотрена. Если localPath отсутствует или файл удалён при установке зависимостей, вызови `pf_read_task_attachment` и открой полученный путь. Если просмотр недоступен, явно сообщи об этом и не утверждай, что проверил скриншот.
+diff --git a/worker-github-sync.ps1 b/worker-github-sync.ps1
+new file mode 100644
+--- /dev/null
++++ b/worker-github-sync.ps1
+@@ -0,0 +1,31 @@
++﻿# Shared instructions appended by the native runtime for every new/resumed worker.
++function Add-WorkerGitHubSyncInstructions([string]$Prompt) {
++  $rule = @'
++
++## Обязательная проверка GitHub при каждом запуске
++
++Для git-проекта перед анализом кода, началом ИЛИ продолжением задачи, а также
++перед commit, PR и push ОБЯЗАТЕЛЬНО выполняй `git fetch <github-remote> --prune`.
++Определи фактический remote GitHub, соответствующий проверенному репозиторию
++проекта. Не считай `origin` GitHub автоматически: он может указывать на сервер.
++Не добавляй и не подменяй remote в обход границ назначенного проекта.
++
++После fetch сравни HEAD с актуальной основной и рабочей ветками GitHub.
++Интегрируй удалённые изменения безопасно, прежде чем продолжать разработку или
++публиковать. Используй ветки и checkout только по правилам проекта и диспетчера.
++Сохраняй чужие и исходные незакоммиченные правки. Запрещены force-push,
++`reset --hard`, `clean` и отбрасывание файлов ради синхронизации. При конфликте
++без понятного безопасного разрешения сообщи конкретный блокер, сохранив правки.
++После интеграции повтори затронутые проверки.
++
++После push проверь через `git ls-remote`, что GitHub содержит опубликованный
++коммит. Если fetch, интеграция, проверка или push не удались, явно сообщи причину;
++не называй репозиторий синхронизированным и публикацию успешной без проверки.
++Проверка GitHub обязательна и при возобновлении старой сессии, независимо от
++предыдущего контекста и флага IGNORE_CLAUDE_MD.
++
++В snapshot-режиме, в проекте без Git и в заданиях без доступа к инструментам
++git-команды неприменимы: не создавай репозиторий или remote ради этого правила.
++'@
++  return $Prompt + "`n`n" + $rule
++}
+diff --git a/worker-github-sync.tests.ps1 b/worker-github-sync.tests.ps1
+new file mode 100644
+--- /dev/null
++++ b/worker-github-sync.tests.ps1
+@@ -0,0 +1,28 @@
++﻿$ErrorActionPreference = 'Stop'
++. (Join-Path $PSScriptRoot 'worker-github-sync.ps1')
++$checks = 0
++function Check([bool]$ok, [string]$message) {
++  if (-not $ok) { throw $message }
++  $script:checks++; Write-Host "PASS $message"
++}
++foreach ($prompt in @('New task', 'Resume the existing task', '<!-- worker-github-sync-v1 --> task text')) {
++  $result = Add-WorkerGitHubSyncInstructions $prompt
++  Check ($result.StartsWith($prompt)) 'the task prompt is preserved'
++  Check ($result.Contains('git fetch <github-remote> --prune')) 'GitHub fetch is required for every prompt, including resumes'
++  Check ($result.Contains('git ls-remote')) 'publication must be verified remotely'
++  Check ($result.Contains('IGNORE_CLAUDE_MD')) 'legacy template flags cannot waive synchronization'
++  Check ($result.Contains('snapshot-режиме')) 'snapshot and tool-less jobs keep their exception'
++}
++$errors = $null; $tokens = $null
++$engine = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'codex-engine.psm1'), [ref]$tokens, [ref]$errors)
++Check ($errors.Count -eq 0) 'the native runtime parses'
++$invoke = $engine.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-CodexRawStream' }, $true)
++$calls = @($invoke.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Add-WorkerGitHubSyncInstructions' }, $true))
++Check ($calls.Count -eq 1) 'the runtime always adds the rule once per invocation'
++$ancestor = $calls[0].Parent; $conditional = $false
++while ($ancestor -and $ancestor -ne $invoke) {
++  if ($ancestor -is [Management.Automation.Language.IfStatementAst]) { $conditional = $true }
++  $ancestor = $ancestor.Parent
++}
++Check (-not $conditional) 'the rule also covers workers without SessionTaskId'
++Write-Host "Passed: $checks"

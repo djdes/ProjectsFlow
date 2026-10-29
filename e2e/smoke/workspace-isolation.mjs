@@ -107,6 +107,7 @@ export const workspaceIsolationScenarios = [
     id: 'workspace-all-inboxes', title: 'Глобус: все задачи по пространствам; домик: выбранное пространство', matrix: [['desktop', 'light'], ['phone', 'dark'], ['narrow', 'light']],
     async run(t) {
       await start(t);
+      const selectedBefore = t.state.activeWorkspaceId ?? WORKSPACE_ID;
       await t.goto('/all-tasks', { ready: () => t.page.getByRole('heading', { name: 'Все задачи', level: 1 }) });
       const other = t.page.locator('[data-pf-workspace-tasks="ws-other"]');
       await t.check('блоки других пространств под текущим', async () => {
@@ -120,7 +121,7 @@ export const workspaceIsolationScenarios = [
       });
       await t.step('домик возвращает только выбранное пространство', async () => {
         await t.goto('/', { ready: () => t.page.getByRole('heading', { name: 'Задачи пространства', level: 1 }) });
-        t.assert(t.state.activeWorkspaceId === WORKSPACE_ID, 'глобус изменил выбранное пространство');
+        t.assert((t.state.activeWorkspaceId ?? WORKSPACE_ID) === selectedBefore, 'глобус изменил выбранное пространство');
         t.assert(await t.page.locator('[data-pf-global-task-id="queue-ws-other"]').count() === 0, 'домик показал чужое пространство');
         await t.goto('/all-tasks', { ready: () => t.page.getByRole('heading', { name: 'Все задачи', level: 1 }) });
       });
