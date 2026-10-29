@@ -27,6 +27,10 @@ export class HttpAdminRepository implements AdminRepository {
     await httpClient.patch<unknown>(`/admin/users/${id}`, patch);
   }
 
+  async deleteUser(id: string): Promise<void> {
+    await httpClient.delete<unknown>(`/admin/users/${id}`);
+  }
+
   async listUserProjectsWithDispatcher(userId: string): Promise<AdminUserProjectDispatcher[]> {
     const { projects } = await httpClient.get<{ projects: AdminUserProjectDispatcher[] }>(
       `/admin/users/${userId}/projects-with-dispatcher`,
@@ -77,7 +81,7 @@ export class HttpAdminRepository implements AdminRepository {
     await httpClient.patch<unknown>(`/admin/support-tickets/${id}`, { status });
   }
 
-  async setUserPlan(id: string, plan: PlanId): Promise<void> {
-    await httpClient.patch<unknown>(`/admin/users/${id}/plan`, { plan });
+  async setUserPlan(id: string, plan: PlanId, subscriptionExpiresAt?: string | null): Promise<void> {
+    await httpClient.patch<unknown>(`/admin/users/${id}/plan`, { plan, subscriptionExpiresAt });
   }
 }

@@ -2,6 +2,9 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { ListAllProjects } from '../../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
+import type { DeleteUserAsAdmin } from '../../application/admin/DeleteUserAsAdmin.js';
+import { AdminUserError } from '../../domain/user/adminErrors.js';
+import { adminPlanSchema, adminUserPatchSchema } from './schemas.js';
 import type { ListUserProjectsWithDispatcher } from '../../application/admin/ListUserProjectsWithDispatcher.js';
 import type { ListUserProjectsWithFavorites } from '../../application/admin/ListUserProjectsWithFavorites.js';
 import type { SetUserProjectFavorite } from '../../application/admin/SetUserProjectFavorite.js';
@@ -23,6 +26,7 @@ type Deps = {
   readonly listAllProjects: ListAllProjects;
   readonly listAllUsers: ListAllUsers;
   readonly updateUser: UpdateUserAsAdmin;
+  readonly deleteUser: DeleteUserAsAdmin;
   readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
   readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
   readonly setUserProjectFavorite: SetUserProjectFavorite;
@@ -140,19 +144,29 @@ export function adminRouter(deps: Deps): Router {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      const body = req.body ?? {};
-      const patch: { displayName?: string; email?: string; isAdmin?: boolean } = {};
-      if (typeof body.displayName === 'string') patch.displayName = body.displayName;
-      if (typeof body.email === 'string') patch.email = body.email;
-      if (typeof body.isAdmin === 'boolean') patch.isAdmin = body.isAdmin;
-      await deps.updateUser.execute(id, patch);
+      const patch = adminUserPatchSchema.parse(req.body);
+      await deps.updateUser.execute(id, patch, req.user!.id);
       res.status(204).end();
     } catch (e) {
       next(e);
     }
   });
 
-  // Админ-выдача тарифа юзеру (фикс +30 дней; free → сброс). ВИП подключается только так.
+  router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params['id'];
+      if (typeof id !== 'string') {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      await deps.deleteUser.execute(id, req.user!.id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Explicit expiry supports custom dates and unlimited grants; old clients retain +30 days.
   router.patch('/users/:id/plan', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params['id'];
@@ -160,12 +174,9 @@ export function adminRouter(deps: Deps): Router {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      const plan = (req.body ?? {}).plan;
-      if (plan !== 'free' && plan !== 'prime' && plan !== 'vip') {
-        res.status(400).json({ error: "plan must be 'free', 'prime' or 'vip'" });
-        return;
-      }
-      await deps.setUserPlanAsAdmin.execute(id, plan);
+      const { plan, subscriptionExpiresAt } = adminPlanSchema.parse(req.body);
+      await deps.setUserPlanAsAdmin.execute(id, plan,
+        subscriptionExpiresAt === undefined ? undefined : subscriptionExpiresAt === null ? null : new Date(subscriptionExpiresAt));
       res.status(204).end();
     } catch (e) {
       next(e);
@@ -247,6 +258,14 @@ export function adminRouter(deps: Deps): Router {
     } catch (e) {
       next(e);
     }
+  });
+
+  router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (!(error instanceof AdminUserError)) return next(error);
+    const status = error.code === 'user_not_found' ? 404
+      : error.code === 'admin_access_revoked' ? 403
+      : error.code === 'email_taken' || error.code === 'cannot_modify_self' ? 409 : 400;
+    res.status(status).json({ error: error.code, message: error.message });
   });
 
   return router;

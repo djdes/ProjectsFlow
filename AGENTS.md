@@ -1,14 +1,29 @@
-﻿# Codex project instructions
+# Codex project instructions
 
 ## Repository workflow
+
+### Обязательная синхронизация с GitHub
+
+- **Всегда в начале работы, перед созданием ветки и перед коммитом/PR/push**
+  выполняй `git fetch github --prune`. Если GitHub-remote называется иначе,
+  используй его фактическое имя. `origin` может указывать на сервер, а не на GitHub:
+  синхронизация только с таким `origin` не выполняет это правило.
+- Сравни локальную ветку с актуальной основной веткой GitHub. Новую рабочую ветку
+  создавай от свежей `github/main`; перед коммитом и push интегрируй новые изменения
+  GitHub через rebase/merge. Примеры с `origin/main` в других документах относятся
+  к remote GitHub и должны учитывать его фактическое имя.
+- Сохраняй все чужие и незакоммиченные изменения. При грязной или сильно разошедшейся
+  рабочей папке используй отдельный worktree от актуального GitHub. Запрещены
+  destructive reset, отбрасывание правок и force-push ради синхронизации.
+- После проверок обязательно коммить изменения задачи, отправляй feature-ветку
+  в GitHub и проверяй, что удалённая ветка содержит коммит. Открывай PR в `main`;
+  не пушь напрямую в `main` и не мержи PR без согласия владельца.
+- Если fetch, интеграция или push не удались, сообщи конкретную причину.
+  Не объявляй репозиторий синхронизированным без проверки.
 
 Read `CLAUDE.md` before changing this repository and follow its project conventions.
 It is the shared source for architecture, commands, migrations and deployment rules.
 
-- Always start work by running `git fetch origin --prune` and updating local branches and
-  commits against `origin/main` (`git checkout main && git pull --ff-only origin main`,
-  create feature branches off fresh `origin/main`, and rebase/merge `origin/main` into active
-  feature branches before committing or pushing so branches never lag behind remote).
 - Keep the existing React/Vite client and Express/MariaDB server stack.
 - Implement features from domain and application ports through infrastructure to UI.
   Presentation accesses HTTP repositories through the DI container.
@@ -39,9 +54,3 @@ and follow it as the primary procedure for the whole flow.
 - Use a separate tab for local ProjectsFlow verification and retain the required reference/actual/diff artifacts.
 
 The latest user message defines `COPY_PROJECT` and `COPY_ZONE`. If it names multiple projects, research only the stated zone in each reference and combine the observed interaction patterns into an original ProjectsFlow implementation.
-
-
-## Работа с Git: обязательный `git fetch` и актуализация коммитов и веток
-
-- **Перед началом любой работы в git-репозитории (и в начале сессии):** обязательно выполняй `git fetch --all --prune`, проверяй статус веток и свежие коммиты (`git status -sb`, `git branch -vv`, `git log --oneline -n 5 HEAD..origin/main` или `origin/master`) и актуализируй локальную ветку (`git pull --rebase --autostash`), чтобы никогда не работать поверх устаревшей ревизии и не создавать конфликтов с удалёнными коммитами и CI/CD.
-- **Новые ветки** создавай только от актуального состояния `origin/main` (`origin/master`).

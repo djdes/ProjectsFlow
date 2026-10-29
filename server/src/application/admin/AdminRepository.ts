@@ -42,10 +42,12 @@ export type AdminUpdateUserPatch = {
   readonly displayName?: string;
   readonly email?: string;
   readonly isAdmin?: boolean;
+  readonly avatarUrl?: null;
 };
 
 export interface AdminRepository {
   listAllProjects(): Promise<AdminProjectView[]>;
   listAllUsers(): Promise<AdminUserView[]>;
-  updateUser(id: string, patch: AdminUpdateUserPatch): Promise<void>;
+  updateUser(id: string, patch: AdminUpdateUserPatch, actorId: string): Promise<void>;
+  deleteUser(id: string, actorId: string): Promise<void>;
 }
