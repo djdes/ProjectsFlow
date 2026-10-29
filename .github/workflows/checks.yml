@@ -34,6 +34,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Global task overview and workspace navigation tests
+        working-directory: client
+        run: node --import tsx --test src/application/task/ListWorkspaceTasks.test.ts src/infrastructure/http/HttpTaskAssigneeRepository.workspace.test.ts src/presentation/pages/WorkspaceTaskNavigation.behavior.test.ts
+
       - name: Worker chat and AI composer tests
         working-directory: client
         run: node --import tsx --test src/presentation/components/tasks/workerChat.behavior.test.ts src/presentation/components/tasks/CancelWorkButton.behavior.test.ts src/domain/live/fileEditPayload.test.ts src/presentation/components/experience/PlatformUpdateNotice.behavior.test.ts src/presentation/components/tasks/CommentAcknowledgement.behavior.test.ts src/presentation/hooks/AwaitingReplyProvider.behavior.test.ts src/infrastructure/http/HttpTaskRepository.acknowledgement.test.ts src/presentation/components/ai/AiComposer.behavior.test.ts src/presentation/hooks/useNotificationStream.behavior.test.ts src/presentation/hooks/CompletedTodayProvider.behavior.test.ts src/lib/notificationTaskTarget.test.ts

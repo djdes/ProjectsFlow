@@ -48,6 +48,10 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
     return this.fetchAssignedList('/assignees/others');
   }
 
+  async listOthersInWorkspace(workspaceId: string): Promise<AssignedTask[]> {
+    return this.fetchAssignedList('/assignees/others', workspaceId);
+  }
+
   async listColleaguesPersonal(): Promise<AssignedTask[]> {
     return this.fetchAssignedList('/assignees/personal');
   }

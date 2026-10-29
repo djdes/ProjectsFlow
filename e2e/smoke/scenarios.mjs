@@ -360,8 +360,8 @@ export const scenarios = [
       const { page, state } = t;
       await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
       await checkDarkTheme(t);
-      await t.check('заголовок «Все входящие»', () =>
-        t.visible(page.getByRole('heading', { name: 'Все входящие', level: 1 }), 'h1 «Все входящие»'),
+      await t.check('заголовок «Задачи пространства»', () =>
+        t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
       );
       await t.check('«В работе»: полки «На утверждении» и «Вручную» с карточками', async () => {
         const now = page.locator(NOW);
@@ -593,8 +593,8 @@ export const scenarios = [
         readyName: 'карточки «Входящих» видны',
       });
       await checkDarkTheme(t);
-      await t.check('заголовок «Все входящие»', () =>
-        t.visible(page.getByRole('heading', { name: 'Все входящие', level: 1 }), 'h1 «Все входящие»'),
+      await t.check('заголовок «Задачи пространства»', () =>
+        t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
       );
       await t.pageChecks('Входящие');
 
@@ -1122,7 +1122,7 @@ export const scenarios = [
       for (const [label, path, ready] of [
         ['ИИ', '/ai', () => page.getByRole('heading', { name: 'ProjectsFlow ИИ', level: 1 })],
         ['Профиль', '/profile', () => page.getByText('Личные данные', { exact: true })],
-        ['Входящие', '/', () => page.getByRole('heading', { name: 'Все входящие', level: 1 })],
+        ['Входящие', '/', () => page.getByRole('heading', { name: 'Задачи пространства', level: 1 })],
       ]) {
         await t.check(`нижняя панель: «${label}» открывает ${path}`, async () => {
           const button = nav.getByRole('button', { name: label, exact: true });

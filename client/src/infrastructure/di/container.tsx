@@ -9,6 +9,7 @@ import { HttpKbRepository } from "@/infrastructure/http/HttpKbRepository";
 import { HttpSecretsRepository } from "@/infrastructure/http/HttpSecretsRepository";
 import { HttpTaskRepository } from "@/infrastructure/http/HttpTaskRepository";
 import { HttpTaskAssigneeRepository } from "@/infrastructure/http/HttpTaskAssigneeRepository";
+import { ListWorkspaceTasks } from '@/application/task/ListWorkspaceTasks';
 import { HttpStatsRepository } from "@/infrastructure/http/HttpStatsRepository";
 import { HttpDigestSettingsRepository } from "@/infrastructure/http/HttpDigestSettingsRepository";
 import { HttpTaskSearchRepository } from "@/infrastructure/http/HttpTaskSearchRepository";
@@ -129,6 +130,7 @@ type Container = {
   secretsRepository: SecretsRepository;
   taskRepository: TaskRepository;
   taskAssigneeRepository: TaskAssigneeRepository;
+  listWorkspaceTasks: ListWorkspaceTasks;
   statsRepository: StatsRepository;
   digestSettingsRepository: DigestSettingsRepository;
   inviteRepository: InviteRepository;
@@ -236,6 +238,7 @@ function buildContainer(): Container {
     secretsRepository: secretsRepo,
     taskRepository: taskRepo,
     taskAssigneeRepository: taskAssigneeRepo,
+    listWorkspaceTasks: new ListWorkspaceTasks(taskAssigneeRepo),
     statsRepository: statsRepo,
     digestSettingsRepository: digestSettingsRepo,
     inviteRepository: inviteRepo,

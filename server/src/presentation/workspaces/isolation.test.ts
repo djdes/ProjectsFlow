@@ -155,9 +155,22 @@ test('HTTP: default and team inboxes, assignments and personal tasks never cross
   }
 });
 
+test('HTTP: global task reads do not change the workspace used by the home view', async (t) => {
+  const h = await harness(t);
+  h.setActive('a');
+  await Promise.all(['a', 'b'].flatMap((workspaceId) => ['/assignees/mine', '/assignees/others'].map(async (path) => {
+    const response = await h.request(path, workspaceId);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.ok(body.items.every((item: { projectId: string }) => item.projectId.endsWith(`-${workspaceId}`)));
+  })));
+  const home = await (await h.request('/inbox')).json();
+  assert.equal(home.project.id, 'inbox-a');
+});
+
 test('HTTP: forged workspace and stale member selection are denied without returning tasks', async (t) => {
   const h = await harness(t);
-  for (const path of ['/assignees/mine', '/inbox', '/notifications']) {
+  for (const path of ['/assignees/mine', '/assignees/others', '/inbox', '/notifications']) {
     assert.equal((await h.request(path, 'private')).status, 404);
   }
   assert.equal((await h.request('/assignees/member/member-b', 'a')).status, 404);

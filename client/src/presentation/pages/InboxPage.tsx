@@ -11,7 +11,6 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import type { Task } from '@/domain/task/Task';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
-import { OtherWorkspaceInboxes } from '@/presentation/components/tasks/OtherWorkspaceInboxes';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 
@@ -22,9 +21,8 @@ function loadHideDone(): boolean {
   return window.localStorage.getItem(HIDE_DONE_STORAGE_KEY) === '1';
 }
 
-// «Все входящие» — блоки по пространствам сверху вниз. Первый — полные входящие текущего
-// пространства (канбан с drag-drop по статусам; сортировку/группировку выбирают в
-// «Сортировке»). Под ним — компактные блоки остальных пространств (OtherWorkspaceInboxes).
+// The home button opens the selected workspace's working board.
+// The globe opens AllWorkspaceTasksPage without changing the selected workspace.
 // Личные задачи живут в обычном проекте с флагом isInbox=true; сервер создаёт его лениво
 // при первом GET /api/inbox.
 export function InboxPage(): React.ReactElement {
@@ -113,7 +111,7 @@ export function InboxPage(): React.ReactElement {
     // проекта). Тогда закреплённый снизу горизонтальный скролл-бар доски (SyncedStickyScrollbar)
     // прилипает к низу вьюпорта так же, как на проектах, — а не к внутреннему скролл-порту.
     <div className="flex min-h-full flex-col">
-      {/* Шапка страницы (дизайн C4): крошки «<Пространство> ▾ › Все входящие» и счётчик
+      {/* Шапка страницы: выбранное пространство и счётчик
           «сделано сегодня», линия снизу. На мобиле — своя шапка приложения. */}
       <PageTopBar className="hidden sm:flex" end={<HeaderCompletedTodayPill />}>
         <InboxBreadcrumbs />
@@ -121,9 +119,9 @@ export function InboxPage(): React.ReactElement {
 
       {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
           ответственных текущего пространства: название пространства, вкладки, люди и поиск
-          он ставит в одну строку сам. Ниже — блоки других пространств. */}
+          он ставит в одну строку сам. */}
       <div className="flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
-        <PageTitle>Все входящие</PageTitle>
+        <PageTitle>Задачи пространства</PageTitle>
         <AssignedToMeBlock
           boardTasks={boardTasks}
           inboxProjectId={project.id}
@@ -151,7 +149,6 @@ export function InboxPage(): React.ReactElement {
           selectionActive={selectionActive}
           onSelectionActiveChange={setSelectionActive}
         />
-        <OtherWorkspaceInboxes />
       </div>
     </div>
   );
