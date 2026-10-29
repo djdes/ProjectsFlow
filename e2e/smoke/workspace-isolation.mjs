@@ -135,7 +135,7 @@ export const workspaceIsolationScenarios = [
       await t.screenshot('all-inboxes');
       await t.step('карточка открывает обычное окно задачи без смены выбранного пространства', async () => {
         if (t.isMobile) await other.locator(section('queue')).click();
-        await other.locator('[data-pf-task-id="queue-ws-other"]').click();
+        await other.locator('[data-pf-task-id="queue-ws-other"]').getByText('Очередь ws-other', { exact: true }).click();
         await t.visible(t.page.getByRole('dialog').last(), 'обычное окно задачи');
         t.assert((t.state.activeWorkspaceId ?? WORKSPACE_ID) === selectedBefore, 'открытие карточки сменило выбранное пространство');
         await t.visible(t.page.getByText('Очередь ws-other', { exact: true }).filter({ visible: true }).first(), 'задача другой команды открыта');

@@ -24,7 +24,7 @@ export function AllWorkspaceTasksPage(): React.ReactElement {
       <div className="flex flex-1 flex-col gap-6 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
         <div className="space-y-1">
           <PageTitle>Все задачи</PageTitle>
-          <p className="text-sm text-muted-foreground">Мои задачи из всех пространств. Задачи коллег — во вкладке «Другим».</p>
+          <p className="text-sm text-muted-foreground">Мои задачи из всех пространств. Общие задачи и задачи коллег — во вкладке «Все».</p>
         </div>
         {error && <p role="alert" className="text-sm text-destructive">Не удалось обновить список пространств.</p>}
         {workspaces.length === 0 && <p className="text-sm text-muted-foreground">Нет доступных пространств.</p>}
