@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { users, type UserRow } from '../db/schema.js';
 import type { User, UserWithSecrets } from '../../domain/user/User.js';
@@ -38,7 +38,7 @@ export class DrizzleUserRepository implements UserRepository {
   constructor(private readonly db: Database) {}
 
   async getById(id: string): Promise<User | null> {
-    const rows = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
+    const rows = await this.db.select().from(users).where(and(eq(users.id, id), isNull(users.deletedAt))).limit(1);
     const row = rows[0];
     return row ? toUser(row) : null;
   }
@@ -47,7 +47,7 @@ export class DrizzleUserRepository implements UserRepository {
     const rows = await this.db
       .select()
       .from(users)
-      .where(eq(users.email, email.toLowerCase()))
+      .where(and(eq(users.email, email.toLowerCase()), isNull(users.deletedAt)))
       .limit(1);
     const row = rows[0];
     return row ? toUserWithSecrets(row) : null;
@@ -96,12 +96,12 @@ export class DrizzleUserRepository implements UserRepository {
     const rows = await this.db
       .select()
       .from(users)
-      .where(inArray(users.id, [...ids]));
+      .where(and(inArray(users.id, [...ids]), isNull(users.deletedAt)));
     return rows.map(toUser);
   }
 
   async listAdmins(): Promise<User[]> {
-    const rows = await this.db.select().from(users).where(eq(users.isAdmin, true));
+    const rows = await this.db.select().from(users).where(and(eq(users.isAdmin, true), isNull(users.deletedAt)));
     return rows.map(toUser);
   }
 
@@ -287,7 +287,7 @@ export class DrizzleUserRepository implements UserRepository {
         expiresAt: users.subscriptionExpiresAt,
       })
       .from(users)
-      .where(eq(users.id, userId))
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
       .limit(1);
     const r = rows[0];
     if (!r) return null;
@@ -303,7 +303,7 @@ export class DrizzleUserRepository implements UserRepository {
     await this.db
       .update(users)
       .set({ plan, subscriptionStartedAt: startedAt, subscriptionExpiresAt: expiresAt })
-      .where(eq(users.id, userId));
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)));
   }
 
   async getPrimeTrialUsedAt(userId: string): Promise<Date | null> {

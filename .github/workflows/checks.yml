@@ -37,6 +37,9 @@ jobs:
       - name: Global task overview and workspace navigation tests
         working-directory: client
         run: node --import tsx --test src/application/task/ListWorkspaceTasks.test.ts src/infrastructure/http/HttpTaskAssigneeRepository.workspace.test.ts src/presentation/pages/WorkspaceTaskNavigation.behavior.test.ts
+      - name: Admin user management forms
+        working-directory: client
+        run: node --import tsx --test src/presentation/components/admin/AdminUserDialogs.behavior.test.ts
 
       - name: Worker chat and AI composer tests
         working-directory: client

@@ -9,29 +9,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { AdminProject, AdminSupportTicket, AdminUser, EmailTemplateMeta, EmailPreview } from '@/application/admin/AdminRepository';
 import { relativeTime } from '@/lib/relativeTime';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import type { PlanId } from '@/domain/usage/Usage';
 import { planNameRu } from '@/presentation/usage/usageFormat';
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 import { AdminLlmPanel } from '@/presentation/components/admin/AdminLlmPanel';
+import { EditUserDialog, UserPlanDialog, DeleteUserDialog } from '@/presentation/components/admin/AdminUserDialogs';
+import { useAuth } from '@/presentation/auth/AuthProvider';
 import { EmptyPanel } from '@/presentation/pages/PageScaffold';
 import { SectionPage } from '@/presentation/pages/SectionPage';
 
@@ -357,8 +345,12 @@ function EditableProjectRepo({
 
 function UsersTab(): React.ReactElement {
   const { adminRepository } = useContainer();
+  const { user: currentUser, applyUserUpdate } = useAuth();
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [planUser, setPlanUser] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState<AdminUser | null>(null);
+  const [busy, setBusy] = useState(false);
   const [dispatchersUser, setDispatchersUser] = useState<AdminUser | null>(null);
 
   const reload = (): void => {
@@ -371,29 +363,15 @@ function UsersTab(): React.ReactElement {
   useEffect(reload, [adminRepository]);
 
   const toggleAdmin = async (u: AdminUser): Promise<void> => {
+    if (busy || u.id === currentUser?.id) return;
+    setBusy(true);
     try {
       await adminRepository.updateUser(u.id, { isAdmin: !u.isAdmin });
       toast.success(u.isAdmin ? 'Права админа сняты' : 'Назначен админом');
       reload();
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
-    }
-  };
-
-  // Админ-выдача тарифа (фикс 30 дней; free → сброс). Так подключается ВИП (не self-serve).
-  const changeUserPlan = async (u: AdminUser, plan: PlanId): Promise<void> => {
-    if (plan === u.plan) return;
-    try {
-      await adminRepository.setUserPlan(u.id, plan);
-      toast.success(
-        plan === 'free'
-          ? `Тариф снят у ${u.displayName}`
-          : `Тариф «${planNameRu(plan)}» выдан ${u.displayName} на 30 дней`,
-      );
-      reload();
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    }
+    } finally { setBusy(false); }
   };
 
   if (!users) return <ListSkeleton />;
@@ -420,8 +398,8 @@ function UsersTab(): React.ReactElement {
                     <span className="pf-tag pf-tone-yellow shrink-0 text-2xs font-medium">
                       {planNameRu(u.plan)}
                       {u.subscriptionExpiresAt
-                        ? ` до ${new Date(u.subscriptionExpiresAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
-                        : ''}
+                        ? ` до ${new Date(u.subscriptionExpiresAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                        : ' · бессрочно'}
                     </span>
                   )}
                 </p>
@@ -473,29 +451,16 @@ function UsersTab(): React.ReactElement {
               <Button size="sm" variant="outline" onClick={() => setEditing(u)}>
                 Изменить
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" title="Выдать/сменить тариф (фикс 30 дней)">
-                    <CreditCard className="size-4" />
-                    Тариф
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {(['free', 'prime', 'vip'] as PlanId[]).map((pl) => (
-                    <DropdownMenuItem
-                      key={pl}
-                      disabled={pl === u.plan}
-                      onClick={() => void changeUserPlan(u, pl)}
-                    >
-                      {planNameRu(pl)}
-                      {pl === u.plan && <Check className="ms-auto size-3.5" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button size="sm" variant="ghost" onClick={() => void toggleAdmin(u)}>
+              <Button size="sm" variant="outline" onClick={() => setPlanUser(u)}>
+                <CreditCard className="size-4" /> Тариф и срок
+              </Button>
+              <Button size="sm" variant="ghost" disabled={busy || u.id === currentUser?.id} onClick={() => void toggleAdmin(u)}
+                title={u.id === currentUser?.id ? 'Нельзя снять права администратора у себя' : undefined}>
                 {u.isAdmin ? 'Снять админа' : 'Сделать админом'}
               </Button>
+              <Button size="sm" variant="ghost" className="text-destructive" disabled={u.id === currentUser?.id}
+                title={u.id === currentUser?.id ? 'Нельзя удалить свою учётную запись' : undefined}
+                onClick={() => setDeleting(u)}>Удалить</Button>
             </div>
           </li>
         ))}
@@ -505,12 +470,20 @@ function UsersTab(): React.ReactElement {
         <EditUserDialog
           user={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
+          onSaved={(patch) => {
+            if (currentUser?.id === editing.id) applyUserUpdate({ ...currentUser, ...patch });
             setEditing(null);
             reload();
           }}
         />
       )}
+
+      {planUser && <UserPlanDialog user={planUser} onClose={() => setPlanUser(null)} onSaved={() => { setPlanUser(null); reload(); }} />}
+      {deleting && <DeleteUserDialog user={deleting} onClose={() => setDeleting(null)} onSaved={() => {
+        setUsers((previous) => previous?.filter((user) => user.id !== deleting.id) ?? null);
+        setDeleting(null);
+        reload();
+      }} />}
 
       {dispatchersUser && (
         <AdminUserDispatchersDialog
@@ -520,71 +493,6 @@ function UsersTab(): React.ReactElement {
       )}
 
     </>
-  );
-}
-
-function EditUserDialog({
-  user,
-  onClose,
-  onSaved,
-}: {
-  user: AdminUser;
-  onClose: () => void;
-  onSaved: () => void;
-}): React.ReactElement {
-  const { adminRepository } = useContainer();
-  const [displayName, setDisplayName] = useState(user.displayName);
-  const [email, setEmail] = useState(user.email);
-  const [saving, setSaving] = useState(false);
-
-  const save = async (): Promise<void> => {
-    setSaving(true);
-    try {
-      await adminRepository.updateUser(user.id, { displayName, email });
-      toast.success('Пользователь обновлён');
-      onSaved();
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Редактировать пользователя</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="admin-edit-name">Имя</Label>
-            <Input
-              id="admin-edit-name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="admin-edit-email">Email</Label>
-            <Input
-              id="admin-edit-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>
-            Отмена
-          </Button>
-          <Button onClick={() => void save()} disabled={saving}>
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
