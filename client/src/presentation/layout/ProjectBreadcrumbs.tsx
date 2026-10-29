@@ -201,7 +201,9 @@ export function ProjectBreadcrumbs({
           onMouseLeave={projectsMenu.closeSoon}
         >
           <FolderOpen className="size-3.5 shrink-0" />
-          <span>Проекты</span>
+          {/* На странице задачи справа ещё кластер кнопок: пока строке тесно, «Проекты» —
+              только значком, иначе название задачи сжималось до нулевой ширины. */}
+          <span className={cn(task && 'sr-only lg:not-sr-only')}>Проекты</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
@@ -294,13 +296,26 @@ export function ProjectBreadcrumbs({
       {/* Сегмент проекта — дропдаун с видами (Доска / Обзор / База знаний / …). */}
       <DropdownMenu open={viewsMenu.open} onOpenChange={viewsMenu.setOpen} modal={false}>
         <DropdownMenuTrigger
-          className={cn(segmentClass(view === 'board' && !task), 'min-w-0')}
+          className={cn(
+            segmentClass(view === 'board' && !task),
+            // На странице задачи сегмент не сжимается: при нулевой ширине значок проекта
+            // вылезал из него и наезжал на стрелки соседей. Тесно — имя прячется (ниже).
+            task ? 'shrink-0' : 'min-w-0',
+          )}
+          title={task ? projectName : undefined}
           onMouseEnter={viewsMenu.openNow}
           onMouseLeave={viewsMenu.closeSoon}
         >
           <ProjectChip name={projectName} icon={projectIcon} />
           {/* Длинное имя проекта обрезаем многоточием, чтобы крошки не растягивали хедер. */}
-          <span className="min-w-0 max-w-[9rem] truncate sm:max-w-[14rem]">{projectName}</span>
+          <span
+            className={cn(
+              'min-w-0 max-w-[9rem] truncate sm:max-w-[14rem]',
+              task && 'hidden xl:block',
+            )}
+          >
+            {projectName}
+          </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
@@ -324,11 +339,12 @@ export function ProjectBreadcrumbs({
           <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
           <DropdownMenu open={taskMenu.open} onOpenChange={taskMenu.setOpen} modal={false}>
             <DropdownMenuTrigger
-              className={cn(segmentClass(true), 'min-w-0')}
+              className={cn(segmentClass(true), 'min-w-12')}
+              title={task.title}
               onMouseEnter={taskMenu.openNow}
               onMouseLeave={taskMenu.closeSoon}
             >
-              <span className="min-w-0 max-w-[7rem] truncate sm:max-w-[12rem]">{task.title}</span>
+              <span className="min-w-0 max-w-[12rem] truncate">{task.title}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"

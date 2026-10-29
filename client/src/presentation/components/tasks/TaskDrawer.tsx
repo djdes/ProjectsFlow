@@ -1685,8 +1685,9 @@ export function TaskDrawer({
         }}
       >
         <Link2 className="size-4" />
-        {/* На телефонах — только иконка: вместе с парой пилюль текст не влезает. */}
-        <span className="hidden text-sm sm:inline">Копировать ссылку</span>
+        {/* До xl — только иконка: на странице задачи подпись отнимала место у крошек,
+            и название задачи в них не помещалось даже на планшете. */}
+        <span className="hidden text-sm xl:inline">Копировать ссылку</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

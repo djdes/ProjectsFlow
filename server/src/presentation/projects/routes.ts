@@ -832,6 +832,13 @@ export function projectsRouter(deps: Deps): Router {
   });
 
   router.post('/:id/views', async (req: Request, res: Response, next: NextFunction) => {
+    // Тот же путь у записи просмотра проекта (projectAnalyticsRouter, пустое тело). Этот
+    // роутер смонтирован раньше и отвечал ей 400 — «Просмотры» в аналитике всегда были 0.
+    // Без имени вью это не создание вью: пропускаем запрос дальше.
+    if (!req.body || typeof req.body !== 'object' || !('name' in req.body)) {
+      next();
+      return;
+    }
     try {
       const id = req.params.id;
       if (typeof id !== 'string') throw new ProjectNotFoundError();
