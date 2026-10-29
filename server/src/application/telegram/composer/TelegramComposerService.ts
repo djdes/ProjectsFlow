@@ -1904,16 +1904,13 @@ export class TelegramComposerService {
     return [`🗂 ${label}: <b>не выбрано</b> — не понял, куда положить. Выбери кнопкой ниже.`];
   }
 
-  // Кнопки пространства для карточки: пока не выбрано — сами варианты (одно нажатие); после
-  // выбора — «🗂 Пространство», чтобы передумать.
+  // Ask only when unresolved; a decided workspace can be changed in the created task.
   private workspaceRows(
     draft: TelegramTaskDraft,
     view: WorkspaceView,
   ): { text: string; callback_data: string }[][] {
-    if (view.mode === 'off' || !view.multiple) return [];
-    if (view.mode === 'pending') return this.workspaceOptionRows(draft, view);
-    if (view.options.length < 2) return [];
-    return [[{ text: '🗂 Пространство', callback_data: `ws:${draft.id}:?` }]];
+    return view.mode === 'pending' && view.multiple
+      ? this.workspaceOptionRows(draft, view) : [];
   }
 
   // Подвал карточки: когда создам сам. Пока пространство не выбрано — честно куда.
@@ -2251,8 +2248,10 @@ export class TelegramComposerService {
           const allowed = await Promise.all(choices.map((p) => this.deps.workspaces!.isMember(p.workspaceId, assigneeUserId)));
           choices = choices.filter((_p, idx) => allowed[idx]);
         }
-        project = choices.length === 1 ? choices[0]! : null;
-        if (choices.length !== 1) projectChoices = await this.offeredProjects(creatorUserId, choices);
+        // Trust the model's explicit project when it remains accessible to the assignee.
+        project = choices.find((candidate) => candidate.id === s.projectId)
+          ?? (choices.length === 1 ? choices[0]! : null);
+        if (!project) projectChoices = await this.offeredProjects(creatorUserId, choices);
       }
       const projectId = hintProjectId ?? project?.id ?? null;
       out.push({

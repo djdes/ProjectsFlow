@@ -2142,8 +2142,8 @@ test('пространство: два и подсказок нет — кноп
   assert.equal(chosen.workspacePending, false);
   assert.deepEqual(h.savedChoices, [{ chatId: 500, userId: 'u1', workspaceId: 'w-team' }]);
   assert.match(lastCard(h).text, /Пространство: <b>Команда<\/b>/);
-  // После выбора — кнопка «🗂 Пространство», чтобы передумать.
-  assert.ok(buttonData(lastCard(h).replyMarkup).includes(`ws:${draftId}:?`));
+  // A resolved workspace needs no further selection buttons.
+  assert.ok(!buttonData(lastCard(h).replyMarkup).some((data) => data.startsWith('ws:')));
 
   await h.service.handleCallback(cq(`tc:${draftId}`));
   assert.equal(h.createTaskCalls.length, 1);
@@ -2263,7 +2263,7 @@ test('пространство: AI-сегмент без проекта — то
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-me');
 });
 
-test('пространство: пикер «🗂 Пространство» и «Назад» возвращают карточку', async () => {
+test('пространство: решённый выбор не предлагает дополнительных кнопок', async () => {
   const h = makeHarness({
     workspaces: {
       list: [SPACE_ME, SPACE_TEAM],
@@ -2272,11 +2272,8 @@ test('пространство: пикер «🗂 Пространство» и 
   });
   await h.service.startFromMessage(111, 500, 'Купить кофе');
   const draftId = [...h.drafts.keys()][0]!;
-  await h.service.handleCallback(cq(`ws:${draftId}:?`));
-  assert.match(lastCard(h).text, /В какое пространство/);
-  assert.ok(buttonTexts(lastCard(h).replyMarkup).some((t) => t.startsWith('✓ ') && t.includes('Личное')));
-  await h.service.handleCallback(cq(`ws:${draftId}:b`));
-  assert.match(lastCard(h).text, /Новая задача/);
+  assert.equal(h.drafts.get(draftId)!.workspaceId, 'w-me');
+  assert.ok(!buttonData(lastCard(h).replyMarkup).some((data) => data.startsWith('ws:')));
 });
 
 test('пространство: чужое пространство в кнопке отвергается', async () => {
@@ -2360,25 +2357,39 @@ test('поручение: общий личный хаб и команда тр�
   assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
 });
 
-test('AI: валидный id одноимённого проекта не позволяет модели выбрать пространство за автора', async () => {
+test('AI: выбранные проекты разных пространств принимаются без уточнения', async () => {
   const h = makeHarness({
     projects: [{ id: 'p-team', name: 'Сайт', workspaceId: 'w-team' }, { id: 'p-studio', name: 'Сайт', workspaceId: 'w-studio' }],
     workspaces: { list: [SPACE_TEAM, SPACE_STUDIO] },
-    aiSegments: [seg1({ projectId: 'p-team', projectName: 'Сайт' })],
+    aiSegments: [seg1({ projectId: 'p-team', projectName: 'Сайт' }), seg1({ projectId: 'p-studio', projectName: 'Сайт' })],
+  });
+  await h.service.startFromMessage(111, 500, 'На сайтах исправить меню');
+  const draftId = [...h.drafts.keys()][0]!;
+  const segments = h.drafts.get(draftId)!.segments!;
+  assert.deepEqual(segments.map((s) => s.projectId), ['p-team', 'p-studio']);
+  assert.ok(segments.every((s) => s.projectChoices === undefined));
+  assert.ok(!buttonData(lastCard(h).replyMarkup).some((data) => data.startsWith('ws:')));
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.deepEqual(h.createTaskCalls.map((call) => call.projectId), ['p-team', 'p-studio']);
+});
+
+test('AI: без определённого проекта одноимённые варианты требуют уточнения', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p-team', name: 'Сайт', workspaceId: 'w-team' }, { id: 'p-studio', name: 'Сайт', workspaceId: 'w-studio' }],
+    workspaces: { list: [SPACE_TEAM, SPACE_STUDIO] },
+    aiSegments: [seg1({ projectId: null, projectName: 'Сайт' })],
   });
   await h.service.startFromMessage(111, 500, 'На сайте исправить меню');
   const draftId = [...h.drafts.keys()][0]!;
-  const draft = h.drafts.get(draftId)!;
-  assert.equal(draft.segments![0]!.projectId, null);
-  assert.deepEqual(draft.segments![0]!.projectChoices?.map((p) => p.id), ['p-team', 'p-studio']);
-  assert.ok(buttonTexts(lastCard(h).replyMarkup).includes('Сайт · Студия'));
+  assert.equal(h.drafts.get(draftId)!.segments![0]!.projectId, null);
+  assert.equal(h.drafts.get(draftId)!.segments![0]!.projectChoices?.length, 2);
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls.length, 0);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1000) });
   await h.service.processDueAutoCreate();
   assert.equal(h.createTaskCalls.length, 0);
   await h.service.handleCallback(cq(`ap:${draftId}:0:1`));
-  assert.ok(h.drafts.get(draftId)!.autoCreateAt, 'выбор проекта снова запускает таймер после ожидания');
+  assert.ok(h.drafts.get(draftId)!.autoCreateAt);
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls[0]!.projectId, 'p-studio');
 });
