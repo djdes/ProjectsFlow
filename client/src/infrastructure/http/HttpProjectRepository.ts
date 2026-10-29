@@ -165,8 +165,10 @@ function memberFromDto(dto: MemberDto): ProjectMember {
 }
 
 export class HttpProjectRepository implements ProjectRepository {
+  constructor(private readonly client: typeof httpClient = httpClient) {}
+
   async list(): Promise<Project[]> {
-    const { projects } = await httpClient.get<{ projects: ProjectDto[] }>(
+    const { projects } = await this.client.get<{ projects: ProjectDto[] }>(
       "/projects",
     );
     return projects.map(fromDto);
@@ -174,7 +176,7 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async getById(id: string): Promise<Project | null> {
     try {
-      const { project } = await httpClient.get<{ project: ProjectDto }>(
+      const { project } = await this.client.get<{ project: ProjectDto }>(
         `/projects/${id}`,
       );
       return fromDto(project);
@@ -185,13 +187,13 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async getInbox(): Promise<Project> {
-    const { project } = await httpClient.get<{ project: ProjectDto }>("/inbox");
+    const { project } = await this.client.get<{ project: ProjectDto }>("/inbox");
     return fromDto(project);
   }
 
   async create(input: CreateProjectInput): Promise<Project> {
     try {
-      const { project } = await httpClient.post<{ project: ProjectDto }>(
+      const { project } = await this.client.post<{ project: ProjectDto }>(
         "/projects",
         {
           name: input.name,
@@ -208,7 +210,7 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async update(id: string, patch: UpdateProjectInput): Promise<Project> {
     try {
-      const { project } = await httpClient.patch<{ project: ProjectDto }>(
+      const { project } = await this.client.patch<{ project: ProjectDto }>(
         `/projects/${id}`,
         patch,
       );
@@ -270,13 +272,13 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await httpClient.delete<void>(`/projects/${id}`);
+    await this.client.delete<void>(`/projects/${id}`);
   }
 
   async listDispatcherCandidates(
     projectId: string,
   ): Promise<DispatcherCandidate[]> {
-    const { candidates } = await httpClient.get<{
+    const { candidates } = await this.client.get<{
       candidates: DispatcherCandidate[];
     }>(`/projects/${projectId}/dispatcher-candidates`);
     return candidates;
@@ -286,7 +288,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     userId: string | null,
   ): Promise<Project> {
-    const { project } = await httpClient.put<{ project: ProjectDto }>(
+    const { project } = await this.client.put<{ project: ProjectDto }>(
       `/projects/${projectId}/dispatcher`,
       { userId },
     );
@@ -296,7 +298,7 @@ export class HttpProjectRepository implements ProjectRepository {
   async getProjectWorkerOverview(
     projectId: string,
   ): Promise<ProjectWorkerOverview> {
-    return httpClient.get<ProjectWorkerOverview>(
+    return this.client.get<ProjectWorkerOverview>(
       `/projects/${projectId}/worker-overview`,
     );
   }
@@ -305,7 +307,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     enabled: boolean,
   ): Promise<Project> {
-    const { project } = await httpClient.put<{ project: ProjectDto }>(
+    const { project } = await this.client.put<{ project: ProjectDto }>(
       `/projects/${projectId}/multi-task-worker`,
       { enabled },
     );
@@ -313,17 +315,17 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async publish(projectId: string): Promise<{ slug: string; url: string }> {
-    return httpClient.post<{ slug: string; url: string }>(
+    return this.client.post<{ slug: string; url: string }>(
       `/projects/${projectId}/publish`,
     );
   }
 
   async unpublish(projectId: string): Promise<void> {
-    await httpClient.delete<void>(`/projects/${projectId}/publish`);
+    await this.client.delete<void>(`/projects/${projectId}/publish`);
   }
 
   async setPublicIndexing(projectId: string, indexing: boolean): Promise<void> {
-    await httpClient.patch<void>(`/projects/${projectId}/publish`, {
+    await this.client.patch<void>(`/projects/${projectId}/publish`, {
       indexing,
     });
   }
@@ -332,13 +334,13 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     appearance: PublicAppearance,
   ): Promise<void> {
-    await httpClient.patch<void>(`/projects/${projectId}/public-appearance`, {
+    await this.client.patch<void>(`/projects/${projectId}/public-appearance`, {
       appearance,
     });
   }
 
   async ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }> {
-    return httpClient.post<{ appRepoFullName: string }>(
+    return this.client.post<{ appRepoFullName: string }>(
       `/projects/${projectId}/app-repo`,
     );
   }
@@ -347,26 +349,26 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     input: { name: string; privateRepo: boolean },
   ): Promise<{ fullName: string; gitRepoUrl: string }> {
-    return httpClient.post<{ fullName: string; gitRepoUrl: string }>(
+    return this.client.post<{ fullName: string; gitRepoUrl: string }>(
       `/projects/${projectId}/repo`,
       input,
     );
   }
 
   async getProjectSite(projectId: string): Promise<ProjectSite> {
-    return httpClient.get<ProjectSite>(`/projects/${projectId}/site`);
+    return this.client.get<ProjectSite>(`/projects/${projectId}/site`);
   }
 
   async convertProjectToPlatformBackend(projectId: string): Promise<ConversionTaskResult> {
-    return httpClient.post<ConversionTaskResult>(`/projects/${projectId}/site/convert`, {});
+    return this.client.post<ConversionTaskResult>(`/projects/${projectId}/site/convert`, {});
   }
 
   async launchProject(projectId: string): Promise<ConversionTaskResult> {
-    return httpClient.post<ConversionTaskResult>(`/projects/${projectId}/site/launch`, {});
+    return this.client.post<ConversionTaskResult>(`/projects/${projectId}/site/launch`, {});
   }
 
   async getAppBackendStatus(projectId: string): Promise<AppBackendStatus> {
-    return httpClient.get<AppBackendStatus>(
+    return this.client.get<AppBackendStatus>(
       `/projects/${projectId}/app-backend`,
     );
   }
@@ -374,7 +376,7 @@ export class HttpProjectRepository implements ProjectRepository {
   async getGitTokenDelegation(
     projectId: string,
   ): Promise<GitTokenDelegationStatus> {
-    return httpClient.get<GitTokenDelegationStatus>(
+    return this.client.get<GitTokenDelegationStatus>(
       `/projects/${projectId}/git-token-delegation`,
     );
   }
@@ -389,7 +391,7 @@ export class HttpProjectRepository implements ProjectRepository {
     revokedAt: string | null;
     granterUserId: string;
   }> {
-    return httpClient.put(`/projects/${projectId}/git-token-delegation`, {
+    return this.client.put(`/projects/${projectId}/git-token-delegation`, {
       enabled,
       ...(granterUserId !== undefined ? { granterUserId } : {}),
     });
@@ -398,26 +400,26 @@ export class HttpProjectRepository implements ProjectRepository {
   async listGitTokenAccessLog(
     projectId: string,
   ): Promise<GitTokenAccessLogEntry[]> {
-    const { entries } = await httpClient.get<{
+    const { entries } = await this.client.get<{
       entries: GitTokenAccessLogEntry[];
     }>(`/projects/${projectId}/git-token-delegation/access-log`);
     return entries;
   }
 
   async reorder(orderedIds: readonly string[]): Promise<void> {
-    await httpClient.put<void>("/projects/reorder", { orderedIds });
+    await this.client.put<void>("/projects/reorder", { orderedIds });
   }
 
   async toggleFavorite(projectId: string, favorite: boolean): Promise<void> {
-    await httpClient.put<void>(`/projects/${projectId}/favorite`, { favorite });
+    await this.client.put<void>(`/projects/${projectId}/favorite`, { favorite });
   }
 
   async reorderFavorites(orderedIds: readonly string[]): Promise<void> {
-    await httpClient.put<void>("/projects/reorder-favorites", { orderedIds });
+    await this.client.put<void>("/projects/reorder-favorites", { orderedIds });
   }
 
   async getNotificationPrefs(projectId: string): Promise<NotificationPrefs> {
-    const { prefs } = await httpClient.get<{ prefs: NotificationPrefs }>(
+    const { prefs } = await this.client.get<{ prefs: NotificationPrefs }>(
       `/projects/${projectId}/notification-prefs`,
     );
     return prefs;
@@ -427,7 +429,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     prefs: NotificationPrefs,
   ): Promise<NotificationPrefs> {
-    const { prefs: saved } = await httpClient.put<{ prefs: NotificationPrefs }>(
+    const { prefs: saved } = await this.client.put<{ prefs: NotificationPrefs }>(
       `/projects/${projectId}/notification-prefs`,
       { prefs },
     );
@@ -435,7 +437,7 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async getKanbanSettings(projectId: string): Promise<KanbanBoardSettings> {
-    const { settings } = await httpClient.get<{ settings?: unknown }>(
+    const { settings } = await this.client.get<{ settings?: unknown }>(
       `/projects/${projectId}/kanban-settings`,
     );
     // Защита: старый сервер (до фикса) мог отдать JSON-колонку строкой — парсим/нормализуем
@@ -447,7 +449,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     settings: KanbanBoardSettings,
   ): Promise<KanbanBoardSettings> {
-    const { settings: saved } = await httpClient.put<{
+    const { settings: saved } = await this.client.put<{
       settings?: KanbanBoardSettings;
     }>(`/projects/${projectId}/kanban-settings`, { settings });
     return saved ?? {};
@@ -457,7 +459,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     label: string,
   ): Promise<{ slot: CustomKanbanSlot; settings: KanbanBoardSettings }> {
-    const res = await httpClient.post<{ slot: CustomKanbanSlot; settings?: KanbanBoardSettings }>(
+    const res = await this.client.post<{ slot: CustomKanbanSlot; settings?: KanbanBoardSettings }>(
       `/projects/${projectId}/kanban-columns`,
       { label },
     );
@@ -468,7 +470,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     slot: CustomKanbanSlot,
   ): Promise<{ settings: KanbanBoardSettings; movedTasks: number }> {
-    const res = await httpClient.delete<{
+    const res = await this.client.delete<{
       settings?: KanbanBoardSettings;
       movedTasks?: number;
     }>(`/projects/${projectId}/kanban-columns/${slot}`);
@@ -479,45 +481,45 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async listMembers(projectId: string): Promise<ProjectMember[]> {
-    const { members } = await httpClient.get<{ members: MemberDto[] }>(
+    const { members } = await this.client.get<{ members: MemberDto[] }>(
       `/projects/${projectId}/members`,
     );
     return members.map(memberFromDto);
   }
 
   async checkGitCollision(gitRepoUrl: string): Promise<GitCollision> {
-    return httpClient.get<GitCollision>(
+    return this.client.get<GitCollision>(
       `/projects/git-collision?url=${encodeURIComponent(gitRepoUrl)}`,
     );
   }
 
   async requestJoin(projectId: string): Promise<void> {
-    await httpClient.post<unknown>(`/projects/${projectId}/join-requests`);
+    await this.client.post<unknown>(`/projects/${projectId}/join-requests`);
   }
 
   async resolveJoinRequest(requestId: string, accept: boolean): Promise<void> {
-    await httpClient.post<unknown>(
+    await this.client.post<unknown>(
       `/projects/join-requests/${requestId}/resolve`,
       { accept },
     );
   }
 
   async listSharedMembers(): Promise<SharedMember[]> {
-    const { members } = await httpClient.get<{ members: SharedMember[] }>(
+    const { members } = await this.client.get<{ members: SharedMember[] }>(
       "/me/shared-members",
     );
     return members;
   }
 
   async recordProjectView(projectId: string): Promise<void> {
-    await httpClient.post(`/projects/${projectId}/views`, {});
+    await this.client.post(`/projects/${projectId}/views`, {});
   }
 
   async getProjectAnalytics(
     projectId: string,
     days: number,
   ): Promise<ProjectAnalytics> {
-    const { analytics } = await httpClient.get<{
+    const { analytics } = await this.client.get<{
       analytics: {
         totalViews: number;
         windowDays: number;
@@ -547,7 +549,7 @@ export class HttpProjectRepository implements ProjectRepository {
     limit: number,
     before?: ProjectActivityCursor,
   ): Promise<ProjectActivity> {
-    const res = await httpClient.get<{
+    const res = await this.client.get<{
       summary: {
         createdAt: string;
         createdByName: string | null;
@@ -603,13 +605,13 @@ export class HttpProjectRepository implements ProjectRepository {
   async getAppBackendDashboard(
     projectId: string,
   ): Promise<AppBackendDashboard> {
-    return httpClient.get<AppBackendDashboard>(
+    return this.client.get<AppBackendDashboard>(
       `/projects/${projectId}/app-backend/dashboard`,
     );
   }
 
   async getAppTraffic(projectId: string, days: number): Promise<AppTraffic> {
-    return httpClient.get<AppTraffic>(
+    return this.client.get<AppTraffic>(
       `/projects/${projectId}/app-traffic?days=${days}`,
     );
   }
@@ -617,7 +619,7 @@ export class HttpProjectRepository implements ProjectRepository {
   async getAppDashboardSettings(
     projectId: string,
   ): Promise<AppDashboardSettings> {
-    return httpClient.get<AppDashboardSettings>(
+    return this.client.get<AppDashboardSettings>(
       `/projects/${projectId}/app-dashboard/settings`,
     );
   }
@@ -626,7 +628,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     patch: AppDashboardSettingsPatch,
   ): Promise<AppDashboardSettings> {
-    return httpClient.put<AppDashboardSettings>(
+    return this.client.put<AppDashboardSettings>(
       `/projects/${projectId}/app-dashboard/settings`,
       patch,
     );
@@ -635,21 +637,21 @@ export class HttpProjectRepository implements ProjectRepository {
   async verifyAppCustomDomain(
     projectId: string,
   ): Promise<AppDashboardSettings> {
-    return httpClient.post<AppDashboardSettings>(
+    return this.client.post<AppDashboardSettings>(
       `/projects/${projectId}/app-dashboard/domains/verify`,
       {},
     );
   }
 
   async testAppWebhook(projectId: string): Promise<AppDashboardSettings> {
-    return httpClient.post<AppDashboardSettings>(
+    return this.client.post<AppDashboardSettings>(
       `/projects/${projectId}/app-dashboard/integrations/webhooks/test`,
       {},
     );
   }
 
   async scanAppSecurity(projectId: string): Promise<AppSecurityScan> {
-    return httpClient.post<AppSecurityScan>(
+    return this.client.post<AppSecurityScan>(
       `/projects/${projectId}/app-dashboard/security/scan`,
       {},
     );
@@ -658,7 +660,7 @@ export class HttpProjectRepository implements ProjectRepository {
   async getGoogleAuthProvider(
     projectId: string,
   ): Promise<GoogleAuthProviderStatus> {
-    return httpClient.get<GoogleAuthProviderStatus>(
+    return this.client.get<GoogleAuthProviderStatus>(
       `/projects/${projectId}/app-dashboard/auth/google`,
     );
   }
@@ -667,7 +669,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
     input: { readonly clientId: string; readonly clientSecret: string; readonly enabled: boolean },
   ): Promise<GoogleAuthProviderStatus> {
-    return httpClient.put<GoogleAuthProviderStatus>(
+    return this.client.put<GoogleAuthProviderStatus>(
       `/projects/${projectId}/app-dashboard/auth/google`,
       input,
     );
@@ -676,7 +678,7 @@ export class HttpProjectRepository implements ProjectRepository {
   async disableGoogleAuthProvider(
     projectId: string,
   ): Promise<GoogleAuthProviderStatus> {
-    return httpClient.delete<GoogleAuthProviderStatus>(
+    return this.client.delete<GoogleAuthProviderStatus>(
       `/projects/${projectId}/app-dashboard/auth/google`,
     );
   }
@@ -685,7 +687,7 @@ export class HttpProjectRepository implements ProjectRepository {
     projectId: string,
   ): Promise<readonly AppRuntimeUser[]> {
     return (
-      await httpClient.get<{ users: AppRuntimeUser[] }>(
+      await this.client.get<{ users: AppRuntimeUser[] }>(
         `/projects/${projectId}/app-backend/users`,
       )
     ).users;
@@ -696,7 +698,7 @@ export class HttpProjectRepository implements ProjectRepository {
     userId: string,
   ): Promise<number> {
     return (
-      await httpClient.post<{ revoked: number }>(
+      await this.client.post<{ revoked: number }>(
         `/projects/${projectId}/app-backend/users/${encodeURIComponent(userId)}/revoke-sessions`,
         {},
       )
@@ -708,7 +710,7 @@ export class HttpProjectRepository implements ProjectRepository {
     userId: string,
   ): Promise<number> {
     return (
-      await httpClient.delete<{ deleted: number }>(
+      await this.client.delete<{ deleted: number }>(
         `/projects/${projectId}/app-backend/users/${encodeURIComponent(userId)}`,
       )
     ).deleted;
@@ -719,7 +721,7 @@ export class HttpProjectRepository implements ProjectRepository {
     table: string,
     query: AppRowsQuery,
   ): Promise<AppRowsPage> {
-    return httpClient.post<AppRowsPage>(
+    return this.client.post<AppRowsPage>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/query`,
       query,
     );
@@ -730,7 +732,7 @@ export class HttpProjectRepository implements ProjectRepository {
     table: string,
     values: AppDataRow,
   ): Promise<AppDataRow> {
-    const result = await httpClient.post<{ row: AppDataRow }>(
+    const result = await this.client.post<{ row: AppDataRow }>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows`,
       { values },
     );
@@ -745,7 +747,7 @@ export class HttpProjectRepository implements ProjectRepository {
     expectedUpdatedAt?: string,
   ): Promise<AppDataRow | null> {
     try {
-      const result = await httpClient.patch<{ row: AppDataRow | null }>(
+      const result = await this.client.patch<{ row: AppDataRow | null }>(
         `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`,
         { values, ...(expectedUpdatedAt !== undefined ? { expectedUpdatedAt } : {}) },
       );
@@ -766,7 +768,7 @@ export class HttpProjectRepository implements ProjectRepository {
     table: string,
     rowId: string,
   ): Promise<number> {
-    const result = await httpClient.delete<{ deleted: number }>(
+    const result = await this.client.delete<{ deleted: number }>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`,
     );
     return result.deleted;
@@ -778,7 +780,7 @@ export class HttpProjectRepository implements ProjectRepository {
     rowId: string,
     column: string,
   ): Promise<unknown> {
-    const result = await httpClient.post<{ value: unknown }>(
+    const result = await this.client.post<{ value: unknown }>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}/reveal`,
       { column },
     );
@@ -790,7 +792,7 @@ export class HttpProjectRepository implements ProjectRepository {
     table: string,
     query: AppRowsQuery,
   ): Promise<AppRowsExport> {
-    return httpClient.post<AppRowsExport>(
+    return this.client.post<AppRowsExport>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/export`,
       query,
     );
@@ -802,7 +804,7 @@ export class HttpProjectRepository implements ProjectRepository {
     field: string,
     sensitive: AppSensitiveKind | null,
   ): Promise<{ readonly field: string; readonly sensitive: AppSensitiveKind | null }> {
-    return httpClient.put<{ field: string; sensitive: AppSensitiveKind | null }>(
+    return this.client.put<{ field: string; sensitive: AppSensitiveKind | null }>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/fields/${encodeURIComponent(field)}/sensitivity`,
       { sensitive },
     );
@@ -813,7 +815,7 @@ export class HttpProjectRepository implements ProjectRepository {
     table: string,
     rules: AppCrudRules,
   ): Promise<AppCrudRules> {
-    const result = await httpClient.put<{ rules: AppCrudRules }>(
+    const result = await this.client.put<{ rules: AppCrudRules }>(
       `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/permissions`,
       rules,
     );
@@ -840,7 +842,7 @@ export class HttpProjectRepository implements ProjectRepository {
     if (filters.offset !== undefined)
       query.set("offset", String(filters.offset));
     const suffix = query.size > 0 ? `?${query.toString()}` : "";
-    return httpClient.get<AppAuditPage>(
+    return this.client.get<AppAuditPage>(
       `/projects/${projectId}/app-backend/logs${suffix}`,
     );
   }
@@ -862,7 +864,7 @@ export class HttpProjectRepository implements ProjectRepository {
     if (filters.limit !== undefined) query.set("limit", String(filters.limit));
     if (filters.cursor) query.set("cursor", filters.cursor);
     const suffix = query.size > 0 ? `?${query.toString()}` : "";
-    return httpClient.get<AppLogFeedPage>(
+    return this.client.get<AppLogFeedPage>(
       `/projects/${projectId}/app-backend/logs/feed${suffix}`,
     );
   }

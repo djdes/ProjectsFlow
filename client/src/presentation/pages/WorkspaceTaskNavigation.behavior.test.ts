@@ -6,34 +6,39 @@ import React, { act } from 'react';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import type { WorkspaceTasksResult } from '@/application/task/ListWorkspaceTasks';
-import type { AssignedTask } from '@/domain/task/AssignedTask';
 const { createRoot } = await import('react-dom/client');
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
 const context = {
   pathname: '/all-tasks', navigations: [] as string[], selected: { id: 'selected', name: 'Выбранное', icon: null },
   workspaces: [{ id: 'selected', name: 'Выбранное', icon: null }, { id: 'other', name: 'Другая команда', icon: null }],
-  results: [] as WorkspaceTasksResult[], calls: [] as string[][],
+  workspaceError: null as Error | null,
 };
 Object.assign(globalThis, { __workspaceTasks: context });
 const stubs: Record<string, string> = {
   'react-router-dom': `import React from 'react'; const c=()=>globalThis.__workspaceTasks;
     export const useLocation=()=>({pathname:c().pathname}), useNavigate=()=>to=>c().navigations.push(to), useNavigationType=()=>'PUSH';
     export const Link=({to,...p})=>React.createElement('a',{...p,href:to}), NavLink=Link;`,
-  '@/infrastructure/di/container': `const listWorkspaceTasks={execute:async ids=>{
-    const c=globalThis.__workspaceTasks;c.calls.push(ids);return c.results;
-  }};export const useContainer=()=>({listWorkspaceTasks,aiConversationRepository:{}});`,
-  '@/presentation/hooks/useWorkspaces': 'export const useWorkspaces=()=>({data:globalThis.__workspaceTasks.workspaces});',
+  '@/infrastructure/di/container': `import React from 'react'; const Scope=React.createContext('');
+    export const useContainer=()=>({aiConversationRepository:{}}), useTestWorkspace=()=>React.useContext(Scope);
+    export const WorkspaceContainerProvider=({workspaceId,children})=>React.createElement(Scope.Provider,{value:workspaceId},children);`,
+  '@/presentation/hooks/useWorkspaces': 'export const useWorkspaces=()=>({data:globalThis.__workspaceTasks.workspaces,error:globalThis.__workspaceTasks.workspaceError});',
+  '@/presentation/hooks/WorkspacesProvider': 'export const WorkspaceViewProvider=({children})=>children;',
+  '@/presentation/hooks/ProjectsProvider': 'export const ProjectsProvider=({children})=>children;',
+  '@/presentation/hooks/FocusedInboxProvider': 'export const FocusedInboxProvider=({children})=>children;',
+  '@/presentation/hooks/CompletedTodayProvider': 'export const CompletedTodayProvider=({children})=>children;',
+  '@/presentation/hooks/AwaitingReplyProvider': 'export const AwaitingReplyProvider=({children})=>children;',
+  './InboxPage': `import React from 'react'; import {useTestWorkspace} from '@/infrastructure/di/container';
+    export const InboxPage=({embedded})=>React.createElement('div',{'data-reused-inbox':useTestWorkspace(),'data-embedded':embedded},'Доска пространства');`,
   '@/presentation/hooks/useCurrentWorkspace': 'export const useCurrentWorkspace=()=>({workspace:globalThis.__workspaceTasks.selected});',
   '@/presentation/hooks/useCurrentUser': "export const useCurrentUser=()=>({user:{id:'me',isAdmin:false,displayName:'Я'}});",
   '@/presentation/hooks/useProjects': 'export const useProjects=()=>({data:[]});',
   '@/presentation/hooks/useChatRooms': 'export const useActiveChatUnread=()=>0;',
-  '@/presentation/hooks/UnreadTasksProvider': 'export const useUnreadTasks=()=>({count:0});',
+  '@/presentation/hooks/UnreadTasksProvider': 'export const useUnreadTasks=()=>({count:0});export const UnreadTasksProvider=({children})=>children;',
   '@/presentation/hooks/useAiConversations': 'export const announceAiConversationsChanged=()=>{};',
   '@/presentation/components/motion/MotionProvider': 'export const useMotion=()=>({animations:false});',
   '@/presentation/components/forms/NewProjectDialogProvider': 'export const useNewProjectDialog=()=>({open:()=>{}});',
-  '@/presentation/components/forms/AddTaskDialogProvider': 'export const useAddTaskDialog=()=>({open:()=>{}});',
+  '@/presentation/components/forms/AddTaskDialogProvider': 'export const useAddTaskDialog=()=>({open:()=>{}});export const AddTaskDialogProvider=({children})=>children;',
   '@/presentation/components/search/GlobalSearchProvider': 'export const useGlobalSearch=()=>({open:()=>{}});',
   '@/presentation/components/experience/usePageRefresh': 'export const usePageRefresh=()=>{};',
   '@/presentation/hooks/useInboxRealtimeRefresh': 'export const useInboxRealtimeRefresh=()=>{};',
@@ -69,33 +74,22 @@ async function mount(component: string) {
   return { host, close: async () => { await act(async () => root.unmount()); host.remove(); } };
 }
 
-test('global overview renders all tasks, coworkers and completed tasks under their own workspace/project', async () => {
-  const tasks = Array.from({ length: 8 }, (_, index) => ({ id: `task-${index}`, projectId: 'other-project', projectName: 'Одинаковый проект',
-    description: `Задача ${index}`, status: index === 7 ? 'done' : 'todo', deadline: null,
-    assignee: { userId: 'other', displayName: 'Коллега', avatarUrl: null }, createdAt: new Date() } as AssignedTask));
-  context.calls = [];
-  context.results = [{ workspaceId: 'selected', status: 'ready', groups: [{ projectId: 'my-project', projectName: 'Одинаковый проект', tasks: [] }] },
-    { workspaceId: 'other', status: 'ready', groups: [{ projectId: 'other-project', projectName: 'Одинаковый проект', tasks }] }];
+test('the globe reuses the workspace board in a separate scope for every workspace', async () => {
   const view = await mount('AllWorkspaceTasksPage');
   try {
-    assert.deepEqual(context.calls[0], ['selected', 'other']);
-    const other = view.host.querySelector('[data-pf-workspace-tasks=other]')!;
-    assert.equal(other.querySelectorAll('[data-pf-global-task-id]').length, 8);
-    assert.match(other.textContent!, /Коллега/); assert.match(other.textContent!, /Готово/);
-    assert.equal(view.host.querySelector('[data-pf-workspace-tasks=selected]')!.querySelectorAll('[data-pf-global-task-id]').length, 0);
+    const boards = [...view.host.querySelectorAll('[data-reused-inbox]')];
+    assert.deepEqual(boards.map((board) => board.getAttribute('data-reused-inbox')), ['selected', 'other']);
+    assert.ok(boards.every((board) => board.getAttribute('data-embedded') === 'true'));
+    assert.equal(view.host.querySelectorAll('[data-pf-global-task-id]').length, 0);
     assert.equal(context.selected.id, 'selected');
-    assert.equal(other.querySelector('a')!.getAttribute('href'), '/projects/other-project/tasks/task-0');
   } finally { await view.close(); }
 });
 
-test('a failed workspace stays visible with a retry instead of hiding missing tasks', async () => {
-  context.results = [{ workspaceId: 'selected', status: 'ready', groups: [] }, { workspaceId: 'other', status: 'error' }];
+test('workspace list errors remain explicit instead of silently claiming a complete overview', async () => {
+  context.workspaceError = new Error('offline');
   const view = await mount('AllWorkspaceTasksPage');
-  try {
-    const other = view.host.querySelector('[data-pf-workspace-tasks=other]')!;
-    assert.match(other.querySelector('[role=alert]')!.textContent!, /Не удалось загрузить задачи/);
-    assert.equal(other.querySelector('button')!.textContent, 'Повторить');
-  } finally { await view.close(); }
+  try { assert.match(view.host.querySelector('[role=alert]')!.textContent!, /Не удалось обновить/); }
+  finally { context.workspaceError = null; await view.close(); }
 });
 
 test('desktop home and globe navigate independently while preserving the selected workspace', async () => {

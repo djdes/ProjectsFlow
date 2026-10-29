@@ -1,4 +1,5 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { workspaceHttpClient } from '@/infrastructure/http/httpClient';
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { ImageGenerationRepository } from '@/application/image-generation/ImageGenerationRepository';
 import { HttpImageGenerationRepository } from '@/infrastructure/http/HttpImageGenerationRepository';
 import { HttpProjectRepository } from "@/infrastructure/http/HttpProjectRepository";
@@ -9,7 +10,6 @@ import { HttpKbRepository } from "@/infrastructure/http/HttpKbRepository";
 import { HttpSecretsRepository } from "@/infrastructure/http/HttpSecretsRepository";
 import { HttpTaskRepository } from "@/infrastructure/http/HttpTaskRepository";
 import { HttpTaskAssigneeRepository } from "@/infrastructure/http/HttpTaskAssigneeRepository";
-import { ListWorkspaceTasks } from '@/application/task/ListWorkspaceTasks';
 import { HttpStatsRepository } from "@/infrastructure/http/HttpStatsRepository";
 import { HttpDigestSettingsRepository } from "@/infrastructure/http/HttpDigestSettingsRepository";
 import { HttpTaskSearchRepository } from "@/infrastructure/http/HttpTaskSearchRepository";
@@ -130,7 +130,6 @@ type Container = {
   secretsRepository: SecretsRepository;
   taskRepository: TaskRepository;
   taskAssigneeRepository: TaskAssigneeRepository;
-  listWorkspaceTasks: ListWorkspaceTasks;
   statsRepository: StatsRepository;
   digestSettingsRepository: DigestSettingsRepository;
   inviteRepository: InviteRepository;
@@ -238,7 +237,6 @@ function buildContainer(): Container {
     secretsRepository: secretsRepo,
     taskRepository: taskRepo,
     taskAssigneeRepository: taskAssigneeRepo,
-    listWorkspaceTasks: new ListWorkspaceTasks(taskAssigneeRepo),
     statsRepository: statsRepo,
     digestSettingsRepository: digestSettingsRepo,
     inviteRepository: inviteRepo,
@@ -306,4 +304,28 @@ export function useContainer(): Container {
   if (!c)
     throw new Error("useContainer must be used inside <ContainerProvider>");
   return c;
+}
+
+export function WorkspaceContainerProvider({ workspaceId, children }: { workspaceId: string; children: ReactNode }): React.ReactElement {
+  const parent = useContainer();
+  const scoped = useMemo(() => {
+    const client = workspaceHttpClient(workspaceId);
+    const projectRepository = new HttpProjectRepository(client);
+    const taskRepository = new HttpTaskRepository(client);
+    const taskAssigneeRepository = new HttpTaskAssigneeRepository(client);
+    return {
+      ...parent, projectRepository, taskRepository, taskAssigneeRepository,
+      statsRepository: new HttpStatsRepository(client),
+      recordTaskView: new RecordTaskView(new HttpRecentTaskViewRepository(client)),
+      listProjects: new ListProjects(projectRepository),
+      getProject: new GetProject(projectRepository),
+      createProject: new CreateProject(projectRepository),
+      updateProject: new UpdateProject(projectRepository),
+      reorderProjects: new ReorderProjects(projectRepository),
+      toggleProjectFavorite: new ToggleProjectFavorite(projectRepository),
+      reorderFavoriteProjects: new ReorderFavoriteProjects(projectRepository),
+      resolveDestructiveTargets: new ResolveDestructiveTargets(taskRepository),
+    };
+  }, [parent, workspaceId]);
+  return <ContainerCtx.Provider value={scoped}>{children}</ContainerCtx.Provider>;
 }

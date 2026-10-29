@@ -108,29 +108,36 @@ export const workspaceIsolationScenarios = [
     async run(t) {
       await start(t);
       const selectedBefore = t.state.activeWorkspaceId ?? WORKSPACE_ID;
+      const source = t.state.tasks.find((task) => task.id === 'queue-ws-other');
+      t.state.tasks.push({ ...source, id: 'colleague-invoice', description: 'Чужая накладная',
+        assignee: { userId: COLLEAGUES[0].id, displayName: COLLEAGUES[0].displayName, avatarUrl: null },
+        createdBy: COLLEAGUES[0].id, status: 'todo' });
       await t.goto('/all-tasks', { ready: () => t.page.getByRole('heading', { name: 'Все задачи', level: 1 }) });
       const other = t.page.locator('[data-pf-workspace-tasks="ws-other"]');
       await t.check('блоки других пространств под текущим', async () => {
         await t.visible(t.page.getByRole('heading', { name: 'Все задачи', level: 1 }), 'h1 «Все задачи»');
         await t.visible(other.getByRole('heading', { name: 'Другая команда', level: 2 }), 'блок «Другая команда»');
         await t.visible(t.page.locator('[data-pf-workspace-tasks="ws-personal"]'), 'блок личного пространства');
-        await t.visible(other.locator('[data-pf-global-task-id="queue-ws-other"]'), 'задача другой команды');
+        if (t.isMobile) await other.locator(section('queue')).click();
+        await t.visible(other.locator('[data-pf-task-id="queue-ws-other"]'), 'задача другой команды');
         t.assert(t.journal.reads.some((r) => r.workspaceId === 'ws-other' && r.path === '/assignees/mine'), 'нет запроса задач другого пространства');
         t.assert(t.state.activeWorkspaceId !== 'ws-other', 'чтение блока переключило пространство');
+        t.assert(await other.locator('[data-pf-task-id="colleague-invoice"]').count() === 0, 'чужая накладная попала в «Для меня»');
         t.assert(await t.page.locator('#assigned-to-me [data-pf-task-id="queue-ws-other"]').count() === 0, 'чужая задача попала в основной блок');
       });
       await t.step('домик возвращает только выбранное пространство', async () => {
         await t.goto('/', { ready: () => t.page.getByRole('heading', { name: 'Задачи пространства', level: 1 }) });
         t.assert((t.state.activeWorkspaceId ?? WORKSPACE_ID) === selectedBefore, 'глобус изменил выбранное пространство');
-        t.assert(await t.page.locator('[data-pf-global-task-id="queue-ws-other"]').count() === 0, 'домик показал чужое пространство');
+        t.assert(await t.page.locator('[data-pf-task-id="queue-ws-other"]').count() === 0, 'домик показал чужое пространство');
         await t.goto('/all-tasks', { ready: () => t.page.getByRole('heading', { name: 'Все задачи', level: 1 }) });
       });
       await t.pageChecks('все задачи');
       await t.screenshot('all-inboxes');
-      await t.step('тап по задаче переключает пространство и открывает её', async () => {
-        await other.locator('[data-pf-global-task-id="queue-ws-other"]').click();
-        await t.waitFor(() => t.state.activeWorkspaceId === 'ws-other', 'пространство не переключилось');
-        await t.waitFor(() => new URL(t.page.url()).pathname === '/projects/project-ws-other/tasks/queue-ws-other', 'не открылась задача');
+      await t.step('карточка открывает обычное окно задачи без смены выбранного пространства', async () => {
+        if (t.isMobile) await other.locator(section('queue')).click();
+        await other.locator('[data-pf-task-id="queue-ws-other"]').click();
+        await t.visible(t.page.getByRole('dialog').last(), 'обычное окно задачи');
+        t.assert((t.state.activeWorkspaceId ?? WORKSPACE_ID) === selectedBefore, 'открытие карточки сменило выбранное пространство');
         await t.visible(t.page.getByText('Очередь ws-other', { exact: true }).filter({ visible: true }).first(), 'задача другой команды открыта');
       });
     },

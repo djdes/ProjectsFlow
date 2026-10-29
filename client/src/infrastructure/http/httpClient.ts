@@ -99,3 +99,17 @@ export const httpClient = {
   put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),
   delete: <T>(path: string) => mutate<T>(path, { method: 'DELETE' }),
 };
+
+export type HttpClient = typeof httpClient;
+
+// A board can read and mutate its workspace without changing the tab's selection.
+export function workspaceHttpClient(workspaceId: string): HttpClient {
+  return {
+    get: <T>(path: string, options?: Pick<Options, 'timeoutMs' | 'workspaceId'>) =>
+      httpClient.get<T>(path, { ...options, workspaceId }),
+    post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body, workspaceId }),
+    patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body, workspaceId }),
+    put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body, workspaceId }),
+    delete: <T>(path: string) => mutate<T>(path, { method: 'DELETE', workspaceId }),
+  };
+}

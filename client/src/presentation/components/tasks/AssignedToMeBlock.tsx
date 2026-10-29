@@ -157,6 +157,9 @@ import {
 } from './inboxBlockTasks';
 
 type Props = {
+  regionId?: string;
+  initialTab?: 'toMe' | 'byMe';
+  tabStorageKey?: string;
   // Снимок именно нижней inbox-доски. null = доска ещё не закончила первую загрузку.
   // Свои задачи виртуально зеркалятся в верхнюю личную колонку без дублирования в БД.
   boardTasks: readonly Task[] | null;
@@ -262,9 +265,9 @@ function usePersistentScrollLeft(storageKey: string): {
 // перезагрузке открывается та же (просьба юзера). Grouping персистится серверно (ui_prefs),
 // вкладку держим локально, чтобы не слать серверный запрос на каждый клик по вкладке.
 const TAB_STORAGE_KEY = 'pf.inbox.assignedTab';
-function readStoredTab(): AssigneeTab | null {
+function readStoredTab(storageKey = TAB_STORAGE_KEY): AssigneeTab | null {
   try {
-    const v = localStorage.getItem(TAB_STORAGE_KEY);
+    const v = localStorage.getItem(storageKey);
     return v === 'toMe' || v === 'byMe' ? v : null;
   } catch {
     return null;
@@ -317,6 +320,9 @@ function readStoredHidePersonal(): boolean {
 }
 
 export function AssignedToMeBlock({
+  regionId = 'assigned-to-me',
+  initialTab,
+  tabStorageKey = TAB_STORAGE_KEY,
   boardTasks,
   inboxProjectId,
   onChanged,
@@ -377,20 +383,20 @@ export function AssignedToMeBlock({
   const [focusRetry, setFocusRetry] = useState(0);
   const [loadError, setLoadError] = useState(false);
   const focusedLoading = focusedMemberId !== null && focusedResult?.memberId !== focusedMemberId && !focusedError;
-  const [tab, setTab] = useState<AssigneeTab>(() => readStoredTab() ?? 'toMe');
+  const [tab, setTab] = useState<AssigneeTab>(() => initialTab ?? readStoredTab(tabStorageKey) ?? 'toMe');
   // Зафиксирован ли стартовый выбор вкладки: сохранённый выбор фиксирует его сразу,
   // иначе авто-переключение выполняется один раз после загрузки обоих источников.
-  const tabSelectionResolvedRef = useRef(readStoredTab() !== null);
+  const tabSelectionResolvedRef = useRef(initialTab !== undefined || readStoredTab(tabStorageKey) !== null);
   // Явная смена вкладки юзером — персистим в localStorage и глушим авто-переключение.
   const handleTabChange = useCallback((next: AssigneeTab): void => {
     tabSelectionResolvedRef.current = true;
     try {
-      localStorage.setItem(TAB_STORAGE_KEY, next);
+      localStorage.setItem(tabStorageKey, next);
     } catch {
       /* ignore */
     }
     setTab(next);
-  }, []);
+  }, [tabStorageKey]);
   // Фильтры вкладки «Другим»: ответственный и проект. null = все.
   const [filterTo, setFilterTo] = useState<string | null>(null);
   // Share the active person filter with the global creation dialog; clear it on navigation.
@@ -1568,7 +1574,7 @@ export function AssignedToMeBlock({
   // данных строка заголовка не «прыгает».
   if (!inboxReady) {
     return (
-      <section id="assigned-to-me" className="flex flex-col gap-3">
+      <section id={regionId} className="flex flex-col gap-3">
         <InboxLoadingLayout heading={heading} />
       </section>
     );
@@ -1850,7 +1856,7 @@ export function AssignedToMeBlock({
 
   if (!hasAny) {
     return (
-      <section id="assigned-to-me" className="flex flex-col gap-3">
+      <section id={regionId} className="flex flex-col gap-3">
         {headRow}
         <p className="py-12 text-center text-ui text-muted-foreground">{emptyText}</p>
       </section>
@@ -2297,7 +2303,7 @@ export function AssignedToMeBlock({
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
     // прокручивалась выше неё.
-    <section id="assigned-to-me" className={cn('flex flex-col gap-3', !isWide && 'gap-2.5 pbe-20')}>
+    <section id={regionId} className={cn('flex flex-col gap-3', !isWide && 'gap-2.5 pbe-20')}>
       {headRow}
 
       {/* Нулевая метка над переключателем; -mbe-2.5 гасит лишний зазор колонки. */}

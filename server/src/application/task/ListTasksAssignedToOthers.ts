@@ -27,12 +27,13 @@ export class ListTasksAssignedToOthers {
   async execute(userId: string): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
-    const projects = await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id);
+    const projects = (await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id))
+      .filter((project) => project.workspaceId === ws.id && (!project.isInbox || project.ownerId === userId));
     const rows = await Promise.all(
       projects.map(async (project) => ({
         project,
         tasks: (await this.deps.tasks.listByProject(project.id)).filter(
-          (task) => task.assignee.userId !== userId,
+          (task) => task.projectId === project.id && task.assignee.userId !== userId,
         ),
       })),
     );
