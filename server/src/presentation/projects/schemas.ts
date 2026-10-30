@@ -237,6 +237,7 @@ export const setTaskPropertyValueSchema = z.object({
 
 // Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
 export const uiPrefsSchema = z.object({
+  hiddenTaskWorkspaceIds: z.array(z.string().min(1).max(36)).max(1000).optional(),
   inboxAssignedGrouping: z.enum(ASSIGNED_GROUPINGS).optional(),
   // Порядок строк-свойств окна задачи; ограничиваем длину/строки (без жёсткого enum,
   // чтобы добавление новых ключей-свойств не требовало правки схемы).

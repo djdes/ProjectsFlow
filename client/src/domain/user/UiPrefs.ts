@@ -68,6 +68,8 @@ export function reorderTaskProperties(
 }
 
 export type UiPrefs = {
+  // Пространства, скрытые пользователем на странице «Все задачи».
+  readonly hiddenTaskWorkspaceIds?: readonly string[];
   readonly inboxAssignedGrouping?: AssignedGrouping;
   // Порядок строк-свойств окна задачи (TaskPropertyKey[]). Один на пользователя, все проекты.
   readonly taskPropertyOrder?: readonly string[];
