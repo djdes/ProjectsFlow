@@ -1,0 +1,547 @@
+diff --git a/codex-engine.psm1 b/codex-engine.psm1
+--- a/codex-engine.psm1
++++ b/codex-engine.psm1
+@@ -6,8 +6,9 @@
+ Set-StrictMode -Off
+ . (Join-Path $PSScriptRoot 'codex-file-edits.ps1')
+ . (Join-Path $PSScriptRoot 'worker-git-policy.ps1')
+ . (Join-Path $PSScriptRoot 'worker-github-sync.ps1')
++. (Join-Path $PSScriptRoot 'worker-git-preflight.ps1')
+ 
+ # $ за 1M токенов (стандартный тариф API OpenAI, 06.10.2026): in / cached in / out.
+ # Нужен для «API-эквивалента» в статистике и бюджете — на подписке маржинальная цена 0.
+ $script:CodexPrice = @{
+@@ -295,10 +296,12 @@
+   $proc = $null
+   $sessionLock = $null; $binding = ''; $resetId = ''; $resumeId = ''
+   $checkoutLease = $null; $gitHookDir = $null
+   try {
++    $gitWorkDir = Get-WorkerRunGitDirectory $Run
++    if ($gitWorkDir) { $checkoutLease = Enter-WorkerCheckoutLease $gitWorkDir }
++    Assert-WorkerGitSynchronized $gitWorkDir
+     if ($Run.SessionTaskId) {
+-      $checkoutLease = Enter-WorkerCheckoutLease ([string]$Run.SessionWorkDir)
+       $gitHookDir = New-WorkerGitPolicy -Repo ([string]$Run.SessionWorkDir) -TaskId ([string]$Run.SessionTaskId) -Directory ([string]$Run.Home)
+       Import-Module (Join-Path $PSScriptRoot 'codex-task-session.psm1') -Force
+       $apiUrl = [string]$Run.Environment.PROJECTSFLOW_API_URL
+       $binding = Get-CodexTaskSessionBinding -AuthHome $Run.AuthHome -AccountId $Run.SessionAccountId -ApiUrl $apiUrl -ProjectId $Run.SessionProjectId -TaskId $Run.SessionTaskId -WorkDir $Run.SessionWorkDir
+@@ -313,8 +316,9 @@
+       if ($resumeId) { $Prompt = (Format-CodexTaskResumePrepend $taskView) + "`n`n" + $Prompt }
+       $Prompt += "`n`nБезопасная публикация: один checkout занят только этой задачей. Не используй git add -A или git add .; добавляй явные файлы своей правки. Сохрани незакоммиченные изменения, существовавшие до запуска. Перед push получи актуальную удалённую ветку, интегрируй её без потери чужих изменений и повтори затронутые проверки. Не применяй force-push, reset --hard, clean, checkout --ours/--theirs или restore для решения конфликтов. При конфликте, смысл которого неясен, остановись с вопросом. Каждый свой коммит помечай [" + ([string]$Run.SessionTaskId).Substring(0,8) + "]."
+     }
+     $Prompt = Add-WorkerGitHubSyncInstructions $Prompt
++    $gitHookDir = Add-WorkerGitSyncHooks -Repo $gitWorkDir -Directory ([string]$Run.Home) -HookDir $gitHookDir
+     # PS 5.1 native invocation strips TOML's embedded quotes from array arguments.
+     # Escape once for CreateProcess, exactly as the short-job runner does.
+     $psi = New-Object System.Diagnostics.ProcessStartInfo
+     $psi.FileName = [string]$Run.Exe
+@@ -668,8 +672,9 @@
+   $runHome = New-CodexRunHome -Token $Token -GatewayBaseUrl $GatewayBaseUrl -GuardCommand $GuardCommand -UpstreamModel $UpstreamModel -WorkspaceRoot $WorkspaceRoot -TextOnly:$TextOnly
+   return @{
+     Exe = $codex.Exe; PathDir = $codex.PathDir; Home = $runHome.Home; AuthHome = $runHome.AuthHome; Environment = $runHome.Environment; Token = $runHome.Token
+     Model = $UpstreamModel
++    TextOnly = [bool]$TextOnly
+     Args = @(Get-CodexExecArgs -WorkDir $WorkspaceRoot -ReasoningEffort $ReasoningEffort -Sandbox $Sandbox -Model $UpstreamModel -ConfigArgs $runHome.ConfigArgs -RunProfile $runHome.Profile)
+   }
+ }
+ 
+@@ -686,10 +691,15 @@
+     [scriptblock]$OnTick = $null
+   )
+   $state = New-CodexEventState ([string]$Run.Model)
+   $final = $null; $reason = ''; $proc = $null; $errTask = $null
++  $checkoutLease = $null; $gitHookDir = $null
+   $startedAt = Get-Date
+   try {
++    $gitWorkDir = Get-WorkerRunGitDirectory $Run
++    if ($gitWorkDir) { $checkoutLease = Enter-WorkerCheckoutLease $gitWorkDir }
++    Assert-WorkerGitSynchronized $gitWorkDir
++    $gitHookDir = Add-WorkerGitSyncHooks -Repo $gitWorkDir -Directory ([string]$Run.Home)
+     $psi = New-Object System.Diagnostics.ProcessStartInfo
+     $psi.FileName = [string]$Run.Exe
+     $psi.Arguments = (@($Run.Args) | ForEach-Object { ConvertTo-WindowsArgument ([string]$_) }) -join ' '
+     $psi.RedirectStandardInput = $true
+@@ -705,8 +715,9 @@
+       $envKeys = if ($Run.Environment -is [System.Collections.IDictionary]) { @($Run.Environment.Keys) } else { @($Run.Environment.PSObject.Properties.Name) }
+       foreach ($key in $envKeys) { $psi.EnvironmentVariables[$key] = [string]$Run.Environment.$key }
+     }
+     if ($Run.PathDir) { $psi.EnvironmentVariables['PATH'] = ([string]$Run.PathDir) + ';' + $psi.EnvironmentVariables['PATH'] }
++    Set-WorkerGitPolicyEnvironment $psi.EnvironmentVariables $gitHookDir
+     $proc = [System.Diagnostics.Process]::Start($psi)
+     $errTask = $proc.StandardError.ReadToEndAsync()
+     $writer = New-Object System.IO.StreamWriter($proc.StandardInput.BaseStream, (New-Object System.Text.UTF8Encoding $false))
+     $writer.Write($Prompt)
+@@ -741,8 +752,9 @@
+   } finally {
+     if ($proc -and -not $proc.HasExited) {
+       try { & taskkill /PID $proc.Id /T /F 2>$null | Out-Null } catch {}
+     }
++    if ($checkoutLease) { $checkoutLease.Dispose() }
+   }
+ 
+   if ($final -and -not $final.is_error -and "$($final.result)".Trim()) {
+     $tokensIn = $null; $tokensOut = $null
+diff --git a/codex-engine.tests.ps1 b/codex-engine.tests.ps1
+--- a/codex-engine.tests.ps1
++++ b/codex-engine.tests.ps1
+@@ -141,17 +141,17 @@
+   $samplePath = Join-Path $PSScriptRoot 'codex-engine.sample.jsonl'
+   $fakeHome = Join-Path $tmp 'home'
+   New-Item -ItemType Directory -Force -Path $fakeHome | Out-Null
+   $emit = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; if (`$env:PF_LLM_TOKEN) { exit 3 }; Get-Content -LiteralPath '$samplePath' -Encoding utf8"
+-  $fake = @{ Exe = 'powershell.exe'; PathDir = $null; Home = $fakeHome; Token = 'tok-1'; Model = 'gpt-6.1-sol'; Args = @('-NoProfile', '-NonInteractive', '-Command', $emit) }
++  $fake = @{ Exe = 'powershell.exe'; PathDir = $null; Home = $fakeHome; Token = 'tok-1'; Model = 'gpt-6.1-sol'; TextOnly = $true; Args = @('-NoProfile', '-NonInteractive', '-Command', $emit) }
+   $res = Invoke-CodexText -Run $fake -Prompt 'сделай план' -TimeoutSec 60
+   Assert-True ($res.ok -and $res.text -like 'Готово*') 'итог — последний ответ модели, токена шлюза в окружении нет'
+   Assert-True ([Math]::Abs([double]$res.cost.costUsd - $expected) -lt 1e-12 -and $res.cost.tokensIn -eq 1000 -and $res.cost.tokensOut -eq 80) 'стоимость и токены из result'
+-  $slow = @{ Exe = 'powershell.exe'; PathDir = $null; Home = $fakeHome; Token = 'tok-1'; Model = 'gpt-6.1-sol'; Args = @('-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 60') }
++  $slow = @{ Exe = 'powershell.exe'; PathDir = $null; Home = $fakeHome; Token = 'tok-1'; Model = 'gpt-6.1-sol'; TextOnly = $true; Args = @('-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 60') }
+   $t0 = Get-Date
+   $res2 = Invoke-CodexText -Run $slow -Prompt 'x' -TimeoutSec 10
+   Assert-True (-not $res2.ok -and $res2.reason -eq 'timeout' -and ((Get-Date) - $t0).TotalSeconds -lt 30) 'зависший codex гасится по таймауту'
+-  $broken = @{ Exe = 'powershell.exe'; PathDir = $null; Home = $fakeHome; Token = 'tok-1'; Model = 'gpt-6.1-sol'; Args = @('-NoProfile', '-NonInteractive', '-Command', '[Console]::Error.WriteLine(''boom''); exit 1') }
++  $broken = @{ Exe = 'powershell.exe'; PathDir = $null; Home = $fakeHome; Token = 'tok-1'; Model = 'gpt-6.1-sol'; TextOnly = $true; Args = @('-NoProfile', '-NonInteractive', '-Command', '[Console]::Error.WriteLine(''boom''); exit 1') }
+   $res3 = Invoke-CodexText -Run $broken -Prompt 'x' -TimeoutSec 30
+   Assert-True (-not $res3.ok -and $res3.reason -like 'no_result*boom*') 'без результата — причина с хвостом stderr'
+ } finally {
+   $env:PF_CODEX_AUTH_HOME = $savedAuthHome
+diff --git a/codex-task-session.tests.ps1 b/codex-task-session.tests.ps1
+--- a/codex-task-session.tests.ps1
++++ b/codex-task-session.tests.ps1
+@@ -48,9 +48,9 @@
+ });
+ '@)
+   $engineModule = Get-Module codex-engine
+   & $engineModule { function script:Invoke-RestMethod { return @{task=@{id='12345678-1234-1234-1234-123456789abc';projectId='project-1'};comments=@()} } }
+-  $run = @{Exe=(Get-Command node.exe).Source;AuthHome=$dir;Home=$dir;SessionTaskId='12345678-1234-1234-1234-123456789abc';SessionProjectId='project-1';SessionAccountId='operator-1';SessionWorkDir=$PSScriptRoot;Args=@($fake,'exec','--ephemeral','-');Environment=@{PROJECTSFLOW_API_URL='https://example.test/api';PROJECTSFLOW_AGENT_TOKEN='test-only';PF_TEST_ARGV=(Join-Path $dir 'argv.json')}}
++  $run = @{Exe=(Get-Command node.exe).Source;AuthHome=$dir;Home=$dir;SessionTaskId='12345678-1234-1234-1234-123456789abc';SessionProjectId='project-1';SessionAccountId='operator-1';SessionWorkDir=$dir;Args=@($fake,'exec','--ephemeral','-');Environment=@{PROJECTSFLOW_API_URL='https://example.test/api';PROJECTSFLOW_AGENT_TOKEN='test-only';PF_TEST_ARGV=(Join-Path $dir 'argv.json')}}
+   $firstStream = @(Invoke-CodexRawStream -Run $run -Prompt 'First prompt')
+   $context = @($firstStream | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object type -eq 'projectsflow.session')
+   Check ($context.Count -eq 1 -and -not $context[0].resumed) 'first launch reports a confirmed new context to LIVE'
+   $actual = [IO.File]::ReadAllText($run.Environment.PF_TEST_ARGV) | ConvertFrom-Json
+diff --git a/site-editor-worker.ps1 b/site-editor-worker.ps1
+--- a/site-editor-worker.ps1
++++ b/site-editor-worker.ps1
+@@ -166,8 +166,17 @@
+ }
+ 
+ Import-Module (Join-Path $PSScriptRoot 'llm-client.psm1') -Force
+ Import-Module (Join-Path $PSScriptRoot 'codex-engine.psm1') -Force
++. (Join-Path $PSScriptRoot 'worker-git-preflight.ps1')
++
++function Test-SiteEditorGitSynchronization([string]$Repo) {
++  try { Assert-WorkerGitSynchronized $Repo; return $true }
++  catch {
++    Complete-Job $false $null ('git_sync_blocked: ' + $_.Exception.Message) | Out-Null
++    return $false
++  }
++}
+ 
+ # Черновик правки элемента: короткое задание через сервер ProjectsFlow (GPT по подписке).
+ function Invoke-DraftModel([string]$prompt) {
+   $r = Invoke-PfLlmText -Api $Api -Token $Token -Prompt $prompt -Tier (ConvertTo-PfLlmTier $Model) -TimeoutSec $WatchdogSec -ProjectId $ProjectId
+@@ -238,8 +247,9 @@
+   if (-not $gitRoot) { Complete-Job $false $null 'project_workspace_is_not_git' | Out-Null; return }
+   $resolvedProject = [System.IO.Path]::GetFullPath($ProjectPath).TrimEnd('\')
+   $resolvedRoot = [System.IO.Path]::GetFullPath(([string]$gitRoot).Trim()).TrimEnd('\')
+   if ($resolvedProject -ne $resolvedRoot) { Complete-Job $false $null 'project_workspace_root_mismatch' | Out-Null; return }
++  if (-not (Test-SiteEditorGitSynchronization $resolvedRoot)) { return }
+   $dirtyBefore = @(& git -C $resolvedRoot status --porcelain)
+   if ($dirtyBefore.Count -gt 0) { Complete-Job $false $null 'project_workspace_dirty_before_publish' | Out-Null; return }
+   $beforeSha = ([string](& git -C $resolvedRoot rev-parse HEAD)).Trim()
+   $payload = [string]$Job.domSnapshot
+@@ -258,8 +268,9 @@
+ $([string]$Job.prompt)
+ "@
+   $response = Invoke-CodeAgent $prompt $resolvedRoot
+   if (-not $response.ok) { Complete-Job $false $null ("model_failed: " + $response.error) | Out-Null; return }
++  if (-not (Test-SiteEditorGitSynchronization $resolvedRoot)) { return }
+   $dirtyAfter = @(& git -C $resolvedRoot status --porcelain)
+   $afterSha = ([string](& git -C $resolvedRoot rev-parse HEAD)).Trim()
+   if ($dirtyAfter.Count -gt 0) {
+     & git -C $resolvedRoot add --all
+@@ -269,8 +280,9 @@
+   }
+   if ($afterSha -eq $beforeSha) { Complete-Job $false $null 'no_source_changes_produced' | Out-Null; return }
+   $branch = ([string](& git -C $resolvedRoot rev-parse --abbrev-ref HEAD)).Trim()
+   if (-not $branch -or $branch -eq 'HEAD') { $branch = 'main' }
++  if (-not (Test-SiteEditorGitSynchronization $resolvedRoot)) { return }
+   $pushed = Push-WithDelegatedToken $resolvedRoot $branch
+   if (-not $pushed.Ok) {
+     # This used to report a bare 'git_push_failed' with no detail at all, which made the
+     # actual cause (no rights / no repo / non-fast-forward) impossible to tell apart.
+diff --git a/worker-pre-push.ps1 b/worker-pre-push.ps1
+--- a/worker-pre-push.ps1
++++ b/worker-pre-push.ps1
+@@ -3,8 +3,10 @@
+ try {
+   [Console]::OutputEncoding = [Text.Encoding]::UTF8
+   $p = [IO.File]::ReadAllText($Policy, [Text.Encoding]::UTF8) | ConvertFrom-Json
+   $repo = [string]$p.Repo
++  . (Join-Path $PSScriptRoot 'worker-git-preflight.ps1')
++  Assert-WorkerGitSynchronized $repo
+   $marker = '[' + ([string]$p.TaskId).Substring(0,8).ToLowerInvariant() + ']'
+   while ($line = [Console]::In.ReadLine()) {
+     $parts = $line -split ' '
+     if ($parts.Count -ne 4) { throw 'invalid_push_input' }
+diff --git a/worker-git-policy.tests.ps1 b/worker-git-policy.tests.ps1
+--- a/worker-git-policy.tests.ps1
++++ b/worker-git-policy.tests.ps1
+@@ -20,8 +20,9 @@
+   $null = Invoke-FixtureGit $path @('config','user.email','policy@example.test')
+   [IO.File]::WriteAllText((Join-Path $path 'operator.txt'),'original')
+   $null = Invoke-FixtureGit $path @('add','operator.txt'); $null = Invoke-FixtureGit $path @('commit','-m','base')
+   $null = Invoke-FixtureGit $root @('init','--bare',$bare)
++  $null = Invoke-FixtureGit $bare @('symbolic-ref','HEAD','refs/heads/main')
+   $null = Invoke-FixtureGit $path @('remote','add','origin',$bare)
+   Check ((Invoke-FixtureGit $path @('push','-u','origin','main')) -eq 0) 'fixture baseline published'
+   return @{Repo=$path;Bare=$bare}
+ }
+@@ -97,9 +98,9 @@
+   WithPolicy $f {
+     param($f)
+     Commit $f.Repo 'rewrite.txt' 'fix: attempted rewrite [12345678]'
+     Check ((Invoke-FixtureGit $f.Repo @('push','--force','origin','HEAD:main')) -ne 0) 'force flag cannot overwrite newer published history'
+-    Check (($script:lastOutput -join ' ') -match 'remote_history_changed') 'published history rejection is explained'
++    Check (($script:lastOutput -join ' ') -match '(remote_history_changed|worker_git_sync_integration_required)') 'published history rejection is explained'
+   }
+ 
+   $f = Fixture
+   [IO.File]::WriteAllText((Join-Path $f.Repo '.git/hooks/pre-push'),"#!/bin/sh`nexit 0`n")
+diff --git a/worker-git-preflight.ps1 b/worker-git-preflight.ps1
+new file mode 100644
+--- /dev/null
++++ b/worker-git-preflight.ps1
+@@ -0,0 +1,156 @@
++﻿# Native Git gate: fetch remote refs, never change HEAD, the index or working files.
++function ConvertTo-WorkerGitArgument([string]$Value) {
++  if ($Value -notmatch '[\s"]' -and $Value.Length) { return $Value }
++  return '"' + ([regex]::Replace(([regex]::Replace($Value, '(\\*)"', '$1$1\"')), '(\\+)$', '$1$1')) + '"'
++}
++
++function Invoke-WorkerSyncGit([string]$Repo, [string[]]$Arguments, [int]$TimeoutMs = 60000) {
++  $info = New-Object Diagnostics.ProcessStartInfo
++  $info.FileName = 'git.exe'
++  $info.Arguments = (@('-C', $Repo) + $Arguments | ForEach-Object { ConvertTo-WorkerGitArgument ([string]$_) }) -join ' '
++  $info.UseShellExecute = $false; $info.CreateNoWindow = $true
++  $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true; $info.RedirectStandardInput = $true
++  $info.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
++  $info.EnvironmentVariables['GCM_INTERACTIVE'] = 'never'
++  $process = [Diagnostics.Process]::Start($info)
++  try {
++    $process.StandardInput.Close()
++    $stdout = $process.StandardOutput.ReadToEndAsync(); $stderr = $process.StandardError.ReadToEndAsync()
++    if (-not $process.WaitForExit($TimeoutMs)) {
++      & taskkill /PID $process.Id /T /F 2>$null | Out-Null
++      throw 'worker_git_sync_timeout: Git did not complete; worker is blocked without changing local files'
++    }
++    $output = $stdout.Result; $detail = $stderr.Result
++    $detail = $detail -replace '(?i)(https?://)[^\s/@]+@', '$1[redacted]@'
++    $detail = $detail -replace '(?i)(?:gh[pousr]_|github_pat_)[a-z0-9_]+', '[redacted]'
++    return @{ Code = $process.ExitCode; Output = $output.Trim(); Detail = $detail.Substring(0, [Math]::Min(1500, $detail.Length)).Trim() }
++  } finally { $process.Dispose() }
++}
++
++function Read-WorkerSyncGit([string]$Repo, [string[]]$Arguments) {
++  $result = Invoke-WorkerSyncGit $Repo $Arguments
++  if ($result.Code -ne 0) { throw ('worker_git_sync_read_failed: ' + ($Arguments -join ' ') + ': ' + $result.Detail) }
++  return [string]$result.Output
++}
++
++function Get-WorkerSyncRemote([string]$Repo) {
++  $remotes = @((Read-WorkerSyncGit $Repo @('remote')) -split '\r?\n' | Where-Object { $_ })
++  if (-not $remotes.Count) { return '' }
++  $github = @{}
++  $githubPattern = '(?i)^(?:https://(?:[^/@\s]+@)?github\.com/|git@github\.com:|ssh://(?:git@)?github\.com(?::(?:22|443))?/)([^/\s]+/[^/\s]+?)(?:\.git)?/?$'
++  foreach ($remote in $remotes) {
++    if ($remote -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._/-]*$') { throw 'worker_git_sync_invalid_remote_name' }
++    $urls = @((Read-WorkerSyncGit $Repo @('remote', 'get-url', '--all', $remote)) -split '\r?\n')
++    $identities = @($urls | ForEach-Object {
++      if ($_ -match $githubPattern) {
++        $Matches[1].ToLowerInvariant()
++      }
++    } | Sort-Object -Unique)
++    if ($identities.Count) {
++      if ($identities.Count -ne 1 -or $urls.Count -ne @($urls | Where-Object { $_ -match $githubPattern }).Count) {
++        throw 'worker_git_sync_ambiguous_remote: one remote points at different repositories'
++      }
++      $github[$remote] = $identities[0]
++    }
++  }
++  if (@($github.Values | Sort-Object -Unique).Count -gt 1) { throw 'worker_git_sync_ambiguous_github: cannot choose between different GitHub repositories' }
++  $branch = Invoke-WorkerSyncGit $Repo @('symbolic-ref', '--quiet', '--short', 'HEAD')
++  $upstream = if ($branch.Code -eq 0) { Invoke-WorkerSyncGit $Repo @('config', '--get', ('branch.' + $branch.Output + '.remote')) } else { $null }
++  if ($github.Count) {
++    if ($upstream -and $github.ContainsKey($upstream.Output)) { return [string]$upstream.Output }
++    if ($github.ContainsKey('github')) { return 'github' }
++    if ($github.ContainsKey('origin')) { return 'origin' }
++    return [string]@($github.Keys | Sort-Object)[0]
++  }
++  if ($upstream -and $upstream.Output -ne '.' -and $remotes -contains $upstream.Output) { return [string]$upstream.Output }
++  if ($remotes -contains 'origin') { return 'origin' }
++  if ($remotes.Count -eq 1) { return [string]$remotes[0] }
++  throw 'worker_git_sync_ambiguous_remote: no unambiguous upstream'
++}
++
++function Assert-WorkerGitSynchronized([string]$Repo) {
++  if (-not $Repo -or -not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) { return }
++  $remote = Get-WorkerSyncRemote $Repo
++  if (-not $remote) { return }
++  $branch = Read-WorkerSyncGit $Repo @('symbolic-ref', '--quiet', '--short', 'HEAD')
++  $fetch = Invoke-WorkerSyncGit $Repo @('-c', 'credential.interactive=false', 'fetch', '--prune', '--no-tags', $remote, ('+refs/heads/*:refs/remotes/' + $remote + '/*'))
++  if ($fetch.Code -ne 0) { throw ('worker_git_sync_fetch_failed: ' + $remote + ': ' + $fetch.Detail) }
++  $remoteHead = Invoke-WorkerSyncGit $Repo @('ls-remote', '--symref', $remote, 'HEAD')
++  if ($remoteHead.Code -ne 0) { throw ('worker_git_sync_remote_head_failed: ' + $remoteHead.Detail) }
++  $primary = ''; $advertised = ''
++  foreach ($line in ($remoteHead.Output -split '\r?\n')) {
++    if ($line -match '^ref:\s+refs/heads/(.+)\s+HEAD$') { $primary = $Matches[1] }
++    if ($line -match '^([a-f0-9]{40}|[a-f0-9]{64})\s+HEAD$') { $advertised = $Matches[1] }
++  }
++  if (-not $primary -or -not $advertised) {
++    $heads = Read-WorkerSyncGit $Repo @('ls-remote', '--heads', $remote)
++    if (-not $heads) { return } # An empty remote permits the first task commit.
++    throw 'worker_git_sync_default_branch_unknown: remote HEAD must identify its real primary branch'
++  }
++  $primaryRef = 'refs/remotes/' + $remote + '/' + $primary
++  $fetched = Read-WorkerSyncGit $Repo @('rev-parse', '--verify', $primaryRef)
++  if ($fetched -ne $advertised) { throw 'worker_git_sync_remote_changed_during_fetch: retry synchronization' }
++  $refs = @($primaryRef)
++  $branchRef = 'refs/remotes/' + $remote + '/' + $branch
++  $hasBranch = Invoke-WorkerSyncGit $Repo @('show-ref', '--verify', '--quiet', $branchRef)
++  if ($hasBranch.Code -eq 0) { $refs += $branchRef }
++  elseif ($hasBranch.Code -ne 1) { throw 'worker_git_sync_branch_read_failed' }
++  $upstreamRemote = Invoke-WorkerSyncGit $Repo @('config', '--get', ('branch.' + $branch + '.remote'))
++  if ($upstreamRemote.Code -eq 0 -and $upstreamRemote.Output -eq $remote) {
++    $merge = Read-WorkerSyncGit $Repo @('config', '--get', ('branch.' + $branch + '.merge'))
++    if ($merge -notlike 'refs/heads/*') { throw 'worker_git_sync_invalid_upstream' }
++    $tracked = 'refs/remotes/' + $remote + '/' + $merge.Substring(11)
++    $trackedExists = Invoke-WorkerSyncGit $Repo @('show-ref', '--verify', '--quiet', $tracked)
++    if ($trackedExists.Code -ne 0) { throw 'worker_git_sync_upstream_deleted: do not recreate an upstream branch without review' }
++    $refs += $tracked
++  }
++  foreach ($ref in @($refs | Sort-Object -Unique)) {
++    $ancestor = Invoke-WorkerSyncGit $Repo @('merge-base', '--is-ancestor', $ref, 'HEAD')
++    if ($ancestor.Code -eq 1) { throw ('worker_git_sync_integration_required: ' + $ref + ' is not included in HEAD; preserve local changes and integrate in a separate safe checkout before retrying') }
++    if ($ancestor.Code -ne 0) { throw ('worker_git_sync_history_unavailable: ' + $ancestor.Detail) }
++  }
++}
++
++function Get-WorkerRunGitDirectory($Run) {
++  if ($Run.TextOnly) { return '' }
++  if ($Run.SessionWorkDir) { return [string]$Run.SessionWorkDir }
++  $arguments = @($Run.Args)
++  for ($index = 0; $index -lt ($arguments.Count - 1); $index++) {
++    if ($arguments[$index] -eq '-C') { return [string]$arguments[$index + 1] }
++  }
++  throw 'worker_git_sync_workspace_missing: cannot verify a tool-enabled worker'
++}
++
++# Wrap existing hooks instead of changing persistent Git config or bypassing operator hooks.
++function Add-WorkerGitSyncHooks([string]$Repo, [string]$Directory, [string]$HookDir = '') {
++  if (-not $Repo -or -not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) { return '' }
++  if (-not $HookDir) {
++    $HookDir = Join-Path $Directory 'sync-git-hooks'
++    [void][IO.Directory]::CreateDirectory($HookDir)
++    $gitDir = Read-WorkerSyncGit $Repo @('rev-parse', '--absolute-git-dir')
++    $configured = Invoke-WorkerSyncGit $Repo @('config', '--get', 'core.hooksPath')
++    if ($configured.Code -gt 1) { throw 'worker_git_sync_hook_configuration_unavailable' }
++    $original = if ($configured.Output) { $configured.Output } else { Join-Path $gitDir 'hooks' }
++    if (-not [IO.Path]::IsPathRooted($original)) { $original = Join-Path $Repo $original }
++    if (Test-Path -LiteralPath $original) {
++      foreach ($hook in @(Get-ChildItem -LiteralPath $original -File | Where-Object { $_.Name -notlike '*.sample' })) {
++        $proxy = "#!/bin/sh`nexec " + (ConvertTo-WorkerHookArgument ($hook.FullName -replace '\\', '/')) + ' "$@"' + "`n"
++        [IO.File]::WriteAllText((Join-Path $HookDir $hook.Name), $proxy, (New-Object Text.UTF8Encoding($false)))
++      }
++    }
++  }
++  foreach ($name in @('pre-commit', 'pre-push')) {
++    $path = Join-Path $HookDir $name
++    $tail = "exit 0`n"
++    if (Test-Path -LiteralPath $path) {
++      $chained = $path + '.after-sync'
++      Copy-Item -LiteralPath $path -Destination $chained
++      $tail = 'exec ' + (ConvertTo-WorkerHookArgument ($chained -replace '\\', '/')) + ' "$@"' + "`n"
++    }
++    $command = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' +
++      (ConvertTo-WorkerHookArgument ((Join-Path $PSScriptRoot 'worker-git-sync-hook.ps1') -replace '\\', '/')) +
++      ' -Repo ' + (ConvertTo-WorkerHookArgument ($Repo -replace '\\', '/'))
++    [IO.File]::WriteAllText($path, ("#!/bin/sh`n" + $command + " || exit `$?`n" + $tail), (New-Object Text.UTF8Encoding($false)))
++  }
++  return $HookDir
++}
+diff --git a/worker-git-sync-hook.ps1 b/worker-git-sync-hook.ps1
+new file mode 100644
+--- /dev/null
++++ b/worker-git-sync-hook.ps1
+@@ -0,0 +1,10 @@
++﻿param([Parameter(Mandatory=$true)][string]$Repo)
++$ErrorActionPreference = 'Stop'
++. (Join-Path $PSScriptRoot 'worker-git-preflight.ps1')
++try {
++  Assert-WorkerGitSynchronized $Repo
++  exit 0
++} catch {
++  [Console]::Error.WriteLine('ProjectsFlow: Git synchronization blocked: ' + $_.Exception.Message)
++  exit 1
++}
+diff --git a/worker-git-preflight.tests.ps1 b/worker-git-preflight.tests.ps1
+new file mode 100644
+--- /dev/null
++++ b/worker-git-preflight.tests.ps1
+@@ -0,0 +1,156 @@
++﻿$ErrorActionPreference = 'Stop'
++. (Join-Path $PSScriptRoot 'worker-git-policy.ps1')
++. (Join-Path $PSScriptRoot 'worker-git-preflight.ps1')
++$root = Join-Path ([IO.Path]::GetTempPath()) ('pf-worker-sync-' + [guid]::NewGuid().ToString('N') + ' with space')
++[void][IO.Directory]::CreateDirectory($root)
++$script:checks = 0; $script:fixtures = 0
++function Check([bool]$Value, [string]$Message) { if (-not $Value) { throw $Message }; $script:checks++; Write-Host "PASS $Message" }
++function Invoke-SyncFixtureGit([string]$Repo, [string[]]$Arguments) {
++  $result = Invoke-WorkerSyncGit $Repo $Arguments
++  if ($result.Code -ne 0) { throw ($Arguments[0] + ': ' + $result.Detail) }
++  return [string]$result.Output
++}
++function Fixture([string]$Primary = 'master') {
++  $script:fixtures++
++  $dir = Join-Path $root ([string]$script:fixtures); $bare = $dir + '.git'
++  [void][IO.Directory]::CreateDirectory($dir)
++  $null = Invoke-SyncFixtureGit $dir @('init', '-b', $Primary)
++  $null = Invoke-SyncFixtureGit $dir @('config', 'user.name', 'Git Sync Test')
++  $null = Invoke-SyncFixtureGit $dir @('config', 'user.email', 'sync@example.invalid')
++  [IO.File]::WriteAllText((Join-Path $dir 'base.txt'), 'baseline')
++  $null = Invoke-SyncFixtureGit $dir @('add', 'base.txt'); $null = Invoke-SyncFixtureGit $dir @('commit', '-m', 'baseline')
++  $null = Invoke-SyncFixtureGit $root @('init', '--bare', $bare)
++  $null = Invoke-SyncFixtureGit $bare @('symbolic-ref', 'HEAD', ('refs/heads/' + $Primary))
++  $null = Invoke-SyncFixtureGit $dir @('remote', 'add', 'origin', $bare)
++  $null = Invoke-SyncFixtureGit $dir @('push', '-u', 'origin', $Primary)
++  $other = $dir + '-other'; $null = Invoke-SyncFixtureGit $root @('clone', $bare, $other)
++  $null = Invoke-SyncFixtureGit $other @('config', 'user.name', 'Other Developer')
++  $null = Invoke-SyncFixtureGit $other @('config', 'user.email', 'other@example.invalid')
++  return @{ Repo=$dir; Bare=$bare; Other=$other; Primary=$Primary }
++}
++function Commit([string]$Repo, [string]$Name, [string]$Message = 'change [12345678]') {
++  [IO.File]::WriteAllText((Join-Path $Repo $Name), [guid]::NewGuid().ToString('N'))
++  $null = Invoke-SyncFixtureGit $Repo @('add', '--', $Name); $null = Invoke-SyncFixtureGit $Repo @('commit', '-m', $Message)
++}
++function Advance($Fixture) {
++  Commit $Fixture.Other 'remote.txt'
++  $null = Invoke-SyncFixtureGit $Fixture.Other @('push', 'origin', $Fixture.Primary)
++}
++function Rejected([scriptblock]$Action, [string]$Pattern) {
++  $message = ''
++  try { & $Action } catch { $message = $_.Exception.Message }
++  Check ($message -match $Pattern) ('fail closed: ' + $Pattern + '; actual=' + $message)
++}
++function WithHooks([string]$HookDir, [scriptblock]$Action) {
++  $variables = @{}; Set-WorkerGitPolicyEnvironment $variables $HookDir
++  $saved = @{}
++  try {
++    foreach ($key in $variables.Keys) { $saved[$key] = [Environment]::GetEnvironmentVariable($key); [Environment]::SetEnvironmentVariable($key, $variables[$key]) }
++    & $Action
++  } finally { foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key]) } }
++}
++try {
++  $f = Fixture
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'base.txt'), 'operator edit')
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'staged.txt'), 'operator staged')
++  $null = Invoke-SyncFixtureGit $f.Repo @('add', 'staged.txt')
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'untracked.txt'), 'operator untracked')
++  $head = Invoke-SyncFixtureGit $f.Repo @('rev-parse', 'HEAD'); $status = Invoke-SyncFixtureGit $f.Repo @('status', '--porcelain')
++  Assert-WorkerGitSynchronized $f.Repo
++  Check ((Invoke-SyncFixtureGit $f.Repo @('rev-parse', 'HEAD')) -eq $head -and (Invoke-SyncFixtureGit $f.Repo @('status', '--porcelain')) -eq $status) 'fresh master passes without changing HEAD or the index'
++  Advance $f
++  Rejected { Assert-WorkerGitSynchronized $f.Repo } 'worker_git_sync_integration_required'
++  Check ((Invoke-SyncFixtureGit $f.Repo @('rev-parse', 'origin/master')) -ne $head) 'fetch actually updates stale tracking refs'
++  Check ((Invoke-SyncFixtureGit $f.Repo @('rev-parse', 'HEAD')) -eq $head -and (Invoke-SyncFixtureGit $f.Repo @('status', '--porcelain')) -eq $status) 'rejection preserves HEAD, staged and unstaged changes'
++  Check ([IO.File]::ReadAllText((Join-Path $f.Repo 'base.txt')) -eq 'operator edit' -and [IO.File]::ReadAllText((Join-Path $f.Repo 'untracked.txt')) -eq 'operator untracked') 'operator file contents are preserved'
++
++  $f = Fixture 'main'
++  $null = Invoke-SyncFixtureGit $f.Repo @('switch', '-c', 'feature/task')
++  Commit $f.Repo 'own.txt'
++  Assert-WorkerGitSynchronized $f.Repo
++  Check $true 'local feature commits based on current main are allowed'
++  Advance $f
++  Rejected { Assert-WorkerGitSynchronized $f.Repo } 'worker_git_sync_integration_required'
++  Check ((Invoke-SyncFixtureGit $f.Repo @('log', '-1', '--format=%s')) -eq 'change [12345678]') 'diverged feature history is never rewritten'
++
++  $f = Fixture
++  $null = Invoke-SyncFixtureGit $f.Repo @('switch', '-c', 'feature/shared')
++  $null = Invoke-SyncFixtureGit $f.Repo @('push', '-u', 'origin', 'feature/shared')
++  $null = Invoke-SyncFixtureGit $f.Other @('switch', '-c', 'feature/shared', 'origin/master')
++  Commit $f.Other 'shared.txt'; $null = Invoke-SyncFixtureGit $f.Other @('push', 'origin', 'feature/shared')
++  Rejected { Assert-WorkerGitSynchronized $f.Repo } 'worker_git_sync_integration_required'
++  $null = Invoke-SyncFixtureGit $f.Bare @('update-ref', '-d', 'refs/heads/feature/shared')
++  Rejected { Assert-WorkerGitSynchronized $f.Repo } 'worker_git_sync_upstream_deleted'
++
++  $f = Fixture
++  $null = Invoke-SyncFixtureGit $f.Repo @('remote', 'set-url', 'origin', (Join-Path $root 'missing.git'))
++  Rejected { Assert-WorkerGitSynchronized $f.Repo } 'worker_git_sync_fetch_failed'
++
++  $f = Fixture
++  $null = Invoke-SyncFixtureGit $f.Bare @('symbolic-ref', 'HEAD', 'refs/heads/missing')
++  Rejected { Assert-WorkerGitSynchronized $f.Repo } 'worker_git_sync_default_branch_unknown'
++
++  $f = Fixture
++  $null = Invoke-SyncFixtureGit $f.Repo @('remote', 'add', 'github', 'https://github.com/example/project.git')
++  Check ((Get-WorkerSyncRemote $f.Repo) -eq 'github') 'GitHub is selected even when origin points at another server'
++  $null = Invoke-SyncFixtureGit $f.Repo @('remote', 'add', 'foreign', 'git@github.com:other/project.git')
++  Rejected { Get-WorkerSyncRemote $f.Repo } 'worker_git_sync_ambiguous_github'
++
++  Check ((Get-WorkerRunGitDirectory @{TextOnly=$true}) -eq '') 'tool-less jobs do not access Git'
++  Check ((Get-WorkerRunGitDirectory @{Args=@('exec','-C',$root,'-')}) -eq $root) 'one-shot tool-enabled jobs resolve their own working directory'
++  Rejected { Get-WorkerRunGitDirectory @{Args=@('exec','-')} } 'worker_git_sync_workspace_missing'
++  Assert-WorkerGitSynchronized $root
++  Check $true 'snapshot folders without Git are left alone'
++
++  $f = Fixture
++  $operatorHooks = Join-Path $f.Repo '.git/hooks'
++  [IO.File]::WriteAllText((Join-Path $operatorHooks 'pre-commit'), "#!/bin/sh`necho operator_pre_commit >&2`nexit 7`n", (New-Object Text.UTF8Encoding($false)))
++  [IO.File]::WriteAllText((Join-Path $operatorHooks 'pre-push'), "#!/bin/sh`necho operator_pre_push >&2`nexit 9`n", (New-Object Text.UTF8Encoding($false)))
++  $hooks = Add-WorkerGitSyncHooks -Repo $f.Repo -Directory (Join-Path $root 'operator-run')
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'next.txt'), 'next'); $null = Invoke-SyncFixtureGit $f.Repo @('add', 'next.txt')
++  WithHooks $hooks {
++    $result = Invoke-WorkerSyncGit $f.Repo @('commit', '-m', 'operator hook must run')
++    Check ($result.Code -ne 0 -and $result.Detail -match 'operator_pre_commit') 'existing operator pre-commit hooks remain effective'
++    $result = Invoke-WorkerSyncGit $f.Repo @('push', 'origin', 'HEAD:refs/heads/operator-policy')
++    Check ($result.Code -ne 0 -and $result.Detail -match 'operator_pre_push') 'one-shot workers preserve existing operator pre-push hooks'
++  }
++  Check ((Invoke-SyncFixtureGit $f.Repo @('status', '--porcelain')) -match 'next.txt') 'operator rejection preserves the staged change'
++
++  $f = Fixture
++  $null = Invoke-SyncFixtureGit $f.Repo @('switch', '-c', 'feature/unpublished')
++  Commit $f.Repo 'own.txt'
++  Assert-WorkerGitSynchronized $f.Repo
++  $hooks = New-WorkerGitPolicy $f.Repo '12345678-1234-1234-1234-123456789abc' (Join-Path $root 'task-run')
++  $hooks = Add-WorkerGitSyncHooks -Repo $f.Repo -Directory (Join-Path $root 'task-run') -HookDir $hooks
++  WithHooks $hooks {
++    $result = Invoke-WorkerSyncGit $f.Repo @('push', 'origin', 'HEAD:refs/heads/feature/allowed')
++    Check ($result.Code -eq 0) ('fresh task push passes both synchronization and task ownership hooks: ' + $result.Detail)
++  }
++  Advance $f
++  [IO.File]::WriteAllText((Join-Path $f.Repo 'next.txt'), 'next'); $null = Invoke-SyncFixtureGit $f.Repo @('add', 'next.txt')
++  WithHooks $hooks {
++    $result = Invoke-WorkerSyncGit $f.Repo @('commit', '-m', 'change [12345678]')
++    Check ($result.Code -ne 0 -and $result.Detail -match 'integration_required') 'commit re-fetches and blocks after main advances mid-task'
++    $result = Invoke-WorkerSyncGit $f.Repo @('push', 'origin', 'HEAD:refs/heads/feature/unpublished')
++    Check ($result.Code -ne 0 -and $result.Detail -match 'integration_required') 'new branch push cannot bypass a newer remote primary branch'
++  }
++  Check ((Invoke-SyncFixtureGit $f.Repo @('ls-remote', '--heads', 'origin', 'refs/heads/feature/unpublished')) -eq '') 'rejected push creates no remote branch'
++
++  Import-Module (Join-Path $PSScriptRoot 'codex-engine.psm1') -Force
++  $fake = Join-Path $root 'fake-code-worker.cjs'; $marker = Join-Path $root 'worker-started.txt'
++  [IO.File]::WriteAllText($fake, 'const fs=require("node:fs");process.stdin.resume();process.stdin.on("end",()=>{fs.writeFileSync(process.env.PF_SYNC_MARKER,"started");console.log(JSON.stringify({type:"turn.completed",usage:{}}));});')
++  $run = @{ Exe=(Get-Command node.exe).Source; Home=(Join-Path $root 'native-run'); Args=@($fake,'-C',$f.Repo); Environment=@{PF_SYNC_MARKER=$marker} }
++  Rejected { Invoke-CodexRawStream -Run $run -Prompt 'resume work' } 'worker_git_sync_integration_required'
++  Check (-not (Test-Path -LiteralPath $marker)) 'stale checkout blocks before the native code worker process starts'
++  $textResult = Invoke-CodexText -Run $run -Prompt 'apply approved website edit' -TimeoutSec 30
++  Check (-not $textResult.ok -and $textResult.reason -match 'worker_git_sync_integration_required' -and -not (Test-Path -LiteralPath $marker)) 'one-shot code workers also stop before the model starts'
++  $lease = Enter-WorkerCheckoutLease $f.Repo; $lease.Dispose()
++  Check $true 'failed preflight releases the checkout lease'
++} finally {
++  $resolved = [IO.Path]::GetFullPath($root)
++  $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
++  if ($resolved.StartsWith($tempRoot,[StringComparison]::OrdinalIgnoreCase) -and [IO.Path]::GetFileName($resolved).StartsWith('pf-worker-sync-')) {
++    Remove-Item -LiteralPath $resolved -Recurse -Force
++  }
++}
++Write-Host "Passed: $script:checks"
