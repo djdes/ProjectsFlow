@@ -6,6 +6,7 @@ import React, { act } from 'react';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import type { UiPrefs } from '@/domain/user/UiPrefs';
 const { createRoot } = await import('react-dom/client');
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -13,6 +14,7 @@ const context = {
   pathname: '/all-tasks', navigations: [] as string[], selected: { id: 'selected', name: 'Выбранное', icon: null },
   workspaces: [{ id: 'selected', name: 'Выбранное', icon: null }, { id: 'other', name: 'Другая команда', icon: null }],
   workspaceError: null as Error | null,
+  uiPrefs: {} as UiPrefs,
 };
 Object.assign(globalThis, { __workspaceTasks: context });
 const stubs: Record<string, string> = {
@@ -20,7 +22,9 @@ const stubs: Record<string, string> = {
     export const useLocation=()=>({pathname:c().pathname}), useNavigate=()=>to=>c().navigations.push(to), useNavigationType=()=>'PUSH';
     export const Link=({to,...p})=>React.createElement('a',{...p,href:to}), NavLink=Link;`,
   '@/infrastructure/di/container': `import React from 'react'; const Scope=React.createContext('');
-    export const useContainer=()=>({aiConversationRepository:{}}), useTestWorkspace=()=>React.useContext(Scope);
+    const userRepository={getUiPrefs:async()=>globalThis.__workspaceTasks.uiPrefs,
+      setUiPrefs:async prefs=>(globalThis.__workspaceTasks.uiPrefs={...globalThis.__workspaceTasks.uiPrefs,...prefs})};
+    export const useContainer=()=>({aiConversationRepository:{},userRepository}), useTestWorkspace=()=>React.useContext(Scope);
     export const WorkspaceContainerProvider=({workspaceId,children})=>React.createElement(Scope.Provider,{value:workspaceId},children);`,
   '@/presentation/hooks/useWorkspaces': 'export const useWorkspaces=()=>({data:globalThis.__workspaceTasks.workspaces,error:globalThis.__workspaceTasks.workspaceError});',
   '@/presentation/hooks/WorkspacesProvider': 'export const WorkspaceViewProvider=({children})=>children;',
@@ -29,7 +33,8 @@ const stubs: Record<string, string> = {
   '@/presentation/hooks/CompletedTodayProvider': 'export const CompletedTodayProvider=({children})=>children;',
   '@/presentation/hooks/AwaitingReplyProvider': 'export const AwaitingReplyProvider=({children})=>children;',
   './InboxPage': `import React from 'react'; import {useTestWorkspace} from '@/infrastructure/di/container';
-    export const InboxPage=({embedded})=>React.createElement('div',{'data-reused-inbox':useTestWorkspace(),'data-embedded':embedded},'Доска пространства');`,
+    export const InboxPage=({embedded,onHideWorkspace})=>React.createElement('div',{'data-reused-inbox':useTestWorkspace(),'data-embedded':embedded},
+      'Доска пространства',React.createElement('button',{onClick:onHideWorkspace},'Скрыть пространство'));`,
   '@/presentation/hooks/useCurrentWorkspace': 'export const useCurrentWorkspace=()=>({workspace:globalThis.__workspaceTasks.selected});',
   '@/presentation/hooks/useCurrentUser': "export const useCurrentUser=()=>({user:{id:'me',isAdmin:false,displayName:'Я'}});",
   '@/presentation/hooks/useProjects': 'export const useProjects=()=>({data:[]});',
@@ -90,6 +95,34 @@ test('workspace list errors remain explicit instead of silently claiming a compl
   const view = await mount('AllWorkspaceTasksPage');
   try { assert.match(view.host.querySelector('[role=alert]')!.textContent!, /Не удалось обновить/); }
   finally { context.workspaceError = null; await view.close(); }
+});
+
+test('hiding removes the entire workspace section, survives remount and can hide every board', async () => {
+  context.uiPrefs = {};
+  let view = await mount('AllWorkspaceTasksPage');
+  try {
+    const personal = view.host.querySelector<HTMLElement>('[data-pf-workspace-tasks="selected"]')!;
+    await act(async () => personal.querySelector('button')!.click());
+    assert.equal(view.host.querySelector('[data-pf-workspace-tasks="selected"]'), null);
+    assert.ok(view.host.querySelector('[data-pf-workspace-tasks="other"]'));
+    assert.deepEqual(context.uiPrefs.hiddenTaskWorkspaceIds, ['selected']);
+    assert.equal(context.selected.id, 'selected');
+    await view.close();
+    view = await mount('AllWorkspaceTasksPage');
+    assert.equal(view.host.querySelector('[data-pf-workspace-tasks="selected"]'), null);
+    const other = view.host.querySelector<HTMLElement>('[data-pf-workspace-tasks="other"]')!;
+    await act(async () => other.querySelector('button')!.click());
+    assert.equal(view.host.querySelector('[data-pf-workspace-tasks]'), null);
+    assert.match(view.host.querySelector('[role=status]')!.textContent!, /Все пространства скрыты/);
+    const menu = [...view.host.querySelectorAll('button')].find(button => button.textContent!.includes('Пространства 0/2'))!;
+    assert.ok(menu);
+    await act(async () => menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    const restore = [...document.querySelectorAll<HTMLElement>('[role=menuitem]')].find(item => item.textContent === 'Показать все')!;
+    assert.ok(restore);
+    await act(async () => restore.click());
+    assert.equal(view.host.querySelectorAll('[data-pf-workspace-tasks]').length, 2);
+    assert.deepEqual(context.uiPrefs.hiddenTaskWorkspaceIds, []);
+  } finally { context.uiPrefs = {}; await view.close(); }
 });
 
 test('desktop home and globe navigate independently while preserving the selected workspace', async () => {

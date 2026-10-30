@@ -7,6 +7,8 @@ export const ASSIGNED_GROUPINGS = ['project', 'created', 'deadline', 'priority',
 export type AssignedGrouping = (typeof ASSIGNED_GROUPINGS)[number];
 
 export type UiPrefs = {
+  // Personal visibility on the global tasks page; does not change workspace access.
+  readonly hiddenTaskWorkspaceIds?: readonly string[];
   readonly inboxAssignedGrouping?: AssignedGrouping;
   // Порядок строк-свойств окна задачи (assignee/approver/deadline/priority/taskType/mode/…).
   // Один на пользователя для всех проектов; неизвестные/недостающие ключи дополняются дефолтом.
