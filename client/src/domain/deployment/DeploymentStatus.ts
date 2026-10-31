@@ -12,7 +12,7 @@ export type DeploymentStatus = {
 };
 
 export function deploymentIsActive(phase: DeploymentPhase): boolean {
-  return ['queued', 'checking', 'building', 'deploying', 'verifying'].includes(phase);
+  return ['deploying', 'verifying'].includes(phase);
 }
 
 export function newerDeploymentAvailable(status: DeploymentStatus, browserBuild: string): boolean {

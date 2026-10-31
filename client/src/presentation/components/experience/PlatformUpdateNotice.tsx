@@ -25,7 +25,7 @@ export function DeploymentStatusNotice({ status, browserBuild, observedRun, onRe
     return () => window.clearTimeout(timer);
   }, [status, key, available, observed]);
   const recentFailure = !!status && ['failed', 'canceled'].includes(status.phase) && !!status.updatedAt
-    && (observed || new Date(status.checkedAt).getTime() - new Date(status.updatedAt).getTime() < 15 * 60_000);
+    && observed && new Date(status.checkedAt).getTime() - new Date(status.updatedAt).getTime() < 15 * 60_000;
   if (!status || dismissed === key || (!active && !available && !uncertain && !recentFailure && !(observed && status.phase === 'success'))) return null;
   const failed = status.phase === 'failed' || status.phase === 'canceled';
   const confirmed = status.phase === 'success' && !status.stale;
