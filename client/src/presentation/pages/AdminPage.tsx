@@ -27,6 +27,13 @@ type Tab = 'projects' | 'users' | 'support' | 'email' | 'ai';
 
 const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email', 'ai'];
 
+// Статус проекта приходит кодом ('active' …) — в интерфейсе показываем по-русски.
+const PROJECT_STATUS_LABEL: Record<AdminProject['status'], string> = {
+  active: 'активен',
+  paused: 'на паузе',
+  archived: 'в архиве',
+};
+
 export function AdminPage(): React.ReactElement {
   const [searchParams] = useSearchParams();
   // Дип-линк из уведомления о новом обращении: /admin?tab=support.
@@ -195,7 +202,7 @@ function ProjectsTab(): React.ReactElement {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{p.status}</span>
+                      <span>{PROJECT_STATUS_LABEL[p.status] ?? p.status}</span>
                       <span className="inline-flex items-center gap-1">
                         <Users className="size-3" /> {p.memberCount}
                       </span>

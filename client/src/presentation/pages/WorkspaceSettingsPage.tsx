@@ -1006,33 +1006,35 @@ function AssigneeDigestCard({
                   aria-label="Включить ежедневную таблицу"
                 />
                 <Label className="min-w-32">Ежедневная таблица</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={draft.hour}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)),
-                    })
-                  }
-                />
-                <span>:</span>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={draft.minute}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
-                    })
-                  }
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.hour}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)),
+                      })
+                    }
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={draft.minute}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
+                      })
+                    }
+                  />
+                </div>
               </div>
               <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
                 <Switch
@@ -1042,7 +1044,7 @@ function AssigneeDigestCard({
                   aria-label="Включить личную сводку в бота"
                 />
                 <Label className="min-w-32">Каждому в личку бота</Label>
-                <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                <span className="min-w-48 flex-1 text-xs text-muted-foreground">
                   в то же время каждый получает свои задачи по всем проектам — карточками
                   с кнопками «Завершить», «Комментировать», «Посмотреть». Telegram-группа
                   для этого не нужна.
@@ -1051,39 +1053,41 @@ function AssigneeDigestCard({
               <div className={cn('space-y-3 py-3', GROUP_CLASS)}>
                 <div className="flex flex-wrap items-center gap-3">
                   <Label className="min-w-32">Сверка коммитов</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={23}
-                    value={draft.commitSyncHour}
-                    disabled={!canManage}
-                    className="w-16"
-                    onChange={(event) =>
-                      update({
-                        commitSyncHour: Math.min(
-                          23,
-                          Math.max(0, Number(event.target.value) || 0),
-                        ),
-                      })
-                    }
-                  />
-                  <span>:</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={59}
-                    value={draft.commitSyncMinute}
-                    disabled={!canManage}
-                    className="w-16"
-                    onChange={(event) =>
-                      update({
-                        commitSyncMinute: Math.min(
-                          59,
-                          Math.max(0, Number(event.target.value) || 0),
-                        ),
-                      })
-                    }
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={draft.commitSyncHour}
+                      disabled={!canManage}
+                      className="w-16"
+                      onChange={(event) =>
+                        update({
+                          commitSyncHour: Math.min(
+                            23,
+                            Math.max(0, Number(event.target.value) || 0),
+                          ),
+                        })
+                      }
+                    />
+                    <span>:</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={draft.commitSyncMinute}
+                      disabled={!canManage}
+                      className="w-16"
+                      onChange={(event) =>
+                        update({
+                          commitSyncMinute: Math.min(
+                            59,
+                            Math.max(0, Number(event.target.value) || 0),
+                          ),
+                        })
+                      }
+                    />
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     время сверки для всех проектов пространства
                   </span>
@@ -1227,39 +1231,41 @@ function AssigneeDigestCard({
                   onCheckedChange={(eodReminderEnabled) => update({ eodReminderEnabled })}
                 />
                 <Label className="min-w-32">Перед уходом</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={draft.eodReminderHour}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      eodReminderHour: Math.min(
-                        23,
-                        Math.max(0, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
-                />
-                <span>:</span>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={draft.eodReminderMinute}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      eodReminderMinute: Math.min(
-                        59,
-                        Math.max(0, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.eodReminderHour}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        eodReminderHour: Math.min(
+                          23,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      })
+                    }
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={draft.eodReminderMinute}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        eodReminderMinute: Math.min(
+                          59,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      })
+                    }
+                  />
+                </div>
                 <span className="text-xs text-muted-foreground">
                   напомнить обновить статусы в группе
                 </span>
