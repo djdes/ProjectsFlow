@@ -38,7 +38,11 @@ function marker(body: string, kind: 'question' | 'answer' | 'cancel'): Record<st
 function prefersSession(candidate: WorkerActivitySession, current: WorkerActivitySession): boolean {
   const candidateRunning = candidate.status === 'running';
   const currentRunning = current.status === 'running';
-  if (candidateRunning !== currentRunning) return candidateRunning;
+  if (candidateRunning !== currentRunning) {
+    return candidateRunning
+      ? +candidate.startedAt >= +current.startedAt
+      : +candidate.startedAt > +current.startedAt;
+  }
   const candidateEffective = +(candidate.endedAt ?? candidate.startedAt);
   const currentEffective = +(current.endedAt ?? current.startedAt);
   if (candidateEffective !== currentEffective) return candidateEffective > currentEffective;

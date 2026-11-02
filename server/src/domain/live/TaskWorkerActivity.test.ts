@@ -49,3 +49,10 @@ test('overlapping session completed later beats duplicate collision failed earli
   assert.deepEqual(taskWorkerActivities([session('approval', 'failed', 100, 105, 'pending_approval')], []), []);
   assert.equal(taskWorkerActivities([session('approval', 'running', 100, null, 'pending_approval')], [])[0]!.state, 'running');
 });
+
+test('newer finished session supersedes an older orphaned running session regardless of order', () => {
+  const staleRunning = session('one', 'running', 100, null, 'pending_approval');
+  const newerCompleted = session('one', 'completed', 200, 700, 'pending_approval');
+  assert.deepEqual(taskWorkerActivities([staleRunning, newerCompleted], []), []);
+  assert.deepEqual(taskWorkerActivities([newerCompleted, staleRunning], []), []);
+});

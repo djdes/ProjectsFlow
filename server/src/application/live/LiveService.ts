@@ -107,6 +107,23 @@ export class LiveService {
     if (billedUserId) {
       await assertDispatcherAllowed(this.deps.checkBudget, billedUserId);
     }
+    // Если предыдущий прогон этой же задачи остался незакрытым (например, ранний выход на
+    // уточнение или обрыв связи диспетчера), закрываем его при старте новой попытки.
+    if (typeof this.deps.repo.listSessions === 'function') {
+      const priorSessions = await this.deps.repo.listSessions(taskId);
+      for (const prior of priorSessions) {
+        if (prior.status !== 'running') continue;
+        await this.deps.repo.finishSession(prior.id, {
+          status: 'canceled',
+          headAfter: null,
+          costUsd: null,
+          tokensIn: null,
+          tokensOut: null,
+        });
+        this.deps.liveEventHub?.publishEnd?.(prior.id, 'canceled');
+        this.broadcastChanged(projectId, taskId, prior.id, 'canceled', [userId]);
+      }
+    }
     const sessionId = this.deps.idGen();
     const baseSeq = (await this.deps.repo.maxSeqForTask(taskId)) + 1;
     await this.deps.repo.insertSession({

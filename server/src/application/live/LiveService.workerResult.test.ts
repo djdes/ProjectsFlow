@@ -74,3 +74,31 @@ test('ingest and completion publish under the attempt UUID, never the shared tas
   await service.finishSession('p', 'dispatcher', 't', 'attempt', { status: 'completed' });
   assert.deepEqual(calls, ['events:attempt', 'end:attempt']);
 });
+
+test('starting a new session closes any leftover running sessions of the same task', async () => {
+  const closed: string[] = [];
+  const ended: string[] = [];
+  const service = new LiveService({
+    access: { projects: { async getById() { return { id: 'p', dispatcherUserId: 'dispatcher' }; } }, members: {} },
+    tasks: { async getById() { return { id: 't', createdBy: null }; } },
+    legacyAttribution: { async findLegacyCreatorForTask() { return null; } },
+    idGen: () => 'new-session',
+    repo: {
+      async listSessions() {
+        return [
+          { id: 'orphan-running', status: 'running' },
+          { id: 'prev-completed', status: 'completed' },
+        ];
+      },
+      async finishSession(id: string, input: { status: string }) { closed.push(`${id}:${input.status}`); },
+      async maxSeqForTask() { return 10; },
+      async insertSession() {},
+    },
+    liveEventHub: { publishEnd(id: string, status: string) { ended.push(`${id}:${status}`); } },
+    broadcaster: { async broadcastLiveSessionChanged() {} },
+  } as unknown as LiveServiceDeps);
+  const res = await service.startSession('p', 'dispatcher', 't', { agentName: 'ralph-worker', attempt: 2 });
+  assert.equal(res.sessionId, 'new-session');
+  assert.deepEqual(closed, ['orphan-running:canceled']);
+  assert.deepEqual(ended, ['orphan-running:canceled']);
+});

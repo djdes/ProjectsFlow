@@ -198,7 +198,8 @@ function TaskLiveChat({
     [onCommentCreated, onTaskChanged],
   );
 
-  const runningRun = runs.find(run => run.session.status === 'running');
+  const latestRun = runs.at(-1);
+  const runningRun = latestRun?.session.status === 'running' ? latestRun : undefined;
   const anyRunning = !!runningRun;
   useEffect(() => { onRunningChange?.(anyRunning); }, [anyRunning, onRunningChange]);
   useEffect(() => {
@@ -295,7 +296,7 @@ function TaskLiveChat({
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
           if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
-          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' ? 'работает' : STATUS_LABEL_RU[entry.session.status]}</p>;
+          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' && entry.session.id === runningRun?.session.id ? 'работает' : STATUS_LABEL_RU[entry.session.status === 'running' ? 'completed' : entry.session.status]}</p>;
         })}
         {runningRun && <ClaudeSpinner startedAt={runningRun.session.startedAt} />}
         {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
