@@ -10,6 +10,7 @@ const { createRoot } = await import('react-dom/client');
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
 const context = {
+  userId: 'me',
   pathname: '/all-tasks', navigations: [] as string[], selected: { id: 'selected', name: 'Выбранное', icon: null },
   workspaces: [{ id: 'selected', name: 'Выбранное', icon: null }, { id: 'other', name: 'Другая команда', icon: null }],
   workspaceError: null as Error | null,
@@ -31,7 +32,7 @@ const stubs: Record<string, string> = {
   './InboxPage': `import React from 'react'; import {useTestWorkspace} from '@/infrastructure/di/container';
     export const InboxPage=({embedded})=>React.createElement('div',{'data-reused-inbox':useTestWorkspace(),'data-embedded':embedded},'Доска пространства');`,
   '@/presentation/hooks/useCurrentWorkspace': 'export const useCurrentWorkspace=()=>({workspace:globalThis.__workspaceTasks.selected});',
-  '@/presentation/hooks/useCurrentUser': "export const useCurrentUser=()=>({user:{id:'me',isAdmin:false,displayName:'Я'}});",
+  '@/presentation/hooks/useCurrentUser': "export const useCurrentUser=()=>({user:{id:globalThis.__workspaceTasks.userId,isAdmin:false,displayName:'Я'}});",
   '@/presentation/hooks/useProjects': 'export const useProjects=()=>({data:[]});',
   '@/presentation/hooks/useChatRooms': 'export const useActiveChatUnread=()=>0;',
   '@/presentation/hooks/UnreadTasksProvider': 'export const useUnreadTasks=()=>({count:0});export const UnreadTasksProvider=({children})=>children;',
@@ -90,6 +91,43 @@ test('workspace list errors remain explicit instead of silently claiming a compl
   const view = await mount('AllWorkspaceTasksPage');
   try { assert.match(view.host.querySelector('[role=alert]')!.textContent!, /Не удалось обновить/); }
   finally { context.workspaceError = null; await view.close(); }
+});
+
+test('hidden workspaces stay hidden after reopening and can all be restored', async () => {
+  localStorage.clear();
+  let view = await mount('AllWorkspaceTasksPage');
+  try {
+    const inputs = view.host.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
+    await act(async () => inputs[1]!.click());
+    assert.equal(view.host.querySelector('[data-reused-inbox=other]'), null);
+    assert.ok(view.host.querySelector('[data-reused-inbox=selected]'));
+    await view.close();
+    view = await mount('AllWorkspaceTasksPage');
+    assert.equal(view.host.querySelector('[data-reused-inbox=other]'), null);
+    await act(async () => view.host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
+    assert.equal(view.host.querySelectorAll('[data-reused-inbox]').length, 0);
+    assert.match(view.host.textContent!, /Все пространства скрыты/);
+    for (const input of view.host.querySelectorAll<HTMLInputElement>('input[type=checkbox]')) {
+      await act(async () => input.click());
+    }
+    assert.equal(view.host.querySelectorAll('[data-reused-inbox]').length, 2);
+    assert.equal(context.selected.id, 'selected');
+  } finally { await view.close(); localStorage.clear(); }
+});
+
+test('malformed saved visibility does not break the overview', async () => {
+  localStorage.setItem('pf:all-tasks:hidden-workspaces:me', '{invalid');
+  const view = await mount('AllWorkspaceTasksPage');
+  try { assert.equal(view.host.querySelectorAll('[data-reused-inbox]').length, 2); }
+  finally { await view.close(); localStorage.clear(); }
+});
+
+test('hidden workspace preferences belong to the signed-in user', async () => {
+  localStorage.setItem('pf:all-tasks:hidden-workspaces:me', '["other"]');
+  context.userId = 'another-user';
+  const view = await mount('AllWorkspaceTasksPage');
+  try { assert.equal(view.host.querySelectorAll('[data-reused-inbox]').length, 2); }
+  finally { await view.close(); context.userId = 'me'; localStorage.clear(); }
 });
 
 test('desktop home and globe navigate independently while preserving the selected workspace', async () => {
