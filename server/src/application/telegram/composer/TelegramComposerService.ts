@@ -2224,9 +2224,8 @@ export class TelegramComposerService {
     // «Готово»-режим: колонка каждого сегмента фиксируется в 'done' (см. startFromMessage).
     forceStatus: VisibleKanbanStatus | null = null,
     hintAssigneeUserId: string | null = null,
-    // Дописать сегмент в существующую задачу (existingTaskId от модели) можно только когда
-    // сообщение — ответ. Иначе это новая задача: модель «узнаёт» похожую по теме и уводила
-    // в комментарий старой задачи то, что человек ставил как новую работу.
+    // Replies can add a comment; an explicit duplicate can propose a description append.
+    // Mere topic similarity must still produce a separate task.
     allowAppend = false,
     // Ответственный по умолчанию, когда модель никого не назвала (не нашла или поставила автора).
     defaultAssigneeUserId: string | null = null,
@@ -2275,7 +2274,8 @@ export class TelegramComposerService {
         // приходит из «Готово»-режима и ставит все сегменты сразу в «Готово».
         targetStatus: forceStatus,
         taskType: s.taskType,
-        existingTaskId: allowAppend && projectChoices === undefined ? s.existingTaskId : null,
+        existingTaskId: (allowAppend || s.isDuplicate === true) && projectChoices === undefined ? s.existingTaskId : null,
+        isDuplicate: s.isDuplicate === true,
         sourceExcerpt: s.sourceExcerpt,
       });
     }
@@ -2488,27 +2488,31 @@ export class TelegramComposerService {
     // если модель ошиблась и это на самом деле отдельная задача.
     const append = await this.resolveAppendTarget(seg);
     const lines = [
-      append ? '➕ <b>Дополню существующую задачу</b>' : '🆕 <b>Новая задача</b>',
+      append ? (seg.isDuplicate ? '➕ <b>Похоже на дубль. Дополнить описание задачи с датой и временем?</b>' : '➕ <b>Дополню существующую задачу</b>') : '🆕 <b>Новая задача</b>',
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
       ...this.workspaceLines(view),
     ];
-    if (append) lines.push(`🎯 Задача: <b>${escapeHtml(excerpt(append.excerpt, 60))}</b>`);
+    if (append) lines.push(`🎯 Задача: <a href="${this.taskUrl(append.projectId, append.taskId)}">${escapeHtml(excerpt(append.excerpt, 60))}</a>`);
     lines.push(`👤 Ответственный: <b>${escapeHtml(assignee)}</b>`);
     lines.push(`📊 Колонка: <b>${escapeHtml(columnName)}</b>`);
     if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
     if (seg.title.trim()) lines.push(`📝 <b>${mdToPlain(seg.title.trim())}</b>`);
-    lines.push(markdownToTelegramHtml(excerpt(seg.body)));
+    lines.push(markdownToTelegramHtml(excerpt(seg.isDuplicate && append
+      ? seg.sourceExcerpt?.trim() || draft.taskText || seg.body
+      : seg.body)));
     if (draft.attachments.length > 0) {
       lines.push(`📎 Вложения: <b>${draft.attachments.length}</b>`);
     }
-    lines.push('', this.autoCreateFooter(view));
+    lines.push('', seg.isDuplicate && append
+      ? '⏸ Дополнение описания — только после подтверждения.'
+      : this.autoCreateFooter(view));
     return {
       text: lines.join('\n'),
       replyMarkup: {
         inline_keyboard: [
           ...(view.mode === 'pending' ? this.workspaceRows(draft, view) : []),
           [
-            { text: '✅ Создать задачу', callback_data: `ac:${draft.id}` },
+            { text: seg.isDuplicate && append ? '✅ Дополнить описание' : '✅ Создать задачу', callback_data: `ac:${draft.id}` },
             { text: '✖️ Отменить', callback_data: `tx:${draft.id}` },
           ],
           [{ text: '✏️ Изменить', callback_data: `ae:${draft.id}:0` }],
@@ -2550,7 +2554,7 @@ export class TelegramComposerService {
       const marker = seg.included ? (append ? '➕ ' : '') : '🚫 ';
       lines.push(`${i + 1}. ${marker}<b>${mdToPlain(titleText)}</b>${strike}`);
       lines.push(`   ${meta.join(' · ')}`);
-      if (append) lines.push(`   🎯 дополню: ${escapeHtml(excerpt(append.excerpt, 50))}`);
+      if (append) lines.push(`   🎯 ${seg.isDuplicate ? 'дубль — дополню описание с датой и временем' : 'дополню'}: ${escapeHtml(excerpt(append.excerpt, 50))}`);
     }
     if (draft.attachments.length > 0) {
       lines.push('', ...this.attachmentAssignmentSummary(draft));
@@ -2560,7 +2564,7 @@ export class TelegramComposerService {
     const rows: { text: string; callback_data: string }[][] = [
       ...(view.mode === 'pending' ? this.workspaceRows(draft, view) : []),
       [
-        { text: `✅ Создать все (${includedCount})`, callback_data: `ac:${draft.id}` },
+        { text: `✅ Подтвердить (${includedCount})`, callback_data: `ac:${draft.id}` },
         { text: '✖️ Отменить', callback_data: `tx:${draft.id}` },
       ],
     ];
@@ -2582,7 +2586,9 @@ export class TelegramComposerService {
       ]);
     }
     if (view.mode === 'decided') rows.push(...this.workspaceRows(draft, view));
-    lines.push('', this.autoCreateFooter(view));
+    lines.push('', segs.some((s) => s.included && s.isDuplicate && s.existingTaskId)
+      ? '⏸ Дополнение описания — только после подтверждения.'
+      : this.autoCreateFooter(view));
     return { text: lines.join('\n'), replyMarkup: { inline_keyboard: rows } };
   }
 
@@ -3184,6 +3190,10 @@ export class TelegramComposerService {
         'Сначала выбери проект — его пространство подписано на кнопке.');
       return;
     }
+    if (opts.automatic && draft.segments?.some((s) => s.included && s.isDuplicate && s.existingTaskId)) {
+      await this.deps.drafts.parkConfirmation(draft.id);
+      return;
+    }
     const segmentEntries = (draft.segments ?? [])
       .map((segment, index) => ({ segment, index }))
       .filter(({ segment }) => segment.included);
@@ -3238,12 +3248,18 @@ export class TelegramComposerService {
           failed += 1;
           continue;
         }
-        // Сегмент-дополнение: модель узнала существующую задачу и предлагает не плодить
-        // дубль, а дописать в неё комментарий. Описание задачи НЕ переписываем — UpdateTask
-        // делает полный replace, и любая ошибка модели стёрла бы работу человека.
+        // Preserve the current description verbatim; never replace it with model output.
         const appendTo = await this.resolveAppendTarget(seg);
         if (appendTo) {
-          await this.deps.createTaskComment.execute({
+          if (seg.isDuplicate) {
+            if (!this.deps.updateTask) throw new Error('Обновление описания недоступно');
+            const stamp = (this.deps.now?.() ?? new Date()).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+            const source = seg.sourceExcerpt?.trim() || draft.taskText || description;
+            await this.deps.updateTask.execute({
+              projectId: appendTo.projectId, taskId: appendTo.taskId, ownerUserId: userId,
+              description: `${appendTo.description}\n\n**Дополнение от ${stamp} (МСК)**\n\n${source}`,
+            });
+          } else await this.deps.createTaskComment.execute({
             projectId: appendTo.projectId,
             taskId: appendTo.taskId,
             ownerUserId: userId,
@@ -3414,7 +3430,7 @@ export class TelegramComposerService {
    */
   private async resolveAppendTarget(
     seg: TelegramDraftSegment,
-  ): Promise<{ taskId: string; projectId: string; excerpt: string } | null> {
+  ): Promise<{ taskId: string; projectId: string; excerpt: string; description: string } | null> {
     const taskId = seg.existingTaskId?.trim();
     if (!taskId || !this.deps.tasks) return null;
     try {
@@ -3425,6 +3441,7 @@ export class TelegramComposerService {
       if (!seg.projectId || task.projectId !== seg.projectId) return null;
       return {
         taskId: task.id,
+        description: task.description ?? '',
         projectId: task.projectId,
         excerpt: (task.description ?? '').split('\n')[0]?.trim() ?? '',
       };

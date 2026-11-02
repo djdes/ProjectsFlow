@@ -94,6 +94,7 @@ test('compose: JSON из ответа в markdown-заборе превраща�
         deadline: null,
         taskType: null,
         existingTaskId: null,
+        isDuplicate: false,
         sourceExcerpt: null,
       },
     ],
@@ -114,7 +115,7 @@ test('compose: результат разбирается Telegram-композе
       {
         id: 's2', title: 'Добавить скидку', simpleBody: 'Ещё скидка 10% на доставку', projectId: 'p1',
         projectName: 'Сайт', confidence: 0.7, assigneeUserId: null, assigneeName: null,
-        deadline: null, taskType: 'feature', existingTaskId: 't42', sourceExcerpt: 'и скидку 10% на доставку',
+        deadline: null, taskType: 'feature', existingTaskId: 't42', isDuplicate: true, sourceExcerpt: 'и скидку 10% на доставку',
       },
     ],
   });
@@ -129,6 +130,7 @@ test('compose: результат разбирается Telegram-композе
   assert.equal(segments[0]!.taskType, 'bug');
   assert.equal(segments[0]!.sourceExcerpt, 'Ваня, меню на айфоне не открывается, глянь до пятницы');
   assert.equal(segments[1]!.existingTaskId, 't42');
+  assert.equal(segments[1]!.isDuplicate, true);
   assert.equal(segments[1]!.taskType, 'feature');
 });
 

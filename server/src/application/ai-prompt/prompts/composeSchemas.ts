@@ -30,6 +30,7 @@ export const COMPOSE_PASS1_SCHEMA: LlmJsonSchema = {
             'deadline',
             'taskType',
             'existingTaskId',
+            'isDuplicate',
             'sourceExcerpt',
           ],
           properties: {
@@ -44,6 +45,7 @@ export const COMPOSE_PASS1_SCHEMA: LlmJsonSchema = {
             deadline: nullableString,
             taskType: { type: 'string', enum: ['feature', 'bug'] },
             existingTaskId: nullableString,
+            isDuplicate: { type: 'boolean' },
             sourceExcerpt: { type: 'string' },
           },
         },

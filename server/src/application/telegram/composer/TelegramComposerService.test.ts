@@ -1594,6 +1594,34 @@ test('обычное сообщение (не ответ) → всегда но�
   assert.ok(!h.edits.some((e) => /дополн/i.test(e.text)), 'карточка не обещает дополнить');
 });
 
+test('явный дубль предлагает дополнить описание с датой после подтверждения', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    now: () => new Date('2026-11-02T07:00:00Z'),
+    aiSegments: [seg1({ existingTaskId: 'old-1', isDuplicate: true, sourceExcerpt: 'Починить сборку повторно' })],
+    existingTasks: {
+      'old-1': { id: 'old-1', projectId: 'p1', description: 'Исходное описание\nРучные детали', deletedAt: null },
+    },
+  });
+  await h.service.startFromMessage(111, 500, 'Починить сборку повторно');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.equal(h.updatedDescriptions.length, 0);
+  assert.ok(h.edits.some((e) => e.text.includes('дубль')));
+  const draft = h.drafts.get(draftId)!;
+  h.drafts.set(draftId, { ...draft, autoCreateAt: new Date(Date.now() - 1000) });
+  await h.service.processDueAutoCreate();
+  assert.equal(h.updatedDescriptions.length, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.equal(h.drafts.get(draftId)!.autoCreateAt, null);
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.equal(h.updatedDescriptions.length, 1);
+  const result = h.updatedDescriptions[0]!;
+  assert.ok(result.startsWith('Исходное описание\nРучные детали\n\n'));
+  assert.ok(result.includes('02.11.2026, 10:00:00 (МСК)'));
+  assert.ok(result.endsWith('Починить сборку повторно'));
+});
+
 test('existingTaskId валиден и сообщение — ответ → комментарий в существующую задачу вместо новой', async () => {
   const h = makeHarness({
     projects: [{ id: 'p1', name: 'Альфа' }],
