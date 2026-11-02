@@ -199,7 +199,16 @@ export type TaskChangedPayload = {
   readonly taskAvailable: boolean;
 };
 
+export type PlatformMessagePayload = {
+  readonly type: 'platform_message';
+  readonly campaignId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly url: string | null;
+};
+
 export type NotificationPayload =
+  | PlatformMessagePayload
   | TaskChangedPayload
   | CommentMentionPayload
   | ProjectInvitePayload
@@ -253,6 +262,7 @@ export const ACTIONABLE_NOTIFICATION_TYPES: readonly NotificationPayload['type']
 // приглашение не найти нигде. Прочие уведомления без пространства — осиротевшие (проект
 // или задача удалены), их не показываем.
 export const PERSONAL_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
+  'platform_message',
   'workspace_invite',
   'project_invite',
   'support_ticket',
@@ -261,6 +271,7 @@ export const PERSONAL_NOTIFICATION_TYPES: readonly NotificationPayload['type'][]
 // «Для меня» в колокольчике: лид получает изменения всех задач проекта, а ориентироваться
 // нужно по своим. Эти виды адресованы лично человеку всегда…
 export const MINE_NOTIFICATION_TYPES: readonly NotificationPayload['type'][] = [
+  'platform_message',
   'workspace_invite',
   'project_invite',
   'join_request',

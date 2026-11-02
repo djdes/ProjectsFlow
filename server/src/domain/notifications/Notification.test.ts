@@ -22,3 +22,10 @@ test('рабочие уведомления других пространств 
   assert.equal(isVisibleInWorkspace(of('join_request', 'ws-other'), 'ws-mine'), false);
   assert.equal(isVisibleInWorkspace(of('task_changed', 'ws-mine'), 'ws-mine'), true);
 });
+
+
+test('рассылка адресована пользователю и видна при переключении его рабочих пространств', () => {
+  const notification = { workspaceId: null, payload: { type: 'platform_message', campaignId: 'campaign', title: 'Новости', body: 'Текст', url: null } } as const;
+  assert.equal(isVisibleInWorkspace(notification, 'workspace-a'), true);
+  assert.equal(isVisibleInWorkspace(notification, 'workspace-b'), true);
+});

@@ -1,3 +1,7 @@
+import { AdminMailingService } from './application/mailing/AdminMailingService.js';
+import { DeliverMailings } from './application/mailing/DeliverMailings.js';
+import { MysqlMailingRepository } from './infrastructure/repositories/MysqlMailingRepository.js';
+import { PlatformMailingTransport } from './infrastructure/mailing/PlatformMailingTransport.js';
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
 import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
 import { MysqlTelegramWorkerResultOutbox } from './infrastructure/repositories/MysqlTelegramWorkerResultOutbox.js';
@@ -2187,8 +2191,19 @@ const aiActionBatchService = new AiActionBatchService({
   },
 });
 
+const mailingRepository = new MysqlMailingRepository(pool);
+const mailingTransport = new PlatformMailingTransport({
+  email: emailSender, emailConfigured: Boolean(process.env['SMTP_HOST']),
+  notifications: notificationRepo, telegram: sendAgentTelegramNotification,
+  telegramConfigured: Boolean(telegramBotToken),
+});
+const adminMailingService = new AdminMailingService({ repository: mailingRepository, transport: mailingTransport, now, idGen: idGenerator });
+const deliverMailings = new DeliverMailings({ repository: mailingRepository, transport: mailingTransport, now, appUrl: appBaseUrl });
+setInterval(deliverMailings.wake, 5_000).unref();
+
 const deploymentAuditRuns = new Set<string>();
 const { app, devProxyUpgrade } = createApp({
+  mailings: adminMailingService,
   deployment: new GetDeploymentStatus({
     now,
     revision: new FileDeployedRevision(new URL('../../client/dist/build.json', import.meta.url)),
