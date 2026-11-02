@@ -9,15 +9,25 @@
   используй его фактическое имя. `origin` может указывать на сервер, а не на GitHub:
   синхронизация только с таким `origin` не выполняет это правило.
 - Сравни локальную ветку с актуальной основной веткой GitHub. Новую рабочую ветку
-  создавай от свежей `github/main`; перед коммитом и push интегрируй новые изменения
-  GitHub через rebase/merge. Примеры с `origin/main` в других документах относятся
-  к remote GitHub и должны учитывать его фактическое имя.
+  создавай от свежей `github/main`; перед первым push интегрируй новые изменения
+  GitHub через rebase, чтобы ветка ложилась на актуальный `main` линейно и без конфликтов.
+  Примеры с `origin/main` в других документах относятся к remote GitHub и должны
+  учитывать его фактическое имя.
 - Сохраняй все чужие и незакоммиченные изменения. При грязной или сильно разошедшейся
   рабочей папке используй отдельный worktree от актуального GitHub. Запрещены
   destructive reset, отбрасывание правок и force-push ради синхронизации.
 - После проверок обязательно коммить изменения задачи, отправляй feature-ветку
   в GitHub и проверяй, что удалённая ветка содержит коммит. Открывай PR в `main`;
-  не пушь напрямую в `main` и не мержи PR без согласия владельца.
+  не пушь напрямую в `main`.
+  - **Автономный канбан-воркер (`ralph-worker`):** без дополнительных вопросов создаёт
+    рабочую ветку задачи (`feat/<taskIdShort>-…` / `fix/<taskIdShort>-…`), пушит её,
+    открывает PR в `main`, дожидается отсутствия конфликтов (`mergeable == true`) и
+    успешного завершения всех CI-проверок PR (`checks.yml`), после чего **автоматически
+    мержит PR в `main`** и возвращает локальный checkout на свежий `main`. Если CI красный
+    и не чинится в рамках задачи или есть конфликт — оставляет PR открытым и указывает
+    ссылку и причину в комментарии задачи.
+  - **Интерактивные сессии:** открывают PR в `main` и мержат его после зелёных проверок
+    по подтверждению владельца репозитория.
 - Если fetch, интеграция или push не удались, сообщи конкретную причину.
   Не объявляй репозиторий синхронизированным без проверки.
 
@@ -36,18 +46,22 @@ It is the shared source for architecture, commands, migrations and deployment ru
   the task changes unless the user explicitly asks otherwise. Preserve unrelated work.
 - Production deploys only through pull requests. Never push directly to `main`:
   push to a feature branch (`feat/…`, `fix/…`, `chore/…`) and open a PR into `main`.
-  Merge only after the PR checks are green and the repository owner approves.
+  Autonomous `ralph-worker` runs may merge their own PR automatically once it is
+  conflict-free and all PR checks are green, then switch checkout back to `main`;
+  interactive sessions merge after owner approval.
   Do not run manual deploys (`npm run deploy`, workflow dispatch) unless the owner asks.
 - Do not change nginx or commit credentials. Follow the commit/kanban workflow in
   `CLAUDE.md` when a commit is requested; do not move tasks to done without authorization.
 
 ## Playwright and interface-reference work
 
-Before any Playwright, Browser MCP, CDP, or visual reference-site work, fully read
-`C:\Users\Yaroslav\simplifications\Инструкция работы с playwright для codex.md`
-and follow it as the primary procedure for the whole flow.
+In interactive workstation sessions (when not running inside a sandboxed `ralph-worker`
+restricted to the repository directory), before reference-site Playwright/CDP work read
+`C:\Users\Yaroslav\simplifications\Инструкция работы с playwright для codex.md` if present.
+Sandboxed `ralph-worker` runs must never read paths outside the repository workspace and
+should run local `npm run test:smoke` / repository Playwright checks directly inside `cwd`.
 
-- Connect to the user's existing Chrome through CDP; do not launch a replacement browser when that Chrome is available.
+- Connect to the user's existing Chrome through CDP when doing interactive reference-site capture; do not launch a replacement browser when that Chrome is available.
 - Treat reference-site research as a clean-room study of observable behavior only.
 - Complete the repository audit and reference capture before production implementation.
 - Keep the reference tab open, do not log out, do not inspect secrets or private source code, and do not perform destructive actions.
