@@ -87,6 +87,8 @@ export function notificationKind(payload: NotificationPayload): FeedKind {
       return payload.severity === 'critical'
         ? kind('Сбой сервера', 'red', ServerCrash)
         : kind('Предупреждение', 'orange', Server);
+    case 'platform_message':
+      return kind('Рассылка', 'gray', Newspaper);
     case 'daily_digest':
       return kind('Сводка', 'gray', Newspaper);
     case 'support_ticket':

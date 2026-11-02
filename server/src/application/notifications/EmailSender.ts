@@ -4,6 +4,8 @@ export type EmailMessage = {
   readonly subject: string;
   readonly html: string;
   readonly text: string;
+  readonly messageId?: string;
+  readonly headers?: Readonly<Record<string, string>>;
 };
 
 export interface EmailSender {

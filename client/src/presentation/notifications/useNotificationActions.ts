@@ -87,6 +87,12 @@ export function useNotificationActions(opts?: {
       else if (p.type === 'server_alert') navigate(`/projects/${p.projectId}/monitoring`);
       else if (p.type === 'daily_digest') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'support_ticket') navigate('/admin?tab=support');
+      else if (p.type === 'platform_message' && p.url) {
+        try {
+          const target = new URL(p.url, window.location.origin);
+          if (target.protocol === 'https:' || target.protocol === 'http:') window.location.assign(target.href);
+        } catch { /* Invalid legacy links remain inert. */ }
+      }
       else if (p.type === 'chat_mention') {
         // Переключаем сайдбар на чат (rail + вкладка панели); localStorage — чтобы выбор пережил
         // remount, событие — чтобы сработало на уже смонтированных Sidebar/CommunicationPanel.

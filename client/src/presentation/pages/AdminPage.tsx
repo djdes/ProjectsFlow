@@ -1,3 +1,4 @@
+import { AdminMailingPanel } from '@/presentation/components/admin/mailings/AdminMailingPanel';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Bot, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
@@ -23,9 +24,9 @@ import { useAuth } from '@/presentation/auth/AuthProvider';
 import { EmptyPanel } from '@/presentation/pages/PageScaffold';
 import { SectionPage } from '@/presentation/pages/SectionPage';
 
-type Tab = 'projects' | 'users' | 'support' | 'email' | 'ai';
+type Tab = 'projects' | 'users' | 'support' | 'email' | 'ai' | 'mailings';
 
-const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email', 'ai'];
+const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email', 'ai', 'mailings'];
 
 // Статус проекта приходит кодом ('active' …) — в интерфейсе показываем по-русски.
 const PROJECT_STATUS_LABEL: Record<AdminProject['status'], string> = {
@@ -62,6 +63,7 @@ export function AdminPage(): React.ReactElement {
             <TabsTrigger value="email">
               <Mail className="size-3.5" /> Email
             </TabsTrigger>
+            <TabsTrigger value="mailings"><Send className="size-3.5" /> Рассылки</TabsTrigger>
             <TabsTrigger value="ai">
               <Bot className="size-3.5" /> ИИ
             </TabsTrigger>
@@ -80,6 +82,7 @@ export function AdminPage(): React.ReactElement {
         <TabsContent value="email" className="mbs-5">
           <EmailTab />
         </TabsContent>
+        <TabsContent value="mailings" className="mbs-5"><AdminMailingPanel /></TabsContent>
         <TabsContent value="ai" className="mbs-5">
           <AdminLlmPanel />
         </TabsContent>

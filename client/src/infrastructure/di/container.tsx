@@ -1,3 +1,5 @@
+import type { MailingRepository } from "@/application/mailing/MailingRepository";
+import { HttpMailingRepository } from "@/infrastructure/http/HttpMailingRepository";
 import { workspaceHttpClient } from '@/infrastructure/http/httpClient';
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { ImageGenerationRepository } from '@/application/image-generation/ImageGenerationRepository';
@@ -137,6 +139,7 @@ type Container = {
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
   adminRepository: AdminRepository;
+  mailingRepository: MailingRepository;
   // Подписка ChatGPT платформы: вход по коду, статус, очереди на сервере (только админ).
   llmAdminRepository: LlmAdminRepository;
   employeeRepository: EmployeeRepository;
@@ -244,6 +247,7 @@ function buildContainer(): Container {
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
     adminRepository: adminRepo,
+    mailingRepository: new HttpMailingRepository(),
     llmAdminRepository: new HttpLlmAdminRepository(),
     employeeRepository: employeeRepo,
     projectFinanceRepository: projectFinanceRepo,

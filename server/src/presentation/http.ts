@@ -1,3 +1,5 @@
+import type { AdminMailingService } from '../application/mailing/AdminMailingService.js';
+import { mailingAdminRouter, mailingPublicRouter } from './mailing/routes.js';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
@@ -540,6 +542,7 @@ type AppDeps = {
     readonly gateway: LlmGateway;
     readonly text: GenerateLlmText;
   };
+  readonly mailings?: AdminMailingService;
   readonly admin: {
     readonly listAllProjects: ListAllProjects;
     readonly listAllUsers: ListAllUsers;
@@ -845,6 +848,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], express.json({ limit: '35mb' }));
+  app.use('/api/admin/mailings/imports', express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
@@ -1021,6 +1025,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/me', meStatsRouter(deps.meStats));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin/llm', llmAdminRouter(deps.llm));
+  if (deps.mailings) {
+    app.use('/api/admin/mailings', mailingAdminRouter(deps.mailings));
+    app.use('/api/mailings', mailingPublicRouter(deps.mailings));
+  }
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));
   app.use(

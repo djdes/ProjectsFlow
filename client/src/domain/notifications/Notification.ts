@@ -173,7 +173,16 @@ export type TaskChangedPayload = {
   readonly taskAvailable: boolean;
 };
 
+export type PlatformMessagePayload = {
+  readonly type: 'platform_message';
+  readonly campaignId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly url: string | null;
+};
+
 export type NotificationPayload =
+  | PlatformMessagePayload
   | TaskChangedPayload
   | CommentMentionPayload
   | ProjectInvitePayload

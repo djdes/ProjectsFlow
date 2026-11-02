@@ -46,6 +46,8 @@ type NotificationView = {
 
 function describe(payload: NotificationPayload): NotificationView {
   switch (payload.type) {
+    case 'platform_message':
+      return { avatarName: 'ProjectsFlow', context: 'ProjectsFlow', subject: payload.title, meta: payload.body, metaTitle: payload.body };
     case 'task_changed': {
       const actor = feedActorName(payload.actorDisplayName) || 'Кто-то';
       const comment = payload.action === 'commented' ? plainExcerpt(payload.detail) : '';
