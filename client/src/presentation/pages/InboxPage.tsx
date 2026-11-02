@@ -1,7 +1,7 @@
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { EyeOff, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import { PageTitle, PageTopBar } from '@/presentation/layout/PageChrome';
@@ -25,7 +25,13 @@ function loadHideDone(): boolean {
 // The globe opens AllWorkspaceTasksPage without changing the selected workspace.
 // Личные задачи живут в обычном проекте с флагом isInbox=true; сервер создаёт его лениво
 // при первом GET /api/inbox.
-export function InboxPage({ embedded = false }: { embedded?: boolean }): React.ReactElement {
+export function InboxPage({
+  embedded = false,
+  onHideWorkspace,
+}: {
+  embedded?: boolean;
+  onHideWorkspace?: () => void;
+}): React.ReactElement {
   const { projectRepository, taskRepository } = useContainer();
   const { workspace } = useCurrentWorkspace();
   const [project, setProject] = useState<Project | null>(null);
@@ -131,21 +137,37 @@ export function InboxPage({ embedded = false }: { embedded?: boolean }): React.R
           onChanged={() => void reloadInboxTasks(project.id)}
           heading={<CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />}
           actions={
-            // Выделение задач блока: режим включается сразу во всех его колонках, в шапке
-            // каждой появляются «Все»/«Очистить», снизу — панель действий.
-            <Button
-              type="button"
-              variant={selectionActive ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
-              aria-pressed={selectionActive}
-              onClick={() => setSelectionActive((v) => !v)}
-            >
-              <ListChecks className="size-4" />
-              <span className="max-sm:sr-only">
-                {selectionActive ? 'Отменить выделение' : 'Выделить'}
-              </span>
-            </Button>
+            <>
+              {/* Выделение задач блока: режим включается сразу во всех его колонках, в шапке
+                  каждой появляются «Все»/«Очистить», снизу — панель действий. */}
+              <Button
+                type="button"
+                variant={selectionActive ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
+                aria-pressed={selectionActive}
+                onClick={() => setSelectionActive((v) => !v)}
+              >
+                <ListChecks className="size-4" />
+                <span className="max-sm:sr-only">
+                  {selectionActive ? 'Отменить выделение' : 'Выделить'}
+                </span>
+              </Button>
+              {embedded && onHideWorkspace && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
+                  title="Скрыть пространство со страницы «Все задачи»"
+                  aria-label={`Скрыть пространство «${workspace?.name ?? 'Пространство'}»`}
+                  onClick={onHideWorkspace}
+                >
+                  <EyeOff className="size-4" />
+                  <span className="max-sm:sr-only">Скрыть</span>
+                </Button>
+              )}
+            </>
           }
           hideDone={hideDone}
           onHideDoneChange={handleHideDoneChange}

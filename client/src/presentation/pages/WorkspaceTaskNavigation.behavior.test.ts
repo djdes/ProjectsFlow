@@ -30,7 +30,7 @@ const stubs: Record<string, string> = {
   '@/presentation/hooks/CompletedTodayProvider': 'export const CompletedTodayProvider=({children})=>children;',
   '@/presentation/hooks/AwaitingReplyProvider': 'export const AwaitingReplyProvider=({children})=>children;',
   './InboxPage': `import React from 'react'; import {useTestWorkspace} from '@/infrastructure/di/container';
-    export const InboxPage=({embedded})=>React.createElement('div',{'data-reused-inbox':useTestWorkspace(),'data-embedded':embedded},'Доска пространства');`,
+    export const InboxPage=({embedded,onHideWorkspace})=>{const id=useTestWorkspace();return React.createElement('div',{'data-reused-inbox':id,'data-embedded':embedded},'Доска пространства',onHideWorkspace?React.createElement('button',{type:'button','data-hide-workspace':id,onClick:onHideWorkspace},'Скрыть'):null);};`,
   '@/presentation/hooks/useCurrentWorkspace': 'export const useCurrentWorkspace=()=>({workspace:globalThis.__workspaceTasks.selected});',
   '@/presentation/hooks/useCurrentUser': "export const useCurrentUser=()=>({user:{id:globalThis.__workspaceTasks.userId,isAdmin:false,displayName:'Я'}});",
   '@/presentation/hooks/useProjects': 'export const useProjects=()=>({data:[]});',
@@ -112,6 +112,24 @@ test('hidden workspaces stay hidden after reopening and can all be restored', as
     }
     assert.equal(view.host.querySelectorAll('[data-reused-inbox]').length, 2);
     assert.equal(context.selected.id, 'selected');
+  } finally { await view.close(); localStorage.clear(); }
+});
+
+test('inline hide button on a workspace board hides that space and Show all restores it', async () => {
+  localStorage.clear();
+  const view = await mount('AllWorkspaceTasksPage');
+  try {
+    const inlineHide = view.host.querySelector<HTMLButtonElement>('[data-hide-workspace=other]');
+    assert.ok(inlineHide);
+    await act(async () => inlineHide.click());
+    assert.equal(view.host.querySelector('[data-reused-inbox=other]'), null);
+    assert.ok(view.host.querySelector('[data-reused-inbox=selected]'));
+    const showAll = [...view.host.querySelectorAll<HTMLButtonElement>('button')].find((btn) =>
+      btn.textContent?.includes('Показать все'),
+    );
+    assert.ok(showAll);
+    await act(async () => showAll.click());
+    assert.equal(view.host.querySelectorAll('[data-reused-inbox]').length, 2);
   } finally { await view.close(); localStorage.clear(); }
 });
 

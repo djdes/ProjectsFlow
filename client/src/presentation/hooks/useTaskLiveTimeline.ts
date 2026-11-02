@@ -97,7 +97,8 @@ export function useTaskLiveTimeline(projectId: string, taskId: string): {
     };
   }, [projectId, taskId, liveRepository]);
 
-  const runningId = runs.findLast(run => run.session.status === 'running')?.session.id ?? null;
+  const latestRun = runs.at(-1);
+  const runningId = latestRun?.session.status === 'running' ? latestRun.session.id : null;
   useEffect(() => {
     if (!runningId) return;
     let disposed = false;
