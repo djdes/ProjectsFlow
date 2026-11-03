@@ -1,4 +1,6 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
+import { GetPlatformStats } from './application/admin/GetPlatformStats.js';
+import { DrizzlePlatformStatsRepository } from './infrastructure/repositories/DrizzlePlatformStatsRepository.js';
 import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
 import { MysqlTelegramWorkerResultOutbox } from './infrastructure/repositories/MysqlTelegramWorkerResultOutbox.js';
 import { MysqlMailingRepository } from './infrastructure/repositories/MysqlMailingRepository.js';
@@ -761,6 +763,7 @@ const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db, projectMemberRepo);
 const adminRepo = new DrizzleAdminRepository(db);
+const platformStatsRepo = new DrizzlePlatformStatsRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
 
@@ -2709,6 +2712,7 @@ const { app, devProxyUpgrade } = createApp({
     text: llmTextGenerator,
   },
   admin: {
+    getPlatformStats: new GetPlatformStats({ repo: platformStatsRepo, now }),
     listAllProjects: new ListAllProjects(adminRepo),
     listAllUsers: new ListAllUsers(adminRepo),
     updateUser: new UpdateUserAsAdmin(adminRepo),

@@ -1,3 +1,4 @@
+import type { GetPlatformStats } from '../application/admin/GetPlatformStats.js';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
@@ -547,6 +548,7 @@ type AppDeps = {
     readonly text: GenerateLlmText;
   };
   readonly admin: {
+    readonly getPlatformStats: GetPlatformStats;
     readonly listAllProjects: ListAllProjects;
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;

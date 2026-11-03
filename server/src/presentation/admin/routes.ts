@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import type { GetPlatformStats } from '../../application/admin/GetPlatformStats.js';
 import type { ListAllProjects } from '../../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
@@ -23,6 +24,8 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 
 type Deps = {
+  // Вкладка «Статистика». Опциональна — без неё эндпоинт отвечает 404 (тесты).
+  readonly getPlatformStats?: GetPlatformStats;
   readonly listAllProjects: ListAllProjects;
   readonly listAllUsers: ListAllUsers;
   readonly updateUser: UpdateUserAsAdmin;
@@ -60,6 +63,18 @@ export function adminRouter(deps: Deps): Router {
     try {
       const list = await deps.listAllProjects.execute();
       res.json({ projects: list.map(projectToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/stats', async (_req: Request, res: Response, next: NextFunction) => {
+    if (!deps.getPlatformStats) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+    try {
+      res.json(await deps.getPlatformStats.execute());
     } catch (e) {
       next(e);
     }

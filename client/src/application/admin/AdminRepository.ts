@@ -88,7 +88,35 @@ export type AdminSupportTicket = {
   readonly submitterEmail: string | null;
 };
 
+// Вкладка «Статистика»: дневные ряды метрик платформы (дни по Москве) и прогноз на 30 дней.
+export type StatsPoint = { readonly day: string; readonly value: number };
+export type StatsForecastPoint = StatsPoint & { readonly low: number; readonly high: number };
+export type PlatformStatsMetric = {
+  readonly key: 'activeUsers' | 'registrations' | 'tasksCreated' | 'comments';
+  readonly label: string;
+  readonly points: StatsPoint[];
+  readonly forecast: StatsForecastPoint[];
+  readonly last30: number;
+  readonly prev30: number;
+  readonly forecastNext30: number;
+};
+export type PlatformStats = {
+  readonly from: string;
+  readonly to: string;
+  readonly totals: {
+    readonly users: number;
+    readonly workspaces: number;
+    readonly projects: number;
+    readonly tasks: number;
+    readonly paidUsers: number;
+    readonly activeWeek: number;
+    readonly activeMonth: number;
+  };
+  readonly metrics: PlatformStatsMetric[];
+};
+
 export interface AdminRepository {
+  getPlatformStats(): Promise<PlatformStats>;
   listProjects(): Promise<AdminProject[]>;
   listUsers(): Promise<AdminUser[]>;
   updateUser(id: string, patch: AdminUserPatch): Promise<void>;

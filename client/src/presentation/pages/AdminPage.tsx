@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bot, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Megaphone, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
+import { Bot, ChartLine, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Megaphone, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -19,14 +19,15 @@ import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 import { AdminLlmPanel } from '@/presentation/components/admin/AdminLlmPanel';
 import { AdminMailingPanel } from '@/presentation/components/admin/mailing/AdminMailingPanel';
+import { AdminStatsPanel } from '@/presentation/components/admin/AdminStatsPanel';
 import { EditUserDialog, UserPlanDialog, DeleteUserDialog } from '@/presentation/components/admin/AdminUserDialogs';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { EmptyPanel } from '@/presentation/pages/PageScaffold';
 import { SectionPage } from '@/presentation/pages/SectionPage';
 
-type Tab = 'projects' | 'users' | 'support' | 'mailing' | 'email' | 'ai';
+type Tab = 'stats' | 'projects' | 'users' | 'support' | 'mailing' | 'email' | 'ai';
 
-const TABS: readonly Tab[] = ['projects', 'users', 'support', 'mailing', 'email', 'ai'];
+const TABS: readonly Tab[] = ['stats', 'projects', 'users', 'support', 'mailing', 'email', 'ai'];
 
 // Статус проекта приходит кодом ('active' …) — в интерфейсе показываем по-русски.
 const PROJECT_STATUS_LABEL: Record<AdminProject['status'], string> = {
@@ -51,6 +52,9 @@ export function AdminPage(): React.ReactElement {
         {/* Шесть вкладок на телефоне шире экрана — ряд прокручивается вбок, а не режется. */}
         <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pf-scrollbar-hide sm:mx-0 sm:px-0">
           <TabsList>
+            <TabsTrigger value="stats">
+              <ChartLine className="size-3.5" /> Статистика
+            </TabsTrigger>
             <TabsTrigger value="projects">
               <FolderGit2 className="size-3.5" /> Проекты
             </TabsTrigger>
@@ -72,6 +76,9 @@ export function AdminPage(): React.ReactElement {
           </TabsList>
         </div>
 
+        <TabsContent value="stats" className="mbs-5">
+          <AdminStatsPanel />
+        </TabsContent>
         <TabsContent value="projects" className="mbs-5">
           <ProjectsTab />
         </TabsContent>

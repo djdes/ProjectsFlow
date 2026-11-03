@@ -1,6 +1,7 @@
 import type {
   AdminProject,
   AdminRepository,
+  PlatformStats,
   AdminUser,
   AdminUserPatch,
   AdminUserProjectDispatcher,
@@ -13,6 +14,10 @@ import type { PlanId } from '@/domain/usage/Usage';
 import { httpClient } from './httpClient';
 
 export class HttpAdminRepository implements AdminRepository {
+  getPlatformStats(): Promise<PlatformStats> {
+    return httpClient.get<PlatformStats>('/admin/stats');
+  }
+
   async listProjects(): Promise<AdminProject[]> {
     const { projects } = await httpClient.get<{ projects: AdminProject[] }>('/admin/projects');
     return projects;
