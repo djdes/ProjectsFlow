@@ -4,7 +4,7 @@ import { ME } from './fixtures.mjs';
 // saving, a test letter to the admin (mocked POST) and the reach of a new campaign.
 export const adminMailingScenarios = [{
   id: 'admin-mailing',
-  title: 'Рассылки: шаблон, предпросмотр ПК/телефон, тест себе и охват',
+  title: 'Рассылки: шаблон, промо-макет, предпросмотр ПК/телефон, тест себе и охват',
   matrix: [['desktop', 'light'], ['phone', 'light']],
   async run(t) {
     const panel = t.page.locator('[data-pf-admin-mailing]');
@@ -42,9 +42,28 @@ export const adminMailingScenarios = [{
       await t.visible(t.page.locator('[data-pf-mailing-preview="desktop"]'), 'обратно на ПК');
     });
 
+    await t.step('промо-макет: выбор, срок акции и предпросмотр', async () => {
+      const layouts = panel.locator('[data-pf-mailing-layouts]');
+      await t.visible(layouts.getByRole('radio', { name: /Классика/, checked: true }), 'классический макет по умолчанию');
+      await layouts.getByRole('radio', { name: /Ультрамарин/ }).click();
+      await t.visible(layouts.getByRole('radio', { name: /Ультрамарин/, checked: true }), 'выбран макет «Ультрамарин»');
+      await panel.getByLabel('Предложение', { exact: true }).fill('−30%');
+      await panel.getByLabel('Срок', { exact: true }).fill('до 15 декабря');
+      await t.waitForMutation((m) => m.path === '/admin/mailings/preview' && m.body?.layout === 'annual'
+        && m.body?.offer?.badge === '−30%' && m.body?.offer?.deadline === 'до 15 декабря', 'предпросмотр не получил макет и акцию');
+      const desktop = t.page.frameLocator('iframe[title="Письмо на компьютере"]');
+      await t.visible(desktop.locator('[data-pf-layout="annual"]'), 'макет в письме');
+      await t.visible(desktop.locator('.pf-offer').getByText('−30%'), 'предложение крупной строкой');
+      await t.page.getByRole('tab', { name: 'Телефон', exact: true }).click();
+      await t.visible(t.page.frameLocator('iframe[title="Письмо на телефоне"]').locator('[data-pf-layout="annual"]'), 'макет на телефоне');
+      await t.page.getByRole('tab', { name: 'ПК', exact: true }).click();
+      await t.visible(t.page.locator('[data-pf-mailing-preview="desktop"]'), 'обратно на ПК');
+    });
+
     await t.step('сохранение и тест себе', async () => {
       await panel.getByRole('button', { name: 'Сохранить', exact: true }).click();
-      await t.waitForMutation((m) => m.method === 'POST' && m.path === '/admin/mailings/templates' && m.body?.name === 'Новость: доски', 'шаблон не сохранён');
+      await t.waitForMutation((m) => m.method === 'POST' && m.path === '/admin/mailings/templates' && m.body?.name === 'Новость: доски'
+        && m.body?.layout === 'annual' && m.body?.offer?.badge === '−30%', 'шаблон не сохранён');
       await panel.getByRole('button', { name: 'Отправить тест себе', exact: true }).click();
       await t.waitForMutation((m) => m.path === '/admin/mailings/test', 'тест не отправлен');
       await t.visible(t.page.getByText(`Тестовое письмо отправлено на ${ME.email}`), 'подтверждение теста');

@@ -6,13 +6,43 @@
 // are swapped for private-use placeholders BEFORE parsing and filled in at the very end,
 // escaped. A recipient's name therefore can never inject markup, a link or bold text.
 
-export type MailingVariables = { readonly name: string; readonly workspace: string };
+// name/workspace come from the recipient; offer/deadline from the template's promo terms.
+export type MailingVariables = {
+  readonly name: string;
+  readonly workspace: string;
+  readonly offer?: string;
+  readonly deadline?: string;
+};
 export type MailingVariableKey = keyof MailingVariables;
 
 export const MAILING_VARIABLES: ReadonlyArray<{ readonly key: MailingVariableKey; readonly fallback: string }> = [
   { key: 'name', fallback: 'коллега' },
   { key: 'workspace', fallback: 'ProjectsFlow' },
+  { key: 'offer', fallback: 'подарок' },
+  { key: 'deadline', fallback: 'в ближайшие дни' },
 ];
+
+/** Colours and type of the rendered body; promo layouts pass their own. */
+export type MailingBodyTheme = {
+  readonly text: string;
+  readonly heading: string;
+  readonly link: string;
+  readonly quote: string;
+  readonly quoteBorder: string;
+  readonly rule: string;
+  readonly codeBg: string;
+  readonly font?: string;
+  readonly headingFont?: string;
+  readonly headingWeight?: number;
+  readonly headingStyle?: 'normal' | 'italic';
+  readonly headingTransform?: 'uppercase';
+  readonly headingSpacing?: string;
+  readonly h1Size?: number;
+};
+
+export const DEFAULT_MAILING_BODY_THEME: MailingBodyTheme = {
+  text: '#334155', heading: '#0f172a', link: '#2563eb', quote: '#475569', quoteBorder: '#cbd5e1', rule: '#e2e8f0', codeBg: '#f1f5f9',
+};
 
 const VARIABLE_RE = /\{\{\s*([a-z_]+)\s*(?:\|([^{}\n]*))?\}\}/giu;
 // Private-use code points never typed by people; stripped from input before parsing.
@@ -36,7 +66,7 @@ function isKnownVariable(key: string): key is MailingVariableKey {
 }
 
 function resolveVariable(key: MailingVariableKey, inlineFallback: string | undefined, vars: MailingVariables): string {
-  const value = vars[key].trim();
+  const value = (vars[key] ?? '').trim();
   if (value) return value;
   const fallback = inlineFallback?.trim();
   if (fallback) return fallback;
@@ -142,9 +172,9 @@ function isSafeUrl(url: string): boolean {
   return /^(https?:\/\/|mailto:)/i.test(url) && !url.includes(VAR_OPEN);
 }
 
-const LINK_STYLE = 'color:#2563eb;text-decoration:underline;';
+const linkStyle = (t: MailingBodyTheme): string => `color:${t.link};text-decoration:underline;`;
 
-function renderInline(src: string, allowLinks = true): string {
+function renderInline(src: string, t: MailingBodyTheme, allowLinks = true): string {
   const stash: string[] = [];
   const put = (html: string): string => `${STASH_OPEN}${stash.push(html) - 1}${STASH_CLOSE}`;
   let s = src.replace(ESCAPE_RE, (_m, ch: string) => put(escapeMailingHtml(ch)));
@@ -153,17 +183,17 @@ function renderInline(src: string, allowLinks = true): string {
     return safe ? `${put(`<span style="${escapeMailingHtml(safe)}">`)}${inner}${put('</span>')}` : inner;
   });
   s = s.replace(/`([^`\n]+)`/g, (_m, code: string) =>
-    put(`<code style="font-family:SFMono-Regular,Consolas,monospace;font-size:13px;background:#f1f5f9;border-radius:4px;padding:1px 4px;">${escapeMailingHtml(code)}</code>`));
+    put(`<code style="font-family:SFMono-Regular,Consolas,monospace;font-size:13px;background:${t.codeBg};border-radius:4px;padding:1px 4px;">${escapeMailingHtml(code)}</code>`));
   s = s.replace(IMAGE_RE, (whole, alt: string, url: string) =>
     /^https:\/\//i.test(url) && !url.includes(VAR_OPEN)
       ? put(`<img src="${escapeMailingHtml(url)}" alt="${escapeMailingHtml(alt)}" style="display:block;max-width:100%;height:auto;border:0;border-radius:8px;margin:8px 0;">`)
       : put(escapeMailingHtml(alt || whole)));
   if (allowLinks) {
     s = s.replace(LINK_RE, (_m, text: string, url: string) => {
-      const inner = renderInline(text, false);
-      return isSafeUrl(url) ? put(`<a href="${escapeMailingHtml(url)}" style="${LINK_STYLE}">${inner}</a>`) : put(inner);
+      const inner = renderInline(text, t, false);
+      return isSafeUrl(url) ? put(`<a href="${escapeMailingHtml(url)}" style="${linkStyle(t)}">${inner}</a>`) : put(inner);
     });
-    s = s.replace(AUTOLINK_RE, (url: string) => put(`<a href="${escapeMailingHtml(url)}" style="${LINK_STYLE}word-break:break-all;">${escapeMailingHtml(url)}</a>`));
+    s = s.replace(AUTOLINK_RE, (url: string) => put(`<a href="${escapeMailingHtml(url)}" style="${linkStyle(t)}word-break:break-all;">${escapeMailingHtml(url)}</a>`));
   }
   s = escapeMailingHtml(s)
     .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>')
@@ -195,16 +225,32 @@ function inlineText(src: string): string {
     .replace(/(^|[^\w])_([^_\n]+?)_(?!\w)/gu, '$1$2');
 }
 
-const P_STYLE = 'margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;';
-const H_STYLE: Record<1 | 2 | 3, string> = {
-  1: 'margin:0 0 14px;font-size:22px;line-height:1.3;font-weight:700;color:#0f172a;',
-  2: 'margin:20px 0 10px;font-size:18px;line-height:1.35;font-weight:700;color:#0f172a;',
-  3: 'margin:16px 0 8px;font-size:16px;line-height:1.4;font-weight:600;color:#0f172a;',
-};
+// The default theme yields exactly the classic styles; extras are appended only when set.
+function blockStyles(t: MailingBodyTheme): { p: string; h: Record<1 | 2 | 3, string>; list: string; quote: string; hr: string; pre: string } {
+  const font = t.font ? `font-family:${t.font};` : '';
+  const hx = (weight: number): string => `font-weight:${t.headingWeight ?? weight};color:${t.heading};`
+    + (t.headingFont ? `font-family:${t.headingFont};` : '')
+    + (t.headingStyle ? `font-style:${t.headingStyle};` : '')
+    + (t.headingTransform ? `text-transform:${t.headingTransform};` : '')
+    + (t.headingSpacing ? `letter-spacing:${t.headingSpacing};` : '');
+  return {
+    p: `margin:0 0 14px;font-size:15px;line-height:1.6;color:${t.text};${font}`,
+    h: {
+      1: `margin:0 0 14px;font-size:${t.h1Size ?? 22}px;line-height:${t.h1Size ? 1.12 : 1.3};${hx(700)}`,
+      2: `margin:20px 0 10px;font-size:18px;line-height:1.35;${hx(700)}`,
+      3: `margin:16px 0 8px;font-size:16px;line-height:1.4;${hx(600)}`,
+    },
+    list: `margin:0 0 14px;padding:0 0 0 22px;font-size:15px;line-height:1.6;color:${t.text};${font}`,
+    quote: `margin:0 0 14px;padding:4px 0 4px 14px;border-left:3px solid ${t.quoteBorder};font-size:15px;line-height:1.6;color:${t.quote};${font}`,
+    hr: `border:0;border-top:1px solid ${t.rule};margin:20px 0;`,
+    pre: `margin:0 0 14px;padding:12px;background:${t.codeBg};border-radius:8px;font-family:SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.5;color:${t.heading};white-space:pre-wrap;word-break:break-word;`,
+  };
+}
 
 export type RenderedMailingBody = { readonly html: string; readonly text: string };
 
-export function renderMailingBody(markdown: string, vars: MailingVariables): RenderedMailingBody {
+export function renderMailingBody(markdown: string, vars: MailingVariables, theme: MailingBodyTheme = DEFAULT_MAILING_BODY_THEME): RenderedMailingBody {
+  const st = blockStyles(theme);
   const values: string[] = [];
   const source = markdown.replace(PUA_RE, '').replace(VARIABLE_RE, (whole, key: string, fallback: string | undefined) => {
     const k = key.toLowerCase();
@@ -214,17 +260,17 @@ export function renderMailingBody(markdown: string, vars: MailingVariables): Ren
   const blocks = parseBlocks(source);
   const html = blocks.map((b): string => {
     switch (b.type) {
-      case 'p': return `<p style="${P_STYLE}">${b.lines.map((l) => renderInline(l)).join('<br>')}</p>`;
-      case 'h': return `<h${b.level} style="${H_STYLE[b.level]}">${renderInline(b.text)}</h${b.level}>`;
+      case 'p': return `<p style="${st.p}">${b.lines.map((l) => renderInline(l, theme)).join('<br>')}</p>`;
+      case 'h': return `<h${b.level} class="pf-h${b.level}" style="${st.h[b.level]}">${renderInline(b.text, theme)}</h${b.level}>`;
       case 'ul':
       case 'ol':
-        return `<${b.type} style="margin:0 0 14px;padding:0 0 0 22px;font-size:15px;line-height:1.6;color:#334155;">` +
-          b.items.map((item) => `<li style="margin:0 0 6px;">${renderInline(item)}</li>`).join('') + `</${b.type}>`;
+        return `<${b.type} style="${st.list}">` +
+          b.items.map((item) => `<li style="margin:0 0 6px;">${renderInline(item, theme)}</li>`).join('') + `</${b.type}>`;
       case 'quote':
-        return `<blockquote style="margin:0 0 14px;padding:4px 0 4px 14px;border-left:3px solid #cbd5e1;font-size:15px;line-height:1.6;color:#475569;">${b.lines.map((l) => renderInline(l)).join('<br>')}</blockquote>`;
-      case 'hr': return '<hr style="border:0;border-top:1px solid #e2e8f0;margin:20px 0;">';
+        return `<blockquote style="${st.quote}">${b.lines.map((l) => renderInline(l, theme)).join('<br>')}</blockquote>`;
+      case 'hr': return `<hr style="${st.hr}">`;
       case 'code':
-        return `<pre style="margin:0 0 14px;padding:12px;background:#f1f5f9;border-radius:8px;font-family:SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.5;color:#0f172a;white-space:pre-wrap;word-break:break-word;">${escapeMailingHtml(b.text)}</pre>`;
+        return `<pre style="${st.pre}">${escapeMailingHtml(b.text)}</pre>`;
     }
   }).join('\n');
   const text = blocks.map((b): string => {

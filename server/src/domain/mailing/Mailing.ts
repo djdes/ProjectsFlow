@@ -1,6 +1,10 @@
 // Admin mailings (db/176): a template library, campaigns sent from a template snapshot,
 // one queue row per recipient and a platform-wide unsubscribe list.
 
+import type { MailingLayout, MailingOffer } from './layouts.js';
+
+export type { MailingLayout, MailingOffer } from './layouts.js';
+
 export type MailingContent = {
   readonly subject: string;
   // Inbox snippet shown next to the subject; hidden inside the letter body.
@@ -9,6 +13,9 @@ export type MailingContent = {
   readonly bodyMarkdown: string;
   readonly ctaLabel: string | null;
   readonly ctaUrl: string | null;
+  // Letter design (db/177); 'standard' for templates saved before layouts existed.
+  readonly layout: MailingLayout;
+  readonly offer: MailingOffer | null;
 };
 
 export type MailingTemplate = MailingContent & {

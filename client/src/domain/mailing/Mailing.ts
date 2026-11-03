@@ -1,11 +1,22 @@
 // Admin mailings: template library, campaigns and their delivery progress.
 
+// Letter designs: the classic card or a promo layout with a hero image and an offer strip.
+export const MAILING_LAYOUTS = ['standard', 'trial', 'annual', 'winback', 'referral', 'deadline', 'news'] as const;
+export type MailingLayout = (typeof MAILING_LAYOUTS)[number];
+
+// Display-only promo terms, also available in texts as {{offer}} and {{deadline}}.
+export type MailingOffer = { readonly badge: string; readonly deadline: string };
+
+export const MAILING_OFFER_LIMITS = { badge: 40, deadline: 60 } as const;
+
 export type MailingContent = {
   readonly subject: string;
   readonly preheader: string;
   readonly bodyMarkdown: string;
   readonly ctaLabel: string | null;
   readonly ctaUrl: string | null;
+  readonly layout: MailingLayout;
+  readonly offer: MailingOffer | null;
 };
 
 export type MailingTemplateDraft = MailingContent & { readonly name: string };

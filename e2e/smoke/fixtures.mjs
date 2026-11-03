@@ -581,12 +581,15 @@ const MAILING_STARTERS = [
   { key: 'product_news', name: 'Новость продукта', description: 'Анонс новой возможности с кнопкой «Попробовать»',
     subject: '{{name}}, в ProjectsFlow появилось новое', preheader: 'Коротко о том, что изменилось',
     bodyMarkdown: ['Здравствуйте, {{name}}!', '', '## Что нового', '', 'Мы добавили **новую возможность**.'].join('\n'),
-    ctaLabel: 'Попробовать', ctaUrl: 'https://projectsflow.ru/' },
+    ctaLabel: 'Попробовать', ctaUrl: 'https://projectsflow.ru/', layout: 'standard', offer: null },
   { key: 'update', name: 'Обновление', description: 'Сводка изменений за период',
     subject: 'Обновления ProjectsFlow', preheader: 'Что изменилось', bodyMarkdown: ['Здравствуйте, {{name}}!', '', '- Пункт'].join('\n'),
-    ctaLabel: null, ctaUrl: null },
+    ctaLabel: null, ctaUrl: null, layout: 'standard', offer: null },
   { key: 'come_back', name: 'Приглашение вернуться', description: 'Для тех, кто давно не заходил',
-    subject: '{{name}}, мы скучаем', preheader: 'Ваши проекты ждут', bodyMarkdown: 'Здравствуйте, {{name}}!', ctaLabel: null, ctaUrl: null },
+    subject: '{{name}}, мы скучаем', preheader: 'Ваши проекты ждут', bodyMarkdown: 'Здравствуйте, {{name}}!', ctaLabel: null, ctaUrl: null, layout: 'standard', offer: null },
+  { key: 'promo_trial', name: 'Прайм на 7 дней', description: 'Промо: пробный Прайм', subject: '{{name}}, Прайм на {{offer}}',
+    preheader: 'Воркер сам берёт задачи', bodyMarkdown: ['# Отдайте рутину воркеру', '', 'Прайм на {{offer}}.'].join('\n'),
+    ctaLabel: 'Посмотреть Прайм', ctaUrl: 'https://projectsflow.ru/profile', layout: 'trial', offer: { badge: '7 дней', deadline: 'до 30 ноября' } },
 ];
 
 function mailingState(state) {
@@ -598,14 +601,22 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 
 // Stand-in for the server renderer: the same fluid 600px card and phone media query.
 function mailingPreviewDto(body) {
-  const fill = (s) => String(s ?? '').replace(/\{\{\s*name\s*\}\}/g, ME.displayName).replace(/\{\{\s*workspace\s*\}\}/g, workspaceDto().name);
+  const layout = body.layout && body.layout !== 'standard' ? String(body.layout) : null;
+  const offer = layout ? body.offer : null;
+  const fill = (s) => String(s ?? '').replace(/\{\{\s*name\s*\}\}/g, ME.displayName).replace(/\{\{\s*workspace\s*\}\}/g, workspaceDto().name)
+    .replace(/\{\{\s*offer\s*\}\}/g, offer?.badge || 'подарок').replace(/\{\{\s*deadline\s*\}\}/g, offer?.deadline || 'в ближайшие дни');
+  // Promo layouts: hero and offer strip, like the server renderer.
+  const promo = layout
+    ? `<tr><td data-pf-layout="${escapeHtml(layout)}" style="padding:0;"><img src="/mail/${escapeHtml(layout)}/thumb-1.jpg" alt="" style="display:block;width:100%;"></td></tr>`
+      + (offer?.badge ? `<tr><td class="pf-offer" style="padding:20px 32px 0;font-size:56px;">${escapeHtml(offer.badge)}</td></tr>` : '')
+    : '';
   const paragraphs = fill(body.bodyMarkdown).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(p)}</p>`).join('');
   const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <style>@media (max-width:480px){.pf-shell{padding:0!important}.pf-card{border-radius:0!important}}</style></head>
 <body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;"><table role="presentation" width="100%" class="pf-shell" style="padding:32px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" class="pf-card" style="width:100%;max-width:600px;background:#fff;border-radius:12px;border:1px solid #e2e8f0;">
 <tr><td style="padding:28px 32px 12px;font-size:13px;font-weight:700;color:#2563eb;">PROJECTSFLOW</td></tr>
-<tr><td style="padding:8px 32px;">${paragraphs}</td></tr>
+${promo}<tr><td style="padding:8px 32px;">${paragraphs}</td></tr>
 <tr><td style="padding:16px 32px;background:#f8fafc;font-size:12px;color:#94a3b8;">Отписаться от рассылок</td></tr>
 </table></td></tr></table></body></html>`;
   return { subject: fill(body.subject), preheader: fill(body.preheader), html, text: fill(body.bodyMarkdown) };

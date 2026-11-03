@@ -13,6 +13,8 @@ type Deps = {
   readonly email: EmailSender;
   readonly perMinute: number;
   readonly unsubscribeUrl: (userId: string) => string;
+  // Public app origin for the hero images of promo layouts.
+  readonly assetBaseUrl?: string;
   readonly now: () => Date;
 };
 
@@ -63,6 +65,7 @@ export class RunMailingQueue {
       content: d.content,
       vars: { name: d.displayName, workspace: d.workspaceName ?? '' },
       unsubscribeUrl: this.deps.unsubscribeUrl(d.userId),
+      assetBaseUrl: this.deps.assetBaseUrl,
     });
     try {
       await this.deps.email.send(message);

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { audienceSummary, campaignProgress, canPreview, pluralRu, previewZoom, sameDraft, EMPTY_DRAFT } from './mailingFormat';
+import {
+  audienceSummary, campaignProgress, canPreview, contentOf, offerOf, pluralRu, previewZoom, sameDraft, variableHints,
+  EMPTY_DRAFT, MAILING_LAYOUT_OPTIONS,
+} from './mailingFormat';
 
 test('preview zoom fits the frame into the column and never enlarges', () => {
   assert.equal(previewZoom(1000, 680), 1);
@@ -29,4 +32,16 @@ test('draft comparison treats empty CTA fields as absent; preview needs subject 
   assert.ok(!sameDraft(EMPTY_DRAFT, { ...EMPTY_DRAFT, subject: 'x' }));
   assert.ok(!canPreview({ ...EMPTY_DRAFT, subject: 'Тема' }));
   assert.ok(canPreview({ ...EMPTY_DRAFT, subject: 'Тема', bodyMarkdown: 'Текст' }));
+});
+
+test('layouts: promo terms only for promo layouts, compared normalized; promo variables hidden for the classic letter', () => {
+  assert.equal(offerOf('standard', { badge: '7 дней', deadline: '' }), null);
+  assert.equal(offerOf('trial', { badge: ' ', deadline: '' }), null);
+  assert.deepEqual(offerOf('trial', { badge: ' 7 дней ', deadline: 'до 30 ноября' }), { badge: '7 дней', deadline: 'до 30 ноября' });
+  assert.ok(!sameDraft(EMPTY_DRAFT, { ...EMPTY_DRAFT, layout: 'news' }));
+  assert.ok(sameDraft({ ...EMPTY_DRAFT, layout: 'news', offer: null }, { ...EMPTY_DRAFT, layout: 'news', offer: { badge: '', deadline: ' ' } }));
+  assert.deepEqual(contentOf({ ...EMPTY_DRAFT, offer: { badge: 'x', deadline: '' } }).offer, null);
+  assert.deepEqual(variableHints('standard').map((v) => v.token), ['{{name}}', '{{workspace}}']);
+  assert.ok(variableHints('deadline').some((v) => v.token === '{{deadline}}'));
+  assert.equal(new Set(MAILING_LAYOUT_OPTIONS.map((o) => o.value)).size, MAILING_LAYOUT_OPTIONS.length);
 });

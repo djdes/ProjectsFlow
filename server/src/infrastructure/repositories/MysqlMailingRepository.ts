@@ -11,21 +11,24 @@ import {
   type MailingAudience,
   type MailingCampaign,
   type MailingCandidate,
+  type MailingContent,
   type MailingDelivery,
   type MailingRecipientFailure,
   type MailingRecipientStatus,
   type MailingTemplate,
 } from '../../domain/mailing/Mailing.js';
 import { effectiveMailingPlan, parseMailingAudience } from '../../domain/mailing/audience.js';
+import { isMailingLayout, parseMailingOffer, type MailingLayout } from '../../domain/mailing/layouts.js';
 import { parseJsonCol } from './jsonCol.js';
 
 type TemplateRow = RowDataPacket & {
   id: string; name: string; subject: string; preheader: string; body_markdown: string;
-  cta_label: string | null; cta_url: string | null; created_by: string; created_at: Date; updated_at: Date;
+  cta_label: string | null; cta_url: string | null; layout: string; offer: unknown;
+  created_by: string; created_at: Date; updated_at: Date;
 };
 type CampaignRow = RowDataPacket & {
   id: string; template_id: string | null; name: string; subject: string; preheader: string; body_markdown: string;
-  cta_label: string | null; cta_url: string | null; audience: unknown; status: MailingCampaign['status'];
+  cta_label: string | null; cta_url: string | null; layout: string; offer: unknown; audience: unknown; status: MailingCampaign['status'];
   total_count: number; created_by: string; created_at: Date; finished_at: Date | null; cancelled_at: Date | null;
 };
 type CandidateRow = RowDataPacket & {
@@ -33,9 +36,22 @@ type CandidateRow = RowDataPacket & {
   plan: 'free' | 'prime' | 'vip'; subscription_expires_at: Date | null;
 };
 
+type ContentCols = {
+  subject: string; preheader: string; body_markdown: string; cta_label: string | null; cta_url: string | null; layout: string; offer: unknown;
+};
+
+// Unknown layouts (a newer deploy rolled back) fall back to the classic letter.
+const layoutOf = (v: string): MailingLayout => (isMailingLayout(v) ? v : 'standard');
+const offerOf = (v: unknown) => parseMailingOffer(parseJsonCol<unknown>(v, null));
+const offerCol = (c: MailingContent): string | null => (c.offer ? JSON.stringify(c.offer) : null);
+
+const contentOfRow = (r: ContentCols): MailingContent => ({
+  subject: r.subject, preheader: r.preheader, bodyMarkdown: r.body_markdown, ctaLabel: r.cta_label, ctaUrl: r.cta_url,
+  layout: layoutOf(r.layout), offer: offerOf(r.offer),
+});
+
 const toTemplate = (r: TemplateRow): MailingTemplate => ({
-  id: r.id, name: r.name, subject: r.subject, preheader: r.preheader, bodyMarkdown: r.body_markdown,
-  ctaLabel: r.cta_label, ctaUrl: r.cta_url, createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+  id: r.id, name: r.name, ...contentOfRow(r), createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
 const RECIPIENT_COLUMNS = 'campaign_id,user_id,email,display_name,workspace_name';
@@ -58,9 +74,9 @@ export class MysqlMailingRepository implements MailingRepository {
 
   async createTemplate(id: string, t: MailingTemplateInput, createdBy: string): Promise<MailingTemplate> {
     await this.pool.query(
-      `INSERT INTO mailing_templates (id,name,subject,preheader,body_markdown,cta_label,cta_url,created_by)
+      `INSERT INTO mailing_templates (id,name,subject,preheader,body_markdown,cta_label,cta_url,layout,offer,created_by)
        VALUES (?,?,?,?,?,?,?,?)`,
-      [id, t.name, t.subject, t.preheader, t.bodyMarkdown, t.ctaLabel, t.ctaUrl, createdBy],
+      [id, t.name, t.subject, t.preheader, t.bodyMarkdown, t.ctaLabel, t.ctaUrl, t.layout, offerCol(t), createdBy],
     );
     const created = await this.getTemplate(id);
     if (!created) throw new Error('Failed to read back mailing template');
@@ -69,8 +85,8 @@ export class MysqlMailingRepository implements MailingRepository {
 
   async updateTemplate(id: string, t: MailingTemplateInput): Promise<MailingTemplate | null> {
     await this.pool.query(
-      `UPDATE mailing_templates SET name=?,subject=?,preheader=?,body_markdown=?,cta_label=?,cta_url=? WHERE id=?`,
-      [t.name, t.subject, t.preheader, t.bodyMarkdown, t.ctaLabel, t.ctaUrl, id],
+      `UPDATE mailing_templates SET name=?,subject=?,preheader=?,body_markdown=?,cta_label=?,cta_url=?,layout=?,offer=? WHERE id=?`,
+      [t.name, t.subject, t.preheader, t.bodyMarkdown, t.ctaLabel, t.ctaUrl, t.layout, offerCol(t), id],
     );
     return this.getTemplate(id);
   }
@@ -147,10 +163,10 @@ export class MysqlMailingRepository implements MailingRepository {
       await conn.beginTransaction();
       const [r] = await conn.query<ResultSetHeader>(
         `INSERT IGNORE INTO mailing_campaigns
-         (id,template_id,name,subject,preheader,body_markdown,cta_label,cta_url,audience,request_hash,status,total_count,created_by,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,'sending',?,?,?)`,
+         (id,template_id,name,subject,preheader,body_markdown,cta_label,cta_url,layout,offer,audience,request_hash,status,total_count,created_by,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'sending',?,?,?)`,
         [input.id, input.templateId, input.name, input.content.subject, input.content.preheader, input.content.bodyMarkdown,
-          input.content.ctaLabel, input.content.ctaUrl, JSON.stringify(input.audience), input.requestHash,
+          input.content.ctaLabel, input.content.ctaUrl, input.content.layout, offerCol(input.content), JSON.stringify(input.audience), input.requestHash,
           input.recipients.length, input.createdBy, now],
       );
       if (r.affectedRows === 0) {
@@ -189,7 +205,7 @@ export class MysqlMailingRepository implements MailingRepository {
       for (const row of counts) if (row.campaign_id === r.id) c[row.status] = Number(row.n);
       return {
         id: r.id, templateId: r.template_id, name: r.name,
-        content: { subject: r.subject, preheader: r.preheader, bodyMarkdown: r.body_markdown, ctaLabel: r.cta_label, ctaUrl: r.cta_url },
+        content: contentOfRow(r),
         audience: parseMailingAudience(parseJsonCol<unknown>(r.audience, null)) ?? { kind: 'all' },
         status: r.status, totalCount: Number(r.total_count), counts: c, createdBy: r.created_by,
         createdAt: r.created_at, finishedAt: r.finished_at, cancelledAt: r.cancelled_at,
@@ -261,9 +277,10 @@ export class MysqlMailingRepository implements MailingRepository {
     const [rows] = await this.pool.query<(RowDataPacket & {
       campaign_id: string; user_id: string; email: string; display_name: string; workspace_name: string | null; attempts: number;
       subject: string; preheader: string; body_markdown: string; cta_label: string | null; cta_url: string | null;
+      layout: string; offer: unknown;
     })[]>(
       `SELECT r.campaign_id,r.user_id,r.email,r.display_name,r.workspace_name,r.attempts,
-              c.subject,c.preheader,c.body_markdown,c.cta_label,c.cta_url
+              c.subject,c.preheader,c.body_markdown,c.cta_label,c.cta_url,c.layout,c.offer
        FROM mailing_recipients r JOIN mailing_campaigns c ON c.id=r.campaign_id
        WHERE r.status='sending' AND r.locked_at=? AND (r.campaign_id,r.user_id) IN (${claimed.map(() => '(?,?)').join(',')})`,
       [lockedAt, ...claimed.flatMap((c) => [c.campaign_id, c.user_id])],
@@ -271,7 +288,7 @@ export class MysqlMailingRepository implements MailingRepository {
     return rows.map((r) => ({
       campaignId: r.campaign_id, userId: r.user_id, email: r.email, displayName: r.display_name, workspaceName: r.workspace_name,
       attempts: Number(r.attempts), lockedAt,
-      content: { subject: r.subject, preheader: r.preheader, bodyMarkdown: r.body_markdown, ctaLabel: r.cta_label, ctaUrl: r.cta_url },
+      content: contentOfRow(r),
     }));
   }
 

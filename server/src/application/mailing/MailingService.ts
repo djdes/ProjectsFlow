@@ -10,6 +10,7 @@ import type {
   MailingTemplate,
 } from '../../domain/mailing/Mailing.js';
 import { MAILING_LIMITS } from '../../domain/mailing/Mailing.js';
+import { isMailingLayout, parseMailingOffer } from '../../domain/mailing/layouts.js';
 import { MailingError } from '../../domain/mailing/errors.js';
 import { selectMailingRecipients, type MailingReach } from '../../domain/mailing/audience.js';
 import { MAILING_STARTERS, type MailingStarter } from '../../domain/mailing/starters.js';
@@ -67,7 +68,14 @@ export function parseMailingContent(raw: unknown): MailingContent {
     throw new MailingError('invalid_content', 'Ссылка кнопки должна начинаться с https://');
   }
   if (ctaUrl && !ctaLabel) throw new MailingError('invalid_content', 'Укажите текст кнопки');
-  return { subject, preheader: clean(v['preheader'], MAILING_LIMITS.preheader), bodyMarkdown, ctaLabel, ctaUrl: ctaLabel ? ctaUrl : null };
+  const rawLayout = v['layout'] ?? 'standard';
+  if (!isMailingLayout(rawLayout)) throw new MailingError('invalid_content', 'Неизвестный макет письма');
+  // The classic letter has no offer strip; stale promo terms are dropped with the layout.
+  const offer = rawLayout === 'standard' ? null : parseMailingOffer(v['offer']);
+  return {
+    subject, preheader: clean(v['preheader'], MAILING_LIMITS.preheader), bodyMarkdown, ctaLabel, ctaUrl: ctaLabel ? ctaUrl : null,
+    layout: rawLayout, offer,
+  };
 }
 
 export function parseMailingTemplateInput(raw: unknown): MailingTemplateInput {
@@ -81,7 +89,10 @@ export function mailingRequestHash(templateId: string, audience: MailingAudience
 }
 
 function contentOf(t: MailingTemplate): MailingContent {
-  return { subject: t.subject, preheader: t.preheader, bodyMarkdown: t.bodyMarkdown, ctaLabel: t.ctaLabel, ctaUrl: t.ctaUrl };
+  return {
+    subject: t.subject, preheader: t.preheader, bodyMarkdown: t.bodyMarkdown, ctaLabel: t.ctaLabel, ctaUrl: t.ctaUrl,
+    layout: t.layout, offer: t.offer,
+  };
 }
 
 export class MailingService {
@@ -128,7 +139,9 @@ export class MailingService {
     const content = parseMailingContent(raw);
     const recipient = (await this.deps.repo.findRecipient(admin.id)) ?? { ...admin, userId: admin.id, workspaceName: null };
     const vars = this.varsOf(recipient);
-    const msg = renderMailingEmail({ to: recipient.email, content, vars, unsubscribeUrl: this.unsubscribeUrl(admin.id) });
+    const msg = renderMailingEmail({
+      to: recipient.email, content, vars, unsubscribeUrl: this.unsubscribeUrl(admin.id), assetBaseUrl: this.deps.appUrl,
+    });
     return { subject: msg.subject, preheader: renderMailingPreheader(content, vars), html: msg.html, text: msg.text };
   }
 
@@ -143,7 +156,7 @@ export class MailingService {
     this.testSends.set(admin.id, [...recent, now]);
     const recipient = (await this.deps.repo.findRecipient(admin.id)) ?? { ...admin, userId: admin.id, workspaceName: null };
     await this.deps.email.send(renderMailingEmail({
-      to: admin.email, content, vars: this.varsOf(recipient), unsubscribeUrl: this.unsubscribeUrl(admin.id), test: true,
+      to: admin.email, content, vars: this.varsOf(recipient), unsubscribeUrl: this.unsubscribeUrl(admin.id), assetBaseUrl: this.deps.appUrl, test: true,
     }));
     return { to: admin.email };
   }

@@ -8,10 +8,11 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { relativeTime } from '@/lib/relativeTime';
 import { useContainer } from '@/infrastructure/di/container';
-import type { MailingStarter, MailingTemplate, MailingTemplateDraft } from '@/domain/mailing/Mailing';
+import { MAILING_OFFER_LIMITS, type MailingStarter, type MailingTemplate, type MailingTemplateDraft } from '@/domain/mailing/Mailing';
 import { RichTextEditor } from '@/presentation/components/editor/RichTextEditor';
 import { MailingPreview } from './MailingPreview';
-import { EMPTY_DRAFT, MAILING_VARIABLE_HINTS, canPreview, contentOf, sameDraft } from './mailingFormat';
+import { MailingLayoutPicker } from './MailingLayoutPicker';
+import { EMPTY_DRAFT, canPreview, contentOf, offerOf, sameDraft, variableHints } from './mailingFormat';
 
 type Selection = { kind: 'template'; id: string } | { kind: 'new'; starterKey: string | null };
 
@@ -23,6 +24,8 @@ export function mailingErrorText(e: unknown, fallback: string): string {
 
 const draftOf = (t: MailingTemplateDraft): MailingTemplateDraft => ({
   name: t.name, subject: t.subject, preheader: t.preheader, bodyMarkdown: t.bodyMarkdown, ctaLabel: t.ctaLabel, ctaUrl: t.ctaUrl,
+  // Templates from before layouts existed come without these fields.
+  layout: t.layout ?? 'standard', offer: t.offer ?? null,
 });
 
 const ROW_CLASS = 'flex w-full items-start gap-2 px-3 py-2.5 text-start text-sm transition-colors';
@@ -57,13 +60,15 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
 
   const dirty = !sameDraft(draft, baseline);
   const patch = (p: Partial<MailingTemplateDraft>): void => setDraft((d) => ({ ...d, ...p }));
+  const patchOffer = (p: Partial<{ badge: string; deadline: string }>): void =>
+    setDraft((d) => ({ ...d, offer: { badge: '', deadline: '', ...d.offer, ...p } }));
   const confirmLeave = (): boolean => !dirty || window.confirm('Есть несохранённые изменения. Закрыть без сохранения?');
 
   const save = async (): Promise<void> => {
     if (!selection || busy) return;
     setBusy('save');
     try {
-      const value = { ...draft, ctaLabel: draft.ctaLabel || null, ctaUrl: draft.ctaUrl || null };
+      const value = { ...draft, ctaLabel: draft.ctaLabel || null, ctaUrl: draft.ctaUrl || null, offer: offerOf(draft.layout, draft.offer) };
       const saved = selection.kind === 'template'
         ? await mailingRepository.updateTemplate(selection.id, value)
         : await mailingRepository.createTemplate(value);
@@ -200,6 +205,26 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
               <Input id="mailing-name" value={draft.name} maxLength={120} placeholder="Например, «Новость: доски»"
                 onChange={(e) => patch({ name: e.target.value })} />
             </div>
+            <MailingLayoutPicker value={draft.layout} onChange={(layout) => patch({ layout })} />
+            {draft.layout !== 'standard' && (
+              <div className="space-y-1.5" data-pf-mailing-offer>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mailing-offer-badge">Предложение</Label>
+                    <Input id="mailing-offer-badge" value={draft.offer?.badge ?? ''} maxLength={MAILING_OFFER_LIMITS.badge} placeholder="7 дней"
+                      onChange={(e) => patchOffer({ badge: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mailing-offer-deadline">Срок</Label>
+                    <Input id="mailing-offer-deadline" value={draft.offer?.deadline ?? ''} maxLength={MAILING_OFFER_LIMITS.deadline} placeholder="до 30 ноября"
+                      onChange={(e) => patchOffer({ deadline: e.target.value })} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Крупная строка под картинкой и переменные {'{{offer}}'} и {'{{deadline}}'}. Это только текст: тариф выдаётся вручную в разделе «Пользователи».
+                </p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="mailing-subject">Тема письма</Label>
               <Input id="mailing-subject" value={draft.subject} maxLength={200} placeholder="{{name}}, у нас новости"
@@ -224,7 +249,7 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
               </div>
               <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 Переменные:
-                {MAILING_VARIABLE_HINTS.map((v) => (
+                {variableHints(draft.layout).map((v) => (
                   <button key={v.token} type="button" onClick={() => copyToken(v.token)}
                     className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-foreground hover:bg-hover" title={`Скопировать — ${v.label}`}>
                     {v.token}

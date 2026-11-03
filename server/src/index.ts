@@ -1090,7 +1090,7 @@ const mailingService = new MailingService({
 });
 mailingQueue = new RunMailingQueue({
   repo: mailingRepo, email: emailSender, perMinute: parsePerMinute(process.env['MAILING_PER_MINUTE']),
-  unsubscribeUrl: (userId) => mailingService.unsubscribeUrl(userId), now,
+  unsubscribeUrl: (userId) => mailingService.unsubscribeUrl(userId), assetBaseUrl: appBaseUrl, now,
 });
 setInterval(mailingQueue.wake, 5_000).unref();
 

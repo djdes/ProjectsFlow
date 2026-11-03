@@ -2,6 +2,8 @@ import type {
   MailingAudience,
   MailingCampaign,
   MailingContent,
+  MailingLayout,
+  MailingOffer,
   MailingPlan,
   MailingTemplateDraft,
   MailingWorkspaceOption,
@@ -64,15 +66,29 @@ export const EMPTY_DRAFT: MailingTemplateDraft = {
   bodyMarkdown: '',
   ctaLabel: null,
   ctaUrl: null,
+  layout: 'standard',
+  offer: null,
 };
 
+/** Promo terms as the server stores them: none for the classic letter, null when empty. */
+export function offerOf(layout: MailingLayout, offer: MailingOffer | null): MailingOffer | null {
+  if (layout === 'standard' || !offer) return null;
+  const badge = offer.badge.trim();
+  const deadline = offer.deadline.trim();
+  return badge || deadline ? { badge, deadline } : null;
+}
+
 export function contentOf(d: MailingContent): MailingContent {
-  return { subject: d.subject, preheader: d.preheader, bodyMarkdown: d.bodyMarkdown, ctaLabel: d.ctaLabel || null, ctaUrl: d.ctaUrl || null };
+  return {
+    subject: d.subject, preheader: d.preheader, bodyMarkdown: d.bodyMarkdown, ctaLabel: d.ctaLabel || null, ctaUrl: d.ctaUrl || null,
+    layout: d.layout, offer: offerOf(d.layout, d.offer),
+  };
 }
 
 export function sameDraft(a: MailingTemplateDraft, b: MailingTemplateDraft): boolean {
   return a.name === b.name && a.subject === b.subject && a.preheader === b.preheader && a.bodyMarkdown === b.bodyMarkdown
-    && (a.ctaLabel || null) === (b.ctaLabel || null) && (a.ctaUrl || null) === (b.ctaUrl || null);
+    && (a.ctaLabel || null) === (b.ctaLabel || null) && (a.ctaUrl || null) === (b.ctaUrl || null)
+    && a.layout === b.layout && JSON.stringify(offerOf(a.layout, a.offer)) === JSON.stringify(offerOf(b.layout, b.offer));
 }
 
 /** Enough content for the server to render a preview (subject and body are required). */
@@ -80,7 +96,27 @@ export function canPreview(d: MailingContent): boolean {
   return d.subject.trim().length > 0 && d.bodyMarkdown.trim().length > 0;
 }
 
-export const MAILING_VARIABLE_HINTS: ReadonlyArray<{ token: string; label: string }> = [
+export const MAILING_VARIABLE_HINTS: ReadonlyArray<{ token: string; label: string; promo?: true }> = [
   { token: '{{name}}', label: 'имя получателя' },
   { token: '{{workspace}}', label: 'его пространство' },
+  { token: '{{offer}}', label: 'предложение акции', promo: true },
+  { token: '{{deadline}}', label: 'срок акции', promo: true },
 ];
+
+/** Variables that make sense for the layout: promo terms exist only in promo layouts. */
+export function variableHints(layout: MailingLayout): ReadonlyArray<{ token: string; label: string }> {
+  return MAILING_VARIABLE_HINTS.filter((v) => layout !== 'standard' || !v.promo);
+}
+
+// Layout picker: thumbnails are the hero art served from client/public/mail/<layout>/.
+export const MAILING_LAYOUT_OPTIONS: ReadonlyArray<{ value: MailingLayout; label: string; hint: string }> = [
+  { value: 'standard', label: 'Классика', hint: 'Белая карточка без картинки' },
+  { value: 'trial', label: 'Звёздная сфера', hint: 'Пробный период, тёмное письмо' },
+  { value: 'annual', label: 'Ультрамарин', hint: 'Скидка, полутоновое небо' },
+  { value: 'winback', label: 'Коллаж', hint: 'Возвращение, фазы луны' },
+  { value: 'referral', label: 'Нити', hint: 'Приглашение команды' },
+  { value: 'deadline', label: 'Закат', hint: 'Срок акции крупно' },
+  { value: 'news', label: 'Гравюра', hint: 'Новости и бонус в рамке' },
+];
+
+export const layoutThumbUrl = (layout: MailingLayout): string => `/mail/${layout}/thumb-1.jpg`;
