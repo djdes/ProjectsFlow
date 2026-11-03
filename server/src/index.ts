@@ -1,6 +1,10 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
 import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
 import { MysqlTelegramWorkerResultOutbox } from './infrastructure/repositories/MysqlTelegramWorkerResultOutbox.js';
+import { MysqlMailingRepository } from './infrastructure/repositories/MysqlMailingRepository.js';
+import { MailingService } from './application/mailing/MailingService.js';
+import { RunMailingQueue } from './application/mailing/RunMailingQueue.js';
+import { parsePerMinute } from './domain/mailing/deliveryPolicy.js';
 import { MysqlTelegramTaskOriginRepository } from './infrastructure/repositories/MysqlTelegramTaskOriginRepository.js';
 import { ImageGenerationService } from './application/image-generation/ImageGenerationService.js';
 import { MysqlImageGenerationRepository } from './infrastructure/repositories/MysqlImageGenerationRepository.js';
@@ -1073,6 +1077,22 @@ const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
   telegram: sendAgentTelegramNotification, appUrl: appBaseUrl, now,
 });
 setInterval(deliverWorkspaceInvites.wake, 15_000).unref();
+
+// --- Рассылки админки (db/176) ---
+// mailing_recipients — durable-очередь: воркер тикает каждые 5 с и шлёт не больше
+// MAILING_PER_MINUTE писем в скользящую минуту (лимит SMTP-провайдера). Запуск будит очередь сразу.
+const mailingRepo = new MysqlMailingRepository(pool);
+const mailingTokenSecret = process.env['MAILING_TOKEN_SECRET'] || envRepoAccessSecret || 'dev-mailing-secret';
+let mailingQueue: RunMailingQueue | null = null;
+const mailingService = new MailingService({
+  repo: mailingRepo, email: emailSender, appUrl: appBaseUrl, tokenSecret: mailingTokenSecret,
+  idGen: idGenerator, now, wakeQueue: () => mailingQueue?.wake(),
+});
+mailingQueue = new RunMailingQueue({
+  repo: mailingRepo, email: emailSender, perMinute: parsePerMinute(process.env['MAILING_PER_MINUTE']),
+  unsubscribeUrl: (userId) => mailingService.unsubscribeUrl(userId), now,
+});
+setInterval(mailingQueue.wake, 5_000).unref();
 
 // --- Чат-виджет: поддержка ---
 // Обращения сохраняются в support_tickets и доставляются админам/руту in-app уведомлением
@@ -2225,6 +2245,7 @@ const { app, devProxyUpgrade } = createApp({
   voiceTranscriber: groqVoiceTranscriber,
   workspaceScope: workspaceScope({ workspaces: workspaceRepo, run: (userId, workspace, next) => requestWorkspaceContext.run(userId, workspace, next) }),
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
+  mailing: { service: mailingService },
   telegramDigestActions: { service: telegramDigestActionService },
   auth: {
     register: new Register(authDeps),

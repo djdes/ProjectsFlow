@@ -22,6 +22,7 @@ import { HttpAutomationRepository } from "@/infrastructure/http/HttpAutomationRe
 import { HttpWorkflowRepository } from "@/infrastructure/http/HttpWorkflowRepository";
 import { HttpAdminRepository } from "@/infrastructure/http/HttpAdminRepository";
 import { HttpLlmAdminRepository } from "@/infrastructure/http/HttpLlmAdminRepository";
+import { HttpMailingRepository } from "@/infrastructure/http/HttpMailingRepository";
 import { HttpEmployeeRepository } from "@/infrastructure/http/HttpEmployeeRepository";
 import { HttpProjectFinanceRepository } from "@/infrastructure/http/HttpProjectFinanceRepository";
 import { HttpTelegramRepository } from "@/infrastructure/http/HttpTelegramRepository";
@@ -77,6 +78,7 @@ import type { AgentTokenRepository } from "@/application/agent/AgentTokenReposit
 import type { AgentDeviceRepository } from "@/application/agent/AgentDeviceRepository";
 import type { AdminRepository } from "@/application/admin/AdminRepository";
 import type { LlmAdminRepository } from "@/application/llm/LlmAdminRepository";
+import type { MailingRepository } from "@/application/mailing/MailingRepository";
 import type {
   EmployeeRepository,
   ProjectFinanceRepository,
@@ -139,6 +141,7 @@ type Container = {
   adminRepository: AdminRepository;
   // Подписка ChatGPT платформы: вход по коду, статус, очереди на сервере (только админ).
   llmAdminRepository: LlmAdminRepository;
+  mailingRepository: MailingRepository;
   employeeRepository: EmployeeRepository;
   projectFinanceRepository: ProjectFinanceRepository;
   telegramRepository: TelegramRepository;
@@ -245,6 +248,7 @@ function buildContainer(): Container {
     agentDeviceRepository: agentDeviceRepo,
     adminRepository: adminRepo,
     llmAdminRepository: new HttpLlmAdminRepository(),
+    mailingRepository: new HttpMailingRepository(),
     employeeRepository: employeeRepo,
     projectFinanceRepository: projectFinanceRepo,
     telegramRepository: telegramRepo,

@@ -248,6 +248,8 @@ import { tasksRouter } from './tasks/routes.js';
 import { searchRouter } from './search/routes.js';
 import type { EmailSender } from '../application/notifications/EmailSender.js';
 import { adminRouter } from './admin/routes.js';
+import { adminMailingRouter, mailingUnsubscribeRouter } from './mailing/routes.js';
+import type { MailingService } from '../application/mailing/MailingService.js';
 import type { ListAllSupportTickets } from '../application/admin/ListAllSupportTickets.js';
 import type { SetSupportTicketStatus } from '../application/admin/SetSupportTicketStatus.js';
 import type { SetUserPlanAsAdmin } from '../application/admin/SetUserPlanAsAdmin.js';
@@ -343,6 +345,8 @@ type AppDeps = {
     readonly service: EmailActionService;
     readonly appUrl: string;
   };
+  // Admin mailings (db/176) + the public unsubscribe page.
+  readonly mailing: { readonly service: MailingService };
   readonly telegramDigestActions: {
     readonly service: TelegramDigestActionService;
   };
@@ -920,6 +924,8 @@ export function createApp(deps: AppDeps): CreatedApp {
 
   // Публичные one-click страницы действий из писем-сводок (авторизация по opaque-токену).
   app.use('/api/email-actions', emailActionsRouter(deps.emailActions));
+  // Публичная отписка от рассылок (авторизация подписанным токеном из письма).
+  app.use('/api/mailing/unsubscribe', mailingUnsubscribeRouter(deps.mailing));
   app.use(
     '/api/telegram-digest-actions',
     telegramDigestActionsRouter(deps.telegramDigestActions),
@@ -1024,6 +1030,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/me', meStatsRouter(deps.meStats));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin/llm', llmAdminRouter(deps.llm));
+  app.use('/api/admin/mailings', adminMailingRouter(deps.mailing));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));
   app.use(

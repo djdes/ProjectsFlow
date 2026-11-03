@@ -4,6 +4,8 @@ export type EmailMessage = {
   readonly subject: string;
   readonly html: string;
   readonly text: string;
+  // Extra MIME headers (List-Unsubscribe for marketing letters). Optional for every sender.
+  readonly headers?: Readonly<Record<string, string>>;
 };
 
 export interface EmailSender {

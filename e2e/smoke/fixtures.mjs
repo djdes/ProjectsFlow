@@ -568,7 +568,70 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/employees$/, () => json({ employees: [] })],
     [/^\/agent\/tokens$/, () => json({ tokens: [] })],
     [/^\/ai\/conversations$/, () => json({ items: [], nextCursor: null })],
+    // Admin «Рассылки»: template library, audience options and campaign history.
+    [/^\/admin\/mailings\/templates$/, () => json({ templates: mailingState(state).templates, starters: MAILING_STARTERS })],
+    [/^\/admin\/mailings\/audience\/workspaces$/, () => json({ workspaces: [{ id: WORKSPACE_ID, name: workspaceDto().name, memberCount: PEOPLE.length }] })],
+    [/^\/admin\/mailings\/campaigns$/, () => json({ campaigns: mailingState(state).campaigns })],
   ];
+}
+
+// --- Admin mailings ----------------------------------------------------------------
+
+const MAILING_STARTERS = [
+  { key: 'product_news', name: 'Новость продукта', description: 'Анонс новой возможности с кнопкой «Попробовать»',
+    subject: '{{name}}, в ProjectsFlow появилось новое', preheader: 'Коротко о том, что изменилось',
+    bodyMarkdown: ['Здравствуйте, {{name}}!', '', '## Что нового', '', 'Мы добавили **новую возможность**.'].join('\n'),
+    ctaLabel: 'Попробовать', ctaUrl: 'https://projectsflow.ru/' },
+  { key: 'update', name: 'Обновление', description: 'Сводка изменений за период',
+    subject: 'Обновления ProjectsFlow', preheader: 'Что изменилось', bodyMarkdown: ['Здравствуйте, {{name}}!', '', '- Пункт'].join('\n'),
+    ctaLabel: null, ctaUrl: null },
+  { key: 'come_back', name: 'Приглашение вернуться', description: 'Для тех, кто давно не заходил',
+    subject: '{{name}}, мы скучаем', preheader: 'Ваши проекты ждут', bodyMarkdown: 'Здравствуйте, {{name}}!', ctaLabel: null, ctaUrl: null },
+];
+
+function mailingState(state) {
+  state.mailing ??= { templates: [], campaigns: [], reach: { eligible: PEOPLE.length, unsubscribed: 1, invalid: 0 } };
+  return state.mailing;
+}
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Stand-in for the server renderer: the same fluid 600px card and phone media query.
+function mailingPreviewDto(body) {
+  const fill = (s) => String(s ?? '').replace(/\{\{\s*name\s*\}\}/g, ME.displayName).replace(/\{\{\s*workspace\s*\}\}/g, workspaceDto().name);
+  const paragraphs = fill(body.bodyMarkdown).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(p)}</p>`).join('');
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@media (max-width:480px){.pf-shell{padding:0!important}.pf-card{border-radius:0!important}}</style></head>
+<body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;"><table role="presentation" width="100%" class="pf-shell" style="padding:32px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" class="pf-card" style="width:100%;max-width:600px;background:#fff;border-radius:12px;border:1px solid #e2e8f0;">
+<tr><td style="padding:28px 32px 12px;font-size:13px;font-weight:700;color:#2563eb;">PROJECTSFLOW</td></tr>
+<tr><td style="padding:8px 32px;">${paragraphs}</td></tr>
+<tr><td style="padding:16px 32px;background:#f8fafc;font-size:12px;color:#94a3b8;">Отписаться от рассылок</td></tr>
+</table></td></tr></table></body></html>`;
+  return { subject: fill(body.subject), preheader: fill(body.preheader), html, text: fill(body.bodyMarkdown) };
+}
+
+function mutateMailing(state, method, path, body) {
+  if (!path.startsWith('/admin/mailings/')) return undefined;
+  const m = mailingState(state);
+  if (method === 'POST' && path === '/admin/mailings/templates') {
+    const now = new Date().toISOString();
+    const template = { ...body, id: `tpl-${m.templates.length + 1}`, createdBy: ME.id, createdAt: now, updatedAt: now };
+    m.templates.unshift(template);
+    return json({ template }, 201);
+  }
+  const put = method === 'PUT' && path.match(/^\/admin\/mailings\/templates\/([^/]+)$/);
+  if (put) {
+    const i = m.templates.findIndex((t) => t.id === put[1]);
+    if (i < 0) return json({ error: 'template_not_found' }, 404);
+    m.templates[i] = { ...m.templates[i], ...body, updatedAt: new Date().toISOString() };
+    return json({ template: m.templates[i] });
+  }
+  if (method === 'POST' && path === '/admin/mailings/preview') return json(mailingPreviewDto(body));
+  // Test sends go to the signed-in admin only; nothing leaves the browser in smoke runs.
+  if (method === 'POST' && path === '/admin/mailings/test') return json({ to: ME.email });
+  if (method === 'POST' && path === '/admin/mailings/reach') return json({ reach: m.reach });
+  return undefined;
 }
 
 function parseBody(request) {
@@ -581,6 +644,8 @@ function parseBody(request) {
 
 // Mutations: journaled, then answered like the server would (where a scenario relies on it).
 function mutate(state, method, path, body) {
+  const mailing = mutateMailing(state, method, path, body);
+  if (mailing) return mailing;
   const taskMatch = path.match(/^\/projects\/([^/]+)\/tasks\/([^/]+)(\/.*)?$/);
   if (taskMatch) {
     const [, , taskId, rest = ''] = taskMatch;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bot, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
+import { Bot, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Megaphone, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -18,14 +18,15 @@ import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 import { AdminLlmPanel } from '@/presentation/components/admin/AdminLlmPanel';
+import { AdminMailingPanel } from '@/presentation/components/admin/mailing/AdminMailingPanel';
 import { EditUserDialog, UserPlanDialog, DeleteUserDialog } from '@/presentation/components/admin/AdminUserDialogs';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { EmptyPanel } from '@/presentation/pages/PageScaffold';
 import { SectionPage } from '@/presentation/pages/SectionPage';
 
-type Tab = 'projects' | 'users' | 'support' | 'email' | 'ai';
+type Tab = 'projects' | 'users' | 'support' | 'mailing' | 'email' | 'ai';
 
-const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email', 'ai'];
+const TABS: readonly Tab[] = ['projects', 'users', 'support', 'mailing', 'email', 'ai'];
 
 // Статус проекта приходит кодом ('active' …) — в интерфейсе показываем по-русски.
 const PROJECT_STATUS_LABEL: Record<AdminProject['status'], string> = {
@@ -47,7 +48,7 @@ export function AdminPage(): React.ReactElement {
       {/* Вкладки — общий Tabs (как в профиле): неактивная вкладка не монтируется, поэтому
           данные раздела грузятся только при его открытии. */}
       <Tabs value={tab} onValueChange={(next) => setTab(next as Tab)}>
-        {/* Пять вкладок на телефоне шире экрана — ряд прокручивается вбок, а не режется. */}
+        {/* Шесть вкладок на телефоне шире экрана — ряд прокручивается вбок, а не режется. */}
         <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pf-scrollbar-hide sm:mx-0 sm:px-0">
           <TabsList>
             <TabsTrigger value="projects">
@@ -58,6 +59,9 @@ export function AdminPage(): React.ReactElement {
             </TabsTrigger>
             <TabsTrigger value="support">
               <LifeBuoy className="size-3.5" /> Поддержка
+            </TabsTrigger>
+            <TabsTrigger value="mailing">
+              <Megaphone className="size-3.5" /> Рассылки
             </TabsTrigger>
             <TabsTrigger value="email">
               <Mail className="size-3.5" /> Email
@@ -76,6 +80,9 @@ export function AdminPage(): React.ReactElement {
         </TabsContent>
         <TabsContent value="support" className="mbs-5">
           <SupportTab />
+        </TabsContent>
+        <TabsContent value="mailing" className="mbs-5">
+          <AdminMailingPanel />
         </TabsContent>
         <TabsContent value="email" className="mbs-5">
           <EmailTab />
