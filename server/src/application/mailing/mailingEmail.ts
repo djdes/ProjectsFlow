@@ -60,10 +60,10 @@ export function renderMailingEmail(input: MailingEmailInput): EmailMessage {
 
   const html = layout === 'standard'
     ? standardHtml(parts)
-    : promoHtml(parts, layout, offer && { badge: offer.badge, deadline: offer.deadline }, input.assetBaseUrl ?? DEFAULT_ASSET_BASE);
+    : promoHtml(parts, layout, offer && { badge: offer.badge, deadline: offer.deadline, caption: offer.caption || theme!.offer.caption }, input.assetBaseUrl ?? DEFAULT_ASSET_BASE);
 
   const offerText = theme && offer
-    ? [offer.badge ? `${theme.offer.caption}: ${offer.badge}` : null, offer.deadline || null].filter(Boolean).join('\n')
+    ? [offer.badge ? `${offer.caption || theme.offer.caption}: ${offer.badge}` : null, offer.deadline || null].filter(Boolean).join('\n')
     : null;
   const text = [
     theme?.offer.style === 'box' ? null : offerText,
@@ -147,7 +147,7 @@ function standardHtml(p: Parts): string {
 </html>`;
 }
 
-type Offer = { readonly badge: string; readonly deadline: string };
+type Offer = { readonly badge: string; readonly deadline: string; readonly caption: string };
 
 // Spaced lowercase caption, the family's label voice (refs 8 and 9).
 function caption(t: PromoTheme, text: string, extra = ''): string {
@@ -169,7 +169,7 @@ function offerRow(t: PromoTheme, offer: Offer): string {
     return `<tr><td class="pf-pad" style="padding:8px 32px 12px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${o.boxBg}" style="background:${o.boxBg};border:1px solid ${o.boxBorder};border-radius:18px;">
             <tr><td style="padding:18px 22px;">
-              ${caption(t, o.caption)}
+              ${caption(t, offer.caption)}
               ${offer.badge ? offerBig(t, offer.badge) : ''}
               ${offer.deadline ? offerMeta(t, offer.deadline) : ''}
             </td></tr>
@@ -181,7 +181,7 @@ function offerRow(t: PromoTheme, offer: Offer): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
             <td class="pf-stack" valign="bottom" style="padding:0 18px 0 0;">${offerBig(t, offer.badge)}</td>
             <td class="pf-stack pf-split-r" valign="bottom" width="190" style="width:190px;border-left:1px solid ${t.rule};padding:0 0 10px 18px;">
-              ${caption(t, o.caption, 'padding:0 0 6px;')}
+              ${caption(t, offer.caption, 'padding:0 0 6px;')}
               ${offer.deadline ? offerMeta(t, offer.deadline) : ''}
             </td>
           </tr></table>
@@ -190,7 +190,7 @@ function offerRow(t: PromoTheme, offer: Offer): string {
   // countdown swaps the emphasis: the deadline is the big line.
   const [big, small] = o.style === 'countdown' ? [offer.deadline || offer.badge, offer.deadline ? offer.badge : ''] : [offer.badge, offer.deadline];
   return `<tr><td class="pf-pad" style="padding:28px 32px 6px;">
-          ${caption(t, o.caption)}
+          ${caption(t, offer.caption)}
           ${big ? offerBig(t, big) : ''}
           ${small ? offerMeta(t, small) : ''}
         </td></tr>`;

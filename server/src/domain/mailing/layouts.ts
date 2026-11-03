@@ -18,9 +18,12 @@ export type MailingOffer = {
   readonly badge: string;
   // Free text, e.g. «до 30 ноября».
   readonly deadline: string;
+  // Small label over the badge, e.g. «на тариф VIP». Absent — the layout's own caption, which
+  // fits its original promo («на годовой тариф») but not a letter reusing the design.
+  readonly caption?: string;
 };
 
-export const MAILING_OFFER_LIMITS = { badge: 40, deadline: 60 } as const;
+export const MAILING_OFFER_LIMITS = { badge: 40, deadline: 60, caption: 40 } as const;
 
 /** Normalizes stored or submitted offer JSON; empty offers become null. */
 export function parseMailingOffer(raw: unknown): MailingOffer | null {
@@ -29,5 +32,7 @@ export function parseMailingOffer(raw: unknown): MailingOffer | null {
   const text = (x: unknown, max: number): string => (typeof x === 'string' ? x.replace(/\s+/g, ' ').trim().slice(0, max) : '');
   const badge = text(v['badge'], MAILING_OFFER_LIMITS.badge);
   const deadline = text(v['deadline'], MAILING_OFFER_LIMITS.deadline);
-  return badge || deadline ? { badge, deadline } : null;
+  const caption = text(v['caption'], MAILING_OFFER_LIMITS.caption);
+  if (!badge && !deadline) return null;
+  return caption ? { badge, deadline, caption } : { badge, deadline };
 }

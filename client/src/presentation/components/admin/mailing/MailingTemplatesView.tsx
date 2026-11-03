@@ -60,7 +60,7 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
 
   const dirty = !sameDraft(draft, baseline);
   const patch = (p: Partial<MailingTemplateDraft>): void => setDraft((d) => ({ ...d, ...p }));
-  const patchOffer = (p: Partial<{ badge: string; deadline: string }>): void =>
+  const patchOffer = (p: Partial<{ badge: string; deadline: string; caption: string }>): void =>
     setDraft((d) => ({ ...d, offer: { badge: '', deadline: '', ...d.offer, ...p } }));
   const confirmLeave = (): boolean => !dirty || window.confirm('Есть несохранённые изменения. Закрыть без сохранения?');
 
@@ -208,7 +208,12 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
             <MailingLayoutPicker value={draft.layout} onChange={(layout) => patch({ layout })} />
             {draft.layout !== 'standard' && (
               <div className="space-y-1.5" data-pf-mailing-offer>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mailing-offer-caption">Подпись</Label>
+                    <Input id="mailing-offer-caption" value={draft.offer?.caption ?? ''} maxLength={MAILING_OFFER_LIMITS.caption} placeholder="как в макете"
+                      onChange={(e) => patchOffer({ caption: e.target.value })} />
+                  </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="mailing-offer-badge">Предложение</Label>
                     <Input id="mailing-offer-badge" value={draft.offer?.badge ?? ''} maxLength={MAILING_OFFER_LIMITS.badge} placeholder="7 дней"

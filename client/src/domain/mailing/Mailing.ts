@@ -5,9 +5,10 @@ export const MAILING_LAYOUTS = ['standard', 'trial', 'annual', 'winback', 'refer
 export type MailingLayout = (typeof MAILING_LAYOUTS)[number];
 
 // Display-only promo terms, also available in texts as {{offer}} and {{deadline}}.
-export type MailingOffer = { readonly badge: string; readonly deadline: string };
+// caption — label over the badge; empty means the layout's own one.
+export type MailingOffer = { readonly badge: string; readonly deadline: string; readonly caption?: string };
 
-export const MAILING_OFFER_LIMITS = { badge: 40, deadline: 60 } as const;
+export const MAILING_OFFER_LIMITS = { badge: 40, deadline: 60, caption: 40 } as const;
 
 export type MailingContent = {
   readonly subject: string;

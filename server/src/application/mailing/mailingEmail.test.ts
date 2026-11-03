@@ -79,3 +79,13 @@ test('content parsing: layout defaults to standard, unknown layouts are rejected
   assert.equal(parseMailingContent({ ...base, layout: 'news', offer: { badge: ' ', deadline: '' } }).offer, null);
   assert.throws(() => parseMailingContent({ ...base, layout: 'brutalist' }), (e: unknown) => e instanceof MailingError && e.code === 'invalid_content');
 });
+
+test('своя подпись к предложению заменяет подпись макета, без неё остаётся подпись макета', () => {
+  const vip = MAILING_STARTERS.find((s) => s.key === 'promo_vip')!;
+  const own = render(vip);
+  assert.ok(own.html.includes('тариф VIP без оплаты') && !own.html.includes('на годовой тариф'));
+  assert.ok(own.text.includes('тариф VIP без оплаты: 14 дней'));
+  const plain = render({ ...vip, offer: { badge: '14 дней', deadline: 'до 20 декабря' } });
+  assert.ok(plain.html.includes(PROMO_THEMES.annual.offer.caption));
+  assert.deepEqual(parseMailingContent({ ...vip, offer: { badge: '1', deadline: '', caption: `  ${'x'.repeat(60)} ` } }).offer?.caption, 'x'.repeat(40));
+});

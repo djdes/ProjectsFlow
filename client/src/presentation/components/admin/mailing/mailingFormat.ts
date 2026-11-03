@@ -75,7 +75,9 @@ export function offerOf(layout: MailingLayout, offer: MailingOffer | null): Mail
   if (layout === 'standard' || !offer) return null;
   const badge = offer.badge.trim();
   const deadline = offer.deadline.trim();
-  return badge || deadline ? { badge, deadline } : null;
+  const caption = offer.caption?.trim() ?? '';
+  if (!badge && !deadline) return null;
+  return caption ? { badge, deadline, caption } : { badge, deadline };
 }
 
 export function contentOf(d: MailingContent): MailingContent {
