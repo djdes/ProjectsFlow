@@ -1018,7 +1018,7 @@ export function KanbanBoard({
     status === 'done' ? null : (grouped[status][0]?.id ?? null);
 
   const handleQuickPromote = async (task: Task, target?: TaskStatus): Promise<void> => {
-    // «Шаг вперёд» по колонкам: Черновики→Вручную→Воркер→Готово (quickPromoteNext).
+    // «Шаг вперёд» по колонкам: Черновики→В работе→Воркер→Готово (quickPromoteNext).
     // Явный target — кнопка «Взять в работу» (→ 'manual') с любой колонки.
     const next = target ?? quickPromoteNext(task.status, workerEnabled);
     if (!next) return;
@@ -1248,7 +1248,7 @@ export function KanbanBoard({
             работает в обоих режимах: все колонки в DOM, просто проскроллены.
             items-start — каждая колонка своей высоты по контенту (не тянется до самой длинной);
             высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
-        {/* Полка «В работе» — над колонками, вместо колонки «Вручную». Дроп в неё
+        {/* Полка «В работе» — над колонками, вместо колонки «В работе». Дроп в неё
             обрабатывает общий handleDragEnd: droppable совпадает с колонкой по id и data. */}
         <BoardWorkShelf
           // Полка = колонка 'manual', поэтому и подпись у неё та же (переименование

@@ -40,9 +40,9 @@ test('resolveMoveTarget: worker — двигает всё кроме todo', () =
   assert.equal(resolveMoveTarget('backlog', 'worker'), 'todo');
 });
 
-// Задача, положенная в «Вручную», обязана там и остаться: комментарий (или правка,
+// Задача, положенная в «В работе», обязана там и остаться: комментарий (или правка,
 // которая шлётся тем же композером) не выдёргивает её в «Черновики»/«Воркеру».
-test('resolveMoveTarget: «Вручную» не двигается ни одним target', () => {
+test('resolveMoveTarget: «В работе» не двигается ни одним target', () => {
   assert.equal(resolveMoveTarget('manual', 'draft'), null);
   assert.equal(resolveMoveTarget('manual', 'worker'), null);
 });

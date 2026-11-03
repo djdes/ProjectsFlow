@@ -9,9 +9,9 @@ import {
 // The domain enum keeps `backlog/todo/...`; this is the user-facing rename.
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Черновики',
-  manual: 'Вручную',
+  manual: 'В работе',
   todo: 'Воркер',
-  in_progress: 'В работе',
+  in_progress: 'У воркера',
   awaiting_clarification: 'На уточнении',
   pending_approval: 'На утверждении',
   done: 'Готово',
@@ -35,7 +35,7 @@ export function resolveStatusLabel(
   return STATUS_LABEL[status];
 }
 
-// Прогрессия «шаг вперёд» по видимым колонкам: Черновики→Вручную→Воркер→Готово.
+// Прогрессия «шаг вперёд» по видимым колонкам: Черновики→В работе→Воркер→Готово.
 // Один источник для кнопки-стрелки на карточке (KanbanCard) и сплит-пилюли в окне задачи.
 export const ADVANCE_NEXT: Partial<Record<TaskStatus, TaskStatus>> = {
   backlog: 'manual',
@@ -45,7 +45,7 @@ export const ADVANCE_NEXT: Partial<Record<TaskStatus, TaskStatus>> = {
 
 // Следующий статус для быстрого «передать дальше». in_progress/awaiting_clarification
 // визуально живут в колонке «Воркер» (todo) → у них следующий = done. null = дальше некуда.
-// workerEnabled=false (db/152): колонки «Воркер» нет, поэтому шаг из «Вручную» ведёт сразу
+// workerEnabled=false (db/152): колонки «Воркер» нет, поэтому шаг из «В работе» ведёт сразу
 // в «Готово» — иначе стрелка перекладывала бы задачу в колонку, которой не видно.
 export function quickPromoteNext(status: TaskStatus, workerEnabled = true): TaskStatus | null {
   const visible = status === 'in_progress' || status === 'awaiting_clarification' ? 'todo' : status;

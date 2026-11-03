@@ -2643,7 +2643,7 @@ export function AgentsSection({
 const WORKFLOW_STATUS_LABELS: Record<WorkflowTaskStatus, string> = {
   backlog: "Бэклог",
   todo: "К выполнению",
-  in_progress: "В работе",
+  in_progress: "У воркера",
   awaiting_clarification: "Ждёт уточнения",
   done: "Готово",
   manual: "Ручная",

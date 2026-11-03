@@ -179,7 +179,7 @@ const config: Config = {
           'soft-hover': 'var(--done-soft-hover)',
           ink: 'oklch(var(--done-ink) / <alpha-value>)',
         },
-        // Предупреждение — тот же янтарь, что «Вручную» (одна жёлтая краска на продукт),
+        // Предупреждение — тот же янтарь, что «В работе» (одна жёлтая краска на продукт),
         // отдельное имя — чтобы в коде было видно смысл.
         warning: {
           DEFAULT: 'oklch(var(--manual) / <alpha-value>)',

@@ -224,7 +224,7 @@ export function QueueHeader({
   );
 }
 
-// Иконка статуса «Вручную»: наполовину залитый круг — «начато, делаю сам».
+// Иконка статуса «В работе»: наполовину залитый круг — «начато, делаю сам».
 export function ManualIcon({ className }: { className?: string }): React.ReactElement {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={cn('size-3.5 shrink-0', className)}>
@@ -284,14 +284,14 @@ export function InboxSectionSwitch({
       aria-label="Раздел"
       className={cn('flex h-12 rounded-lg border border-transparent bg-foreground/[0.06] p-0.5 dark:border-border dark:bg-panel', className)}
     >
-      {item('now', 'В работе', nowCount, nowAttention)}
+      {item('now', 'Сейчас', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}
     </div>
   );
 }
 
 // Свайп карточки вправо на тач-экране — «дальше по процессу» (из очереди в работу, из
-// «Вручную» в готово или на утверждение, на полке приёмки — принять). Под карточкой
+// «В работе» в готово или на утверждение, на полке приёмки — принять). Под карточкой
 // проступает подложка с действием цветом его статуса; за порогом она становится плотной —
 // отпустите, и действие выполнится. Мышью жест не срабатывает: на десктопе есть плашка.
 export type SwipeAction = {

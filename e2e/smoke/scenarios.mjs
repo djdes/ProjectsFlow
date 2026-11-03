@@ -50,7 +50,7 @@ const INBOX_SECTION_SWITCH_REQUIRED = true;
 
 // ---------------------------------------------------------------- helpers ----
 
-const NOW = 'section[aria-label="В работе"]';
+const NOW = 'section[aria-label="Сейчас"]';
 const QUEUE = 'section[aria-label="Очередь"]';
 const card = (id) => `[data-pf-task-id="${id}"]`;
 
@@ -351,7 +351,7 @@ export const scenarios = [
 
   {
     id: 'inbox',
-    title: 'Входящие: «В работе» и «Очередь»',
+    title: 'Входящие: «Сейчас» и «Очередь»',
     matrix: [
       ['desktop', 'light'],
       ['desktop', 'dark'],
@@ -363,12 +363,12 @@ export const scenarios = [
       await t.check('заголовок «Задачи пространства»', () =>
         t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
       );
-      await t.check('«В работе»: полки «На утверждении» и «Вручную» с карточками', async () => {
+      await t.check('«Сейчас»: полки «На утверждении» и «В работе» с карточками', async () => {
         const now = page.locator(NOW);
-        await t.visible(now, 'колонка «В работе»');
+        await t.visible(now, 'колонка «Сейчас»');
         await t.visible(now.getByText('На утверждении', { exact: true }), 'полка «На утверждении»');
-        await t.visible(now.getByText('Вручную', { exact: true }), 'полка «Вручную»');
-        await expectCards(t, NOW, [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id), '«В работе»');
+        await t.visible(now.getByText('В работе', { exact: true }), 'полка «В работе»');
+        await expectCards(t, NOW, [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id), '«Сейчас»');
       });
       await t.check('«Очередь»: колонки проектов и все мои задачи', async () => {
         const queue = page.locator(QUEUE);
@@ -414,7 +414,7 @@ export const scenarios = [
       const { page, state } = t;
       // Вера спросила меня в своей задаче — её нет в моих лентах «Мои».
       state.awaitingReply = [{ taskId: 't-prices', authorUserId: 'u-vera', excerpt: 'Какие цены ставить на услуги?' }];
-      // На телефоне сначала открыт раздел «В работе», очереди на экране ещё нет.
+      // На телефоне сначала открыт раздел «Сейчас», очереди на экране ещё нет.
       await t.goto('/', {
         ready: () => page.locator(t.isMobile ? '[data-pf-inbox-section-switch]' : QUEUE),
         readyName: 'доска «Входящих» загрузилась',
@@ -489,7 +489,7 @@ export const scenarios = [
       const { page, state } = t;
       await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
 
-      await t.check('«Взять в работу»: POST move → manual, карточка во «Вручную»', async () => {
+      await t.check('«Взять в работу»: POST move → manual, карточка в «В работе»', async () => {
         const queueCard = page.locator(`${QUEUE} ${card('t-pay')}`);
         await t.visible(queueCard, `карточка «${taskTitle(state, 't-pay')}» в очереди`);
         await queueCard.hover();
@@ -499,10 +499,10 @@ export const scenarios = [
           'нет POST /api/projects/p-shop/tasks/t-pay/move с targetStatus "manual"',
         );
         const nowCard = page.locator(`${NOW} ${card('t-pay')}`);
-        await t.visible(nowCard, 'карточка в «В работе»');
+        await t.visible(nowCard, 'карточка в «Сейчас»');
         await t.waitFor(
           async () => (await nowCard.locator('button[aria-label="Вернуть в очередь"]').count()) > 0,
-          'у карточки нет действия «Вернуть в очередь» — она не на полке «Вручную»',
+          'у карточки нет действия «Вернуть в очередь» — она не на полке «В работе»',
         );
         await expectGone(t, `${QUEUE} ${card('t-pay')}`, 'карточка осталась в очереди');
       });
@@ -521,9 +521,9 @@ export const scenarios = [
       await t.check('«Передать воркеру»: только в колонке проекта, POST move → todo', async () => {
         const handoff = 'button[aria-label="Передать воркеру"]';
         const manualCard = page.locator(`${NOW} ${card('t-form')}`);
-        await t.visible(manualCard, `карточка «${taskTitle(state, 't-form')}» во «Вручную»`);
+        await t.visible(manualCard, `карточка «${taskTitle(state, 't-form')}» в «В работе»`);
         await manualCard.hover();
-        t.assert((await manualCard.locator(handoff).count()) === 0, '«Передать воркеру» на полке «Вручную»');
+        t.assert((await manualCard.locator(handoff).count()) === 0, '«Передать воркеру» на полке «В работе»');
         t.assert(
           (await page.locator(`${QUEUE} ${card('t-domain')} ${handoff}`).count()) === 0,
           '«Передать воркеру» у личной задачи',
@@ -603,14 +603,14 @@ export const scenarios = [
       const switches = page.locator('[data-pf-inbox-section-switch]');
       if (!INBOX_SECTION_SWITCH_REQUIRED && (await switches.count()) === 0) {
         const why = 'в вёрстке ещё нет кнопок [data-pf-inbox-section-switch] — их добавляет мобильная доработка «Входящих»';
-        t.expected('переключатель «В работе»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', why);
-        t.expected('«В работе» и «Очередь» показываются по одному', why);
-        await t.check('карточки «В работе» и «Очередь» видны', async () => {
-          await expectCards(t, NOW, nowIds, '«В работе»');
+        t.expected('переключатель «Сейчас»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', why);
+        t.expected('«Сейчас» и «Очередь» показываются по одному', why);
+        await t.check('карточки «Сейчас» и «Очередь» видны', async () => {
+          await expectCards(t, NOW, nowIds, '«Сейчас»');
           await expectCards(t, QUEUE, queueIds, '«Очередь»');
         });
       } else {
-        await t.check('переключатель «В работе»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', async () => {
+        await t.check('переключатель «Сейчас»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', async () => {
           const found = await switches.evaluateAll((els) =>
             els.map((el) => ({
               value: el.getAttribute('data-pf-inbox-section-switch'),
@@ -623,7 +623,7 @@ export const scenarios = [
           t.assert(pressed.length === 1, `aria-pressed="true" у: ${pressed.join(', ') || 'ни одной'}`);
         });
         for (const [value, shown, other, label, ids] of [
-          ['now', NOW, QUEUE, 'В работе', nowIds],
+          ['now', NOW, QUEUE, 'Сейчас', nowIds],
           ['queue', QUEUE, NOW, 'Очередь', queueIds],
         ]) {
           await t.check(`переключатель → «${label}»: виден только этот раздел, все его карточки`, async () => {
@@ -665,12 +665,12 @@ export const scenarios = [
         await expectGone(t, `${QUEUE} ${card('t-home')}`, 'карточка осталась в очереди');
       });
       if (swiped) {
-        await t.check('взятая задача — в разделе «В работе»', async () => {
+        await t.check('взятая задача — в разделе «Сейчас»', async () => {
           await showSection(t, 'now');
-          await t.visible(page.locator(`${NOW} ${card('t-home')}`), 'карточка в «В работе»');
+          await t.visible(page.locator(`${NOW} ${card('t-home')}`), 'карточка в «Сейчас»');
         });
       } else {
-        t.skip('взятая задача — в разделе «В работе»', 'свайп не сработал');
+        t.skip('взятая задача — в разделе «Сейчас»', 'свайп не сработал');
       }
 
       await t.check('долгий тап и бросок на «Готово» в доке закрывает задачу (POST move → done)', async () => {
@@ -783,7 +783,7 @@ export const scenarios = [
       });
       await t.pageChecks('доска проекта');
       await openAndCloseTask(t, page.locator(card('t-home')), taskTitle(state, 't-home'));
-      await t.check('кнопка «Взять в работу» на черновике переносит его в «Вручную»', async () => {
+      await t.check('кнопка «Взять в работу» на черновике переносит его в «В работе»', async () => {
         const draft = page.locator(card('t-prices')).first();
         if (!t.isMobile) await draft.hover();
         const take = draft.getByRole('button', { name: 'Взять в работу' }).filter({ visible: true }).first();
@@ -792,7 +792,7 @@ export const scenarios = [
         else await take.click();
         await t.waitForMutation(
           (m) => m.method === 'POST' && m.path === `/projects/${BOARD_PROJECT_ID}/tasks/t-prices/move` && m.body?.targetStatus === 'manual',
-          'нет переноса черновика в «Вручную»',
+          'нет переноса черновика в «В работе»',
         );
       });
     },
@@ -929,9 +929,9 @@ export const scenarios = [
         const menu = page.getByRole('menu');
         await t.visible(menu.getByText('Статус задачи', { exact: true }), 'заголовок выбора статуса');
         if (t.isMobile) t.assert(await menu.getAttribute('data-pf-mobile-sheet') === 'true', 'статус открылся не нижней шторкой');
-        await press(menu.getByRole('menuitemradio', { name: 'Вручную', exact: true }));
+        await press(menu.getByRole('menuitemradio', { name: 'В работе', exact: true }));
         await t.waitForMutation((m) => m.path.endsWith('/t-home/move') && m.body?.targetStatus === 'manual', 'статус не сохранён');
-        await t.waitFor(async () => (await page.getByRole('button', { name: 'Сменить статус', exact: true }).innerText()).includes('Вручную'), 'статус не обновился');
+        await t.waitFor(async () => (await page.getByRole('button', { name: 'Сменить статус', exact: true }).innerText()).includes('В работе'), 'статус не обновился');
       });
       await t.check('список утверждающих открывается с полными именами', async () => {
         await press(properties.getByRole('button', { name: 'Кто утверждает', exact: true }));

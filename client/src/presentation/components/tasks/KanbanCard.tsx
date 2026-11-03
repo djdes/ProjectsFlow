@@ -232,10 +232,10 @@ function KanbanCardImpl({
   // карточка не залитая плашка, а белая карточка на цветном кольце колонки.
   const doneCard = !preview && task.status === 'done';
 
-  // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
+  // Цель «шага вперёд» для кнопки на hover: Черновики→В работе, В работе→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
-  // «Вручную» — своя кнопка «Взять в работу» (как во «Входящих»): безымянная стрелка его
-  // не выдавала. Поэтому стрелку, ведущую в «Вручную», не показываем — действие одно.
+  // «В работе» — своя кнопка «Взять в работу» (как во «Входящих»): безымянная стрелка его
+  // не выдавала. Поэтому стрелку, ведущую в «В работе», не показываем — действие одно.
   const canTake = !!onQuickPromote && canTakeToManual(task.status);
   const quickNext = onQuickPromote ? quickPromoteNext(task.status, workerEnabled) : null;
   const promoteNext = quickNext === 'manual' && canTake ? null : quickNext;
@@ -310,7 +310,7 @@ function KanbanCardImpl({
           onQuickPromote?.(task, 'manual');
         }}
         aria-label="Взять в работу"
-        title="Взять в работу — в «Вручную»"
+        title="Взять в работу — в «В работе»"
       >
         <Play className={cn('fill-current', big ? 'size-4' : 'size-3')} />
       </Button>

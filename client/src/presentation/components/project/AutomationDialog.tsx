@@ -111,7 +111,7 @@ const DEFAULT_DEPLOY_COMMAND = 'npm run deploy';
 // Колонки-кандидаты для ежедневной сводки (визуальные статусы канбана).
 const DIGEST_STATUS_OPTIONS: { status: TaskStatus; label: string }[] = [
   { status: 'backlog', label: 'Черновики' },
-  { status: 'manual', label: 'Вручную' },
+  { status: 'manual', label: 'В работе' },
   { status: 'todo', label: 'Воркер' },
   { status: 'done', label: 'Готово' },
 ];

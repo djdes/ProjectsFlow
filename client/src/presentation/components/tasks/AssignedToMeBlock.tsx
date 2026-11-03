@@ -348,7 +348,7 @@ export function AssignedToMeBlock({
   // Приёмка включена в пространстве вообще (независимо от роли смотрящего) — используется
   // отдельно от isApprover, чтобы решить, показывать ли полку рядовому исполнителю.
   const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
-  // Без воркера «В работе» ставят люди — такие задачи на полке «Вручную» (isHandWork).
+  // Без воркера «В работе» ставят люди — такие задачи на полке «В работе» (isHandWork).
   const workerEnabled = useWorkerEnabled();
   // «Передать воркеру» на карточке очереди — те же условия, что у кнопки на доске проекта.
   const workerHandoffAvailable = useWorkerHandoffAvailable();
@@ -416,7 +416,7 @@ export function AssignedToMeBlock({
     }
     setHidePersonal(next);
   }, []);
-  // Поиск и фильтр по сроку (дизайн C4). Действуют на «Вручную» и очередь; полку приёмки
+  // Поиск и фильтр по сроку (дизайн C4). Действуют на «В работе» и очередь; полку приёмки
   // фильтрует только поиск — решение по сданной работе не прячется за сроком.
   const [query, setQuery] = useState('');
   const [due, setDue] = useState<DueKind | null>(null);
@@ -1002,7 +1002,7 @@ export function AssignedToMeBlock({
   const selectionColumns = grouping === 'deadline' ? kanbanGroups : groups;
   // Bulk management uses the same server capability as individual controls.
   const columnSelectableGroups = selectionColumns.map((g) => g.items.filter((t) => t.canModify).map((t) => t.id));
-  // Полки «На утверждении» и «Вручную» — такие же участники выделения, как колонки: раньше
+  // Полки «На утверждении» и «В работе» — такие же участники выделения, как колонки: раньше
   // при включении режима они просто пропадали с экрана, и до этих задач массовые действия
   // было не достать вовсе. Идут первыми, потому что первыми же и нарисованы — порядок
   // важен для Shift-диапазона и протяжки мышью, которые считают по этому же списку.
@@ -1581,7 +1581,7 @@ export function AssignedToMeBlock({
   }
 
   // Быстрое действие карточки очереди: «Взять в работу» — то же, что перетащить её в
-  // «Вручную» (статус 'manual', агент такие не берёт). Не предлагаем там, где задачей уже
+  // «В работе» (статус 'manual', агент такие не берёт). Не предлагаем там, где задачей уже
   // занят воркер (в работе / ждёт уточнения), и для закрытой или сданной.
   if (loadError) return <section className="space-y-4">{heading}
     <p className="text-sm text-muted-foreground">Не удалось загрузить задачи этого пространства.</p>
@@ -1599,7 +1599,7 @@ export function AssignedToMeBlock({
         <Play className="size-3 fill-current" />
       </QuickAction>
     ) : null;
-  // «Передать воркеру» — только проектные задачи очереди: полки «Вручную»/«На утверждении»
+  // «Передать воркеру» — только проектные задачи очереди: полки «В работе»/«На утверждении»
   // рендерят свои действия, а в «Личных» колонка «Воркер» не для этого.
   const canHandOff = (item: InboxBlockTask): boolean =>
     workerHandoffAvailable && item.canModify && !item.isInbox && canSendToWorker(item.status);
@@ -1614,7 +1614,7 @@ export function AssignedToMeBlock({
       </QuickAction>
     ) : null;
   // Свайп вправо на тач-экране — «дальше по процессу»: карточка очереди → в работу; карточка
-  // «Вручную» → на утверждение (своя, где работу принимает руководитель) или в готово.
+  // «В работе» → на утверждение (своя, где работу принимает руководитель) или в готово.
   const queueSwipe = (item: InboxBlockTask): SwipeAction | null =>
     !selectionActive && canTake(item)
       ? { label: 'Взять в работу', tone: 'manual', onCommit: () => void setWorkStatus(item, 'manual') }
@@ -1696,7 +1696,7 @@ export function AssignedToMeBlock({
     setFilterTo(null);
     setFilterProject(null);
   };
-  // Колонка «В работе» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
+  // Колонка «В работе» = полка приёмки + «В работе». Приёмку видит и рядовой исполнитель:
   // это единственная цель дропа для «сдать первую задачу» жестом. В режиме выделения пустые
   // полки прячем: тащить в них нечего, а подсказка «перетащите сюда» врала бы.
   const filtersPopover = (
@@ -1872,8 +1872,8 @@ export function AssignedToMeBlock({
     <button
       type="button"
       onClick={toggleNowCollapsed}
-      aria-label="Свернуть «В работе»"
-      title="Свернуть «В работе»"
+      aria-label="Свернуть «Сейчас»"
+      title="Свернуть «Сейчас»"
       className={cn(COLUMN_ACTION_CLASS, 'ms-auto')}
     >
       <ChevronsLeft className="size-3.5" />
@@ -1958,10 +1958,10 @@ export function AssignedToMeBlock({
       />
     ) : null;
 
-  // «В работе»: полка приёмки сверху, «Вручную» снизу — одна серая панель.
+  // «В работе»: полка приёмки сверху, «В работе» снизу — одна серая панель.
   const nowPanel = (
     <section
-      aria-label="В работе"
+      aria-label="Сейчас"
       className="flex w-full shrink-0 flex-col rounded-xl bg-panel md:w-[284px]"
     >
       {showApprovalZone && (
@@ -2384,11 +2384,11 @@ export function AssignedToMeBlock({
               <button
                 type="button"
                 onClick={toggleNowCollapsed}
-                aria-label="Развернуть «В работе»"
-                title="Развернуть «В работе»"
+                aria-label="Развернуть «Сейчас»"
+                title="Развернуть «Сейчас»"
                 className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
               >
-                <span className="[writing-mode:vertical-rl]">В работе</span>
+                <span className="[writing-mode:vertical-rl]">Сейчас</span>
                 <span className="tabular-nums text-approval">{approvalTasks.length}</span>
                 <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
               </button>
@@ -2415,7 +2415,7 @@ export function AssignedToMeBlock({
         ) : (
           // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
           <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
-            В «В работе» выбирать нечего
+            В «Сейчас» выбирать нечего
           </p>
         )
       ) : (
@@ -3325,13 +3325,13 @@ function ApprovalShelf({
   });
   // Пустую полку видит и рядовой исполнитель (не только принимающий) — текст по умолчанию
   // объясняет её именно ему: это цель для СВОЕЙ сделанной работы, а не чужая очередь.
-  // На телефоне «Вручную» и полка — один раздел без перетаскивания между колонками, поэтому
+  // На телефоне «В работе» и полка — один раздел без перетаскивания между колонками, поэтому
   // подсказка называет жест, который там работает.
   const defaultEmptyHint = isApprover
     ? 'Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их можете только вы.'
     : narrow
-      ? 'Сделали задачу из «Вручную» — смахните её вправо, и руководитель примет работу.'
-      : 'Готовую задачу перетащите сюда из «Вручную» — её примет руководитель.';
+      ? 'Сделали задачу из «В работе» — смахните её вправо, и руководитель примет работу.'
+      : 'Готовую задачу перетащите сюда из «В работе» — её примет руководитель.';
   return (
     <div
       ref={setNodeRef}
@@ -3526,7 +3526,7 @@ function ApprovalItemCard({
   );
 }
 
-// Полка «Вручную»: нижняя часть колонки «В работе», куда перетаскивают задачи, которыми
+// Полка «В работе»: нижняя часть колонки «В работе», куда перетаскивают задачи, которыми
 // занимаются сами (статус manual — агент такие не берёт). Подсвечивается при наведении
 // драга; внизу всегда штриховая подсказка-цель «перетащите сюда».
 function InProgressShelf({
@@ -3553,7 +3553,7 @@ function InProgressShelf({
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
   onDelete: (item: InboxBlockTask) => void;
-  // Быстрые действия карточки «Вручную» (сдать на утверждение, вернуть в очередь) —
+  // Быстрые действия карточки «В работе» (сдать на утверждение, вернуть в очередь) —
   // их собирает родитель: только он знает правила приёмки.
   renderActions: (item: InboxBlockTask) => React.ReactNode;
   // Свайп вправо по карточке на тач-экране — «дальше по процессу» (готово или сдать).
@@ -3612,9 +3612,8 @@ function InProgressShelf({
       )}
     >
       <div className="flex h-7 items-center gap-1.5 px-[3px] text-ui">
-        {/* Полка — это статус 'manual', и называться должна так же. «В работе» здесь
-            было бы вторым смыслом того же слова: в сводках/TG/EOD «В работе» — это
-            статус 'in_progress' (задача у воркера), а не «делаю руками». */}
+        {/* Полка — это статус 'manual', и называться должна так же: «В работе» — то, что
+            человек делает сам. Задача у воркера (in_progress) — «У воркера». */}
         <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-manual">
           <ManualIcon className="text-manual" />
           {STATUS_LABEL.manual}
@@ -4410,7 +4409,7 @@ function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
 
 // === Карточки канбана (колонка = группа) ===
 // Карточка задачи «Входящих» (дизайн C4): белая плашка с кольцом-тенью (в тёмной — графит с
-// линией). Сверху — метка проекта (и автор работы на полке приёмки, срок — у «Вручную»),
+// линией). Сверху — метка проекта (и автор работы на полке приёмки, срок — у «В работе»),
 // заголовок 13.5px, первая строка описания вторичным цветом, снизу — срок и счётчики.
 // Быстрые действия — плашкой в правом верхнем углу по наведению; на тач-экранах — рядом
 // снизу. Клик открывает drawer, ПКМ и Ctrl+клик — «выполнено».
@@ -4453,7 +4452,7 @@ function AcceptedCard({
   footer?: React.ReactNode;
   // Аватар и имя ответственного в верхней строке — на полке приёмки «чья это работа».
   showAssignee?: boolean;
-  // Срок — в верхней строке справа (полка «Вручную»), а не внизу.
+  // Срок — в верхней строке справа (полка «В работе»), а не внизу.
   dueOnTop?: boolean;
 }): React.ReactElement {
   const isDone = item.status === 'done';

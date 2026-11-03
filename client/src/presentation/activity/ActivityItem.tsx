@@ -88,7 +88,7 @@ function humanizeValue(field: string, v: string | null): string {
   return clean.length > 80 ? `${clean.slice(0, 80).trimEnd()}…` : clean;
 }
 
-// Одно изменение в строке «кто · что»: «Вручную → Готово», «срок: 13 окт.», «приоритет:
+// Одно изменение в строке «кто · что»: «В работе → Готово», «срок: 13 окт.», «приоритет:
 // Средний → Высокий». Статус без подписи — стрелка между статусами говорит сама за себя.
 // Описание в строку не влезает — называем поле, текст виден в задаче (клик подсветит поле).
 type ChangeParts = { readonly label: string; readonly old: string | null; readonly next: string };

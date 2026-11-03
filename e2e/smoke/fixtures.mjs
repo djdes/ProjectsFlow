@@ -158,7 +158,7 @@ export function createState() {
     taskDto({ id: 't-ios', projectId: 'p-mobile', title: 'Собрать тестовую сборку для iOS', status: 'backlog', taskType: 'feature', createdHoursAgo: 60 }),
     taskDto({ id: 't-release-doc', projectId: 'p-docs', title: 'Описать процесс релиза', status: 'backlog', priority: 4, createdHoursAgo: 30 }),
     taskDto({ id: 't-delivery', projectId: 'p-shop', title: 'Подключить службу доставки', status: 'done', createdHoursAgo: 200 }),
-    // Assigned to me, status manual — the «Вручную» shelf of «Сейчас».
+    // Assigned to me, status manual — the «В работе» shelf of «Сейчас».
     taskDto({ id: 't-form', projectId: 'p-site', title: 'Поправить форму записи к врачу', status: 'manual', deadline: today, priority: 2, createdHoursAgo: 50 }),
     // My personal inbox.
     taskDto({ id: 't-domain', projectId: INBOX_ID, title: 'Продлить домен для лендинга', status: 'backlog', deadline: nextWeek, createdHoursAgo: 20 }),

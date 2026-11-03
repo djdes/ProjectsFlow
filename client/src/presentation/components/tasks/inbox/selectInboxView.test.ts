@@ -41,7 +41,7 @@ test('without the deadline filter completed cards remain visible when requested 
   assert.ok(view.queue.some((t) => t.id === 'done'));
   assert.equal(view.dueCounts.late, 2);
 });
-test('без воркера «В работе» — это работа человека: полка «Вручную», а не очередь', () => {
+test('без воркера «В работе» — это работа человека: полка «В работе», а не очередь', () => {
   // 14.10.2026: сотрудник перевёл задачу в «В работе» на доске проекта, а во «Входящих» она
   // осталась в очереди без кнопки «Взять в работу» — ни там, ни на полке.
   const working = [task('hands', 'in_progress', null), task('queued', 'backlog', null)];
