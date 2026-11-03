@@ -30,7 +30,9 @@ const loaded = { exports: {} as Record<string, React.ComponentType<{ user: Admin
 new Function('module', 'exports', 'require', compiled.outputFiles[0]!.text)(loaded, loaded.exports, createRequire(import.meta.url));
 const user: AdminUser = { id: 'target', displayName: 'Иван', email: 'ivan@example.test', avatarUrl: '/avatar.png',
   isAdmin: false, projectCount: 3, ownedProjectCount: 1, delegationEnabledCount: 0, githubConnected: false,
-  plan: 'prime', subscriptionExpiresAt: '2026-12-01T10:20:35.000Z' };
+  plan: 'prime', subscriptionExpiresAt: '2026-12-01T10:20:35.000Z', telegramLinked: true, telegramUsername: 'ivan' };
+const emptyPreview = { blockers: [], removedWorkspaces: [{ name: 'Личное', kind: 'default' as const }], removedProjects: 2, removedTasks: 5,
+  reassignedTasks: 3, leftWorkspaces: [{ name: 'Команда', successorName: 'Босс' }] };
 
 async function harness(component: string, repository: Partial<AdminRepository>, override: Partial<AdminUser> = {}) {
   scope.__adminUsers = { repository };
@@ -56,11 +58,14 @@ async function harness(component: string, repository: Partial<AdminRepository>, 
 test('delete requires the exact confirmation email, disables pending submissions and keeps errors visible', async () => {
   let calls = 0;
   let fail!: (reason: Error) => void;
-  const view = await harness('DeleteUserDialog', { deleteUser: async (id) => {
+  const view = await harness('DeleteUserDialog', { getUserDeletionPreview: async () => emptyPreview, deleteUser: async (id) => {
     assert.equal(id, user.id); calls++;
     return new Promise<void>((_resolve, reject) => { fail = reject; });
   } });
   try {
+    const summary = document.querySelector('[data-admin-delete-summary]')!.textContent!;
+    assert.match(summary, /«Личное» \(личное\)/); assert.match(summary, /2 проекта/); assert.match(summary, /5 задач/);
+    assert.match(summary, /3 задачи перейдут/); assert.match(summary, /«Команда».*получит Босс/);
     assert.equal(view.button('Удалить пользователя').disabled, true);
     await view.fill('admin-delete-email', 'another@example.test'); await view.submit();
     assert.equal(calls, 0);
@@ -74,6 +79,21 @@ test('delete requires the exact confirmation email, disables pending submissions
   } finally { await view.close(); }
 });
 
+test('blockers from the preview replace the confirmation and keep deletion disabled', async () => {
+  let calls = 0;
+  const view = await harness('DeleteUserDialog', {
+    getUserDeletionPreview: async () => ({ ...emptyPreview, blockers: [{ kind: 'admin' }, { kind: 'owned_workspace', workspaceId: 'w', name: 'Студия', members: 4 }] }),
+    deleteUser: async () => { calls++; },
+  });
+  try {
+    const text = document.querySelector('[data-admin-delete-blockers]')!.textContent!;
+    assert.match(text, /снимите права администратора/); assert.match(text, /«Студия» \(4 участника\).*другого владельца/);
+    assert.equal(document.querySelector('#admin-delete-email'), null);
+    assert.equal(view.button('Удалить пользователя').disabled, true);
+    await view.submit(); assert.equal(calls, 0);
+  } finally { await view.close(); }
+});
+
 test('profile editing validates, normalizes fields, removes avatar and reports email conflicts without closing', async () => {
   const patches: unknown[] = [];
   let conflict = true;
@@ -84,12 +104,13 @@ test('profile editing validates, normalizes fields, removes avatar and reports e
     await view.fill('admin-edit-name', '  '); await view.submit(); assert.equal(patches.length, 0);
     await view.fill('admin-edit-name', '  Новое имя  ');
     await view.fill('admin-edit-email', ' NEW@Example.Test ');
-    await view.click(document.querySelector<HTMLElement>('#admin-remove-avatar')!); await view.submit();
+    await view.click(document.querySelector<HTMLElement>('#admin-remove-avatar')!);
+    await view.click(document.querySelector<HTMLElement>('#admin-unlink-telegram')!); await view.submit();
     assert.equal(view.saved, 0);
     assert.match(document.querySelector('[role=alert]')!.textContent!, /почта уже используется/);
     conflict = false; await view.submit();
     assert.equal(view.saved, 1);
-    assert.deepEqual(patches[1], { displayName: 'Новое имя', email: 'new@example.test', avatarUrl: null });
+    assert.deepEqual(patches[1], { displayName: 'Новое имя', email: 'new@example.test', avatarUrl: null, telegram: null });
   } finally { await view.close(); }
 });
 
@@ -100,10 +121,13 @@ test('same-plan expiry is editable, original seconds survive unchanged saves, an
     await view.submit(); assert.deepEqual(grants[0], [user.id, 'prime', user.subscriptionExpiresAt]);
     await view.fill('admin-plan-expiry', '2027-02-15T14:30'); await view.submit();
     assert.deepEqual(grants[1], [user.id, 'prime', new Date('2027-02-15T14:30').toISOString()]);
+    // +30 days counts from the date in the field while it is in the future.
+    await view.click(view.button('+30 дней')); await view.submit();
+    assert.deepEqual(grants[2], [user.id, 'prime', new Date(new Date('2027-02-15T14:30').getTime() + 30 * 86400000).toISOString()]);
     await view.click(document.querySelector<HTMLElement>('#admin-plan-unlimited')!); await view.submit();
-    assert.deepEqual(grants[2], [user.id, 'prime', null]);
+    assert.deepEqual(grants[3], [user.id, 'prime', null]);
     assert.equal(view.field('admin-plan-expiry').disabled, true);
     await view.click(document.querySelector<HTMLElement>('[role=tab]')!); await view.submit();
-    assert.deepEqual(grants[3], [user.id, 'free', null]);
+    assert.deepEqual(grants[4], [user.id, 'free', null]);
   } finally { await view.close(); }
 });

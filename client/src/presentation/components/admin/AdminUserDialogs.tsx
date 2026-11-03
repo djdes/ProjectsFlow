@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import type { AdminUser, AdminUserPatch } from '@/application/admin/AdminRepository';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { AdminUser, AdminUserDeletionBlocker, AdminUserDeletionPreview, AdminUserPatch } from '@/application/admin/AdminRepository';
 import type { PlanId } from '@/domain/usage/Usage';
 import { useContainer } from '@/infrastructure/di/container';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { toast } from '@/components/ui/sonner';
 import { planNameRu } from '@/presentation/usage/usageFormat';
+import { pluralRu } from '@/presentation/components/admin/mailing/mailingFormat';
 
 type Props = { user: AdminUser; onClose: () => void; onSaved: () => void };
 
@@ -20,13 +21,15 @@ export function EditUserDialog({ user, onClose, onSaved }: Omit<Props, 'onSaved'
   const [displayName, setDisplayName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email);
   const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [unlinkTelegram, setUnlinkTelegram] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const save = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     if (saving) return;
-    const patch = { displayName: displayName.trim(), email: email.trim().toLowerCase(),
+    const profile = { displayName: displayName.trim(), email: email.trim().toLowerCase(),
       ...(removeAvatar ? { avatarUrl: null } : {}) };
+    const patch = { ...profile, ...(unlinkTelegram ? { telegram: null } : {}) };
     if (!patch.displayName || patch.displayName.length > 80 || patch.email.length > 255
       || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patch.email)) {
       setError('Укажите имя до 80 символов и корректную почту'); return;
@@ -34,7 +37,8 @@ export function EditUserDialog({ user, onClose, onSaved }: Omit<Props, 'onSaved'
     setSaving(true); setError('');
     try {
       await adminRepository.updateUser(user.id, patch);
-      toast.success('Пользователь обновлён'); onSaved(patch);
+      // Only profile fields go back: the caller merges them into the signed-in user.
+      toast.success('Пользователь обновлён'); onSaved(profile);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить пользователя'); }
     finally { setSaving(false); }
   };
@@ -43,7 +47,7 @@ export function EditUserDialog({ user, onClose, onSaved }: Omit<Props, 'onSaved'
       <DialogContent hideClose={saving}>
         <DialogHeader>
           <DialogTitle>Редактировать пользователя</DialogTitle>
-          <DialogDescription>Имя, почта для входа и фотография профиля.</DialogDescription>
+          <DialogDescription>Имя, почта для входа, фотография профиля и Telegram.</DialogDescription>
         </DialogHeader>
         <form onSubmit={(event) => void save(event)} className="space-y-4">
           <fieldset disabled={saving} className="space-y-3">
@@ -58,6 +62,12 @@ export function EditUserDialog({ user, onClose, onSaved }: Omit<Props, 'onSaved'
             {user.avatarUrl && <div className="flex items-center gap-2">
               <Checkbox id="admin-remove-avatar" checked={removeAvatar} onCheckedChange={(checked) => setRemoveAvatar(checked === true)} />
               <Label htmlFor="admin-remove-avatar">Удалить фотографию профиля</Label>
+            </div>}
+            {user.telegramLinked && <div className="flex items-center gap-2">
+              <Checkbox id="admin-unlink-telegram" checked={unlinkTelegram} onCheckedChange={(checked) => setUnlinkTelegram(checked === true)} />
+              <Label htmlFor="admin-unlink-telegram" className="min-w-0 break-words">
+                Отвязать Telegram{user.telegramUsername ? ` @${user.telegramUsername}` : ''}
+              </Label>
             </div>}
           </fieldset>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -74,6 +84,23 @@ export function EditUserDialog({ user, onClose, onSaved }: Omit<Props, 'onSaved'
 function localDateTime(value: Date): string {
   return new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
+
+const DAY_MS = 86400000;
+const DATE_RU: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+
+// The plan the user has right now, as the admin sees it before changing anything.
+function currentPlanLabel(user: Pick<AdminUser, 'plan' | 'subscriptionExpiresAt'>, now = Date.now()): string {
+  if (user.plan === 'free') return 'Сейчас: Бесплатный';
+  if (!user.subscriptionExpiresAt) return `Сейчас: ${planNameRu(user.plan)}, бессрочно`;
+  const expires = new Date(user.subscriptionExpiresAt);
+  const date = expires.toLocaleString('ru-RU', DATE_RU);
+  if (expires.getTime() <= now) return `Срок ${planNameRu(user.plan)} истёк ${date}`;
+  const days = Math.ceil((expires.getTime() - now) / DAY_MS);
+  return `Сейчас: ${planNameRu(user.plan)} до ${date} (${days} ${pluralRu(days, 'день', 'дня', 'дней')})`;
+}
+
+// Extensions add to the date in the field while it is in the future, otherwise to now.
+const EXTENSIONS = [{ days: 7, label: '+7 дней' }, { days: 30, label: '+30 дней' }, { days: 365, label: '+1 год' }] as const;
 
 export function UserPlanDialog({ user, onClose, onSaved }: Props): React.ReactElement {
   const { adminRepository } = useContainer();
@@ -106,9 +133,10 @@ export function UserPlanDialog({ user, onClose, onSaved }: Props): React.ReactEl
       <DialogContent hideClose={saving}>
         <DialogHeader>
           <DialogTitle>Тариф и срок действия</DialogTitle>
-          <DialogDescription>{user.displayName} · {user.email}</DialogDescription>
+          <DialogDescription className="break-words">{user.displayName} · {user.email}</DialogDescription>
         </DialogHeader>
         <form onSubmit={(event) => void save(event)} className="space-y-4">
+          <p data-admin-plan-current className="text-sm">{currentPlanLabel(user)}</p>
           <fieldset disabled={saving} className="space-y-4">
             <SegmentedControl value={plan} onChange={setPlan} options={(['free', 'prime', 'vip'] as const).map((value) => ({ value, label: planNameRu(value) }))} />
             {plan === 'free' ? <p className="text-sm text-muted-foreground">Платная подписка будет отключена, срок действия сброшен.</p> : <>
@@ -122,9 +150,18 @@ export function UserPlanDialog({ user, onClose, onSaved }: Props): React.ReactEl
                   value={expiry} onChange={(event) => setExpiry(event.target.value)} />
                 <p className="text-xs text-muted-foreground">Время указано в часовом поясе вашего устройства. Прошедшая дата завершит подписку.</p>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => {
-                setUnlimited(false); setExpiry(localDateTime(new Date(Date.now() + 30 * 86400000)));
-              }}>30 дней с сегодняшнего дня</Button>
+              <div className="flex flex-wrap gap-2">
+                {EXTENSIONS.map(({ days, label }) => (
+                  <Button key={days} type="button" variant="outline" size="sm" onClick={() => {
+                    const field = new Date(expiry).getTime();
+                    const base = !unlimited && Number.isFinite(field) && field > Date.now() ? field : Date.now();
+                    setUnlimited(false); setExpiry(localDateTime(new Date(base + days * DAY_MS)));
+                  }}>{label}</Button>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => {
+                  setUnlimited(false); setExpiry(localDateTime(new Date(Date.now() + 30 * DAY_MS)));
+                }}>30 дней с сегодня</Button>
+              </div>
             </>}
           </fieldset>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -138,12 +175,60 @@ export function UserPlanDialog({ user, onClose, onSaved }: Props): React.ReactEl
   );
 }
 
+function blockerText(blocker: AdminUserDeletionBlocker): string {
+  if (blocker.kind === 'self') return 'Это ваша учётная запись.';
+  if (blocker.kind === 'admin') return 'Пользователь — администратор. Сначала снимите права администратора.';
+  return `Пространство «${blocker.name}» (${blocker.members} ${pluralRu(blocker.members, 'участник', 'участника', 'участников')}): `
+    + 'назначьте другого владельца в настройках пространства, например через «Войти как».';
+}
+
+function DeletionSummary({ preview }: { preview: AdminUserDeletionPreview }): React.ReactElement {
+  const workspaces = preview.removedWorkspaces.map((w) => (w.kind === 'default' ? `«${w.name}» (личное)` : `«${w.name}»`));
+  return (
+    <div data-admin-delete-summary className="space-y-2 text-sm">
+      <p className="font-medium">Будет удалено безвозвратно:</p>
+      <ul className="list-disc space-y-1 ps-5 text-muted-foreground">
+        {workspaces.length > 0 && <li className="break-words">
+          {pluralRu(workspaces.length, 'Пространство', 'Пространства', 'Пространства')} {workspaces.join(', ')}
+        </li>}
+        <li>
+          {preview.removedProjects} {pluralRu(preview.removedProjects, 'проект', 'проекта', 'проектов')} с «Входящими»
+          {' '}и {preview.removedTasks} {pluralRu(preview.removedTasks, 'задача', 'задачи', 'задач')}
+        </li>
+        <li>Вход, сессии, токены агентов, GitHub, Telegram, подключения ИИ и уведомления</li>
+      </ul>
+      {(preview.reassignedTasks > 0 || preview.leftWorkspaces.length > 0) && <>
+        <p className="font-medium">Останется у команды:</p>
+        <ul className="list-disc space-y-1 ps-5 text-muted-foreground">
+          {preview.reassignedTasks > 0 && <li>
+            {preview.reassignedTasks} {pluralRu(preview.reassignedTasks, 'задача перейдёт', 'задачи перейдут', 'задач перейдут')} владельцам пространств
+          </li>}
+          {preview.leftWorkspaces.map((w) => (
+            <li key={w.name} className="break-words">«{w.name}» — выход из участников{w.successorName ? `, задачи и проекты получит ${w.successorName}` : ''}</li>
+          ))}
+        </ul>
+      </>}
+      <p className="text-xs text-muted-foreground">Комментарии и история останутся с подписью «Удалённый пользователь».</p>
+    </div>
+  );
+}
+
 export function DeleteUserDialog({ user, onClose, onSaved }: Props): React.ReactElement {
   const { adminRepository } = useContainer();
+  const [preview, setPreview] = useState<AdminUserDeletionPreview | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const confirmed = confirmation.trim().toLowerCase() === user.email.toLowerCase();
+  useEffect(() => {
+    let alive = true;
+    adminRepository.getUserDeletionPreview(user.id)
+      .then((value) => { if (alive) setPreview(value); })
+      .catch((reason: unknown) => { if (alive) setLoadError(reason instanceof Error ? reason.message : 'Не удалось подготовить удаление'); });
+    return () => { alive = false; };
+  }, [adminRepository, user.id]);
+  const blocked = !preview || preview.blockers.length > 0;
+  const confirmed = !blocked && confirmation.trim().toLowerCase() === user.email.toLowerCase();
   const remove = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     if (saving || !confirmed) return;
@@ -156,20 +241,33 @@ export function DeleteUserDialog({ user, onClose, onSaved }: Props): React.React
   };
   return (
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-      <DialogContent hideClose={saving}>
+      <DialogContent hideClose={saving} className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Удалить пользователя?</DialogTitle>
-          <DialogDescription>Доступ {user.displayName} будет закрыт, сессии и токены отозваны, профиль обезличен. Проекты и история сохранятся. Отменить удаление нельзя.</DialogDescription>
+          <DialogDescription className="break-words">{user.displayName} · {user.email}. Отменить удаление нельзя.</DialogDescription>
         </DialogHeader>
         <form onSubmit={(event) => void remove(event)} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="admin-delete-email">Для подтверждения введите {user.email}</Label>
-            <Input id="admin-delete-email" type="email" autoComplete="off" required value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)} disabled={saving} />
-          </div>
+          {!preview && !loadError && <p className="text-sm text-muted-foreground">Считаем, что будет удалено…</p>}
+          {loadError && <p role="alert" className="text-sm text-destructive">{loadError}</p>}
+          {preview && preview.blockers.length > 0 && (
+            <div data-admin-delete-blockers className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
+              <p className="font-medium text-destructive">Удалить пока нельзя</p>
+              <ul className="list-disc space-y-1 ps-5">
+                {preview.blockers.map((b) => <li key={b.kind === 'owned_workspace' ? b.workspaceId : b.kind} className="break-words">{blockerText(b)}</li>)}
+              </ul>
+            </div>
+          )}
+          {preview && preview.blockers.length === 0 && <>
+            <DeletionSummary preview={preview} />
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-delete-email" className="break-words">Для подтверждения введите {user.email}</Label>
+              <Input id="admin-delete-email" type="email" autoComplete="off" required value={confirmation}
+                onChange={(event) => setConfirmation(event.target.value)} disabled={saving} />
+            </div>
+          </>}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Отмена</Button>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>{preview && preview.blockers.length > 0 ? 'Понятно' : 'Отмена'}</Button>
             <Button type="submit" variant="destructive" disabled={saving || !confirmed}>{saving ? 'Удаляем…' : 'Удалить пользователя'}</Button>
           </DialogFooter>
         </form>

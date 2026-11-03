@@ -29,6 +29,9 @@ export type AdminUser = {
   // Тариф юзера + дата окончания подписки (ISO|null) — для бейджа/контрола в админке.
   readonly plan: PlanId;
   readonly subscriptionExpiresAt: string | null;
+  // Привязка Telegram: есть ли и @username, если известен (для «Отвязать Telegram»).
+  readonly telegramLinked: boolean;
+  readonly telegramUsername: string | null;
 };
 
 export type AdminUserPatch = {
@@ -36,6 +39,23 @@ export type AdminUserPatch = {
   readonly email?: string;
   readonly isAdmin?: boolean;
   readonly avatarUrl?: null;
+  readonly telegram?: null;
+};
+
+// Что произойдёт при удалении пользователя — считается сервером по тем же правилам, что и само
+// удаление. blockers непустой — удалить нельзя, пока причины не устранены.
+export type AdminUserDeletionBlocker =
+  | { readonly kind: 'self' }
+  | { readonly kind: 'admin' }
+  | { readonly kind: 'owned_workspace'; readonly workspaceId: string; readonly name: string; readonly members: number };
+
+export type AdminUserDeletionPreview = {
+  readonly blockers: readonly AdminUserDeletionBlocker[];
+  readonly removedWorkspaces: readonly { readonly name: string; readonly kind: 'default' | 'team' }[];
+  readonly removedProjects: number;
+  readonly removedTasks: number;
+  readonly reassignedTasks: number;
+  readonly leftWorkspaces: readonly { readonly name: string; readonly successorName: string | null }[];
 };
 
 // Проект юзера + его текущий диспетчер (с резолвом имён) + флаг GitHub-делегации.
@@ -120,6 +140,7 @@ export interface AdminRepository {
   listProjects(): Promise<AdminProject[]>;
   listUsers(): Promise<AdminUser[]>;
   updateUser(id: string, patch: AdminUserPatch): Promise<void>;
+  getUserDeletionPreview(id: string): Promise<AdminUserDeletionPreview>;
   deleteUser(id: string): Promise<void>;
   // Проекты юзера (где он owner) + текущие диспетчеры. Сменить диспетчера
   // admin может через обычный `projectRepository.setDispatcher` (admin-bypass).

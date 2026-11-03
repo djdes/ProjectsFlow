@@ -194,7 +194,7 @@ import type { ListUserProjectsWithDispatcher } from '../application/admin/ListUs
 import type { ListUserProjectsWithFavorites } from '../application/admin/ListUserProjectsWithFavorites.js';
 import type { SetUserProjectFavorite } from '../application/admin/SetUserProjectFavorite.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
-import type { DeleteUserAsAdmin } from '../application/admin/DeleteUserAsAdmin.js';
+import type { DeleteUserAsAdmin, GetUserDeletionPreview } from '../application/admin/DeleteUserAsAdmin.js';
 import type { ManageEmployees } from '../application/finance/ManageEmployees.js';
 import type { ManageProjectFinance } from '../application/finance/ManageProjectFinance.js';
 import type { GetProjectFinance } from '../application/finance/GetProjectFinance.js';
@@ -553,6 +553,7 @@ type AppDeps = {
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;
     readonly deleteUser: DeleteUserAsAdmin;
+    readonly getUserDeletionPreview: GetUserDeletionPreview;
     readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
     readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
     readonly setUserProjectFavorite: SetUserProjectFavorite;

@@ -21,6 +21,7 @@ import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
 import { quickTaskSettingsScenarios } from './quick-task-settings.mjs';
 import { liveChatScenarios } from './live-chat.mjs';
 import { adminMailingScenarios } from './admin-mailing.mjs';
+import { adminUsersScenarios } from './admin-users.mjs';
 
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
@@ -216,6 +217,7 @@ async function openAndCloseTask(t, cardLocator, title) {
 export const scenarios = [
   ...liveChatScenarios,
   ...adminMailingScenarios,
+  ...adminUsersScenarios,
   ...telegramConnectScenarios,
   ...taskCreationDefaultsScenarios,
   ...quickTaskSettingsScenarios,

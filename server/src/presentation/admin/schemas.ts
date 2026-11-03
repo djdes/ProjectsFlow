@@ -5,6 +5,7 @@ export const adminUserPatchSchema = z.object({
   email: z.string().trim().toLowerCase().max(255).email('Введите корректную почту').optional(),
   isAdmin: z.boolean().optional(),
   avatarUrl: z.null().optional(),
+  telegram: z.null().optional(),
 }).strict().refine((patch) => Object.keys(patch).length > 0, 'Нет данных для изменения');
 
 export const adminPlanSchema = z.object({

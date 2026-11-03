@@ -6,9 +6,10 @@ import express from 'express';
 import { adminRouter } from './routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
-import { DeleteUserAsAdmin } from '../../application/admin/DeleteUserAsAdmin.js';
+import { DeleteUserAsAdmin, GetUserDeletionPreview } from '../../application/admin/DeleteUserAsAdmin.js';
 import { SetUserPlanAsAdmin } from '../../application/admin/SetUserPlanAsAdmin.js';
 import type { AdminRepository, AdminUpdateUserPatch } from '../../application/admin/AdminRepository.js';
+import type { UserDeletionPlan, UserDeletionSnapshot } from '../../domain/user/userDeletion.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
 import type { PlanId } from '../../domain/usage/Plan.js';
 import { effectivePlan, type Subscription } from '../../domain/usage/Subscription.js';
@@ -16,9 +17,13 @@ import { AdminUserError } from '../../domain/user/adminErrors.js';
 
 const now = new Date('2026-10-29T12:00:00Z');
 async function harness() {
-  const profiles = new Map(['admin', 'target', 'other'].map((id) => [id, { id, displayName: id, email: `${id}@example.test`, isAdmin: id === 'admin' }]));
+  const profiles = new Map(['admin', 'target', 'other', 'admin2'].map((id) => [id, { id, displayName: id, email: `${id}@example.test`, isAdmin: id.startsWith('admin') }]));
   const subscriptions = new Map<string, Subscription>([['target', { plan: 'prime', startedAt: new Date('2026-10-01T00:00:00Z'), expiresAt: new Date('2026-11-01T00:00:00Z') }]]);
   const changes: string[] = [];
+  const snapshotOf = (id: string): UserDeletionSnapshot | null => {
+    const user = profiles.get(id);
+    return user ? { userId: id, isAdmin: user.isAdmin, workspaces: [], projects: [] } : null;
+  };
   const repo = {
     updateUser: async (id: string, patch: AdminUpdateUserPatch, actor: string) => {
       const user = profiles.get(id);
@@ -26,9 +31,13 @@ async function harness() {
       if ([...profiles.values()].some((p) => p.id !== id && p.email === patch.email)) throw new AdminUserError('email_taken', 'Эта почта уже используется');
       Object.assign(user, patch); changes.push(`update:${id}:${actor}`);
     },
-    deleteUser: async (id: string, actor: string) => {
-      if (!profiles.delete(id)) throw new AdminUserError('user_not_found', 'Пользователь не найден');
-      changes.push(`delete:${id}:${actor}`);
+    loadUserDeletionSnapshot: async (id: string) => snapshotOf(id),
+    deleteUser: async (id: string, actor: string, decide: (s: UserDeletionSnapshot) => UserDeletionPlan) => {
+      const snapshot = snapshotOf(id);
+      if (!snapshot) throw new AdminUserError('user_not_found', 'Пользователь не найден');
+      const plan = decide(snapshot);
+      profiles.delete(id); changes.push(`delete:${id}:${actor}`);
+      return { plan, storageKeys: [] };
     },
   } as unknown as AdminRepository;
   const users = {
@@ -43,7 +52,8 @@ async function harness() {
     if (role) req.user = { id: 'admin', isAdmin: role === 'admin', email: 'admin@example.test', displayName: 'Админ', avatarUrl: null, createdAt: now };
     next();
   });
-  app.use('/admin', adminRouter({ updateUser: new UpdateUserAsAdmin(repo), deleteUser: new DeleteUserAsAdmin(repo),
+  app.use('/admin', adminRouter({ updateUser: new UpdateUserAsAdmin(repo), deleteUser: new DeleteUserAsAdmin({ repo, storage: { delete: async () => {} } as never }),
+    getUserDeletionPreview: new GetUserDeletionPreview(repo),
     setUserPlanAsAdmin: new SetUserPlanAsAdmin({ users, now: () => now }) } as never));
   app.use(errorHandler);
   const server = createServer(app);
@@ -64,6 +74,7 @@ test('all user mutations require admin access and cannot be authorized by body f
     for (const [path, method, body] of [
       ['/users/target', 'PATCH', { displayName: 'Новое имя', isAdmin: true }],
       ['/users/target', 'DELETE', undefined],
+      ['/users/target/deletion-preview', 'GET', undefined],
       ['/users/target/plan', 'PATCH', { plan: 'vip' }],
     ] as const) {
       assert.equal((await h.request(path, method, body, '')).status, 401);
@@ -76,11 +87,11 @@ test('all user mutations require admin access and cannot be authorized by body f
 test('profile changes normalize email/name, reject invalid data and conflicts, and report missing users', async () => {
   const h = await harness();
   try {
-    for (const patch of [{}, { displayName: '  ' }, { displayName: 'x'.repeat(81) }, { email: 'broken' }, { isAdmin: 'true' }, { passwordHash: 'x' }, { avatarUrl: 'https://example.test/a' }]) {
+    for (const patch of [{}, { displayName: '  ' }, { displayName: 'x'.repeat(81) }, { email: 'broken' }, { isAdmin: 'true' }, { passwordHash: 'x' }, { avatarUrl: 'https://example.test/a' }, { telegram: false }]) {
       assert.equal((await h.request('/users/target', 'PATCH', patch)).status, 400);
     }
     assert.equal(h.changes.length, 0);
-    assert.equal((await h.request('/users/target', 'PATCH', { displayName: '  Иван  ', email: ' NEW@Example.Test ', avatarUrl: null })).status, 204);
+    assert.equal((await h.request('/users/target', 'PATCH', { displayName: '  Иван  ', email: ' NEW@Example.Test ', avatarUrl: null, telegram: null })).status, 204);
     assert.equal(h.profiles.get('target')!.email, 'new@example.test');
     assert.equal(h.profiles.get('target')!.displayName, 'Иван');
     assert.deepEqual(h.changes, ['update:target:admin']);
@@ -91,12 +102,19 @@ test('profile changes normalize email/name, reject invalid data and conflicts, a
   } finally { await h.close(); }
 });
 
-test('deletion rejects self-deletion and removes only the selected account', async () => {
+test('deletion rejects self-deletion and other admins, previews the plan and removes only the selected account', async () => {
   const h = await harness();
   try {
     assert.equal((await h.request('/users/admin', 'DELETE')).status, 409);
+    const blocked = await h.request('/users/admin2', 'DELETE');
+    assert.equal(blocked.status, 409);
+    assert.equal((await blocked.json() as { error: string }).error, 'deletion_blocked');
+    assert.equal(h.profiles.has('admin2'), true);
+    const preview = await h.request('/users/admin2/deletion-preview', 'GET');
+    assert.deepEqual((await preview.json() as { blockers: unknown }).blockers, [{ kind: 'admin' }]);
+    assert.equal((await h.request('/users/missing/deletion-preview', 'GET')).status, 404);
     assert.equal((await h.request('/users/missing', 'DELETE')).status, 404);
-    assert.equal((await h.request('/users/target', 'DELETE')).status, 204);
+    assert.equal((await h.request('/users/target', 'DELETE')).status, 200);
     assert.equal(h.profiles.has('target'), false);
     assert.equal(h.profiles.has('other'), true);
     assert.deepEqual(h.changes, ['delete:target:admin']);

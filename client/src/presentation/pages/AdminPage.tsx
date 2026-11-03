@@ -414,7 +414,7 @@ function UsersTab(): React.ReactElement {
     <>
       <ul className={LIST_CLASS}>
         {users.map((u) => (
-          <li key={u.id} className="space-y-2 px-4 py-3">
+          <li key={u.id} data-admin-user={u.id} className="space-y-2 px-4 py-3">
             <div className="flex items-start gap-3">
               <Avatar className="size-8 shrink-0">
                 <AvatarFallback className="text-2xs">{getInitials(u.displayName)}</AvatarFallback>

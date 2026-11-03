@@ -398,7 +398,7 @@ import { ListUserProjectsWithDispatcher } from './application/admin/ListUserProj
 import { ListUserProjectsWithFavorites } from './application/admin/ListUserProjectsWithFavorites.js';
 import { SetUserProjectFavorite } from './application/admin/SetUserProjectFavorite.js';
 import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
-import { DeleteUserAsAdmin } from './application/admin/DeleteUserAsAdmin.js';
+import { DeleteUserAsAdmin, GetUserDeletionPreview } from './application/admin/DeleteUserAsAdmin.js';
 import { DrizzleEmployeeRepository } from './infrastructure/repositories/DrizzleEmployeeRepository.js';
 import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/DrizzleProjectFinanceRepository.js';
 import { ManageEmployees } from './application/finance/ManageEmployees.js';
@@ -2716,7 +2716,8 @@ const { app, devProxyUpgrade } = createApp({
     listAllProjects: new ListAllProjects(adminRepo),
     listAllUsers: new ListAllUsers(adminRepo),
     updateUser: new UpdateUserAsAdmin(adminRepo),
-    deleteUser: new DeleteUserAsAdmin(adminRepo),
+    deleteUser: new DeleteUserAsAdmin({ repo: adminRepo, storage: attachmentStorage }),
+    getUserDeletionPreview: new GetUserDeletionPreview(adminRepo),
     listUserProjectsWithDispatcher: new ListUserProjectsWithDispatcher({
       members: projectMemberRepo,
       delegations: gitTokenDelegationRepo,

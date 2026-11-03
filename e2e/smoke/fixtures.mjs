@@ -572,7 +572,55 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/admin\/mailings\/templates$/, () => json({ templates: mailingState(state).templates, starters: MAILING_STARTERS })],
     [/^\/admin\/mailings\/audience\/workspaces$/, () => json({ workspaces: [{ id: WORKSPACE_ID, name: workspaceDto().name, memberCount: PEOPLE.length }] })],
     [/^\/admin\/mailings\/campaigns$/, () => json({ campaigns: mailingState(state).campaigns })],
+    // Admin «Пользователи»: the list and the deletion summary of the confirm dialog.
+    [/^\/admin\/users$/, () => json({ users: adminUsersState(state).users })],
+    [/^\/admin\/users\/([^/]+)\/deletion-preview$/, (m) => json(adminDeletionPreview(state, m[1]))],
   ];
+}
+
+// --- Admin users ------------------------------------------------------------------
+
+const inDays = (days) => new Date(Date.now() + days * 86400000).toISOString();
+
+function adminUsersState(state) {
+  state.adminUsers ??= { users: PEOPLE.map((p, i) => ({
+    id: p.id, email: p.email, displayName: p.displayName, avatarUrl: null,
+    // Глеб is another admin: his deletion stays blocked until the rights are removed.
+    isAdmin: p.id === ME.id || p.id === 'u-gleb', projectCount: 3 - Math.min(i, 2), ownedProjectCount: i === 0 ? 2 : 0,
+    delegationEnabledCount: 0, githubConnected: false,
+    plan: p.id === 'u-boris' ? 'prime' : 'free', subscriptionExpiresAt: p.id === 'u-boris' ? inDays(5) : null,
+    telegramLinked: p.id === 'u-vera', telegramUsername: p.id === 'u-vera' ? 'vera_l' : null,
+    createdAt: '2025-02-01T09:00:00.000Z',
+  })) };
+  return state.adminUsers;
+}
+
+function adminDeletionPreview(state, id) {
+  const user = adminUsersState(state).users.find((u) => u.id === id);
+  const blockers = [...(id === ME.id ? [{ kind: 'self' }] : []), ...(user?.isAdmin ? [{ kind: 'admin' }] : [])];
+  return { blockers, removedWorkspaces: [{ name: 'Личное пространство', kind: 'default' }], removedProjects: 2, removedTasks: 7,
+    reassignedTasks: 3, leftWorkspaces: [{ name: workspaceDto().name, successorName: ME.displayName }] };
+}
+
+function mutateAdminUsers(state, method, path, body) {
+  const m = path.match(/^\/admin\/users\/([^/]+)(\/plan)?$/);
+  if (!m) return undefined;
+  const a = adminUsersState(state);
+  const user = a.users.find((u) => u.id === m[1]);
+  if (!user) return json({ error: 'user_not_found', message: 'Пользователь не найден' }, 404);
+  if (method === 'PATCH' && m[2]) {
+    Object.assign(user, { plan: body.plan,
+      subscriptionExpiresAt: body.plan === 'free' ? null : body.subscriptionExpiresAt === undefined ? inDays(30) : body.subscriptionExpiresAt });
+    return { status: 204 };
+  }
+  if (method === 'PATCH') { Object.assign(user, body); return { status: 204 }; }
+  if (method === 'DELETE') {
+    const preview = adminDeletionPreview(state, user.id);
+    if (preview.blockers.length) return json({ error: 'deletion_blocked', message: 'Удалить нельзя' }, 409);
+    a.users = a.users.filter((u) => u.id !== user.id);
+    return json(preview);
+  }
+  return undefined;
 }
 
 // --- Admin mailings ----------------------------------------------------------------
@@ -657,6 +705,8 @@ function parseBody(request) {
 function mutate(state, method, path, body) {
   const mailing = mutateMailing(state, method, path, body);
   if (mailing) return mailing;
+  const adminUsers = mutateAdminUsers(state, method, path, body);
+  if (adminUsers) return adminUsers;
   const taskMatch = path.match(/^\/projects\/([^/]+)\/tasks\/([^/]+)(\/.*)?$/);
   if (taskMatch) {
     const [, , taskId, rest = ''] = taskMatch;

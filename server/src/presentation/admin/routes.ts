@@ -3,7 +3,8 @@ import type { GetPlatformStats } from '../../application/admin/GetPlatformStats.
 import type { ListAllProjects } from '../../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
-import type { DeleteUserAsAdmin } from '../../application/admin/DeleteUserAsAdmin.js';
+import type { DeleteUserAsAdmin, GetUserDeletionPreview } from '../../application/admin/DeleteUserAsAdmin.js';
+import type { UserDeletionPlan } from '../../domain/user/userDeletion.js';
 import { AdminUserError } from '../../domain/user/adminErrors.js';
 import { adminPlanSchema, adminUserPatchSchema } from './schemas.js';
 import type { ListUserProjectsWithDispatcher } from '../../application/admin/ListUserProjectsWithDispatcher.js';
@@ -30,6 +31,7 @@ type Deps = {
   readonly listAllUsers: ListAllUsers;
   readonly updateUser: UpdateUserAsAdmin;
   readonly deleteUser: DeleteUserAsAdmin;
+  readonly getUserDeletionPreview: GetUserDeletionPreview;
   readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
   readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
   readonly setUserProjectFavorite: SetUserProjectFavorite;
@@ -48,6 +50,15 @@ function userToDto(u: AdminUserView): Record<string, unknown> {
     ...u,
     createdAt: u.createdAt.toISOString(),
     subscriptionExpiresAt: u.subscriptionExpiresAt ? u.subscriptionExpiresAt.toISOString() : null,
+  };
+}
+
+// The deletion summary for the confirm dialog. Ids stay server-side except workspace ids of blockers.
+function deletionToDto(plan: UserDeletionPlan): Record<string, unknown> {
+  return {
+    blockers: plan.blockers,
+    removedWorkspaces: plan.removeWorkspaces.map((w) => ({ name: w.name, kind: w.kind })),
+    ...plan.summary,
   };
 }
 
@@ -167,6 +178,19 @@ export function adminRouter(deps: Deps): Router {
     }
   });
 
+  router.get('/users/:id/deletion-preview', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params['id'];
+      if (typeof id !== 'string') {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      res.json(deletionToDto(await deps.getUserDeletionPreview.execute(id, req.user!.id)));
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params['id'];
@@ -174,8 +198,7 @@ export function adminRouter(deps: Deps): Router {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      await deps.deleteUser.execute(id, req.user!.id);
-      res.status(204).end();
+      res.json(deletionToDto(await deps.deleteUser.execute(id, req.user!.id)));
     } catch (e) {
       next(e);
     }
@@ -279,7 +302,7 @@ export function adminRouter(deps: Deps): Router {
     if (!(error instanceof AdminUserError)) return next(error);
     const status = error.code === 'user_not_found' ? 404
       : error.code === 'admin_access_revoked' ? 403
-      : error.code === 'email_taken' || error.code === 'cannot_modify_self' ? 409 : 400;
+      : error.code === 'email_taken' || error.code === 'cannot_modify_self' || error.code === 'deletion_blocked' ? 409 : 400;
     res.status(status).json({ error: error.code, message: error.message });
   });
 

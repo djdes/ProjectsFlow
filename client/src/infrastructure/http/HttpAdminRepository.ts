@@ -4,6 +4,7 @@ import type {
   PlatformStats,
   AdminUser,
   AdminUserPatch,
+  AdminUserDeletionPreview,
   AdminUserProjectDispatcher,
   AdminUserProjectFavorite,
   EmailTemplateMeta,
@@ -30,6 +31,10 @@ export class HttpAdminRepository implements AdminRepository {
 
   async updateUser(id: string, patch: AdminUserPatch): Promise<void> {
     await httpClient.patch<unknown>(`/admin/users/${id}`, patch);
+  }
+
+  getUserDeletionPreview(id: string): Promise<AdminUserDeletionPreview> {
+    return httpClient.get<AdminUserDeletionPreview>(`/admin/users/${id}/deletion-preview`);
   }
 
   async deleteUser(id: string): Promise<void> {
