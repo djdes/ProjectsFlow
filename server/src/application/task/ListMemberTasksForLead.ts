@@ -41,9 +41,10 @@ type Deps = {
  *    эталон изоляции — ListProjects.ts), а НЕ по членству вызывающего в конкретных проектах;
  *  - завершённые задачи ('done') не отдаём.
  *
- * Личные (inbox) задачи сотрудника руководитель видит, только если сам их поставил: личное
- * приватно (то же правило, что у ListPersonalTasksOfColleagues и isDelegatingColleague в
- * taskAuthorization), — такие задачи он и меняет (canModify). Для именованных проектов — canModify
+ * Личные (inbox) задачи сотрудника тоже в выборке (решение владельца продукта 03.11.2026:
+ * руководителю на доске сотрудника нужна вся его картина, иначе «все задачи» показывали не
+ * все). Права на правку (canModify) — по общим правилам canManageTask (принимающий работу
+ * руководитель пространства). Для именованных проектов — canModify
  * зависит от РЕАЛЬНОГО членства руководителя в этом конкретном проекте: если он не
  * участник, карточка read-only (false) — мы дали видимость, а не право редактировать
  * чужой проект без приглашения.
@@ -69,11 +70,7 @@ export class ListMemberTasksForLead {
     const projectById = new Map(
       projectEntries.filter((e): e is [string, Project] => e[1] !== null && e[1].workspaceId === ws.id),
     );
-    // Личные задачи сотрудника — только поставленные самим руководителем (личное приватно).
-    const visible = taskList.filter((t) => {
-      const project = projectById.get(t.projectId);
-      return project !== undefined && (!project.isInbox || t.createdBy === callerId);
-    });
+    const visible = taskList.filter((t) => projectById.has(t.projectId));
     if (visible.length === 0) return [];
 
     const ids = visible.map((t) => t.id);

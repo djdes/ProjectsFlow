@@ -280,7 +280,9 @@ test('other assignees in the same workspace are not leaked into the member board
   assert.deepEqual(items.map((i) => i.task.id), ['t1']);
 });
 
-test("member's own personal tasks are hidden from the lead; project tasks stay visible", async () => {
+test("member's own personal tasks are visible to the lead too", async () => {
+  // 03.11.2026: руководитель открыл доску сотрудника — его собственные личные задачи не
+  // показывались, и «все задачи» были не все.
   const { list } = makeList({
     callerRole: 'lead',
     memberRole: 'editor',
@@ -296,5 +298,5 @@ test("member's own personal tasks are hidden from the lead; project tasks stay v
   });
 
   const items = await list.execute('lead', 'bob');
-  assert.deepEqual(items.map((i) => i.task.id).sort(), ['from-lead', 'project']);
+  assert.deepEqual(items.map((i) => i.task.id).sort(), ['from-lead', 'own', 'project']);
 });
