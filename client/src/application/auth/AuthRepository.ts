@@ -16,6 +16,9 @@ export interface AuthRepository {
   login(input: LoginInput): Promise<User>;
   logout(): Promise<void>;
   getCurrentOrNull(): Promise<User | null>;
+  // Админка: войти от имени пользователя / вернуться в свою учётную запись (cookie меняет сервер).
+  startImpersonation(userId: string): Promise<void>;
+  stopImpersonation(): Promise<void>;
   // Сброс пароля (U2). requestPasswordReset всегда резолвится (сервер не раскрывает,
   // существует ли аккаунт). resetPassword кидает HttpError при невалидном/протухшем токене.
   requestPasswordReset(email: string): Promise<void>;

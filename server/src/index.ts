@@ -71,6 +71,7 @@ import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
 import { Register } from './application/auth/Register.js';
 import { Login } from './application/auth/Login.js';
 import { Logout } from './application/auth/Logout.js';
+import { Impersonation } from './application/auth/Impersonation.js';
 import { RequestPasswordReset } from './application/auth/RequestPasswordReset.js';
 import { ResetPassword } from './application/auth/ResetPassword.js';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/repositories/DrizzlePasswordResetTokenRepository.js';
@@ -2229,6 +2230,7 @@ const { app, devProxyUpgrade } = createApp({
     register: new Register(authDeps),
     login: new Login(authDeps),
     logout: new Logout(sessionRepo),
+    impersonation: new Impersonation({ users: userRepo, sessions: sessionRepo, idGen: idGenerator, now }),
     getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now }),
     requestPasswordReset: new RequestPasswordReset({
       users: userRepo,

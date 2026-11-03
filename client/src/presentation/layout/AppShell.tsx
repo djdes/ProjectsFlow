@@ -50,6 +50,7 @@ import { SidebarResizingContext } from './sidebarResizingContext';
 import { Sidebar } from './Sidebar';
 import { useEdgeSwipe } from '@/presentation/hooks/useEdgeSwipe';
 import { PlatformUpdateNotice } from '@/presentation/components/experience/PlatformUpdateNotice';
+import { ImpersonationBanner } from '@/presentation/auth/ImpersonationBanner';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 
@@ -253,6 +254,7 @@ function WorkspaceShell(): React.ReactElement {
     <SidebarCollapsedContext.Provider value={isDesktop && collapsed}>
     <SidebarResizingContext.Provider value={sidebarDragging}>
     <WorkspaceNotifications />
+    <ImpersonationBanner />
     <ProjectsProvider>
     {/* Счётчик «выполнено сегодня» — над роутером, чтобы цифра не сбрасывалась при переходах
         между страницами. Внутри AppShell (а не в main.tsx): запрос требует авторизации. */}

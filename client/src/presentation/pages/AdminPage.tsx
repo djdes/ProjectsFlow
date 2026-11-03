@@ -351,9 +351,22 @@ function EditableProjectRepo({
 }
 
 function UsersTab(): React.ReactElement {
-  const { adminRepository } = useContainer();
+  const { adminRepository, authRepository } = useContainer();
   const { user: currentUser, applyUserUpdate } = useAuth();
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [impersonating, setImpersonating] = useState<string | null>(null);
+  // Войти от имени пользователя: сервер переключает cookie, затем полная перезагрузка — всё
+  // состояние приложения (проекты, пространства, кеши) должно стать его.
+  const impersonate = (u: AdminUser): void => {
+    setImpersonating(u.id);
+    authRepository
+      .startImpersonation(u.id)
+      .then(() => window.location.assign('/'))
+      .catch((e: unknown) => {
+        setImpersonating(null);
+        toast.error(e instanceof Error ? e.message : 'Не удалось войти от имени пользователя');
+      });
+  };
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [planUser, setPlanUser] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
@@ -457,6 +470,16 @@ function UsersTab(): React.ReactElement {
               </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(u)}>
                 Изменить
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={u.id === currentUser?.id || impersonating !== null}
+                onClick={() => impersonate(u)}
+                title={u.id === currentUser?.id ? 'Это вы' : 'Открыть платформу так, как её видит этот пользователь'}
+              >
+                {impersonating === u.id ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+                Войти как
               </Button>
               <Button size="sm" variant="outline" onClick={() => setPlanUser(u)}>
                 <CreditCard className="size-4" /> Тариф и срок

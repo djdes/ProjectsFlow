@@ -4,6 +4,7 @@ export type CreateSessionInput = {
   readonly id: string;
   readonly userId: string;
   readonly expiresAt: Date;
+  readonly impersonatorSessionId?: string | null;
 };
 
 export interface SessionRepository {

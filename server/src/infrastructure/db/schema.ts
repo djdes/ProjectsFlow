@@ -281,6 +281,8 @@ export const sessions = mysqlTable(
     userId: fkUserId('user_id'),
     expiresAt: timestamp('expires_at').notNull(),
     createdAt: createdAtCol(),
+    // Вход администратора от имени пользователя (db/175): сессия администратора, из которой вошли.
+    impersonatorSessionId: varchar('impersonator_session_id', { length: 64 }),
   },
   (t) => [
     index('idx_sessions_user').on(t.userId),

@@ -3,6 +3,8 @@ import multer from 'multer';
 import type { Register } from '../../application/auth/Register.js';
 import type { Login } from '../../application/auth/Login.js';
 import type { Logout } from '../../application/auth/Logout.js';
+import { ImpersonationError, type Impersonation } from '../../application/auth/Impersonation.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import type { RequestPasswordReset } from '../../application/auth/RequestPasswordReset.js';
 import type { ResetPassword } from '../../application/auth/ResetPassword.js';
 import type { UpdateProfile } from '../../application/user/UpdateProfile.js';
@@ -33,6 +35,8 @@ type Deps = {
   readonly register: Register;
   readonly login: Login;
   readonly logout: Logout;
+  // Вход администратора от имени пользователя. Опционален — без него эндпоинты отдают 404.
+  readonly impersonation?: Impersonation;
   // Сброс пароля (U2). Опциональны — если не переданы, эндпоинты отдадут 404 (для тестов).
   readonly requestPasswordReset?: RequestPasswordReset;
   readonly resetPassword?: ResetPassword;
@@ -217,7 +221,54 @@ export function authRouter(deps: Deps): Router {
   );
 
   router.get('/me', requireAuth, (req: Request, res: Response) => {
-    res.json({ user: publicUser(req.user!) });
+    res.json({ user: publicUser(req.user!), impersonatedBy: req.impersonatedBy ?? null });
+  });
+
+  const impersonationStatus: Record<ImpersonationError['code'], number> = {
+    not_admin: 403,
+    already_impersonating: 409,
+    not_impersonating: 409,
+    cannot_impersonate_self: 409,
+    user_not_found: 404,
+    admin_session_gone: 401,
+  };
+  const sendImpersonationError = (res: Response, e: ImpersonationError): void => {
+    res.status(impersonationStatus[e.code]).json({ error: e.code, message: e.message });
+  };
+
+  // Админка → «Войти как»: cookie переключается на сессию пользователя.
+  router.post('/impersonate/:userId', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+    if (!deps.impersonation) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+    try {
+      const session = await deps.impersonation.start(req.user!, req.sessionId!, String(req.params['userId']));
+      console.log(`[impersonation] admin ${req.user!.id} → user ${session.userId}`);
+      setSessionCookie(res, session);
+      res.status(204).end();
+    } catch (e) {
+      if (e instanceof ImpersonationError) sendImpersonationError(res, e);
+      else next(e);
+    }
+  });
+
+  // Вернуться в свою учётную запись администратора.
+  router.post('/impersonation/stop', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    if (!deps.impersonation) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+    try {
+      const adminSession = await deps.impersonation.stop(req.sessionId!);
+      setSessionCookie(res, adminSession);
+      res.status(204).end();
+    } catch (e) {
+      if (e instanceof ImpersonationError) {
+        if (e.code === 'admin_session_gone') clearSessionCookie(res);
+        sendImpersonationError(res, e);
+      } else next(e);
+    }
   });
 
   // Usage (лимиты + расход) текущего юзера: два скользящих окна 5ч/7д. Клиент опрашивает
