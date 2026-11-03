@@ -4,7 +4,7 @@ import { ME } from './fixtures.mjs';
 // saving, a test letter to the admin (mocked POST) and the reach of a new campaign.
 export const adminMailingScenarios = [{
   id: 'admin-mailing',
-  title: 'Рассылки: шаблон, промо-макет, предпросмотр ПК/телефон, тест себе и охват',
+  title: 'Рассылки: шаблон, промо-макет с ценой, предпросмотр ПК/телефон, тест себе и охват',
   matrix: [['desktop', 'light'], ['phone', 'light']],
   async run(t) {
     const panel = t.page.locator('[data-pf-admin-mailing]');
@@ -49,8 +49,10 @@ export const adminMailingScenarios = [{
       await t.visible(layouts.getByRole('radio', { name: /Ультрамарин/, checked: true }), 'выбран макет «Ультрамарин»');
       await panel.getByLabel('Предложение', { exact: true }).fill('−30%');
       await panel.getByLabel('Срок', { exact: true }).fill('до 15 декабря');
+      await panel.getByLabel('Цена', { exact: true }).fill('15 960 ₽ вместо 22 800 ₽');
       await t.waitForMutation((m) => m.path === '/admin/mailings/preview' && m.body?.layout === 'annual'
-        && m.body?.offer?.badge === '−30%' && m.body?.offer?.deadline === 'до 15 декабря', 'предпросмотр не получил макет и акцию');
+        && m.body?.offer?.badge === '−30%' && m.body?.offer?.deadline === 'до 15 декабря'
+        && m.body?.offer?.price === '15 960 ₽ вместо 22 800 ₽', 'предпросмотр не получил макет и акцию');
       const desktop = t.page.frameLocator('iframe[title="Письмо на компьютере"]');
       await t.visible(desktop.locator('[data-pf-layout="annual"]'), 'макет в письме');
       await t.visible(desktop.locator('.pf-offer').getByText('−30%'), 'предложение крупной строкой');

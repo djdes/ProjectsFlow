@@ -60,7 +60,7 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
 
   const dirty = !sameDraft(draft, baseline);
   const patch = (p: Partial<MailingTemplateDraft>): void => setDraft((d) => ({ ...d, ...p }));
-  const patchOffer = (p: Partial<{ badge: string; deadline: string; caption: string }>): void =>
+  const patchOffer = (p: Partial<{ badge: string; deadline: string; caption: string; price: string }>): void =>
     setDraft((d) => ({ ...d, offer: { badge: '', deadline: '', ...d.offer, ...p } }));
   const confirmLeave = (): boolean => !dirty || window.confirm('Есть несохранённые изменения. Закрыть без сохранения?');
 
@@ -208,7 +208,7 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
             <MailingLayoutPicker value={draft.layout} onChange={(layout) => patch({ layout })} />
             {draft.layout !== 'standard' && (
               <div className="space-y-1.5" data-pf-mailing-offer>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="mailing-offer-caption">Подпись</Label>
                     <Input id="mailing-offer-caption" value={draft.offer?.caption ?? ''} maxLength={MAILING_OFFER_LIMITS.caption} placeholder="как в макете"
@@ -224,9 +224,14 @@ export function MailingTemplatesView({ onUseTemplate }: { onUseTemplate: (templa
                     <Input id="mailing-offer-deadline" value={draft.offer?.deadline ?? ''} maxLength={MAILING_OFFER_LIMITS.deadline} placeholder="до 30 ноября"
                       onChange={(e) => patchOffer({ deadline: e.target.value })} />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mailing-offer-price">Цена</Label>
+                    <Input id="mailing-offer-price" value={draft.offer?.price ?? ''} maxLength={MAILING_OFFER_LIMITS.price} placeholder="15 960 ₽ вместо 22 800 ₽"
+                      onChange={(e) => patchOffer({ price: e.target.value })} />
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Крупная строка под картинкой и переменные {'{{offer}}'} и {'{{deadline}}'}. Это только текст: тариф выдаётся вручную в разделе «Пользователи».
+                  Блок под картинкой: срок, крупное предложение, цена и кнопка. «X вместо Y» в цене зачёркивает старую цену — только для настоящей скидки. Срок «сегодня…» или «до завтра» в макете «Закат» встаёт лентой. Переменные {'{{offer}}'} и {'{{deadline}}'}. Это только текст: тариф выдаётся вручную в разделе «Пользователи».
                 </p>
               </div>
             )}

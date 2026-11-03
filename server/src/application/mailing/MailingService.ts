@@ -70,7 +70,7 @@ export function parseMailingContent(raw: unknown): MailingContent {
   if (ctaUrl && !ctaLabel) throw new MailingError('invalid_content', 'Укажите текст кнопки');
   const rawLayout = v['layout'] ?? 'standard';
   if (!isMailingLayout(rawLayout)) throw new MailingError('invalid_content', 'Неизвестный макет письма');
-  // The classic letter has no offer strip; stale promo terms are dropped with the layout.
+  // The classic letter has no offer field; stale promo terms are dropped with the layout.
   const offer = rawLayout === 'standard' ? null : parseMailingOffer(v['offer']);
   return {
     subject, preheader: clean(v['preheader'], MAILING_LIMITS.preheader), bodyMarkdown, ctaLabel, ctaUrl: ctaLabel ? ctaUrl : null,

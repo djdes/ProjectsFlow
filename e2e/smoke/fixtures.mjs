@@ -607,7 +607,7 @@ function mailingPreviewDto(body) {
     .replace(/\{\{\s*offer\s*\}\}/g, offer?.badge || 'подарок').replace(/\{\{\s*deadline\s*\}\}/g, offer?.deadline || 'в ближайшие дни');
   // Promo layouts: hero and offer strip, like the server renderer.
   const promo = layout
-    ? `<tr><td data-pf-layout="${escapeHtml(layout)}" style="padding:0;"><img src="/mail/${escapeHtml(layout)}/thumb-1.jpg" alt="" style="display:block;width:100%;"></td></tr>`
+    ? `<tr><td data-pf-layout="${escapeHtml(layout)}" style="padding:0;"><img src="/mail/${escapeHtml(layout)}/thumb-2.jpg" alt="" style="display:block;width:100%;"></td></tr>`
       + (offer?.badge ? `<tr><td class="pf-offer" style="padding:20px 32px 0;font-size:56px;">${escapeHtml(offer.badge)}</td></tr>` : '')
     : '';
   const paragraphs = fill(body.bodyMarkdown).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(p)}</p>`).join('');

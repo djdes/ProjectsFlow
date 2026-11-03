@@ -38,6 +38,8 @@ test('layouts: promo terms only for promo layouts, compared normalized; promo va
   assert.equal(offerOf('standard', { badge: '7 дней', deadline: '' }), null);
   assert.equal(offerOf('trial', { badge: ' ', deadline: '' }), null);
   assert.deepEqual(offerOf('trial', { badge: ' 7 дней ', deadline: 'до 30 ноября' }), { badge: '7 дней', deadline: 'до 30 ноября' });
+  assert.deepEqual(offerOf('annual', { badge: '−30%', deadline: '', caption: ' ', price: ' 15 960 ₽ вместо 22 800 ₽ ' }),
+    { badge: '−30%', deadline: '', price: '15 960 ₽ вместо 22 800 ₽' });
   assert.ok(!sameDraft(EMPTY_DRAFT, { ...EMPTY_DRAFT, layout: 'news' }));
   assert.ok(sameDraft({ ...EMPTY_DRAFT, layout: 'news', offer: null }, { ...EMPTY_DRAFT, layout: 'news', offer: { badge: '', deadline: ' ' } }));
   assert.deepEqual(contentOf({ ...EMPTY_DRAFT, offer: { badge: 'x', deadline: '' } }).offer, null);

@@ -1,13 +1,15 @@
 import type { EmailMessage } from '../notifications/EmailSender.js';
 import type { MailingContent } from '../../domain/mailing/Mailing.js';
-import { isMailingLayout } from '../../domain/mailing/layouts.js';
+import { isMailingLayout, splitOfferPrice } from '../../domain/mailing/layouts.js';
 import {
   escapeMailingHtml as esc,
   fillMailingVariables,
   renderMailingBody,
   type MailingVariables,
 } from '../../domain/mailing/renderMailingBody.js';
-import { PROMO_THEMES, promoHeroUrl, type PromoLayout, type PromoTheme } from './promoLayouts.js';
+import {
+  PROMO_THEMES, isLastDayDeadline, promoBadgePhoneSizes, promoBadgeSize, promoHeroUrl, type PromoLayout, type PromoTheme,
+} from './promoLayouts.js';
 
 export type MailingEmailInput = {
   readonly to: string;
@@ -58,18 +60,23 @@ export function renderMailingEmail(input: MailingEmailInput): EmailMessage {
   const ctaLabel = content.ctaLabel ? fillMailingVariables(content.ctaLabel, vars).trim() : '';
   const parts: Parts = { subject, preheader, bodyHtml: body.html, ctaUrl, ctaLabel, unsubscribe: esc(input.unsubscribeUrl) };
 
+  const promoOffer: Offer | null = theme && offer
+    ? { badge: offer.badge, deadline: offer.deadline, caption: offer.caption || theme.offer.caption, price: offer.price ?? '' }
+    : null;
   const html = layout === 'standard'
     ? standardHtml(parts)
-    : promoHtml(parts, layout, offer && { badge: offer.badge, deadline: offer.deadline, caption: offer.caption || theme!.offer.caption }, input.assetBaseUrl ?? DEFAULT_ASSET_BASE);
+    : promoHtml(parts, layout, promoOffer, input.assetBaseUrl ?? DEFAULT_ASSET_BASE);
 
-  const offerText = theme && offer
-    ? [offer.badge ? `${offer.caption || theme.offer.caption}: ${offer.badge}` : null, offer.deadline || null].filter(Boolean).join('\n')
+  // Plain text mirrors the HTML order: offer, button, body, button again.
+  const offerText = promoOffer
+    ? [promoOffer.deadline || null, promoOffer.badge ? `${promoOffer.caption}: ${promoOffer.badge}` : null, promoOffer.price || null].filter(Boolean).join('\n')
     : null;
+  const ctaText = ctaUrl && ctaLabel ? `${ctaLabel}: ${ctaUrl}` : null;
   const text = [
-    theme?.offer.style === 'box' ? null : offerText,
+    offerText,
+    theme ? ctaText : null,
     body.text,
-    theme?.offer.style === 'box' ? offerText : null,
-    ctaUrl && ctaLabel ? `${ctaLabel}: ${ctaUrl}` : null,
+    ctaText,
     '—',
     `Отписаться от рассылок: ${input.unsubscribeUrl}`,
   ].filter(Boolean).join('\n\n');
@@ -147,71 +154,113 @@ function standardHtml(p: Parts): string {
 </html>`;
 }
 
-type Offer = { readonly badge: string; readonly deadline: string; readonly caption: string };
+type Offer = { readonly badge: string; readonly deadline: string; readonly caption: string; readonly price: string };
+
+const LABEL_FONT = 'Arial,Helvetica,sans-serif';
+const SERIF_FONT = "Georgia,'Times New Roman',Times,serif";
+const WIDE_FONT = "'Arial Black','Helvetica Neue',Helvetica,Arial,sans-serif";
+
+// Prices and amounts never break across lines: «15 960 ₽» keeps its spaces together. The
+// offer fields are whitespace-normalized on save, so this happens at render time.
+const NBSP = String.fromCharCode(0xa0);
+function keepNumbers(text: string): string {
+  return text.replace(/(\d)\s(?=\d{3}(?!\d))/g, `$1${NBSP}`).replace(/(\d)\s(?=₽)/g, `$1${NBSP}`);
+}
 
 // Spaced lowercase caption, the family's label voice (refs 8 and 9).
 function caption(t: PromoTheme, text: string, extra = ''): string {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.4;letter-spacing:3px;color:${t.label};${extra}">${esc(text)}</div>`;
+  return `<div style="font-family:${LABEL_FONT};font-size:11px;line-height:1.4;letter-spacing:3px;color:${t.label};${extra}">${esc(text)}</div>`;
 }
 
-function offerBig(t: PromoTheme, text: string): string {
-  const o = t.offer;
-  return `<div class="pf-offer" style="font-family:${o.font};font-size:${o.size}px;line-height:1;font-weight:${o.weight};${o.italic ? 'font-style:italic;' : ''}letter-spacing:${o.weight >= 900 ? '-1px' : '-0.5px'};color:${o.color};padding:8px 0 6px;word-break:break-word;">${esc(text)}</div>`;
-}
-
-function offerMeta(t: PromoTheme, text: string): string {
-  return `<div style="font-family:Georgia,'Times New Roman',Times,serif;font-style:italic;font-size:17px;line-height:1.35;color:${t.offer.meta};">${esc(text)}</div>`;
-}
-
-function offerRow(t: PromoTheme, offer: Offer): string {
-  const o = t.offer;
-  if (o.style === 'box') {
-    return `<tr><td class="pf-pad" style="padding:8px 32px 12px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${o.boxBg}" style="background:${o.boxBg};border:1px solid ${o.boxBorder};border-radius:18px;">
-            <tr><td style="padding:18px 22px;">
-              ${caption(t, offer.caption)}
-              ${offer.badge ? offerBig(t, offer.badge) : ''}
-              ${offer.deadline ? offerMeta(t, offer.deadline) : ''}
-            </td></tr>
-          </table>
-        </td></tr>`;
-  }
-  if (o.style === 'split' && offer.badge) {
-    return `<tr><td class="pf-pad" style="padding:28px 32px 6px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-            <td class="pf-stack" valign="bottom" style="padding:0 18px 0 0;">${offerBig(t, offer.badge)}</td>
-            <td class="pf-stack pf-split-r" valign="bottom" width="190" style="width:190px;border-left:1px solid ${t.rule};padding:0 0 10px 18px;">
-              ${caption(t, offer.caption, 'padding:0 0 6px;')}
-              ${offer.deadline ? offerMeta(t, offer.deadline) : ''}
+// Bulletproof button: the cell carries the colour, so it survives blocked styles and images.
+function button(href: string, label: string, s: PromoTheme['cta'], cls: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" class="pf-btn-table"><tr>
+            <td align="center" bgcolor="${s.bg}" style="border-radius:${s.radius}px;background:${s.bg};border:1px solid ${s.border};">
+              <a href="${esc(href)}" class="pf-btn ${cls}" style="display:inline-block;min-width:220px;background:${s.bg};color:${s.ink};text-decoration:none;font-family:${s.font};font-size:18px;font-weight:${s.weight};letter-spacing:${s.spacing};${s.uppercase ? 'text-transform:uppercase;' : ''}line-height:1.2;text-align:center;padding:18px 34px;border-radius:${s.radius}px;">${esc(label)}</a>
             </td>
-          </tr></table>
-        </td></tr>`;
+          </tr></table>`;
+}
+
+function chip(t: PromoTheme, text: string): string {
+  const c = t.offer.chip;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;"><tr>
+            <td bgcolor="${c.bg}" class="pf-chip" style="background:${c.bg};border-radius:${c.radius}px;padding:7px 14px;font-family:${LABEL_FONT};font-size:14px;line-height:1.25;font-weight:700;color:${c.ink};">${esc(keepNumbers(text))}</td>
+          </tr></table>`;
+}
+
+// Last-day deadline («сегодня до 23:59»): a full-width ribbon above the badge.
+function ribbon(t: PromoTheme, text: string): string {
+  const r = t.offer.ribbon!;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>
+            <td bgcolor="${r.bg}" class="pf-ribbon" style="background:${r.bg};padding:12px 16px;font-family:${WIDE_FONT};font-size:28px;line-height:1.1;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;color:${r.ink};">${esc(text)}</td>
+          </tr></table>`;
+}
+
+function badge(t: PromoTheme, text: string): string {
+  const o = t.offer;
+  const size = promoBadgeSize(t, text);
+  return `<div class="pf-offer pf-offer-${size.tier}" style="font-family:${o.font};font-size:${size.desktop}px;line-height:0.98;font-weight:${o.weight};${o.italic ? 'font-style:italic;' : ''}letter-spacing:${o.weight >= 900 ? '-2px' : '-1px'};color:${o.ink};padding:2px 0 8px;word-break:break-word;">${esc(text)}</div>`;
+}
+
+function offerCaption(t: PromoTheme, text: string): string {
+  const o = t.offer;
+  const serif = o.font === SERIF_FONT;
+  return `<div style="font-family:${serif ? SERIF_FONT : LABEL_FONT};${serif ? 'font-style:italic;' : 'font-weight:700;'}font-size:${serif ? 22 : 18}px;line-height:1.25;color:${o.sub};">${esc(keepNumbers(text))}</div>`;
+}
+
+function priceLine(t: PromoTheme, text: string): string {
+  const o = t.offer;
+  const parts = splitOfferPrice(keepNumbers(text));
+  const inner = parts
+    ? `<b style="font-weight:700;color:${o.ink};">${esc(parts.now)}</b> вместо <s style="text-decoration:line-through;">${esc(parts.was)}</s>`
+    : esc(keepNumbers(text));
+  return `<div style="font-family:${LABEL_FONT};font-size:18px;line-height:1.4;color:${o.sub};padding:6px 0 0;">${inner}</div>`;
+}
+
+/**
+ * The offer field right under the hero: deadline chip (or last-day ribbon), the badge as the
+ * biggest line, caption and price, the primary button. Without an offer it still holds the
+ * button, so the art's colour edge always lands on something.
+ */
+function offerField(t: PromoTheme, offer: Offer | null, cta: { href: string; label: string } | null): string {
+  const o = t.offer;
+  const lastDay = offer?.deadline ? isLastDayDeadline(t, offer.deadline) : false;
+  const top = offer?.deadline ? (lastDay ? ribbon(t, offer.deadline) : chip(t, offer.deadline)) : '';
+  const side = offer ? `${offer.caption ? offerCaption(t, offer.caption) : ''}${offer.price ? priceLine(t, offer.price) : ''}` : '';
+  let main = '';
+  // Split only while the badge fits beside the side column in one line; longer badges stack.
+  const tier = offer?.badge ? promoBadgeSize(t, offer.badge).tier : 'xs';
+  const splitFits = tier === 'l' || (tier === 'm' && o.font !== WIDE_FONT);
+  if (offer?.badge && o.style === 'split' && side && splitFits) {
+    main = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td class="pf-stack" valign="bottom" style="padding:0 18px 0 0;">${badge(t, offer.badge)}</td>
+            <td class="pf-stack pf-split-r" valign="bottom" width="210" style="width:210px;border-left:2px solid ${o.rule};padding:0 0 14px 18px;">${side}</td>
+          </tr></table>`;
+  } else if (offer?.badge) {
+    main = `${offer.caption ? offerCaption(t, offer.caption) : ''}${badge(t, offer.badge)}${offer.price ? priceLine(t, offer.price) : ''}`;
   }
-  // countdown swaps the emphasis: the deadline is the big line.
-  const [big, small] = o.style === 'countdown' ? [offer.deadline || offer.badge, offer.deadline ? offer.badge : ''] : [offer.badge, offer.deadline];
-  return `<tr><td class="pf-pad" style="padding:28px 32px 6px;">
-          ${caption(t, offer.caption)}
-          ${big ? offerBig(t, big) : ''}
-          ${small ? offerMeta(t, small) : ''}
+  const btn = cta
+    ? `<div style="padding:${main || top ? '22px' : '0'} 0 0;">${button(cta.href, cta.label, { ...t.cta, bg: o.button.bg, ink: o.button.ink, border: o.button.bg }, 'pf-btn-main')}</div>`
+    : '';
+  if (!main && !btn && !top) return `<tr><td bgcolor="${o.field}" style="background:${o.field};font-size:0;line-height:0;height:14px;">&nbsp;</td></tr>`;
+  return `<tr><td bgcolor="${o.field}" class="pf-pad pf-field" style="background:${o.field};padding:22px 32px 32px;" data-pf-offer>
+          ${top}
+          ${main}
+          ${btn}
         </td></tr>`;
 }
 
 function promoHtml(p: Parts, layout: PromoLayout, offer: Offer | null, assetBaseUrl: string): string {
   const t = PROMO_THEMES[layout];
-  const c = t.cta;
   const heroUrl = promoHeroUrl(assetBaseUrl, layout);
-  const showOffer = offer && (offer.badge || offer.deadline);
-  const offerTop = showOffer && t.offer.style !== 'box' ? offerRow(t, offer) : '';
-  const offerAfter = showOffer && t.offer.style === 'box' ? offerRow(t, offer) : '';
-  const cta = p.ctaUrl && p.ctaLabel
-    ? `<tr><td class="pf-pad" style="padding:10px 32px 34px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" class="pf-btn-table"><tr>
-            <td align="center" bgcolor="${c.bg}" style="border-radius:${c.radius}px;background:${c.bg};border:1px solid ${c.border};">
-              <a href="${esc(p.ctaUrl)}" class="pf-btn" style="display:inline-block;background:${c.bg};color:${c.ink};text-decoration:none;font-family:${c.font};font-size:15px;font-weight:${c.weight};letter-spacing:${c.spacing};${c.uppercase ? 'text-transform:uppercase;' : ''}line-height:1.2;padding:16px 34px;border-radius:${c.radius}px;">${esc(p.ctaLabel)}</a>
-            </td>
-          </tr></table>
+  const cta = p.ctaUrl && p.ctaLabel ? { href: p.ctaUrl, label: p.ctaLabel } : null;
+  const field = offerField(t, offer && (offer.badge || offer.deadline) ? offer : null, cta);
+  const ctaEnd = cta
+    ? `<tr><td class="pf-pad" style="padding:12px 32px 36px;">
+          ${button(cta.href, cta.label, t.cta, 'pf-btn-end')}
         </td></tr>`
     : '';
+  const phoneBadges = promoBadgePhoneSizes(t).map(([tier, px]) => `.pf-offer-${tier} { font-size: ${px}px !important; letter-spacing: -1px !important; }`).join('\n      ');
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -227,12 +276,14 @@ function promoHtml(p: Parts, layout: PromoLayout, offer: Offer | null, assetBase
       .pf-shell { padding: 0 !important; }
       .pf-card { border-left: 0 !important; border-right: 0 !important; }
       .pf-pad { padding-left: 20px !important; padding-right: 20px !important; }
-      .pf-offer { font-size: ${t.offer.phoneSize}px !important; }
+      .pf-field { padding-top: 18px !important; padding-bottom: 26px !important; }
+      ${phoneBadges}
+      .pf-ribbon { font-size: 22px !important; }
       .pf-h1 { font-size: ${t.h1Phone}px !important; }
       .pf-stack { display: block !important; width: 100% !important; }
-      .pf-split-r { border-left: 0 !important; border-top: 1px solid ${t.rule} !important; padding: 10px 0 4px !important; }
+      .pf-split-r { border-left: 0 !important; border-top: 2px solid ${t.offer.rule} !important; padding: 10px 0 0 !important; }
       .pf-btn-table { width: 100% !important; }
-      .pf-btn { display: block !important; text-align: center !important; }
+      .pf-btn { display: block !important; min-width: 0 !important; text-align: center !important; padding-left: 12px !important; padding-right: 12px !important;${t.cta.uppercase ? ' font-size: 16px !important; letter-spacing: 0.5px !important;' : ''} }
     }
   </style>
 </head>
@@ -242,20 +293,19 @@ function promoHtml(p: Parts, layout: PromoLayout, offer: Offer | null, assetBase
     <tr><td align="center">
       <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${t.card}" class="pf-card" style="width:100%;max-width:600px;background:${t.card};border:1px solid ${t.border};">
-        <tr><td class="pf-pad" style="padding:16px 32px;border-bottom:1px solid ${t.rule};">
+        <tr><td class="pf-pad" style="padding:14px 32px;border-bottom:1px solid ${t.rule};">
           ${caption(t, 'projectsflow')}
         </td></tr>
         <tr><td bgcolor="${t.hero.bg}" style="padding:0;background:${t.hero.bg};font-size:0;line-height:0;">
-          <img src="${esc(heroUrl)}" width="${t.hero.width}" alt="${esc(t.hero.alt)}" style="display:block;width:100%;max-width:${t.hero.width}px;height:auto;border:0;outline:none;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:${t.hero.altInk};">
+          <img src="${esc(heroUrl)}" width="${t.hero.width}" alt="${esc(t.hero.alt)}" style="display:block;width:100%;max-width:${t.hero.width}px;height:auto;border:0;outline:none;text-decoration:none;font-family:${LABEL_FONT};font-size:13px;line-height:1.4;color:${t.hero.altInk};">
         </td></tr>
-        ${offerTop}
-        <tr><td class="pf-pad" style="padding:${offerTop ? '18px' : '30px'} 32px 4px;word-break:break-word;">
+        ${field}
+        <tr><td class="pf-pad" style="padding:30px 32px 4px;word-break:break-word;">
           ${p.bodyHtml}
         </td></tr>
-        ${offerAfter}
-        ${cta}
+        ${ctaEnd}
         <tr><td class="pf-pad" style="padding:18px 32px 22px;border-top:1px solid ${t.rule};">
-          <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.55;color:${t.footer.ink};">Вы получили это письмо как пользователь ProjectsFlow. <a href="${p.unsubscribe}" style="color:${t.footer.link};text-decoration:underline;">Отписаться от рассылок</a></p>
+          <p style="margin:0;font-family:${LABEL_FONT};font-size:12px;line-height:1.55;color:${t.footer.ink};">Вы получили это письмо как пользователь ProjectsFlow. <a href="${p.unsubscribe}" style="color:${t.footer.link};text-decoration:underline;">Отписаться от рассылок</a></p>
         </td></tr>
       </table>
       <!--[if mso]></td></tr></table><![endif]-->

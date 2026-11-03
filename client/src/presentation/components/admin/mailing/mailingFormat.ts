@@ -76,8 +76,9 @@ export function offerOf(layout: MailingLayout, offer: MailingOffer | null): Mail
   const badge = offer.badge.trim();
   const deadline = offer.deadline.trim();
   const caption = offer.caption?.trim() ?? '';
+  const price = offer.price?.trim() ?? '';
   if (!badge && !deadline) return null;
-  return caption ? { badge, deadline, caption } : { badge, deadline };
+  return { badge, deadline, ...(caption ? { caption } : {}), ...(price ? { price } : {}) };
 }
 
 export function contentOf(d: MailingContent): MailingContent {
@@ -117,8 +118,8 @@ export const MAILING_LAYOUT_OPTIONS: ReadonlyArray<{ value: MailingLayout; label
   { value: 'annual', label: 'Ультрамарин', hint: 'Скидка, полутоновое небо' },
   { value: 'winback', label: 'Коллаж', hint: 'Возвращение, фазы луны' },
   { value: 'referral', label: 'Нити', hint: 'Приглашение команды' },
-  { value: 'deadline', label: 'Закат', hint: 'Срок акции крупно' },
-  { value: 'news', label: 'Гравюра', hint: 'Новости и бонус в рамке' },
+  { value: 'deadline', label: 'Закат', hint: 'Срок «сегодня» — лентой' },
+  { value: 'news', label: 'Гравюра', hint: 'Новости и бонус' },
 ];
 
-export const layoutThumbUrl = (layout: MailingLayout): string => `/mail/${layout}/thumb-1.jpg`;
+export const layoutThumbUrl = (layout: MailingLayout): string => `/mail/${layout}/thumb-2.jpg`;
