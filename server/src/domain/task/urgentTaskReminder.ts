@@ -7,9 +7,10 @@ import { formatDeadlineRemainingRu } from './digestFormat.js';
 // Priority 1 «Срочно» and 2 «Высокий» (PRIORITY_DIGEST_META).
 export const URGENT_REMINDER_PRIORITIES: readonly TaskPriority[] = [1, 2];
 
-// Statuses where someone still has to do the work. Not included: backlog (drafts, nobody
-// has taken them yet), pending_approval (already handed over to the reviewer), done.
+// Open statuses that still need work, drafts included (owner's decision). Not included:
+// pending_approval (already handed over to the reviewer), done.
 export const URGENT_REMINDER_STATUSES: readonly TaskStatus[] = [
+  'backlog',
   'todo',
   'in_progress',
   'awaiting_clarification',

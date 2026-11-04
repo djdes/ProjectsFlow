@@ -136,11 +136,10 @@ test('second run in the same slot sends nothing', async () => {
   assert.equal(next.taskCount, 1);
 });
 
-test('closed, draft and approval tasks are not reminded', async () => {
+test('closed and approval tasks are not reminded', async () => {
   const { useCase, sent } = setup({
     tasks: [
       candidate({ status: 'done' }),
-      candidate({ taskId: 't2', status: 'backlog' }),
       candidate({ taskId: 't3', status: 'pending_approval' }),
     ],
     links: { u1: link() },
@@ -148,6 +147,15 @@ test('closed, draft and approval tasks are not reminded', async () => {
   const result = await useCase.execute(SLOT);
   assert.equal(result.taskCount, 0);
   assert.equal(sent.length, 0);
+});
+
+test('urgent drafts are reminded', async () => {
+  const { useCase } = setup({
+    tasks: [candidate({ status: 'backlog' })],
+    links: { u1: link() },
+  });
+  const result = await useCase.execute(SLOT);
+  assert.equal(result.taskCount, 1);
 });
 
 test('workspace switch turns reminders off', async () => {

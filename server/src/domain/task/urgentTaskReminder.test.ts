@@ -47,10 +47,10 @@ test('priority 1 and 2 are urgent, 3 and 4 are not', () => {
 
 test('only open statuses that still need work are reminded', () => {
   const urgent = { priority: 1 as const, description: 'x' };
-  for (const status of ['todo', 'in_progress', 'awaiting_clarification', 'manual', 'custom_3'] as const) {
+  for (const status of ['backlog', 'todo', 'in_progress', 'awaiting_clarification', 'manual', 'custom_3'] as const) {
     assert.equal(needsUrgentReminder({ ...urgent, status }), true, status);
   }
-  for (const status of ['backlog', 'pending_approval', 'done'] as const) {
+  for (const status of ['pending_approval', 'done'] as const) {
     assert.equal(needsUrgentReminder({ ...urgent, status }), false, status);
   }
 });
