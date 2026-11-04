@@ -97,6 +97,8 @@ function makeHarness(opts?: {
   delegatedInboxWorkspace?: string | null;
   // Кто из shared состоит в проекте (projectId → id). Без записи — все shared, как раньше.
   projectMembers?: Record<string, string[]>;
+  // Мок LLM для автовыбора пространства по таймауту (id пространства или функция от промпта).
+  llmWorkspacePick?: string | ((prompt: string) => string | Promise<string>);
 }) {
   const projects: { id: string; name: string; workspaceId?: string }[] = opts?.projects ?? [
     { id: 'p1', name: 'Альфа' },
@@ -123,6 +125,7 @@ function makeHarness(opts?: {
   const inboxCalls: { ownerId?: string; actorId?: string; workspaceId?: string }[] = [];
   const delegatedResolverCalls: [string, string][] = [];
   const savedChoices: { chatId: number; userId: string; workspaceId: string }[] = [];
+  const llmPrompts: string[] = [];
   const workspaceChoices = new Map(Object.entries(opts?.workspaces?.choices ?? {}));
   const updatedDescriptions: string[] = [];
   const downloadedFileIds: string[] = [];
@@ -508,6 +511,25 @@ function makeHarness(opts?: {
           },
         }
       : {}),
+    ...(opts?.llmWorkspacePick !== undefined
+      ? {
+          llm: {
+            async generate(input: any) {
+              llmPrompts.push(input.input);
+              const picked =
+                typeof opts.llmWorkspacePick === 'function'
+                  ? await opts.llmWorkspacePick(input.input)
+                  : opts.llmWorkspacePick;
+              return {
+                text: JSON.stringify({ workspaceId: picked, reason: 'test_ai_pick' }),
+                model: 'test-llm',
+                usage: null,
+                costUsd: null,
+              };
+            },
+          },
+        }
+      : {}),
     idGen: () => 'uuid',
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
@@ -527,6 +549,7 @@ function makeHarness(opts?: {
     inboxUserIds,
     inboxCalls,
     savedChoices,
+    llmPrompts,
     delegatedResolverCalls,
     updatedDescriptions,
     downloadedFileIds,
@@ -2224,36 +2247,57 @@ test('пространство: ответственный состоит тол
   assert.equal(call.allowInboxDelegation, true);
 });
 
-test('пространство: авто-создание без выбора — в личное пространство', async () => {
+test('пространство: авто-создание без выбора (фолбэк без LLM) — бытовая задача в личное пространство', async () => {
   const h = makeHarness({ workspaces: { list: [SPACE_TEAM, SPACE_ME] } });
   await h.service.startFromMessage(111, 500, 'Купить кофе');
   const draftId = [...h.drafts.keys()][0]!;
-  assert.match(lastCard(h).text, /через 10 минут положу во «Входящие» пространства «Личное»/);
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1_000) });
 
   assert.equal(await h.service.processDueAutoCreate(), 1);
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-me');
+  assert.deepEqual(h.savedChoices, []);
 });
 
-test('пространство: авто-создание без выбора и без личного — ждём кнопку; выбор снова заводит таймер', async () => {
-  const h = makeHarness({ workspaces: { list: [SPACE_TEAM, SPACE_STUDIO] } });
-  await h.service.startFromMessage(111, 500, 'Купить кофе');
+test('пространство: если никто не выбрал — через 10 минут ИИ сам думает по проектам пространств и выбирает', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p-team', name: 'OrdersFlow', workspaceId: 'w-team' },
+      { id: 'p-studio', name: 'Дизайн-система', workspaceId: 'w-studio' },
+    ],
+    workspaces: { list: [SPACE_ME, SPACE_TEAM, SPACE_STUDIO] },
+    llmWorkspacePick: 'w-studio',
+  });
+  await h.service.startFromMessage(111, 500, 'Подготовить макеты иконки для витрины');
   const draftId = [...h.drafts.keys()][0]!;
-  assert.match(lastCard(h).text, /Пока пространство не выбрано, задачу не создам/);
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1_000) });
 
-  await h.service.processDueAutoCreate();
-  assert.equal(h.createTaskCalls.length, 0);
-  const parked = h.drafts.get(draftId)!;
-  assert.equal(parked.status, 'composing');
-  assert.equal(parked.autoCreateAt, null); // тик больше не трогает черновик
-
-  await h.service.handleCallback(cq(`ws:${draftId}:w-studio`));
-  const armed = h.drafts.get(draftId)!;
-  assert.ok(armed.autoCreateAt, 'выбор пространства снова заводит авто-создание');
-  h.drafts.set(draftId, { ...armed, autoCreateAt: new Date(Date.now() - 1_000) });
   assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.llmPrompts.length, 1);
+  assert.match(h.llmPrompts[0]!, /Дизайн-система/);
+  assert.match(h.llmPrompts[0]!, /OrdersFlow/);
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-studio');
+  assert.equal(h.drafts.get(draftId)!.workspaceId, 'w-studio');
+  assert.equal(h.drafts.get(draftId)!.workspacePending, false);
+  // Автовыбор по таймауту не сохраняется как явный выбор пользователя для будущих задач чата.
+  assert.deepEqual(h.savedChoices, []);
+});
+
+test('пространство: два командных без личного — по таймауту бот тоже выбирает сам, а не зависает навсегда', async () => {
+  const h = makeHarness({
+    workspaces: { list: [SPACE_TEAM, SPACE_STUDIO] },
+    llmWorkspacePick: 'w-studio',
+  });
+  await h.service.startFromMessage(111, 500, 'Проверить отчёт по релизам');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/);
+  h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1_000) });
+
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-studio');
 });
 
@@ -2366,23 +2410,45 @@ test('пространство: непривязанный участник гр
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-team');
 });
 
-test('поручение: общий личный хаб и команда требуют выбора; таймер не угадывает', async () => {
-  const h = makeHarness({ workspaces: { list: [SPACE_ME, SPACE_TEAM],
-    members: { 'w-me': ['u2'], 'w-team': ['u2'] },
-    choices: { '500:u1': { workspaceId: 'w-team', chosenAt: new Date() } } } });
+test('поручение: несколько общих пространств сначала спрашивают кнопкой, а по таймауту бот выбирает сам', async () => {
+  const h = makeHarness({
+    workspaces: {
+      list: [SPACE_ME, SPACE_TEAM],
+      members: { 'w-me': ['u2'], 'w-team': ['u2'] },
+      choices: { '500:u1': { workspaceId: 'w-team', chosenAt: new Date() } },
+    },
+    llmWorkspacePick: 'w-team',
+  });
   await h.service.startFromMessage(111, 500, 'Сделать фотографии @Вася');
   const draftId = [...h.drafts.keys()][0]!;
   assert.equal(h.drafts.get(draftId)!.workspacePending, true);
   assert.ok(buttonData(lastCard(h).replyMarkup).includes(`ws:${draftId}:w-team`));
-  assert.match(lastCard(h).text, /Пока пространство не выбрано/u);
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/u);
+
+  // Ручное нажатие «Создать» до выбора по-прежнему просит нажать кнопку пространства:
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 0);
+
+  // А если никто не нажал кнопку за 10 минут — бот сам выбирает подходящее общее пространство:
+  h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1000) });
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox-u2@w-team');
+  assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
+});
+
+test('поручение: если у автора и исполнителя нет ни одного общего пространства — авто-тик не создаёт задачу', async () => {
+  const h = makeHarness({
+    workspaces: { list: [SPACE_TEAM], members: {} },
+    llmWorkspacePick: 'w-team',
+  });
+  await h.service.startFromMessage(111, 500, 'Сделать фотографии @Вася');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.match(lastCard(h).text, /Пока пространство не выбрано, задачу не создам/u);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1000) });
   await h.service.processDueAutoCreate();
   assert.equal(h.createTaskCalls.length, 0);
   assert.equal(h.drafts.get(draftId)!.autoCreateAt, null);
-  await h.service.handleCallback(cq(`ws:${draftId}:w-team`));
-  await h.service.handleCallback(cq(`tc:${draftId}`));
-  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox-u2@w-team');
-  assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
 });
 
 test('AI: выбранные проекты разных пространств принимаются без уточнения', async () => {

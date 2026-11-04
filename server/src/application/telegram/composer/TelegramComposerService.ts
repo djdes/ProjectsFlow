@@ -36,13 +36,16 @@ import { parseDonePrefix } from './parseDonePrefix.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
 import { endOfWeekDeadline } from './defaultDeadline.js';
+import type { GenerateLlmText } from '../../llm/LlmTextGenerator.js';
 import {
   allowedWorkspaces,
+  isGroupChat,
   resolveDraftWorkspace,
   sortWorkspaceOptions,
   type ComposerWorkspaceDeps,
   type WorkspaceOption,
 } from './resolveDraftWorkspace.js';
+import { pickDraftWorkspaceWithAi } from './pickDraftWorkspaceWithAi.js';
 import {
   VISIBLE_KANBAN_STATUSES,
   type VisibleKanbanStatus,
@@ -117,6 +120,8 @@ type Deps = {
   // не может — спрашивает кнопками. Опционально: без него «Входящие» берутся в активном
   // пространстве автора, как раньше.
   readonly workspaces?: ComposerWorkspaceDeps;
+  // Выбор подходящего пространства на таймауте авто-создания, когда человек не нажал кнопку.
+  readonly llm?: GenerateLlmText;
 };
 
 // Пространство задач черновика без проекта — для карточки и создания.
@@ -131,9 +136,9 @@ type WorkspaceView = {
   readonly options: readonly WorkspaceOption[];
   // Пространств у автора больше одного — показываем строку и кнопку «Пространство».
   readonly multiple: boolean;
-  // Куда положить задачу без выбора при авто-создании: личное пространство, если оно среди
-  // вариантов (оно приватное — ничего не утечёт в команду). null — ждём выбора.
-  readonly fallback: WorkspaceOption | null;
+  // Справочник пространств временно недоступен — при авто-создании нужно повторить тик позже,
+  // а не парковать черновик навсегда.
+  readonly transientError?: boolean;
 };
 
 const WORKSPACE_OFF: WorkspaceView = {
@@ -141,7 +146,6 @@ const WORKSPACE_OFF: WorkspaceView = {
   current: null,
   options: [],
   multiple: false,
-  fallback: null,
 };
 
 // composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
@@ -1508,7 +1512,12 @@ export class TelegramComposerService {
       assigneeUserId,
       offered: clearMembers(draft.offered),
       ...(this.deps.workspaces && !draft.projectId && assigneeUserId !== draft.assigneeUserId
-        ? { workspaceId: null, workspacePending: true } : {}),
+        ? {
+            workspaceId: null,
+            workspacePending: true,
+            ...(draft.autoCreateAt === null ? { autoCreateSeconds: AUTO_CREATE_SECONDS } : {}),
+          }
+        : {}),
     });
     await this.advance(cq, updated ?? draft, chatId, messageId);
   }
@@ -1714,7 +1723,7 @@ export class TelegramComposerService {
     if (draft.workspaceId === null && !draft.workspacePending && targets.delegates.length === 0) return WORKSPACE_OFF;
     try {
       const mine = sortWorkspaceOptions(await deps.listForUser(draft.creatorUserId));
-      if (mine.length === 0) return { mode: 'pending', current: null, options: [], multiple: true, fallback: null };
+      if (mine.length === 0) return { mode: 'pending', current: null, options: [], multiple: true };
       const options = await allowedWorkspaces(deps, mine, targets.delegates);
       const current =
         options.find((workspace) => workspace.id === draft.workspaceId) ??
@@ -1724,17 +1733,15 @@ export class TelegramComposerService {
         current,
         options,
         multiple: mine.length > 1 || !current,
-        fallback: targets.delegates.length === 0
-          ? options.find((workspace) => workspace.kind === 'default') ?? null : null,
       };
     } catch (err) {
       console.warn('[tg-composer] workspace view failed:', err);
-      return { mode: 'pending', current: null, options: [], multiple: true, fallback: null };
+      return { mode: 'pending', current: null, options: [], multiple: true, transientError: true };
     }
   }
 
   // Пространство для getOrCreateInbox. undefined — прежнее поведение (активное пространство);
-  // 'blocked' — не выбрано, а положить задачу некуда (ждём кнопку).
+  // 'blocked' — не выбрано при ручном клике или нет ни одного общего пространства с исполнителем.
   private async workspaceForInbox(
     draft: TelegramTaskDraft,
     automatic: boolean,
@@ -1742,10 +1749,121 @@ export class TelegramComposerService {
     const view = await this.workspaceView(draft);
     if (view.mode === 'off') return undefined;
     if (view.current) return view.current.id;
-    // Авто-создание без выбора: в личное пространство — приватное, ничего не утечёт в команду.
-    // Личного среди вариантов нет — не угадываем, ждём человека.
-    if (automatic && view.fallback) return view.fallback.id;
-    return 'blocked';
+    if (!automatic) return 'blocked';
+    if (view.transientError) {
+      throw new Error('workspace lookup temporarily unavailable during auto-create');
+    }
+    if (view.options.length === 0) return 'blocked';
+    const picked = await this.autoPickPendingWorkspace(draft, view.options);
+    if (!picked) return 'blocked';
+    // Фиксируем выбранное ботом пространство в черновике, но НЕ записываем в chats.saveChoice,
+    // чтобы автоматическое решение на таймауте не подменяло явный выбор человека для следующих задач.
+    await this.deps.drafts
+      .patch(draft.id, { workspaceId: picked, workspacePending: false })
+      .catch(() => null);
+    return picked;
+  }
+
+  // Автовыбор пространства по истечении таймера, когда никто не нажал кнопку в карточке:
+  // собирает контекст (проекты каждого пространства, соседние сегменты, исполнителей, чат) и
+  // просит модель выбрать лучшее пространство (с детерминированным фолбэком при сбое ИИ).
+  private async autoPickPendingWorkspace(
+    draft: TelegramTaskDraft,
+    options: readonly WorkspaceOption[],
+  ): Promise<string | null> {
+    const targets = this.inboxTargets(draft);
+    const projectsByWorkspaceId = new Map<string, string[]>();
+    const projectWorkspaceById = new Map<string, string>();
+    try {
+      const allProjects = await this.deps.members.listProjectsForUser(draft.creatorUserId);
+      for (const p of allProjects) {
+        if (p.isInbox || p.status === 'archived' || !p.workspaceId) continue;
+        projectWorkspaceById.set(p.id, p.workspaceId);
+        const list = projectsByWorkspaceId.get(p.workspaceId) ?? [];
+        list.push(p.name);
+        projectsByWorkspaceId.set(p.workspaceId, list);
+      }
+    } catch {
+      // Контекст проектов опционален — выбор сработает и по названиям пространств.
+    }
+
+    const siblingProjectWorkspaceIds: string[] = [];
+    const siblingTitles: string[] = [];
+    let tasksText = '';
+    if (draft.segments) {
+      const inboxLines: string[] = [];
+      for (const seg of draft.segments) {
+        if (!seg.included) continue;
+        if (seg.projectId) {
+          const wsId = projectWorkspaceById.get(seg.projectId);
+          if (wsId) siblingProjectWorkspaceIds.push(wsId);
+          const title = seg.title.trim() || excerpt(seg.body, 60);
+          if (title) siblingTitles.push(title);
+        } else {
+          const block = [seg.title.trim(), seg.body.trim()].filter(Boolean).join(': ');
+          if (block) inboxLines.push(block);
+        }
+      }
+      tasksText = inboxLines.join('\n\n') || (draft.taskText ?? '');
+    } else {
+      tasksText = draft.taskText ?? '';
+    }
+    const replyBlock = replyContextBlock(draft.replyContext);
+    if (replyBlock) {
+      tasksText = [tasksText, replyBlock].filter(Boolean).join('\n\n');
+    }
+
+    const delegateNames = (
+      await Promise.all(
+        targets.delegates.map(async (id) => {
+          try {
+            return (await this.deps.users.getById(id))?.displayName ?? null;
+          } catch {
+            return null;
+          }
+        }),
+      )
+    ).filter((name): name is string => Boolean(name));
+
+    const delegatedPreferredWorkspaceIds = this.deps.resolveDelegatedInboxWorkspace
+      ? (
+          await Promise.all(
+            targets.delegates.map((delegateId) =>
+              this.deps
+                .resolveDelegatedInboxWorkspace!(delegateId, draft.creatorUserId)
+                .catch(() => null),
+            ),
+          )
+        ).filter((id): id is string => Boolean(id))
+      : [];
+
+    const linkedWorkspaceIds =
+      isGroupChat(draft.tgChatId) && this.deps.workspaces
+        ? await this.deps.workspaces.chats.linkedWorkspaceIds(draft.tgChatId).catch(() => [])
+        : [];
+    const lastChosenWorkspaceId = this.deps.workspaces
+      ? ((await this.deps.workspaces.chats
+          .getChoice(draft.tgChatId, draft.creatorUserId)
+          .catch(() => null))?.workspaceId ?? null)
+      : null;
+
+    const picked = await pickDraftWorkspaceWithAi(
+      { llm: this.deps.llm },
+      {
+        billedUserId: draft.creatorUserId,
+        options,
+        isGroupChat: isGroupChat(draft.tgChatId),
+        linkedWorkspaceIds,
+        lastChosenWorkspaceId,
+        delegatedPreferredWorkspaceIds,
+        siblingProjectWorkspaceIds,
+        projectsByWorkspaceId,
+        delegateNames,
+        tasksText,
+        siblingTasksText: siblingTitles.length > 0 ? siblingTitles.join('; ') : null,
+      },
+    );
+    return picked?.workspaceId ?? options[0]?.id ?? null;
   }
 
   // Захваченный черновик создать нельзя: пространство не выбрано, а положить без выбора некуда.
@@ -1913,11 +2031,11 @@ export class TelegramComposerService {
       ? this.workspaceOptionRows(draft, view) : [];
   }
 
-  // Подвал карточки: когда создам сам. Пока пространство не выбрано — честно куда.
+  // Подвал карточки: когда создам сам. Если вариантов несколько — предупреждаем, что подберём сами.
   private autoCreateFooter(view: WorkspaceView, verb = 'создам'): string {
     if (view.mode === 'pending' && view.multiple) {
-      return view.fallback
-        ? `⏱ Не выберешь — через 10 минут положу во «Входящие» пространства «${escapeHtml(view.fallback.name)}».`
+      return view.options.length > 0
+        ? `⏱ Не выберешь — через 10 минут сам подберу пространство и ${verb}.`
         : '⏸ Пока пространство не выбрано, задачу не создам.';
     }
     return `⏱ Без нажатия ${verb} автоматически через 10 минут.`;
@@ -3088,7 +3206,12 @@ export class TelegramComposerService {
         segments: segs,
         offered: clearMembers(draft.offered),
         ...(this.deps.workspaces && !seg.projectId && assigneeUserId !== seg.assigneeUserId
-          ? { workspaceId: null, workspacePending: true } : {}),
+          ? {
+              workspaceId: null,
+              workspacePending: true,
+              ...(draft.autoCreateAt === null ? { autoCreateSeconds: AUTO_CREATE_SECONDS } : {}),
+            }
+          : {}),
       });
       const card = await this.renderSegmentEdit(updated ?? draft, idx);
       if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
