@@ -1,4 +1,5 @@
-import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from 'undici';
+import { fetch as undiciFetch, type Dispatcher } from 'undici';
+import { createProxyDispatcher } from '../http/createProxyDispatcher.js';
 import type {
   LlmAccess,
   LlmRateLimits,
@@ -58,7 +59,7 @@ export class ChatGptCodexTransport implements LlmTransport {
 
   constructor(options: ChatGptCodexTransportOptions = {}) {
     this.baseUrl = (options.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '');
-    this.dispatcher = options.proxyUrl?.trim() ? new ProxyAgent(options.proxyUrl.trim()) : undefined;
+    this.dispatcher = createProxyDispatcher(options.proxyUrl);
   }
 
   async generateText(access: LlmAccess, request: LlmTextRequest): Promise<LlmTextResult> {

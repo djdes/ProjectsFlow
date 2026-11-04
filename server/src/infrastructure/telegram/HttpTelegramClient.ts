@@ -5,11 +5,9 @@ import { File } from 'node:buffer';
 import {
   fetch as undiciFetch,
   FormData,
-  Pool,
-  ProxyAgent,
-  type buildConnector,
   type Dispatcher,
 } from 'undici';
+import { createProxyDispatcher } from '../http/createProxyDispatcher.js';
 import {
   TELEGRAM_ALLOWED_UPDATES,
   type AnswerInlineQueryInput,
@@ -49,32 +47,6 @@ type TgFetchInit = {
   dispatcher?: Dispatcher;
 };
 
-// Прокси может резать Telegram по имени хоста в CONNECT и при этом пропускать тот же IP
-// (наш с 24.09.2026 отвечает 403 на CONNECT к *.telegram.org). Туннель открываем к
-// connectHost, а сам запрос остаётся на домене из URL: Host, SNI и проверка сертификата —
-// по-прежнему api.telegram.org.
-function pinnedConnectProxyAgent(proxyUrl: string, connectHost: string): ProxyAgent {
-  return new ProxyAgent({
-    uri: proxyUrl,
-    factory: (origin, opts) => {
-      const options = opts as Pool.Options;
-      const tunnel = options.connect;
-      if (typeof tunnel !== 'function') return new Pool(origin, options);
-      const connect: buildConnector.connector = (target, callback) =>
-        tunnel(
-          {
-            ...target,
-            servername: target.servername || target.hostname,
-            hostname: connectHost,
-            host: target.port ? `${connectHost}:${target.port}` : connectHost,
-          },
-          callback,
-        );
-      return new Pool(origin, { ...options, connect });
-    },
-  });
-}
-
 export class HttpTelegramClient implements TelegramClient {
   private readonly base: string;
   private readonly fileBase: string;
@@ -82,11 +54,11 @@ export class HttpTelegramClient implements TelegramClient {
 
   // apiBaseUrl — override https://api.telegram.org (если используется relay, например
   // CF-worker, тогда proxy не нужен).
-  // proxyUrl — HTTP/HTTPS proxy URL вида 'http://user:pass@host:port'. Применяется ко всем
-  // запросам к Telegram API. Если задан И apiBaseUrl — proxy всё равно применяется
-  // (для случая когда relay тоже за прокси). Без proxy — прямой fetch.
-  // proxyConnectHost — адрес, к которому прокси открывает туннель вместо хоста из apiBaseUrl
-  // (см. pinnedConnectProxyAgent). Без proxyUrl не действует.
+  // proxyUrl — HTTP/HTTPS или SOCKS5 proxy URL ('http://user:pass@host:port' /
+  // 'socks5://user:pass@host:port'). Применяется ко всем запросам к Telegram API.
+  // Если задан И apiBaseUrl — proxy всё равно применяется (для случая когда relay тоже за прокси).
+  // proxyConnectHost — адрес, к которому прокси открывает туннель вместо хоста из apiBaseUrl.
+  // Без proxyUrl не действует.
   constructor(
     private readonly botToken: string,
     apiBaseUrl: string = 'https://api.telegram.org',
@@ -96,11 +68,7 @@ export class HttpTelegramClient implements TelegramClient {
     const cleaned = apiBaseUrl.replace(/\/$/, '');
     this.base = `${cleaned}/bot${botToken}`;
     this.fileBase = `${cleaned}/file/bot${botToken}`;
-    this.dispatcher = proxyUrl
-      ? proxyConnectHost
-        ? pinnedConnectProxyAgent(proxyUrl, proxyConnectHost)
-        : new ProxyAgent(proxyUrl)
-      : undefined;
+    this.dispatcher = createProxyDispatcher(proxyUrl, { connectHost: proxyConnectHost });
   }
 
   // Возвращаем Response-подобный объект из undici (status/ok/json/text — те же что у DOM).
