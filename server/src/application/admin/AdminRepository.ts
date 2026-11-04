@@ -39,7 +39,46 @@ export type AdminUserView = {
   // Telegram link for the edit dialog: linked flag and @username when known.
   readonly telegramLinked: boolean;
   readonly telegramUsername: string | null;
+  // Workspaces the user is a member of.
+  readonly workspaceCount: number;
+  // Last password login (db/178; older logins are recovered from live sessions).
+  readonly lastLoginAt: Date | null;
+  // Last time the user was seen in the app: requests (throttled), project views, logins.
+  readonly lastActivityAt: Date | null;
   readonly createdAt: Date;
+  // Anonymized account (see DeleteUserAsAdmin); listed only under the «Удалённые» filter.
+  readonly deletedAt: Date | null;
+};
+
+// Current profile values: «before» for the audit journal and the target's address for mail.
+export type AdminUserProfile = {
+  readonly id: string;
+  readonly email: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly isAdmin: boolean;
+  readonly telegramLinked: boolean;
+  readonly telegramUsername: string | null;
+};
+
+// The user panel: memberships, AI spend and activity counters from existing tables.
+export type AdminUserOverviewData = {
+  readonly workspaces: readonly {
+    readonly id: string; readonly name: string; readonly kind: 'default' | 'team';
+    readonly role: string; readonly isOwner: boolean; readonly memberCount: number;
+  }[];
+  readonly projects: readonly {
+    readonly id: string; readonly name: string; readonly status: ProjectStatus;
+    readonly role: string; readonly workspaceName: string | null; readonly taskCount: number;
+  }[];
+  readonly usage: { readonly costUsd30d: number; readonly costUsdTotal: number; readonly runs30d: number };
+  readonly activity: {
+    readonly tasksCreated30d: number;
+    readonly comments30d: number;
+    readonly activeSessions: number;
+    readonly lastLoginAt: Date | null;
+    readonly lastSeenAt: Date | null;
+  };
 };
 
 export type AdminUpdateUserPatch = {
@@ -53,7 +92,10 @@ export type AdminUpdateUserPatch = {
 
 export interface AdminRepository {
   listAllProjects(): Promise<AdminProjectView[]>;
+  // Every account, deleted ones included (they carry deletedAt).
   listAllUsers(): Promise<AdminUserView[]>;
+  getUserProfile(id: string): Promise<AdminUserProfile | null>;
+  loadUserOverview(id: string, since: Date): Promise<AdminUserOverviewData | null>;
   updateUser(id: string, patch: AdminUpdateUserPatch, actorId: string): Promise<void>;
   loadUserDeletionSnapshot(id: string): Promise<UserDeletionSnapshot | null>;
   // One transaction: locks the actor and the target, reloads the snapshot, asks `decide`

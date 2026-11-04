@@ -2,6 +2,7 @@ import type { User } from '../../domain/user/User.js';
 import type { Session } from '../../domain/session/Session.js';
 import type { SessionRepository } from '../session/SessionRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import type { AdminAuditLog } from '../admin/AdminAuditLog.js';
 
 export type ImpersonationErrorCode =
   | 'not_admin'
@@ -26,6 +27,8 @@ type Deps = {
   readonly sessions: SessionRepository;
   readonly idGen: () => string;
   readonly now: () => Date;
+  // Admin journal (db/178): every «Войти как» is recorded for the target user.
+  readonly audit?: AdminAuditLog;
 };
 
 // Вход администратора от имени пользователя: отдельная сессия пользователя со ссылкой на
@@ -49,12 +52,17 @@ export class Impersonation {
     const now = this.deps.now().getTime();
     // Не дольше сессии администратора: она нужна, чтобы вернуться.
     const expiresAt = new Date(Math.min(now + IMPERSONATION_TTL_MS, adminSession.expiresAt.getTime()));
-    return this.deps.sessions.create({
+    const session = await this.deps.sessions.create({
       id: this.deps.idGen(),
       userId: target.id,
       expiresAt,
       impersonatorSessionId: adminSession.id,
     });
+    await this.deps.audit?.record([{
+      actorUserId: admin.id, targetUserId: target.id, action: 'impersonate',
+      after: { until: expiresAt.toISOString() },
+    }]);
+    return session;
   }
 
   // Завершить сессию «от имени» и вернуть сессию администратора, из которой в неё вошли.

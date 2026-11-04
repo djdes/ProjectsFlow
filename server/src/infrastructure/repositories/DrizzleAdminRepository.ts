@@ -15,6 +15,8 @@ import type {
   AdminProjectView,
   AdminRepository,
   AdminUpdateUserPatch,
+  AdminUserOverviewData,
+  AdminUserProfile,
   AdminUserView,
 } from '../../application/admin/AdminRepository.js';
 
@@ -70,12 +72,16 @@ export class DrizzleAdminRepository implements AdminRepository {
         subscriptionExpiresAt: users.subscriptionExpiresAt,
         telegramUserId: users.telegramUserId,
         telegramUsername: users.telegramUsername,
-        projectCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = ${users.id})`,
+        lastLoginAt: users.lastLoginAt,
+        lastSeenAt: users.lastSeenAt,
+        deletedAt: users.deletedAt,
+        workspaceCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm WHERE wm.user_id = users.id)`,
+        projectCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = users.id)`,
         // Сколько проектов где юзер OWNER (для знаменателя «X/Y» делегации).
         // Исключаем inbox — он персональный, делегация для него не имеет смысла.
         ownedProjectCount: sql<number>`(
           SELECT COUNT(*) FROM projects p
-          WHERE p.owner_id = ${users.id} AND p.is_inbox = FALSE
+          WHERE p.owner_id = users.id AND p.is_inbox = FALSE
         )`,
         // v0.15: per-member делегации. В admin UI «X разрешил свой GH» = у X есть
         // ВКЛЮЧЁННАЯ запись делегации в проекте где X — owner. Если другие
@@ -83,17 +89,16 @@ export class DrizzleAdminRepository implements AdminRepository {
         delegationEnabledCount: sql<number>`(
           SELECT COUNT(*) FROM project_git_token_delegations d
           INNER JOIN projects p ON p.id = d.project_id
-          WHERE p.owner_id = ${users.id}
-            AND d.granter_user_id = ${users.id}
+          WHERE p.owner_id = users.id
+            AND d.granter_user_id = users.id
             AND d.enabled = TRUE
         )`,
         // Подключён ли GitHub. UI рисует индикатор «нет GH — делегацию включать нельзя».
         githubConnected: sql<number>`(
-          SELECT COUNT(*) FROM user_github_tokens g WHERE g.user_id = ${users.id}
+          SELECT COUNT(*) FROM user_github_tokens g WHERE g.user_id = users.id
         )`,
       })
       .from(users)
-      .where(isNull(users.deletedAt))
       .orderBy(asc(users.createdAt));
 
     return rows.map((r) => ({
@@ -110,8 +115,80 @@ export class DrizzleAdminRepository implements AdminRepository {
       subscriptionExpiresAt: r.subscriptionExpiresAt ?? null,
       telegramLinked: r.telegramUserId !== null,
       telegramUsername: r.telegramUsername ?? null,
+      workspaceCount: Number(r.workspaceCount),
+      lastLoginAt: r.lastLoginAt ?? null,
+      lastActivityAt: latest(r.lastSeenAt, r.lastLoginAt),
       createdAt: r.createdAt,
+      deletedAt: r.deletedAt ?? null,
     }));
+  }
+
+  async getUserProfile(id: string): Promise<AdminUserProfile | null> {
+    const [row] = await this.db
+      .select({
+        id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl,
+        isAdmin: users.isAdmin, telegramUserId: users.telegramUserId, telegramUsername: users.telegramUsername,
+      })
+      .from(users)
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .limit(1);
+    if (!row) return null;
+    return {
+      id: row.id, email: row.email, displayName: row.displayName, avatarUrl: row.avatarUrl ?? null,
+      isAdmin: row.isAdmin, telegramLinked: row.telegramUserId !== null, telegramUsername: row.telegramUsername ?? null,
+    };
+  }
+
+  async loadUserOverview(id: string, since: Date): Promise<AdminUserOverviewData | null> {
+    const [user] = await this.db
+      .select({ lastLoginAt: users.lastLoginAt, lastSeenAt: users.lastSeenAt })
+      .from(users).where(eq(users.id, id)).limit(1);
+    if (!user) return null;
+    const wsRows = await this.db
+      .select({
+        id: workspaces.id, name: workspaces.name, kind: workspaces.kind, role: workspaceMembers.role,
+        ownerUserId: workspaces.ownerUserId,
+        memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members m2 WHERE m2.workspace_id = ${workspaces.id})`,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.userId, id))
+      .orderBy(asc(workspaces.createdAt));
+    const projectRows = await this.db
+      .select({
+        id: projects.id, name: projects.name, status: projects.status, role: projectMembers.role,
+        workspaceName: workspaces.name,
+        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
+      })
+      .from(projectMembers)
+      .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+      .leftJoin(workspaces, eq(workspaces.id, projects.workspaceId))
+      .where(and(eq(projectMembers.userId, id), eq(projects.isInbox, false)))
+      .orderBy(asc(projects.name));
+    const result = await this.db.execute(sql`
+      SELECT
+        (SELECT COALESCE(SUM(cost_usd), 0) FROM ai_usage_ledger WHERE user_id = ${id} AND occurred_at >= ${since}) AS cost30,
+        (SELECT COALESCE(SUM(cost_usd), 0) FROM ai_usage_ledger WHERE user_id = ${id}) AS costTotal,
+        (SELECT COUNT(*) FROM ai_usage_ledger WHERE user_id = ${id} AND occurred_at >= ${since}) AS runs30,
+        (SELECT COUNT(*) FROM tasks WHERE created_by = ${id} AND created_at >= ${since}) AS tasks30,
+        (SELECT COUNT(*) FROM task_comments WHERE owner_user_id = ${id} AND actor_kind = 'user' AND created_at >= ${since}) AS comments30,
+        (SELECT COUNT(*) FROM sessions WHERE user_id = ${id} AND impersonator_session_id IS NULL AND expires_at > NOW()) AS sessions`);
+    const counters = (result[0] as unknown as Array<Record<string, number | string | null>>)[0] ?? {};
+    const n = (k: string): number => Number(counters[k] ?? 0);
+    return {
+      workspaces: wsRows.map((w) => ({
+        id: w.id, name: w.name, kind: w.kind, role: w.role, isOwner: w.ownerUserId === id, memberCount: Number(w.memberCount),
+      })),
+      projects: projectRows.map((p) => ({
+        id: p.id, name: p.name, status: p.status as ProjectStatus, role: p.role,
+        workspaceName: p.workspaceName ?? null, taskCount: Number(p.taskCount),
+      })),
+      usage: { costUsd30d: n('cost30'), costUsdTotal: n('costTotal'), runs30d: n('runs30') },
+      activity: {
+        tasksCreated30d: n('tasks30'), comments30d: n('comments30'), activeSessions: n('sessions'),
+        lastLoginAt: user.lastLoginAt ?? null, lastSeenAt: latest(user.lastSeenAt, user.lastLoginAt),
+      },
+    };
   }
 
   async updateUser(id: string, patch: AdminUpdateUserPatch, actorId: string): Promise<void> {
@@ -214,6 +291,12 @@ export class DrizzleAdminRepository implements AdminRepository {
       return { plan, storageKeys };
     });
   }
+}
+
+function latest(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a.getTime() >= b.getTime() ? a : b;
 }
 
 // Same fields as the user's own Telegram unlink (DrizzleUserRepository.clearTelegramLink).

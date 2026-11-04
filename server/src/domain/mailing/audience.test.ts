@@ -25,6 +25,11 @@ test('audience parsing accepts only known shapes', () => {
   assert.equal(parseMailingAudience({ kind: 'plan', plans: ['gold'] }), null);
   assert.equal(parseMailingAudience({ kind: 'workspace', workspaceId: "x' OR 1=1" }), null);
   assert.equal(parseMailingAudience({ kind: 'everyone' }), null);
+  assert.deepEqual(parseMailingAudience({ kind: 'users', userIds: ['u-1', 'u-2'] }), { kind: 'users', userIds: ['u-1', 'u-2'] });
+  assert.equal(parseMailingAudience({ kind: 'users', userIds: [] }), null);
+  assert.equal(parseMailingAudience({ kind: 'users', userIds: ['u-1', 'u-1'] }), null);
+  assert.equal(parseMailingAudience({ kind: 'users', userIds: ["x' OR 1=1"] }), null);
+  assert.equal(parseMailingAudience({ kind: 'users', userIds: Array.from({ length: 1001 }, (_, i) => `u${i}`) }), null);
   assert.equal(parseMailingAudience(null), null);
 });
 

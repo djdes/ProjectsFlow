@@ -1,5 +1,5 @@
 import type { MailingAudience, MailingCandidate, MailingPlan } from './Mailing.js';
-import { MAILING_PLANS } from './Mailing.js';
+import { MAILING_PLANS, MAILING_USERS_AUDIENCE_MAX } from './Mailing.js';
 
 export type MailingReach = {
   // Will receive the letter.
@@ -46,11 +46,19 @@ export function selectMailingRecipients(
 /** Validates an audience coming from the client; null when it is malformed. */
 export function parseMailingAudience(raw: unknown): MailingAudience | null {
   if (!raw || typeof raw !== 'object') return null;
-  const value = raw as { kind?: unknown; workspaceId?: unknown; plans?: unknown };
+  const value = raw as { kind?: unknown; workspaceId?: unknown; plans?: unknown; userIds?: unknown };
   if (value.kind === 'all') return { kind: 'all' };
   if (value.kind === 'workspace') {
     return typeof value.workspaceId === 'string' && /^[\w-]{1,64}$/.test(value.workspaceId)
       ? { kind: 'workspace', workspaceId: value.workspaceId }
+      : null;
+  }
+  if (value.kind === 'users') {
+    if (!Array.isArray(value.userIds)) return null;
+    const ids = value.userIds as unknown[];
+    const valid = ids.every((id) => typeof id === 'string' && /^[\w-]{1,64}$/.test(id));
+    return valid && ids.length > 0 && ids.length <= MAILING_USERS_AUDIENCE_MAX && new Set(ids).size === ids.length
+      ? { kind: 'users', userIds: ids as string[] }
       : null;
   }
   if (value.kind === 'plan') {

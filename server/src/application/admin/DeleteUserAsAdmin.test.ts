@@ -10,6 +10,7 @@ function setup(snapshot: UserDeletionSnapshot | null) {
   const deletedFiles: string[] = [];
   const repo = {
     loadUserDeletionSnapshot: async () => snapshot,
+    getUserProfile: async () => null,
     deleteUser: async (_id: string, _actor: string, decide: (s: UserDeletionSnapshot) => UserDeletionPlan) => {
       if (!snapshot) throw new AdminUserError('user_not_found', 'Пользователь не найден');
       const plan = decide(snapshot); // throws before any mutation when blocked
@@ -22,7 +23,7 @@ function setup(snapshot: UserDeletionSnapshot | null) {
   };
   return {
     executed, deletedFiles,
-    remove: new DeleteUserAsAdmin({ repo, storage: storage as never }),
+    remove: new DeleteUserAsAdmin({ repo, storage: storage as never, audit: { record: async () => {}, listForTarget: async () => [] } }),
     preview: new GetUserDeletionPreview(repo),
   };
 }

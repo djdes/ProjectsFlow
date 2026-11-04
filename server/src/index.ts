@@ -399,6 +399,13 @@ import { ListUserProjectsWithFavorites } from './application/admin/ListUserProje
 import { SetUserProjectFavorite } from './application/admin/SetUserProjectFavorite.js';
 import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
 import { DeleteUserAsAdmin, GetUserDeletionPreview } from './application/admin/DeleteUserAsAdmin.js';
+import { BulkSetPlanAsAdmin } from './application/admin/BulkSetPlanAsAdmin.js';
+import { SignOutUserEverywhere } from './application/admin/SignOutUserEverywhere.js';
+import { SendPasswordResetAsAdmin } from './application/admin/SendPasswordResetAsAdmin.js';
+import { GetAdminUserOverview } from './application/admin/GetAdminUserOverview.js';
+import { DrizzleAdminAuditLog } from './infrastructure/repositories/DrizzleAdminAuditLog.js';
+import { DrizzleUserActivityRepository } from './infrastructure/repositories/DrizzleUserActivityRepository.js';
+import { LastSeenTracker } from './application/auth/LastSeenTracker.js';
 import { DrizzleEmployeeRepository } from './infrastructure/repositories/DrizzleEmployeeRepository.js';
 import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/DrizzleProjectFinanceRepository.js';
 import { ManageEmployees } from './application/finance/ManageEmployees.js';
@@ -763,6 +770,8 @@ const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db, projectMemberRepo);
 const adminRepo = new DrizzleAdminRepository(db);
+const adminAuditLog = new DrizzleAdminAuditLog(db, idGenerator);
+const userActivityRepo = new DrizzleUserActivityRepository(db);
 const platformStatsRepo = new DrizzlePlatformStatsRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
@@ -2070,7 +2079,17 @@ const authDeps = {
   sessionTtlMs: sessionTtlMs(),
   now,
   createDefaultWorkspace,
+  activity: userActivityRepo,
 };
+const requestPasswordReset = new RequestPasswordReset({
+  users: userRepo,
+  tokens: passwordResetTokenRepo,
+  email: emailSender,
+  idGen: idGenerator,
+  now,
+  ttlMs: 60 * 60 * 1000, // 1 час
+  appUrl: appBaseUrl,
+});
 
 // Ежедневная сводка (db/064): один общий SendDailyDigest для планировщика и кнопки
 // «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
@@ -2254,17 +2273,9 @@ const { app, devProxyUpgrade } = createApp({
     register: new Register(authDeps),
     login: new Login(authDeps),
     logout: new Logout(sessionRepo),
-    impersonation: new Impersonation({ users: userRepo, sessions: sessionRepo, idGen: idGenerator, now }),
-    getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now }),
-    requestPasswordReset: new RequestPasswordReset({
-      users: userRepo,
-      tokens: passwordResetTokenRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      now,
-      ttlMs: 60 * 60 * 1000, // 1 час
-      appUrl: appBaseUrl,
-    }),
+    impersonation: new Impersonation({ users: userRepo, sessions: sessionRepo, idGen: idGenerator, now, audit: adminAuditLog }),
+    getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now, lastSeen: new LastSeenTracker(userActivityRepo) }),
+    requestPasswordReset,
     resetPassword: new ResetPassword({
       users: userRepo,
       tokens: passwordResetTokenRepo,
@@ -2714,9 +2725,13 @@ const { app, devProxyUpgrade } = createApp({
   admin: {
     getPlatformStats: new GetPlatformStats({ repo: platformStatsRepo, now }),
     listAllProjects: new ListAllProjects(adminRepo),
-    listAllUsers: new ListAllUsers(adminRepo),
-    updateUser: new UpdateUserAsAdmin(adminRepo),
-    deleteUser: new DeleteUserAsAdmin({ repo: adminRepo, storage: attachmentStorage }),
+    listAllUsers: new ListAllUsers(adminRepo, now),
+    updateUser: new UpdateUserAsAdmin(adminRepo, adminAuditLog),
+    deleteUser: new DeleteUserAsAdmin({ repo: adminRepo, storage: attachmentStorage, audit: adminAuditLog }),
+    bulkSetPlan: new BulkSetPlanAsAdmin({ users: userRepo, audit: adminAuditLog, idGen: idGenerator, now }),
+    signOutEverywhere: new SignOutUserEverywhere({ repo: adminRepo, sessions: sessionRepo, audit: adminAuditLog }),
+    sendPasswordReset: new SendPasswordResetAsAdmin({ repo: adminRepo, requestPasswordReset, audit: adminAuditLog }),
+    getUserOverview: new GetAdminUserOverview({ repo: adminRepo, audit: adminAuditLog, now }),
     getUserDeletionPreview: new GetUserDeletionPreview(adminRepo),
     listUserProjectsWithDispatcher: new ListUserProjectsWithDispatcher({
       members: projectMemberRepo,
@@ -2732,7 +2747,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     listAllSupportTickets: new ListAllSupportTickets(supportTicketRepo),
     setSupportTicketStatus: new SetSupportTicketStatus(supportTicketRepo),
-    setUserPlanAsAdmin: new SetUserPlanAsAdmin({ users: userRepo, now }),
+    setUserPlanAsAdmin: new SetUserPlanAsAdmin({ users: userRepo, audit: adminAuditLog, now }),
     emailSender,
   },
   finance: {

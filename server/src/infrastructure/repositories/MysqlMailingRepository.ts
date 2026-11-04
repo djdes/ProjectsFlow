@@ -120,10 +120,15 @@ export class MysqlMailingRepository implements MailingRepository {
         `SELECT u.id,u.email,u.display_name,w.name AS workspace_name,u.plan,u.subscription_expires_at
          FROM workspace_members m JOIN users u ON u.id=m.user_id JOIN workspaces w ON w.id=m.workspace_id
          WHERE m.workspace_id=? AND u.deleted_at IS NULL ORDER BY u.created_at, u.id`, [audience.workspaceId])
-      : await this.pool.query<CandidateRow[]>(
-        `SELECT u.id,u.email,u.display_name,w.name AS workspace_name,u.plan,u.subscription_expires_at
-         FROM users u LEFT JOIN workspaces w ON w.id=u.current_workspace_id
-         WHERE u.deleted_at IS NULL ORDER BY u.created_at, u.id`);
+      : audience.kind === 'users'
+        ? await this.pool.query<CandidateRow[]>(
+          `SELECT u.id,u.email,u.display_name,w.name AS workspace_name,u.plan,u.subscription_expires_at
+           FROM users u LEFT JOIN workspaces w ON w.id=u.current_workspace_id
+           WHERE u.deleted_at IS NULL AND u.id IN (?) ORDER BY u.created_at, u.id`, [audience.userIds])
+        : await this.pool.query<CandidateRow[]>(
+          `SELECT u.id,u.email,u.display_name,w.name AS workspace_name,u.plan,u.subscription_expires_at
+           FROM users u LEFT JOIN workspaces w ON w.id=u.current_workspace_id
+           WHERE u.deleted_at IS NULL ORDER BY u.created_at, u.id`);
     const plans = audience.kind === 'plan' ? new Set(audience.plans) : null;
     return rows
       .filter((r) => !plans || plans.has(effectiveMailingPlan(r.plan, r.subscription_expires_at, now)))

@@ -92,6 +92,10 @@ export const users = mysqlTable(
     subscriptionExpiresAt: timestamp('subscription_expires_at'),
     // Разовый пробный Прайм (db/085): метка активации триала (null = не использован).
     primeTrialUsedAt: timestamp('prime_trial_used_at'),
+    // Админка «Пользователи» (db/178): последний вход по паролю и последняя активность
+    // (обновляется не чаще раза в 5 минут, см. LastSeenTracker).
+    lastLoginAt: timestamp('last_login_at'),
+    lastSeenAt: timestamp('last_seen_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -2523,6 +2527,28 @@ export const appAdminAuditLog = mysqlTable(
 );
 
 export type AppAdminAuditLogRow = typeof appAdminAuditLog.$inferSelect;
+
+// platform_admin_audit_log — db/178. Append-only журнал действий администратора платформы
+// над учётными записями (тариф, роль, профиль, удаление, вход от имени, массовые операции).
+export const platformAdminAuditLog = mysqlTable(
+  'platform_admin_audit_log',
+  {
+    seq: bigint('seq', { mode: 'number' }).autoincrement().primaryKey(),
+    id: char('id', { length: 36 }).notNull(),
+    actorUserId: char('actor_user_id', { length: 36 }).notNull(),
+    targetUserId: char('target_user_id', { length: 36 }),
+    action: varchar('action', { length: 40 }).notNull(),
+    batchId: char('batch_id', { length: 36 }),
+    beforeJson: mediumtext('before_json'),
+    afterJson: mediumtext('after_json'),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [
+    uniqueIndex('uq_platform_admin_audit_id').on(t.id),
+    index('idx_platform_admin_audit_target').on(t.targetUserId, t.seq),
+    index('idx_platform_admin_audit_actor').on(t.actorUserId, t.seq),
+  ],
+);
 export type NewAppAdminAuditLogRow = typeof appAdminAuditLog.$inferInsert;
 
 // Privacy-preserving traffic of the PUBLISHED application (db/137). Никакого IP и raw UA:

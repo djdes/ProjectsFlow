@@ -60,8 +60,14 @@ test('deleted accounts are excluded from authentication, admin lists and subscri
   const h = harness();
   assert.equal(await h.users.getById('target'), null);
   assert.equal(await h.users.getByEmail('target@example.test'), null);
-  await h.users.listAdmins(); await h.admin.listAllUsers(); await h.users.getSubscription('target');
+  await h.users.listAdmins(); await h.admin.getUserProfile('target'); await h.users.getSubscription('target');
   for (const query of h.queries) assert.match(query.sql, /`deleted_at` is null/);
+  // The users console lists deleted accounts too, marked by deleted_at, under their own filter.
+  const listed = harness();
+  await listed.admin.listAllUsers();
+  assert.match(listed.queries[0]!.sql, /`deleted_at`/);
+  // Correlated counters must point at the outer users row, not at a same-named inner column.
+  assert.doesNotMatch(listed.queries[0]!.sql, /= `id`/);
   // Display lookups keep the anonymized row, so history shows «Удалённый пользователь».
   const display = harness();
   await display.users.getManyByIds(['target']);

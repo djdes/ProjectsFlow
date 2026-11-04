@@ -560,6 +560,10 @@ type AppDeps = {
     readonly listAllSupportTickets: ListAllSupportTickets;
     readonly setSupportTicketStatus: SetSupportTicketStatus;
     readonly setUserPlanAsAdmin: SetUserPlanAsAdmin;
+    readonly bulkSetPlan: import('../application/admin/BulkSetPlanAsAdmin.js').BulkSetPlanAsAdmin;
+    readonly signOutEverywhere: import('../application/admin/SignOutUserEverywhere.js').SignOutUserEverywhere;
+    readonly sendPasswordReset: import('../application/admin/SendPasswordResetAsAdmin.js').SendPasswordResetAsAdmin;
+    readonly getUserOverview: import('../application/admin/GetAdminUserOverview.js').GetAdminUserOverview;
     readonly emailSender: EmailSender;
   };
   readonly finance: {

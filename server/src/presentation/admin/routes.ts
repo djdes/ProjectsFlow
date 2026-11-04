@@ -6,7 +6,12 @@ import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmi
 import type { DeleteUserAsAdmin, GetUserDeletionPreview } from '../../application/admin/DeleteUserAsAdmin.js';
 import type { UserDeletionPlan } from '../../domain/user/userDeletion.js';
 import { AdminUserError } from '../../domain/user/adminErrors.js';
-import { adminPlanSchema, adminUserPatchSchema } from './schemas.js';
+import { adminBulkPlanSchema, adminPlanSchema, adminUserPatchSchema, adminUserQuerySchema } from './schemas.js';
+import type { BulkSetPlanAsAdmin } from '../../application/admin/BulkSetPlanAsAdmin.js';
+import type { SignOutUserEverywhere } from '../../application/admin/SignOutUserEverywhere.js';
+import type { SendPasswordResetAsAdmin } from '../../application/admin/SendPasswordResetAsAdmin.js';
+import type { AdminUserOverview, GetAdminUserOverview } from '../../application/admin/GetAdminUserOverview.js';
+import type { AdminAuditEntry } from '../../application/admin/AdminAuditLog.js';
 import type { ListUserProjectsWithDispatcher } from '../../application/admin/ListUserProjectsWithDispatcher.js';
 import type { ListUserProjectsWithFavorites } from '../../application/admin/ListUserProjectsWithFavorites.js';
 import type { SetUserProjectFavorite } from '../../application/admin/SetUserProjectFavorite.js';
@@ -38,6 +43,10 @@ type Deps = {
   readonly listAllSupportTickets: ListAllSupportTickets;
   readonly setSupportTicketStatus: SetSupportTicketStatus;
   readonly setUserPlanAsAdmin: SetUserPlanAsAdmin;
+  readonly bulkSetPlan: BulkSetPlanAsAdmin;
+  readonly signOutEverywhere: SignOutUserEverywhere;
+  readonly sendPasswordReset: SendPasswordResetAsAdmin;
+  readonly getUserOverview: GetAdminUserOverview;
   readonly emailSender: EmailSender;
 };
 
@@ -50,8 +59,35 @@ function userToDto(u: AdminUserView): Record<string, unknown> {
     ...u,
     createdAt: u.createdAt.toISOString(),
     subscriptionExpiresAt: u.subscriptionExpiresAt ? u.subscriptionExpiresAt.toISOString() : null,
+    lastLoginAt: iso(u.lastLoginAt),
+    lastActivityAt: iso(u.lastActivityAt),
+    deletedAt: iso(u.deletedAt),
   };
 }
+
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+function auditToDto(e: AdminAuditEntry): Record<string, unknown> {
+  return { ...e, createdAt: e.createdAt.toISOString() };
+}
+
+function overviewToDto(o: AdminUserOverview): Record<string, unknown> {
+  return {
+    user: userToDto(o.user),
+    workspaces: o.workspaces,
+    projects: o.projects,
+    usage: o.usage,
+    activity: { ...o.activity, lastLoginAt: iso(o.activity.lastLoginAt), lastSeenAt: iso(o.activity.lastSeenAt) },
+    history: o.history.map(auditToDto),
+  };
+}
+
+const userIdParam = (req: Request, res: Response): string | null => {
+  const id = req.params['id'];
+  if (typeof id === 'string') return id;
+  res.status(404).json({ error: 'not_found' });
+  return null;
+};
 
 // The deletion summary for the confirm dialog. Ids stay server-side except workspace ids of blockers.
 function deletionToDto(plan: UserDeletionPlan): Record<string, unknown> {
@@ -91,10 +127,54 @@ export function adminRouter(deps: Deps): Router {
     }
   });
 
-  router.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
+  // The users console: search, filter, sort and page; counts per filter for the chips.
+  router.get('/users', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const list = await deps.listAllUsers.execute();
-      res.json({ users: list.map(userToDto) });
+      const query = adminUserQuerySchema.parse(req.query);
+      const page = await deps.listAllUsers.execute(query);
+      res.json({ users: page.items.map(userToDto), total: page.total, page: page.page, pageSize: page.pageSize, counts: page.counts });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Bulk «Выдать или продлить тариф» for the selected users.
+  router.post('/users/bulk/plan', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = adminBulkPlanSchema.parse(req.body);
+      const term = body.term.kind === 'until' ? { kind: 'until' as const, date: new Date(body.term.date) } : body.term;
+      res.json(await deps.bulkSetPlan.execute({ userIds: body.userIds, plan: body.plan, term }, req.user!.id));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/users/:id/overview', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = userIdParam(req, res);
+      if (id === null) return;
+      res.json(overviewToDto(await deps.getUserOverview.execute(id)));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/users/:id/sign-out-all', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = userIdParam(req, res);
+      if (id === null) return;
+      await deps.signOutEverywhere.execute(id, req.user!.id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/users/:id/password-reset', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = userIdParam(req, res);
+      if (id === null) return;
+      res.json(await deps.sendPasswordReset.execute(id, req.user!.id));
     } catch (e) {
       next(e);
     }
@@ -214,7 +294,8 @@ export function adminRouter(deps: Deps): Router {
       }
       const { plan, subscriptionExpiresAt } = adminPlanSchema.parse(req.body);
       await deps.setUserPlanAsAdmin.execute(id, plan,
-        subscriptionExpiresAt === undefined ? undefined : subscriptionExpiresAt === null ? null : new Date(subscriptionExpiresAt));
+        subscriptionExpiresAt === undefined ? undefined : subscriptionExpiresAt === null ? null : new Date(subscriptionExpiresAt),
+        req.user!.id);
       res.status(204).end();
     } catch (e) {
       next(e);

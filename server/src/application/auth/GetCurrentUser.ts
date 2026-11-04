@@ -1,11 +1,14 @@
 import type { User } from '../../domain/user/User.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { SessionRepository } from '../session/SessionRepository.js';
+import type { LastSeenTracker } from './LastSeenTracker.js';
 
 type Deps = {
   readonly users: UserRepository;
   readonly sessions: SessionRepository;
   readonly now: () => Date;
+  // Marks the user as active (admin users console). A session «от имени» does not count.
+  readonly lastSeen?: LastSeenTracker;
 };
 
 export class GetCurrentUser {
@@ -30,7 +33,10 @@ export class GetCurrentUser {
       await this.deps.sessions.delete(session.id);
       return null;
     }
-    if (!session.impersonatorSessionId) return { user, sessionId: session.id, impersonatedBy: null };
+    if (!session.impersonatorSessionId) {
+      this.deps.lastSeen?.touch(user.id, this.deps.now());
+      return { user, sessionId: session.id, impersonatedBy: null };
+    }
     // Вход «от имени» живёт, только пока жива сессия администратора и он всё ещё администратор:
     // иначе по забытой вкладке можно было бы остаться в чужой учётной записи.
     const adminSession = await this.deps.sessions.getById(session.impersonatorSessionId);

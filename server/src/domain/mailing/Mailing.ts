@@ -32,7 +32,11 @@ export type MailingPlan = (typeof MAILING_PLANS)[number];
 export type MailingAudience =
   | { readonly kind: 'all' }
   | { readonly kind: 'workspace'; readonly workspaceId: string }
-  | { readonly kind: 'plan'; readonly plans: readonly MailingPlan[] };
+  | { readonly kind: 'plan'; readonly plans: readonly MailingPlan[] }
+  // Users picked in the admin users console.
+  | { readonly kind: 'users'; readonly userIds: readonly string[] };
+
+export const MAILING_USERS_AUDIENCE_MAX = 1000;
 
 export type MailingCampaignStatus = 'sending' | 'completed' | 'cancelled';
 
