@@ -1314,6 +1314,7 @@ const telegramComposer = new TelegramComposerService({
   idGen: idGenerator,
   shortIdGen: shortIdGenerator,
   appUrl: appBaseUrl,
+  llm: aiPromptLlm,
   enqueueAiPromptJob,
   waitForAiPromptJob,
   uploadAttachment: new UploadTaskAttachment({
