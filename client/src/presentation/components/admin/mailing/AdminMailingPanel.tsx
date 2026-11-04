@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FileText, Megaphone } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { MailingCampaignsView } from './MailingCampaignsView';
@@ -12,8 +12,13 @@ const VIEWS = [
 ] as const;
 
 // «Администрирование» → «Рассылки»: marketing letters to platform users.
-export function AdminMailingPanel(): React.ReactElement {
+// presetUserIds: recipients handed over from «Пользователи» (bulk «Рассылка выбранным»).
+export function AdminMailingPanel({ presetUserIds = null, onClearPreset }: {
+  presetUserIds?: readonly string[] | null;
+  onClearPreset?: () => void;
+} = {}): React.ReactElement {
   const [view, setView] = useState<View>('campaigns');
+  useEffect(() => { if (presetUserIds) setView('campaigns'); }, [presetUserIds]);
   // «Создать рассылку» from a template opens the composer with that template.
   const [preselect, setPreselect] = useState<string | null>(null);
 
@@ -24,7 +29,7 @@ export function AdminMailingPanel(): React.ReactElement {
         <p className="text-xs text-muted-foreground">Письма уходят постепенно, с учётом лимита почтового сервера. Отписавшимся не отправляются.</p>
       </div>
       {view === 'campaigns' ? (
-        <MailingCampaignsView preselectTemplateId={preselect} />
+        <MailingCampaignsView preselectTemplateId={preselect} presetUserIds={presetUserIds} onClearPreset={onClearPreset} />
       ) : (
         <MailingTemplatesView onUseTemplate={(id) => { setPreselect(id); setView('campaigns'); }} />
       )}

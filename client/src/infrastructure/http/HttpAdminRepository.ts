@@ -2,7 +2,10 @@ import type {
   AdminProject,
   AdminRepository,
   PlatformStats,
-  AdminUser,
+  AdminPlanTerm,
+  AdminUserListQuery,
+  AdminUserOverview,
+  AdminUserPage,
   AdminUserPatch,
   AdminUserDeletionPreview,
   AdminUserProjectDispatcher,
@@ -24,9 +27,25 @@ export class HttpAdminRepository implements AdminRepository {
     return projects;
   }
 
-  async listUsers(): Promise<AdminUser[]> {
-    const { users } = await httpClient.get<{ users: AdminUser[] }>('/admin/users');
-    return users;
+  listUsers(query: AdminUserListQuery): Promise<AdminUserPage> {
+    const params = new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)]));
+    return httpClient.get<AdminUserPage>(`/admin/users?${params.toString()}`);
+  }
+
+  getUserOverview(id: string): Promise<AdminUserOverview> {
+    return httpClient.get<AdminUserOverview>(`/admin/users/${id}/overview`);
+  }
+
+  async signOutEverywhere(id: string): Promise<void> {
+    await httpClient.post<unknown>(`/admin/users/${id}/sign-out-all`, {});
+  }
+
+  sendPasswordReset(id: string): Promise<{ email: string }> {
+    return httpClient.post<{ email: string }>(`/admin/users/${id}/password-reset`, {});
+  }
+
+  bulkSetPlan(input: { userIds: readonly string[]; plan: 'prime' | 'vip'; term: AdminPlanTerm }): Promise<{ updated: number; missing: readonly string[] }> {
+    return httpClient.post<{ updated: number; missing: readonly string[] }>('/admin/users/bulk/plan', input);
   }
 
   async updateUser(id: string, patch: AdminUserPatch): Promise<void> {

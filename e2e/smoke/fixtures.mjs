@@ -573,8 +573,9 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/admin\/mailings\/audience\/workspaces$/, () => json({ workspaces: [{ id: WORKSPACE_ID, name: workspaceDto().name, memberCount: PEOPLE.length }] })],
     [/^\/admin\/mailings\/campaigns$/, () => json({ campaigns: mailingState(state).campaigns })],
     // Admin «Пользователи»: the list and the deletion summary of the confirm dialog.
-    [/^\/admin\/users$/, () => json({ users: adminUsersState(state).users })],
+    [/^\/admin\/users$/, (_m, query) => json(adminUsersPage(state, query))],
     [/^\/admin\/users\/([^/]+)\/deletion-preview$/, (m) => json(adminDeletionPreview(state, m[1]))],
+    [/^\/admin\/users\/([^/]+)\/overview$/, (m) => adminUserOverview(state, m[1])],
   ];
 }
 
@@ -590,9 +591,61 @@ function adminUsersState(state) {
     delegationEnabledCount: 0, githubConnected: false,
     plan: p.id === 'u-boris' ? 'prime' : 'free', subscriptionExpiresAt: p.id === 'u-boris' ? inDays(5) : null,
     telegramLinked: p.id === 'u-vera', telegramUsername: p.id === 'u-vera' ? 'vera_l' : null,
-    createdAt: '2025-02-01T09:00:00.000Z',
-  })) };
+    workspaceCount: 1 + (i === 0 ? 1 : 0), lastLoginAt: inDays(-i - 1),
+    // Глеб has not been seen for two months: he is the «Неактивные» example.
+    lastActivityAt: p.id === 'u-gleb' ? inDays(-60) : inDays(-i * 0.01),
+    createdAt: `2025-0${i + 1}-01T09:00:00.000Z`, deletedAt: null,
+  })), history: {} };
   return state.adminUsers;
+}
+
+// Mirror of the server rules (domain/user/adminUserDirectory.ts) for the smoke data.
+const ADMIN_FILTERS = ['all', 'free', 'prime', 'vip', 'expired', 'admins', 'telegram', 'inactive', 'deleted'];
+function adminPlanState(u) {
+  if (u.plan === 'free') return 'free';
+  return u.subscriptionExpiresAt && Date.parse(u.subscriptionExpiresAt) <= Date.now() ? 'expired' : u.plan;
+}
+function adminMatches(u, filter, idleDays) {
+  if (filter === 'deleted') return Boolean(u.deletedAt);
+  if (u.deletedAt) return false;
+  if (filter === 'all') return true;
+  if (['free', 'prime', 'vip', 'expired'].includes(filter)) return adminPlanState(u) === filter;
+  if (filter === 'admins') return u.isAdmin;
+  if (filter === 'telegram') return u.telegramLinked;
+  return !u.lastActivityAt || Date.parse(u.lastActivityAt) < Date.now() - idleDays * 86400000;
+}
+function adminUsersPage(state, query) {
+  const q = (query.get('q') ?? '').trim().toLowerCase().replace(/^@/, '');
+  const filter = ADMIN_FILTERS.includes(query.get('filter')) ? query.get('filter') : 'all';
+  const idle = Number(query.get('inactiveDays')) || 30;
+  const pageSize = Number(query.get('pageSize')) || 50;
+  const page = Number(query.get('page')) || 1;
+  const searched = adminUsersState(state).users.filter((u) => !q
+    || [u.displayName, u.email, u.telegramUsername ?? ''].some((v) => v.toLowerCase().includes(q)));
+  const counts = Object.fromEntries(ADMIN_FILTERS.map((f) => [f, searched.filter((u) => adminMatches(u, f, idle)).length]));
+  const sort = query.get('sort') ?? 'created';
+  const sign = query.get('dir') === 'asc' ? 1 : -1;
+  const key = (u) => sort === 'name' ? u.displayName : sort === 'activity' ? u.lastActivityAt ?? '' : sort === 'expiry' ? u.subscriptionExpiresAt ?? '~' : u.createdAt;
+  const list = searched.filter((u) => adminMatches(u, filter, idle)).sort((a, b) => key(a).localeCompare(key(b), 'ru') * sign);
+  return { users: list.slice((page - 1) * pageSize, page * pageSize), total: list.length, page, pageSize, counts };
+}
+function adminUserOverview(state, id) {
+  const a = adminUsersState(state);
+  const user = a.users.find((u) => u.id === id);
+  if (!user) return json({ error: 'user_not_found', message: 'Пользователь не найден' }, 404);
+  return json({
+    user,
+    workspaces: [{ id: WORKSPACE_ID, name: workspaceDto().name, kind: 'team', role: user.isAdmin ? 'owner' : 'editor', isOwner: user.id === ME.id, memberCount: PEOPLE.length }],
+    projects: [{ id: 'p-site', name: 'Сайт клиники', status: 'active', role: 'editor', workspaceName: workspaceDto().name, taskCount: 12 }],
+    usage: { costUsd30d: 3.42, costUsdTotal: 18.9, runs30d: 14 },
+    activity: { tasksCreated30d: 9, comments30d: 21, activeSessions: 2, lastLoginAt: user.lastLoginAt, lastSeenAt: user.lastActivityAt },
+    history: a.history[id] ?? [],
+  });
+}
+function adminJournal(state, id, action, before, after) {
+  const a = adminUsersState(state);
+  (a.history[id] ??= []).unshift({ id: `h-${Date.now()}-${Math.random()}`, actorUserId: ME.id, actorDisplayName: ME.displayName,
+    action, batchId: null, before, after, createdAt: new Date().toISOString() });
 }
 
 function adminDeletionPreview(state, id) {
@@ -603,6 +656,30 @@ function adminDeletionPreview(state, id) {
 }
 
 function mutateAdminUsers(state, method, path, body) {
+  if (method === 'POST' && path === '/admin/users/bulk/plan') {
+    const a = adminUsersState(state);
+    let updated = 0;
+    for (const id of body.userIds) {
+      const user = a.users.find((u) => u.id === id);
+      if (!user) continue;
+      const before = { plan: user.plan, expiresAt: user.subscriptionExpiresAt };
+      const running = user.plan === body.plan && adminPlanState(user) === body.plan;
+      const base = running && user.subscriptionExpiresAt ? Date.parse(user.subscriptionExpiresAt) : Date.now();
+      user.plan = body.plan;
+      user.subscriptionExpiresAt = body.term.kind === 'unlimited' ? null : body.term.kind === 'until' ? body.term.date
+        : running && !user.subscriptionExpiresAt ? null : new Date(base + body.term.days * 86400000).toISOString();
+      adminJournal(state, id, 'bulk_plan', before, { plan: user.plan, expiresAt: user.subscriptionExpiresAt, batchSize: body.userIds.length });
+      updated++;
+    }
+    return json({ updated, missing: [] });
+  }
+  const action = path.match(/^\/admin\/users\/([^/]+)\/(sign-out-all|password-reset)$/);
+  if (action && method === 'POST') {
+    const user = adminUsersState(state).users.find((u) => u.id === action[1]);
+    if (!user) return json({ error: 'user_not_found', message: 'Пользователь не найден' }, 404);
+    adminJournal(state, user.id, action[2] === 'sign-out-all' ? 'sign_out_all' : 'password_reset_sent', null, action[2] === 'password-reset' ? { email: user.email } : null);
+    return action[2] === 'sign-out-all' ? { status: 204 } : json({ email: user.email });
+  }
   const m = path.match(/^\/admin\/users\/([^/]+)(\/plan)?$/);
   if (!m) return undefined;
   const a = adminUsersState(state);

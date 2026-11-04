@@ -23,6 +23,7 @@ test('audience summary and Russian plurals', () => {
   assert.equal(audienceSummary({ kind: 'all' }, ws), 'Все пользователи');
   assert.equal(audienceSummary({ kind: 'workspace', workspaceId: 'w1' }, ws), 'Пространство «Ромашка»');
   assert.equal(audienceSummary({ kind: 'plan', plans: ['free', 'vip'] }, ws), 'Тариф: Free, VIP');
+  assert.equal(audienceSummary({ kind: 'users', userIds: ['a', 'b'] }, ws), 'Выбранные пользователи: 2');
   assert.deepEqual([1, 2, 5, 11, 21, 104].map((n) => pluralRu(n, 'письмо', 'письма', 'писем')),
     ['письмо', 'письма', 'писем', 'писем', 'письмо', 'письма']);
 });

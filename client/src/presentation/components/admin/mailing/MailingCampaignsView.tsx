@@ -40,7 +40,12 @@ const newRequestId = (): string => crypto.randomUUID();
 
 // Campaigns: compose from a saved template (audience, reach, test, launch) and follow
 // delivery progress of earlier sends. Progress is polled while something is sending.
-export function MailingCampaignsView({ preselectTemplateId }: { preselectTemplateId: string | null }): React.ReactElement {
+// presetUserIds: users picked in «Пользователи» → «Рассылка выбранным».
+export function MailingCampaignsView({ preselectTemplateId, presetUserIds = null, onClearPreset }: {
+  preselectTemplateId: string | null;
+  presetUserIds?: readonly string[] | null;
+  onClearPreset?: () => void;
+}): React.ReactElement {
   const { mailingRepository } = useContainer();
   const [campaigns, setCampaigns] = useState<MailingCampaign[] | null>(null);
   const [templates, setTemplates] = useState<MailingTemplate[]>([]);
@@ -77,6 +82,8 @@ export function MailingCampaignsView({ preselectTemplateId }: { preselectTemplat
         templates={templates}
         workspaces={workspaces}
         preselectTemplateId={preselectTemplateId}
+        presetUserIds={presetUserIds}
+        onClearPreset={onClearPreset}
         onLaunched={(c) => setCampaigns((list) => [c, ...(list ?? []).filter((x) => x.id !== c.id)])}
       />
       <section aria-label="История рассылок" className="space-y-2">
@@ -100,16 +107,24 @@ function Composer({
   templates,
   workspaces,
   preselectTemplateId,
+  presetUserIds,
+  onClearPreset,
   onLaunched,
 }: {
   templates: readonly MailingTemplate[];
   workspaces: readonly MailingWorkspaceOption[];
   preselectTemplateId: string | null;
+  presetUserIds: readonly string[] | null;
+  onClearPreset?: () => void;
   onLaunched: (c: MailingCampaign) => void;
 }): React.ReactElement {
   const { mailingRepository } = useContainer();
   const [templateId, setTemplateId] = useState<string>(preselectTemplateId ?? '');
-  const [kind, setKind] = useState<AudienceKind>('all');
+  const [kind, setKind] = useState<AudienceKind>(presetUserIds ? 'users' : 'all');
+  useEffect(() => { setKind((k) => (presetUserIds ? 'users' : k === 'users' ? 'all' : k)); }, [presetUserIds]);
+  const kinds = useMemo(() => (presetUserIds
+    ? [...AUDIENCE_KINDS, { value: 'users' as const, label: `Выбранные · ${presetUserIds.length}` }]
+    : AUDIENCE_KINDS), [presetUserIds]);
   const [workspaceId, setWorkspaceId] = useState('');
   const [plans, setPlans] = useState<MailingPlan[]>(['prime', 'vip']);
   const [reach, setReach] = useState<MailingReach | null>(null);
@@ -128,8 +143,9 @@ function Composer({
   const audience = useMemo((): MailingAudience | null => {
     if (kind === 'all') return { kind: 'all' };
     if (kind === 'workspace') return workspaceId ? { kind: 'workspace', workspaceId } : null;
+    if (kind === 'users') return presetUserIds && presetUserIds.length > 0 ? { kind: 'users', userIds: presetUserIds } : null;
     return plans.length > 0 ? { kind: 'plan', plans: PLANS.filter((p) => plans.includes(p)) } : null;
-  }, [kind, workspaceId, plans]);
+  }, [kind, workspaceId, plans, presetUserIds]);
   const audienceKey = JSON.stringify(audience);
 
   useEffect(() => {
@@ -197,7 +213,7 @@ function Composer({
   }
 
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
       <section className="min-w-0 space-y-4 rounded-lg bg-card p-3 shadow-card sm:p-4" aria-label="Новая рассылка">
         <h3 className="flex items-center gap-2 text-sm font-medium"><Megaphone className="size-4 text-muted-foreground" /> Новая рассылка</h3>
         <div className="space-y-1.5">
@@ -208,7 +224,13 @@ function Composer({
         </div>
         <div className="space-y-2">
           <span className="text-sm font-medium">Кому</span>
-          <SegmentedControl className="flex w-full [&>*]:flex-1" value={kind} onChange={setKind} options={AUDIENCE_KINDS} />
+          <SegmentedControl className="flex w-full flex-wrap [&>*]:flex-1" value={kind} onChange={setKind} options={kinds} />
+          {kind === 'users' && presetUserIds && (
+            <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground" data-pf-mailing-preset>
+              {presetUserIds.length} {pluralRu(presetUserIds.length, 'пользователь выбран', 'пользователя выбраны', 'пользователей выбрано')} в разделе «Пользователи».
+              {onClearPreset && <button type="button" className="text-primary-ink underline-offset-2 hover:underline focus-visible:underline" onClick={onClearPreset}>Сбросить выбор</button>}
+            </p>
+          )}
           {kind === 'workspace' && (
             <select aria-label="Пространство" className={SELECT_CLASS} value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
               <option value="">Выберите пространство</option>

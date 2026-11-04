@@ -40,6 +40,8 @@ export function audienceSummary(audience: MailingAudience, workspaces: readonly 
     }
     case 'plan':
       return `Тариф: ${audience.plans.map((p) => PLAN_LABEL[p]).join(', ')}`;
+    case 'users':
+      return `Выбранные пользователи: ${audience.userIds.length}`;
   }
 }
 

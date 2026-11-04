@@ -30,7 +30,8 @@ const loaded = { exports: {} as Record<string, React.ComponentType<{ user: Admin
 new Function('module', 'exports', 'require', compiled.outputFiles[0]!.text)(loaded, loaded.exports, createRequire(import.meta.url));
 const user: AdminUser = { id: 'target', displayName: 'Иван', email: 'ivan@example.test', avatarUrl: '/avatar.png',
   isAdmin: false, projectCount: 3, ownedProjectCount: 1, delegationEnabledCount: 0, githubConnected: false,
-  plan: 'prime', subscriptionExpiresAt: '2026-12-01T10:20:35.000Z', telegramLinked: true, telegramUsername: 'ivan' };
+  plan: 'prime', subscriptionExpiresAt: '2026-12-01T10:20:35.000Z', telegramLinked: true, telegramUsername: 'ivan',
+  workspaceCount: 1, lastLoginAt: null, lastActivityAt: null, createdAt: '2025-01-01T00:00:00.000Z', deletedAt: null };
 const emptyPreview = { blockers: [], removedWorkspaces: [{ name: 'Личное', kind: 'default' as const }], removedProjects: 2, removedTasks: 5,
   reassignedTasks: 3, leftWorkspaces: [{ name: 'Команда', successorName: 'Босс' }] };
 

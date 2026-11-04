@@ -32,7 +32,78 @@ export type AdminUser = {
   // Привязка Telegram: есть ли и @username, если известен (для «Отвязать Telegram»).
   readonly telegramLinked: boolean;
   readonly telegramUsername: string | null;
+  readonly workspaceCount: number;
+  readonly lastLoginAt: string | null; // ISO
+  readonly lastActivityAt: string | null; // ISO
+  readonly createdAt: string; // ISO
+  // Anonymized account, shown only under the «Удалённые» filter.
+  readonly deletedAt: string | null;
 };
+
+export const ADMIN_USER_FILTERS = ['all', 'free', 'prime', 'vip', 'expired', 'admins', 'telegram', 'inactive', 'deleted'] as const;
+export type AdminUserFilter = (typeof ADMIN_USER_FILTERS)[number];
+export const ADMIN_USER_SORTS = ['name', 'created', 'activity', 'expiry'] as const;
+export type AdminUserSort = (typeof ADMIN_USER_SORTS)[number];
+
+export type AdminUserListQuery = {
+  readonly q: string;
+  readonly filter: AdminUserFilter;
+  readonly inactiveDays: number;
+  readonly sort: AdminUserSort;
+  readonly dir: 'asc' | 'desc';
+  readonly page: number;
+  readonly pageSize: number;
+};
+
+export type AdminUserPage = {
+  readonly users: readonly AdminUser[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly counts: Readonly<Record<AdminUserFilter, number>>;
+};
+
+export type AdminAuditAction =
+  | 'profile_update' | 'role_change' | 'plan_change' | 'bulk_plan' | 'delete'
+  | 'impersonate' | 'sign_out_all' | 'password_reset_sent';
+
+export type AdminAuditEntry = {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string | null;
+  readonly action: AdminAuditAction;
+  readonly batchId: string | null;
+  readonly before: Readonly<Record<string, unknown>> | null;
+  readonly after: Readonly<Record<string, unknown>> | null;
+  readonly createdAt: string; // ISO
+};
+
+export type AdminUserOverview = {
+  readonly user: AdminUser;
+  readonly workspaces: readonly {
+    readonly id: string; readonly name: string; readonly kind: 'default' | 'team';
+    readonly role: string; readonly isOwner: boolean; readonly memberCount: number;
+  }[];
+  readonly projects: readonly {
+    readonly id: string; readonly name: string; readonly status: ProjectStatus;
+    readonly role: string; readonly workspaceName: string | null; readonly taskCount: number;
+  }[];
+  // AI spend, «API equivalent» in USD.
+  readonly usage: { readonly costUsd30d: number; readonly costUsdTotal: number; readonly runs30d: number };
+  readonly activity: {
+    readonly tasksCreated30d: number;
+    readonly comments30d: number;
+    readonly activeSessions: number;
+    readonly lastLoginAt: string | null;
+    readonly lastSeenAt: string | null;
+  };
+  readonly history: readonly AdminAuditEntry[];
+};
+
+export type AdminPlanTerm =
+  | { readonly kind: 'extend'; readonly days: number }
+  | { readonly kind: 'until'; readonly date: string } // ISO
+  | { readonly kind: 'unlimited' };
 
 export type AdminUserPatch = {
   readonly displayName?: string;
@@ -138,7 +209,12 @@ export type PlatformStats = {
 export interface AdminRepository {
   getPlatformStats(): Promise<PlatformStats>;
   listProjects(): Promise<AdminProject[]>;
-  listUsers(): Promise<AdminUser[]>;
+  listUsers(query: AdminUserListQuery): Promise<AdminUserPage>;
+  getUserOverview(id: string): Promise<AdminUserOverview>;
+  signOutEverywhere(id: string): Promise<void>;
+  // Sends the usual «Забыли пароль?» letter; returns the address it went to.
+  sendPasswordReset(id: string): Promise<{ email: string }>;
+  bulkSetPlan(input: { userIds: readonly string[]; plan: 'prime' | 'vip'; term: AdminPlanTerm }): Promise<{ updated: number; missing: readonly string[] }>;
   updateUser(id: string, patch: AdminUserPatch): Promise<void>;
   getUserDeletionPreview(id: string): Promise<AdminUserDeletionPreview>;
   deleteUser(id: string): Promise<void>;
