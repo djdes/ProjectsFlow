@@ -2560,3 +2560,40 @@ test('AI: сегмент в проекте без явного ответств�
     ['mag', 'u2'], ['mag', 'u2'], ['mag', 'u2'],
   ]);
 });
+
+// Прод, 28.10.2026, черновик _3x6GOCD3NQc: сообщение целиком, AI-путь. Модель положила все
+// шесть пунктов в TasksFlow (угадала по «tasksflow.ru») и не нашла Михаила среди его
+// участников — в сегментах assigneeUserId: null, assigneeName: 'tepei_kms'. Задачи ушли автору.
+test('прод-регрессия: «@tepei_kms … маг производство … tasksflow.ru» — задачи Михаилу, не в TasksFlow', async () => {
+  const text = '@tepei_kms по нашим задачам маг производство, надо сегодня завтра всё закрыть, чтобы с пятницы начать новые. '
+    + '1) По листу что на утверждении, там много вопросов по ценам было, не понятно обновил или нет в 1с и новые позиции ввел или нет '
+    + '2) Гороховый и щи у тебя в работе, кидай в колонку вручную 3) То что просрочено надо делать в первую очередь '
+    + '4) Покраска подложек 5) Предложи пару блюд ГЦ ХЦ для сабa на доставку в кофейню 6) По магазину давай закрепим что утром проверяешь витрины. '
+    + 'задачи которые повторяются ежедневно будут в tasksflow.ru';
+  const seg = (id: string) => ({
+    id, title: `Пункт ${id}`, simpleBody: 'Тело', projectId: 'tf', projectName: 'TasksFlow', confidence: 0.9,
+    assigneeUserId: null, assigneeName: 'tepei_kms', deadline: null,
+  });
+  const h = makeHarness({
+    projects: [{ id: 'tf', name: 'TasksFlow' }, { id: 'mag', name: 'MAG Производство' }],
+    shared: [{ id: 'u2', displayName: 'Михаил', email: 'm@e.com' }],
+    telegramUsernames: { tepei_kms: 'u2' },
+    projectMembers: { tf: [], mag: ['u2'] },
+    aiSegments: ['1', '2', '3', '4', '5', '6'].map(seg),
+  });
+  await h.service.startFromMessage(111, 500, text);
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  assert.equal(draft.assigneeUserId, 'u2');
+  assert.equal(draft.segments!.length, 6);
+  for (const s of draft.segments!) {
+    assert.equal(s.assigneeUserId, 'u2');
+    assert.notEqual(s.projectId, 'tf');
+  }
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 6);
+  for (const c of h.createTaskCalls) {
+    assert.equal(c.assigneeUserId, 'u2');
+    assert.notEqual(c.projectId, 'tf');
+  }
+});
