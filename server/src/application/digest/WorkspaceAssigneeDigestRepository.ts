@@ -29,6 +29,7 @@ export type SaveWorkspaceAssigneeDigestSettingsInput = {
   readonly eodReminderEnabled: boolean;
   readonly eodReminderHour: number;
   readonly eodReminderMinute: number;
+  readonly urgentRemindersEnabled: boolean;
 };
 
 export interface WorkspaceAssigneeDigestRepository {

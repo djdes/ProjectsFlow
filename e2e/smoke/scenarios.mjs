@@ -1220,6 +1220,13 @@ export const scenarios = [
         await t.visible(page.getByRole('heading', { name: 'Команда «Смоук»' }), 'заголовок «Команда «Смоук»»');
         await t.visible(page.getByText('Вера Лебедева').first(), 'участник «Вера Лебедева»');
       });
+      await t.check('включатель напоминаний о срочных задачах', async () => {
+        const urgent = page.getByRole('switch', { name: 'Напоминания о срочных задачах' });
+        await t.visible(urgent, 'переключатель «Срочные задачи»');
+        if ((await urgent.getAttribute('aria-checked')) !== 'true') {
+          throw new Error('напоминания о срочных задачах должны быть включены по умолчанию');
+        }
+      });
       await t.pageChecks('настройки пространства');
     },
   },

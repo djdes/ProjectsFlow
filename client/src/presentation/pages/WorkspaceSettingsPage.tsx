@@ -530,6 +530,7 @@ type AssigneeDigestDraft = {
   eodReminderEnabled: boolean;
   eodReminderHour: number;
   eodReminderMinute: number;
+  urgentRemindersEnabled: boolean;
 };
 
 function AssigneeDigestCard({
@@ -617,6 +618,7 @@ function AssigneeDigestCard({
           eodReminderEnabled: result.settings.eodReminderEnabled,
           eodReminderHour: result.settings.eodReminderHour,
           eodReminderMinute: result.settings.eodReminderMinute,
+          urgentRemindersEnabled: result.settings.urgentRemindersEnabled,
         });
         setMembers(result.members);
         setGroups(history);
@@ -721,6 +723,7 @@ function AssigneeDigestCard({
         eodReminderEnabled: draft.eodReminderEnabled,
         eodReminderHour: draft.eodReminderHour,
         eodReminderMinute: draft.eodReminderMinute,
+        urgentRemindersEnabled: draft.urgentRemindersEnabled,
       });
       update({
         enabled: settings.enabled,
@@ -738,6 +741,7 @@ function AssigneeDigestCard({
         eodReminderEnabled: settings.eodReminderEnabled,
         eodReminderHour: settings.eodReminderHour,
         eodReminderMinute: settings.eodReminderMinute,
+        urgentRemindersEnabled: settings.urgentRemindersEnabled,
       });
       // Режим сверки пространства (db/155) сохраняем отдельным вызовом: он живёт на самом
       // пространстве, а не в настройках рассылки. Best-effort — остальное уже сохранено.
@@ -1268,6 +1272,19 @@ function AssigneeDigestCard({
                 </div>
                 <span className="text-xs text-muted-foreground">
                   напомнить обновить статусы в группе
+                </span>
+              </div>
+              <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
+                <Switch
+                  checked={draft.urgentRemindersEnabled}
+                  disabled={!canManage}
+                  aria-label="Напоминания о срочных задачах"
+                  onCheckedChange={(urgentRemindersEnabled) => update({ urgentRemindersEnabled })}
+                />
+                <Label className="min-w-32">Срочные задачи</Label>
+                <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  пн–пт в&nbsp;8:00 и&nbsp;16:00 — исполнителю в&nbsp;личку бота и&nbsp;по&nbsp;каждой
+                  задаче в&nbsp;группу (приоритет «Срочно»/«Высокий» или слово «срочно» в&nbsp;тексте)
                 </span>
               </div>
               <div className={cn('space-y-2 py-3', GROUP_CLASS)}>

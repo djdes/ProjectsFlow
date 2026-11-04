@@ -29,6 +29,8 @@ export type WorkspaceAssigneeDigestSettings = {
   readonly eodReminderHour: number;
   readonly eodReminderMinute: number;
   readonly eodReminderLastSentOn: string | null;
+  // Weekday 08:00 / 16:00 reminders about urgent tasks (db/179).
+  readonly urgentRemindersEnabled: boolean;
   readonly lastSentOn: string | null;
 };
 
@@ -65,6 +67,7 @@ export type SaveWorkspaceAssigneeDigestInput = {
   readonly eodReminderEnabled: boolean;
   readonly eodReminderHour: number;
   readonly eodReminderMinute: number;
+  readonly urgentRemindersEnabled: boolean;
 };
 
 export type WorkspaceAssigneeDigestSendResult = {

@@ -359,6 +359,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           eodReminderHour: 19,
           eodReminderMinute: 0,
           eodReminderLastSentOn: null,
+          urgentRemindersEnabled: true,
           lastSentOn: null,
         },
         members: PEOPLE.map((p) => ({

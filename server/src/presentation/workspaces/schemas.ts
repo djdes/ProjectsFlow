@@ -72,6 +72,8 @@ export const saveWorkspaceAssigneeDigestSchema = z
     eodReminderEnabled: z.boolean().default(false),
     eodReminderHour: z.number().int().min(0).max(23).default(17),
     eodReminderMinute: z.number().int().min(0).max(59).default(20),
+    // Старый клиент поле не шлёт — не выключаем напоминания молча.
+    urgentRemindersEnabled: z.boolean().default(true),
   })
   .refine((value) => !value.enabled || value.telegramGroupChatId !== null, {
     message: 'Выберите Telegram-группу для рассылки',

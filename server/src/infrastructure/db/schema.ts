@@ -1913,6 +1913,8 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
     eodReminderHour: tinyint('eod_reminder_hour').notNull().default(17),
     eodReminderMinute: tinyint('eod_reminder_minute').notNull().default(20),
     eodReminderLastSentOn: date('eod_reminder_last_sent_on', { mode: 'string' }),
+    // Напоминания о срочных задачах в 8:00 и 16:00 по будням (db/179).
+    urgentRemindersEnabled: boolean('urgent_reminders_enabled').notNull().default(true),
     lastSentOn: date('last_sent_on', { mode: 'string' }),
     testDeliveries: json('test_deliveries').$type<
       Array<{ chatId: number; messageIds: number[] }> | null
@@ -2626,3 +2628,15 @@ export const leadDigestState = mysqlTable('lead_digest_state', {
 });
 
 export type LeadDigestStateRow = typeof leadDigestState.$inferSelect;
+
+// Учёт напоминаний о срочных задачах (db/179): строка на задачу и слот 'YYYY-MM-DD@08|16'.
+// Ставится до отправки (INSERT IGNORE) — повтор после рестарта невозможен.
+export const urgentTaskReminders = mysqlTable(
+  'urgent_task_reminders',
+  {
+    taskId: char('task_id', { length: 36 }).notNull(),
+    slotKey: varchar('slot_key', { length: 16 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.taskId, t.slotKey] })],
+);

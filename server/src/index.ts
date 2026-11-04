@@ -313,6 +313,9 @@ import { SendLeadDigest } from './application/lead/SendLeadDigest.js';
 import { DrizzleLeadDigestStateRepository } from './infrastructure/repositories/DrizzleLeadDigestStateRepository.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { scheduledBroadcastsPaused } from './infrastructure/scheduler/broadcastPause.js';
+import { UrgentTaskReminderScheduler } from './infrastructure/scheduler/UrgentTaskReminderScheduler.js';
+import { SendUrgentTaskReminders } from './application/urgent-reminder/SendUrgentTaskReminders.js';
+import { DrizzleUrgentTaskReminderRepository } from './infrastructure/repositories/DrizzleUrgentTaskReminderRepository.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
@@ -3548,6 +3551,21 @@ const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   isPaused: scheduledBroadcastsPaused,
 });
 workspaceAssigneeDigestScheduler.start();
+
+// Срочные задачи (приоритет 1–2 или «срочно» в тексте): по будням в 8:00 и 16:00 МСК
+// исполнителю в личку бота и по задаче в рабочий чат пространства (db/179).
+const urgentTaskReminderScheduler = new UrgentTaskReminderScheduler({
+  send: new SendUrgentTaskReminders({
+    reminders: new DrizzleUrgentTaskReminderRepository(db),
+    settings: workspaceAssigneeDigestRepo,
+    users: userRepo,
+    telegram: telegramClient,
+    appUrl: appBaseUrl,
+    messageTasks: telegramMessageTaskRepo,
+  }),
+  isPaused: scheduledBroadcastsPaused,
+});
+urgentTaskReminderScheduler.start();
 
 // Ежедневная личная сводка руководителям (role='lead'): в личный чат бота и на почту.
 // Групповые чаты не задействованы — командная картина не должна утекать всей команде

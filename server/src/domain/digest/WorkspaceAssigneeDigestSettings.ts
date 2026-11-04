@@ -29,6 +29,8 @@ export type WorkspaceAssigneeDigestSettings = {
   readonly eodReminderHour: number;
   readonly eodReminderMinute: number;
   readonly eodReminderLastSentOn: string | null;
+  // Напоминания о срочных задачах по будням в 8:00 и 16:00 (db/179). По умолчанию включено.
+  readonly urgentRemindersEnabled: boolean;
   readonly lastSentOn: string | null;
 };
 
@@ -57,6 +59,7 @@ export function defaultWorkspaceAssigneeDigestSettings(
     eodReminderHour: 17,
     eodReminderMinute: 20,
     eodReminderLastSentOn: null,
+    urgentRemindersEnabled: true,
     lastSentOn: null,
   };
 }
