@@ -36,7 +36,8 @@ test('cleanup: у assistant отдельный, более длинный stale-
   assert.ok(interactive && assistant);
 
   assert.deepEqual([...interactive.modes], ['improve', 'compose', 'compose-advanced']);
-  assert.deepEqual([...assistant.modes], ['assistant']);
+  // text (шлюз Codex) — машинная очередь, тот же длинный таймаут, что у assistant.
+  assert.deepEqual([...assistant.modes], ['assistant', 'text']);
 
   assert.equal(now.getTime() - interactive.olderThan.getTime(), 5 * 60 * 1000);
   assert.equal(now.getTime() - assistant.olderThan.getTime(), 15 * 60 * 1000);

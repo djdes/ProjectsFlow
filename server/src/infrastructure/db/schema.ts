@@ -1169,10 +1169,11 @@ export const aiPromptJobs = mysqlTable(
     // Режим job'а: 'improve' (legacy — одиночное улучшение текста, plain в improved_text)
     // | 'compose' (pass-1: разбивка + «Простой» + классификация, JSON-строка в improved_text)
     // | 'compose-advanced' (pass-2: ленивый «Продвинутый» по сегментам pass-1)
-    // | 'assistant' (невидимая очередь ИИ-ассистентов продуктов: DocsFlow/ScanFlow).
+    // | 'assistant' (невидимая очередь ИИ-ассистентов продуктов: DocsFlow/ScanFlow)
+    // | 'text' (универсальный текстовый шлюз Codex: POST /api/ai/text-jobs).
     // См. db/060_ai_prompt_compose.sql + db/065_ai_prompt_compose_advanced.sql
-    // + db/156_ai_prompt_jobs_assistant_mode.sql.
-    mode: mysqlEnum('mode', ['improve', 'compose', 'compose-advanced', 'assistant'])
+    // + db/156_ai_prompt_jobs_assistant_mode.sql + db/180_ai_prompt_jobs_text_mode.sql.
+    mode: mysqlEnum('mode', ['improve', 'compose', 'compose-advanced', 'assistant', 'text'])
       .notNull()
       .default('improve'),
     // MEDIUMTEXT (db/066): свободный текст до 50000 символов (≈100КБ в utf8mb4) и JSON

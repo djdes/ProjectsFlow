@@ -255,6 +255,12 @@ MCP и агентский REST не передают задачи воркеру
    выше. Не молча: всегда подтверждай move у юзера через AskUserQuestion.
 10. **Актуализация git (`git fetch`):** всегда начинай работу, создание веток и подготовку коммита/PR с `git fetch origin --prune` и актуализации локальной `main` и рабочей ветки относительно `origin/main` (`git pull --ff-only origin main`, `git rebase origin/main`), чтобы коммиты и ветки никогда не отставали от удалённого репозитория.
 
+## Codex-шлюз для других проектов (`/api/ai/text-jobs`, `/api/ai/image-jobs`)
+
+Текст («упрости», «напиши пост») и картинки по подписке Codex для любых проектов: POST задачи
+с account-токеном агента → long-poll результата. Исполняет Ralph (`ai-job-worker.ps1` → `Do-Text`,
+image-api). Контракт, лимиты и примеры — [docs/codex-gateway.md](docs/codex-gateway.md).
+
 ## LLM: подписка ChatGPT по коду (модуль `llm`, db/157)
 
 Все LLM-запросы платформы идут в GPT через одну подписку ChatGPT, которую админ подключает по

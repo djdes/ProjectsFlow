@@ -193,6 +193,40 @@ test('improve: у проекта нет диспетчера — по-прежн
   );
 });
 
+// --- text (текстовый шлюз Codex: POST /api/ai/text-jobs) ---
+
+test('text (inbox): свой bucket 300/час, конверт доходит как есть, KB не собирается', async () => {
+  const { deps, hits, created } = makeDeps();
+  const envelope = JSON.stringify({ v: 1, instructions: 'Упрости', input: 'Сложный текст' });
+  const job = await new EnqueueAiPromptJob(deps).execute({
+    userId: 'u1',
+    text: envelope,
+    projectId: null,
+    mode: 'text',
+  });
+
+  assert.equal(job.mode, 'text');
+  assert.equal(created[0]?.inputText, envelope);
+  assert.equal(created[0]?.kbContext, null);
+  assert.equal(created[0]?.dispatcherUserId, 'disp-1');
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0]?.bucket, 'ai-text:u1');
+  assert.equal(hits[0]?.perHour, 300);
+});
+
+test('text: у проекта нет диспетчера — fallback на дефолтного, KB не собирается', async () => {
+  const { deps, created } = makeProjectDeps({ dispatcherUserId: null, defaultDispatcher: 'disp-default' });
+  // KB для text не нужна: makeProjectDeps бросает из listKbDocuments, если её попробуют собрать.
+  await new EnqueueAiPromptJob(deps).execute({
+    userId: 'u1',
+    text: '{"v":1,"instructions":"","input":"x"}',
+    projectId: 'p1',
+    mode: 'text',
+  });
+  assert.equal(created[0]?.dispatcherUserId, 'disp-default');
+  assert.equal(created[0]?.kbContext, null);
+});
+
 test('compose-advanced: при срабатывании лимита — AiPromptRateLimitedError', async () => {
   const { deps } = makeDeps();
   (deps.rateLimiter as unknown as { hit: () => boolean }).hit = () => false;

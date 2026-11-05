@@ -7,6 +7,7 @@ import express, { type Express, type Request, type Response, type RequestHandler
 import { mountBuildAssets } from './staticAssets.js';
 import type { ImageGenerationService } from '../application/image-generation/ImageGenerationService.js';
 import { imageGenerationRouter, imageGenerationAgentRouter } from './image-generation/routes.js';
+import { aiTextJobsRouter } from './ai-text/routes.js';
 import type { VoiceTranscriber } from '../application/telegram/VoiceTranscriber.js';
 import { voiceTranscriptionRouter } from './voice-transcription/routes.js';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
@@ -858,6 +859,9 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], express.json({ limit: '35mb' }));
+  // Текстовый шлюз Codex: до 100000 символов текста + 20000 инструкции — в кириллице это
+  // больше общего лимита 256kb.
+  app.use('/api/ai/text-jobs', express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
@@ -983,6 +987,12 @@ export function createApp(deps: AppDeps): CreatedApp {
     app.use('/api/ai/image-jobs', imageGenerationRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
     app.use('/api/agent/image-jobs', imageGenerationAgentRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
   }
+  // Текстовый шлюз Codex (пара к image-jobs): очередь ai_prompt_jobs, mode='text'.
+  app.use('/api/ai/text-jobs', aiTextJobsRouter({
+    enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
+    waitForAiPromptJob: deps.agent.waitForAiPromptJob,
+    authenticate: deps.agent.authenticateAgentToken,
+  }));
   if (deps.voiceTranscriber) {
     const sttRouter = voiceTranscriptionRouter(deps.voiceTranscriber, deps.agent.authenticateAgentToken);
     app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], sttRouter);
