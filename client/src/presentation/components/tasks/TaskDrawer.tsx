@@ -46,6 +46,8 @@ import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
+import { useCommentNotifyCandidates } from '@/presentation/hooks/useCommentNotifyCandidates';
+import { defaultCommentAudience } from '@/domain/task/defaultCommentAudience';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { CommentBody } from './CommentBody';
@@ -2693,8 +2695,11 @@ function CommentComposer({
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState(false);
-  // Адресация уведомления (по умолчанию — все участники).
-  const [notify, setNotify] = useState<NotifyAudience>({ mode: 'all' });
+  // Адресация уведомления: пока автор не выбрал сам — дефолт сервера (руководитель).
+  const notifyCandidates = useCommentNotifyCandidates(projectId, taskId);
+  const defaultAudience = defaultCommentAudience(notifyCandidates.candidates, null, currentUser?.id ?? null);
+  const [chosenNotify, setNotify] = useState<NotifyAudience | null>(null);
+  const notify = chosenNotify ?? defaultAudience;
   const [pending, setPending] = useState<PendingFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Кандидаты в @-упоминания — все участники кроме автора.
@@ -2728,7 +2733,9 @@ function CommentComposer({
     if ((trimmed.length === 0 && pending.length === 0) || submitting) return;
     setSubmitting(true);
     try {
-      const created = await taskRepository.createComment(projectId, taskId, trimmed || ' ', notify);
+      const created = await taskRepository.createComment(projectId, taskId, trimmed, notify, {
+        attachmentCount: pending.length,
+      });
       markAnswered(taskId);
       const uploaded: TaskAttachment[] = [];
       for (const pf of pending) {
@@ -2857,9 +2864,9 @@ function CommentComposer({
         </button>
         <div className="ms-auto">
           <NotifyAudienceControl
-            projectId={projectId}
-            excludeUserId={currentUser?.id ?? null}
-            members={members}
+            candidates={notifyCandidates.candidates}
+            failed={notifyCandidates.failed}
+            defaultAudience={defaultAudience}
             value={notify}
             onChange={setNotify}
             disabled={submitting}

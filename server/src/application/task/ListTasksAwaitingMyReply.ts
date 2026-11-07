@@ -11,6 +11,7 @@ import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { AssignedTaskView } from './ListTasksAssignedToMe.js';
 import { requireTaskModifyAccess, requireTaskReadAccess } from './taskAuthorization.js';
+import { commentPreviewText } from '../../domain/task/commentContent.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -128,7 +129,7 @@ export class ListTasksAwaitingMyReply {
         commentId: question.id,
         authorUserId: question.ownerUserId,
         authorDisplayName: names.get(question.ownerUserId) ?? '',
-        excerpt: excerptOf(question.body),
+        excerpt: excerptOf(commentPreviewText(question.body)),
         askedAt: question.createdAt,
       },
     }));

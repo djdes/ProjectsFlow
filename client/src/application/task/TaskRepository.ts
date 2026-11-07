@@ -4,6 +4,7 @@ import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskVersionsResult } from '@/domain/task/TaskVersion';
 import type {
   CommentNotifications,
+  CommentNotifyCandidate,
   NotifyAudience,
   TaskComment,
 } from '@/domain/task/TaskComment';
@@ -152,8 +153,12 @@ export interface TaskRepository {
     taskId: string,
     body: string,
     notify?: NotifyAudience,
-    reply?: { replyToCommentId?: string | null; quotedText?: string | null },
+    // attachmentCount — сколько вложений клиент загрузит следом: при > 0 текст может
+    // быть пустым (комментарий из одной картинки).
+    options?: { replyToCommentId?: string | null; quotedText?: string | null; attachmentCount?: number },
   ): Promise<TaskComment>;
+  // Кого можно уведомить о комментарии к задаче и кто выбран по умолчанию.
+  listCommentNotifyCandidates(projectId: string, taskId: string): Promise<CommentNotifyCandidate[]>;
   // Журнал доставки уведомлений по комментарию — для меню ⋮ «Кто уведомлён».
   listCommentNotifications(
     projectId: string,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Bell, BellOff, ChevronDown, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -9,19 +9,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { ProjectMember } from '@/domain/project/ProjectMembership';
-import type { NotifyAudience } from '@/domain/task/TaskComment';
-import type { TaskAssignee } from '@/domain/task/TaskAssignee';
-import { useContainer } from '@/infrastructure/di/container';
+import type { CommentNotifyCandidate, NotifyAudience } from '@/domain/task/TaskComment';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
 type Props = {
-  projectId: string;
-  // Автор комментария — исключаем из списка получателей (его всё равно отфильтрует сервер).
-  excludeUserId?: string | null;
-  // Уже загруженные участники (если есть) — чтобы не дёргать listMembers повторно.
-  members?: readonly ProjectMember[];
-  assignee?: TaskAssignee | null;
+  // Кого можно уведомить: все, кто может открыть задачу, кроме автора (сервер).
+  // null — список ещё грузится.
+  candidates: readonly CommentNotifyCandidate[] | null;
+  // Список не загрузился — пишем об этом вместо «уведомлять некого».
+  failed?: boolean;
   defaultAudience?: NotifyAudience;
   value: NotifyAudience;
   onChange: (next: NotifyAudience) => void;
@@ -40,43 +36,16 @@ function initials(name: string): string {
 // выпадашка рядом не помещались: в ряду со скрепкой и отправкой на 320px от имени
 // получателя оставалось многоточие, а на 390px — «Денис В…».
 export function NotifyAudienceControl({
-  projectId,
-  excludeUserId,
-  members: membersProp,
-  assignee,
+  candidates,
+  failed,
   defaultAudience = { mode: 'all' },
   value,
   onChange,
   disabled,
 }: Props): React.ReactElement {
-  const { projectRepository } = useContainer();
-  const [fetched, setFetched] = useState<ProjectMember[]>([]);
   const compact = useMediaQuery('(max-width: 639px)');
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    // Если участники переданы пропом — не дёргаем сеть.
-    if (membersProp) return;
-    let alive = true;
-    projectRepository
-      .listMembers(projectId)
-      .then((list) => {
-        if (alive) setFetched(list);
-      })
-      .catch(() => {
-        if (alive) setFetched([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [projectId, membersProp, projectRepository]);
-
-  const members = (membersProp ?? fetched)
-    .filter((m) => m.userId !== excludeUserId)
-    .map((m) => ({ userId: m.userId, displayName: m.user.displayName, avatarUrl: m.user.avatarUrl }));
-  if (assignee && assignee.userId !== excludeUserId && !members.some((m) => m.userId === assignee.userId)) {
-    members.push(assignee);
-  }
+  const members = candidates ?? [];
 
   const notifyOn = value.mode !== 'none';
   const selectedIds =
@@ -220,13 +189,22 @@ export function NotifyAudienceControl({
                     {initials(m.displayName)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="truncate">{m.displayName}</span>
+                <span className="min-w-0">
+                  <span className="block truncate">{m.displayName}</span>
+                  {m.isManager && (
+                    <span className="block text-2xs text-muted-foreground">Руководитель</span>
+                  )}
+                </span>
               </span>
             </DropdownMenuCheckboxItem>
           ))}
           {members.length === 0 && (
             <div className="px-2 py-1.5 text-xs text-muted-foreground">
-              Только вы — уведомлять некого
+              {candidates === null
+                ? 'Загрузка…'
+                : failed
+                  ? 'Не удалось загрузить список'
+                  : 'Только вы — уведомлять некого'}
             </div>
           )}
         </DropdownMenuContent>

@@ -20,6 +20,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCommentNotifyCandidates } from '@/presentation/hooks/useCommentNotifyCandidates';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -108,7 +109,13 @@ function TaskDrawerComposerForm({
   const getSnapshot = useCallback(() => readCommentDraft(draftKey), [draftKey]);
   const draft = useSyncExternalStore(subscribe, getSnapshot);
   const { body, files: pending, reply: replyDraft, sending: submitting } = draft;
-  const defaultAudience = defaultCommentAudience(task.assignee?.userId ?? null, currentUser?.id ?? null);
+  // Кого можно уведомить и кто по умолчанию (руководитель) — решает сервер.
+  const notifyCandidates = useCommentNotifyCandidates(task.projectId, task.id);
+  const defaultAudience = defaultCommentAudience(
+    notifyCandidates.candidates,
+    task.assignee?.userId ?? null,
+    currentUser?.id ?? null,
+  );
   const notify = draft.notify ?? defaultAudience;
   const setBody = (value: string): void => updateCommentDraft(draftKey, (current) => ({ ...current, body: value }));
   const setNotify = (value: NotifyAudience): void => updateCommentDraft(draftKey, (current) => ({ ...current, notify: value }));
@@ -230,13 +237,19 @@ function TaskDrawerComposerForm({
     const sent = beginCommentSend(draftKey);
     if (!sent) return;
     let created: TaskComment;
+    const text = sent.body.trim();
     try {
       created = await taskRepository.createComment(
         task.projectId,
         task.id,
-        effectiveTarget === 'worker' ? workerSessionPrompt(sent.body.trim() || ' ', sessionMode) : sent.body.trim() || ' ',
+        effectiveTarget === 'worker' ? workerSessionPrompt(text, sessionMode) : text,
         sent.notify ?? defaultAudience,
-        sent.reply ? { replyToCommentId: sent.reply.commentId, quotedText: sent.reply.quotedText } : undefined,
+        {
+          replyToCommentId: sent.reply?.commentId ?? null,
+          quotedText: sent.reply?.quotedText ?? null,
+          // Текст может быть пустым: комментарий из одних вложений.
+          attachmentCount: sent.files.length,
+        },
       );
     } catch (error) {
       toast.error(`Не удалось отправить: ${(error as Error).message}`);
@@ -258,6 +271,12 @@ function TaskDrawerComposerForm({
         } catch (error) {
           toast.error(`Не удалось загрузить ${file.file.name}: ${(error as Error).message}`);
         }
+      }
+      // Комментарий без текста держался на вложениях. Не загрузилось ни одно — убираем
+      // пустой комментарий; файлы остаются в черновике для повторной отправки.
+      if (text.length === 0 && sent.files.length > 0 && uploaded.length === 0) {
+        await taskRepository.deleteComment(task.projectId, task.id, created.id).catch(() => undefined);
+        return;
       }
       if (mountedRef.current) {
         setPreview(null);
@@ -293,7 +312,7 @@ function TaskDrawerComposerForm({
   // для position:fixed и зажимал бы плавающее меню форматирования внутри overflow-hidden
   // карточки композера.
   return (
-    <div ref={rootRef} className="bg-background/95 px-3 pbe-3 pbs-2">
+    <div ref={rootRef} data-pf-comment-composer className="bg-background/95 px-3 pbe-3 pbs-2">
       <div className="overflow-clip rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
         {replyDraft && (
           <div className="flex items-center gap-1.5 border-be bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">
@@ -413,10 +432,8 @@ function TaskDrawerComposerForm({
               <Paperclip className="size-4 motion-safe:transition-transform duration-200 ease-out group-hover/at:-rotate-12 group-hover/at:scale-110" />
             </Button>
             <NotifyAudienceControl
-              projectId={task.projectId}
-              excludeUserId={currentUser?.id ?? null}
-              members={members}
-              assignee={task.assignee}
+              candidates={notifyCandidates.candidates}
+              failed={notifyCandidates.failed}
               defaultAudience={defaultAudience}
               value={notify}
               onChange={setNotify}

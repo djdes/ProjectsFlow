@@ -15,6 +15,8 @@ import { parseMentions } from '../task/parseMentions.js';
 import { notificationExcerpt } from '../telegram/notificationExcerpt.js';
 import type { NotificationRepository } from './NotificationRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import { listTaskAudienceMembers } from '../task/taskAudience.js';
+import { commentPreviewText } from '../../domain/task/commentContent.js';
 
 export type DispatchCommentAudience = {
   readonly mode: CommentNotifyMode;
@@ -77,22 +79,12 @@ export class DispatchCommentNotifications {
       this.deps.members.listByProject(input.projectId),
       this.deps.tasks.getById(comment.taskId),
     ]);
+    const preview = commentPreviewText(comment.body);
     if (!project) return;
 
     const approverIds = await this.deps.members.listApproverUserIdsForProject?.(input.projectId) ?? [];
-    const members = [...projectMembers];
-    // Inbox membership contains only its owner; approvers and a delegated assignee
-    // are task-scoped participants, resolved separately without broadening the project.
-    if (project.isInbox && this.deps.users) {
-      const involved = new Set([...approverIds, ...(task?.assignee?.userId ? [task.assignee.userId] : [])]);
-      for (const userId of involved) {
-        if (members.some((m) => m.userId === userId)) continue;
-        if (await this.deps.members.isProjectHidden?.(project.id, userId)) continue;
-        const user = await this.deps.users.getById(userId);
-        if (user) members.push({ projectId: project.id, userId, role: 'viewer', joinedAt: new Date(), user,
-          notificationPrefs: await this.deps.members.getNotificationPrefs(project.id, userId) });
-      }
-    }
+    // Everyone with access to the task: a selected recipient outside this list is dropped.
+    const members = await listTaskAudienceMembers(this.deps, project, task, approverIds, projectMembers);
 
     const projectName = projectDisplayName(project);
     const actorName =
@@ -129,7 +121,7 @@ export class DispatchCommentNotifications {
             type: 'task_changed', action: 'commented', title: 'Новый комментарий',
             projectId: project.id, projectName, taskId: comment.taskId,
             taskExcerpt: (task?.description ?? '').slice(0, 240),
-            detail: comment.body.slice(0, 500), commentId: comment.id,
+            detail: preview.slice(0, 500), commentId: comment.id,
             actorUserId: input.actorUserId, actorDisplayName: actorName, taskAvailable: true,
           },
         });
@@ -154,7 +146,7 @@ export class DispatchCommentNotifications {
             projectName,
             actorDisplayName: actorName,
             taskExcerpt: task?.description ?? '',
-            commentExcerpt: comment.body,
+            commentExcerpt: preview,
             ctaUrl: url,
             ctaLabel: 'Открыть комментарий',
             mentioned: forced,
@@ -169,7 +161,7 @@ export class DispatchCommentNotifications {
     // --- Telegram-канал: base (kind 'comment_on_my_task') + упомянутые (kind 'mention') ---
     const tgText =
       `💬 Новый комментарий в «${escapeTgHtml(projectName)}»:\n` +
-      `${notificationExcerpt(comment.body, this.deps.appUrl, 100)}\n\n` +
+      `${notificationExcerpt(preview, this.deps.appUrl, 100)}\n\n` +
       `<a href="${url}">Открыть комментарий</a>`;
 
     for (const m of base) {
@@ -197,7 +189,7 @@ export class DispatchCommentNotifications {
     // TG_KIND_TO_PREF, so it stays switchable off by the user).
     const tgMentionText =
       `💬 Вас упомянули в комментарии в «${escapeTgHtml(projectName)}»:\n` +
-      `${notificationExcerpt(comment.body, this.deps.appUrl, 100)}\n\n` +
+      `${notificationExcerpt(preview, this.deps.appUrl, 100)}\n\n` +
       `<a href="${url}">Открыть комментарий</a>`;
 
     // Only for mode 'all': 'selected'/'none' are an explicit narrowing by the author and

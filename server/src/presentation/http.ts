@@ -189,6 +189,7 @@ import type { RealtimeEvent } from '../domain/realtime/RealtimeEvent.js';
 import type { ProjectNotificationService } from '../application/notifications/ProjectNotificationService.js';
 import type { DispatchCommentNotifications } from '../application/notifications/DispatchCommentNotifications.js';
 import type { GetCommentNotifications } from '../application/task/GetCommentNotifications.js';
+import type { ListCommentNotifyCandidates } from '../application/task/ListCommentNotifyCandidates.js';
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { ListUserProjectsWithDispatcher } from '../application/admin/ListUserProjectsWithDispatcher.js';
@@ -694,6 +695,7 @@ type AppDeps = {
     readonly broadcastTelegram: BroadcastTelegramNotificationByTask;
     readonly dispatchCommentNotifications: DispatchCommentNotifications;
     readonly getCommentNotifications: GetCommentNotifications;
+    readonly listCommentNotifyCandidates: ListCommentNotifyCandidates;
     readonly projectRepo: ProjectRepository;
   };
   readonly digest: {

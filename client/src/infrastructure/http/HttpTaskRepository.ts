@@ -11,6 +11,7 @@ import type { PlanId } from '@/domain/usage/Usage';
 import type {
   CommentNotification,
   CommentNotifications,
+  CommentNotifyCandidate,
   NotifyAudience,
   TaskComment,
   CommentAcknowledgement,
@@ -399,17 +400,24 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     body: string,
     notify?: NotifyAudience,
-    reply?: { replyToCommentId?: string | null; quotedText?: string | null },
+    options?: { replyToCommentId?: string | null; quotedText?: string | null; attachmentCount?: number },
   ): Promise<TaskComment> {
     const payload: Record<string, unknown> = { body };
     if (notify) payload['notify'] = notify;
-    if (reply?.replyToCommentId) payload['replyToCommentId'] = reply.replyToCommentId;
-    if (reply?.quotedText) payload['quotedText'] = reply.quotedText;
+    if (options?.replyToCommentId) payload['replyToCommentId'] = options.replyToCommentId;
+    if (options?.quotedText) payload['quotedText'] = options.quotedText;
+    if (options?.attachmentCount) payload['attachmentCount'] = options.attachmentCount;
     const { comment } = await this.client.post<{ comment: CommentDto }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,
       payload,
     );
     return commentFromDto(comment);
+  }
+  async listCommentNotifyCandidates(projectId: string, taskId: string): Promise<CommentNotifyCandidate[]> {
+    const { candidates } = await this.client.get<{ candidates: CommentNotifyCandidate[] }>(
+      `/projects/${projectId}/tasks/${taskId}/comment-notify-candidates`,
+    );
+    return candidates;
   }
   async listCommentNotifications(
     projectId: string,

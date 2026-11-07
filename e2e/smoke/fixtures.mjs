@@ -39,6 +39,9 @@ const PEOPLE = [ME, ...COLLEAGUES];
 const person = (id) => PEOPLE.find((p) => p.id === id);
 
 export const WORKSPACE_ID = 'ws-team';
+// 1×1 PNG for uploaded comment images.
+export const SMOKE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const SMOKE_PNG_DATA_URL = `data:image/png;base64,${SMOKE_PNG_BASE64}`;
 export const INBOX_ID = 'p-inbox-anna';
 const VERA_INBOX_ID = 'p-inbox-vera';
 
@@ -394,7 +397,14 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     }],
     [/^\/projects\/([^/]+)\/tasks$/, ([, id]) =>
       json({ tasks: state.tasks.filter((t) => t.projectId === id) })],
-    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/comments$/, () => json({ comments: [] })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/comments$/, ([, , taskId]) => json({ comments: state.comments?.[taskId] ?? [] })],
+    // Who the comment author may notify; the server marks the manager as the default.
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/comment-notify-candidates$/, () => json({
+      candidates: state.notifyCandidates ?? COLLEAGUES.map((p) => ({
+        userId: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl,
+        isDefault: p.id === 'u-boris', isManager: p.id === 'u-boris',
+      })),
+    })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/attachments$/, () => json({ attachments: [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/commits$/, () => json({ commits: [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/versions$/, ([, , taskId]) =>
@@ -815,6 +825,29 @@ function mutate(state, method, path, body) {
       return json({ task: res.body.task, commentId: `c-${Date.now()}` });
     }
     if (method === 'POST' && rest === '/approval/withdraw') return touch({ status: 'manual' });
+    if (method === 'POST' && rest === '/comments') {
+      const now = new Date().toISOString();
+      const comment = {
+        id: `c-smoke-${Object.values(state.comments ?? {}).flat().length + 1}`,
+        taskId, ownerUserId: ME.id, body: body?.body ?? '', actorKind: 'user', agentName: null,
+        notifyMode: body?.notify?.mode ?? 'all', replyToCommentId: null, quotedText: null,
+        createdAt: now, updatedAt: now, attachments: [], acknowledgements: [],
+      };
+      state.comments ??= {};
+      state.comments[taskId] = [...(state.comments[taskId] ?? []), comment];
+      return json({ comment }, 201);
+    }
+    const commentUpload = rest.match(/^\/comments\/([^/]+)\/attachments$/);
+    if (method === 'POST' && commentUpload) {
+      const comment = state.comments?.[taskId]?.find((c) => c.id === commentUpload[1]);
+      if (!comment) return json({ error: 'not_found' }, 404);
+      const attachment = {
+        id: `a-smoke-${comment.attachments.length + 1}`, taskId, filename: 'screenshot.png', mimeType: 'image/png',
+        sizeBytes: 68, url: SMOKE_PNG_DATA_URL, uploadedAt: new Date().toISOString(),
+      };
+      comment.attachments.push(attachment);
+      return json({ attachment }, 201);
+    }
     if (method === 'POST' && rest === '/assign-to-project') {
       return touch({ projectId: body?.targetProjectId ?? task.projectId, context: undefined });
     }

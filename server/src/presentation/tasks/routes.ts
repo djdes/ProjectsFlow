@@ -40,6 +40,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { DispatchCommentNotifications } from '../../application/notifications/DispatchCommentNotifications.js';
 import type { GetCommentNotifications } from '../../application/task/GetCommentNotifications.js';
+import type { ListCommentNotifyCandidates } from '../../application/task/ListCommentNotifyCandidates.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
@@ -125,6 +126,8 @@ type Deps = {
   readonly dispatchCommentNotifications: DispatchCommentNotifications;
   // Чтение журнала «кто уведомлён» для меню ⋮ у комментария.
   readonly getCommentNotifications: GetCommentNotifications;
+  // Кого автор комментария может уведомить + кто выбран по умолчанию (композер).
+  readonly listCommentNotifyCandidates: ListCommentNotifyCandidates;
   // Для получения имени проекта в TG-сообщениях.
   readonly projectRepo: ProjectRepository;
 };
@@ -725,6 +728,21 @@ export function tasksRouter(deps: Deps): Router {
     }
   });
 
+  // Адресаты «Уведомить → Выбрать» в композере: все, кто может открыть задачу, кроме
+  // автора; isDefault — кого композер выбирает сам (руководитель, см. defaultNotifyRecipients).
+  router.get('/:taskId/comment-notify-candidates', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const candidates = await deps.listCommentNotifyCandidates.execute(
+        req.params['projectId'] as string,
+        req.user!.id,
+        req.params['taskId'] as string,
+      );
+      res.json({ candidates });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   // Журнал доставки уведомлений по комментарию — для меню ⋮ «Кто уведомлён».
   router.get(
     '/:taskId/comments/:commentId/notifications',
@@ -774,6 +792,7 @@ export function tasksRouter(deps: Deps): Router {
         notifyUserIds: audience.userIds,
         replyToCommentId: body.replyToCommentId ?? null,
         quotedText: body.quotedText ?? null,
+        attachmentCount: body.attachmentCount ?? 0,
       });
       deps.notifyTaskChanged(projectId);
       deps.notifyCommentAdded(

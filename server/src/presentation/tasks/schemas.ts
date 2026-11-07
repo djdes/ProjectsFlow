@@ -106,8 +106,11 @@ export const notifyAudienceSchema = z.object({
 
 // Лимит 10000 символов — на пару порядков больше типичного комментария, но защищает
 // от случайной вставки гигантского лога.
+// Пустой текст допустим, если клиент следом загружает вложения (attachmentCount > 0):
+// комментарий из одной картинки. Пустой комментарий без вложений отбивает CreateTaskComment.
 export const createTaskCommentSchema = z.object({
-  body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
+  body: z.string().trim().max(10000),
+  attachmentCount: z.number().int().min(0).max(100).optional(),
   // Опционально: старые клиенты без поля → дефолт 'all' на роуте.
   notify: notifyAudienceSchema.optional(),
   // Ответ/цитата (db/080). Опциональны → старые клиенты не присылают.

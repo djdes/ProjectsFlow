@@ -148,6 +148,7 @@ import { ReorderFavoriteProjects } from './application/project/ReorderFavoritePr
 import { DispatchTaskChangeNotifications } from './application/notifications/DispatchTaskChangeNotifications.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { DispatchCommentNotifications } from './application/notifications/DispatchCommentNotifications.js';
+import { ListCommentNotifyCandidates } from './application/task/ListCommentNotifyCandidates.js';
 import { GetCommentNotifications } from './application/task/GetCommentNotifications.js';
 import { DrizzleCommentNotificationLogRepository } from './infrastructure/repositories/DrizzleCommentNotificationLogRepository.js';
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
@@ -3038,6 +3039,12 @@ const { app, devProxyUpgrade } = createApp({
     maybeReopenForClarification,
     broadcastTelegram: broadcastTelegramByTask,
     dispatchCommentNotifications,
+    listCommentNotifyCandidates: new ListCommentNotifyCandidates({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      users: userRepo,
+    }),
     getCommentNotifications: new GetCommentNotifications({
       projects: projectRepo,
       members: projectMemberRepo,

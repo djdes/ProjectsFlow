@@ -14,7 +14,7 @@
 //   t.boxFitsCheck(label, selector) — a dialog/sheet fits the screen horizontally,
 //   t.visible / t.hidden / t.waitFor / t.assert / t.waitForMutation — helpers.
 
-import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, WORKSPACE_ID, firstLine } from './fixtures.mjs';
+import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, SMOKE_PNG_BASE64, WORKSPACE_ID, firstLine } from './fixtures.mjs';
 import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
 import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
@@ -993,6 +993,59 @@ export const scenarios = [
         await expectGone(t, card('t-home'), 'задача осталась на исходной доске');
       });
       await t.pageChecks('доска после переноса');
+    },
+  },
+
+  {
+    id: 'task-comment-composer',
+    title: 'Комментарий: картинка без текста и уведомление руководителя по умолчанию',
+    matrix: [['desktop', 'dark'], ['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      const press = (locator) => t.isMobile ? locator.tap() : locator.click();
+      const commentsPath = `/projects/${BOARD_PROJECT_ID}/tasks/t-home/comments`;
+      const shots = process.env.SMOKE_SHOTS_DIR;
+      const shot = async (name) => {
+        if (shots) await page.screenshot({ path: `${shots}/${name}-${t.isMobile ? 'phone' : 'desktop'}.png`, animations: 'disabled' });
+      };
+      await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => page.locator('[data-pf-comment-composer]:visible') });
+      const composer = page.locator('[data-pf-comment-composer]:visible');
+      const audience = composer.getByTitle('Кого уведомить');
+      await t.step('по умолчанию уведомляется руководитель', async () => {
+        await t.waitFor(async () => (await audience.innerText()).includes('Борис Котов'), 'по умолчанию выбран не руководитель');
+      });
+      await t.check('в «Выбрать» можно отметить любого участника', async () => {
+        await press(audience);
+        for (const name of ['Борис Котов', 'Вера Лебедева', 'Глеб Орлов']) {
+          await t.visible(page.getByRole('menuitemcheckbox', { name: new RegExp(name) }), name);
+        }
+        await t.visible(page.getByRole('menuitemcheckbox', { name: /Руководитель/ }), 'метка руководителя');
+        await shot('comment-notify-menu');
+        await page.keyboard.press('Escape');
+      });
+      await t.step('комментарий из одной картинки отправляется без текста', async () => {
+        await composer.locator('input[type="file"]').setInputFiles({
+          name: 'screenshot.png', mimeType: 'image/png', buffer: Buffer.from(SMOKE_PNG_BASE64, 'base64'),
+        });
+        await t.visible(composer.getByRole('button', { name: 'Открыть screenshot.png' }), 'превью картинки в композере');
+        await shot('comment-composer');
+        const send = composer.getByRole('button', { name: /^Отправить/ }).first();
+        await t.waitFor(() => send.isEnabled(), 'кнопка отправки неактивна без текста');
+        await press(send);
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === commentsPath && m.body?.body === '' && m.body?.attachmentCount === 1 &&
+            m.body?.notify?.mode === 'selected' && m.body.notify.userIds?.join() === 'u-boris',
+          'комментарий без текста не отправлен руководителю',
+        );
+        await t.waitForMutation((m) => m.method === 'POST' && m.path.startsWith(`${commentsPath}/`) && m.path.endsWith('/attachments'), 'картинка не загружена');
+        await t.visible(page.locator('img[alt="screenshot.png"]'), 'картинка в ленте комментариев');
+        t.assert(
+          !t.journal.mutations.some((m) => m.method === 'DELETE' && m.path.startsWith(`${commentsPath}/`)),
+          'комментарий удалён после загрузки',
+        );
+      });
+      await shot('comment-sent');
+      await t.pageChecks('окно задачи после комментария с картинкой');
     },
   },
 
