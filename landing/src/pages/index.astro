@@ -2,6 +2,8 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import ShowcaseApp from '@/components/showcase/ShowcaseApp';
+import { PLANS } from '@/data/pricing';
+import { FAQ } from '@/data/faq';
 import { readingMinutes, formatDate } from '@/lib/blog';
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
@@ -18,8 +20,57 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
     minutes: readingMinutes(p.body ?? ''),
     description: p.data.description,
   }));
+
+const SITE = 'https://projectsflow.ru';
+
+// Структурированные данные для поиска: бренд, сайт, продукт с ценами тарифов и FAQ.
+// Цены и вопросы берутся из тех же data-файлов, что и видимая страница — расхождений не будет.
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'ProjectsFlow',
+    url: SITE,
+    logo: `${SITE}/favicon.svg`,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'ProjectsFlow',
+    url: SITE,
+    inLanguage: 'ru-RU',
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'ProjectsFlow',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    url: SITE,
+    inLanguage: 'ru-RU',
+    description:
+      'Платформа для тех, кто строит с AI: описываешь идею — проект доводится до результата. Канбан, проекты, делегирование задач AI.',
+    offers: PLANS.map((p) => ({
+      '@type': 'Offer',
+      name: p.name,
+      price: String(p.priceRub),
+      priceCurrency: 'RUB',
+      url: `${SITE}${p.href}`,
+      availability: 'https://schema.org/InStock',
+    })),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  },
+];
 ---
 
-<BaseLayout>
+<BaseLayout jsonLd={jsonLd}>
   <ShowcaseApp client:load posts={posts} appBase={appBase} />
 </BaseLayout>
