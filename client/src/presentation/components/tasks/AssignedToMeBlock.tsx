@@ -288,6 +288,8 @@ function readStoredSection(): InboxSection | null {
   }
 }
 const COLLAPSED_COLUMNS_KEY = 'pf.inbox.collapsedColumns';
+// Свёрнутая полка «На утверждении»: остаётся только шапка со счётчиком.
+const APPROVAL_COLLAPSED_KEY = 'pf.inbox.approvalCollapsed';
 function readStoredFlag(key: string): boolean {
   try {
     return localStorage.getItem(key) === '1';
@@ -3323,6 +3325,20 @@ function ApprovalShelf({
     data: { type: 'approval' },
     disabled: !canDrop || selecting,
   });
+  // Полку можно свернуть до шапки: длинная очередь приёмки выталкивала колонку вниз.
+  // Цель дропа при этом остаётся — сдать работу можно и в свёрнутую полку.
+  const [collapsed, setCollapsed] = useState<boolean>(() => readStoredFlag(APPROVAL_COLLAPSED_KEY));
+  const toggleCollapsed = (): void => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(APPROVAL_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
   // Пустую полку видит и рядовой исполнитель (не только принимающий) — текст по умолчанию
   // объясняет её именно ему: это цель для СВОЕЙ сделанной работы, а не чужая очередь.
   // На телефоне «В работе» и полка — один раздел без перетаскивания между колонками, поэтому
@@ -3343,14 +3359,29 @@ function ApprovalShelf({
       )}
     >
       <div className="flex h-7 items-center gap-1.5 px-[3px] text-ui">
-        <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-approval">
-          <ShieldCheck className="size-3.5 shrink-0 text-approval" strokeWidth={2.3} />
-          На утверждении
-        </span>
-        <span className="tabular-nums text-muted-foreground">{items.length}</span>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Развернуть задачи на утверждении' : 'Свернуть задачи на утверждении'}
+          className="flex min-w-0 items-center gap-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-150',
+              !collapsed && 'rotate-90',
+            )}
+          />
+          <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-approval">
+            <ShieldCheck className="size-3.5 shrink-0 text-approval" strokeWidth={2.3} />
+            На утверждении
+          </span>
+          <span className="tabular-nums text-muted-foreground">{items.length}</span>
+        </button>
         {headerEnd}
       </div>
-      {items.length === 0 ? (
+      {collapsed ? null : items.length === 0 ? (
         <p className="px-1 pbe-1 text-meta leading-snug text-muted-foreground">
           {emptyHint ?? defaultEmptyHint}
         </p>
