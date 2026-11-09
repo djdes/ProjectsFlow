@@ -57,6 +57,22 @@ function MarkdownImpl({
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
         components={{
+          // Ссылки из описаний и комментариев — в новой вкладке: иначе переход уводил со
+          // страницы задачи. Клик не всплывает в контейнеры с onClick (открытие редактора).
+          a: (anchorProps) => {
+            const { node, children: linkChildren, ...props } = anchorProps;
+            void node;
+            return (
+              <a
+                {...props}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {linkChildren}
+              </a>
+            );
+          },
           input: (inputProps) => {
             // node не должен утекать в DOM-атрибуты при spread'е props.
             const { node, ...props } = inputProps;
