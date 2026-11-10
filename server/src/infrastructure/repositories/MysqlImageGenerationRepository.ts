@@ -11,7 +11,7 @@ export class MysqlImageGenerationRepository implements ImageGenerationRepository
        FROM image_generation_jobs WHERE user_id=? AND created_at >= UTC_TIMESTAMP(3) - INTERVAL 1 DAY ORDER BY created_at`, [userId]);
     return {
       active: rows.filter(row => row.status === 'queued' || row.status === 'running').length,
-      remaining: Math.max(0, 10 - rows.length),
+      remaining: Math.max(0, 20 - rows.length),
       releaseAfterSeconds: rows.map(row => Number(row.releaseAfterSeconds)),
     };
   }
@@ -21,7 +21,7 @@ export class MysqlImageGenerationRepository implements ImageGenerationRepository
       await connection.beginTransaction();
       await connection.query('SELECT id FROM users WHERE id=? FOR UPDATE', [job.userId]);
       const [rows] = await connection.query<RowDataPacket[]>(`SELECT COUNT(*) AS total, SUM(status IN ('queued','running')) AS active FROM image_generation_jobs WHERE user_id=? AND created_at >= UTC_TIMESTAMP() - INTERVAL 1 DAY`, [job.userId]);
-      if (Number(rows[0]?.active) >= 2 || Number(rows[0]?.total) >= 10) throw new ImageGenerationError(429, 'Лимит: две генерации одновременно и десять за сутки');
+      if (Number(rows[0]?.active) >= 2 || Number(rows[0]?.total) >= 20) throw new ImageGenerationError(429, 'Лимит: две генерации одновременно и двадцать за сутки');
       await connection.query('INSERT INTO image_generation_jobs (id,user_id,dispatcher_user_id,prompt,conversation_id) VALUES (?,?,?,?,?)', [job.id,job.userId,job.dispatcherUserId,job.prompt,job.conversationId ?? null]);
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
