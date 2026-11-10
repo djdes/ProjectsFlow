@@ -1048,7 +1048,7 @@ export function AutomationDialog({
                     type="number"
                     min={0}
                     max={59}
-                    value={draft.commitSyncMinute}
+                    value={String(draft.commitSyncMinute).padStart(2, '0')}
                     onChange={(e) =>
                       update({ commitSyncMinute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
                     }
@@ -1226,7 +1226,7 @@ export function AutomationDialog({
                       type="number"
                       min={0}
                       max={59}
-                      value={digest.minute}
+                      value={String(digest.minute).padStart(2, '0')}
                       onChange={(e) =>
                         updateDigest({ minute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
                       }
