@@ -74,6 +74,9 @@ const ROLE_SELECT_CLASS =
 // Группа настроек внутри карточки — серая панель вместо рамки (дизайн C4).
 const GROUP_CLASS = 'rounded-lg bg-panel px-3';
 
+// Минуты в полях «ЧЧ : ММ» — двумя цифрами: «17 : 00», а не «17 : 0».
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
 
 
 export function WorkspaceSettingsPage(): React.ReactElement {
@@ -1029,7 +1032,7 @@ function AssigneeDigestCard({
                     type="number"
                     min={0}
                     max={59}
-                    value={draft.minute}
+                    value={pad2(draft.minute)}
                     disabled={!canManage}
                     className="w-16"
                     onChange={(event) =>
@@ -1079,7 +1082,7 @@ function AssigneeDigestCard({
                       type="number"
                       min={0}
                       max={59}
-                      value={draft.commitSyncMinute}
+                      value={pad2(draft.commitSyncMinute)}
                       disabled={!canManage}
                       className="w-16"
                       onChange={(event) =>
@@ -1257,7 +1260,7 @@ function AssigneeDigestCard({
                     type="number"
                     min={0}
                     max={59}
-                    value={draft.eodReminderMinute}
+                    value={pad2(draft.eodReminderMinute)}
                     disabled={!canManage}
                     className="w-16"
                     onChange={(event) =>

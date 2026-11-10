@@ -351,7 +351,13 @@ function AssignForm({
         <Label className="text-xs">Сотрудник</Label>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start font-normal sm:w-44">
+            <Button
+              type="button"
+              variant="outline"
+              // flex (не inline-flex), иначе кнопка встаёт в строку с подписью «Сотрудник»,
+              // а не под ней; h-9 — высота соседних полей «Доля %» и «С даты».
+              className="flex h-9 min-h-9 w-full justify-start px-3 font-normal sm:h-9 sm:w-44"
+            >
               <span className="truncate">{selected?.name ?? 'Выбрать…'}</span>
             </Button>
           </DropdownMenuTrigger>
@@ -376,7 +382,7 @@ function AssignForm({
           <Input id="astart" type="date" className="sm:w-40" value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
       </div>
-      <Button size="sm" className="w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="w-full sm:h-9 sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Назначить
       </Button>
     </div>
@@ -524,7 +530,7 @@ function ExpenseForm({
         <Label className="text-xs" htmlFor="exp-date">Дата</Label>
         <Input id="exp-date" type="date" className="sm:w-40" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <Button size="sm" className="col-span-2 w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="col-span-2 w-full sm:h-9 sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Добавить
       </Button>
     </div>
@@ -573,7 +579,7 @@ function IncomeForm({
         <Label className="text-xs" htmlFor="inc-date">Дата</Label>
         <Input id="inc-date" type="date" className="sm:w-40" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <Button size="sm" className="col-span-2 w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="col-span-2 w-full sm:h-9 sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Добавить
       </Button>
     </div>
