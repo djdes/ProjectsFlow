@@ -71,7 +71,7 @@ GET  /api/ai/image-jobs/{id}/image PNG, когда status = succeeded
 GET  /api/ai/image-jobs/quota      { active, remaining, releaseAfterSeconds[] }
 ```
 
-Лимит: две генерации одновременно и десять за скользящие сутки на аккаунт.
+Лимит: две генерации одновременно и двадцать за скользящие сутки на аккаунт.
 
 ## Примеры
 
