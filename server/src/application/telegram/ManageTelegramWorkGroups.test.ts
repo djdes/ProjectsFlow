@@ -10,8 +10,8 @@ import type {
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import { NotWorkspaceLeadError, CannotInviteToDefaultWorkspaceError } from '../../domain/workspace/errors.js';
 import {
+  TelegramGroupNotAdminError,
   TelegramGroupNotFoundError,
-  TelegramGroupNotMemberError,
   TelegramGroupTakenError,
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
@@ -71,7 +71,8 @@ function makeService(opts: {
   roles?: Record<string, WorkspaceRole>;
   kind?: 'team' | 'default';
   telegramUserId?: number | null;
-  memberStatus?: string | null;
+  // Статус отправителя/добавляющего (Telegram id 555) среди администраторов группы.
+  adminStatus?: string | null;
   chatExists?: boolean;
 } = {}) {
   const store = makeRepo();
@@ -98,8 +99,9 @@ function makeService(opts: {
       async getChat(chatId) {
         return opts.chatExists === false ? null : { id: chatId, title: 'Команда', type: 'supergroup' };
       },
-      async getChatMember() {
-        return opts.memberStatus === null ? null : { status: opts.memberStatus ?? 'member' };
+      async getChatAdministrators() {
+        if (opts.adminStatus === null) return null;
+        return [{ userId: 555, status: opts.adminStatus ?? 'administrator' }, { userId: 999, status: 'creator' }];
       },
     },
     botUsername: 'ProjectsFlow_Bot',
@@ -134,11 +136,11 @@ test('createLink: viewer cannot connect work groups, default hub cannot have the
 test('bindFromCode: binds the group once, the code is single-use', async () => {
   const { service, groups } = makeService();
   await service.createLink('ws1', 'lead', 'work');
-  const first = await service.bindFromCode(TOKEN, { id: -1001, title: 'Команда' });
+  const first = await service.bindFromCode(TOKEN, { id: -1001, title: 'Команда' }, 555);
   assert.deepEqual(first, { kind: 'bound', workspaceName: 'Программисты' });
   assert.equal(groups.get(-1001)?.workspaceId, 'ws1');
   assert.equal(groups.get(-1001)?.addedByUserId, 'lead');
-  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1001, title: 'Команда' }), { kind: 'invalid' });
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1001, title: 'Команда' }, 555), { kind: 'invalid' });
 });
 
 test('bindFromCode: same workspace → already; other workspace → taken without its name', async () => {
@@ -146,19 +148,19 @@ test('bindFromCode: same workspace → already; other workspace → taken withou
   groups.set(-1001, { chatId: -1001, workspaceId: 'ws1', title: 'Старое', addedByUserId: null, createdAt: NOW });
   groups.set(-1002, { chatId: -1002, workspaceId: 'ws2', title: 'Офис', addedByUserId: null, createdAt: NOW });
   await service.createLink('ws1', 'lead', 'work');
-  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1001, title: 'Новое' }), {
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1001, title: 'Новое' }, 555), {
     kind: 'already',
     workspaceName: 'Программисты',
   });
   assert.equal(groups.get(-1001)?.title, 'Новое');
   await service.createLink('ws1', 'lead', 'work');
-  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1002, title: 'Офис' }), { kind: 'taken' });
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1002, title: 'Офис' }, 555), { kind: 'taken' });
 });
 
 test('bindFromCode: purpose main sets the digest group instead of a work group', async () => {
   const { service, groups, main } = makeService();
   await service.createLink('ws1', 'viewer', 'main');
-  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1003, title: 'Сводки' }), {
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1003, title: 'Сводки' }, 555), {
     kind: 'main',
     workspaceName: 'Программисты',
   });
@@ -168,10 +170,39 @@ test('bindFromCode: purpose main sets the digest group instead of a work group',
   assert.deepEqual(listed.mainGroup, { chatId: -1003, title: 'Сводки' });
 });
 
-test('addManual: requires a group the bot sees and the actor is a member of', async () => {
+test('bindFromCode: only a group admin can bind; the code survives a refused attempt', async () => {
+  const { service, groups } = makeService({ adminStatus: 'member' });
+  await service.createLink('ws1', 'lead', 'work');
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1001, title: 'Команда' }, 555), { kind: 'not_admin' });
+  assert.equal(groups.size, 0);
+  // Создатель группы (id 999) подключает тем же кодом.
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -1001, title: 'Команда' }, 999), {
+    kind: 'bound',
+    workspaceName: 'Программисты',
+  });
+});
+
+test('remove: disconnecting a group closes waiting onboardings', async () => {
+  const removed: Array<[string, number]> = [];
+  const { service, groups } = makeService();
+  groups.set(-1001, { chatId: -1001, workspaceId: 'ws1', title: 'Команда', addedByUserId: null, createdAt: NOW });
+  const withHook = new ManageTelegramWorkGroups({
+    ...(service as unknown as { deps: ConstructorParameters<typeof ManageTelegramWorkGroups>[0] }).deps,
+    onRemoved: async (workspaceId, chatId) => {
+      removed.push([workspaceId, chatId]);
+    },
+  });
+  await withHook.remove('ws1', 'lead', -1001);
+  assert.deepEqual(removed, [['ws1', -1001]]);
+  await withHook.remove('ws1', 'lead', -1001);
+  assert.equal(removed.length, 1, 'nothing removed → no hook');
+});
+
+test('addManual: requires a group the bot sees and the actor is its admin', async () => {
   await assert.rejects(makeService({ chatExists: false }).service.addManual('ws1', 'lead', -1001), TelegramGroupNotFoundError);
   await assert.rejects(makeService({ telegramUserId: null }).service.addManual('ws1', 'lead', -1001), TelegramNotLinkedError);
-  await assert.rejects(makeService({ memberStatus: 'left' }).service.addManual('ws1', 'lead', -1001), TelegramGroupNotMemberError);
+  await assert.rejects(makeService({ adminStatus: 'member' }).service.addManual('ws1', 'lead', -1001), TelegramGroupNotAdminError);
+  await assert.rejects(makeService({ adminStatus: null }).service.addManual('ws1', 'lead', -1001), TelegramGroupNotAdminError);
   await assert.rejects(makeService().service.addManual('ws1', 'viewer', -1001), NotWorkspaceLeadError);
   await assert.rejects(makeService().service.addManual('ws1', 'lead', 42), TelegramGroupNotFoundError);
   const { service, groups } = makeService();

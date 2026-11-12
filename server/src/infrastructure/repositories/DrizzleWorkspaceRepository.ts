@@ -6,8 +6,7 @@ import {
   users,
   workspaces,
   workspaceMembers,
-  type WorkspaceRow,
-} from '../db/schema.js';
+  type WorkspaceRow, workspaceMemberRemovals } from '../db/schema.js';
 import { isWorkspaceCommitSyncMode, type Workspace } from '../../domain/workspace/Workspace.js';
 import type {
   WorkspaceMember,
@@ -205,6 +204,21 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       if (!isDuplicateKey(err)) throw err;
       // уже участник — идемпотентно пропускаем
     }
+    // Вернули в пространство осознанно — отметка «удалён» больше не действует (db/181).
+    await this.db
+      .delete(workspaceMemberRemovals)
+      .where(and(eq(workspaceMemberRemovals.workspaceId, workspaceId), eq(workspaceMemberRemovals.userId, userId)));
+  }
+
+  // Удалял ли руководитель этого человека из пространства (db/181): такой участник не
+  // возвращается сам через рабочую Telegram-группу.
+  async wasRemoved(workspaceId: string, userId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ userId: workspaceMemberRemovals.userId })
+      .from(workspaceMemberRemovals)
+      .where(and(eq(workspaceMemberRemovals.workspaceId, workspaceId), eq(workspaceMemberRemovals.userId, userId)))
+      .limit(1);
+    return rows.length > 0;
   }
 
   async setMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void> {
@@ -215,9 +229,15 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
   }
 
   async removeMember(workspaceId: string, userId: string): Promise<void> {
-    await this.db
-      .delete(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+      await tx
+        .insert(workspaceMemberRemovals)
+        .values({ workspaceId, userId })
+        .onDuplicateKeyUpdate({ set: { removedAt: sql`CURRENT_TIMESTAMP` } });
+    });
   }
 
   async setCurrentWorkspace(userId: string, workspaceId: string): Promise<void> {

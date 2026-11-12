@@ -482,11 +482,11 @@ test('accept: хук после вступления получает пригл
     now: () => NOW,
     onAccepted: async (input) => {
       calls.push(input);
-      return { telegram: 'linked' };
+      return { telegram: { status: 'pair' as const, url: 'https://t.me/bot?start=connect_x' } };
     },
   });
   const res = await accept.execute('t'.repeat(64), 'u2');
-  assert.deepEqual(res, { workspaceId: 'w1', telegram: 'linked' });
+  assert.deepEqual(res, { workspaceId: 'w1', telegram: { status: 'pair', url: 'https://t.me/bot?start=connect_x' } });
   assert.deepEqual(calls, [{ inviteId: 'inv-1', workspaceId: 'w1', userId: 'u2' }]);
 });
 
@@ -504,4 +504,19 @@ test('accept: сбой хука не отменяет вступление', asy
   const res = await accept.execute('t'.repeat(64), 'u2');
   assert.deepEqual(res, { workspaceId: 'w1', telegram: null });
   assert.equal((await workspaces.getMembership('w1', 'u2'))?.role, 'editor');
+});
+
+test('accept: проверка до вступления может отказать — участником человек не становится', async () => {
+  const { invitesRepo, workspaces } = makeFakes({ invites: [pendingInvite()] });
+  const accept = new AcceptWorkspaceInvite({
+    users: { getById: async () => ({ email: 'u2@test.dev' }) },
+    invites: invitesRepo,
+    workspaces,
+    now: () => NOW,
+    beforeAccept: async () => {
+      throw new WorkspaceInviteExpiredError();
+    },
+  });
+  await assert.rejects(accept.execute('t'.repeat(64), 'u2'), WorkspaceInviteExpiredError);
+  assert.equal(await workspaces.getMembership('w1', 'u2'), null);
 });

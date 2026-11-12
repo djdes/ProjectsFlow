@@ -7,8 +7,8 @@ import {
 } from '../../domain/workspace/errors.js';
 import {
   TelegramBotUnavailableError,
+  TelegramGroupNotAdminError,
   TelegramGroupNotFoundError,
-  TelegramGroupNotMemberError,
   TelegramGroupTakenError,
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
@@ -23,8 +23,8 @@ import type {
 // Код живёт полчаса: человек нажимает кнопку и сразу выбирает группу в Telegram.
 const LINK_CODE_TTL_MS = 30 * 60 * 1000;
 export const WORK_GROUP_CODE_PREFIX = 'wg_';
-// Статусы участника группы, которые считаем «состоит в группе».
-const MEMBER_STATUSES = new Set(['creator', 'administrator', 'member', 'restricted']);
+// Кто вправе подключать группу к пространству: её создатель и администраторы.
+const ADMIN_STATUSES = new Set(['creator', 'administrator']);
 
 type Deps = {
   readonly repo: TelegramWorkGroupRepository;
@@ -35,16 +35,19 @@ type Deps = {
   readonly users: {
     getTelegramLink(userId: string): Promise<{ telegramUserId: number } | null>;
   };
-  readonly telegram: Pick<TelegramClient, 'getChat' | 'getChatMember'>;
+  readonly telegram: Pick<TelegramClient, 'getChat' | 'getChatAdministrators'>;
   readonly botUsername: string | null;
   // base64url 32 байта (43 символа): влезает в deep link вместе с префиксом.
   readonly randomToken: () => string;
   readonly now: () => Date;
+  // Группу отключили: закрыть ждущие подключения людей и их приглашения.
+  readonly onRemoved?: (workspaceId: string, chatId: number) => Promise<void>;
 };
 
 export type BindWorkGroupResult =
   | { readonly kind: 'bound' | 'already' | 'main'; readonly workspaceName: string }
   | { readonly kind: 'taken' }
+  | { readonly kind: 'not_admin' }
   | { readonly kind: 'invalid' };
 
 export type ResolvedWorkGroup = {
@@ -110,9 +113,7 @@ export class ManageTelegramWorkGroups {
     if (!chat || (chat.type !== 'group' && chat.type !== 'supergroup')) throw new TelegramGroupNotFoundError();
     const link = await this.deps.users.getTelegramLink(actorUserId);
     if (!link) throw new TelegramNotLinkedError();
-    if (!this.deps.telegram.getChatMember) throw new TelegramBotUnavailableError();
-    const member = await this.deps.telegram.getChatMember(chatId, link.telegramUserId).catch(() => null);
-    if (!member || !MEMBER_STATUSES.has(member.status)) throw new TelegramGroupNotMemberError();
+    if (!(await this.isGroupAdmin(chatId, link.telegramUserId))) throw new TelegramGroupNotAdminError();
     const group = { chatId, workspaceId, title: chat.title, addedByUserId: actorUserId };
     if ((await this.deps.repo.insert(group)) === 'exists') {
       const existing = await this.deps.repo.findByChat(chatId);
@@ -124,14 +125,20 @@ export class ManageTelegramWorkGroups {
 
   async remove(workspaceId: string, actorUserId: string, chatId: number): Promise<void> {
     await requireWorkspaceLead(this.deps.workspaces, workspaceId, actorUserId);
-    await this.deps.repo.remove(workspaceId, chatId);
+    if (await this.deps.repo.remove(workspaceId, chatId)) {
+      await this.deps.onRemoved?.(workspaceId, chatId);
+    }
   }
 
-  // Бот получил в группе «/start@bot wg_<code>» — человек нажал «Подключить группу».
+  // Бот получил в группе «/start@bot wg_<code>» — человек нажал «Подключить группу». Код выдают
+  // владелец/руководитель пространства, а отправить его в группу должен её администратор.
   async bindFromCode(
     code: string,
     chat: { readonly id: number; readonly title: string | null },
+    senderTelegramUserId: number,
   ): Promise<BindWorkGroupResult> {
+    // Проверяем права до того, как погасить код: администратор сможет подключить им же.
+    if (!(await this.isGroupAdmin(chat.id, senderTelegramUserId))) return { kind: 'not_admin' };
     const claimed = await this.deps.repo.consumeLinkCode(hashCode(code), this.deps.now());
     if (!claimed) return { kind: 'invalid' };
     const workspace = await this.deps.workspaces.getById(claimed.workspaceId);
@@ -165,6 +172,11 @@ export class ManageTelegramWorkGroups {
 
   migrateChat(fromChatId: number, toChatId: number): Promise<void> {
     return this.deps.repo.migrateChat(fromChatId, toChatId);
+  }
+
+  private async isGroupAdmin(chatId: number, telegramUserId: number): Promise<boolean> {
+    const admins = await this.deps.telegram.getChatAdministrators?.(chatId).catch(() => null);
+    return (admins ?? []).some((admin) => admin.userId === telegramUserId && ADMIN_STATUSES.has(admin.status));
   }
 
   private botUsername(): string | null {

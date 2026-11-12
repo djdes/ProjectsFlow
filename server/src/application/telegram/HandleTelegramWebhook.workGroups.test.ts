@@ -20,6 +20,8 @@ function makeHarness(opts: {
   const binds: Array<{ code: string; chatId: number; title: string | null }> = [];
   const migrations: Array<[number, number]> = [];
   const groupStarts: number[] = [];
+  const pairedTelegramIds: number[] = [];
+  const bindSenders: number[] = [];
   let workGroup = opts.workGroup ?? null;
 
   const deps = {
@@ -51,8 +53,9 @@ function makeHarness(opts: {
       async handleInlineQuery() {},
     },
     workGroups: {
-      async bindFromCode(code: string, chat: { id: number; title: string | null }) {
+      async bindFromCode(code: string, chat: { id: number; title: string | null }, sender: number) {
         binds.push({ code, chatId: chat.id, title: chat.title });
+        bindSenders.push(sender);
         const result = opts.bindResult ?? { kind: 'bound', workspaceName: 'Программисты' };
         if (result.kind === 'bound') workGroup = { workspaceId: 'ws1', workspaceName: 'Программисты' };
         return result;
@@ -66,7 +69,9 @@ function makeHarness(opts: {
         privateStarts.push({ id: input.id, chatId: input.chatId, fromId: input.from.id });
       },
       async handleJoinCallback(cq: { id: string }, id: string) { joinCallbacks.push({ cqId: cq.id, id }); },
+      async completeAfterPairing(tgUserId: number) { pairedTelegramIds.push(tgUserId); },
     },
+    pairing: { async complete() { return 'connected' as const; } },
     isWorkspaceMember: async () => opts.member ?? false,
     greetingDelayMs: 0,
     ...(opts.voiceTranscript
@@ -78,7 +83,7 @@ function makeHarness(opts: {
     notifyStatusChanged() {},
   };
   const h = new HandleTelegramWebhook(deps as never);
-  return { h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts };
+  return { h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts, pairedTelegramIds, bindSenders };
 }
 
 const CODE = 'B'.repeat(43);
@@ -99,6 +104,7 @@ test('группа: /start@bot wg_<code> привязывает группу, а
   const x = makeHarness();
   await x.h.execute(groupMessage({ text: `/start@ProjectsFlow_Bot wg_${CODE}` }));
   assert.deepEqual(x.binds, [{ code: CODE, chatId: -1001, title: 'Команда' }]);
+  assert.deepEqual(x.bindSenders, [777], 'the sender is checked to be a group admin');
   assert.deepEqual(x.groupStarts, []);
   assert.match(x.sent[0]!.text, /Группа «Команда» подключена к пространству «Программисты»/);
 });
@@ -196,4 +202,31 @@ test('личка: /start wj_<id> и кнопка wj: уходят в подкл�
   assert.deepEqual(x.privateStarts, [{ id: 'abcdefghijkl', chatId: 777, fromId: 777 }]);
   await x.h.execute({ update_id: 4, callback_query: { id: 'cq', from: { id: 777 }, data: 'wj:abcdefghijkl' } } as TelegramUpdate);
   assert.deepEqual(x.joinCallbacks, [{ cqId: 'cq', id: 'abcdefghijkl' }]);
+});
+
+test('группа: не администратор — отказ; повтор доставки после привязки — без «ссылка устарела»', async () => {
+  const notAdmin = makeHarness({ bindResult: { kind: 'not_admin' } });
+  await notAdmin.h.execute(groupMessage({ text: `/start@ProjectsFlow_Bot wg_${CODE}` }));
+  assert.match(notAdmin.sent[0]!.text, /только её администратор/);
+  const bound = makeHarness({
+    bindResult: { kind: 'invalid' },
+    workGroup: { workspaceId: 'ws1', workspaceName: 'Программисты' },
+  });
+  await bound.h.execute(groupMessage({ text: `/start@ProjectsFlow_Bot wg_${CODE}` }));
+  assert.match(bound.sent[0]!.text, /уже подключена к пространству «Программисты»/);
+});
+
+test('личка: привязка Telegram обычной ссылкой создаёт задачи, ждавшие этого человека', async () => {
+  const x = makeHarness();
+  await x.h.execute({
+    update_id: 5,
+    message: {
+      message_id: 6,
+      from: { id: 777 },
+      chat: { id: 777, type: 'private' },
+      text: `/start connect_${'A'.repeat(43)}`,
+    },
+  } as TelegramUpdate);
+  assert.match(x.sent[0]!.text, /Telegram подключён/);
+  assert.deepEqual(x.pairedTelegramIds, [777]);
 });

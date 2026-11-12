@@ -1078,7 +1078,7 @@ setInterval(() => {
 const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
 // Рабочие Telegram-группы пространства (db/181): подключение по deep link, ручное добавление,
 // «чья это группа» для бота.
-const telegramWorkGroups = new ManageTelegramWorkGroups({
+const telegramWorkGroups: ManageTelegramWorkGroups = new ManageTelegramWorkGroups({
   repo: new DrizzleTelegramWorkGroupRepository(db),
   workspaces: workspaceRepo,
   users: userRepo,
@@ -1086,6 +1086,9 @@ const telegramWorkGroups = new ManageTelegramWorkGroups({
   botUsername: telegramBotUsername,
   randomToken: () => randomBytes(32).toString('base64url'),
   now,
+  // Группу отключили — закрыть ждущие подключения людей и отозвать их приглашения.
+  onRemoved: (workspaceId: string, chatId: number): Promise<void> =>
+    telegramGroupOnboarding.cancelForGroup(workspaceId, chatId),
 });
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
@@ -1446,11 +1449,15 @@ const dismissCloseProposal = new DismissCloseProposal({
 
 // Подключение людей из рабочих Telegram-групп (db/181): инструкция в группе, персональное
 // приглашение в личке бота, после вступления — задача из запомненного текста.
-const telegramGroupOnboarding = new TelegramGroupOnboarding({
+const telegramGroupOnboarding: TelegramGroupOnboarding = new TelegramGroupOnboarding({
   repo: new DrizzleTelegramGroupOnboardingRepository(db),
   users: userRepo,
   workspaces: workspaceRepo,
   invites: workspaceInviteRepo,
+  workGroups: telegramWorkGroups,
+  // Telegram привязывает сам владелец аккаунта обычной ссылкой подключения — не при
+  // принятии приглашения (ссылку-приглашение мог открыть кто угодно).
+  pairing: pairTelegramAccount,
   client: telegramClient,
   appUrl: appBaseUrl,
   botUsername: telegramBotUsername,
@@ -2677,7 +2684,9 @@ const { app, devProxyUpgrade } = createApp({
       invites: workspaceInviteRepo,
       workspaces: workspaceRepo,
       now,
-      // Приглашение из рабочей Telegram-группы: привязать Telegram и поставить ждавшую задачу.
+      // Приглашение бота из рабочей Telegram-группы: до вступления — группа ещё рабочая и
+      // человека не удаляли; после — подсказать подключение Telegram (задача создастся после него).
+      beforeAccept: ({ inviteId, userId }) => telegramGroupOnboarding.guardInviteAcceptance({ inviteId, userId }),
       onAccepted: ({ inviteId, userId }) => telegramGroupOnboarding.completeFromInvite({ inviteId, userId }),
     }),
     acceptProject: new AcceptProjectInvite({

@@ -366,7 +366,10 @@ type Deps = {
   // группы на новый id. Без них группы ведут себя как раньше.
   readonly workGroups?: Pick<ManageTelegramWorkGroups, 'bindFromCode' | 'resolveChat' | 'migrateChat'>;
   // Подключение людей, написавших задачу в рабочей группе (нет аккаунта или вне пространства).
-  readonly onboarding?: Pick<TelegramGroupOnboarding, 'prompt' | 'handlePrivateStart' | 'handleJoinCallback'>;
+  readonly onboarding?: Pick<
+    TelegramGroupOnboarding,
+    'prompt' | 'handlePrivateStart' | 'handleJoinCallback' | 'completeAfterPairing'
+  >;
   readonly isWorkspaceMember?: (workspaceId: string, userId: string) => Promise<boolean>;
   // Пауза перед приветствием, когда бота добавили в группу: если за это время группу подключили
   // кнопкой (тот же Telegram шлёт /start с кодом), приветствие не нужно. По умолчанию 3 с.
@@ -504,6 +507,13 @@ export class HandleTelegramWebhook {
           ? 'Этот Telegram или аккаунт ProjectsFlow уже подключён. Для смены привязки сначала отключите Telegram в профиле.'
           : 'Ссылка подключения устарела или уже использована. Откройте профиль ProjectsFlow и нажмите «Подключить Telegram» ещё раз.';
       await this.reply(chatId, message);
+      // Telegram привязан самим владельцем аккаунта — пора создать задачи, ждавшие этого
+      // человека в рабочих группах (db/181).
+      if (result === 'connected' && this.deps.onboarding) {
+        await this.deps.onboarding.completeAfterPairing(msg.from.id).catch((err) => {
+          console.warn('[tg-webhook] onboarding after pairing failed:', err);
+        });
+      }
       return;
     }
 
@@ -610,7 +620,7 @@ export class HandleTelegramWebhook {
     // группу — бот сам узнал её id и привязывает к пространству (db/181).
     if (cmd === '/start' && isGroup && this.deps.workGroups) {
       const code = new RegExp(`^/start\\s+${WORK_GROUP_CODE_PREFIX}([A-Za-z0-9_-]{20,64})$`).exec(text);
-      if (code) return this.handleWorkGroupBind(chatId, msg.chat.title ?? null, code[1]!);
+      if (code) return this.handleWorkGroupBind(chatId, msg.chat.title ?? null, code[1]!, tgUserId);
     }
     if (cmd === '/id') return this.handleChatId(chatId, isGroup, msg.chat.title ?? null);
     // В группе /start привязывает чат к аккаунту отправителя (а не трогает его личный DM-чат).
@@ -674,8 +684,18 @@ export class HandleTelegramWebhook {
         mimeType: msg.voice.mime_type?.trim() || downloaded.mimeType || 'audio/ogg',
       });
 
-      // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения.
-      if (workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey))) return;
+      // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения. Сбой здесь
+      // не «ошибка расшифровки»: текст уже есть, поэтому пробрасываем — Telegram повторит доставку.
+      if (workGroup) {
+        let waiting: boolean;
+        try {
+          waiting = await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey);
+        } catch (err) {
+          this.processedVoiceSources.delete(sourceKey);
+          throw new VoiceOnboardingError(err);
+        }
+        if (waiting) return;
+      }
 
       const botLabel = this.deps.botUsername?.trim()
         ? `@${escapeHtml(this.deps.botUsername.replace(/^@/, ''))}`
@@ -703,6 +723,7 @@ export class HandleTelegramWebhook {
         { sourceKey, background: true, ...(msg.reply_to_message?.message_id ? { reply: true } : {}) },
       );
     } catch (err) {
+      if (err instanceof VoiceOnboardingError) throw err.cause;
       this.processedVoiceSources.delete(sourceKey);
       console.warn('[tg-webhook] voice transcription failed:', err);
       await this.reply(
@@ -1378,8 +1399,13 @@ export class HandleTelegramWebhook {
     );
   }
 
-  private async handleWorkGroupBind(chatId: number, title: string | null, code: string): Promise<void> {
-    const result = await this.deps.workGroups!.bindFromCode(code, { id: chatId, title });
+  private async handleWorkGroupBind(
+    chatId: number,
+    title: string | null,
+    code: string,
+    senderTelegramUserId: number,
+  ): Promise<void> {
+    const result = await this.deps.workGroups!.bindFromCode(code, { id: chatId, title }, senderTelegramUserId);
     const label = title ? `Группа «${escapeHtml(title)}»` : 'Группа';
     const bot = escapeHtml(this.deps.botUsername?.replace(/^@/, '') ?? 'ProjectsFlow_Bot');
     for (const [key, at] of this.recentlyBoundChats) {
@@ -1410,12 +1436,27 @@ export class HandleTelegramWebhook {
       case 'taken':
         await this.reply(chatId, '⚠️ Эта группа уже подключена к другому пространству. Сначала отключите её там.');
         return;
-      case 'invalid':
+      case 'not_admin':
+        await this.reply(
+          chatId,
+          '⚠️ Подключить группу может только её администратор. Попросите администратора нажать ' +
+            '«Подключить группу» в настройках пространства и выбрать эту группу.',
+        );
+        return;
+      case 'invalid': {
+        // Повторная доставка того же /start после успешной привязки: код уже погашен.
+        const bound = await this.workGroupFor(chatId);
+        if (bound) {
+          if (this.recentlyBoundChats.has(chatId)) return;
+          await this.reply(chatId, `ℹ️ ${label} уже подключена к пространству «${escapeHtml(bound.workspaceName)}».`);
+          return;
+        }
         await this.reply(
           chatId,
           '⚠️ Ссылка устарела или уже использована. Откройте настройки пространства и нажмите «Подключить группу» ещё раз.',
         );
         return;
+      }
     }
   }
 
@@ -2320,6 +2361,13 @@ function replyContextOf(
   if (!text) return null;
   const from = reply.sender_chat?.title?.trim() || (reply.from ? formatSenderName(reply.from) : '');
   return { from: from || null, text };
+}
+
+// Сбой подключения человека после успешной расшифровки — не путать с ошибкой расшифровки.
+class VoiceOnboardingError extends Error {
+  constructor(readonly cause: unknown) {
+    super('voice onboarding failed');
+  }
 }
 
 function formatSenderName(from: {

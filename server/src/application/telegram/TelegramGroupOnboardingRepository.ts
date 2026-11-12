@@ -1,7 +1,8 @@
 // Подключение людей, написавших задачу в рабочей Telegram-группе (db/181). См.
 // docs/superpowers/specs/2026-11-12-telegram-work-groups-design.md.
 
-export type GroupOnboardingStatus = 'pending' | 'invited' | 'completed';
+// cancelled — группу отключили или перенесли в другое пространство: подключение закрыто.
+export type GroupOnboardingStatus = 'pending' | 'invited' | 'completed' | 'cancelled';
 
 export type GroupOnboarding = {
   // 12 символов base64url: id уходит в deep link t.me/<bot>?start=wj_<id>.
@@ -39,24 +40,20 @@ export type GroupOnboardingPatch = Partial<
   >
 >;
 
-// connected — Telegram привязан к аккаунту; same — уже был привязан именно этот Telegram;
-// conflict — у аккаунта другой Telegram или этот Telegram привязан к другому аккаунту.
-export type TelegramLinkOutcome = 'connected' | 'same' | 'conflict';
-
 export interface TelegramGroupOnboardingRepository {
-  // Открытая (не завершённая и не истёкшая) запись человека в этой группе.
+  // Открытая (pending/invited, не истёкшая) запись человека в этой группе.
   findOpen(tgChatId: number, tgUserId: number, now: Date): Promise<GroupOnboarding | null>;
+  // Все открытые записи человека — после привязки Telegram создаём ждущие задачи.
+  listOpenForTelegramUser(tgUserId: number, now: Date): Promise<GroupOnboarding[]>;
   getById(id: string): Promise<GroupOnboarding | null>;
   findByInvite(inviteId: string): Promise<GroupOnboarding | null>;
   create(onboarding: GroupOnboarding): Promise<void>;
   update(id: string, patch: GroupOnboardingPatch): Promise<void>;
-  // Атомарно переводит в completed. false — запись уже завершена (повторное нажатие/принятие).
+  // Атомарно ставит приглашение, если его ещё нет (двойной Start в личке не плодит приглашения).
+  // Возвращает приглашение записи после операции.
+  setInviteIfAbsent(id: string, inviteId: string): Promise<string | null>;
+  // Атомарно переводит в completed. false — запись уже закрыта (повторное нажатие/принятие).
   claimCompletion(id: string): Promise<boolean>;
-  // Привязка Telegram к аккаунту (как подтверждение pairing-ссылки, но без токена: личность
-  // Telegram подтверждена личным /start у бота, ссылка ушла только в этот личный чат).
-  linkTelegram(
-    userId: string,
-    telegram: { readonly id: number; readonly username: string | null; readonly firstName: string | null },
-    now: Date,
-  ): Promise<TelegramLinkOutcome>;
+  // Группу отключили: открытые записи → cancelled. Возвращает их приглашения (отозвать).
+  cancelOpenForGroup(workspaceId: string, tgChatId: number): Promise<string[]>;
 }

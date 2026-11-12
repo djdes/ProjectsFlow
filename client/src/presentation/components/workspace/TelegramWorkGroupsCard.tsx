@@ -161,7 +161,7 @@ export function TelegramWorkGroupsCard({
                 <li>
                   Напишите в группе <code>/id</code>&nbsp;— бот ответит её ID.
                 </li>
-                <li>Вставьте ID сюда. Вы сами должны состоять в группе, а Telegram — быть привязан в профиле.</li>
+                <li>Вставьте ID сюда. Добавить группу может её администратор, а Telegram должен быть привязан в профиле.</li>
               </ol>
               <div className="mbs-2 flex gap-2">
                 <Input

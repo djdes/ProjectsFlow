@@ -14,15 +14,22 @@ type WorkspacesPort = {
   absorbDefaultHubInto(userId: string, targetWorkspaceId: string): Promise<boolean>;
 };
 
-// Что ещё сделалось после вступления: приглашение из рабочей Telegram-группы привязывает
-// Telegram к аккаунту и ставит задачу, ждавшую подключения (db/181).
-export type InviteAcceptedTelegram = 'linked' | 'conflict' | null;
+// Следующий шаг с Telegram после вступления по приглашению из рабочей Telegram-группы
+// (db/181): pair — ссылка подключения Telegram для владельца аккаунта; linked — у аккаунта
+// уже тот же Telegram, задача создаётся; conflict — у аккаунта другой Telegram.
+export type InviteAcceptedTelegram =
+  | { readonly status: 'pair'; readonly url: string }
+  | { readonly status: 'linked' }
+  | { readonly status: 'conflict' }
+  | null;
 
 type Deps = {
   readonly users: { getById(id: string): Promise<{ email: string } | null> };
   readonly invites: WorkspaceInviteRepository;
   readonly workspaces: WorkspacesPort;
   readonly now: () => Date;
+  // Проверка до вступления (приглашение бота: группа ещё рабочая, человека не удаляли).
+  readonly beforeAccept?: (input: { readonly inviteId: string; readonly userId: string }) => Promise<void>;
   readonly onAccepted?: (input: {
     readonly inviteId: string;
     readonly workspaceId: string;
@@ -46,6 +53,8 @@ export class AcceptWorkspaceInvite {
       const user = await this.deps.users.getById(userId);
       assertInviteRecipientEmail(invite.email, user?.email ?? null);
     }
+
+    await this.deps.beforeAccept?.({ inviteId: invite.id, userId });
 
     await this.deps.invites.acceptWithMembership({
       inviteId: invite.id, acceptedAt: now, acceptedByUserId: userId,

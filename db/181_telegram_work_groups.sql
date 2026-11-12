@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS telegram_group_onboardings (
   group_title     VARCHAR(255) NULL,
   pending_text    TEXT         NULL,
   last_source_key VARCHAR(128) NULL,
-  status          ENUM('pending','invited','completed') NOT NULL DEFAULT 'pending',
+  -- cancelled — группу отключили или перенесли в другое пространство: подключение закрыто.
+  status          ENUM('pending','invited','completed','cancelled') NOT NULL DEFAULT 'pending',
   invite_id       CHAR(36)     NULL,
   prompted_at     TIMESTAMP    NULL,
   created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -56,5 +57,17 @@ CREATE TABLE IF NOT EXISTS telegram_group_onboardings (
   KEY idx_tgo_member (tg_chat_id, tg_user_id),
   KEY idx_tgo_invite (invite_id),
   CONSTRAINT fk_tgonb_workspace FOREIGN KEY (workspace_id)
+    REFERENCES workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Кого руководитель удалил из пространства. Такой человек не возвращается сам кнопкой
+-- «Вступить» или приглашением бота из рабочей группы — только обычным приглашением
+-- руководителя (оно и снимает отметку).
+CREATE TABLE IF NOT EXISTS workspace_member_removals (
+  workspace_id CHAR(36)  NOT NULL,
+  user_id      CHAR(36)  NOT NULL,
+  removed_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (workspace_id, user_id),
+  CONSTRAINT fk_wmr_workspace FOREIGN KEY (workspace_id)
     REFERENCES workspaces (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

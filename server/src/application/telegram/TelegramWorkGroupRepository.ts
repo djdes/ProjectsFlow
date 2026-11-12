@@ -25,8 +25,8 @@ export interface TelegramWorkGroupRepository {
   insert(group: Omit<TelegramWorkGroup, 'createdAt'>): Promise<'created' | 'exists'>;
   updateTitle(chatId: number, title: string): Promise<void>;
   remove(workspaceId: string, chatId: number): Promise<boolean>;
-  // Группа стала супергруппой и получила новый id: переносим рабочую группу и основную группу
-  // сводок, чтобы бот и расписание продолжили работать.
+  // Группа стала супергруппой и получила новый id: переносим рабочую группу, основную группу
+  // сводок, группы сводок проектов, владельца группы и ждущие подключения людей.
   migrateChat(fromChatId: number, toChatId: number): Promise<void>;
   // Основная группа сводок пространства (workspace_assignee_digest_settings).
   getMainGroup(workspaceId: string): Promise<{ chatId: number; title: string | null } | null>;

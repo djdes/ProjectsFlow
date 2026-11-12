@@ -1,17 +1,14 @@
-import { and, desc, eq, gt, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import {
-  telegramGroupOnboardings,
-  telegramPairingTokens,
-  users,
-  type TelegramGroupOnboardingRow,
-} from '../db/schema.js';
+import { telegramGroupOnboardings, type TelegramGroupOnboardingRow } from '../db/schema.js';
 import type {
   GroupOnboarding,
   GroupOnboardingPatch,
   TelegramGroupOnboardingRepository,
-  TelegramLinkOutcome,
 } from '../../application/telegram/TelegramGroupOnboardingRepository.js';
+
+// Открытые записи: человек ещё не подключился, а группу не отключали.
+const OPEN_STATUSES = ['pending', 'invited'] as const;
 
 function toOnboarding(row: TelegramGroupOnboardingRow): GroupOnboarding {
   return {
@@ -32,11 +29,6 @@ function toOnboarding(row: TelegramGroupOnboardingRow): GroupOnboarding {
   };
 }
 
-function isDuplicateKey(error: unknown): boolean {
-  const e = error as { code?: string; cause?: { code?: string } };
-  return (e.cause?.code ?? e.code) === 'ER_DUP_ENTRY';
-}
-
 export class DrizzleTelegramGroupOnboardingRepository implements TelegramGroupOnboardingRepository {
   constructor(private readonly db: Database) {}
 
@@ -48,13 +40,29 @@ export class DrizzleTelegramGroupOnboardingRepository implements TelegramGroupOn
         and(
           eq(telegramGroupOnboardings.tgChatId, tgChatId),
           eq(telegramGroupOnboardings.tgUserId, tgUserId),
-          ne(telegramGroupOnboardings.status, 'completed'),
+          inArray(telegramGroupOnboardings.status, [...OPEN_STATUSES]),
           gt(telegramGroupOnboardings.expiresAt, now),
         ),
       )
       .orderBy(desc(telegramGroupOnboardings.createdAt))
       .limit(1);
     return row ? toOnboarding(row) : null;
+  }
+
+  async listOpenForTelegramUser(tgUserId: number, now: Date): Promise<GroupOnboarding[]> {
+    const rows = await this.db
+      .select()
+      .from(telegramGroupOnboardings)
+      .where(
+        and(
+          eq(telegramGroupOnboardings.tgUserId, tgUserId),
+          inArray(telegramGroupOnboardings.status, [...OPEN_STATUSES]),
+          gt(telegramGroupOnboardings.expiresAt, now),
+        ),
+      )
+      .orderBy(desc(telegramGroupOnboardings.createdAt))
+      .limit(20);
+    return rows.map(toOnboarding);
   }
 
   async getById(id: string): Promise<GroupOnboarding | null> {
@@ -99,55 +107,42 @@ export class DrizzleTelegramGroupOnboardingRepository implements TelegramGroupOn
     await this.db.update(telegramGroupOnboardings).set(patch).where(eq(telegramGroupOnboardings.id, id));
   }
 
+  async setInviteIfAbsent(id: string, inviteId: string): Promise<string | null> {
+    await this.db
+      .update(telegramGroupOnboardings)
+      .set({ inviteId, status: 'invited' })
+      .where(
+        and(
+          eq(telegramGroupOnboardings.id, id),
+          isNull(telegramGroupOnboardings.inviteId),
+          inArray(telegramGroupOnboardings.status, [...OPEN_STATUSES]),
+        ),
+      );
+    return (await this.getById(id))?.inviteId ?? null;
+  }
+
   async claimCompletion(id: string): Promise<boolean> {
     const [result] = await this.db
       .update(telegramGroupOnboardings)
       .set({ status: 'completed' })
-      .where(and(eq(telegramGroupOnboardings.id, id), ne(telegramGroupOnboardings.status, 'completed')));
+      .where(and(eq(telegramGroupOnboardings.id, id), inArray(telegramGroupOnboardings.status, [...OPEN_STATUSES])));
     return result.affectedRows > 0;
   }
 
-  async linkTelegram(
-    userId: string,
-    telegram: { readonly id: number; readonly username: string | null; readonly firstName: string | null },
-    now: Date,
-  ): Promise<TelegramLinkOutcome> {
-    try {
-      return await this.db.transaction(async (tx) => {
-        const [user] = await tx
-          .select({ telegramUserId: users.telegramUserId })
-          .from(users)
-          .where(eq(users.id, userId))
-          .for('update');
-        if (!user) return 'conflict';
-        if (user.telegramUserId !== null) return user.telegramUserId === telegram.id ? 'same' : 'conflict';
-        const [owner] = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.telegramUserId, telegram.id))
-          .limit(1);
-        if (owner) return 'conflict';
-        // Человек нажимал Start у бота, поэтому личный чат открыт: tg_chat_id = его Telegram id.
-        await tx
-          .update(users)
-          .set({
-            telegramUserId: telegram.id,
-            telegramUsername: telegram.username,
-            telegramFirstName: telegram.firstName,
-            telegramPhotoUrl: null,
-            telegramAuthDate: now,
-            tgChatId: telegram.id,
-            tgStartedAt: now,
-            tgPairedAt: now,
-          })
-          .where(and(eq(users.id, userId), isNull(users.telegramUserId)));
-        await tx.delete(telegramPairingTokens).where(eq(telegramPairingTokens.userId, userId));
-        return 'connected';
-      });
-    } catch (error) {
-      // Тот же Telegram параллельно привязали к другому аккаунту — уникальный индекс.
-      if (isDuplicateKey(error)) return 'conflict';
-      throw error;
-    }
+  async cancelOpenForGroup(workspaceId: string, tgChatId: number): Promise<string[]> {
+    return this.db.transaction(async (tx) => {
+      const where = and(
+        eq(telegramGroupOnboardings.workspaceId, workspaceId),
+        eq(telegramGroupOnboardings.tgChatId, tgChatId),
+        inArray(telegramGroupOnboardings.status, [...OPEN_STATUSES]),
+      );
+      const invites = await tx
+        .select({ inviteId: telegramGroupOnboardings.inviteId })
+        .from(telegramGroupOnboardings)
+        .where(and(where, isNotNull(telegramGroupOnboardings.inviteId)))
+        .for('update');
+      await tx.update(telegramGroupOnboardings).set({ status: 'cancelled' }).where(where);
+      return invites.map((row) => row.inviteId).filter((id): id is string => id !== null);
+    });
   }
 }

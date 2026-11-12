@@ -322,7 +322,7 @@ export const telegramGroupOnboardings = mysqlTable(
     groupTitle: varchar('group_title', { length: 255 }),
     pendingText: text('pending_text'),
     lastSourceKey: varchar('last_source_key', { length: 128 }),
-    status: mysqlEnum('status', ['pending', 'invited', 'completed']).notNull().default('pending'),
+    status: mysqlEnum('status', ['pending', 'invited', 'completed', 'cancelled']).notNull().default('pending'),
     inviteId: char('invite_id', { length: 36 }),
     promptedAt: timestamp('prompted_at'),
     createdAt: createdAtCol(),
@@ -335,6 +335,17 @@ export const telegramGroupOnboardings = mysqlTable(
 );
 
 export type TelegramGroupOnboardingRow = typeof telegramGroupOnboardings.$inferSelect;
+
+// Удалённые руководителем участники (db/181): сами не возвращаются через рабочую группу.
+export const workspaceMemberRemovals = mysqlTable(
+  'workspace_member_removals',
+  {
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    removedAt: timestamp('removed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
+);
 
 export const sessions = mysqlTable(
   'sessions',

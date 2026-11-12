@@ -163,11 +163,12 @@ import {
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
   CannotInviteToDefaultWorkspaceError,
+  WorkspaceRejoinBlockedError,
 } from '../../domain/workspace/errors.js';
 import {
   TelegramBotUnavailableError,
   TelegramGroupNotFoundError,
-  TelegramGroupNotMemberError,
+  TelegramGroupNotAdminError,
   TelegramGroupTakenError,
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
@@ -976,6 +977,10 @@ export function errorHandler(
     res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
     return;
   }
+  if (err instanceof WorkspaceRejoinBlockedError) {
+    res.status(403).json({ error: 'workspace_rejoin_blocked', message: err.message });
+    return;
+  }
   if (err instanceof CannotInviteToDefaultWorkspaceError) {
     res.status(409).json({
       error: 'cannot_invite_to_default_workspace',
@@ -988,8 +993,8 @@ export function errorHandler(
     res.status(404).json({ error: 'telegram_group_not_found', message: err.message });
     return;
   }
-  if (err instanceof TelegramGroupNotMemberError) {
-    res.status(403).json({ error: 'telegram_group_not_member', message: err.message });
+  if (err instanceof TelegramGroupNotAdminError) {
+    res.status(403).json({ error: 'telegram_group_not_admin', message: err.message });
     return;
   }
   if (err instanceof TelegramGroupTakenError) {

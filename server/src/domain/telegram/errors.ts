@@ -8,11 +8,12 @@ export class TelegramGroupNotFoundError extends Error {
   }
 }
 
-// Добавить группу вручную может только её участник (проверка через Telegram).
-export class TelegramGroupNotMemberError extends Error {
+// Подключить группу к пространству может только её администратор в Telegram: иначе любой
+// участник чужой группы перехватил бы её задачи в своё пространство.
+export class TelegramGroupNotAdminError extends Error {
   constructor() {
-    super('Вы не состоите в этой Telegram-группе.');
-    this.name = 'TelegramGroupNotMemberError';
+    super('Подключить группу может только её администратор в Telegram.');
+    this.name = 'TelegramGroupNotAdminError';
   }
 }
 

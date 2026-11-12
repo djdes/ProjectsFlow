@@ -1,7 +1,10 @@
 import { and, asc, eq, gt } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
+  projectDigestSettings,
   telegramGroupLinkTokens,
+  telegramGroupOnboardings,
+  telegramGroupOwners,
   workspaceAssigneeDigestSettings,
   workspaceTelegramGroups,
   type WorkspaceTelegramGroupRow,
@@ -102,6 +105,28 @@ export class DrizzleTelegramWorkGroupRepository implements TelegramWorkGroupRepo
         .update(workspaceAssigneeDigestSettings)
         .set({ telegramGroupChatId: toChatId })
         .where(eq(workspaceAssigneeDigestSettings.telegramGroupChatId, fromChatId));
+      await tx
+        .update(projectDigestSettings)
+        .set({ telegramGroupChatId: toChatId })
+        .where(eq(projectDigestSettings.telegramGroupChatId, fromChatId));
+      await tx
+        .update(telegramGroupOnboardings)
+        .set({ tgChatId: toChatId })
+        .where(eq(telegramGroupOnboardings.tgChatId, fromChatId));
+      // Владелец группы (db/099): PK по чату — если у нового id уже есть владелец, старый лишний.
+      const [ownerTaken] = await tx
+        .select({ chatId: telegramGroupOwners.tgChatId })
+        .from(telegramGroupOwners)
+        .where(eq(telegramGroupOwners.tgChatId, toChatId))
+        .limit(1);
+      if (ownerTaken) {
+        await tx.delete(telegramGroupOwners).where(eq(telegramGroupOwners.tgChatId, fromChatId));
+      } else {
+        await tx
+          .update(telegramGroupOwners)
+          .set({ tgChatId: toChatId })
+          .where(eq(telegramGroupOwners.tgChatId, fromChatId));
+      }
     });
   }
 

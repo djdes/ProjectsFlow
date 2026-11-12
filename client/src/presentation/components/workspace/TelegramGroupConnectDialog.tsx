@@ -116,7 +116,7 @@ export function TelegramGroupConnectDialog({
           <DialogDescription>Id группы вводить не нужно — бот узнает его сам.</DialogDescription>
         </DialogHeader>
         <ol className="list-decimal space-y-1.5 ps-5 text-sm">
-          <li>Нажмите «Открыть Telegram» и выберите группу.</li>
+          <li>Нажмите «Открыть Telegram» и выберите группу — подключать должен её администратор.</li>
           <li>Telegram добавит @ProjectsFlow_Bot (если его там ещё нет) и передаст ему код.</li>
           <li>Группа появится здесь сама — окно закроется.</li>
         </ol>
