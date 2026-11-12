@@ -214,6 +214,9 @@ export interface TelegramClient {
   // тестовые фейки могут не реализовывать. null — бот не в чате / нет прав / ошибка
   // (мягкий фоллбэк, не кидаем — резолв имени не должен ронять сохранение настроек).
   getChat?(chatId: number): Promise<TelegramChatInfo | null>;
+  // Администраторы группы (без ботов): подключать группу к пространству может только её
+  // администратор. null — бот не в группе / ошибка. Опционально для тестовых фейков.
+  getChatAdministrators?(chatId: number): Promise<ReadonlyArray<{ userId: number; status: string }> | null>;
   // Скачать входящее Telegram-вложение по file_id (getFile + /file/bot...). Опционально для
   // тестовых клиентов; если реализации нет, текстовая задача всё равно создаётся без падения.
   downloadFile?(fileId: string): Promise<TelegramDownloadedFile | null>;

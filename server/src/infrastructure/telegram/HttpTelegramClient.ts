@@ -325,6 +325,27 @@ export class HttpTelegramClient implements TelegramClient {
     };
   }
 
+  // getChatAdministrators — администраторы группы (проверка «подключает администратор группы»).
+  // Best-effort: ошибка/отказ → null.
+  async getChatAdministrators(chatId: number): Promise<ReadonlyArray<{ userId: number; status: string }> | null> {
+    try {
+      const res = await this.tgFetch('/getChatAdministrators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId }),
+      });
+      const body = (await res.json().catch(() => null)) as TgResponse<
+        Array<{ status?: string; user?: { id?: number } }>
+      > | null;
+      if (!res.ok || !body?.ok || !Array.isArray(body.result)) return null;
+      return body.result.flatMap((m) =>
+        typeof m.user?.id === 'number' && typeof m.status === 'string' ? [{ userId: m.user.id, status: m.status }] : [],
+      );
+    } catch {
+      return null;
+    }
+  }
+
   async downloadFile(fileId: string): Promise<{ data: Buffer; filename: string; mimeType: string } | null> {
     try {
       const metaRes = await this.tgFetch('/getFile', {

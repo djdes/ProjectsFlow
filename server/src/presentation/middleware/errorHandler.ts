@@ -163,7 +163,15 @@ import {
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
   CannotInviteToDefaultWorkspaceError,
+  WorkspaceRejoinBlockedError,
 } from '../../domain/workspace/errors.js';
+import {
+  TelegramBotUnavailableError,
+  TelegramGroupNotFoundError,
+  TelegramGroupNotAdminError,
+  TelegramGroupTakenError,
+  TelegramNotLinkedError,
+} from '../../domain/telegram/errors.js';
 import {
   ChatMessageNotFoundError,
   NotMessageAuthorError,
@@ -969,11 +977,36 @@ export function errorHandler(
     res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
     return;
   }
+  if (err instanceof WorkspaceRejoinBlockedError) {
+    res.status(403).json({ error: 'workspace_rejoin_blocked', message: err.message });
+    return;
+  }
   if (err instanceof CannotInviteToDefaultWorkspaceError) {
     res.status(409).json({
       error: 'cannot_invite_to_default_workspace',
       message: 'В личное пространство пригласить нельзя',
     });
+    return;
+  }
+  // --- Рабочие Telegram-группы (db/181) ---
+  if (err instanceof TelegramGroupNotFoundError) {
+    res.status(404).json({ error: 'telegram_group_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupNotAdminError) {
+    res.status(403).json({ error: 'telegram_group_not_admin', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTakenError) {
+    res.status(409).json({ error: 'telegram_group_taken', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramNotLinkedError) {
+    res.status(409).json({ error: 'telegram_not_linked', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramBotUnavailableError) {
+    res.status(503).json({ error: 'telegram_bot_unavailable', message: err.message });
     return;
   }
   if (err instanceof WorkspaceNotEmptyError) {

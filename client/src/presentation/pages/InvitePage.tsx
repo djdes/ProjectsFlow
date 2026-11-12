@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -32,6 +32,8 @@ export function InvitePage(): React.ReactElement {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [accepting, setAccepting] = useState(false);
   const [recipientRejected, setRecipientRejected] = useState(false);
+  // Приглашение бота из рабочей Telegram-группы принято: остался шаг «подключить Telegram».
+  const [telegramPairUrl, setTelegramPairUrl] = useState<string | null>(null);
   const inviteEmail = state.status === 'ready' ? state.preview.inviteEmail : null;
   const wrongAccount = status === 'authenticated' && (recipientRejected ||
     (inviteEmail !== null && inviteEmail.trim().toLowerCase() !== user?.email.trim().toLowerCase()));
@@ -74,8 +76,17 @@ export function InvitePage(): React.ReactElement {
         // Legacy project-токен: accept зачислил в пространство проекта — ведём на проект.
         toast.success('Вы добавлены в проект');
         navigate(`/projects/${res.projectId}`, { replace: true });
+      } else if (res.telegram?.status === 'pair') {
+        // Telegram подключает только сам владелец аккаунта — показываем кнопку, а не уходим.
+        setTelegramPairUrl(res.telegram.url);
       } else {
-        toast.success('Вы присоединились к пространству');
+        if (res.telegram?.status === 'linked') {
+          toast.success('Вы в пространстве. Задачу из группы бот создаст сам');
+        } else if (res.telegram?.status === 'conflict') {
+          toast.warning('Вы в пространстве, но к аккаунту привязан другой Telegram — задачу из группы бот не создаст');
+        } else {
+          toast.success('Вы присоединились к пространству');
+        }
         navigate('/', { replace: true });
       }
     } catch (e) {
@@ -134,7 +145,30 @@ export function InvitePage(): React.ReactElement {
         </div>
       )}
 
-      {state.status === 'ready' && (
+      {state.status === 'ready' && telegramPairUrl !== null && (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm">
+            ✅ Вы в пространстве <span className="font-semibold">«{state.preview.targetName}»</span>.
+          </p>
+          <div className="flex flex-col gap-1.5 rounded-xl bg-panel px-4 py-3 text-ui text-muted-foreground">
+            <p>
+              Остался один шаг: подключите Telegram. Откроется чат с ботом — нажмите Start, и бот
+              создаст вашу задачу из группы.
+            </p>
+          </div>
+          <Button size="lg" className="w-full" asChild>
+            <a href={telegramPairUrl} target="_blank" rel="noopener noreferrer">
+              <Send className="size-4" />
+              Подключить Telegram
+            </a>
+          </Button>
+          <Button variant="ghost" size="lg" className="w-full" onClick={() => navigate('/', { replace: true })}>
+            Перейти в пространство
+          </Button>
+        </div>
+      )}
+
+      {state.status === 'ready' && telegramPairUrl === null && (
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3">
             <p className="text-sm">

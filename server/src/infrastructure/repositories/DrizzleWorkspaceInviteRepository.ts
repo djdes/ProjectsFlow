@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, isNull, isNotNull, lte, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projects, workspaces, workspaceMembers, workspaceProjectExclusions, workspaceInvites, type WorkspaceInviteRow } from '../db/schema.js';
+import { projects, workspaces, workspaceMembers, workspaceMemberRemovals, workspaceProjectExclusions, workspaceInvites, type WorkspaceInviteRow } from '../db/schema.js';
 import { parseJsonCol } from './jsonCol.js';
 import { WorkspaceInviteAlreadyUsedError, WorkspaceInviteExpiredError, WorkspaceInviteNotFoundError } from '../../domain/workspace/errors.js';
 import type {
@@ -131,6 +131,11 @@ export class DrizzleWorkspaceInviteRepository implements WorkspaceInviteReposito
       }
       await tx.update(workspaceInvites).set({ acceptedAt: input.acceptedAt, acceptedByUserId: input.acceptedByUserId })
         .where(eq(workspaceInvites.id, invite.id));
+      // Приглашение руководителя возвращает удалённого участника осознанно (db/181).
+      await tx.delete(workspaceMemberRemovals).where(and(
+        eq(workspaceMemberRemovals.workspaceId, invite.workspaceId),
+        eq(workspaceMemberRemovals.userId, input.acceptedByUserId),
+      ));
     });
   }
 

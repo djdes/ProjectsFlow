@@ -136,3 +136,19 @@ export const createWorkspaceInviteSchema = z.object({
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
 });
+
+// Рабочие Telegram-группы (db/181): ссылка «Подключить группу» и ручное добавление по id.
+export const createTelegramGroupLinkSchema = z.object({
+  purpose: z.enum(['work', 'main']).default('work'),
+});
+
+export const addTelegramWorkGroupSchema = z.object({
+  // У групп и супергрупп Telegram id отрицательный.
+  chatId: z.number().int().negative().refine(Number.isSafeInteger, 'Некорректный id группы'),
+});
+
+// «Из соседних пространств»: пакетное приглашение по id (почту сервер берёт из базы).
+export const inviteNeighborsSchema = z.object({
+  userIds: z.array(z.string().trim().min(1).max(36)).min(1).max(50),
+  role: z.enum(['editor', 'viewer']),
+});

@@ -1273,6 +1273,11 @@ export const scenarios = [
         await t.visible(page.getByRole('heading', { name: 'Команда «Смоук»' }), 'заголовок «Команда «Смоук»»');
         await t.visible(page.getByText('Вера Лебедева').first(), 'участник «Вера Лебедева»');
       });
+      await t.check('рабочие Telegram-группы и «Из соседних пространств»', async () => {
+        await t.visible(page.getByText('Рабочие Telegram-группы', { exact: true }), 'карточка «Рабочие Telegram-группы»');
+        await t.visible(page.getByText('Команда · задачи'), 'рабочая группа из фикстуры');
+        await t.visible(page.getByRole('button', { name: 'Из соседних пространств' }), 'кнопка «Из соседних пространств»');
+      });
       await t.check('включатель напоминаний о срочных задачах', async () => {
         const urgent = page.getByRole('switch', { name: 'Напоминания о срочных задачах' });
         await t.visible(urgent, 'переключатель «Срочные задачи»');

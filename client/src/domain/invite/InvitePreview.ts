@@ -19,4 +19,15 @@ export type InvitePreview = {
 export type InviteAcceptResult = {
   readonly workspaceId: string | null;
   readonly projectId: string | null;
+  // Приглашение бота из рабочей Telegram-группы (db/181). Telegram при принятии НЕ
+  // привязывается: pair — ссылка, по которой владелец аккаунта сам подключает Telegram (после
+  // этого бот создаст задачу из группы); linked — у аккаунта уже этот Telegram, задача
+  // создаётся; conflict — у аккаунта другой Telegram.
+  readonly telegram?: InviteTelegramStep;
 };
+
+export type InviteTelegramStep =
+  | { readonly status: 'pair'; readonly url: string }
+  | { readonly status: 'linked' }
+  | { readonly status: 'conflict' }
+  | null;

@@ -368,6 +368,12 @@ import { DrizzleTelegramChatWorkspaceRepository } from './infrastructure/reposit
 import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
 import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositories/DrizzleTelegramMessageTaskRepository.js';
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
+import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
+import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
+import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
+import { InviteNeighbors, ListWorkspaceInviteCandidates } from './application/workspace/InviteNeighbors.js';
+import { DrizzleWorkspaceNeighborsRepository } from './infrastructure/repositories/DrizzleWorkspaceNeighborsRepository.js';
+import { DrizzleTelegramGroupOnboardingRepository } from './infrastructure/repositories/DrizzleTelegramGroupOnboardingRepository.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
@@ -1070,6 +1076,20 @@ setInterval(() => {
 }, 6 * 3600 * 1000).unref();
 // Привязка групповых чатов к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
 const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
+// Рабочие Telegram-группы пространства (db/181): подключение по deep link, ручное добавление,
+// «чья это группа» для бота.
+const telegramWorkGroups: ManageTelegramWorkGroups = new ManageTelegramWorkGroups({
+  repo: new DrizzleTelegramWorkGroupRepository(db),
+  workspaces: workspaceRepo,
+  users: userRepo,
+  telegram: telegramClient,
+  botUsername: telegramBotUsername,
+  randomToken: () => randomBytes(32).toString('base64url'),
+  now,
+  // Группу отключили — закрыть ждущие подключения людей и отозвать их приглашения.
+  onRemoved: (workspaceId: string, chatId: number): Promise<void> =>
+    telegramGroupOnboarding.cancelForGroup(workspaceId, chatId),
+});
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
   client: telegramClient,
@@ -1093,6 +1113,14 @@ const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
   telegram: sendAgentTelegramNotification, appUrl: appBaseUrl, now,
 });
 setInterval(deliverWorkspaceInvites.wake, 15_000).unref();
+// Приглашение в пространство: по почте и пакетом «из соседних» — один и тот же use-case.
+const createWorkspaceInvite = new CreateWorkspaceInvite({
+  workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
+  invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
+  idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
+  ttlMs: 7 * 24 * 60 * 60 * 1000,
+});
+const workspaceNeighborsRepo = new DrizzleWorkspaceNeighborsRepository(db);
 
 // --- Рассылки админки (db/176) ---
 // mailing_recipients — durable-очередь: воркер тикает каждые 5 с и шлёт не больше
@@ -1419,6 +1447,43 @@ const dismissCloseProposal = new DismissCloseProposal({
   members: projectMemberRepo,
 });
 
+// Подключение людей из рабочих Telegram-групп (db/181): инструкция в группе, персональное
+// приглашение в личке бота, после вступления — задача из запомненного текста.
+const telegramGroupOnboarding: TelegramGroupOnboarding = new TelegramGroupOnboarding({
+  repo: new DrizzleTelegramGroupOnboardingRepository(db),
+  users: userRepo,
+  workspaces: workspaceRepo,
+  invites: workspaceInviteRepo,
+  workGroups: telegramWorkGroups,
+  // Telegram привязывает сам владелец аккаунта обычной ссылкой подключения — не при
+  // принятии приглашения (ссылку-приглашение мог открыть кто угодно).
+  pairing: pairTelegramAccount,
+  client: telegramClient,
+  appUrl: appBaseUrl,
+  botUsername: telegramBotUsername,
+  shortIdGen: shortIdGenerator,
+  idGen: idGenerator,
+  randomToken: () => randomBytes(32).toString('hex'),
+  now,
+  // Не ждём перефраз: принятие приглашения (HTTP) и кнопки бота отвечают сразу.
+  startTask: async (input) => {
+    void telegramComposer
+      .startFromMessage(
+        input.tgUserId,
+        input.chatId,
+        input.text,
+        {
+          ownerUserId: await telegramGroupOwnerRepo.getOwnerUserId(input.chatId).catch(() => null),
+          senderName: input.senderName,
+          groupTitle: input.groupTitle,
+        },
+        [],
+        { sourceKey: input.sourceKey, background: true },
+      )
+      .catch((err) => console.warn('[tg-onboarding] pending task failed:', err));
+  },
+});
+
 const handleTelegramWebhook = new HandleTelegramWebhook({
   pairing: pairTelegramAccount,
   users: userRepo,
@@ -1435,6 +1500,9 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   taskMessages: telegramTaskMessageRepo,
   messageTasks: telegramMessageTaskRepo,
   groupOwners: telegramGroupOwnerRepo,
+  workGroups: telegramWorkGroups,
+  onboarding: telegramGroupOnboarding,
+  isWorkspaceMember: (workspaceId, userId) => isWorkspaceMember(userId, workspaceId),
   createComment: createTaskCommentUseCase,
   deleteTask: new DeleteTask({
     projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
@@ -2522,13 +2590,18 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       tasks: taskRepo,
     }),
-    invites: {
-      create: new CreateWorkspaceInvite({
-        workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
-        invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
-        idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
-        ttlMs: 7 * 24 * 60 * 60 * 1000,
+    telegramGroups: telegramWorkGroups,
+    neighborInvites: {
+      list: new ListWorkspaceInviteCandidates({ neighbors: workspaceNeighborsRepo, workspaces: workspaceRepo, now }),
+      invite: new InviteNeighbors({
+        neighbors: workspaceNeighborsRepo,
+        workspaces: workspaceRepo,
+        createInvite: createWorkspaceInvite,
+        now,
       }),
+    },
+    invites: {
+      create: createWorkspaceInvite,
       manage: new ManageWorkspaceInvite({
         workspaces: workspaceRepo, invites: workspaceInviteRepo, now,
         ttlMs: 7 * 24 * 60 * 60 * 1000, appUrl: appBaseUrl, onQueued: deliverWorkspaceInvites.wake,
@@ -2611,6 +2684,10 @@ const { app, devProxyUpgrade } = createApp({
       invites: workspaceInviteRepo,
       workspaces: workspaceRepo,
       now,
+      // Приглашение бота из рабочей Telegram-группы: до вступления — группа ещё рабочая и
+      // человека не удаляли; после — подсказать подключение Telegram (задача создастся после него).
+      beforeAccept: ({ inviteId, userId }) => telegramGroupOnboarding.guardInviteAcceptance({ inviteId, userId }),
+      onAccepted: ({ inviteId, userId }) => telegramGroupOnboarding.completeFromInvite({ inviteId, userId }),
     }),
     acceptProject: new AcceptProjectInvite({
       users: userRepo,
@@ -3628,6 +3705,7 @@ const server = app.listen(config.port, () => {
         { command: 'pending', description: 'Задачи на уточнении' },
         { command: 'pause', description: 'Выключить уведомления' },
         { command: 'help', description: 'Что умеет бот' },
+        { command: 'id', description: 'ID этой группы для настроек пространства' },
         { command: 'start', description: 'Подключить бота' },
       ])
       .catch((err) => console.warn('[projectsflow] telegram setMyCommands failed:', err));

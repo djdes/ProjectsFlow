@@ -235,6 +235,8 @@ import { projectsRouter } from './projects/routes.js';
 import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
+import type { ManageTelegramWorkGroups } from '../application/telegram/ManageTelegramWorkGroups.js';
+import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../application/workspace/InviteNeighbors.js';
 import type { ManageWorkspaceProjectAccess } from '../application/workspace/ManageWorkspaceProjectAccess.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
@@ -493,6 +495,12 @@ type AppDeps = {
     readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
     // Кастомные колонки канбана на все проекты пространства (db/154).
     readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
+    // Рабочие Telegram-группы (db/181).
+    readonly telegramGroups?: ManageTelegramWorkGroups;
+    readonly neighborInvites?: {
+      readonly list: ListWorkspaceInviteCandidates;
+      readonly invite: InviteNeighbors;
+    };
     readonly invites: {
       readonly create: CreateWorkspaceInvite;
     readonly manage: ManageWorkspaceInvite;

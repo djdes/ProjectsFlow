@@ -6,6 +6,12 @@ import type {
 } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
+import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/InviteCandidate';
+import type {
+  TelegramGroupLinkPurpose,
+  TelegramWorkGroup,
+  TelegramWorkGroups,
+} from '@/domain/workspace/TelegramWorkGroup';
 import type {
   SaveWorkspaceAssigneeDigestInput,
   WorkspaceAssigneeDigestGroup,
@@ -69,6 +75,24 @@ export interface WorkspaceRepository {
   getInviteLink(workspaceId: string, inviteId: string): Promise<string>;
   createInvite(workspaceId: string, input: CreateWorkspaceInviteInput): Promise<WorkspaceInvite>;
   deleteInvite(workspaceId: string, inviteId: string): Promise<void>;
+  // «Из соседних пространств»: люди из других пространств приглашающего и пакетное
+  // приглашение по id (почту сервер берёт сам, доставка — как у обычного приглашения).
+  listInviteCandidates(workspaceId: string): Promise<InviteCandidate[]>;
+  inviteNeighbors(
+    workspaceId: string,
+    userIds: readonly string[],
+    role: WorkspaceInviteRole,
+  ): Promise<Array<{ userId: string; status: InviteNeighborStatus }>>;
+
+  // Рабочие Telegram-группы (db/181). Ссылка «Подключить группу» открывает в Telegram выбор
+  // группы; бот сам сообщает серверу её id.
+  listTelegramGroups(id: string): Promise<TelegramWorkGroups>;
+  createTelegramGroupLink(
+    id: string,
+    purpose: TelegramGroupLinkPurpose,
+  ): Promise<{ url: string; expiresAt: string }>;
+  addTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
+  removeTelegramGroup(id: string, chatId: number): Promise<void>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;
