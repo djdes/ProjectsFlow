@@ -235,6 +235,8 @@ import { projectsRouter } from './projects/routes.js';
 import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
+import { projectWorkspaceAccessRouter } from './projects/workspaceAccessRoutes.js';
+import type { ManageProjectSharing } from '../application/project/ManageProjectSharing.js';
 import type { ManageTelegramWorkGroups } from '../application/telegram/ManageTelegramWorkGroups.js';
 import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../application/workspace/InviteNeighbors.js';
 import type { ManageWorkspaceProjectAccess } from '../application/workspace/ManageWorkspaceProjectAccess.js';
@@ -486,6 +488,8 @@ type AppDeps = {
     readonly coverStorage: AttachmentStorage;
     readonly maxCoverBytes: number;
   };
+  // «Доступ пространств» проекта (db/182).
+  readonly projectSharing?: ManageProjectSharing;
   readonly workspaces: {
     readonly service: WorkspaceService;
     readonly projectAccess: ManageWorkspaceProjectAccess;
@@ -1053,6 +1057,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
   app.use('/api/projects', digestRouter(deps.digest));
+  // «Доступ пространств» проекта (db/182).
+  if (deps.projectSharing) app.use('/api/projects', projectWorkspaceAccessRouter({ manage: deps.projectSharing }));
   app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
   app.use('/api/me', meStatsRouter(deps.meStats));
   app.use('/api/search', searchRouter(deps.search));

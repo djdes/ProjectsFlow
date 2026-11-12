@@ -157,7 +157,7 @@ export class CompleteCommitSyncJob {
       // проходит через ту же политику. Диспетчер-руководитель закроет сразу, обычный — на
       // утверждение.
       const target = project
-        ? await this.deps.approval.resolveTargetStatus(project, job.dispatcherUserId, 'done')
+        ? await this.deps.approval.resolveTargetStatus(project, job.dispatcherUserId, 'done', task.originWorkspaceId ?? null)
         : 'done';
       const updated = await this.deps.tasks.update(
         task.id,

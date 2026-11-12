@@ -372,6 +372,7 @@ import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositorie
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
 import { DrizzleProjectSharingRepository } from './infrastructure/repositories/DrizzleProjectSharingRepository.js';
 import { TaskVisibility } from './application/project/TaskVisibility.js';
+import { ManageProjectSharing } from './application/project/ManageProjectSharing.js';
 import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
 import { InviteNeighbors, ListWorkspaceInviteCandidates } from './application/workspace/InviteNeighbors.js';
 import { DrizzleWorkspaceNeighborsRepository } from './infrastructure/repositories/DrizzleWorkspaceNeighborsRepository.js';
@@ -715,7 +716,30 @@ const appBaseUrl =
 // закрытия задач (close-proposal, commit-sync, Telegram-композер).
 const taskApprovalService = new TaskApprovalService({
   workspaces: workspaceRepo,
+  projectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
 });
+// Пространство создания задачи общего проекта (db/182): явно переданное или пространство
+// запроса (X-Workspace-Id), если человек в нём участник; иначе основное, если он участник
+// основного; иначе его единственное подключённое пространство. null — основное.
+const resolveTaskOrigin = async (input: {
+  readonly projectId: string;
+  readonly homeWorkspaceId: string;
+  readonly userId: string;
+  readonly requested: string | null | undefined;
+}): Promise<string | null> => {
+  const workspaceIds = await projectSharingRepo.workspaceIdsOf(input.projectId);
+  if (workspaceIds.length <= 1) return null;
+  const memberships = await projectSharingRepo.memberships(
+    [input.userId],
+    [{ projectId: input.projectId, workspaceIds }],
+  );
+  const mine = memberships.filter((m) => !m.excluded || m.role === 'owner' || m.role === 'lead').map((m) => m.workspaceId);
+  const preferred = input.requested ?? requestWorkspaceContext.get(input.userId)?.workspace?.id ?? null;
+  if (preferred && mine.includes(preferred)) return preferred === input.homeWorkspaceId ? null : preferred;
+  if (mine.includes(input.homeWorkspaceId)) return null;
+  const linked = mine.filter((id) => id !== input.homeWorkspaceId);
+  return linked.length === 1 ? linked[0]! : null;
+};
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 
@@ -1328,6 +1352,7 @@ const telegramComposer = new TelegramComposerService({
   createTaskComment: createTaskCommentUseCase,
   tasks: taskRepo,
   createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
     approval: taskApprovalService,
     workerPolicy,
     projects: projectRepo,
@@ -2459,6 +2484,7 @@ const { app, devProxyUpgrade } = createApp({
       sites: siteArtifactRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2475,6 +2501,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2587,6 +2614,25 @@ const { app, devProxyUpgrade } = createApp({
     coverStorage: attachmentStorage,
     maxCoverBytes: MAX_COVER_BYTES,
   },
+  projectSharing: new ManageProjectSharing({
+    projects: projectRepo,
+    sharing: projectSharingRepo,
+    workspaces: workspaceRepo,
+    members: projectMemberRepo,
+    // Проект появился/исчез в пространствах — сайдбары их участников перечитывают проекты.
+    onChanged: (projectId, workspaceIds) => {
+      void (async () => {
+        const notified = new Set<string>();
+        for (const workspaceId of workspaceIds) {
+          for (const member of await workspaceRepo.listMembers(workspaceId)) {
+            if (notified.has(member.userId)) continue;
+            notified.add(member.userId);
+            realtimeHub.publish(member.userId, { kind: 'project_changed', projectId });
+          }
+        }
+      })().catch((err) => console.warn('[project-sharing] notify failed:', err));
+    },
+  }),
   workspaces: {
     service: workspaceService,
     projectAccess: new ManageWorkspaceProjectAccess({
@@ -2748,6 +2794,7 @@ const { app, devProxyUpgrade } = createApp({
         ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
       }),
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2942,6 +2989,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
       approval: taskApprovalService,
       workerPolicy,
       projects: projectRepo,
@@ -3356,6 +3404,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
       approval: taskApprovalService,
       workerPolicy,
       projects: projectRepo,

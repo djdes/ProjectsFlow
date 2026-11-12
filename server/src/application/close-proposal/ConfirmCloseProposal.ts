@@ -56,7 +56,7 @@ export class ConfirmCloseProposal {
       // в интерфейсе. Раньше этот путь шёл мимо приёмки и закрывал задачу напрямую.
       const project = await this.deps.projects.getById(proposal.projectId);
       const target = project
-        ? await this.deps.approval.resolveTargetStatus(project, input.userId, 'done')
+        ? await this.deps.approval.resolveTargetStatus(project, input.userId, 'done', task.originWorkspaceId ?? null)
         : 'done';
       const updated = await this.deps.tasks.update(
         task.id,

@@ -34,6 +34,8 @@ import {
   ProjectNotFoundError,
   ProjectRepoAlreadyConnectedError,
   ProjectArchiveInvalidError,
+  ProjectSharingForbiddenError,
+  ProjectSharingInvalidError,
 } from '../../domain/project/errors.js';
 import { DispatcherCandidateInvalidError } from '../../application/project/SetProjectDispatcher.js';
 import {
@@ -986,6 +988,15 @@ export function errorHandler(
       error: 'cannot_invite_to_default_workspace',
       message: 'В личное пространство пригласить нельзя',
     });
+    return;
+  }
+  // --- Доступ пространств к проекту (db/182) ---
+  if (err instanceof ProjectSharingForbiddenError) {
+    res.status(403).json({ error: 'project_sharing_forbidden', message: err.message });
+    return;
+  }
+  if (err instanceof ProjectSharingInvalidError) {
+    res.status(400).json({ error: 'project_sharing_invalid', message: err.message });
     return;
   }
   // --- Рабочие Telegram-группы (db/181) ---
