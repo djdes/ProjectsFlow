@@ -161,12 +161,12 @@ export class BroadcastTelegramNotificationByTask {
   // Ошибки доставки одному руководителю не мешают остальным и не влияют на ответ.
   private async notifyLeads(
     cmd: BroadcastByTaskCommand,
-    task: { projectId: string; assignee: { userId: string; displayName: string } },
+    task: { projectId: string; originWorkspaceId?: string | null; assignee: { userId: string; displayName: string } },
     delivered: { userId: string; messageId: number }[],
     skipped: { userId: string; reason: string; detail?: string }[],
   ): Promise<void> {
     if (!TEAM_FORWARD_KINDS.has(cmd.kind)) return;
-    const leadIds = await this.deps.members.listApproverUserIdsForProject(task.projectId);
+    const leadIds = await this.deps.members.listApproverUserIdsForProject(task.projectId, task.originWorkspaceId ?? null);
     const recipients = [...new Set(leadIds)].filter(
       (id) => id !== task.assignee.userId && id !== cmd.skipUserId,
     );

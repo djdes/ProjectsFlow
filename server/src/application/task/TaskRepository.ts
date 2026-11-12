@@ -188,5 +188,7 @@ export interface TaskRepository {
     targetProjectId: string,
     assigneeUserId: string,
     actorUserId?: string | null,
+    // Пространство создания в новом проекте (db/182); null — основное.
+    originWorkspaceId?: string | null,
   ): Promise<Task | null>;
 }

@@ -649,7 +649,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return rows.map((r) => r.userId);
   }
 
-  async listApproverUserIdsForProject(projectId: string): Promise<string[]> {
+  async listApproverUserIdsForProject(projectId: string, originWorkspaceId?: string | null): Promise<string[]> {
     const rows = await this.db
       .select({ userId: workspaceMembers.userId })
       .from(projects)
@@ -660,7 +660,24 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
           inArray(workspaceMembers.role, ['lead', 'owner']),
         ),
       );
-    return rows.map((r) => r.userId);
+    const ids = rows.map((r) => r.userId);
+    if (!originWorkspaceId) return ids;
+    // Общий проект (db/182): задачу из подключённого пространства принимают и его
+    // руководители. Пространство должно быть подключено сейчас (иначе задача — основного).
+    const origin = await this.db
+      .select({ userId: workspaceMembers.userId })
+      .from(projectWorkspaceAccess)
+      .innerJoin(projects, eq(projects.id, projectWorkspaceAccess.projectId))
+      .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, projectWorkspaceAccess.workspaceId))
+      .where(
+        and(
+          eq(projectWorkspaceAccess.projectId, projectId),
+          eq(projectWorkspaceAccess.workspaceId, originWorkspaceId),
+          ne(projectWorkspaceAccess.workspaceId, projects.workspaceId),
+          inArray(workspaceMembers.role, ['lead', 'owner']),
+        ),
+      );
+    return [...new Set([...ids, ...origin.map((r) => r.userId)])];
   }
 
   async listLeadUserIds(workspaceId: string): Promise<string[]> {

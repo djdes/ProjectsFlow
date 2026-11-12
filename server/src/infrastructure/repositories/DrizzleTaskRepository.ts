@@ -512,6 +512,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     targetProjectId: string,
     assigneeUserId: string,
     actorUserId: string | null = null,
+    originWorkspaceId: string | null = null,
   ): Promise<Task | null> {
     const before = this.history ? await this.getById(taskId) : null;
     // Снимок status_before_done относился к колонкам старого проекта — чистим при переносе.
@@ -524,7 +525,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     await this.db.transaction(async (tx) => {
       await tx
         .update(tasks)
-        .set({ projectId: targetProjectId, assigneeUserId, statusBeforeDone: null })
+        .set({ projectId: targetProjectId, assigneeUserId, statusBeforeDone: null, originWorkspaceId })
         .where(activeTasks(eq(tasks.id, taskId)));
       await tx
         .update(taskVersions)

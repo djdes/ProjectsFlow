@@ -10,6 +10,7 @@ import {
   projectInvites,
   projectJoinRequests,
   projectMembers,
+  projectWorkspaceAccess,
   projects,
   secrets,
   taskAttachments,
@@ -266,7 +267,27 @@ export class DrizzleProjectRepository implements ProjectRepository {
 
   async setWorkspace(projectId: string, workspaceId: string): Promise<void> {
     try {
-      await this.db.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+      await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ workspaceId: projects.workspaceId })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .for('update');
+        if (!row) return;
+        await tx.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+        // Общий проект (db/182): ни старое, ни новое основное пространство больше не
+        // подключения — участники старого теряют доступ (перенос меняет аудиторию), а строка
+        // нового не должна переопределять правило основного. Задачи обоих пространств
+        // становятся задачами основного; updated_at задач не трогаем.
+        const homes = [...new Set([row.workspaceId, workspaceId])];
+        await tx
+          .delete(projectWorkspaceAccess)
+          .where(and(eq(projectWorkspaceAccess.projectId, projectId), inArray(projectWorkspaceAccess.workspaceId, homes)));
+        await tx
+          .update(tasks)
+          .set({ originWorkspaceId: null, updatedAt: sql`${tasks.updatedAt}` })
+          .where(and(eq(tasks.projectId, projectId), inArray(tasks.originWorkspaceId, homes)));
+      });
     } catch (err) {
       // Конфликт имени в целевом пространстве (uq_projects_workspace_name).
       if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError('');

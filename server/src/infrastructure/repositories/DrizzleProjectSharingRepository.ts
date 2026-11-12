@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectMemberTaskVisibility,
@@ -198,7 +198,7 @@ export class DrizzleProjectSharingRepository implements ProjectSharingRepository
         // Задачи отключённого пространства остаются в проекте и становятся задачами основного.
         await tx
           .update(tasks)
-          .set({ originWorkspaceId: null })
+          .set({ originWorkspaceId: null, updatedAt: sql`${tasks.updatedAt}` })
           .where(and(eq(tasks.projectId, projectId), inArray(tasks.originWorkspaceId, removedWorkspaceIds)));
         await tx
           .delete(workspaceProjectExclusions)

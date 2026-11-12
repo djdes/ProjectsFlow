@@ -1601,6 +1601,8 @@ export class TelegramComposerService {
         // CreateTask поставил бы «сегодня». Держим то же правило, что и для сегментов.
         deadline: endOfWeekDeadline(this.now()),
         allowInboxDelegation: delegatedInbox,
+        // Общий проект (db/182): задача из чата пространства — задача этого пространства.
+        originWorkspaceId: draft.workspaceId ?? null,
       });
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
@@ -3419,6 +3421,8 @@ export class TelegramComposerService {
           assigneeUserId: assigneeUserId ?? userId,
           allowInboxDelegation: delegatedInbox,
           taskType: seg.taskType ?? null,
+          // Общий проект (db/182): задача из чата пространства — задача этого пространства.
+          originWorkspaceId: draft.workspaceId ?? null,
         });
         created += 1;
         if (created === 1) {

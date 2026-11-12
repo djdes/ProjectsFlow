@@ -3321,6 +3321,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
     }),
     listApprovalQueue: new ListApprovalQueue({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       workspaces: workspaceRepo,
@@ -3345,6 +3346,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
+      resolveOrigin: resolveTaskOrigin,
     }),
     changeAssignee: new ChangeTaskAssignee({
       approval: taskApprovalService,

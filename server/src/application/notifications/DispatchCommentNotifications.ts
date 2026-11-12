@@ -82,7 +82,7 @@ export class DispatchCommentNotifications {
     const preview = commentPreviewText(comment.body);
     if (!project) return;
 
-    const approverIds = await this.deps.members.listApproverUserIdsForProject?.(input.projectId) ?? [];
+    const approverIds = await this.deps.members.listApproverUserIdsForProject?.(input.projectId, task?.originWorkspaceId ?? null) ?? [];
     // Everyone with access to the task: a selected recipient outside this list is dropped.
     const members = await listTaskAudienceMembers(this.deps, project, task, approverIds, projectMembers);
 

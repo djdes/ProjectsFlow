@@ -102,7 +102,9 @@ export interface ProjectMemberRepository {
   // listLeadUserIdsForProject, который возвращает только lead'ов: для уведомлений
   // владелец — тоже руководитель, и в пространстве без назначенных лидов иначе не
   // осталось бы ни одного адресата.
-  listApproverUserIdsForProject(projectId: string): Promise<string[]>;
+  // originWorkspaceId — пространство, где создали задачу (db/182): его руководители тоже
+  // принимают задачу общего проекта.
+  listApproverUserIdsForProject(projectId: string, originWorkspaceId?: string | null): Promise<string[]>;
 
   // Руководители пространства — для ежедневной личной сводки (адресаты рассылки).
   listLeadUserIds(workspaceId: string): Promise<string[]>;
