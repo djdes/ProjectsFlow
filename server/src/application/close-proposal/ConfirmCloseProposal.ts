@@ -41,6 +41,11 @@ export class ConfirmCloseProposal {
 
     const membership = await this.deps.members.findForProject(proposal.projectId, input.userId);
     if (!membership) return { status: 'not_member' };
+    // Общий проект (db/182): скрытую правилами задачу человек не закрывает.
+    const visibleTask = await this.deps.tasks.getById(proposal.taskId);
+    if (visibleTask && this.deps.members.canSeeTask && !(await this.deps.members.canSeeTask(input.userId, visibleTask))) {
+      return { status: 'not_member' };
+    }
 
     const resolved = await this.deps.closeProposals.resolve({
       id: input.proposalId,

@@ -31,15 +31,31 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
     // запись для недоступной/чужой задачи). #блокер5: раньше гейтилось project_members —
     // ws-участник без ленивой строки тихо терял запись просмотра.
     const taskRows = await this.db
-      .select({ projectId: tasks.projectId })
+      .select({
+        projectId: tasks.projectId,
+        createdBy: tasks.createdBy,
+        assigneeUserId: tasks.assigneeUserId,
+        originWorkspaceId: tasks.originWorkspaceId,
+      })
       .from(tasks)
       .where(activeTasks(eq(tasks.id, taskId)))
       .limit(1);
-    const projectId = taskRows[0]?.projectId;
-    if (!projectId) return;
+    const row = taskRows[0];
+    const projectId = row?.projectId;
+    if (!row || !projectId) return;
 
     const membership = await this.projectMembers.findForProject(projectId, userId);
     if (!membership) return;
+    // Общий проект (db/182): скрытую правилами задачу в «Недавние» не записываем.
+    const visible = this.projectMembers.canSeeTask
+      ? await this.projectMembers.canSeeTask(userId, {
+          projectId,
+          createdBy: row.createdBy ?? null,
+          assignee: { userId: row.assigneeUserId },
+          originWorkspaceId: row.originWorkspaceId ?? null,
+        })
+      : true;
+    if (!visible) return;
 
     // Апсерт: одна строка на (user, task), повторное открытие бампит viewed_at.
     // CURRENT_TIMESTAMP (не VALUES(...)) — MariaDB-совместимо, без alias-синтаксиса.

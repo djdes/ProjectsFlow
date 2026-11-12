@@ -487,6 +487,11 @@ type AppDeps = {
     // Обложка проекта: то же локальное файловое хранилище, что и у аттачей задач + лимит.
     readonly coverStorage: AttachmentStorage;
     readonly maxCoverBytes: number;
+    // Общий проект (db/182): какие задачи скрыты от человека правилами видимости.
+    readonly hiddenTaskIds?: (
+      userId: string,
+      refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+    ) => Promise<ReadonlySet<string>>;
   };
   // «Доступ пространств» проекта (db/182).
   readonly projectSharing?: ManageProjectSharing;

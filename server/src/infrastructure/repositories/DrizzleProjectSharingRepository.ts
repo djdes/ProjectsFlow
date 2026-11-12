@@ -17,6 +17,7 @@ import {
 } from '../../domain/project/ProjectSharing.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import type {
+  LoadedProjectSharing,
   ProjectSharingConfig,
   ProjectSharingRepository,
   ProjectWorkspaceMembership,
@@ -41,8 +42,8 @@ export class DrizzleProjectSharingRepository implements ProjectSharingRepository
 
   async loadMany(
     projectIds: readonly string[],
-  ): Promise<Map<string, ProjectSharing & { readonly creatorUserId: string }>> {
-    const result = new Map<string, ProjectSharing & { readonly creatorUserId: string }>();
+  ): Promise<Map<string, LoadedProjectSharing>> {
+    const result = new Map<string, LoadedProjectSharing>();
     const ids = [...new Set(projectIds)];
     if (ids.length === 0) return result;
     const access = await this.db
@@ -53,7 +54,12 @@ export class DrizzleProjectSharingRepository implements ProjectSharingRepository
     const candidateIds = [...new Set(access.map((row) => row.projectId))];
     const [projectRows, overrides] = await Promise.all([
       this.db
-        .select({ id: projects.id, workspaceId: projects.workspaceId, ownerId: projects.ownerId })
+        .select({
+          id: projects.id,
+          workspaceId: projects.workspaceId,
+          ownerId: projects.ownerId,
+          dispatcherUserId: projects.dispatcherUserId,
+        })
         .from(projects)
         .where(inArray(projects.id, candidateIds)),
       this.db
@@ -75,6 +81,7 @@ export class DrizzleProjectSharingRepository implements ProjectSharingRepository
         projectId: project.id,
         homeWorkspaceId: project.workspaceId,
         creatorUserId: project.ownerId,
+        dispatcherUserId: project.dispatcherUserId ?? null,
         workspaces,
         members,
       });

@@ -25,6 +25,11 @@ type Deps = {
   readonly activity: ActivityRepository;
   readonly notifications: NotificationsPort;
   readonly actionStates?: Pick<NotificationActionStates, 'reconcile' | 'attach'>;
+  // Общие проекты (db/182): задачи, скрытые от человека правилами, — их события не показываем.
+  readonly hiddenTaskIds?: (
+    userId: string,
+    refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+  ) => Promise<ReadonlySet<string>>;
 };
 
 export class GetActivityFeed {
@@ -68,8 +73,11 @@ export class GetActivityFeed {
       }),
     ]);
 
+    const refs = events.flatMap((e) => (e.payload?.taskId ? [{ projectId: e.projectId, taskId: e.payload.taskId }] : []));
+    const hidden = this.deps.hiddenTaskIds ? await this.deps.hiddenTaskIds(userId, refs) : new Set<string>();
+    const shown = hidden.size > 0 ? events.filter((e) => !e.payload?.taskId || !hidden.has(e.payload.taskId)) : events;
     const items: ActivityFeedItem[] = [
-      ...events.map((event) => ({ type: 'activity' as const, createdAt: event.createdAt, event })),
+      ...shown.map((event) => ({ type: 'activity' as const, createdAt: event.createdAt, event })),
       ...(await attach(notifs)).map((notification) => ({
         type: 'notification' as const,
         createdAt: notification.createdAt,

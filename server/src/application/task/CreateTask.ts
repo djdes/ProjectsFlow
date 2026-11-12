@@ -170,7 +170,10 @@ export class CreateTask {
     let parentTaskId: string | null = null;
     if (input.parentTaskId) {
       const parent = await this.deps.tasks.getById(input.parentTaskId);
-      if (parent && parent.projectId === targetProjectId) parentTaskId = parent.id;
+      // Общий проект (db/182): подзадачу к скрытой правилами задаче не привязываем.
+      const parentVisible =
+        parent && this.deps.members.canSeeTask ? await this.deps.members.canSeeTask(input.ownerUserId, parent) : true;
+      if (parent && parent.projectId === targetProjectId && parentVisible) parentTaskId = parent.id;
     }
 
     const task = await this.deps.tasks.create({

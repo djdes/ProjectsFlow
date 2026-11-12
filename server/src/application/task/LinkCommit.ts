@@ -7,6 +7,7 @@ import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
+import { isTaskHiddenByRules } from './taskAuthorization.js';
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { parseGithubOwnerRepo } from '../github/ListProjectCommits.js';
@@ -62,6 +63,10 @@ export class LinkCommit {
 
     const task = await this.deps.tasks.getById(input.taskId);
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
+    // Общий проект (db/182): к скрытой правилами задаче коммит не привязать.
+    if (await isTaskHiddenByRules(this.deps, project, task, input.ownerUserId)) {
+      throw new TaskNotFoundError(input.taskId);
+    }
 
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);
     if (!parsed) throw new GithubRepoUrlInvalidError(project.gitRepoUrl);

@@ -149,6 +149,11 @@ type Deps = {
   readonly coverStorage: AttachmentStorage;
   // Лимит размера файла обложки в байтах.
   readonly maxCoverBytes: number;
+  // Общий проект (db/182): какие задачи скрыты от человека правилами видимости.
+  readonly hiddenTaskIds?: (
+    userId: string,
+    refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+  ) => Promise<ReadonlySet<string>>;
 };
 
 // Project всегда содержит role (для текущего юзера). На list-эндпоинте role приходит
@@ -1015,7 +1020,12 @@ export function projectsRouter(deps: Deps): Router {
       const membership = await deps.members.findForProject(id, req.user!.id);
       if (!membership) throw new ProjectNotFoundError();
       const properties = await deps.taskProperties.listForProject(id);
-      const values = await deps.taskProperties.listValuesForProject(id);
+      const all = await deps.taskProperties.listValuesForProject(id);
+      // Общий проект (db/182): значения скрытых правилами задач не отдаём.
+      const hidden = deps.hiddenTaskIds
+        ? await deps.hiddenTaskIds(req.user!.id, all.map((v) => ({ projectId: id, taskId: v.taskId })))
+        : new Set<string>();
+      const values = hidden.size > 0 ? all.filter((v) => !hidden.has(v.taskId)) : all;
       res.json({ properties: properties.map(propertyToDto), values });
     } catch (e) {
       next(e);
@@ -1099,11 +1109,21 @@ export function projectsRouter(deps: Deps): Router {
           typeof propertyId !== 'string'
         )
           throw new ProjectNotFoundError();
-        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        // Значение — часть задачи: гость общего проекта (db/182) тоже ставит, но только на
+        // видимой ему задаче.
+        const membership = await deps.members.findForProject(id, req.user!.id);
+        if (!membership) throw new ProjectNotFoundError();
+        if (membership.role === 'viewer') {
+          res.status(403).json({ error: 'Недостаточно прав для изменения вью доски' });
+          return;
+        }
         const property = await deps.taskProperties.getById(propertyId);
         if (!property || property.projectId !== id) throw new ProjectNotFoundError();
         const task = await deps.tasks.getById(taskId);
         if (!task || task.projectId !== id) throw new ProjectNotFoundError();
+        if (deps.members.canSeeTask && !(await deps.members.canSeeTask(req.user!.id, task))) {
+          throw new ProjectNotFoundError();
+        }
         const body = setTaskPropertyValueSchema.parse(req.body);
         await deps.taskProperties.setValue(taskId, propertyId, body.value);
         await deps.taskVersions.record(task, req.user!.id, task, ['customProperties']);

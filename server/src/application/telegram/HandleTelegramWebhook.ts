@@ -17,6 +17,7 @@ import { WORK_GROUP_CODE_PREFIX } from './ManageTelegramWorkGroups.js';
 import type { TelegramGroupOnboarding } from './TelegramGroupOnboarding.js';
 import { ONBOARDING_CALLBACK_PREFIX, ONBOARDING_START_PREFIX } from './TelegramGroupOnboarding.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import type { VisibleTaskLike } from '../project/TaskVisibility.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskAttachmentRepository } from '../task/TaskAttachmentRepository.js';
@@ -1539,6 +1540,13 @@ export class HandleTelegramWebhook {
     );
   }
 
+  // Общий проект (db/182): только задачи, видимые человеку (в боте нет пространства запроса —
+  // объединение правил его пространств).
+  private async visibleTasks<T extends VisibleTaskLike>(userId: string, list: readonly T[]): Promise<T[]> {
+    if (list.length === 0 || !this.deps.members.filterVisibleTasks) return [...list];
+    return this.deps.members.filterVisibleTasks(userId, list);
+  }
+
   private async handlePending(tgUserId: number, chatId: number): Promise<void> {
     const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     if (!userId) {
@@ -1553,7 +1561,7 @@ export class HandleTelegramWebhook {
       description: string | null;
     }[] = [];
     for (const p of projects) {
-      const list = await this.deps.tasks.listByProject(p.id);
+      const list = await this.visibleTasks(userId, await this.deps.tasks.listByProject(p.id));
       for (const t of list) {
         if (t.status === 'awaiting_clarification') {
           pending.push({
@@ -2106,8 +2114,9 @@ export class HandleTelegramWebhook {
         await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к проекту.', showAlert: true });
         return;
       }
-      const tasks = (await this.deps.tasks.listByProject(projectId)).filter(
-        (t) => t.status !== 'done',
+      const tasks = await this.visibleTasks(
+        userId,
+        (await this.deps.tasks.listByProject(projectId)).filter((t) => t.status !== 'done'),
       );
       if (tasks.length === 0) {
         await this.reply(chatId, '✨ В этом проекте нет открытых задач.');
@@ -2143,7 +2152,8 @@ export class HandleTelegramWebhook {
         return;
       }
       const membership = await this.deps.members.findForProject(task.projectId, userId);
-      if (!membership) {
+      // Общий проект (db/182): скрытая правилами задача — как чужая.
+      if (!membership || (await this.visibleTasks(userId, [task])).length === 0) {
         await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к задаче.', showAlert: true });
         return;
       }

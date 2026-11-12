@@ -4,6 +4,12 @@ import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 // Один проект в нескольких пространствах (db/182). См.
 // docs/superpowers/specs/2026-11-12-shared-projects-across-workspaces-design.md.
 
+// Общий проект с автором и диспетчером: оба видят все задачи проекта.
+export type LoadedProjectSharing = ProjectSharing & {
+  readonly creatorUserId: string;
+  readonly dispatcherUserId?: string | null;
+};
+
 export type ProjectSharingConfig = {
   readonly projectId: string;
   readonly homeWorkspaceId: string;
@@ -33,7 +39,7 @@ export type ProjectWorkspaceMembership = {
 export interface ProjectSharingRepository {
   // Правила общих проектов из списка — только тех, где кроме основного подключено хоть одно
   // пространство. Остальные проекты в ответе отсутствуют (быстрый путь).
-  loadMany(projectIds: readonly string[]): Promise<Map<string, ProjectSharing & { readonly creatorUserId: string }>>;
+  loadMany(projectIds: readonly string[]): Promise<Map<string, LoadedProjectSharing>>;
   // Пространства проекта: основное и подключённые.
   workspaceIdsOf(projectId: string): Promise<string[]>;
   // Членства людей в пространствах проектов (для видимости задач и аудитории уведомлений).

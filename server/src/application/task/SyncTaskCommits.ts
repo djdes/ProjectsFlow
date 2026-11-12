@@ -78,7 +78,11 @@ export class SyncTaskCommits {
     });
 
     // Маппинг short-id (8 hex) → полный task.id. Только задачи этого проекта.
-    const projectTasks = await this.deps.tasks.listByProject(projectId);
+    // Общий проект (db/182): только задачи, видимые вызывающему.
+    const allTasks = await this.deps.tasks.listByProject(projectId);
+    const projectTasks = this.deps.members.filterVisibleTasks
+      ? await this.deps.members.filterVisibleTasks(ownerUserId, allTasks)
+      : allTasks;
     const byShortId = new Map<string, (typeof projectTasks)[number]>();
     for (const t of projectTasks) {
       const shortId = t.id.replace(/-/g, '').slice(0, 8).toLowerCase();

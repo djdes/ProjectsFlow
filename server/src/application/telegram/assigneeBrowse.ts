@@ -15,7 +15,7 @@ import {
 
 // Узкие Pick'и от существующих портов — unit-тесты обходятся мини-фейками.
 export type AssigneeBrowseDeps = {
-  readonly members: Pick<ProjectMemberRepository, 'listProjectsForUser'>;
+  readonly members: Pick<ProjectMemberRepository, 'listProjectsForUser' | 'filterVisibleTasks'>;
   readonly tasks: Pick<TaskRepository, 'listByProject'>;
 };
 
@@ -65,7 +65,9 @@ async function collectOpenTasks(
   }
   const rows: OpenTaskRow[] = [];
   for (const p of projects) {
-    const tasks = await deps.tasks.listByProject(p.id);
+    const all = await deps.tasks.listByProject(p.id);
+    // Общий проект (db/182): только задачи, видимые человеку.
+    const tasks = deps.members.filterVisibleTasks ? await deps.members.filterVisibleTasks(userId, all) : all;
     for (const t of tasks) {
       if (t.status === 'done') continue;
       rows.push({

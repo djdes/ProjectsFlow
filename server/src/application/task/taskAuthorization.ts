@@ -39,7 +39,7 @@ export type TaskAccessResult = {
 };
 
 // Общий проект (db/182): задача скрыта правилами видимости — для этого человека её нет (404).
-async function isTaskHiddenByRules(
+export async function isTaskHiddenByRules(
   deps: Pick<TaskAccessDeps, 'members'>,
   project: Pick<Project, 'isInbox'>,
   task: Task,

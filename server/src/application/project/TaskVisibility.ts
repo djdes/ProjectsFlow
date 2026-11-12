@@ -1,5 +1,9 @@
 import { canSeeTask, type ProjectSharing } from '../../domain/project/ProjectSharing.js';
-import type { ProjectSharingRepository, ProjectWorkspaceMembership } from './ProjectSharingRepository.js';
+import type {
+  LoadedProjectSharing,
+  ProjectSharingRepository,
+  ProjectWorkspaceMembership,
+} from './ProjectSharingRepository.js';
 
 // Минимальный срез задачи для проверки видимости — совпадает с доменной Task.
 export type VisibleTaskLike = {
@@ -18,7 +22,7 @@ type Deps = {
   readonly isSystemAdmin?: (userId: string) => Promise<boolean>;
 };
 
-type SharingWithCreator = ProjectSharing & { readonly creatorUserId: string };
+type SharingWithCreator = LoadedProjectSharing;
 
 /**
  * Видимость задач общих проектов (db/182). Проекты без подключённых пространств идут быстрым
@@ -99,7 +103,13 @@ function visibleTo(
   );
   const memberWorkspaceIds = own.map((m) => m.workspaceId);
   const homeRole = own.find((m) => m.workspaceId === sharing.homeWorkspaceId)?.role;
-  const isAdmin = sharing.creatorUserId === userId || homeRole === 'owner' || homeRole === 'lead';
+  // Автор проекта, руководители основного пространства и диспетчер (воркер исполняет все
+  // задачи проекта) видят всё.
+  const isAdmin =
+    sharing.creatorUserId === userId ||
+    sharing.dispatcherUserId === userId ||
+    homeRole === 'owner' ||
+    homeRole === 'lead';
   const viewerWorkspaceId =
     contextWorkspaceId !== null && memberWorkspaceIds.includes(contextWorkspaceId) ? contextWorkspaceId : null;
   return canSeeTask(

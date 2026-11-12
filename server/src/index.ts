@@ -371,6 +371,7 @@ import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositori
 import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
 import { DrizzleProjectSharingRepository } from './infrastructure/repositories/DrizzleProjectSharingRepository.js';
+import type { Task } from './domain/task/Task.js';
 import { TaskVisibility } from './application/project/TaskVisibility.js';
 import { ManageProjectSharing } from './application/project/ManageProjectSharing.js';
 import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
@@ -646,6 +647,8 @@ const getActivityFeed = new GetActivityFeed({
   activity: activityRepo,
   notifications: notificationRepo,
   actionStates: notificationActionStates,
+  // Объявлен ниже — зовём через замыкание (к моменту запросов уже инициализирован).
+  hiddenTaskIds: (userId, refs) => hiddenTaskIds(userId, refs),
 });
 // GC: чистим события старше 30 дней (на старте + раз в сутки).
 const ACTIVITY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -657,9 +660,16 @@ setInterval(sweepActivity, 24 * 60 * 60 * 1000).unref();
 // Real-time-события (task/project changed) для live-обновления UI без перезагрузки.
 // Транслируются всем участникам проекта по тому же SSE-коннекту, что и уведомления.
 const realtimeHub = new RealtimeHub();
-const projectEventBroadcaster = new ProjectEventBroadcaster({
+const projectEventBroadcaster: ProjectEventBroadcaster = new ProjectEventBroadcaster({
   members: projectMemberRepo,
   publisher: realtimeHub,
+  // Общий проект (db/182): события задачи — только тем, кому она видна. taskRepo объявлен
+  // ниже — берём через замыкание (к моменту событий уже инициализирован).
+  taskAudience: async (projectId: string, taskId: string, userIds: readonly string[]): Promise<string[]> => {
+    if ((await projectSharingRepo.loadMany([projectId])).size === 0) return [...userIds];
+    const task: Task | null = await taskRepo.getByIdIncludingDeleted(taskId);
+    return task ? taskVisibility.filterAudience(task, userIds) : [...userIds];
+  },
 });
 // Best-effort: ошибка резолва участников не должна влиять на основной запрос.
 const notifyTaskChanged = (projectId: string, extraUserIds: readonly string[] = []): void => {
@@ -768,6 +778,23 @@ const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
 const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promise<ReadonlySet<string>> => {
   const list = await taskRepo.listByIds(taskIds);
   return new Set((await taskVisibility.filterTasks(userId, list)).map((task) => task.id));
+};
+// Общие проекты (db/182): задачи из ссылок, скрытые от человека правилами (и удалённые в
+// корзину тоже). Задачи обычных проектов не скрыты — запросов по ним нет.
+const hiddenTaskIds = async (
+  userId: string,
+  refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+): Promise<ReadonlySet<string>> => {
+  if (refs.length === 0) return new Set();
+  const shared = await projectSharingRepo.loadMany(refs.map((ref) => ref.projectId));
+  const ids = [...new Set(refs.filter((ref) => shared.has(ref.projectId)).map((ref) => ref.taskId))];
+  if (ids.length === 0) return new Set();
+  const active = await taskRepo.listByIds(ids);
+  const found = new Set(active.map((task) => task.id));
+  const deleted = await Promise.all(ids.filter((id) => !found.has(id)).map((id) => taskRepo.getByIdIncludingDeleted(id)));
+  const all = [...active, ...deleted.filter((task): task is NonNullable<typeof task> => task !== null)];
+  const visible = new Set((await taskVisibility.filterTasks(userId, all)).map((task) => task.id));
+  return new Set(all.filter((task) => !visible.has(task.id)).map((task) => task.id));
 };
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
@@ -2229,6 +2256,7 @@ const telegramDigestActionService = new TelegramDigestActionService({
 });
 
 const sendDailyDigest = new SendDailyDigest({
+  visibility: taskVisibility,
   tasks: taskRepo,
   comments: taskCommentRepo,
   projects: projectRepo,
@@ -2410,7 +2438,12 @@ const { app, devProxyUpgrade } = createApp({
     maxBlobBytes: SYNC_MAX_BLOB_BYTES,
   },
   live: {
-    activity: new GetProjectWorkerActivity({ projects: projectRepo, members: projectMemberRepo, activity: new MysqlTaskWorkerActivityRepository(pool) }),
+    activity: new GetProjectWorkerActivity({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      activity: new MysqlTaskWorkerActivityRepository(pool),
+      visibleTaskIds,
+    }),
     service: liveService,
     liveEventHub,
   },
@@ -2613,6 +2646,7 @@ const { app, devProxyUpgrade } = createApp({
     members: projectMemberRepo,
     coverStorage: attachmentStorage,
     maxCoverBytes: MAX_COVER_BYTES,
+    hiddenTaskIds,
   },
   projectSharing: new ManageProjectSharing({
     projects: projectRepo,
@@ -2706,7 +2740,7 @@ const { app, devProxyUpgrade } = createApp({
     projectNotifier,
   },
   recentTaskViews: {
-    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace }),
+    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace, hiddenTaskIds }),
     record: new RecordTaskView({ repo: recentTaskViewRepo }),
   },
   projectAnalytics: {
@@ -2727,6 +2761,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       taskVersions: taskVersionRepo,
       tasks: taskRepo,
+      hiddenTaskIds,
     }),
   },
   help: {
