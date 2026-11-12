@@ -330,6 +330,25 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
         })),
       })],
     [/^\/workspaces\/([^/]+)\/invites$/, () => json({ invites: [] })],
+    // Рабочие Telegram-группы (db/181) и кандидаты «Из соседних пространств».
+    [/^\/workspaces\/([^/]+)\/telegram-groups$/, () =>
+      json({
+        groups: [{ chatId: -1001234567890, title: 'Команда · задачи', createdAt: '2026-11-01T09:00:00.000Z' }],
+        mainGroup: null,
+        botUsername: 'ProjectsFlow_Bot',
+      })],
+    [/^\/workspaces\/([^/]+)\/invite-candidates$/, () =>
+      json({
+        candidates: PEOPLE.slice(0, 2).map((p) => ({
+          userId: `${p.id}-neighbor`,
+          displayName: p.displayName,
+          email: `neighbor.${p.email}`,
+          avatarUrl: null,
+          hasTelegram: true,
+          workspaces: [{ id: 'ws-office', name: 'Офис', icon: null }],
+          invited: false,
+        })),
+      })],
     [/^\/workspaces\/([^/]+)\/projects$/, () =>
       json({ projects: PROJECT_SEEDS.map((s) => ({ id: s.id, name: s.name, icon: s.icon })) })],
     [/^\/workspaces\/([^/]+)\/kanban-columns$/, () => json({ columns: [] })],
