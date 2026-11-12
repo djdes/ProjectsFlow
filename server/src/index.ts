@@ -780,9 +780,9 @@ const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promi
   return new Set((await taskVisibility.filterTasks(userId, list)).map((task) => task.id));
 };
 // Общие проекты (db/182): задачи из ссылок, скрытые от человека правилами. Ссылка
-// оценивается в своём проекте: задача могла уехать в другой проект или быть удалена насовсем —
-// тогда она считается задачей основного пространства с неизвестными автором и ответственным
-// (видят те, кому видно всё основное). Задачи обычных проектов не скрыты — запросов по ним нет.
+// оценивается в своём проекте: задача, уехавшая в другой проект, — как задача основного
+// пространства (автор и ответственный — прежние); удалённая насовсем — задача основного
+// пространства без автора и ответственного. Задачи обычных проектов не скрыты.
 const hiddenTaskIds = async (
   userId: string,
   refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
@@ -1742,6 +1742,7 @@ const SYNC_IGNORE_SET = [
 const fileSyncService = new FileSyncService({
   projects: projectRepo,
   members: projectMemberRepo,
+  tasks: taskRepo,
   repo: new DrizzleFileSyncRepository(db),
   storage: blobStorage,
   idGen: idGenerator,

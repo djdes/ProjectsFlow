@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/
 import { useMobileSheet } from '@/components/ui/mobile-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useOptionalProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import {
   ArrowDown,
   ArrowUp,
@@ -235,6 +236,8 @@ export function ProjectBoardViews({
 }: Props): React.ReactElement {
   const { boardViewRepository, taskTemplateRepository } = useContainer();
   const navigate = useNavigate();
+  // Гость общего проекта (db/182) ведёт задачи, а Студия (сайт проекта) — за основным пространством.
+  const guestProject = useOptionalProjectsContext()?.data?.find((p) => p.id === projectId)?.guest === true;
   const rightPanelWidth = useRightPanelWidth();
   const storageKey = `pf:board-view:${projectId}`;
   const [views, setViews] = useState<BoardView[] | null>(null);
@@ -875,10 +878,12 @@ export function ProjectBoardViews({
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2" onClick={() => navigate(`/projects/${projectId}/studio`)}>
-                <PanelsTopLeft className="size-4" />
-                Студия проекта
-              </DropdownMenuItem>
+              {!guestProject && (
+                <DropdownMenuItem className="gap-2" onClick={() => navigate(`/projects/${projectId}/studio`)}>
+                  <PanelsTopLeft className="size-4" />
+                  Студия проекта
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem className="gap-2" onClick={() => openSettings()}>
                 <Settings2 className="size-4" />
                 Настройки отображения
@@ -1125,15 +1130,17 @@ export function ProjectBoardViews({
           {/* Студия проекта. Раньше жила в «трёх точках» — оттуда её не видно, хотя это
               вторая по значимости точка входа после создания задачи. Парная кнопка к
               «Создать»: тот же синий, та же высота и скругление. */}
-          <Button
-            size="icon"
-            aria-label="Открыть Студию"
-            title="Открыть Студию"
-            onClick={() => navigate(`/projects/${projectId}/studio`)}
-            className="ms-1 hidden size-7 rounded-md md:inline-flex"
-          >
-            <PanelsTopLeft className="size-4" />
-          </Button>
+          {!guestProject && (
+            <Button
+              size="icon"
+              aria-label="Открыть Студию"
+              title="Открыть Студию"
+              onClick={() => navigate(`/projects/${projectId}/studio`)}
+              className="ms-1 hidden size-7 rounded-md md:inline-flex"
+            >
+              <PanelsTopLeft className="size-4" />
+            </Button>
+          )}
           {/* Кнопка New у Notion: 28px высотой, радиус 6px, шрифт 14px (MEASURED.md §3).
               Скругление задаёт обёртка (rounded-md = 6px), а половинки внутри —
               rounded-none: свои углы внутри обрезки они бы только «срезали», и группа

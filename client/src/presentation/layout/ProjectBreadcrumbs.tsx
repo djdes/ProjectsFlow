@@ -119,14 +119,18 @@ const CURRENT_DROPDOWN_ITEM_CLASS = 'bg-hover font-medium text-foreground';
 function ViewMenuItems({
   projectId,
   activeKey,
+  guest = false,
 }: {
   projectId: string;
   activeKey?: ProjectViewKey;
+  // Гость общего проекта (db/182): только доска и обзор — разделы проекта ему не открыты.
+  guest?: boolean;
 }): React.ReactElement {
   const navigate = useNavigate();
+  const views = guest ? VIEWS.filter((v) => v.key === 'board' || v.key === 'overview') : VIEWS;
   return (
     <>
-      {VIEWS.map(({ key, label, Icon, path }) => (
+      {views.map(({ key, label, Icon, path }) => (
         <DropdownMenuItem
           key={key}
           onSelect={() => navigate(path(projectId))}
@@ -283,6 +287,7 @@ export function ProjectBreadcrumbs({
                   <ViewMenuItems
                     projectId={p.id}
                     activeKey={p.id === projectId ? view : undefined}
+                    guest={p.guest === true}
                   />
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>
@@ -328,7 +333,11 @@ export function ProjectBreadcrumbs({
         >
           <DropdownMenuLabel>Разделы проекта</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <ViewMenuItems projectId={projectId} activeKey={view} />
+          <ViewMenuItems
+            projectId={projectId}
+            activeKey={view}
+            guest={allProjects.find((p) => p.id === projectId)?.guest === true}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
 

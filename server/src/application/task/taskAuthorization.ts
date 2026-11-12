@@ -107,9 +107,10 @@ export async function canManageTask(
   const membership = await deps.members.findForProject(project.id, userId);
   if (!project.isInbox && !membership) return false;
   if (task.assignee.userId === userId || membership?.role === 'owner' || membership?.role === 'lead') return true;
-  // Общий проект (db/182): гость-руководитель пространства, где задачу создали, ведёт её и
-  // принимает работу — как руководитель основного пространства свои задачи.
-  if (membership?.guest && task.originWorkspaceId) {
+  // Общий проект (db/182): руководитель пространства, где задачу создали, ведёт её и принимает
+  // работу — даже если в проекте он гость или рядовой участник основного пространства. Список
+  // принимающих сам проверяет, что это пространство подключено сейчас (иначе — только основное).
+  if (task.originWorkspaceId) {
     const approvers = await deps.members.listApproverUserIdsForProject?.(project.id, task.originWorkspaceId);
     return (approvers ?? []).includes(userId);
   }

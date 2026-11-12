@@ -48,6 +48,8 @@ export class ListDispatcherCandidates {
 
     // 1) Members с активными токенами.
     for (const m of members) {
+      // Гость общего проекта (db/182) диспетчером не бывает (SetProjectDispatcher его отклонит).
+      if (m.guest) continue;
       const activeTokenCount = await this.deps.agentTokens.countActiveByUser(m.userId);
       if (activeTokenCount === 0) continue;
       seen.add(m.userId);

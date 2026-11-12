@@ -119,8 +119,10 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     const [quick] = await this.db
       .select({
         isInbox: projects.isInbox,
-        shared: sql<number>`EXISTS (SELECT 1 FROM project_workspace_access a WHERE a.project_id = ${projects.id} AND a.workspace_id <> ${projects.workspaceId})`,
-        homeHidden: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x INNER JOIN workspace_members wm ON wm.workspace_id = x.workspace_id AND wm.user_id = x.user_id WHERE x.project_id = ${projects.id} AND x.workspace_id = ${projects.workspaceId} AND x.user_id = ${userId} AND wm.role NOT IN ('owner', 'lead'))`,
+        // Имена колонок — явно с таблицей: в выборке из одной таблицы drizzle пишет их без
+        // неё, и внутри подзапроса `workspace_id` связался бы с таблицей подзапроса.
+        shared: sql<number>`EXISTS (SELECT 1 FROM project_workspace_access a WHERE a.project_id = projects.id AND a.workspace_id <> projects.workspace_id)`,
+        homeHidden: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x INNER JOIN workspace_members wm ON wm.workspace_id = x.workspace_id AND wm.user_id = x.user_id WHERE x.project_id = projects.id AND x.workspace_id = projects.workspace_id AND x.user_id = ${userId} AND wm.role NOT IN ('owner', 'lead'))`,
       })
       .from(projects)
       .where(eq(projects.id, projectId))
