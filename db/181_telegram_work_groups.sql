@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS telegram_group_onboardings (
   tg_chat_id      BIGINT       NOT NULL,
   workspace_id    CHAR(36)     NOT NULL,
   tg_user_id      BIGINT       NOT NULL,
+  -- Профиль Telegram из личного /start: сохраняем в аккаунт при привязке.
+  tg_username     VARCHAR(64)  NULL,
+  tg_first_name   VARCHAR(128) NULL,
   sender_name     VARCHAR(255) NOT NULL,
   group_title     VARCHAR(255) NULL,
   pending_text    TEXT         NULL,

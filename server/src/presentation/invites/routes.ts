@@ -55,8 +55,8 @@ export function invitesRouter(deps: Deps): Router {
           return;
         }
         try {
-          const { workspaceId } = await deps.acceptWorkspace.execute(token, req.user!.id);
-          res.json({ workspaceId });
+          const { workspaceId, telegram } = await deps.acceptWorkspace.execute(token, req.user!.id);
+          res.json({ workspaceId, telegram });
           return;
         } catch (err) {
           if (!(err instanceof WorkspaceInviteNotFoundError)) throw err;

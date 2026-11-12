@@ -471,3 +471,37 @@ test('editor cannot retrieve, resend or revoke another inviter token', async () 
   const repeated = await f.create.execute({ workspaceId: 'w1', actorUserId: 'u2', email: 'person@example.test', role: 'editor' });
   assert.equal(repeated.reused, true); assert.equal(repeated.canShare, false);
 });
+
+test('accept: хук после вступления получает приглашение и возвращает статус Telegram', async () => {
+  const { invitesRepo, workspaces } = makeFakes({ invites: [pendingInvite()] });
+  const calls: Array<{ inviteId: string; workspaceId: string; userId: string }> = [];
+  const accept = new AcceptWorkspaceInvite({
+    users: { getById: async () => ({ email: 'u2@test.dev' }) },
+    invites: invitesRepo,
+    workspaces,
+    now: () => NOW,
+    onAccepted: async (input) => {
+      calls.push(input);
+      return { telegram: 'linked' };
+    },
+  });
+  const res = await accept.execute('t'.repeat(64), 'u2');
+  assert.deepEqual(res, { workspaceId: 'w1', telegram: 'linked' });
+  assert.deepEqual(calls, [{ inviteId: 'inv-1', workspaceId: 'w1', userId: 'u2' }]);
+});
+
+test('accept: сбой хука не отменяет вступление', async () => {
+  const { invitesRepo, workspaces } = makeFakes({ invites: [pendingInvite()] });
+  const accept = new AcceptWorkspaceInvite({
+    users: { getById: async () => ({ email: 'u2@test.dev' }) },
+    invites: invitesRepo,
+    workspaces,
+    now: () => NOW,
+    onAccepted: async () => {
+      throw new Error('telegram down');
+    },
+  });
+  const res = await accept.execute('t'.repeat(64), 'u2');
+  assert.deepEqual(res, { workspaceId: 'w1', telegram: null });
+  assert.equal((await workspaces.getMembership('w1', 'u2'))?.role, 'editor');
+});

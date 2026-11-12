@@ -370,6 +370,8 @@ import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositor
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
 import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
+import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
+import { DrizzleTelegramGroupOnboardingRepository } from './infrastructure/repositories/DrizzleTelegramGroupOnboardingRepository.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
@@ -1432,6 +1434,39 @@ const dismissCloseProposal = new DismissCloseProposal({
   members: projectMemberRepo,
 });
 
+// Подключение людей из рабочих Telegram-групп (db/181): инструкция в группе, персональное
+// приглашение в личке бота, после вступления — задача из запомненного текста.
+const telegramGroupOnboarding = new TelegramGroupOnboarding({
+  repo: new DrizzleTelegramGroupOnboardingRepository(db),
+  users: userRepo,
+  workspaces: workspaceRepo,
+  invites: workspaceInviteRepo,
+  client: telegramClient,
+  appUrl: appBaseUrl,
+  botUsername: telegramBotUsername,
+  shortIdGen: shortIdGenerator,
+  idGen: idGenerator,
+  randomToken: () => randomBytes(32).toString('hex'),
+  now,
+  // Не ждём перефраз: принятие приглашения (HTTP) и кнопки бота отвечают сразу.
+  startTask: async (input) => {
+    void telegramComposer
+      .startFromMessage(
+        input.tgUserId,
+        input.chatId,
+        input.text,
+        {
+          ownerUserId: await telegramGroupOwnerRepo.getOwnerUserId(input.chatId).catch(() => null),
+          senderName: input.senderName,
+          groupTitle: input.groupTitle,
+        },
+        [],
+        { sourceKey: input.sourceKey, background: true },
+      )
+      .catch((err) => console.warn('[tg-onboarding] pending task failed:', err));
+  },
+});
+
 const handleTelegramWebhook = new HandleTelegramWebhook({
   pairing: pairTelegramAccount,
   users: userRepo,
@@ -1448,6 +1483,9 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   taskMessages: telegramTaskMessageRepo,
   messageTasks: telegramMessageTaskRepo,
   groupOwners: telegramGroupOwnerRepo,
+  workGroups: telegramWorkGroups,
+  onboarding: telegramGroupOnboarding,
+  isWorkspaceMember: (workspaceId, userId) => isWorkspaceMember(userId, workspaceId),
   createComment: createTaskCommentUseCase,
   deleteTask: new DeleteTask({
     projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
@@ -2625,6 +2663,8 @@ const { app, devProxyUpgrade } = createApp({
       invites: workspaceInviteRepo,
       workspaces: workspaceRepo,
       now,
+      // Приглашение из рабочей Telegram-группы: привязать Telegram и поставить ждавшую задачу.
+      onAccepted: ({ inviteId, userId }) => telegramGroupOnboarding.completeFromInvite({ inviteId, userId }),
     }),
     acceptProject: new AcceptProjectInvite({
       users: userRepo,
@@ -3642,6 +3682,7 @@ const server = app.listen(config.port, () => {
         { command: 'pending', description: 'Задачи на уточнении' },
         { command: 'pause', description: 'Выключить уведомления' },
         { command: 'help', description: 'Что умеет бот' },
+        { command: 'id', description: 'ID этой группы для настроек пространства' },
         { command: 'start', description: 'Подключить бота' },
       ])
       .catch((err) => console.warn('[projectsflow] telegram setMyCommands failed:', err));

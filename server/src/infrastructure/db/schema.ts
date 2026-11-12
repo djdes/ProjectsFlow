@@ -316,6 +316,8 @@ export const telegramGroupOnboardings = mysqlTable(
     tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     tgUserId: bigint('tg_user_id', { mode: 'number' }).notNull(),
+    tgUsername: varchar('tg_username', { length: 64 }),
+    tgFirstName: varchar('tg_first_name', { length: 128 }),
     senderName: varchar('sender_name', { length: 255 }).notNull(),
     groupTitle: varchar('group_title', { length: 255 }),
     pendingText: text('pending_text'),
