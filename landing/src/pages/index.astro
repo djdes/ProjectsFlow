@@ -4,6 +4,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import ShowcaseApp from '@/components/showcase/ShowcaseApp';
 import { PLANS } from '@/data/pricing';
 import { FAQ } from '@/data/faq';
+import { SITE_DESCRIPTION } from '@/data/site';
 import { readingMinutes, formatDate } from '@/lib/blog';
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
@@ -48,8 +49,7 @@ const jsonLd = [
     operatingSystem: 'Web',
     url: SITE,
     inLanguage: 'ru-RU',
-    description:
-      'Платформа для тех, кто строит с AI: описываешь идею — проект доводится до результата. Канбан, проекты, делегирование задач AI.',
+    description: SITE_DESCRIPTION,
     offers: PLANS.map((p) => ({
       '@type': 'Offer',
       name: p.name,

@@ -102,6 +102,8 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
   (сдвиг, масштаб, вращение) — только под `motion-safe:`/`prefers-reduced-motion: no-preference`;
   `transition-all` не используем; размеры текста — шкала (`text-2xs` = 11px … `text-title`).
 - Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.
+- `/llms.txt` (описание сайта для ИИ-помощников, llmstxt.org) — `landing/src/pages/llms.txt.ts`: собирается при
+  сборке лендинга из `data/site.ts`, `data/pricing.ts`, `data/faq.ts` и коллекции блога; своего текста не содержит.
 - Миграции БД — новый файл `db/00N_*.sql` (append-only, MariaDB-совместимый синтаксис).
 
 ## Переменные окружения
