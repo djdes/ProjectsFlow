@@ -510,6 +510,35 @@ export const workspaces = mysqlTable(
   (t) => [index('idx_workspaces_owner').on(t.ownerUserId)],
 );
 
+// Один проект в нескольких пространствах (db/182): подключённые пространства и их правило
+// видимости задач (строка основного пространства хранит только его правило).
+export const projectWorkspaceAccess = mysqlTable(
+  'project_workspace_access',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    taskScope: mysqlEnum('task_scope', ['all', 'own', 'selected']).notNull().default('own'),
+    visibleFrom: json('visible_from').$type<string[] | null>(),
+    createdByUserId: char('created_by_user_id', { length: 36 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.workspaceId] }), index('idx_pwa_workspace').on(t.workspaceId)],
+);
+
+// Персональное правило видимости задач общего проекта (db/182).
+export const projectMemberTaskVisibility = mysqlTable(
+  'project_member_task_visibility',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    taskScope: mysqlEnum('task_scope', ['all', 'mine', 'selected']).notNull(),
+    visibleFrom: json('visible_from').$type<string[] | null>(),
+    updatedByUserId: char('updated_by_user_id', { length: 36 }),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
+);
+
 export type WorkspaceRow = typeof workspaces.$inferSelect;
 export type NewWorkspaceRow = typeof workspaces.$inferInsert;
 
@@ -864,6 +893,8 @@ export const tasks = mysqlTable(
     priority: tinyint('priority', { unsigned: true }),
     // Тип задачи: 'feature' | 'bug'. NULL = не определён. См. db/153.
     taskType: varchar('task_type', { length: 16 }),
+    // Пространство, в котором задачу создали (общий проект, db/182). NULL = основное.
+    originWorkspaceId: char('origin_workspace_id', { length: 36 }),
     // Мягкое удаление (db/134). NULL = живая задача. Заполнено = задача в корзине:
     // скрыта из ВСЕХ выборок, но строка и все её child-таблицы целы, поэтому
     // восстановление возвращает задачу с ТЕМ ЖЕ id.
@@ -879,6 +910,7 @@ export const tasks = mysqlTable(
     index('idx_tasks_ralph_cancel').on(t.ralphCancelRequestedAt),
     index('idx_tasks_project_deleted').on(t.projectId, t.deletedAt),
     index('idx_tasks_assignee_deleted').on(t.assigneeUserId, t.deletedAt),
+    index('idx_tasks_project_origin').on(t.projectId, t.originWorkspaceId),
   ],
 );
 

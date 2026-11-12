@@ -95,6 +95,7 @@ function toTask(row: TaskRowJoined): Task {
     // VARCHAR в БД: неизвестное значение (ручной UPDATE, будущий тип со старого клиента)
     // читаем как «не определён», а не протаскиваем мусор в домен.
     taskType: isTaskType(row.taskType) ? row.taskType : null,
+    originWorkspaceId: row.originWorkspaceId ?? null,
     deletedAt: row.deletedAt ?? null,
     deletedBy: row.deletedBy ?? null,
     createdAt: row.createdAt,
@@ -140,6 +141,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         parentTaskId: tasks.parentTaskId,
         priority: tasks.priority,
         taskType: tasks.taskType,
+        originWorkspaceId: tasks.originWorkspaceId,
         deletedAt: tasks.deletedAt,
         deletedBy: tasks.deletedBy,
         createdAt: tasks.createdAt,
@@ -269,6 +271,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       ...(input.parentTaskId !== undefined ? { parentTaskId: input.parentTaskId } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
+      ...(input.originWorkspaceId ? { originWorkspaceId: input.originWorkspaceId } : {}),
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');

@@ -1,3 +1,4 @@
+import type { VisibleTaskLike } from './TaskVisibility.js';
 import type { ProjectMembership, ProjectRole } from '../../domain/project/ProjectMembership.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { User } from '../../domain/user/User.js';
@@ -18,6 +19,8 @@ export type ProjectWithRole = Project & {
   readonly isFavorite: boolean;
   // Порядок внутри секции «Избранное» (имеет смысл только при isFavorite=true).
   readonly favoriteSortOrder: number;
+  // Общий проект (db/182): его пространства, основное первым. Пусто — проект не общий.
+  readonly sharedWorkspaces?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly icon: string | null }>;
 };
 
 export type AddMemberInput = {
@@ -29,6 +32,12 @@ export type AddMemberInput = {
 export interface ProjectMemberRepository {
   /** Explicit workspace restriction, including when platform admin bypass is configured. */
   isProjectHidden?(projectId: string, userId: string): Promise<boolean>;
+  // Видимость задач общих проектов (db/182): задачи, которые человек видит (в пространстве
+  // текущего запроса или, без него, по объединению правил). Необязательно — без реализации
+  // все задачи видны, как раньше.
+  filterVisibleTasks?<T extends VisibleTaskLike>(userId: string, tasks: readonly T[]): Promise<T[]>;
+  // Кому из списка показывать события и уведомления по задаче общего проекта.
+  filterTaskAudience?(task: VisibleTaskLike, userIds: readonly string[]): Promise<string[]>;
   // Главный метод доступа: «может ли userId смотреть/менять projectId, и с какой ролью».
   // Возвращает null если юзер не member — use-case обычно мапит в ProjectNotFoundError (404).
   findForProject(projectId: string, userId: string): Promise<ProjectMembership | null>;

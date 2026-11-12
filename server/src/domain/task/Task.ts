@@ -116,6 +116,9 @@ export type Task = {
   readonly priority: TaskPriority | null;
   // Тип задачи: 'feature' | 'bug'. null = не определён. См. db/153.
   readonly taskType: TaskType | null;
+  // Пространство, в котором задачу создали (общий проект, db/182). null = основное
+  // пространство проекта. Optional — старые fake-репозитории его не заполняют.
+  readonly originWorkspaceId?: string | null;
   // Мягкое удаление (db/134). null = живая задача, Date = лежит в корзине.
   // Optional, а не обязательное: обычные выборки задач отдают только живые задачи,
   // поэтому подавляющее большинство мест не должно думать про это поле —

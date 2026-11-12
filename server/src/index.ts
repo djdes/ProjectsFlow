@@ -85,7 +85,7 @@ import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
 import { UploadUserAvatar } from './application/user/UploadUserAvatar.js';
 import { ListProjects } from './application/project/ListProjects.js';
-import { configureAdminBypass } from './application/project/projectAccess.js';
+import { configureAdminBypass, isSystemAdmin } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
@@ -370,6 +370,8 @@ import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositor
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
 import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
+import { DrizzleProjectSharingRepository } from './infrastructure/repositories/DrizzleProjectSharingRepository.js';
+import { TaskVisibility } from './application/project/TaskVisibility.js';
 import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
 import { InviteNeighbors, ListWorkspaceInviteCandidates } from './application/workspace/InviteNeighbors.js';
 import { DrizzleWorkspaceNeighborsRepository } from './infrastructure/repositories/DrizzleWorkspaceNeighborsRepository.js';
@@ -476,7 +478,15 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const passwordResetTokenRepo = new DrizzlePasswordResetTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
-const projectMemberRepo = new DrizzleProjectMemberRepository(db);
+// Один проект в нескольких пространствах (db/182): правила видимости задач. Пространство
+// запроса берём из контекста X-Workspace-Id (объявлен ниже, читается только во время запроса).
+const projectSharingRepo = new DrizzleProjectSharingRepository(db);
+const taskVisibility = new TaskVisibility({
+  sharing: projectSharingRepo,
+  currentWorkspaceId: (userId) => requestWorkspaceContext.get(userId)?.workspace?.id ?? null,
+  isSystemAdmin,
+});
+const projectMemberRepo = new DrizzleProjectMemberRepository(db, taskVisibility);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
 const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db, projectMemberRepo);
