@@ -4,7 +4,9 @@
 // чтобы мгновенно реагировать на новые комменты вместо 30-секундного polling'а.
 export type RealtimeEvent =
   | { readonly kind: 'task_changed'; readonly projectId: string }
-  | { readonly kind: 'project_changed'; readonly projectId: string }
+  // workspaceId — событие для конкретного пространства (например, общий проект только что
+  // отключили от него, db/182): поток этого пространства пропускает его без проверки проекта.
+  | { readonly kind: 'project_changed'; readonly projectId: string; readonly workspaceId?: string }
   | {
       readonly kind: 'task_version_created';
       readonly projectId: string;

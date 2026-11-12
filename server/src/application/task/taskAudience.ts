@@ -20,12 +20,27 @@ export type TaskAudienceDeps = {
 export async function listTaskAudienceMembers(
   deps: TaskAudienceDeps,
   project: Pick<Project, 'id' | 'isInbox' | 'ownerId' | 'workspaceId'>,
-  task: Pick<Task, 'assignee' | 'createdBy'> | null,
+  task: (Pick<Task, 'assignee' | 'createdBy'> & Partial<Pick<Task, 'originWorkspaceId'>>) | null,
   approverIds: readonly string[],
   // Already loaded members.listByProject(project.id), to avoid a second query.
   projectMembers?: readonly ProjectMemberWithUser[],
 ): Promise<ProjectMemberWithUser[]> {
   const members = [...(projectMembers ?? await deps.members.listByProject(project.id))];
+  if (!project.isInbox && task && deps.members.filterTaskAudience) {
+    // Общий проект (db/182): о задаче узнают только те, кому она видна по правилам.
+    const allowed = new Set(
+      await deps.members.filterTaskAudience(
+        {
+          projectId: project.id,
+          createdBy: task.createdBy,
+          assignee: task.assignee,
+          originWorkspaceId: task.originWorkspaceId ?? null,
+        },
+        members.map((m) => m.userId),
+      ),
+    );
+    return members.filter((m) => allowed.has(m.userId));
+  }
   if (!project.isInbox || !deps.users) return members;
 
   const involved = new Set([...approverIds, ...(task?.assignee?.userId ? [task.assignee.userId] : [])]);

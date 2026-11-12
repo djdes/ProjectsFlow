@@ -3,7 +3,7 @@ import {
   ProjectNotFoundError,
 } from '../../domain/project/errors.js';
 import { NotAssignedDispatcherError } from '../../domain/file-sync/errors.js';
-import { can, type ProjectAction } from '../../domain/project/permissions.js';
+import { canMember, type ProjectAction } from '../../domain/project/permissions.js';
 import type { ProjectMembership } from '../../domain/project/ProjectMembership.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
@@ -49,7 +49,7 @@ export async function requireProjectAccess(
   action: ProjectAction,
 ): Promise<ProjectAccess> {
   const membership = await deps.members.findForProject(projectId, userId);
-  if (membership && can(membership.role, action)) {
+  if (membership && canMember(membership, action)) {
     const project = await deps.projects.getById(projectId);
     if (!project) throw new ProjectNotFoundError();
     return { project, membership };

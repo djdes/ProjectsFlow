@@ -16,6 +16,10 @@ export class ListTrashedTasks {
 
   async execute(projectId: string, actorUserId: string): Promise<Task[]> {
     await requireProjectAccess(this.deps, projectId, actorUserId, 'read_project');
-    return this.deps.tasks.listTrashedByProject(projectId);
+    const trashed = await this.deps.tasks.listTrashedByProject(projectId);
+    // Общий проект (db/182): скрытые правилами задачи в корзине тоже не показываем.
+    return this.deps.members.filterVisibleTasks
+      ? this.deps.members.filterVisibleTasks(actorUserId, trashed)
+      : trashed;
   }
 }

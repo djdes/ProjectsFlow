@@ -48,6 +48,10 @@ export type Project = {
   // отсутствуют). memberCount > 1 ⇒ совместный проект (иконка участников).
   readonly memberCount?: number;
   readonly taskCount?: number;
+  // Общий проект (db/182): его пространства, основное первым. Пусто/нет — проект не общий.
+  readonly sharedWorkspaces?: ReadonlyArray<import('./ProjectSharing').SharedWorkspaceRef>;
+  // Гость общего проекта: доступ через подключённое пространство — задачи без настроек проекта.
+  readonly guest?: boolean;
   // Кто видит финансы: 'owner' (по умолчанию) или 'members'. На list-эндпоинте может
   // отсутствовать в старых ответах — дефолт 'owner'.
   readonly financeVisibility: FinanceVisibility;

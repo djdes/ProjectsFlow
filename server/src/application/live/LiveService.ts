@@ -1,6 +1,7 @@
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import { requireProjectAccess, requireDispatcherAccess } from '../project/projectAccess.js';
+import { isTaskHiddenByRules } from '../task/taskAuthorization.js';
 import type { ProjectEventBroadcaster } from '../realtime/ProjectEventBroadcaster.js';
 import type { LiveRepository, FinishLiveSessionInput } from './LiveRepository.js';
 import type { LiveEventHub } from '../../infrastructure/realtime/LiveEventHub.js';
@@ -72,6 +73,16 @@ export class LiveService {
 
   private async authRead(projectId: string, userId: string): Promise<void> {
     await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project');
+  }
+
+  // Лента конкретной задачи: участник проекта, которому задача видна по правилам общего
+  // проекта (db/182). false — задачи нет или она скрыта.
+  private async canReadTask(projectId: string, userId: string, taskId: string): Promise<boolean> {
+    const { project } = await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project');
+    // С корзиной: история запусков удалённой задачи остаётся доступной, как и раньше.
+    const task = await this.deps.tasks.getByIdIncludingDeleted(taskId);
+    if (!task || task.projectId !== projectId) return false;
+    return !(await isTaskHiddenByRules(this.accessDeps, project, task, userId));
   }
 
   private broadcastChanged(
@@ -303,11 +314,17 @@ export class LiveService {
   // ---------- read (участник проекта) ----------
   async listRunningTaskIds(projectId: string, userId: string): Promise<string[]> {
     await this.authRead(projectId, userId);
-    return this.deps.repo.listRunningTaskIds(projectId);
+    const ids = await this.deps.repo.listRunningTaskIds(projectId);
+    const members = this.deps.access.members;
+    if (ids.length === 0 || !members.filterVisibleTasks) return ids;
+    // Общий проект (db/182): только задачи, видимые этому человеку.
+    const tasks = await members.filterVisibleTasks(userId, await this.deps.tasks.listByIds(ids));
+    const visible = new Set(tasks.map((task) => task.id));
+    return ids.filter((id) => visible.has(id));
   }
 
   async listSessions(projectId: string, userId: string, taskId: string): Promise<LiveSession[]> {
-    await this.authRead(projectId, userId);
+    if (!(await this.canReadTask(projectId, userId, taskId))) return [];
     return this.deps.repo.listSessions(taskId);
   }
 
@@ -319,8 +336,8 @@ export class LiveService {
     afterSeq: number,
     limit: number,
   ): Promise<LiveEvent[]> {
-    await this.authRead(projectId, userId);
-    const session = await this.deps.repo.getSession(sessionId);
+    const readable = await this.canReadTask(projectId, userId, taskId);
+    const session = readable ? await this.deps.repo.getSession(sessionId) : null;
     if (!session || session.taskId !== taskId || session.projectId !== projectId) {
       throw new LiveSessionNotFoundError(sessionId);
     }
@@ -333,8 +350,8 @@ export class LiveService {
     taskId: string,
     sessionId: string,
   ): Promise<LiveFileDiff[]> {
-    await this.authRead(projectId, userId);
-    const session = await this.deps.repo.getSession(sessionId);
+    const readable = await this.canReadTask(projectId, userId, taskId);
+    const session = readable ? await this.deps.repo.getSession(sessionId) : null;
     if (!session || session.taskId !== taskId || session.projectId !== projectId) {
       throw new LiveSessionNotFoundError(sessionId);
     }
@@ -348,8 +365,8 @@ export class LiveService {
     taskId: string,
     sessionId: string,
   ): Promise<LiveSession> {
-    await this.authRead(projectId, userId);
-    const session = await this.deps.repo.getSession(sessionId);
+    const readable = await this.canReadTask(projectId, userId, taskId);
+    const session = readable ? await this.deps.repo.getSession(sessionId) : null;
     if (!session || session.taskId !== taskId || session.projectId !== projectId) {
       throw new LiveSessionNotFoundError(sessionId);
     }

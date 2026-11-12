@@ -30,6 +30,8 @@ export type CreateTaskInput = {
   readonly priority?: TaskPriority | null;
   // Тип задачи. null/undefined = не определён.
   readonly taskType?: TaskType | null;
+  // Пространство создания в общем проекте (db/182). null/undefined = основное.
+  readonly originWorkspaceId?: string | null;
 };
 
 export type UpdateTaskPatch = {
@@ -186,5 +188,7 @@ export interface TaskRepository {
     targetProjectId: string,
     assigneeUserId: string,
     actorUserId?: string | null,
+    // Пространство создания в новом проекте (db/182); null — основное.
+    originWorkspaceId?: string | null,
   ): Promise<Task | null>;
 }

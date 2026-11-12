@@ -67,10 +67,20 @@ export class ListMemberTasksForLead {
     const projectEntries = await Promise.all(
       projectIds.map(async (id) => [id, await this.deps.projects.getById(id)] as const),
     );
-    const projectById = new Map(
-      projectEntries.filter((e): e is [string, Project] => e[1] !== null && e[1].workspaceId === ws.id),
+    const inWorkspace = await Promise.all(
+      projectEntries.map(async ([id, project]) =>
+        project !== null &&
+        (project.workspaceId === ws.id || (await this.deps.projects.isInWorkspace?.(id, ws.id)) === true),
+      ),
     );
-    const visible = taskList.filter((t) => projectById.has(t.projectId));
+    const projectById = new Map(
+      projectEntries.filter((e, index): e is [string, Project] => e[1] !== null && inWorkspace[index] === true),
+    );
+    // Общий проект (db/182): руководитель видит только задачи, открытые ему правилами.
+    const inProjects = taskList.filter((t) => projectById.has(t.projectId));
+    const visible = this.deps.members.filterVisibleTasks
+      ? await this.deps.members.filterVisibleTasks(callerId, inProjects)
+      : inProjects;
     if (visible.length === 0) return [];
 
     const ids = visible.map((t) => t.id);

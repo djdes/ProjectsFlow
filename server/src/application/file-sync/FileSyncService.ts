@@ -1,3 +1,5 @@
+import type { TaskRepository } from '../task/TaskRepository.js';
+import { isTaskHiddenByRules } from '../task/taskAuthorization.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import { requireProjectAccess, requireDispatcherAccess } from '../project/projectAccess.js';
@@ -30,6 +32,8 @@ export type FileSyncDeps = {
   readonly serverIgnoreSet: readonly string[];
   readonly draftPinTtlSeconds: number;
   readonly maxBlobBytes: number;
+  // Общий проект (db/182): события задачи отдаём, только если она видна запросившему.
+  readonly tasks?: Pick<TaskRepository, 'getByIdIncludingDeleted'>;
 };
 
 export type SnapshotSource = 'client' | 'dispatcher';
@@ -51,7 +55,7 @@ export class FileSyncService {
   }
 
   private async authRead(projectId: string, userId: string): Promise<void> {
-    await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project_data');
   }
 
   private async authDispatcher(projectId: string, userId: string): Promise<void> {
@@ -401,7 +405,12 @@ export class FileSyncService {
     sinceSeq: number,
     limit: number,
   ): Promise<{ events: { seq: number; kind: string; text: string | null; payload: unknown; createdAt: Date }[] }> {
-    await this.authRead(projectId, userId);
+    // Лента задачи — как сама задача: участнику (и гостю общего проекта), которому она видна.
+    const { project } = await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project');
+    const task = this.deps.tasks ? await this.deps.tasks.getByIdIncludingDeleted(taskId) : null;
+    if (task && (task.projectId !== projectId || (await isTaskHiddenByRules(this.accessDeps, project, task, userId)))) {
+      return { events: [] };
+    }
     const events = await this.deps.repo.listProgressEvents(taskId, sinceSeq, limit);
     return { events };
   }

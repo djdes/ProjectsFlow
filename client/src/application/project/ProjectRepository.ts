@@ -699,6 +699,12 @@ export interface ProjectRepository {
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-выбором ответственного во входящих.
   listSharedMembers(): Promise<SharedMember[]>;
+  // «Доступ пространств» проекта (db/182): подключённые пространства и правила видимости.
+  getWorkspaceAccess(projectId: string): Promise<import('@/domain/project/ProjectSharing').ProjectSharing>;
+  saveWorkspaceAccess(
+    projectId: string,
+    input: import('@/domain/project/ProjectSharing').SaveProjectSharingInput,
+  ): Promise<import('@/domain/project/ProjectSharing').ProjectSharing>;
 
   // Аналитика/активность проекта (окно активности проекта в шапке).
   // recordProjectView — fire-and-forget при открытии проекта (сервер троттлит).

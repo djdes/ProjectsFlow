@@ -22,6 +22,7 @@ test('меню проекта: настройки и избранное свер
     'Убрать из избранного',
     'База знаний',
     'Общий доступ',
+    'Доступ пространств…',
     'Переместить выше',
     'Переместить ниже',
     'Дублировать',
@@ -51,4 +52,20 @@ test('крайние позиции отключают перемещение', 
   const items = buildSidebarProjectMenu({ project: project(), canMoveUp: false, canMoveDown: true });
   assert.equal(items.find((i) => i.action === 'moveUp')?.disabled, true);
   assert.equal(items.find((i) => i.action === 'moveDown')?.disabled, false);
+});
+
+test('доступ пространств — владельцу и руководителю, не во «Входящих»', () => {
+  assert.ok(labels(project({ role: 'lead' })).includes('Доступ пространств…'));
+  assert.ok(!labels(project({ role: 'editor' })).includes('Доступ пространств…'));
+  assert.ok(!labels(project({ isInbox: true })).includes('Доступ пространств…'));
+});
+
+test('гость общего проекта: настройки видны, управления проектом нет', () => {
+  const list = labels(project({ role: 'editor', guest: true }));
+  assert.ok(list.includes('Настройки'));
+  assert.ok(!list.includes('Изменить имя'));
+  assert.ok(!list.includes('База знаний'));
+  assert.ok(!list.includes('Дублировать'));
+  assert.ok(!list.includes('Доступ пространств…'));
+  assert.ok(!list.includes('Удалить проект…'));
 });

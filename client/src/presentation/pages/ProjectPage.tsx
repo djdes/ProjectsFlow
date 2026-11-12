@@ -78,16 +78,18 @@ export function ProjectPage(): React.ReactElement {
 
           <TeamSection project={data} />
 
-          <GitRepoSection project={data} />
+          {/* Гость общего проекта (db/182) видит команду и свои уведомления, но не
+              репозиторий, базу знаний и диспетчера — они остаются за основным пространством. */}
+          {!data.guest && <GitRepoSection project={data} />}
 
-          {data.gitRepoUrl && (
+          {data.gitRepoUrl && !data.guest && (
             <RecentCommitsSection projectId={data.id} gitRepoUrl={data.gitRepoUrl} />
           )}
 
-          <KbSection project={data} />
+          {!data.guest && <KbSection project={data} />}
 
           {/* Ralph-диспетчер — не для inbox-проекта (он персональный, нет команды). */}
-          {!data.isInbox && (
+          {!data.isInbox && !data.guest && (
             <DispatcherSection project={data} onChanged={(p) => applyReplace(p)} />
           )}
 

@@ -28,14 +28,23 @@ export class ListTasksAssignedToOthers {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
     const projects = (await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id))
-      .filter((project) => project.workspaceId === ws.id && (!project.isInbox || project.ownerId === userId));
+      // Проекты пространства, включая подключённые к нему общие проекты (db/182).
+      .filter(
+        (project) =>
+          (project.workspaceId === ws.id || (project.sharedWorkspaces ?? []).some((w) => w.id === ws.id)) &&
+          (!project.isInbox || project.ownerId === userId),
+      );
     const rows = await Promise.all(
-      projects.map(async (project) => ({
-        project,
-        tasks: (await this.deps.tasks.listByProject(project.id)).filter(
+      projects.map(async (project) => {
+        const own = (await this.deps.tasks.listByProject(project.id)).filter(
           (task) => task.projectId === project.id && task.assignee.userId !== userId,
-        ),
-      })),
+        );
+        // Общие проекты (db/182): только задачи, видимые по правилам пространств и людей.
+        const tasks = this.deps.members.filterVisibleTasks
+          ? await this.deps.members.filterVisibleTasks(userId, own)
+          : own;
+        return { project, tasks };
+      }),
     );
     const flat = rows.flatMap(({ project, tasks }) =>
       tasks.map((task) => ({ task, project })),

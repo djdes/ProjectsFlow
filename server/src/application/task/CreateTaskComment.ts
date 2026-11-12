@@ -107,7 +107,11 @@ export class CreateTaskComment {
     // уже сохранён и пользователь увидит успех. Логируем ошибку, но не reject'им.
     try {
       const members = await this.deps.members.listByProject(input.projectId);
-      const mentionedUserIds = parseMentions(body, members, input.ownerUserId);
+      const parsedMentions = parseMentions(body, members, input.ownerUserId);
+      // Общий проект (db/182): упоминание не раскрывает задачу тем, кому она не видна.
+      const mentionedUserIds = this.deps.members.filterTaskAudience
+        ? await this.deps.members.filterTaskAudience(task, parsedMentions)
+        : parsedMentions;
       if (mentionedUserIds.length > 0) {
         const actor = members.find((m) => m.userId === input.ownerUserId);
         // Для agent-комментов displayName в members — это owner проекта (от чьего имени

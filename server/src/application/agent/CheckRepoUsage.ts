@@ -34,7 +34,8 @@ export class CheckRepoUsage {
     // Если хоть один matched-проект мой (я member) — self (приоритет: запрашивать не нужно).
     for (const p of matched) {
       const membership = await this.deps.members.findForProject(p.id, userId);
-      if (membership) return { ownership: 'self', requestTarget: null };
+      // Гость общего проекта (db/182) репозиторием проекта не владеет.
+      if (membership && !membership.guest) return { ownership: 'self', requestTarget: null };
     }
 
     // Все matched — чужие.

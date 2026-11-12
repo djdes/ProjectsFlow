@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, sql, or } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   taskDelegations,
@@ -14,8 +14,7 @@ import {
   recentTaskViews,
   telegramTaskMessages,
   emailActionTokens,
-  type TaskRow,
-} from '../db/schema.js';
+  type TaskRow, projectWorkspaceAccess } from '../db/schema.js';
 import {
   TASK_STATUSES,
   isTaskType,
@@ -95,6 +94,7 @@ function toTask(row: TaskRowJoined): Task {
     // VARCHAR в БД: неизвестное значение (ручной UPDATE, будущий тип со старого клиента)
     // читаем как «не определён», а не протаскиваем мусор в домен.
     taskType: isTaskType(row.taskType) ? row.taskType : null,
+    originWorkspaceId: row.originWorkspaceId ?? null,
     deletedAt: row.deletedAt ?? null,
     deletedBy: row.deletedBy ?? null,
     createdAt: row.createdAt,
@@ -140,6 +140,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         parentTaskId: tasks.parentTaskId,
         priority: tasks.priority,
         taskType: tasks.taskType,
+        originWorkspaceId: tasks.originWorkspaceId,
         deletedAt: tasks.deletedAt,
         deletedBy: tasks.deletedBy,
         createdAt: tasks.createdAt,
@@ -181,32 +182,40 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]> {
-    // Скоуп по пространству — через принадлежность проекта задачи (projects.workspace_id).
-    // Подзапрос вместо join, чтобы не трогать leftJoin-набор baseSelect.
-    const workspaceProjects = this.db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.workspaceId, workspaceId));
+    // Скоуп по пространству — через принадлежность проекта задачи: основное пространство
+    // или подключённое (общий проект, db/182). Список id вместо join, чтобы не трогать
+    // leftJoin-набор baseSelect.
+    const projectIds = await this.workspaceProjectIds(workspaceId);
+    if (projectIds.length === 0) return [];
     const rows = await this.baseSelect()
       .where(
         activeTasks(
-          and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, workspaceProjects)),
+          and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, projectIds)),
         ),
       )
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
+  // Проекты пространства: основные и подключённые к нему (db/182). Сначала резолвим id —
+  // OR двух IN-подзапросов не даёт MariaDB полусоединение и сканирует tasks целиком.
+  private async workspaceProjectIds(workspaceId: string): Promise<string[]> {
+    const [home, linked] = await Promise.all([
+      this.db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, workspaceId)),
+      this.db
+        .select({ id: projectWorkspaceAccess.projectId })
+        .from(projectWorkspaceAccess)
+        .where(eq(projectWorkspaceAccess.workspaceId, workspaceId)),
+    ]);
+    return [...new Set([...home, ...linked].map((row) => row.id))];
+  }
+
   async listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]> {
     // Тот же скоуп по пространству, что у listAssignedToInWorkspace: через проект задачи.
-    const workspaceProjects = this.db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.workspaceId, workspaceId));
+    const projectIds = await this.workspaceProjectIds(workspaceId);
+    if (projectIds.length === 0) return [];
     const rows = await this.baseSelect()
-      .where(
-        activeTasks(and(eq(tasks.status, status), inArray(tasks.projectId, workspaceProjects))),
-      )
+      .where(activeTasks(and(eq(tasks.status, status), inArray(tasks.projectId, projectIds))))
       .orderBy(asc(tasks.updatedAt), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
@@ -269,6 +278,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       ...(input.parentTaskId !== undefined ? { parentTaskId: input.parentTaskId } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
+      ...(input.originWorkspaceId ? { originWorkspaceId: input.originWorkspaceId } : {}),
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');
@@ -505,6 +515,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     targetProjectId: string,
     assigneeUserId: string,
     actorUserId: string | null = null,
+    originWorkspaceId: string | null = null,
   ): Promise<Task | null> {
     const before = this.history ? await this.getById(taskId) : null;
     // Снимок status_before_done относился к колонкам старого проекта — чистим при переносе.
@@ -517,7 +528,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     await this.db.transaction(async (tx) => {
       await tx
         .update(tasks)
-        .set({ projectId: targetProjectId, assigneeUserId, statusBeforeDone: null })
+        .set({ projectId: targetProjectId, assigneeUserId, statusBeforeDone: null, originWorkspaceId })
         .where(activeTasks(eq(tasks.id, taskId)));
       await tx
         .update(taskVersions)

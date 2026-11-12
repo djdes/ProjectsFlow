@@ -85,7 +85,7 @@ import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
 import { UploadUserAvatar } from './application/user/UploadUserAvatar.js';
 import { ListProjects } from './application/project/ListProjects.js';
-import { configureAdminBypass } from './application/project/projectAccess.js';
+import { configureAdminBypass, isSystemAdmin } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
@@ -370,6 +370,10 @@ import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositor
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
 import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
+import { DrizzleProjectSharingRepository } from './infrastructure/repositories/DrizzleProjectSharingRepository.js';
+import type { Task } from './domain/task/Task.js';
+import { TaskVisibility } from './application/project/TaskVisibility.js';
+import { ManageProjectSharing } from './application/project/ManageProjectSharing.js';
 import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
 import { InviteNeighbors, ListWorkspaceInviteCandidates } from './application/workspace/InviteNeighbors.js';
 import { DrizzleWorkspaceNeighborsRepository } from './infrastructure/repositories/DrizzleWorkspaceNeighborsRepository.js';
@@ -476,7 +480,15 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const passwordResetTokenRepo = new DrizzlePasswordResetTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
-const projectMemberRepo = new DrizzleProjectMemberRepository(db);
+// Один проект в нескольких пространствах (db/182): правила видимости задач. Пространство
+// запроса берём из контекста X-Workspace-Id (объявлен ниже, читается только во время запроса).
+const projectSharingRepo = new DrizzleProjectSharingRepository(db);
+const taskVisibility = new TaskVisibility({
+  sharing: projectSharingRepo,
+  currentWorkspaceId: (userId) => requestWorkspaceContext.get(userId)?.workspace?.id ?? null,
+  isSystemAdmin,
+});
+const projectMemberRepo = new DrizzleProjectMemberRepository(db, taskVisibility);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
 const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db, projectMemberRepo);
@@ -635,6 +647,8 @@ const getActivityFeed = new GetActivityFeed({
   activity: activityRepo,
   notifications: notificationRepo,
   actionStates: notificationActionStates,
+  // Объявлен ниже — зовём через замыкание (к моменту запросов уже инициализирован).
+  hiddenTaskIds: (userId, refs) => hiddenTaskIds(userId, refs),
 });
 // GC: чистим события старше 30 дней (на старте + раз в сутки).
 const ACTIVITY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -646,9 +660,16 @@ setInterval(sweepActivity, 24 * 60 * 60 * 1000).unref();
 // Real-time-события (task/project changed) для live-обновления UI без перезагрузки.
 // Транслируются всем участникам проекта по тому же SSE-коннекту, что и уведомления.
 const realtimeHub = new RealtimeHub();
-const projectEventBroadcaster = new ProjectEventBroadcaster({
+const projectEventBroadcaster: ProjectEventBroadcaster = new ProjectEventBroadcaster({
   members: projectMemberRepo,
   publisher: realtimeHub,
+  // Общий проект (db/182): события задачи — только тем, кому она видна. taskRepo объявлен
+  // ниже — берём через замыкание (к моменту событий уже инициализирован).
+  taskAudience: async (projectId: string, taskId: string, userIds: readonly string[]): Promise<string[]> => {
+    if ((await projectSharingRepo.loadMany([projectId])).size === 0) return [...userIds];
+    const task: Task | null = await taskRepo.getByIdIncludingDeleted(taskId);
+    return task ? taskVisibility.filterAudience(task, userIds) : [...userIds];
+  },
 });
 // Best-effort: ошибка резолва участников не должна влиять на основной запрос.
 const notifyTaskChanged = (projectId: string, extraUserIds: readonly string[] = []): void => {
@@ -705,7 +726,30 @@ const appBaseUrl =
 // закрытия задач (close-proposal, commit-sync, Telegram-композер).
 const taskApprovalService = new TaskApprovalService({
   workspaces: workspaceRepo,
+  projectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
 });
+// Пространство создания задачи общего проекта (db/182): явно переданное или пространство
+// запроса (X-Workspace-Id), если человек в нём участник; иначе основное, если он участник
+// основного; иначе его единственное подключённое пространство. null — основное.
+const resolveTaskOrigin = async (input: {
+  readonly projectId: string;
+  readonly homeWorkspaceId: string;
+  readonly userId: string;
+  readonly requested: string | null | undefined;
+}): Promise<string | null> => {
+  const workspaceIds = await projectSharingRepo.workspaceIdsOf(input.projectId);
+  if (workspaceIds.length <= 1) return null;
+  const memberships = await projectSharingRepo.memberships(
+    [input.userId],
+    [{ projectId: input.projectId, workspaceIds }],
+  );
+  const mine = memberships.filter((m) => !m.excluded || m.role === 'owner' || m.role === 'lead').map((m) => m.workspaceId);
+  const preferred = input.requested ?? requestWorkspaceContext.get(input.userId)?.workspace?.id ?? null;
+  if (preferred && mine.includes(preferred)) return preferred === input.homeWorkspaceId ? null : preferred;
+  if (mine.includes(input.homeWorkspaceId)) return null;
+  const linked = mine.filter((id) => id !== input.homeWorkspaceId);
+  return linked.length === 1 ? linked[0]! : null;
+};
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 
@@ -730,6 +774,42 @@ const taskVersionRecorder = new TaskVersionRecorder({
   onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
 });
 const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
+// Видимые человеку задачи общих проектов (db/182) — для пост-фильтра поиска.
+const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promise<ReadonlySet<string>> => {
+  const list = await taskRepo.listByIds(taskIds);
+  return new Set((await taskVisibility.filterTasks(userId, list)).map((task) => task.id));
+};
+// Общие проекты (db/182): задачи из ссылок, скрытые от человека правилами. Ссылка
+// оценивается в своём проекте: задача, уехавшая в другой проект, — как задача основного
+// пространства (автор и ответственный — прежние); удалённая насовсем — задача основного
+// пространства без автора и ответственного. Задачи обычных проектов не скрыты.
+const hiddenTaskIds = async (
+  userId: string,
+  refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+): Promise<ReadonlySet<string>> => {
+  if (refs.length === 0) return new Set();
+  const shared = await projectSharingRepo.loadMany(refs.map((ref) => ref.projectId));
+  const sharedRefs = refs.filter((ref) => shared.has(ref.projectId));
+  const ids = [...new Set(sharedRefs.map((ref) => ref.taskId))];
+  if (ids.length === 0) return new Set();
+  const found = new Map((await taskRepo.listByIds(ids)).map((task) => [task.id, task] as const));
+  const deleted = await Promise.all(ids.filter((id) => !found.has(id)).map((id) => taskRepo.getByIdIncludingDeleted(id)));
+  for (const task of deleted) if (task) found.set(task.id, task);
+  const candidates = sharedRefs.map((ref) => {
+    const task = found.get(ref.taskId);
+    const sameProject = task?.projectId === ref.projectId;
+    return {
+      id: ref.taskId,
+      projectId: ref.projectId,
+      createdBy: task?.createdBy ?? null,
+      assignee: { userId: task?.assignee.userId ?? '' },
+      originWorkspaceId: sameProject ? (task?.originWorkspaceId ?? null) : null,
+    };
+  });
+  const visible = await taskVisibility.filterTasks(userId, candidates);
+  const shown = new Set(visible.map((c) => `${c.projectId}|${c.id}`));
+  return new Set(candidates.filter((c) => !shown.has(`${c.projectId}|${c.id}`)).map((c) => c.id));
+};
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 // Бинарные вложения живут вне каталога релиза и переиспользуются HTTP-роутами и Telegram.
@@ -1313,6 +1393,7 @@ const telegramComposer = new TelegramComposerService({
   createTaskComment: createTaskCommentUseCase,
   tasks: taskRepo,
   createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
     approval: taskApprovalService,
     workerPolicy,
     projects: projectRepo,
@@ -1412,6 +1493,7 @@ workflowEffects.triggerWebhook = async (projectId, event) => {
 // --- Предложения закрыть задачу (db/101, EOD Фаза 1) ---
 const closeProposalRepo = new DrizzleCloseProposalRepository(db);
 const createCloseProposals = new CreateCloseProposals({
+  visibility: taskVisibility,
   closeProposals: closeProposalRepo,
   createComment: createTaskCommentUseCase,
   notifications: notificationRepo,
@@ -1445,6 +1527,7 @@ const confirmCloseProposal = new ConfirmCloseProposal({
 const dismissCloseProposal = new DismissCloseProposal({
   closeProposals: closeProposalRepo,
   members: projectMemberRepo,
+  tasks: taskRepo,
 });
 
 // Подключение людей из рабочих Telegram-групп (db/181): инструкция в группе, персональное
@@ -1659,6 +1742,7 @@ const SYNC_IGNORE_SET = [
 const fileSyncService = new FileSyncService({
   projects: projectRepo,
   members: projectMemberRepo,
+  tasks: taskRepo,
   repo: new DrizzleFileSyncRepository(db),
   storage: blobStorage,
   idGen: idGenerator,
@@ -2189,6 +2273,7 @@ const telegramDigestActionService = new TelegramDigestActionService({
 });
 
 const sendDailyDigest = new SendDailyDigest({
+  visibility: taskVisibility,
   tasks: taskRepo,
   comments: taskCommentRepo,
   projects: projectRepo,
@@ -2217,6 +2302,7 @@ const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
   messageTasks: telegramMessageTaskRepo,
+  visibility: taskVisibility,
 });
 // Личная сводка в бота (db/161): каждому участнику его задачи карточками с кнопками.
 const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
@@ -2228,6 +2314,7 @@ const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
   telegram: sendAgentTelegramNotification,
   messageTasks: telegramMessageTaskRepo,
   appUrl: appBaseUrl,
+  visibility: taskVisibility,
 });
 const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   repo: workspaceAssigneeDigestRepo,
@@ -2368,7 +2455,12 @@ const { app, devProxyUpgrade } = createApp({
     maxBlobBytes: SYNC_MAX_BLOB_BYTES,
   },
   live: {
-    activity: new GetProjectWorkerActivity({ projects: projectRepo, members: projectMemberRepo, activity: new MysqlTaskWorkerActivityRepository(pool) }),
+    activity: new GetProjectWorkerActivity({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      activity: new MysqlTaskWorkerActivityRepository(pool),
+      visibleTaskIds,
+    }),
     service: liveService,
     liveEventHub,
   },
@@ -2442,6 +2534,7 @@ const { app, devProxyUpgrade } = createApp({
       sites: siteArtifactRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2458,6 +2551,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2497,6 +2591,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
       live: liveRepo,
+      hiddenTaskIds,
     }),
     setGitTokenDelegation: new SetGitTokenDelegation({
       projects: projectRepo,
@@ -2569,7 +2664,26 @@ const { app, devProxyUpgrade } = createApp({
     members: projectMemberRepo,
     coverStorage: attachmentStorage,
     maxCoverBytes: MAX_COVER_BYTES,
+    hiddenTaskIds,
   },
+  projectSharing: new ManageProjectSharing({
+    projects: projectRepo,
+    sharing: projectSharingRepo,
+    workspaces: workspaceRepo,
+    members: projectMemberRepo,
+    // Проект появился/исчез в пространствах — сайдбары их участников перечитывают проекты.
+    onChanged: (projectId, workspaceIds) => {
+      void (async () => {
+        // Событие с пространством: поток каждого пространства пропускает своё, даже если
+        // проект от него только что отключили (сайдбар должен убрать проект).
+        for (const workspaceId of workspaceIds) {
+          for (const member of await workspaceRepo.listMembers(workspaceId)) {
+            realtimeHub.publish(member.userId, { kind: 'project_changed', projectId, workspaceId });
+          }
+        }
+      })().catch((err) => console.warn('[project-sharing] notify failed:', err));
+    },
+  }),
   workspaces: {
     service: workspaceService,
     projectAccess: new ManageWorkspaceProjectAccess({
@@ -2627,7 +2741,7 @@ const { app, devProxyUpgrade } = createApp({
   },
   notifications: {
     resolveActiveWorkspace,
-    getProjectWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
+    getProjectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
     tasks: taskRepo,
     list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace, actionStates: notificationActionStates }),
     alerts: new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo }),
@@ -2643,7 +2757,7 @@ const { app, devProxyUpgrade } = createApp({
     projectNotifier,
   },
   recentTaskViews: {
-    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace }),
+    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace, hiddenTaskIds }),
     record: new RecordTaskView({ repo: recentTaskViewRepo }),
   },
   projectAnalytics: {
@@ -2664,6 +2778,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       taskVersions: taskVersionRepo,
       tasks: taskRepo,
+      hiddenTaskIds,
     }),
   },
   help: {
@@ -2731,6 +2846,7 @@ const { app, devProxyUpgrade } = createApp({
         ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
       }),
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2788,7 +2904,7 @@ const { app, devProxyUpgrade } = createApp({
   search: {
     // UI-поиск изолирован по активному пространству (agent-инстанс ниже — без резолвера,
     // глобален by-design).
-    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace }),
+    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace, visibleTaskIds }),
   },
   telegram: {
     pairing: pairTelegramAccount,
@@ -2925,6 +3041,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
       approval: taskApprovalService,
       workerPolicy,
       projects: projectRepo,
@@ -2986,6 +3103,7 @@ const { app, devProxyUpgrade } = createApp({
       versions: taskVersionRepo,
       users: userRepo,
       now: () => new Date(),
+      hiddenTaskIds,
     }),
     restoreTaskVersion: new RestoreTaskVersion({
       approval: taskApprovalService,
@@ -3221,6 +3339,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
     }),
     listApprovalQueue: new ListApprovalQueue({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       workspaces: workspaceRepo,
@@ -3245,6 +3364,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
+      resolveOrigin: resolveTaskOrigin,
     }),
     changeAssignee: new ChangeTaskAssignee({
       approval: taskApprovalService,
@@ -3339,6 +3459,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
       approval: taskApprovalService,
       workerPolicy,
       projects: projectRepo,
@@ -3490,7 +3611,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       versions: taskVersionRecorder,
     }),
-    searchTasks: new SearchTasks({ search: taskSearchRepo }),
+    searchTasks: new SearchTasks({ search: taskSearchRepo, visibleTaskIds }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
     listProjectMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
     getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),

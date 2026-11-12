@@ -146,7 +146,7 @@ export class ManageAppDashboardSettings {
   constructor(private readonly deps: Deps) {}
 
   async get(projectId: string, userId: string): Promise<AppDashboardSettings> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     const stored = await this.deps.settings.get(projectId);
     if (!stored) return DEFAULT_APP_DASHBOARD_SETTINGS;
     return {
@@ -281,7 +281,7 @@ export class ManageAppDashboardSettings {
   }
 
   async scanSecurity(projectId: string, userId: string): Promise<AppSecurityScan> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     const project = await this.deps.projects.getById(projectId);
     if (!project) throw new Error('project_not_found');
     const settings = await this.get(projectId, userId);

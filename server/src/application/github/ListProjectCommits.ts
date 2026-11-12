@@ -44,7 +44,7 @@ export class ListProjectCommits {
     limit = DEFAULT_LIMIT,
     opts: { detailSince?: Date; detailLimit?: number } = {},
   ): Promise<GithubCommit[]> {
-    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project_data');
     if (!project.gitRepoUrl) return [];
 
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);

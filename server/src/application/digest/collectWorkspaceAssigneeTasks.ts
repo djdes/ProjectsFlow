@@ -1,3 +1,4 @@
+import type { TaskVisibility } from '../project/TaskVisibility.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { Task } from '../../domain/task/Task.js';
@@ -35,22 +36,37 @@ export const isOpen = (task: Task): boolean => task.status !== 'done' && !isAwai
 // и поручения из входящих, чтобы человек видел в личке ровно то, что команда — в группе.
 export async function collectWorkspaceAssigneeTasks(
   deps: {
-    readonly projects: Pick<ProjectRepository, 'listByWorkspace' | 'listInboxesByOwners'>;
+    readonly projects: Pick<ProjectRepository, 'listByWorkspace' | 'listInboxesByOwners' | 'listLinkedToWorkspace'>;
     readonly tasks: Pick<TaskRepository, 'listByProject'>;
+    // Общие проекты (db/182): в сводке пространства — задачи, видимые ему по правилам.
+    readonly visibility?: Pick<TaskVisibility, 'filterForWorkspace'>;
   },
   settings: WorkspaceAssigneeDigestSettings,
   members: readonly WorkspaceMember[],
+  // Личная сводка: каждый получает только свой раздел, поэтому своя задача ответственного
+  // входит в него, даже если правило пространства (db/182) прячет её от остальных.
+  opts: { readonly personal?: boolean } = {},
 ): Promise<WorkspaceAssigneeTasks> {
   const projects = await deps.projects.listByWorkspace(settings.workspaceId);
   const configuredProjectIds = new Set(settings.projectIds);
   const selectedProjects = projects.filter(
     (project) => settings.projectMode === 'all' || configuredProjectIds.has(project.id),
   );
+  // Подключённые к пространству общие проекты входят в режиме «все проекты».
+  if (settings.projectMode === 'all' && deps.projects.listLinkedToWorkspace) {
+    selectedProjects.push(...(await deps.projects.listLinkedToWorkspace(settings.workspaceId)));
+  }
   const projectTasks = await Promise.all(
-    selectedProjects.map(async (project) => ({
-      project,
-      tasks: await deps.tasks.listByProject(project.id),
-    })),
+    selectedProjects.map(async (project) => {
+      const all = await deps.tasks.listByProject(project.id);
+      const visible = deps.visibility ? await deps.visibility.filterForWorkspace(settings.workspaceId, all) : all;
+      if (!opts.personal || visible.length === all.length) return { project, tasks: visible };
+      const shown = new Set(visible);
+      return {
+        project,
+        tasks: all.filter((task) => shown.has(task) || members.some((m) => m.userId === task.assignee.userId)),
+      };
+    }),
   );
 
   const allowedRecipients = new Set(

@@ -93,7 +93,7 @@ export class QueryAppLogs {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, callerUserId: string, query: AppLogQuery = {}): Promise<AppLogPage> {
-    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
 
     const nowMs = (this.deps.now ?? (() => new Date()))().getTime();
     const sinceMs = nowMs - WINDOW_MS;

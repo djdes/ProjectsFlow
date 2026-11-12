@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Globe } from 'lucide-react';
 import { useContainer } from '@/infrastructure/di/container';
 import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
+import { useOptionalProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { ProjectBannerDismissButton } from './ProjectBannerDismissButton';
 import { useProjectBannersHidden } from './projectBannersSetting';
@@ -50,6 +51,8 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false, onS
   // Гейт стоит и здесь, а не только у места рендера: эту же плашку рисует выехавшее справа
   // окно задачи, и после закрытия крестиком не должна остаться видимой ни одна копия.
   const bannersHidden = useProjectBannersHidden();
+  // Гость общего проекта (db/182) сайт проекта не читает — сервер ответил бы 403 на каждый тик.
+  const guest = useOptionalProjectsContext()?.data?.find((project) => project.id === projectId)?.guest === true;
 
   // Пока результата нет — лёгкий поллинг. После первого деплоя плашка появляется сама,
   // без перезагрузки страницы и без промежуточного состояния «в разработке».
@@ -57,6 +60,10 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false, onS
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
     setSite(null);
+    if (guest) {
+      setCheckedProject(projectId);
+      return;
+    }
     const load = (): void => {
       projectRepository
         .getProjectSite(projectId)
@@ -85,7 +92,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false, onS
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [projectRepository, projectId]);
+  }, [projectRepository, projectId, guest]);
 
   // Вторая стадия GitHub-onboarding поллит тот же результат. Событие позволяет обеим
   // плашкам переключиться одним кадром: призыв к запуску исчезает, синяя плашка появляется.

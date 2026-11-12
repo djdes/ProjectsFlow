@@ -150,7 +150,9 @@ export async function prepareComposeContext(
   const openTasksByProject = new Map<string, string[]>();
   if (deps.tasks) {
     try {
-      const all = await deps.tasks.listByProjects(creatable.map((p) => p.id));
+      const listed = await deps.tasks.listByProjects(creatable.map((p) => p.id));
+      // Общий проект (db/182): скрытые правилами задачи в промпт не попадают.
+      const all = deps.members.filterVisibleTasks ? await deps.members.filterVisibleTasks(userId, listed) : listed;
       for (const t of all) {
         if (!OPEN_STATUSES.has(t.status)) continue;
         const bucket = openTasksByProject.get(t.projectId) ?? [];

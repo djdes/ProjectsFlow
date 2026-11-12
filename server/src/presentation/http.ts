@@ -235,6 +235,8 @@ import { projectsRouter } from './projects/routes.js';
 import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
+import { projectWorkspaceAccessRouter } from './projects/workspaceAccessRoutes.js';
+import type { ManageProjectSharing } from '../application/project/ManageProjectSharing.js';
 import type { ManageTelegramWorkGroups } from '../application/telegram/ManageTelegramWorkGroups.js';
 import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../application/workspace/InviteNeighbors.js';
 import type { ManageWorkspaceProjectAccess } from '../application/workspace/ManageWorkspaceProjectAccess.js';
@@ -485,7 +487,14 @@ type AppDeps = {
     // Обложка проекта: то же локальное файловое хранилище, что и у аттачей задач + лимит.
     readonly coverStorage: AttachmentStorage;
     readonly maxCoverBytes: number;
+    // Общий проект (db/182): какие задачи скрыты от человека правилами видимости.
+    readonly hiddenTaskIds?: (
+      userId: string,
+      refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+    ) => Promise<ReadonlySet<string>>;
   };
+  // «Доступ пространств» проекта (db/182).
+  readonly projectSharing?: ManageProjectSharing;
   readonly workspaces: {
     readonly service: WorkspaceService;
     readonly projectAccess: ManageWorkspaceProjectAccess;
@@ -583,7 +592,7 @@ type AppDeps = {
   };
   readonly notifications: {
     readonly resolveActiveWorkspace: import('../application/workspace/activeWorkspace.js').ResolveActiveWorkspace;
-    readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
+    readonly getProjectWorkspaceIds: (projectId: string) => Promise<readonly string[]>;
     readonly tasks: TaskRepository;
     readonly list: ListNotifications;
     readonly alerts: NotificationAlerts;
@@ -1053,6 +1062,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
   app.use('/api/projects', digestRouter(deps.digest));
+  // «Доступ пространств» проекта (db/182).
+  if (deps.projectSharing) app.use('/api/projects', projectWorkspaceAccessRouter({ manage: deps.projectSharing }));
   app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
   app.use('/api/me', meStatsRouter(deps.meStats));
   app.use('/api/search', searchRouter(deps.search));

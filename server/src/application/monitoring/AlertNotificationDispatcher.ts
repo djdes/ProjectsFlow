@@ -78,7 +78,8 @@ export class AlertNotificationDispatcher implements MonitoringAlertNotifier {
       }
     };
 
-    const members = await this.deps.members.listByProject(project.id).catch(() => []);
+    // Гости общего проекта (db/182) мониторинг не видят — и алерты им не шлём.
+    const members = (await this.deps.members.listByProject(project.id).catch(() => [])).filter((m) => !m.guest);
     // Fallback: если участников почему-то нет — хотя бы владельцу (in-app + TG).
     if (members.length === 0) {
       await inApp(project.ownerId);

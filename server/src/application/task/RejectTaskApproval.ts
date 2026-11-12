@@ -51,7 +51,7 @@ export class RejectTaskApproval {
 
     // Возвращать работу вправе только тот, кто её принимает. Сам исполнитель забирает
     // задачу назад обычным переносом — там объяснение никому не нужно.
-    if (!(await this.deps.approval.canApprove(project, input.actorUserId))) {
+    if (!(await this.deps.approval.canApprove(project, input.actorUserId, task.originWorkspaceId ?? null))) {
       throw new NotTaskApproverError();
     }
 

@@ -184,3 +184,21 @@ export class PlatformBackendContractUnavailableError extends Error {
     this.name = 'PlatformBackendContractUnavailableError';
   }
 }
+
+// Доступ пространств к проекту (db/182) настраивают автор проекта и owner/lead его основного
+// пространства.
+export class ProjectSharingForbiddenError extends Error {
+  constructor() {
+    super('Доступ пространств настраивает автор проекта или руководитель его пространства.');
+    this.name = 'ProjectSharingForbiddenError';
+  }
+}
+
+// Подключить можно только командное пространство, где вы владелец или руководитель;
+// «Входящие» не подключаются.
+export class ProjectSharingInvalidError extends Error {
+  constructor(message = 'Это пространство нельзя подключить к проекту.') {
+    super(message);
+    this.name = 'ProjectSharingInvalidError';
+  }
+}

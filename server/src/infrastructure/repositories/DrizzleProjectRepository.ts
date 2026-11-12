@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   kbDocuments,
@@ -10,6 +10,7 @@ import {
   projectInvites,
   projectJoinRequests,
   projectMembers,
+  projectWorkspaceAccess,
   projects,
   secrets,
   taskAttachments,
@@ -266,12 +267,49 @@ export class DrizzleProjectRepository implements ProjectRepository {
 
   async setWorkspace(projectId: string, workspaceId: string): Promise<void> {
     try {
-      await this.db.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+      await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ workspaceId: projects.workspaceId })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .for('update');
+        if (!row) return;
+        await tx.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+        // Общий проект (db/182): ни старое, ни новое основное пространство больше не
+        // подключения — участники старого теряют доступ (перенос меняет аудиторию), а строка
+        // нового не должна переопределять правило основного. Задачи обоих пространств
+        // становятся задачами основного; updated_at задач не трогаем.
+        const homes = [...new Set([row.workspaceId, workspaceId])];
+        await tx
+          .delete(projectWorkspaceAccess)
+          .where(and(eq(projectWorkspaceAccess.projectId, projectId), inArray(projectWorkspaceAccess.workspaceId, homes)));
+        await tx
+          .update(tasks)
+          .set({ originWorkspaceId: null, updatedAt: sql`${tasks.updatedAt}` })
+          .where(and(eq(tasks.projectId, projectId), inArray(tasks.originWorkspaceId, homes)));
+      });
     } catch (err) {
       // Конфликт имени в целевом пространстве (uq_projects_workspace_name).
       if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError('');
       throw err;
     }
+  }
+
+  async isInWorkspace(projectId: string, workspaceId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.id, projectId),
+          or(
+            eq(projects.workspaceId, workspaceId),
+            sql`${projects.id} IN (SELECT a.project_id FROM project_workspace_access a WHERE a.workspace_id = ${workspaceId})`,
+          ),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   async getWorkspaceId(projectId: string): Promise<string | null> {
@@ -288,6 +326,21 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .select({ id: projects.id, name: projects.name, icon: projects.icon })
       .from(projects)
       .where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)))
+      .orderBy(projects.createdAt);
+    return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon ?? null }));
+  }
+
+  async listLinkedToWorkspace(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>> {
+    const rows = await this.db
+      .select({ id: projects.id, name: projects.name, icon: projects.icon })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.isInbox, false),
+          sql`${projects.workspaceId} <> ${workspaceId}`,
+          sql`${projects.id} IN (SELECT a.project_id FROM project_workspace_access a WHERE a.workspace_id = ${workspaceId})`,
+        ),
+      )
       .orderBy(projects.createdAt);
     return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon ?? null }));
   }

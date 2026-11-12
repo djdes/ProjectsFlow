@@ -392,7 +392,7 @@ export class ManageAppAuthProviders {
   }
 
   async getGoogle(projectId: string, userId: string): Promise<GoogleProviderStatus> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     await this.ensureDb(projectId);
     return this.deps.auth.googleConfigStatus(projectId);
   }

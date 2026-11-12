@@ -15,7 +15,8 @@ import type { ResolveActiveWorkspace } from '../../application/workspace/activeW
 
 type Deps = {
   readonly resolveActiveWorkspace: ResolveActiveWorkspace;
-  readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
+  // Пространства проекта: основное и подключённые (общий проект, db/182).
+  readonly getProjectWorkspaceIds: (projectId: string) => Promise<readonly string[]>;
   readonly tasks: TaskRepository;
   readonly list: ListNotifications;
   readonly alerts: NotificationAlerts;
@@ -124,10 +125,10 @@ export function notificationsRouter(deps: Deps): Router {
     // «Тихие» события: тот же коннект, отдельный event-тип 'realtime'. Клиент по ним
     // рефетчит данные (без toast).
     const sendRealtime = (e: RealtimeEvent): void => {
-      const scope = 'workspaceId' in e ? Promise.resolve(e.workspaceId)
-        : deps.getProjectWorkspaceId(e.projectId);
-      void scope.then((id) => {
-        if (!closed && id === workspaceId) res.write(`event: realtime\ndata: ${JSON.stringify(e)}\n\n`);
+      const scope = 'workspaceId' in e ? Promise.resolve([e.workspaceId])
+        : deps.getProjectWorkspaceIds(e.projectId);
+      void scope.then((ids) => {
+        if (!closed && workspaceId !== null && ids.includes(workspaceId)) res.write(`event: realtime\ndata: ${JSON.stringify(e)}\n\n`);
       }).catch(() => { /* Do not deliver events whose scope could not be verified. */ });
     };
     const unsubscribeRealtime = deps.subscribeRealtime(req.user!.id, sendRealtime);

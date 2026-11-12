@@ -139,6 +139,8 @@ export type Task = {
   readonly priority: TaskPriority | null;
   // Тип задачи ('feature' | 'bug'). null = не определён. См. db/153.
   readonly taskType: TaskType | null;
+  // Пространство, где создана задача общего проекта (db/182). null — основное.
+  readonly originWorkspaceId?: string | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

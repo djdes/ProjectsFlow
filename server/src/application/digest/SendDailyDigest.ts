@@ -34,6 +34,7 @@ import {
   signAttachmentUrl,
 } from '../attachments/signedAttachmentUrl.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
+import type { TaskVisibility } from '../project/TaskVisibility.js';
 
 // Подписанные URL картинок живут 14 дней — письмо/сводку могут открыть не сразу.
 const IMG_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
@@ -58,6 +59,9 @@ type Deps = {
   readonly signingSecret: string;
   // Задачи групповой сводки (db/160): reply на неё становится комментарием к задаче.
   readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'attach'>;
+  // Общий проект (db/182): получателю — только видимые ему задачи, группе — по правилу
+  // основного пространства. Без него — все задачи, как раньше.
+  readonly visibility?: Pick<TaskVisibility, 'filterTasks' | 'filterForWorkspace'>;
 };
 
 // Отправка ежедневной сводки по проекту (вызывается планировщиком). Полностью
@@ -99,6 +103,11 @@ export class SendDailyDigest {
       inboxOwner: null,
     }));
 
+    // Группа проекта — по правилу основного пространства (db/182).
+    const groupTasks = this.deps.visibility
+      ? await this.deps.visibility.filterForWorkspace(project.workspaceId, enriched)
+      : enriched;
+
     const digestNow = new Date();
     const members = await this.deps.members.listByProject(projectId);
     const memberById = new Map(members.map((m) => [m.userId, m] as const));
@@ -107,7 +116,7 @@ export class SendDailyDigest {
       { telegramUserId: number; username: string | null }
     >();
     if (cfg.tgGrouping === 'assignee') {
-      const assigneeIds = [...new Set(selected.map((task) => task.assignee.userId))];
+      const assigneeIds = [...new Set(groupTasks.map((task) => task.assignee.userId))];
       await Promise.all(
         assigneeIds.map(async (userId) => {
           const link = await this.deps.users.getTelegramLink(userId).catch(() => null);
@@ -127,7 +136,7 @@ export class SendDailyDigest {
       cfg.tgTargets.includes('group') &&
       settings.telegramGroupChatId !== null
     ) {
-      for (const task of selected) {
+      for (const task of groupTasks) {
         const token = await this.deps.createEmailActionToken.execute({
           action: 'complete',
           taskId: task.id,
@@ -141,15 +150,17 @@ export class SendDailyDigest {
       }
     }
 
-    const model = buildDigestModel(enriched, {
-      projectName: project.name,
-      appUrl: this.deps.appUrl,
-      isInbox: project.isInbox,
-      attachmentsByTask: new Map(),
-      grouping: { by: 'status', statuses },
-      now: digestNow,
-    });
-    const telegramModel = buildDigestModel(enriched, {
+    const modelFor = (list: readonly TaskWithCounts[]) =>
+      buildDigestModel([...list], {
+        projectName: project.name,
+        appUrl: this.deps.appUrl,
+        isInbox: project.isInbox,
+        attachmentsByTask: new Map(),
+        grouping: { by: 'status', statuses },
+        now: digestNow,
+      });
+    const model = modelFor(enriched);
+    const telegramModel = buildDigestModel(groupTasks, {
       projectName: project.name,
       appUrl: this.deps.appUrl,
       isInbox: project.isInbox,
@@ -164,7 +175,6 @@ export class SendDailyDigest {
     });
 
     const subject = `Ежедневная сводка · ${project.name}`;
-    const text = renderDigestMarkdown(model);
     // Telegram: массив сообщений (длинная сводка разбивается, все задачи целиком).
     const tgChunks = renderDigestTelegram(telegramModel);
     // Резолвер картинок-вложений → подписанные URL (письмо: <img> в теле, TG: альбом на карточке).
@@ -185,10 +195,17 @@ export class SendDailyDigest {
 
     for (const userId of recipients) {
       const member = memberById.get(userId)!;
+      // Общий проект (db/182): только задачи, видимые получателю.
+      const own = this.deps.visibility
+        ? await this.deps.visibility.filterTasks(userId, enriched, { workspaceId: null })
+        : enriched;
+      if (own.length === 0) continue;
+      const ownModel = own.length === enriched.length ? model : modelFor(own);
+      const text = renderDigestMarkdown(ownModel);
       if (cfg.channels.includes('email') && member.user.email) {
         // One-click токен-ссылки действий — свои на каждого получателя × задачу.
         const actionUrls = new Map<string, { completeUrl: string; commentUrl: string }>();
-        for (const t of selected) {
+        for (const t of own) {
           const [completeToken, commentToken] = await Promise.all([
             this.deps.createEmailActionToken.execute({ action: 'complete', taskId: t.id, projectId, userId }),
             this.deps.createEmailActionToken.execute({ action: 'comment', taskId: t.id, projectId, userId }),
@@ -198,7 +215,7 @@ export class SendDailyDigest {
             commentUrl: `${base}/api/email-actions/${commentToken}`,
           });
         }
-        const html = renderDigestHtml(model, { actionUrls, resolveImageUrl });
+        const html = renderDigestHtml(ownModel, { actionUrls, resolveImageUrl });
         await this.deps.email
           .send({ to: member.user.email, subject, html, text })
           .catch((e) => console.warn('[daily-digest] email failed', userId, e));
@@ -212,7 +229,7 @@ export class SendDailyDigest {
               type: 'daily_digest',
               projectId,
               projectName: project.name,
-              taskCount: selected.length,
+              taskCount: own.length,
             },
           })
           .catch((e) => console.warn('[daily-digest] notification failed', userId, e));
@@ -224,14 +241,14 @@ export class SendDailyDigest {
         const headerResult = await this.deps.telegram
           .execute({
             userId,
-            text: `🗒 <b>Ежедневная сводка · ${escapeDigestHtml(project.name)}</b> — ${selected.length} задач`,
+            text: `🗒 <b>Ежедневная сводка · ${escapeDigestHtml(project.name)}</b> — ${own.length} задач`,
             parseMode: 'HTML',
             kind: 'task_digest',
             skipDedupCheck: true,
           })
           .catch((e) => console.warn('[daily-digest] tg personal header failed', userId, e));
         rememberTestMessage(headerResult);
-        for (const t of selected.slice(0, TG_DIGEST_ACTION_LIMIT)) {
+        for (const t of own.slice(0, TG_DIGEST_ACTION_LIMIT)) {
           // Картинки задачи — альбомом после карточки (подписанные URL); из текста срезаны.
           const taskUrl = `${base}/${project.isInbox ? 'inbox' : `projects/${projectId}`}?task=${t.id}`;
           const imgUrls = extractImageSrcs(t.description)
@@ -256,8 +273,8 @@ export class SendDailyDigest {
             .catch((e) => console.warn('[daily-digest] tg personal card failed', userId, e));
           rememberTestMessage(itemResult);
         }
-        if (selected.length > TG_DIGEST_ACTION_LIMIT) {
-          const rest = selected.length - TG_DIGEST_ACTION_LIMIT;
+        if (own.length > TG_DIGEST_ACTION_LIMIT) {
+          const rest = own.length - TG_DIGEST_ACTION_LIMIT;
           const tailResult = await this.deps.telegram
             .execute({
               userId,
@@ -278,7 +295,8 @@ export class SendDailyDigest {
     if (
       cfg.channels.includes('telegram') &&
       cfg.tgTargets.includes('group') &&
-      settings.telegramGroupChatId !== null
+      settings.telegramGroupChatId !== null &&
+      groupTasks.length > 0
     ) {
       const groupChatId = settings.telegramGroupChatId;
       const richHtml = renderDigestRich(telegramModel);
@@ -309,7 +327,7 @@ export class SendDailyDigest {
               ?.attach({
                 chatId: groupChatId,
                 messageId: r.messageId,
-                tasks: selected.map((task) => ({ taskId: task.id, projectId })),
+                tasks: groupTasks.map((task) => ({ taskId: task.id, projectId })),
               })
               .catch((e) => console.warn('[daily-digest] remember message tasks failed', e));
           }

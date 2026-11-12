@@ -30,6 +30,13 @@ type Deps = {
   // Источник времени для дефолтного срока «сегодня». Опционален, чтобы не переписывать
   // 4 места сборки в index.ts; тесты инжектят фиксированные часы вместо глобального Date.
   readonly now?: () => Date;
+  // Пространство создания задачи общего проекта (db/182). null — основное пространство.
+  readonly resolveOrigin?: (input: {
+    readonly projectId: string;
+    readonly homeWorkspaceId: string;
+    readonly userId: string;
+    readonly requested: string | null | undefined;
+  }) => Promise<string | null>;
 };
 
 export type CreateTaskCommand = {
@@ -78,6 +85,9 @@ export type CreateTaskCommand = {
   // штамповать ей сегодняшнюю дату — исказить копируемую доску. Обычное создание
   // (UI, Telegram, MCP, автоматизация) флаг не ставит и получает «сегодня».
   readonly preserveEmptyDeadline?: boolean;
+  // Пространство, в котором создают задачу общего проекта (db/182). undefined — решает
+  // resolveOrigin (пространство запроса или единственное пространство автора в проекте).
+  readonly originWorkspaceId?: string | null;
 };
 
 const POSITION_STEP = 1024;
@@ -112,10 +122,21 @@ export class CreateTask {
     // Приёмка (db/150): задачу можно создать сразу закрытой — так работает «Готово …» в
     // Telegram-композере (логирование уже сделанной работы). Это тоже закрытие работы, и
     // если приёмка включена, а создатель не руководитель — карточка встаёт на утверждение.
+    // Общий проект (db/182): где создают задачу — от этого её видимость и правило приёмки.
+    const originWorkspaceId =
+      targetProject.isInbox || !this.deps.resolveOrigin
+        ? null
+        : await this.deps.resolveOrigin({
+            projectId: targetProject.id,
+            homeWorkspaceId: targetProject.workspaceId,
+            userId: input.ownerUserId,
+            requested: input.originWorkspaceId,
+          });
     const approvedStatus = await this.deps.approval.resolveTargetStatus(
       targetProject,
       input.ownerUserId,
       input.status,
+      originWorkspaceId,
     );
     // Воркер выключен в пространстве (db/152) — колонки «Воркер» нет, класть в неё нечего.
     // Здесь именно КОЭРСИМ в черновики, а не отвечаем ошибкой: 'todo' — это ДЕФОЛТ создания
@@ -149,7 +170,10 @@ export class CreateTask {
     let parentTaskId: string | null = null;
     if (input.parentTaskId) {
       const parent = await this.deps.tasks.getById(input.parentTaskId);
-      if (parent && parent.projectId === targetProjectId) parentTaskId = parent.id;
+      // Общий проект (db/182): подзадачу к скрытой правилами задаче не привязываем.
+      const parentVisible =
+        parent && this.deps.members.canSeeTask ? await this.deps.members.canSeeTask(input.ownerUserId, parent) : true;
+      if (parent && parent.projectId === targetProjectId && parentVisible) parentTaskId = parent.id;
     }
 
     const task = await this.deps.tasks.create({
@@ -170,6 +194,7 @@ export class CreateTask {
       parentTaskId,
       priority: input.priority ?? null,
       taskType: input.taskType ?? null,
+      originWorkspaceId,
     });
 
     // Лента действий (best-effort, не блокирует создание).

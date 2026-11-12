@@ -181,7 +181,8 @@ export function TasksPage(): React.ReactElement {
   const settleBanner = useCallback((key: string): void => {
     setSettledBanners((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
   }, []);
-  const canEditProject = data ? hasOwnerRights(data.role) || data.role === 'editor' : false;
+  // Гость общего проекта (db/182) ведёт задачи, но не настраивает проект и не приглашает.
+  const canEditProject = data ? (hasOwnerRights(data.role) || data.role === 'editor') && !data.guest : false;
   const onboardingShown = Boolean(data) && !bannersHidden && !data?.isInbox && canEditProject;
   const bannersSettled =
     Boolean(data) &&
@@ -209,7 +210,7 @@ export function TasksPage(): React.ReactElement {
     );
   }
 
-  const canEdit = hasOwnerRights(data.role) || data.role === 'editor';
+  const canEdit = canEditProject;
   // Блок описания рендерим, только когда он реально что-то показывает. У редактора это всегда
   // так: пустое поле — это плейсхолдер «Добавьте описание проекта…», т.е. сам способ описание
   // завести. А наблюдателю ProjectDescription при пустом описании возвращает null, и обёртка
@@ -236,14 +237,14 @@ export function TasksPage(): React.ReactElement {
       {!compact && members.length > 1 && (
         <MemberAvatarStack
           members={members}
-          canInvite={hasOwnerRights(data.role) || data.role === 'editor'}
+          canInvite={canEditProject}
           ownerId={data.ownerId}
         />
       )}
       <ProjectSharePopover
         project={data}
         members={members}
-        canInvite={hasOwnerRights(data.role) || data.role === 'editor'}
+        canInvite={canEditProject}
         isOwner={hasOwnerRights(data.role)}
         compact={compact}
       />

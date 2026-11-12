@@ -5,7 +5,7 @@ import type {
   LimitKind,
 } from '../../domain/automation/Automation.js';
 import { InsufficientProjectRoleError } from '../../domain/project/errors.js';
-import { can } from '../../domain/project/permissions.js';
+import { canMember } from '../../domain/project/permissions.js';
 import { requireProjectAccess, type ProjectAccessDeps } from '../project/projectAccess.js';
 import type { AutomationRepository } from './AutomationRepository.js';
 import { defaultAutomationConfig, mergeCriteriaWithDefaults } from './criteria.js';
@@ -80,7 +80,7 @@ export class SaveAutomationConfig {
       input.ultracodeReviewEnabled !== baseline.ultracodeReviewEnabled ||
       input.deployMethod !== baseline.deployMethod ||
       input.deployCommand !== baseline.deployCommand;
-    if (publishChanged && !can(access.membership.role, 'set_publish_settings')) {
+    if (publishChanged && !canMember(access.membership, 'set_publish_settings')) {
       throw new InsufficientProjectRoleError(access.membership.role, 'set_publish_settings');
     }
 

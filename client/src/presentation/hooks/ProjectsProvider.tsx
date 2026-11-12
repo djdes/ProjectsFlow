@@ -146,6 +146,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
   return <ProjectsCtx.Provider value={value}>{children}</ProjectsCtx.Provider>;
 }
 
+// Без провайдера (публичные страницы, изолированные тесты) — null вместо исключения.
+export function useOptionalProjectsContext(): ProjectsContextValue | null {
+  return useContext(ProjectsCtx);
+}
+
 export function useProjectsContext(): ProjectsContextValue {
   const c = useContext(ProjectsCtx);
   if (!c) throw new Error('useProjectsContext must be used inside <ProjectsProvider>');

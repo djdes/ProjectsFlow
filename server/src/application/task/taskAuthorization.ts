@@ -38,6 +38,17 @@ export type TaskAccessResult = {
   readonly isAssignee: boolean;
 };
 
+// Общий проект (db/182): задача скрыта правилами видимости — для этого человека её нет (404).
+export async function isTaskHiddenByRules(
+  deps: Pick<TaskAccessDeps, 'members'>,
+  project: Pick<Project, 'isInbox'>,
+  task: Task,
+  userId: string,
+): Promise<boolean> {
+  if (project.isInbox || !deps.members.canSeeTask) return false;
+  return !(await deps.members.canSeeTask(userId, task));
+}
+
 // Approvers act on individual tasks in their workspace. This does not grant access
 // to the personal inbox project or expose it in the project list.
 async function isInboxApprover(deps: TaskAccessDeps, project: Project, userId: string): Promise<boolean> {
@@ -72,10 +83,22 @@ async function isDelegatingColleague(
 export async function canManageTask(
   deps: Pick<TaskAccessDeps, 'members'>,
   project: Pick<Project, 'id' | 'ownerId' | 'isInbox'>,
-  task: Pick<Task, 'assignee'>,
+  task: Pick<Task, 'assignee'> & Partial<Pick<Task, 'projectId' | 'createdBy' | 'originWorkspaceId'>>,
   userId: string,
 ): Promise<boolean> {
   if (await deps.members.isProjectHidden?.(project.id, userId)) return false;
+  if (
+    !project.isInbox &&
+    deps.members.canSeeTask &&
+    !(await deps.members.canSeeTask(userId, {
+      projectId: task.projectId ?? project.id,
+      createdBy: task.createdBy ?? null,
+      assignee: task.assignee,
+      originWorkspaceId: task.originWorkspaceId ?? null,
+    }))
+  ) {
+    return false;
+  }
   if (await isSystemAdmin(userId)) return true;
   if (project.isInbox) {
     return project.ownerId === userId || task.assignee.userId === userId ||
@@ -83,7 +106,15 @@ export async function canManageTask(
   }
   const membership = await deps.members.findForProject(project.id, userId);
   if (!project.isInbox && !membership) return false;
-  return task.assignee.userId === userId || membership?.role === 'owner' || membership?.role === 'lead';
+  if (task.assignee.userId === userId || membership?.role === 'owner' || membership?.role === 'lead') return true;
+  // Общий проект (db/182): руководитель пространства, где задачу создали, ведёт её и принимает
+  // работу — даже если в проекте он гость или рядовой участник основного пространства. Список
+  // принимающих сам проверяет, что это пространство подключено сейчас (иначе — только основное).
+  if (task.originWorkspaceId) {
+    const approvers = await deps.members.listApproverUserIdsForProject?.(project.id, task.originWorkspaceId);
+    return (approvers ?? []).includes(userId);
+  }
+  return false;
 }
 
 // Assignee-aware authorization для task-modify операций.
@@ -102,6 +133,7 @@ export async function requireTaskModifyAccess(
   if (!project) throw new ProjectNotFoundError();
   const task = await deps.tasks.getById(taskId);
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
+  if (await isTaskHiddenByRules(deps, project, task, userId)) throw new ProjectNotFoundError();
 
   const managementActions: readonly ProjectAction[] = [
     'update_task', 'move_task', 'assign_task', 'delete_task',
@@ -189,6 +221,7 @@ export async function requireTaskReadAccess(
   }
 
   await requireProjectAccess(deps, projectId, userId, 'read_project');
+  if (await isTaskHiddenByRules(deps, project, task, userId)) throw new ProjectNotFoundError();
   return { project, isAssignee: task.assignee.userId === userId };
 }
 
@@ -211,6 +244,7 @@ export async function requireTaskDeleteAccess(
     await requireProjectAccess(deps, projectId, userId, 'read_project');
     throw new TaskNotFoundError(taskId);
   }
+  if (await isTaskHiddenByRules(deps, project, task, userId)) throw new ProjectNotFoundError();
   if (!await canManageTask(deps, project, task, userId)) {
     if (project.isInbox || !await deps.members.findForProject(project.id, userId)) throw new ProjectNotFoundError();
     throw new InsufficientProjectRoleError('viewer', action);
