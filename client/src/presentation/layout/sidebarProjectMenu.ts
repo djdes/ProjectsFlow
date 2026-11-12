@@ -62,10 +62,13 @@ export function buildSidebarProjectMenu({
       section: 0,
     });
   }
-  items.push(
-    { action: 'kb', label: 'База знаний', section: 1 },
-    { action: 'share', label: 'Общий доступ', section: 1 },
-  );
+  // Гость общего проекта (db/182) не читает базу знаний проекта и не делится проектом.
+  if (!project.guest) {
+    items.push(
+      { action: 'kb', label: 'База знаний', section: 1 },
+      { action: 'share', label: 'Общий доступ', section: 1 },
+    );
+  }
   if (canShareWorkspaces) items.push({ action: 'workspaceAccess', label: 'Доступ пространств…', section: 1 });
   items.push(
     { action: 'moveUp', label: 'Переместить выше', section: 2, disabled: !canMoveUp },

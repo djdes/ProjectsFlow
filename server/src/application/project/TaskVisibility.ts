@@ -105,8 +105,9 @@ function visibleTo(
   const homeRole = own.find((m) => m.workspaceId === sharing.homeWorkspaceId)?.role;
   // Автор проекта, руководители основного пространства и диспетчер (воркер исполняет все
   // задачи проекта) видят всё.
+  // Автор — только пока он участник основного пространства (не гость через подключённое).
   const isAdmin =
-    sharing.creatorUserId === userId ||
+    (sharing.creatorUserId === userId && homeRole !== undefined) ||
     sharing.dispatcherUserId === userId ||
     homeRole === 'owner' ||
     homeRole === 'lead';

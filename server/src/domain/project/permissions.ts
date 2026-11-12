@@ -9,6 +9,10 @@ import type { ProjectRole } from './ProjectMembership.js';
 
 export type ProjectAction =
   | 'read_project'
+  // Данные проекта целиком (финансы, база знаний, код и коммиты, сайт и бэкенд приложения,
+  // настройки, аналитика, ИИ-чаты проекта). Для участников — как read_project; гость общего
+  // проекта (db/182) их не читает: он видит задачи, а не проект.
+  | 'read_project_data'
   | 'update_project'
   | 'delete_project'
   | 'create_task'
@@ -55,6 +59,7 @@ export type ProjectAction =
 
 const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   read_project: 'viewer',
+  read_project_data: 'viewer',
   update_project: 'editor',
   delete_project: 'owner',
   create_task: 'editor',

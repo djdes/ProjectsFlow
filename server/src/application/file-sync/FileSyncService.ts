@@ -51,7 +51,7 @@ export class FileSyncService {
   }
 
   private async authRead(projectId: string, userId: string): Promise<void> {
-    await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project_data');
   }
 
   private async authDispatcher(projectId: string, userId: string): Promise<void> {

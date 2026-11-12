@@ -79,7 +79,8 @@ export class LiveService {
   // проекта (db/182). false — задачи нет или она скрыта.
   private async canReadTask(projectId: string, userId: string, taskId: string): Promise<boolean> {
     const { project } = await requireProjectAccess(this.accessDeps, projectId, userId, 'read_project');
-    const task = await this.deps.tasks.getById(taskId);
+    // С корзиной: история запусков удалённой задачи остаётся доступной, как и раньше.
+    const task = await this.deps.tasks.getByIdIncludingDeleted(taskId);
     if (!task || task.projectId !== projectId) return false;
     return !(await isTaskHiddenByRules(this.accessDeps, project, task, userId));
   }

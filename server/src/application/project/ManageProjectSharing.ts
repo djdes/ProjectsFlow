@@ -173,7 +173,12 @@ export class ManageProjectSharing {
   }
 
   private async canManage(project: Project, actorUserId: string): Promise<boolean> {
-    if (project.ownerId === actorUserId) return true;
+    // Автор проекта управляет доступом, пока он участник основного пространства: гость через
+    // подключённое пространство (например, его убрали из основного) — уже нет.
+    if (project.ownerId === actorUserId) {
+      const access = await this.deps.members.findForProject(project.id, actorUserId);
+      if (access && !access.guest) return true;
+    }
     const membership = await this.deps.workspaces.getMembership(project.workspaceId, actorUserId);
     return isAdminRole(membership?.role);
   }

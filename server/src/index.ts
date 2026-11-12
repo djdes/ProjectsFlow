@@ -779,22 +779,36 @@ const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promi
   const list = await taskRepo.listByIds(taskIds);
   return new Set((await taskVisibility.filterTasks(userId, list)).map((task) => task.id));
 };
-// Общие проекты (db/182): задачи из ссылок, скрытые от человека правилами (и удалённые в
-// корзину тоже). Задачи обычных проектов не скрыты — запросов по ним нет.
+// Общие проекты (db/182): задачи из ссылок, скрытые от человека правилами. Ссылка
+// оценивается в своём проекте: задача могла уехать в другой проект или быть удалена насовсем —
+// тогда она считается задачей основного пространства с неизвестными автором и ответственным
+// (видят те, кому видно всё основное). Задачи обычных проектов не скрыты — запросов по ним нет.
 const hiddenTaskIds = async (
   userId: string,
   refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
 ): Promise<ReadonlySet<string>> => {
   if (refs.length === 0) return new Set();
   const shared = await projectSharingRepo.loadMany(refs.map((ref) => ref.projectId));
-  const ids = [...new Set(refs.filter((ref) => shared.has(ref.projectId)).map((ref) => ref.taskId))];
+  const sharedRefs = refs.filter((ref) => shared.has(ref.projectId));
+  const ids = [...new Set(sharedRefs.map((ref) => ref.taskId))];
   if (ids.length === 0) return new Set();
-  const active = await taskRepo.listByIds(ids);
-  const found = new Set(active.map((task) => task.id));
+  const found = new Map((await taskRepo.listByIds(ids)).map((task) => [task.id, task] as const));
   const deleted = await Promise.all(ids.filter((id) => !found.has(id)).map((id) => taskRepo.getByIdIncludingDeleted(id)));
-  const all = [...active, ...deleted.filter((task): task is NonNullable<typeof task> => task !== null)];
-  const visible = new Set((await taskVisibility.filterTasks(userId, all)).map((task) => task.id));
-  return new Set(all.filter((task) => !visible.has(task.id)).map((task) => task.id));
+  for (const task of deleted) if (task) found.set(task.id, task);
+  const candidates = sharedRefs.map((ref) => {
+    const task = found.get(ref.taskId);
+    const sameProject = task?.projectId === ref.projectId;
+    return {
+      id: ref.taskId,
+      projectId: ref.projectId,
+      createdBy: task?.createdBy ?? null,
+      assignee: { userId: task?.assignee.userId ?? '' },
+      originWorkspaceId: sameProject ? (task?.originWorkspaceId ?? null) : null,
+    };
+  });
+  const visible = await taskVisibility.filterTasks(userId, candidates);
+  const shown = new Set(visible.map((c) => `${c.projectId}|${c.id}`));
+  return new Set(candidates.filter((c) => !shown.has(`${c.projectId}|${c.id}`)).map((c) => c.id));
 };
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
@@ -1479,6 +1493,7 @@ workflowEffects.triggerWebhook = async (projectId, event) => {
 // --- Предложения закрыть задачу (db/101, EOD Фаза 1) ---
 const closeProposalRepo = new DrizzleCloseProposalRepository(db);
 const createCloseProposals = new CreateCloseProposals({
+  visibility: taskVisibility,
   closeProposals: closeProposalRepo,
   createComment: createTaskCommentUseCase,
   notifications: notificationRepo,
@@ -1512,6 +1527,7 @@ const confirmCloseProposal = new ConfirmCloseProposal({
 const dismissCloseProposal = new DismissCloseProposal({
   closeProposals: closeProposalRepo,
   members: projectMemberRepo,
+  tasks: taskRepo,
 });
 
 // Подключение людей из рабочих Telegram-групп (db/181): инструкция в группе, персональное
@@ -2574,6 +2590,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
       live: liveRepo,
+      hiddenTaskIds,
     }),
     setGitTokenDelegation: new SetGitTokenDelegation({
       projects: projectRepo,
@@ -3085,6 +3102,7 @@ const { app, devProxyUpgrade } = createApp({
       versions: taskVersionRepo,
       users: userRepo,
       now: () => new Date(),
+      hiddenTaskIds,
     }),
     restoreTaskVersion: new RestoreTaskVersion({
       approval: taskApprovalService,

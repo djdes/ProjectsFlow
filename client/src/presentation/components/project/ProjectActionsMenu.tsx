@@ -193,7 +193,10 @@ export function ProjectActionsMenu({
         section: 0,
       });
     list.push({ key: 'link', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink, section: 0 });
-    if (financeVisible)
+    // Гость общего проекта (db/182) видит задачи, а не проект: без финансов, автоматизации,
+    // базы знаний и мониторинга (сервер их гостю не отдаёт).
+    const guest = project.guest === true;
+    if (financeVisible && !guest)
       list.push({
         key: 'finance',
         label: 'Финансы',
@@ -201,23 +204,24 @@ export function ProjectActionsMenu({
         onSelect: () => navigate(`/projects/${projectId}/finance`),
         section: 1,
       });
-    list.push(
-      {
-        key: 'automation',
-        label: 'Автоматизация',
-        icon: Bot,
-        onSelect: onOpenAutomation,
-        section: 1,
-      },
-      {
-        key: 'kb',
-        label: 'База знаний',
-        icon: BookOpen,
-        onSelect: () => navigate(`/projects/${projectId}/kb`),
-        section: 1,
-      },
-    );
-    if (monitoringVisible)
+    if (!guest)
+      list.push(
+        {
+          key: 'automation',
+          label: 'Автоматизация',
+          icon: Bot,
+          onSelect: onOpenAutomation,
+          section: 1,
+        },
+        {
+          key: 'kb',
+          label: 'База знаний',
+          icon: BookOpen,
+          onSelect: () => navigate(`/projects/${projectId}/kb`),
+          section: 1,
+        },
+      );
+    if (monitoringVisible && !guest)
       list.push({
         key: 'monitoring',
         label: 'Мониторинг',

@@ -64,6 +64,7 @@ test('гость общего проекта: настройки видны, у�
   const list = labels(project({ role: 'editor', guest: true }));
   assert.ok(list.includes('Настройки'));
   assert.ok(!list.includes('Изменить имя'));
+  assert.ok(!list.includes('База знаний'));
   assert.ok(!list.includes('Дублировать'));
   assert.ok(!list.includes('Доступ пространств…'));
   assert.ok(!list.includes('Удалить проект…'));

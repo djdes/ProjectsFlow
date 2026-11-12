@@ -75,7 +75,7 @@ export class ManageProjectRepositoryCode {
   constructor(private readonly deps: Deps) {}
 
   async getTree(projectId: string, userId: string): Promise<ProjectRepoTree> {
-    const context = await this.resolveContext(projectId, userId, 'read_project');
+    const context = await this.resolveContext(projectId, userId, 'read_project_data');
     const result = await this.deps.api.listRepoTreeRecursive(context.token.accessToken, context.fullName);
     await this.auditDelegated(projectId, userId, context.token);
 
@@ -98,7 +98,7 @@ export class ManageProjectRepositoryCode {
   async getFile(projectId: string, userId: string, rawPath: string): Promise<ProjectRepoTextFile> {
     const path = validateRepositoryPath(rawPath);
     rejectRestricted(path);
-    const context = await this.resolveContext(projectId, userId, 'read_project');
+    const context = await this.resolveContext(projectId, userId, 'read_project_data');
     const file = await this.deps.api.getRepoFile(context.token.accessToken, context.fullName, path);
     await this.auditDelegated(projectId, userId, context.token);
     if (!file) throw new GithubRepoFileNotFoundError(path);
@@ -158,7 +158,7 @@ export class ManageProjectRepositoryCode {
   private async resolveContext(
     projectId: string,
     userId: string,
-    action: 'read_project' | 'update_project',
+    action: 'read_project_data' | 'update_project',
   ): Promise<{
     owner: string;
     repo: string;

@@ -114,8 +114,21 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   // Явно скрыт галочкой: членство в пространствах проекта есть, а доступа нет (скрыт в
   // основном пространстве или во всех подключённых, где состоит).
   async isProjectHidden(projectId: string, userId: string): Promise<boolean> {
+    // Быстрый путь (один запрос, как без подключений): скрыт галочкой в основном
+    // пространстве, где он не owner/lead. Подключённые пространства смотрим, только если есть.
+    const [quick] = await this.db
+      .select({
+        isInbox: projects.isInbox,
+        shared: sql<number>`EXISTS (SELECT 1 FROM project_workspace_access a WHERE a.project_id = ${projects.id} AND a.workspace_id <> ${projects.workspaceId})`,
+        homeHidden: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x INNER JOIN workspace_members wm ON wm.workspace_id = x.workspace_id AND wm.user_id = x.user_id WHERE x.project_id = ${projects.id} AND x.workspace_id = ${projects.workspaceId} AND x.user_id = ${userId} AND wm.role NOT IN ('owner', 'lead'))`,
+      })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    if (!quick || quick.isInbox) return false;
+    if (!Number(quick.shared)) return Boolean(Number(quick.homeHidden));
     const project = await this.getProjectAccessRow(projectId);
-    if (!project || project.isInbox) return false;
+    if (!project) return false;
     const rows = await this.accessRows(project, [userId]);
     const own = rows.get(userId) ?? [];
     return own.length > 0 && deriveSharedMembership(project, userId, own) === null;
@@ -224,7 +237,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       r.wmRole !== null && r.wmCreatedAt !== null
         ? { userId, role: r.wmRole as ProjectRole, createdAt: r.wmCreatedAt }
         : null;
-    if (project.isInbox || wsMember || !r.shared) {
+    if (project.isInbox || wsMember || !Number(r.shared)) {
       return deriveMembership(project, userId, wsMember, Boolean(r.excluded));
     }
     const access = await this.accessRows(project, [userId]);

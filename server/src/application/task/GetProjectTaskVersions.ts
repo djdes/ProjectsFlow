@@ -12,6 +12,11 @@ type Deps = {
   readonly versions: TaskVersionRepository;
   readonly users: UserRepository;
   readonly now: () => Date;
+  // Общий проект (db/182): история скрытых правилами задач не отдаётся.
+  readonly hiddenTaskIds?: (
+    userId: string,
+    refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+  ) => Promise<ReadonlySet<string>>;
 };
 
 // Общая история всех задач проекта. Доступна любому участнику с read_project;
@@ -34,8 +39,12 @@ export class GetProjectTaskVersions {
         ? new Date(now.getTime() - VERSION_HISTORY_FREE_DAYS * 24 * 60 * 60 * 1000).toISOString()
         : null;
 
+    const all = await this.deps.versions.listForProject(projectId);
+    const hidden = this.deps.hiddenTaskIds
+      ? await this.deps.hiddenTaskIds(userId, all.map((v) => ({ projectId, taskId: v.taskId })))
+      : new Set<string>();
     return {
-      versions: await this.deps.versions.listForProject(projectId),
+      versions: hidden.size > 0 ? all.filter((v) => !hidden.has(v.taskId)) : all,
       plan,
       cutoffAt,
     };

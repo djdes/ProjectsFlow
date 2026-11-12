@@ -8,7 +8,7 @@ export class GetDigestSettings {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, userId: string): Promise<DigestSettings> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     return this.deps.settings.getByProject(projectId);
   }
 
@@ -16,7 +16,7 @@ export class GetDigestSettings {
   // доступом к проекту, из которого открыто окно; выборка — объединение групп юзера
   // (по всем его проектам) и групп всего пространства этого проекта (см. listGroupsForUser).
   async listUserGroups(projectId: string, userId: string): Promise<DigestGroupHistory[]> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     return this.deps.settings.listGroupsForUser(userId, projectId);
   }
 }

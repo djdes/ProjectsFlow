@@ -37,7 +37,7 @@ export class ListDispatcherCandidates {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, actorUserId: string): Promise<DispatcherCandidate[]> {
-    await requireProjectAccess(this.deps, projectId, actorUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, actorUserId, 'read_project_data');
     const [members, admins] = await Promise.all([
       this.deps.members.listByProject(projectId),
       this.deps.users.listAdmins(),

@@ -18,6 +18,8 @@ const membersOf: Array<{ workspaceId: string; userId: string; role: WorkspaceRol
   { workspaceId: 'dev', userId: 'both', role: 'editor' },
   { workspaceId: 'office', userId: 'both', role: 'editor' },
   { workspaceId: 'dev', userId: 'devlead', role: 'lead' },
+  { workspaceId: 'dev', userId: 'author', role: 'editor' },
+  { workspaceId: 'office', userId: 'exauthor', role: 'editor' },
   { workspaceId: 'office', userId: 'hidden', role: 'editor', excluded: true },
 ];
 
@@ -70,6 +72,21 @@ test('admins: project author, home lead and system admins see everything', async
   assert.equal(await v.canSee('author', officeTask), true);
   assert.equal(await v.canSee('devlead', officeTask), true);
   assert.equal(await v.canSee('root', devTask), true);
+});
+
+test('the project author who is only a guest no longer sees everything', async () => {
+  const v = make();
+  const guestAuthorSharing = { ...sharingP, creatorUserId: 'exauthor' };
+  const guest = new TaskVisibility({
+    sharing: {
+      async loadMany() {
+        return new Map([['p', guestAuthorSharing]]);
+      },
+      memberships: (userIds, projects) => v['deps'].sharing.memberships(userIds, projects),
+    },
+  });
+  assert.equal(await guest.canSee('exauthor', devTask), false);
+  assert.equal(await guest.canSee('exauthor', officeTask), true);
 });
 
 test('a member hidden from the project by the workspace checkbox sees nothing of it', async () => {
