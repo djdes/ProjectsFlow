@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, inArray, isNull, lt, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { notifications, projects, tasks, type NotificationRow } from '../db/schema.js';
+import { notifications, projectWorkspaceAccess, projects, tasks, workspaceMembers, type NotificationRow } from '../db/schema.js';
 import {
   ACTIONABLE_NOTIFICATION_TYPES,
   MINE_NOTIFICATION_TYPES,
@@ -59,18 +59,54 @@ function mineFor(userId: string): SQL | undefined {
 export class DrizzleNotificationRepository implements NotificationRepository {
   constructor(private readonly db: Database) {}
 
+  private async recipientWorkspace(
+    projectId: string,
+    homeWorkspaceId: string,
+    userId: string,
+    originWorkspaceId: string | null,
+  ): Promise<string> {
+    const linked = await this.db
+      .select({ workspaceId: projectWorkspaceAccess.workspaceId })
+      .from(projectWorkspaceAccess)
+      .where(eq(projectWorkspaceAccess.projectId, projectId));
+    if (linked.every((row) => row.workspaceId === homeWorkspaceId)) return homeWorkspaceId;
+    const candidates = [...new Set([homeWorkspaceId, ...linked.map((row) => row.workspaceId)])];
+    const memberships = await this.db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.userId, userId), inArray(workspaceMembers.workspaceId, candidates)));
+    const mine = memberships.map((row) => row.workspaceId);
+    if (originWorkspaceId && mine.includes(originWorkspaceId)) return originWorkspaceId;
+    if (mine.includes(homeWorkspaceId)) return homeWorkspaceId;
+    return mine[0] ?? homeWorkspaceId;
+  }
+
   async create(input: CreateNotificationInput): Promise<Notification> {
     const payload = input.payload;
     let workspaceId: string | null = 'workspaceId' in payload ? payload.workspaceId : null;
+    let projectId: string | null = null;
+    let originWorkspaceId: string | null = null;
     if ('projectId' in payload) {
       const rows = await this.db.select({ id: projects.workspaceId }).from(projects)
         .where(eq(projects.id, payload.projectId)).limit(1);
       workspaceId = rows[0]?.id ?? null;
+      projectId = payload.projectId;
     } else if ('taskId' in payload) {
-      const rows = await this.db.select({ id: projects.workspaceId }).from(tasks)
+      const rows = await this.db.select({ id: projects.workspaceId, projectId: projects.id }).from(tasks)
         .innerJoin(projects, eq(projects.id, tasks.projectId))
         .where(eq(tasks.id, payload.taskId)).limit(1);
       workspaceId = rows[0]?.id ?? null;
+      projectId = rows[0]?.projectId ?? null;
+    }
+    if ('taskId' in payload) {
+      const rows = await this.db.select({ origin: tasks.originWorkspaceId }).from(tasks)
+        .where(eq(tasks.id, payload.taskId)).limit(1);
+      originWorkspaceId = rows[0]?.origin ?? null;
+    }
+    // Общий проект (db/182): гость (не участник основного пространства) видит уведомление в
+    // своём пространстве проекта — предпочтительно в пространстве, где создана задача.
+    if (workspaceId && projectId) {
+      workspaceId = await this.recipientWorkspace(projectId, workspaceId, input.userId, originWorkspaceId);
     }
     await this.db.insert(notifications).values({
       id: input.id,

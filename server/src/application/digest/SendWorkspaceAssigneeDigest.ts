@@ -1,3 +1,4 @@
+import type { TaskVisibility } from '../project/TaskVisibility.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type {
@@ -55,6 +56,8 @@ type Deps = {
   // Задачи каждого отправленного сообщения (db/160): reply на сводку становится
   // комментарием к задаче. Отсутствие — без этой возможности (тесты, старый wiring).
   readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'attach'>;
+  // Общие проекты (db/182): в групповой таблице — задачи, видимые пространству.
+  readonly visibility?: Pick<TaskVisibility, 'filterForWorkspace'>;
 };
 
 export type WorkspaceAssigneeDigestSendResult = {

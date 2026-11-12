@@ -583,7 +583,7 @@ type AppDeps = {
   };
   readonly notifications: {
     readonly resolveActiveWorkspace: import('../application/workspace/activeWorkspace.js').ResolveActiveWorkspace;
-    readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
+    readonly getProjectWorkspaceIds: (projectId: string) => Promise<readonly string[]>;
     readonly tasks: TaskRepository;
     readonly list: ListNotifications;
     readonly alerts: NotificationAlerts;

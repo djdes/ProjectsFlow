@@ -740,6 +740,11 @@ const taskVersionRecorder = new TaskVersionRecorder({
   onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
 });
 const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
+// Видимые человеку задачи общих проектов (db/182) — для пост-фильтра поиска.
+const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promise<ReadonlySet<string>> => {
+  const list = await taskRepo.listByIds(taskIds);
+  return new Set((await taskVisibility.filterTasks(userId, list)).map((task) => task.id));
+};
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 // Бинарные вложения живут вне каталога релиза и переиспользуются HTTP-роутами и Telegram.
@@ -2227,6 +2232,7 @@ const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
   messageTasks: telegramMessageTaskRepo,
+  visibility: taskVisibility,
 });
 // Личная сводка в бота (db/161): каждому участнику его задачи карточками с кнопками.
 const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
@@ -2238,6 +2244,7 @@ const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
   telegram: sendAgentTelegramNotification,
   messageTasks: telegramMessageTaskRepo,
   appUrl: appBaseUrl,
+  visibility: taskVisibility,
 });
 const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   repo: workspaceAssigneeDigestRepo,
@@ -2637,7 +2644,7 @@ const { app, devProxyUpgrade } = createApp({
   },
   notifications: {
     resolveActiveWorkspace,
-    getProjectWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
+    getProjectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
     tasks: taskRepo,
     list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace, actionStates: notificationActionStates }),
     alerts: new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo }),
@@ -2798,7 +2805,7 @@ const { app, devProxyUpgrade } = createApp({
   search: {
     // UI-поиск изолирован по активному пространству (agent-инстанс ниже — без резолвера,
     // глобален by-design).
-    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace }),
+    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace, visibleTaskIds }),
   },
   telegram: {
     pairing: pairTelegramAccount,
@@ -3500,7 +3507,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       versions: taskVersionRecorder,
     }),
-    searchTasks: new SearchTasks({ search: taskSearchRepo }),
+    searchTasks: new SearchTasks({ search: taskSearchRepo, visibleTaskIds }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
     listProjectMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
     getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),

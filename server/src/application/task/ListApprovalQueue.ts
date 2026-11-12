@@ -58,15 +58,25 @@ export class ListApprovalQueue {
     const projectEntries = await Promise.all(
       projectIds.map(async (id) => [id, await this.deps.projects.getById(id)] as const),
     );
+    const inWorkspace = await Promise.all(
+      projectEntries.map(async ([id, project]) =>
+        project !== null &&
+        (project.workspaceId === ws.id || (await this.deps.projects.isInWorkspace?.(id, ws.id)) === true),
+      ),
+    );
     const projectById = new Map(
-      projectEntries.filter((e): e is [string, Project] => e[1] !== null && e[1].workspaceId === ws.id),
+      projectEntries.filter((e, index): e is [string, Project] => e[1] !== null && inWorkspace[index] === true),
     );
     const allowed = new Map(
       await Promise.all(
         [...projectById.values()].map(async (project) => [project.id, await this.canAccept(project, callerId)] as const),
       ),
     );
-    const visible = pending.filter((t) => allowed.get(t.projectId) === true);
+    const accepted = pending.filter((t) => allowed.get(t.projectId) === true);
+    // Общий проект (db/182): в очереди — только задачи, видимые руководителю в этом пространстве.
+    const visible = this.deps.members.filterVisibleTasks
+      ? await this.deps.members.filterVisibleTasks(callerId, accepted)
+      : accepted;
     if (visible.length === 0) return [];
 
     const ids = visible.map((t) => t.id);

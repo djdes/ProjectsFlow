@@ -1,3 +1,4 @@
+import type { TaskVisibility } from '../project/TaskVisibility.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
@@ -29,8 +30,10 @@ import {
 type Deps = {
   readonly settings: Pick<WorkspaceAssigneeDigestRepository, 'get'>;
   readonly workspaces: Pick<WorkspaceRepository, 'listMembers'>;
-  readonly projects: Pick<ProjectRepository, 'listByWorkspace' | 'listInboxesByOwners'>;
+  readonly projects: Pick<ProjectRepository, 'listByWorkspace' | 'listInboxesByOwners' | 'listLinkedToWorkspace'>;
   readonly tasks: Pick<TaskRepository, 'listByProject'>;
+  // Общие проекты (db/182): те же правила, что у групповой таблицы.
+  readonly visibility?: Pick<TaskVisibility, 'filterForWorkspace'>;
   readonly comments: Pick<TaskCommentRepository, 'countsByTasks'>;
   // Личка с ботом: проверка привязки/«Start», аудит, маппинг reply→комментарий на карточке.
   readonly telegram: { execute(cmd: SendAgentNotificationCommand): Promise<SendAgentNotificationResult> };

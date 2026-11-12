@@ -98,8 +98,12 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   constructor(
     private readonly db: Database,
     // Видимость задач общих проектов (db/182). Без неё все задачи видны, как раньше.
-    private readonly visibility?: Pick<TaskVisibility, 'filterTasks' | 'filterAudience'>,
+    private readonly visibility?: Pick<TaskVisibility, 'filterTasks' | 'filterAudience' | 'canSee'>,
   ) {}
+
+  async canSeeTask(userId: string, task: VisibleTaskLike): Promise<boolean> {
+    return this.visibility ? this.visibility.canSee(userId, task) : true;
+  }
 
   async filterVisibleTasks<T extends VisibleTaskLike>(userId: string, list: readonly T[]): Promise<T[]> {
     return this.visibility ? this.visibility.filterTasks(userId, list) : [...list];

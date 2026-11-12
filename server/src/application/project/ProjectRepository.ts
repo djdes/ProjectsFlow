@@ -76,8 +76,12 @@ export interface ProjectRepository {
   setWorkspace(projectId: string, workspaceId: string): Promise<void>;
   // workspace_id проекта — для deep-link авто-switch активного пространства.
   getWorkspaceId(projectId: string): Promise<string | null>;
+  // Проект доступен в пространстве: основное или подключённое (общий проект, db/182).
+  isInWorkspace?(projectId: string, workspaceId: string): Promise<boolean>;
   // Проекты пространства (для страницы настроек пространства). Лёгкий read-model.
   listByWorkspace(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
+  // Чужие общие проекты, подключённые к пространству (db/182) — для его сводок.
+  listLinkedToWorkspace?(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   // Полный серверный read-model пространства, включая персональные inbox-проекты.
   // Нужен фоновым workspace-wide сценариям (например, напоминанию о дедлайнах),
   // где скрытие inbox из обычного UI-списка не должно скрывать сами задачи.

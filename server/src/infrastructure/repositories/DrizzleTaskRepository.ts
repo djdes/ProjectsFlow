@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, sql, or } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   taskDelegations,
@@ -14,8 +14,7 @@ import {
   recentTaskViews,
   telegramTaskMessages,
   emailActionTokens,
-  type TaskRow,
-} from '../db/schema.js';
+  type TaskRow, projectWorkspaceAccess } from '../db/schema.js';
 import {
   TASK_STATUSES,
   isTaskType,
@@ -183,32 +182,37 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]> {
-    // Скоуп по пространству — через принадлежность проекта задачи (projects.workspace_id).
-    // Подзапрос вместо join, чтобы не трогать leftJoin-набор baseSelect.
-    const workspaceProjects = this.db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.workspaceId, workspaceId));
+    // Скоуп по пространству — через принадлежность проекта задачи: основное пространство
+    // или подключённое (общий проект, db/182). Подзапрос вместо join, чтобы не трогать
+    // leftJoin-набор baseSelect.
     const rows = await this.baseSelect()
       .where(
         activeTasks(
-          and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, workspaceProjects)),
+          and(eq(tasks.assigneeUserId, userId), this.inWorkspaceProjects(workspaceId)),
         ),
       )
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
+  // Задача из проекта пространства: основного или подключённого к нему (db/182).
+  private inWorkspaceProjects(workspaceId: string) {
+    return or(
+      inArray(tasks.projectId, this.db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, workspaceId))),
+      inArray(
+        tasks.projectId,
+        this.db
+          .select({ id: projectWorkspaceAccess.projectId })
+          .from(projectWorkspaceAccess)
+          .where(eq(projectWorkspaceAccess.workspaceId, workspaceId)),
+      ),
+    );
+  }
+
   async listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]> {
     // Тот же скоуп по пространству, что у listAssignedToInWorkspace: через проект задачи.
-    const workspaceProjects = this.db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.workspaceId, workspaceId));
     const rows = await this.baseSelect()
-      .where(
-        activeTasks(and(eq(tasks.status, status), inArray(tasks.projectId, workspaceProjects))),
-      )
+      .where(activeTasks(and(eq(tasks.status, status), this.inWorkspaceProjects(workspaceId))))
       .orderBy(asc(tasks.updatedAt), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }

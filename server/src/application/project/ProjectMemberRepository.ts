@@ -38,6 +38,8 @@ export interface ProjectMemberRepository {
   filterVisibleTasks?<T extends VisibleTaskLike>(userId: string, tasks: readonly T[]): Promise<T[]>;
   // Кому из списка показывать события и уведомления по задаче общего проекта.
   filterTaskAudience?(task: VisibleTaskLike, userIds: readonly string[]): Promise<string[]>;
+  // Видит ли человек задачу вообще (прямая ссылка: объединение правил всех его пространств).
+  canSeeTask?(userId: string, task: VisibleTaskLike): Promise<boolean>;
   // Главный метод доступа: «может ли userId смотреть/менять projectId, и с какой ролью».
   // Возвращает null если юзер не member — use-case обычно мапит в ProjectNotFoundError (404).
   findForProject(projectId: string, userId: string): Promise<ProjectMembership | null>;
