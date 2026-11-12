@@ -1,3 +1,4 @@
+import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/InviteCandidate';
 import type {
   TelegramGroupLinkPurpose,
   TelegramWorkGroup,
@@ -227,6 +228,24 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
       input,
     );
     return inviteFromDto(invite);
+  }
+
+  async listInviteCandidates(workspaceId: string): Promise<InviteCandidate[]> {
+    const { candidates } = await httpClient.get<{ candidates: InviteCandidate[] }>(
+      `/workspaces/${workspaceId}/invite-candidates`,
+    );
+    return candidates;
+  }
+
+  async inviteNeighbors(
+    workspaceId: string,
+    userIds: readonly string[],
+    role: WorkspaceInviteRole,
+  ): Promise<Array<{ userId: string; status: InviteNeighborStatus }>> {
+    const { results } = await httpClient.post<{
+      results: Array<{ userId: string; status: InviteNeighborStatus }>;
+    }>(`/workspaces/${workspaceId}/invites/neighbors`, { userIds, role });
+    return results;
   }
 
   async deleteInvite(workspaceId: string, inviteId: string): Promise<void> {

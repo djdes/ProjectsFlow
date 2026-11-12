@@ -371,6 +371,8 @@ import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositori
 import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
 import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
+import { InviteNeighbors, ListWorkspaceInviteCandidates } from './application/workspace/InviteNeighbors.js';
+import { DrizzleWorkspaceNeighborsRepository } from './infrastructure/repositories/DrizzleWorkspaceNeighborsRepository.js';
 import { DrizzleTelegramGroupOnboardingRepository } from './infrastructure/repositories/DrizzleTelegramGroupOnboardingRepository.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
@@ -1108,6 +1110,14 @@ const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
   telegram: sendAgentTelegramNotification, appUrl: appBaseUrl, now,
 });
 setInterval(deliverWorkspaceInvites.wake, 15_000).unref();
+// Приглашение в пространство: по почте и пакетом «из соседних» — один и тот же use-case.
+const createWorkspaceInvite = new CreateWorkspaceInvite({
+  workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
+  invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
+  idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
+  ttlMs: 7 * 24 * 60 * 60 * 1000,
+});
+const workspaceNeighborsRepo = new DrizzleWorkspaceNeighborsRepository(db);
 
 // --- Рассылки админки (db/176) ---
 // mailing_recipients — durable-очередь: воркер тикает каждые 5 с и шлёт не больше
@@ -2574,13 +2584,17 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
     }),
     telegramGroups: telegramWorkGroups,
-    invites: {
-      create: new CreateWorkspaceInvite({
-        workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
-        invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
-        idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
-        ttlMs: 7 * 24 * 60 * 60 * 1000,
+    neighborInvites: {
+      list: new ListWorkspaceInviteCandidates({ neighbors: workspaceNeighborsRepo, workspaces: workspaceRepo, now }),
+      invite: new InviteNeighbors({
+        neighbors: workspaceNeighborsRepo,
+        workspaces: workspaceRepo,
+        createInvite: createWorkspaceInvite,
+        now,
       }),
+    },
+    invites: {
+      create: createWorkspaceInvite,
       manage: new ManageWorkspaceInvite({
         workspaces: workspaceRepo, invites: workspaceInviteRepo, now,
         ttlMs: 7 * 24 * 60 * 60 * 1000, appUrl: appBaseUrl, onQueued: deliverWorkspaceInvites.wake,

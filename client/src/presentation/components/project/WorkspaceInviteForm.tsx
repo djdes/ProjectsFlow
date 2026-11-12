@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Loader2, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/sonner';
@@ -8,6 +8,7 @@ import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/Wo
 import type { WorkspaceAccessProject } from '@/domain/workspace/WorkspaceProjectAccess';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectAccessChecklist } from './ProjectAccessChecklist';
+import { NeighborInviteDialog } from './NeighborInviteDialog';
 
 export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
   workspace: Workspace;
@@ -21,6 +22,7 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [neighborsOpen, setNeighborsOpen] = useState(false);
   const canManage = workspace.role === 'owner' || workspace.role === 'lead';
   if (workspace.role === 'viewer' || workspace.kind === 'default') return null;
 
@@ -60,10 +62,12 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
   };
 
   return <form onSubmit={event => void submit(event)} className="space-y-3 rounded-xl border border-primary/15 bg-primary/[0.035] p-3 sm:p-4">
-    <div className="flex items-start gap-2.5">
+    <div className="flex flex-wrap items-start gap-2.5">
       <UserPlus className="mbs-0.5 size-4 shrink-0 text-primary" />
-      <div className="min-w-0"><p className="text-sm font-semibold">Новое приглашение</p><p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
+      <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Новое приглашение</p><p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
+      <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={busy} onClick={() => setNeighborsOpen(true)}><UsersRound className="size-4" />Из соседних пространств</Button>
     </div>
+    <NeighborInviteDialog open={neighborsOpen} onOpenChange={setNeighborsOpen} workspace={workspace} onInvited={() => onCreated?.([])} />
     <div className="flex flex-wrap gap-2">
       <label className="min-w-0 flex-[3_1_12rem] space-y-1.5"><span className="text-xs font-medium">Кого пригласить</span><Input value={email} onChange={event => setEmail(event.target.value)} disabled={busy} aria-label="Email для приглашения" aria-invalid={!!error} placeholder="Email, через запятую" autoComplete="email" /></label>
       <label className="min-w-0 flex-[1_1_9rem] space-y-1.5"><span className="text-xs font-medium">Роль в пространстве</span><select className="h-10 w-full rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Роль нового участника" value={role} disabled={busy} onChange={event => setRole(event.target.value as WorkspaceInviteRole)}>

@@ -20,6 +20,7 @@ import type { SetWorkspaceCommitSyncProjects } from '../../application/commit-sy
 import type { BulkManageWorkspaceKanbanColumns } from '../../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import type { ManageTelegramWorkGroups } from '../../application/telegram/ManageTelegramWorkGroups.js';
 import type { TelegramWorkGroup } from '../../application/telegram/TelegramWorkGroupRepository.js';
+import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../../application/workspace/InviteNeighbors.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { z } from 'zod';
 import {
@@ -27,6 +28,7 @@ import {
   addTelegramWorkGroupSchema,
   changeRoleSchema,
   createTelegramGroupLinkSchema,
+  inviteNeighborsSchema,
   createWorkspaceInviteSchema,
   createWorkspaceSchema,
   moveProjectSchema,
@@ -176,6 +178,11 @@ type Deps = {
   readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
   // Рабочие Telegram-группы (db/181). Необязательно: без бота роуты отвечают 503.
   readonly telegramGroups?: ManageTelegramWorkGroups;
+  // «Добавить из соседних»: люди из других пространств приглашающего.
+  readonly neighborInvites?: {
+    readonly list: ListWorkspaceInviteCandidates;
+    readonly invite: InviteNeighbors;
+  };
   readonly appUrl: string;
 };
 
@@ -590,6 +597,28 @@ export function workspacesRouter(deps: Deps): Router {
     } catch (e) {
       next(e);
     }
+  });
+
+  // «Из соседних пространств»: кандидаты и пакетное приглашение по id.
+  router.get('/:id/invite-candidates', async (req, res, next) => {
+    try {
+      if (!deps.neighborInvites) { res.sendStatus(503); return; }
+      const candidates = await deps.neighborInvites.list.execute(req.params.id, req.user!.id);
+      res.json({ candidates });
+    } catch (error) { next(error); }
+  });
+  router.post('/:id/invites/neighbors', async (req, res, next) => {
+    try {
+      if (!deps.neighborInvites) { res.sendStatus(503); return; }
+      const body = inviteNeighborsSchema.parse(req.body);
+      const result = await deps.neighborInvites.invite.execute({
+        workspaceId: req.params.id,
+        actorUserId: req.user!.id,
+        userIds: body.userIds,
+        role: body.role,
+      });
+      res.json(result);
+    } catch (error) { next(error); }
   });
 
   // Token доступен только тем, кто вправе управлять этим приглашением.
