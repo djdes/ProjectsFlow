@@ -43,6 +43,9 @@ export async function collectWorkspaceAssigneeTasks(
   },
   settings: WorkspaceAssigneeDigestSettings,
   members: readonly WorkspaceMember[],
+  // Личная сводка: каждый получает только свой раздел, поэтому своя задача ответственного
+  // входит в него, даже если правило пространства (db/182) прячет её от остальных.
+  opts: { readonly personal?: boolean } = {},
 ): Promise<WorkspaceAssigneeTasks> {
   const projects = await deps.projects.listByWorkspace(settings.workspaceId);
   const configuredProjectIds = new Set(settings.projectIds);
@@ -56,9 +59,12 @@ export async function collectWorkspaceAssigneeTasks(
   const projectTasks = await Promise.all(
     selectedProjects.map(async (project) => {
       const all = await deps.tasks.listByProject(project.id);
+      const visible = deps.visibility ? await deps.visibility.filterForWorkspace(settings.workspaceId, all) : all;
+      if (!opts.personal || visible.length === all.length) return { project, tasks: visible };
+      const shown = new Set(visible);
       return {
         project,
-        tasks: deps.visibility ? await deps.visibility.filterForWorkspace(settings.workspaceId, all) : all,
+        tasks: all.filter((task) => shown.has(task) || members.some((m) => m.userId === task.assignee.userId)),
       };
     }),
   );

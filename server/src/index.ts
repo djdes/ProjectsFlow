@@ -2656,12 +2656,11 @@ const { app, devProxyUpgrade } = createApp({
     // Проект появился/исчез в пространствах — сайдбары их участников перечитывают проекты.
     onChanged: (projectId, workspaceIds) => {
       void (async () => {
-        const notified = new Set<string>();
+        // Событие с пространством: поток каждого пространства пропускает своё, даже если
+        // проект от него только что отключили (сайдбар должен убрать проект).
         for (const workspaceId of workspaceIds) {
           for (const member of await workspaceRepo.listMembers(workspaceId)) {
-            if (notified.has(member.userId)) continue;
-            notified.add(member.userId);
-            realtimeHub.publish(member.userId, { kind: 'project_changed', projectId });
+            realtimeHub.publish(member.userId, { kind: 'project_changed', projectId, workspaceId });
           }
         }
       })().catch((err) => console.warn('[project-sharing] notify failed:', err));

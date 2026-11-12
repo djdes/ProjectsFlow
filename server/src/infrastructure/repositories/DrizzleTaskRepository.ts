@@ -183,36 +183,39 @@ export class DrizzleTaskRepository implements TaskRepository {
 
   async listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]> {
     // Скоуп по пространству — через принадлежность проекта задачи: основное пространство
-    // или подключённое (общий проект, db/182). Подзапрос вместо join, чтобы не трогать
+    // или подключённое (общий проект, db/182). Список id вместо join, чтобы не трогать
     // leftJoin-набор baseSelect.
+    const projectIds = await this.workspaceProjectIds(workspaceId);
+    if (projectIds.length === 0) return [];
     const rows = await this.baseSelect()
       .where(
         activeTasks(
-          and(eq(tasks.assigneeUserId, userId), this.inWorkspaceProjects(workspaceId)),
+          and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, projectIds)),
         ),
       )
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
-  // Задача из проекта пространства: основного или подключённого к нему (db/182).
-  private inWorkspaceProjects(workspaceId: string) {
-    return or(
-      inArray(tasks.projectId, this.db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, workspaceId))),
-      inArray(
-        tasks.projectId,
-        this.db
-          .select({ id: projectWorkspaceAccess.projectId })
-          .from(projectWorkspaceAccess)
-          .where(eq(projectWorkspaceAccess.workspaceId, workspaceId)),
-      ),
-    );
+  // Проекты пространства: основные и подключённые к нему (db/182). Сначала резолвим id —
+  // OR двух IN-подзапросов не даёт MariaDB полусоединение и сканирует tasks целиком.
+  private async workspaceProjectIds(workspaceId: string): Promise<string[]> {
+    const [home, linked] = await Promise.all([
+      this.db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, workspaceId)),
+      this.db
+        .select({ id: projectWorkspaceAccess.projectId })
+        .from(projectWorkspaceAccess)
+        .where(eq(projectWorkspaceAccess.workspaceId, workspaceId)),
+    ]);
+    return [...new Set([...home, ...linked].map((row) => row.id))];
   }
 
   async listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]> {
     // Тот же скоуп по пространству, что у listAssignedToInWorkspace: через проект задачи.
+    const projectIds = await this.workspaceProjectIds(workspaceId);
+    if (projectIds.length === 0) return [];
     const rows = await this.baseSelect()
-      .where(activeTasks(and(eq(tasks.status, status), this.inWorkspaceProjects(workspaceId))))
+      .where(activeTasks(and(eq(tasks.status, status), inArray(tasks.projectId, projectIds))))
       .orderBy(asc(tasks.updatedAt), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }

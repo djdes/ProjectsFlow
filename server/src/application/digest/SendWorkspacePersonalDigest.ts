@@ -89,7 +89,7 @@ export class SendWorkspacePersonalDigest {
     if (!opts.force && !settings.personalEnabled) return EMPTY_RESULT;
 
     const members = await this.deps.workspaces.listMembers(workspaceId);
-    const { byAssignee } = await collectWorkspaceAssigneeTasks(this.deps, settings, members);
+    const { byAssignee } = await collectWorkspaceAssigneeTasks(this.deps, settings, members, { personal: true });
     const recipients = [...byAssignee.entries()].filter(
       ([userId]) => opts.onlyUserId === undefined || userId === opts.onlyUserId,
     );
