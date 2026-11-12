@@ -1,3 +1,4 @@
+import type { ProjectSharing, SaveProjectSharingInput } from '@/domain/project/ProjectSharing';
 import {
   DEFAULT_PUBLIC_APPEARANCE,
   type Project,
@@ -91,6 +92,7 @@ type ProjectDto = {
   // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
   isFavorite?: boolean;
   favoriteSortOrder?: number;
+  sharedWorkspaces?: Array<{ id: string; name: string; icon: string | null }>;
   // Notion-style шапка: описание + обложка (`gradient:<id>` или URL) + позиция (%).
   description?: string | null;
   coverUrl?: string | null;
@@ -126,6 +128,7 @@ function fromDto(dto: ProjectDto): Project {
     multiTaskWorker: dto.multiTaskWorker ?? false,
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
+    ...(dto.sharedWorkspaces && dto.sharedWorkspaces.length > 0 ? { sharedWorkspaces: dto.sharedWorkspaces } : {}),
     description: dto.description ?? null,
     coverUrl: dto.coverUrl ?? null,
     coverPosition: dto.coverPosition ?? 50,
@@ -502,6 +505,14 @@ export class HttpProjectRepository implements ProjectRepository {
       `/projects/join-requests/${requestId}/resolve`,
       { accept },
     );
+  }
+
+  async getWorkspaceAccess(projectId: string): Promise<ProjectSharing> {
+    return httpClient.get<ProjectSharing>(`/projects/${projectId}/workspace-access`);
+  }
+
+  async saveWorkspaceAccess(projectId: string, input: SaveProjectSharingInput): Promise<ProjectSharing> {
+    return httpClient.put<ProjectSharing>(`/projects/${projectId}/workspace-access`, input);
   }
 
   async listSharedMembers(): Promise<SharedMember[]> {

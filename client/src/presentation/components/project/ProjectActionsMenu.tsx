@@ -19,6 +19,7 @@ import {
   Trash2,
   Wallet,
   type LucideIcon,
+  Network,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectVersionsDialog } from './ProjectVersionsDialog';
+import { ProjectWorkspaceAccessDialog } from './ProjectWorkspaceAccessDialog';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 import { trackProjectAction } from '@/lib/productAnalytics';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
@@ -91,6 +93,8 @@ export function ProjectActionsMenu({
   const bannersHidden = useProjectBannersHidden();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  // «Доступ пространств» (db/182): проект в нескольких пространствах.
+  const [workspaceAccessOpen, setWorkspaceAccessOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<'archive' | 'delete' | 'export' | null>(null);
   const projectId = project.id;
   const isOwner = hasOwnerRights(project.role);
@@ -235,6 +239,14 @@ export function ProjectActionsMenu({
       onSelect: () => navigate(`/projects/${projectId}/overview`),
       section: 1,
     });
+    if (isOwner && !project.isInbox)
+      list.push({
+        key: 'workspace-access',
+        label: 'Доступ пространств…',
+        icon: Network,
+        onSelect: () => setWorkspaceAccessOpen(true),
+        section: 1,
+      });
     list.push({
       key: 'export',
       label: 'Экспорт (CSV)',
@@ -379,6 +391,15 @@ export function ProjectActionsMenu({
           </div>
         </PopoverContent>
       </Popover>
+
+      {workspaceAccessOpen && (
+        <ProjectWorkspaceAccessDialog
+          open={workspaceAccessOpen}
+          onOpenChange={setWorkspaceAccessOpen}
+          projectId={projectId}
+          projectName={project.name}
+        />
+      )}
 
       <ProjectVersionsDialog
         projectId={projectId}

@@ -7,6 +7,7 @@ export type SidebarProjectMenuAction =
   | 'favorite'
   | 'kb'
   | 'share'
+  | 'workspaceAccess'
   | 'moveUp'
   | 'moveDown'
   | 'duplicate'
@@ -44,6 +45,9 @@ export function buildSidebarProjectMenu({
   // The favorites section lists active projects only, so the toggle is pointless for
   // archived ones; the inbox cannot be a favorite (server rejects it).
   const canFavorite = !isArchived && !project.isInbox;
+  // Подключить проект к другим пространствам (db/182) — владельцам и руководителям; сервер
+  // окончательно проверит, что это автор проекта или руководитель его пространства.
+  const canShareWorkspaces = hasOwnerRights(project.role) && !project.isInbox;
 
   const items: SidebarProjectMenuItem[] = [
     { action: 'rename', label: 'Изменить имя', section: 0 },
@@ -60,6 +64,9 @@ export function buildSidebarProjectMenu({
   items.push(
     { action: 'kb', label: 'База знаний', section: 1 },
     { action: 'share', label: 'Общий доступ', section: 1 },
+  );
+  if (canShareWorkspaces) items.push({ action: 'workspaceAccess', label: 'Доступ пространств…', section: 1 });
+  items.push(
     { action: 'moveUp', label: 'Переместить выше', section: 2, disabled: !canMoveUp },
     { action: 'moveDown', label: 'Переместить ниже', section: 2, disabled: !canMoveDown },
   );

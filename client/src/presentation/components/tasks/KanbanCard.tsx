@@ -21,6 +21,7 @@ import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
+import { useTaskOriginLabel } from '@/presentation/hooks/useTaskOriginLabel';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
 import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon } from './workerHandoff';
@@ -170,6 +171,8 @@ function KanbanCardImpl({
   // Срочный приоритет — красное свечение. Перебивает синее «непрочитано»: два ореола на
   // одной карточке спорят друг с другом, а «сделай сейчас» важнее, чем «посмотри».
   const urgent = !open && !preview && !selecting && task.priority === 1;
+  // Общий проект (db/182): задача создана в другом пространстве — подписываем откуда.
+  const originLabel = useTaskOriginLabel(task);
   // Мне здесь адресовали комментарий, а я не ответил — бейдж «Ответить» первым в мете.
   const { questionFor } = useAwaitingReply();
   const question = preview ? null : questionFor(task.id);
@@ -222,6 +225,7 @@ function KanbanCardImpl({
       (task.attachmentCount ?? 0) > 0 ||
       (task.ralphMode && task.ralphMode !== 'normal') ||
       task.taskType ||
+      originLabel ||
       task.priority ||
       task.deadline ||
       task.status === 'in_progress' ||
@@ -415,6 +419,14 @@ function KanbanCardImpl({
         </span>
       )}
       <RalphModeBadge mode={task.ralphMode} />
+      {originLabel && (
+        <span
+          className="shrink-0 truncate whitespace-nowrap rounded bg-muted px-1.5 py-px text-muted-foreground"
+          title={`Создана в пространстве «${originLabel}»`}
+        >
+          {originLabel}
+        </span>
+      )}
       {/* Тип задачи (db/153). Показываем только когда он определён — «без типа» это
           нормальное состояние большинства задач, и плашка про него была бы шумом. */}
       {task.taskType && (
