@@ -302,7 +302,9 @@ export function projectsRouter(deps: Deps): Router {
       // по прямой ссылке видели бы danger zone. getProject уже подтвердил read-доступ, значит
       // membership есть; null возможен только для admin-bypass (не member) — ему отдаём 'owner'.
       const membership = await deps.members.findForProject(id, req.user!.id);
-      res.json({ project: toDto(project, membership?.role ?? 'owner') });
+      res.json({
+        project: { ...toDto(project, membership?.role ?? 'owner'), ...(membership?.guest ? { guest: true } : {}) },
+      });
     } catch (e) {
       next(e);
     }
@@ -731,7 +733,8 @@ export function projectsRouter(deps: Deps): Router {
         if (typeof id !== 'string') throw new ProjectNotFoundError();
         const membership = await deps.members.findForProject(id, req.user!.id);
         if (!membership) throw new ProjectNotFoundError();
-        if (membership.role === 'viewer') {
+        // Гость общего проекта (db/182) доску не настраивает — она часть проекта.
+        if (membership.role === 'viewer' || membership.guest) {
           res.status(403).json({ error: 'Недостаточно прав для изменения настроек доски' });
           return;
         }
@@ -811,7 +814,8 @@ export function projectsRouter(deps: Deps): Router {
   ): Promise<boolean> => {
     const membership = await deps.members.findForProject(projectId, userId);
     if (!membership) throw new ProjectNotFoundError();
-    if (membership.role === 'viewer') {
+    // Вью доски общие для проекта: гость общего проекта (db/182) их не меняет.
+    if (membership.role === 'viewer' || membership.guest) {
       res.status(403).json({ error: 'Недостаточно прав для изменения вью доски' });
       return false;
     }

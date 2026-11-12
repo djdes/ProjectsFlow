@@ -59,3 +59,12 @@ test('доступ пространств — владельцу и руково
   assert.ok(!labels(project({ role: 'editor' })).includes('Доступ пространств…'));
   assert.ok(!labels(project({ isInbox: true })).includes('Доступ пространств…'));
 });
+
+test('гость общего проекта: настройки видны, управления проектом нет', () => {
+  const list = labels(project({ role: 'editor', guest: true }));
+  assert.ok(list.includes('Настройки'));
+  assert.ok(!list.includes('Изменить имя'));
+  assert.ok(!list.includes('Дублировать'));
+  assert.ok(!list.includes('Доступ пространств…'));
+  assert.ok(!list.includes('Удалить проект…'));
+});

@@ -24,7 +24,7 @@ export type SidebarProjectMenuItem = {
 };
 
 type Input = {
-  readonly project: Pick<Project, 'role' | 'isInbox' | 'status' | 'isFavorite'>;
+  readonly project: Pick<Project, 'role' | 'isInbox' | 'status' | 'isFavorite' | 'guest'>;
   readonly canMoveUp: boolean;
   readonly canMoveDown: boolean;
 };
@@ -38,8 +38,9 @@ export function buildSidebarProjectMenu({
   canMoveDown,
 }: Input): SidebarProjectMenuItem[] {
   const isArchived = project.status === 'archived';
-  // Viewers cannot change the project; the inbox is a service project.
-  const canManage = project.role !== 'viewer' && !project.isInbox;
+  // Viewers cannot change the project; the inbox is a service project. A guest of a shared
+  // project (db/182) works with tasks only — the project stays with its home workspace.
+  const canManage = project.role !== 'viewer' && !project.isInbox && !project.guest;
   // Only the owner deletes; the inbox cannot be deleted at all.
   const canDelete = hasOwnerRights(project.role) && !project.isInbox;
   // The favorites section lists active projects only, so the toggle is pointless for
@@ -50,7 +51,7 @@ export function buildSidebarProjectMenu({
   const canShareWorkspaces = hasOwnerRights(project.role) && !project.isInbox;
 
   const items: SidebarProjectMenuItem[] = [
-    { action: 'rename', label: 'Изменить имя', section: 0 },
+    ...(project.guest ? [] : [{ action: 'rename', label: 'Изменить имя', section: 0 } as const]),
     // The overview page holds project settings and is open to every member.
     { action: 'settings', label: 'Настройки', section: 0 },
   ];

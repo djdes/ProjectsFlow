@@ -1,5 +1,5 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
-import { can } from '../../domain/project/permissions.js';
+import { canMember } from '../../domain/project/permissions.js';
 import {
   InsufficientProjectRoleError,
 } from '../../domain/project/errors.js';
@@ -59,7 +59,7 @@ export class DeleteTaskComment {
         // Не должно случиться (requireTaskModifyAccess уже прошёл), но safe fallback.
         throw new InsufficientProjectRoleError('viewer', 'delete_any_comment');
       }
-      if (existing.ownerUserId !== ownerUserId && !can(membership.role, 'delete_any_comment')) {
+      if (existing.ownerUserId !== ownerUserId && !canMember(membership, 'delete_any_comment')) {
         throw new InsufficientProjectRoleError(membership.role, 'delete_any_comment');
       }
     }

@@ -93,6 +93,7 @@ type ProjectDto = {
   isFavorite?: boolean;
   favoriteSortOrder?: number;
   sharedWorkspaces?: Array<{ id: string; name: string; icon: string | null }>;
+  guest?: boolean;
   // Notion-style шапка: описание + обложка (`gradient:<id>` или URL) + позиция (%).
   description?: string | null;
   coverUrl?: string | null;
@@ -129,6 +130,7 @@ function fromDto(dto: ProjectDto): Project {
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
     ...(dto.sharedWorkspaces && dto.sharedWorkspaces.length > 0 ? { sharedWorkspaces: dto.sharedWorkspaces } : {}),
+    ...(dto.guest ? { guest: true } : {}),
     description: dto.description ?? null,
     coverUrl: dto.coverUrl ?? null,
     coverPosition: dto.coverPosition ?? 50,

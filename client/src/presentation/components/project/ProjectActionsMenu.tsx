@@ -98,7 +98,8 @@ export function ProjectActionsMenu({
   const [busyAction, setBusyAction] = useState<'archive' | 'delete' | 'export' | null>(null);
   const projectId = project.id;
   const isOwner = hasOwnerRights(project.role);
-  const canEdit = isOwner || project.role === 'editor';
+  // Гость общего проекта (db/182) ведёт задачи, но не настраивает проект.
+  const canEdit = (isOwner || project.role === 'editor') && !project.guest;
   // Зеркало условия рендера в TasksPage: онбординг GitHub появляется только у
   // не-inbox проектов и только при праве редактирования.
   const showGithubBanner = canEdit && !project.isInbox;

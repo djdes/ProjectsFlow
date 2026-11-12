@@ -21,6 +21,8 @@ export type ProjectWithRole = Project & {
   readonly favoriteSortOrder: number;
   // Общий проект (db/182): его пространства, основное первым. Пусто — проект не общий.
   readonly sharedWorkspaces?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly icon: string | null }>;
+  // Гость общего проекта (db/182): доступ через подключённое пространство — только задачи.
+  readonly guest?: boolean;
 };
 
 export type AddMemberInput = {

@@ -12,4 +12,7 @@ export type ProjectMembership = {
   readonly userId: string;
   readonly role: ProjectRole;
   readonly joinedAt: Date;
+  // Гость общего проекта (db/182): доступ только через подключённое пространство. Роль
+  // не выше editor, и только работа с задачами — без настроек проекта (см. canMember).
+  readonly guest?: boolean;
 };

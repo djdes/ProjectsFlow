@@ -34,8 +34,9 @@ import type {
 import { parseJsonCol } from './jsonCol.js';
 import {
   deriveMembership,
-  projectRowVisibility,
+  deriveSharedMembership,
   type ProjectAccessRow,
+  type ProjectWorkspaceAccessRow,
 } from './workspaceMembershipView.js';
 
 // Единое пространство (спека unified-workspace §3.2): доступ к проекту читается
@@ -87,12 +88,9 @@ function toProject(row: ProjectRow): Project {
   };
 }
 
-// Сила роли: из нескольких членств (основное + подключённые пространства) берём лучшую.
-const ROLE_RANK: Record<ProjectRole, number> = { viewer: 1, editor: 2, lead: 3, owner: 4 };
+type SharedWorkspace = { id: string; name: string; icon: string | null };
 
-// Пространства проекта для join'ов: основное ИЛИ подключённое к проекту (db/182).
-const projectWorkspaceSql = (workspaceIdCol: unknown) =>
-  sql`(${workspaceIdCol} = ${projects.workspaceId} OR ${workspaceIdCol} IN (SELECT a.workspace_id FROM project_workspace_access a WHERE a.project_id = ${projects.id}))`;
+const isAdminRole = (role: string): boolean => role === 'owner' || role === 'lead';
 
 export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   constructor(
@@ -113,19 +111,14 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return this.visibility ? this.visibility.filterAudience(task, userIds) : [...userIds];
   }
 
-  // Явно скрыт галочкой: членство в пространствах проекта есть, но во всех он скрыт
-  // (owner/lead не скрываются).
+  // Явно скрыт галочкой: членство в пространствах проекта есть, а доступа нет (скрыт в
+  // основном пространстве или во всех подключённых, где состоит).
   async isProjectHidden(projectId: string, userId: string): Promise<boolean> {
-    const rows = await this.db
-      .select({
-        role: workspaceMembers.role,
-        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${workspaceMembers.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
-      })
-      .from(projects)
-      .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, userId), projectWorkspaceSql(workspaceMembers.workspaceId)))
-      .where(and(eq(projects.id, projectId), eq(projects.isInbox, false)));
-    if (rows.length === 0) return false;
-    return rows.every((row) => Boolean(row.excluded) && row.role !== 'owner' && row.role !== 'lead');
+    const project = await this.getProjectAccessRow(projectId);
+    if (!project || project.isInbox) return false;
+    const rows = await this.accessRows(project, [userId]);
+    const own = rows.get(userId) ?? [];
+    return own.length > 0 && deriveSharedMembership(project, userId, own) === null;
   }
 
   // Срез projects для резолва доступа (workspace_id/owner_id/is_inbox).
@@ -144,9 +137,64 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return rows[0] ?? null;
   }
 
+  // Подключённые пространства проекта (db/182), без строки-правила основного.
+  private async linkedWorkspaceIds(project: Pick<ProjectAccessRow, 'id' | 'workspaceId'>): Promise<string[]> {
+    const rows = await this.db
+      .select({ workspaceId: projectWorkspaceAccess.workspaceId })
+      .from(projectWorkspaceAccess)
+      .where(
+        and(
+          eq(projectWorkspaceAccess.projectId, project.id),
+          ne(projectWorkspaceAccess.workspaceId, project.workspaceId),
+        ),
+      );
+    return rows.map((row) => row.workspaceId);
+  }
+
+  // Членства юзеров в пространствах проекта (основное + подключённые) со скрытием галочкой.
+  private async accessRows(
+    project: ProjectAccessRow,
+    userIds: readonly string[],
+  ): Promise<Map<string, ProjectWorkspaceAccessRow[]>> {
+    const result = new Map<string, ProjectWorkspaceAccessRow[]>();
+    const users = [...new Set(userIds)];
+    if (users.length === 0) return result;
+    const workspaceIds = [project.workspaceId, ...(await this.linkedWorkspaceIds(project))];
+    const [members, exclusions] = await Promise.all([
+      this.db
+        .select({
+          workspaceId: workspaceMembers.workspaceId,
+          userId: workspaceMembers.userId,
+          role: workspaceMembers.role,
+          createdAt: workspaceMembers.createdAt,
+        })
+        .from(workspaceMembers)
+        .where(and(inArray(workspaceMembers.workspaceId, workspaceIds), inArray(workspaceMembers.userId, users))),
+      this.db
+        .select({ workspaceId: workspaceProjectExclusions.workspaceId, userId: workspaceProjectExclusions.userId })
+        .from(workspaceProjectExclusions)
+        .where(
+          and(eq(workspaceProjectExclusions.projectId, project.id), inArray(workspaceProjectExclusions.userId, users)),
+        ),
+    ]);
+    const excluded = new Set(exclusions.map((x) => `${x.workspaceId}|${x.userId}`));
+    for (const m of members) {
+      const list = result.get(m.userId) ?? [];
+      list.push({
+        workspaceId: m.workspaceId,
+        userId: m.userId,
+        role: m.role as ProjectRole,
+        createdAt: m.createdAt,
+        excluded: excluded.has(`${m.workspaceId}|${m.userId}`),
+      });
+      result.set(m.userId, list);
+    }
+    return result;
+  }
+
   async findForProject(projectId: string, userId: string): Promise<ProjectMembership | null> {
-    // Членство — через основное пространство проекта или любое подключённое (db/182): строк
-    // может быть несколько, берём лучшую видимую роль. Скрытие галочкой — по пространству.
+    // Быстрый путь — как без подключённых пространств: членство в основном пространстве
+    // решает всё (см. deriveSharedMembership). Подключённые смотрим, только если его нет.
     const rows = await this.db
       .select({
         id: projects.id,
@@ -156,33 +204,31 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         createdAt: projects.createdAt,
         wmRole: workspaceMembers.role,
         wmCreatedAt: workspaceMembers.createdAt,
-        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${workspaceMembers.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
+        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${projects.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
+        shared: sql<number>`EXISTS (SELECT 1 FROM project_workspace_access a WHERE a.project_id = ${projects.id} AND a.workspace_id <> ${projects.workspaceId})`,
       })
       .from(projects)
       .leftJoin(
         workspaceMembers,
-        and(eq(workspaceMembers.userId, userId), projectWorkspaceSql(workspaceMembers.workspaceId)),
+        and(
+          eq(workspaceMembers.workspaceId, projects.workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
       )
-      .where(eq(projects.id, projectId));
-    const first = rows[0];
-    if (!first) return null;
-    const project = {
-      id: first.id,
-      workspaceId: first.workspaceId,
-      ownerId: first.ownerId,
-      isInbox: first.isInbox,
-      createdAt: first.createdAt,
-    };
-    let best: ProjectMembership | null = null;
-    for (const r of rows) {
-      const wsMember =
-        r.wmRole !== null && r.wmCreatedAt !== null
-          ? { userId, role: r.wmRole as ProjectRole, createdAt: r.wmCreatedAt }
-          : null;
-      const membership = deriveMembership(project, userId, wsMember, Boolean(r.excluded));
-      if (membership && (!best || ROLE_RANK[membership.role] > ROLE_RANK[best.role])) best = membership;
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    const r = rows[0];
+    if (!r) return null;
+    const project = { id: r.id, workspaceId: r.workspaceId, ownerId: r.ownerId, isInbox: r.isInbox, createdAt: r.createdAt };
+    const wsMember =
+      r.wmRole !== null && r.wmCreatedAt !== null
+        ? { userId, role: r.wmRole as ProjectRole, createdAt: r.wmCreatedAt }
+        : null;
+    if (project.isInbox || wsMember || !r.shared) {
+      return deriveMembership(project, userId, wsMember, Boolean(r.excluded));
     }
-    return best;
+    const access = await this.accessRows(project, [userId]);
+    return deriveSharedMembership(project, userId, access.get(userId) ?? []);
   }
 
   async listByProject(projectId: string): Promise<ProjectMemberWithUser[]> {
@@ -216,13 +262,9 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     }
 
     // Участники основного и подключённых пространств проекта (db/182) + их per-project prefs
-    // (ленивые строки — left join). Человек из нескольких пространств — одной строкой с
-    // лучшей ролью; скрытие галочкой — по пространству.
-    const linked = await this.db
-      .select({ workspaceId: projectWorkspaceAccess.workspaceId })
-      .from(projectWorkspaceAccess)
-      .where(eq(projectWorkspaceAccess.projectId, projectId));
-    const workspaceIds = [...new Set([project.workspaceId, ...linked.map((row) => row.workspaceId)])];
+    // (ленивые строки — left join). Человек из нескольких пространств — одной строкой; роль
+    // и скрытие галочкой — по deriveSharedMembership (гости — не выше editor).
+    const workspaceIds = [project.workspaceId, ...(await this.linkedWorkspaceIds(project))];
     const all = await this.db
       .select({
         member: workspaceMembers,
@@ -239,31 +281,36 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
           eq(projectMembers.userId, workspaceMembers.userId),
         ),
       )
-      .where(inArray(workspaceMembers.workspaceId, workspaceIds))
+      .where(workspaceIds.length === 1 ? eq(workspaceMembers.workspaceId, project.workspaceId) : inArray(workspaceMembers.workspaceId, workspaceIds))
       .orderBy(asc(workspaceMembers.createdAt));
-    const bestByUser = new Map<string, (typeof all)[number]>();
+    const byUser = new Map<string, Array<(typeof all)[number]>>();
     for (const r of all) {
-      if (!projectRowVisibility(project, r.member.userId, r.member, Boolean(r.excluded))) continue;
-      const current = bestByUser.get(r.member.userId);
-      if (!current || ROLE_RANK[r.member.role as ProjectRole] > ROLE_RANK[current.member.role as ProjectRole]) {
-        bestByUser.set(r.member.userId, r);
-      }
+      const list = byUser.get(r.member.userId) ?? [];
+      list.push(r);
+      byUser.set(r.member.userId, list);
     }
-    const rows = all.filter((r) => bestByUser.get(r.member.userId) === r);
-    return rows.map((r) => ({
-      projectId,
-      // Создатель проекта — owner своего проекта поверх ws-роли (тот же апгрейд, что в
-      // projectRowVisibility/findForProject), чтобы «мой доступ» и «список участников»
-      // не разъезжались (создатель везде owner).
-      role:
-        r.member.userId === project.ownerId
-          ? ('owner' as ProjectRole)
-          : (r.member.role as ProjectRole),
-      userId: r.member.userId,
-      joinedAt: r.member.createdAt,
-      user: toUser(r.user),
-      notificationPrefs: parseJsonCol<NotificationPrefs | null>(r.prefs, null),
-    }));
+    const out: ProjectMemberWithUser[] = [];
+    for (const [userId, list] of byUser) {
+      const membership = deriveSharedMembership(
+        project,
+        userId,
+        list.map((r) => ({
+          workspaceId: r.member.workspaceId,
+          userId,
+          role: r.member.role as ProjectRole,
+          createdAt: r.member.createdAt,
+          excluded: Boolean(r.excluded),
+        })),
+      );
+      if (!membership) continue;
+      const first = list[0]!;
+      out.push({
+        ...membership,
+        user: toUser(first.user),
+        notificationPrefs: parseJsonCol<NotificationPrefs | null>(first.prefs, null),
+      });
+    }
+    return out;
   }
 
   async listProjectsForUser(userId: string): Promise<ProjectWithRole[]> {
@@ -278,9 +325,9 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   }
 
   // Проекты пространств юзера + его собственные Входящие. Проект виден через основное
-  // пространство ИЛИ подключённое (db/182). В разрезе пространства W: проекты основного W и
-  // подключённые к W, роль и скрытие галочкой — по членству именно в W. Без W — все проекты
-  // всех пространств юзера, по одной строке на проект (лучшая роль).
+  // пространство или гостем через подключённое (db/182, роль — deriveSharedMembership).
+  // В разрезе пространства W: проекты основного W и подключённые к W, где членство в W не
+  // скрыто галочкой. Без W — все проекты всех пространств юзера, по строке на проект.
   // LEFT JOIN workspace_members (не INNER!) — иначе свой inbox выпадал бы, если владельца
   // убрали из пространства, где inbox был создан. Per-member настройки — left join к ленивым
   // строкам project_members.
@@ -288,28 +335,39 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     userId: string,
     workspaceId: string | undefined,
   ): Promise<ProjectWithRole[]> {
+    // Гостевой путь: подключения проектов к пространствам юзера. Строки-правила основного
+    // пространства тоже сюда попадают — их отсекаем ниже, когда известен проект.
+    const guestRows = await this.db
+      .select({
+        projectId: projectWorkspaceAccess.projectId,
+        workspaceId: projectWorkspaceAccess.workspaceId,
+        role: workspaceMembers.role,
+        createdAt: workspaceMembers.createdAt,
+      })
+      .from(projectWorkspaceAccess)
+      .innerJoin(
+        workspaceMembers,
+        and(eq(workspaceMembers.workspaceId, projectWorkspaceAccess.workspaceId), eq(workspaceMembers.userId, userId)),
+      );
+    const guestProjectIds = [
+      ...new Set(
+        guestRows.filter((row) => workspaceId === undefined || row.workspaceId === workspaceId).map((row) => row.projectId),
+      ),
+    ];
     const visible = or(
       and(eq(projects.isInbox, false), isNotNull(workspaceMembers.userId)),
       and(eq(projects.isInbox, true), eq(projects.ownerId, userId)),
     );
-    const membershipJoin =
-      workspaceId === undefined
-        ? and(eq(workspaceMembers.userId, userId), projectWorkspaceSql(workspaceMembers.workspaceId))
-        : and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.workspaceId, workspaceId));
-    const inWorkspace =
-      workspaceId === undefined
-        ? undefined
-        : or(
-            eq(projects.workspaceId, workspaceId),
-            sql`${projects.id} IN (SELECT a.project_id FROM project_workspace_access a WHERE a.workspace_id = ${workspaceId})`,
-          );
+    const own = workspaceId === undefined ? visible : and(visible, eq(projects.workspaceId, workspaceId));
+    const where =
+      guestProjectIds.length > 0 ? or(own, and(eq(projects.isInbox, false), inArray(projects.id, guestProjectIds))) : own;
     const rows = await this.db
       .select({
         project: projects,
         wsRole: workspaceMembers.role,
-        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${workspaceMembers.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
-        // Участники всех пространств проекта (основное + подключённые), без скрытых галочкой.
-        memberCount: sql<number>`(SELECT COUNT(DISTINCT wm2.user_id) FROM workspace_members wm2 WHERE (wm2.workspace_id = ${projects.workspaceId} OR wm2.workspace_id IN (SELECT a2.workspace_id FROM project_workspace_access a2 WHERE a2.project_id = ${projects.id})) AND (wm2.role IN ('owner', 'lead') OR NOT EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = wm2.workspace_id AND x.project_id = ${projects.id} AND x.user_id = wm2.user_id)))`,
+        wsCreatedAt: workspaceMembers.createdAt,
+        excluded: sql<number>`EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = ${projects.workspaceId} AND x.project_id = ${projects.id} AND x.user_id = ${userId})`,
+        memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${projects.workspaceId} AND (wm2.role IN ('owner', 'lead') OR NOT EXISTS (SELECT 1 FROM workspace_project_exclusions x WHERE x.workspace_id = wm2.workspace_id AND x.project_id = ${projects.id} AND x.user_id = wm2.user_id)))`,
         // deleted_at IS NULL (db/134): задачи из корзины не должны раздувать счётчик.
         taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id} AND t.deleted_at IS NULL)`,
         // Избранное ВЫЧИСЛЯЕМОЕ: проект в избранном, если у пользователя есть незавершённая
@@ -319,77 +377,160 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         isFavorite: sql<number>`EXISTS (SELECT 1 FROM tasks tf WHERE tf.project_id = ${projects.id} AND tf.assignee_user_id = ${userId} AND tf.status <> 'done' AND tf.deleted_at IS NULL)`,
       })
       .from(projects)
-      .leftJoin(workspaceMembers, membershipJoin)
+      .leftJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, projects.workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
       .leftJoin(
         projectMembers,
         and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, userId)),
       )
-      .where(inWorkspace === undefined ? visible : and(visible, inWorkspace))
+      .where(where)
       .orderBy(sql`COALESCE(${projectMembers.sortOrder}, 0)`, asc(projects.createdAt));
-    // Роль/включение — через ту же чистую функцию (единый источник истины с findForProject).
-    const byProject = new Map<string, { row: (typeof rows)[number]; role: ProjectRole }>();
+
+    const guestExclusions =
+      guestProjectIds.length > 0
+        ? await this.db
+            .select({ projectId: workspaceProjectExclusions.projectId, workspaceId: workspaceProjectExclusions.workspaceId })
+            .from(workspaceProjectExclusions)
+            .where(
+              and(
+                eq(workspaceProjectExclusions.userId, userId),
+                inArray(workspaceProjectExclusions.projectId, guestProjectIds),
+              ),
+            )
+        : [];
+    const guestExcluded = new Set(guestExclusions.map((x) => `${x.projectId}|${x.workspaceId}`));
+
+    const result: Array<{ row: (typeof rows)[number]; membership: ProjectMembership }> = [];
     for (const r of rows) {
-      const wsMember = r.wsRole !== null ? { role: r.wsRole as ProjectRole } : null;
-      const vis = projectRowVisibility(r.project, userId, wsMember, Boolean(r.excluded));
-      if (!vis) continue;
-      const current = byProject.get(r.project.id);
-      if (!current || ROLE_RANK[vis.role] > ROLE_RANK[current.role]) byProject.set(r.project.id, { row: r, role: vis.role });
+      const home: ProjectWorkspaceAccessRow | null =
+        r.wsRole !== null && r.wsCreatedAt !== null
+          ? {
+              workspaceId: r.project.workspaceId,
+              userId,
+              role: r.wsRole as ProjectRole,
+              createdAt: r.wsCreatedAt,
+              excluded: Boolean(r.excluded),
+            }
+          : null;
+      const linked: ProjectWorkspaceAccessRow[] = guestRows
+        .filter((g) => g.projectId === r.project.id && g.workspaceId !== r.project.workspaceId)
+        .map((g) => ({
+          workspaceId: g.workspaceId,
+          userId,
+          role: g.role as ProjectRole,
+          createdAt: g.createdAt,
+          excluded: guestExcluded.has(`${g.projectId}|${g.workspaceId}`),
+        }));
+      const membership = deriveSharedMembership(r.project, userId, home ? [home, ...linked] : linked);
+      if (!membership) continue;
+      if (workspaceId !== undefined && r.project.workspaceId !== workspaceId) {
+        // Подключённый к W проект: виден в W, если членство в W не скрыто галочкой.
+        const inW = linked.find((g) => g.workspaceId === workspaceId);
+        if (!inW || (inW.excluded && !isAdminRole(inW.role))) continue;
+      }
+      result.push({ row: r, membership });
     }
-    const shared = await this.sharedWorkspacesOf([...byProject.keys()]);
-    return [...byProject.values()].map(({ row: r, role }) => ({
+
+    const sharing = await this.sharingOf(result.map(({ row }) => row.project));
+    return result.map(({ row: r, membership }) => ({
       ...toProject(r.project),
-      role,
-      memberCount: r.project.isInbox ? 1 : Number(r.memberCount),
+      role: membership.role,
+      ...(membership.guest ? { guest: true } : {}),
+      memberCount: r.project.isInbox ? 1 : (sharing.memberCounts.get(r.project.id) ?? Number(r.memberCount)),
       taskCount: Number(r.taskCount),
       // Inbox никогда не попадает в избранное (как и раньше — его нельзя было отметить).
       // Ручная поправка пользователя (закрепить/скрыть) важнее вычисленного значения.
       isFavorite: !r.project.isInbox && (r.favoriteOverride ?? Boolean(r.isFavorite)),
       // Ручной порядок избранного убран — поле оставлено в типе как 0 (клиент больше не сортирует по нему).
       favoriteSortOrder: 0,
-      sharedWorkspaces: shared.get(r.project.id) ?? [],
+      sharedWorkspaces: sharing.workspaces.get(r.project.id) ?? [],
     }));
   }
 
-  // Пространства общих проектов (основное первым) — для значка «общий» и подписей задач.
-  // Проекты без подключённых пространств в ответ не попадают.
-  private async sharedWorkspacesOf(
-    projectIds: readonly string[],
-  ): Promise<Map<string, Array<{ id: string; name: string; icon: string | null }>>> {
-    const result = new Map<string, Array<{ id: string; name: string; icon: string | null }>>();
-    if (projectIds.length === 0) return result;
-    const linked = await this.db
-      .select({
-        projectId: projectWorkspaceAccess.projectId,
-        homeWorkspaceId: projects.workspaceId,
-        id: workspaces.id,
-        name: workspaces.name,
-        icon: workspaces.icon,
-      })
+  // Общие проекты (db/182): их пространства (основное первым) — для значка «общий» и подписей
+  // задач — и число участников по всем пространствам. Проекты без подключённых пространств в
+  // ответ не попадают: для них счётчик считает основной запрос.
+  private async sharingOf(
+    list: ReadonlyArray<Pick<ProjectAccessRow, 'id' | 'workspaceId' | 'ownerId' | 'isInbox' | 'createdAt'>>,
+  ): Promise<{ workspaces: Map<string, SharedWorkspace[]>; memberCounts: Map<string, number> }> {
+    const workspacesByProject = new Map<string, SharedWorkspace[]>();
+    const memberCounts = new Map<string, number>();
+    const candidates = list.filter((project) => !project.isInbox);
+    if (candidates.length === 0) return { workspaces: workspacesByProject, memberCounts };
+    const access = await this.db
+      .select({ projectId: projectWorkspaceAccess.projectId, workspaceId: projectWorkspaceAccess.workspaceId })
       .from(projectWorkspaceAccess)
-      .innerJoin(projects, eq(projects.id, projectWorkspaceAccess.projectId))
-      .innerJoin(workspaces, eq(workspaces.id, projectWorkspaceAccess.workspaceId))
-      .where(
-        and(
-          inArray(projectWorkspaceAccess.projectId, [...projectIds]),
-          ne(projectWorkspaceAccess.workspaceId, projects.workspaceId),
-        ),
-      );
-    if (linked.length === 0) return result;
-    const homeIds = [...new Set(linked.map((row) => row.homeWorkspaceId))];
-    const homes = await this.db
-      .select({ id: workspaces.id, name: workspaces.name, icon: workspaces.icon })
-      .from(workspaces)
-      .where(inArray(workspaces.id, homeIds));
-    for (const row of linked) {
-      let list = result.get(row.projectId);
-      if (!list) {
-        const home = homes.find((h) => h.id === row.homeWorkspaceId);
-        list = home ? [{ id: home.id, name: home.name, icon: home.icon ?? null }] : [];
-        result.set(row.projectId, list);
-      }
-      list.push({ id: row.id, name: row.name, icon: row.icon ?? null });
+      .where(inArray(projectWorkspaceAccess.projectId, candidates.map((project) => project.id)));
+    const linkedByProject = new Map<string, string[]>();
+    for (const project of candidates) {
+      const linked = access
+        .filter((row) => row.projectId === project.id && row.workspaceId !== project.workspaceId)
+        .map((row) => row.workspaceId);
+      if (linked.length > 0) linkedByProject.set(project.id, linked);
     }
-    return result;
+    if (linkedByProject.size === 0) return { workspaces: workspacesByProject, memberCounts };
+    const shared = candidates.filter((project) => linkedByProject.has(project.id));
+    const workspaceIds = [
+      ...new Set(shared.flatMap((project) => [project.workspaceId, ...linkedByProject.get(project.id)!])),
+    ];
+    const [infos, members, exclusions] = await Promise.all([
+      this.db
+        .select({ id: workspaces.id, name: workspaces.name, icon: workspaces.icon })
+        .from(workspaces)
+        .where(inArray(workspaces.id, workspaceIds)),
+      this.db
+        .select({
+          workspaceId: workspaceMembers.workspaceId,
+          userId: workspaceMembers.userId,
+          role: workspaceMembers.role,
+          createdAt: workspaceMembers.createdAt,
+        })
+        .from(workspaceMembers)
+        .where(inArray(workspaceMembers.workspaceId, workspaceIds)),
+      this.db
+        .select({
+          projectId: workspaceProjectExclusions.projectId,
+          workspaceId: workspaceProjectExclusions.workspaceId,
+          userId: workspaceProjectExclusions.userId,
+        })
+        .from(workspaceProjectExclusions)
+        .where(inArray(workspaceProjectExclusions.projectId, shared.map((project) => project.id))),
+    ]);
+    const excluded = new Set(exclusions.map((x) => `${x.projectId}|${x.workspaceId}|${x.userId}`));
+    for (const project of shared) {
+      const ids = [project.workspaceId, ...linkedByProject.get(project.id)!];
+      workspacesByProject.set(
+        project.id,
+        ids.flatMap((id) => {
+          const info = infos.find((w) => w.id === id);
+          return info ? [{ id: info.id, name: info.name, icon: info.icon ?? null }] : [];
+        }),
+      );
+      const byUser = new Map<string, ProjectWorkspaceAccessRow[]>();
+      for (const m of members) {
+        if (!ids.includes(m.workspaceId)) continue;
+        const rows = byUser.get(m.userId) ?? [];
+        rows.push({
+          workspaceId: m.workspaceId,
+          userId: m.userId,
+          role: m.role as ProjectRole,
+          createdAt: m.createdAt,
+          excluded: excluded.has(`${project.id}|${m.workspaceId}|${m.userId}`),
+        });
+        byUser.set(m.userId, rows);
+      }
+      let count = 0;
+      for (const [memberId, rows] of byUser) {
+        if (deriveSharedMembership(project, memberId, rows)) count += 1;
+      }
+      memberCounts.set(project.id, count);
+    }
+    return { workspaces: workspacesByProject, memberCounts };
   }
 
   async isMemberOfAnyProjectOwnedBy(userId: string, ownerUserId: string): Promise<boolean> {

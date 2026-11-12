@@ -65,7 +65,8 @@ export class SetGitTokenDelegation {
       input.projectId,
       granterUserId,
     );
-    if (!targetMembership) {
+    // Гость общего проекта (db/182) свой токен проекту не делегирует.
+    if (!targetMembership || targetMembership.guest) {
       throw new NotProjectMemberForDelegationError();
     }
 

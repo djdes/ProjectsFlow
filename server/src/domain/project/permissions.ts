@@ -128,6 +128,40 @@ export function hasOwnerRights(role: ProjectRole): boolean {
   return role === 'owner' || role === 'lead';
 }
 
+// Гость общего проекта (db/182) — участник подключённого пространства, а не основного.
+// Он ведёт задачи (создаёт, обсуждает, двигает, передаёт воркеру), но проект целиком
+// остаётся за основным пространством: настройки, секреты, база знаний, публикация,
+// диспетчер, мониторинг, состав участников. Роль гостя не выше editor (capGuestRole).
+const GUEST_ACTIONS: ReadonlySet<ProjectAction> = new Set<ProjectAction>([
+  'read_project',
+  'create_task',
+  'update_task',
+  'delete_task',
+  'move_task',
+  'create_comment',
+  'update_own_comment',
+  'delete_own_comment',
+  'delete_any_comment',
+  'link_commit',
+  'assign_task',
+  'manage_attachments',
+  'delegate_task_to_agent',
+  'cancel_agent_job',
+]);
+
+export function capGuestRole(role: ProjectRole): ProjectRole {
+  return role === 'viewer' ? 'viewer' : 'editor';
+}
+
+// Проверка действия по членству: роль + ограничения гостя общего проекта.
+export function canMember(
+  membership: { readonly role: ProjectRole; readonly guest?: boolean },
+  action: ProjectAction,
+): boolean {
+  if (membership.guest && !GUEST_ACTIONS.has(action)) return false;
+  return can(membership.role, action);
+}
+
 export function requiredRoleFor(action: ProjectAction): ProjectRole {
   return REQUIRED_ROLE[action];
 }
