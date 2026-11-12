@@ -368,6 +368,8 @@ import { DrizzleTelegramChatWorkspaceRepository } from './infrastructure/reposit
 import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
 import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositories/DrizzleTelegramMessageTaskRepository.js';
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
+import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
+import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
@@ -1070,6 +1072,17 @@ setInterval(() => {
 }, 6 * 3600 * 1000).unref();
 // Привязка групповых чатов к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
 const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
+// Рабочие Telegram-группы пространства (db/181): подключение по deep link, ручное добавление,
+// «чья это группа» для бота.
+const telegramWorkGroups = new ManageTelegramWorkGroups({
+  repo: new DrizzleTelegramWorkGroupRepository(db),
+  workspaces: workspaceRepo,
+  users: userRepo,
+  telegram: telegramClient,
+  botUsername: telegramBotUsername,
+  randomToken: () => randomBytes(32).toString('base64url'),
+  now,
+});
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
   client: telegramClient,
@@ -2522,6 +2535,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       tasks: taskRepo,
     }),
+    telegramGroups: telegramWorkGroups,
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,

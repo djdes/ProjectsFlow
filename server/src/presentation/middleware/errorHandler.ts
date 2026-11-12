@@ -165,6 +165,13 @@ import {
   CannotInviteToDefaultWorkspaceError,
 } from '../../domain/workspace/errors.js';
 import {
+  TelegramBotUnavailableError,
+  TelegramGroupNotFoundError,
+  TelegramGroupNotMemberError,
+  TelegramGroupTakenError,
+  TelegramNotLinkedError,
+} from '../../domain/telegram/errors.js';
+import {
   ChatMessageNotFoundError,
   NotMessageAuthorError,
   CannotDeleteMessageError,
@@ -974,6 +981,27 @@ export function errorHandler(
       error: 'cannot_invite_to_default_workspace',
       message: 'В личное пространство пригласить нельзя',
     });
+    return;
+  }
+  // --- Рабочие Telegram-группы (db/181) ---
+  if (err instanceof TelegramGroupNotFoundError) {
+    res.status(404).json({ error: 'telegram_group_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupNotMemberError) {
+    res.status(403).json({ error: 'telegram_group_not_member', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTakenError) {
+    res.status(409).json({ error: 'telegram_group_taken', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramNotLinkedError) {
+    res.status(409).json({ error: 'telegram_not_linked', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramBotUnavailableError) {
+    res.status(503).json({ error: 'telegram_bot_unavailable', message: err.message });
     return;
   }
   if (err instanceof WorkspaceNotEmptyError) {

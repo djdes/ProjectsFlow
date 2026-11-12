@@ -5,6 +5,7 @@ import {
   projects,
   telegramChatWorkspaces,
   workspaceAssigneeDigestSettings,
+  workspaceTelegramGroups,
 } from '../db/schema.js';
 import type {
   TelegramChatWorkspaceChoice,
@@ -15,6 +16,13 @@ export class DrizzleTelegramChatWorkspaceRepository implements TelegramChatWorks
   constructor(private readonly db: Database) {}
 
   async linkedWorkspaceIds(tgChatId: number): Promise<string[]> {
+    // Рабочая группа (db/181) однозначно принадлежит своему пространству — оно и решает.
+    const [workGroup] = await this.db
+      .select({ workspaceId: workspaceTelegramGroups.workspaceId })
+      .from(workspaceTelegramGroups)
+      .where(eq(workspaceTelegramGroups.tgChatId, tgChatId))
+      .limit(1);
+    if (workGroup) return [workGroup.workspaceId];
     const [byProject, byWorkspace] = await Promise.all([
       this.db
         .selectDistinct({ workspaceId: projects.workspaceId })

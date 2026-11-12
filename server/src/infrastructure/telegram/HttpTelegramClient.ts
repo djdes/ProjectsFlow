@@ -325,6 +325,23 @@ export class HttpTelegramClient implements TelegramClient {
     };
   }
 
+  // getChatMember — статус человека в группе (проверка «вы сами состоите в группе» при ручном
+  // добавлении рабочей группы). Best-effort: ошибка/отказ → null.
+  async getChatMember(chatId: number, userId: number): Promise<{ status: string } | null> {
+    try {
+      const res = await this.tgFetch('/getChatMember', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, user_id: userId }),
+      });
+      const body = (await res.json().catch(() => null)) as TgResponse<{ status?: string }> | null;
+      if (!res.ok || !body?.ok || typeof body.result?.status !== 'string') return null;
+      return { status: body.result.status };
+    } catch {
+      return null;
+    }
+  }
+
   async downloadFile(fileId: string): Promise<{ data: Buffer; filename: string; mimeType: string } | null> {
     try {
       const metaRes = await this.tgFetch('/getFile', {

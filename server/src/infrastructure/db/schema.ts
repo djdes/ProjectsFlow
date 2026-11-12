@@ -278,6 +278,62 @@ export const telegramGroupOwners = mysqlTable(
 
 export type TelegramGroupOwnerRow = typeof telegramGroupOwners.$inferSelect;
 
+// Рабочие Telegram-группы пространства (db/181): бот принимает в них задачи пространства и
+// подключает людей без аккаунта/вне пространства. Одна группа — у одного пространства.
+export const workspaceTelegramGroups = mysqlTable(
+  'workspace_telegram_groups',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).primaryKey(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    title: varchar('title', { length: 255 }),
+    addedByUserId: char('added_by_user_id', { length: 36 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_wtg_workspace').on(t.workspaceId)],
+);
+
+export type WorkspaceTelegramGroupRow = typeof workspaceTelegramGroups.$inferSelect;
+
+// Одноразовые коды «Подключить группу» (db/181): t.me/<bot>?startgroup=wg_<code>. Только хеш.
+export const telegramGroupLinkTokens = mysqlTable(
+  'telegram_group_link_tokens',
+  {
+    tokenHash: char('token_hash', { length: 64 }).primaryKey(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    purpose: mysqlEnum('purpose', ['work', 'main']).notNull().default('work'),
+    createdByUserId: char('created_by_user_id', { length: 36 }).notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_tglt_workspace').on(t.workspaceId)],
+);
+
+// Подключение человека, написавшего задачу в рабочей группе (db/181).
+export const telegramGroupOnboardings = mysqlTable(
+  'telegram_group_onboardings',
+  {
+    id: char('id', { length: 12 }).primaryKey(),
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    tgUserId: bigint('tg_user_id', { mode: 'number' }).notNull(),
+    senderName: varchar('sender_name', { length: 255 }).notNull(),
+    groupTitle: varchar('group_title', { length: 255 }),
+    pendingText: text('pending_text'),
+    lastSourceKey: varchar('last_source_key', { length: 128 }),
+    status: mysqlEnum('status', ['pending', 'invited', 'completed']).notNull().default('pending'),
+    inviteId: char('invite_id', { length: 36 }),
+    promptedAt: timestamp('prompted_at'),
+    createdAt: createdAtCol(),
+    expiresAt: timestamp('expires_at').notNull(),
+  },
+  (t) => [
+    index('idx_tgo_member').on(t.tgChatId, t.tgUserId),
+    index('idx_tgo_invite').on(t.inviteId),
+  ],
+);
+
+export type TelegramGroupOnboardingRow = typeof telegramGroupOnboardings.$inferSelect;
+
 export const sessions = mysqlTable(
   'sessions',
   {

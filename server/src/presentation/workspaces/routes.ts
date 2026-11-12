@@ -18,11 +18,15 @@ import type { BulkSetWorkspaceCommitSync } from '../../application/commit-sync/B
 import type { ListWorkspaceCommitSyncProjects } from '../../application/commit-sync/ListWorkspaceCommitSyncProjects.js';
 import type { SetWorkspaceCommitSyncProjects } from '../../application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../../application/kanban/BulkManageWorkspaceKanbanColumns.js';
+import type { ManageTelegramWorkGroups } from '../../application/telegram/ManageTelegramWorkGroups.js';
+import type { TelegramWorkGroup } from '../../application/telegram/TelegramWorkGroupRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { z } from 'zod';
 import {
   addMemberSchema,
+  addTelegramWorkGroupSchema,
   changeRoleSchema,
+  createTelegramGroupLinkSchema,
   createWorkspaceInviteSchema,
   createWorkspaceSchema,
   moveProjectSchema,
@@ -170,8 +174,14 @@ type Deps = {
   readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
   // Кастомные колонки канбана на все проекты пространства (db/154).
   readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
+  // Рабочие Telegram-группы (db/181). Необязательно: без бота роуты отвечают 503.
+  readonly telegramGroups?: ManageTelegramWorkGroups;
   readonly appUrl: string;
 };
+
+function telegramGroupToDto(g: TelegramWorkGroup): { chatId: number; title: string | null; createdAt: string } {
+  return { chatId: g.chatId, title: g.title, createdAt: g.createdAt.toISOString() };
+}
 
 export function workspacesRouter(deps: Deps): Router {
   const router = Router();
@@ -516,6 +526,41 @@ export function workspacesRouter(deps: Deps): Router {
     } catch (e) {
       next(e);
     }
+  });
+
+  // Рабочие Telegram-группы пространства (db/181): список, ссылка «Подключить группу»
+  // (бот сам узнаёт id группы), ручное добавление по id и отключение.
+  router.get('/:id/telegram-groups', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const { groups, botUsername } = await deps.telegramGroups.list(req.params.id, req.user!.id);
+      res.json({ groups: groups.map(telegramGroupToDto), botUsername });
+    } catch (error) { next(error); }
+  });
+  router.post('/:id/telegram-groups/link', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const { purpose } = createTelegramGroupLinkSchema.parse(req.body ?? {});
+      const link = await deps.telegramGroups.createLink(req.params.id, req.user!.id, purpose);
+      res.json({ url: link.url, expiresAt: link.expiresAt.toISOString() });
+    } catch (error) { next(error); }
+  });
+  router.post('/:id/telegram-groups', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const { chatId } = addTelegramWorkGroupSchema.parse(req.body);
+      const group = await deps.telegramGroups.addManual(req.params.id, req.user!.id, chatId);
+      res.status(201).json({ group: telegramGroupToDto(group) });
+    } catch (error) { next(error); }
+  });
+  router.delete('/:id/telegram-groups/:chatId', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const chatId = Number(req.params.chatId);
+      if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
+      await deps.telegramGroups.remove(req.params.id, req.user!.id, chatId);
+      res.status(204).end();
+    } catch (error) { next(error); }
   });
 
   // GET /api/workspaces/:id/invites — непринятые приглашения, включая истёкшие. Без token.
