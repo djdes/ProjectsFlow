@@ -105,6 +105,18 @@ export class DrizzleTelegramWorkGroupRepository implements TelegramWorkGroupRepo
     });
   }
 
+  async getMainGroup(workspaceId: string): Promise<{ chatId: number; title: string | null } | null> {
+    const [row] = await this.db
+      .select({
+        chatId: workspaceAssigneeDigestSettings.telegramGroupChatId,
+        title: workspaceAssigneeDigestSettings.telegramGroupTitle,
+      })
+      .from(workspaceAssigneeDigestSettings)
+      .where(eq(workspaceAssigneeDigestSettings.workspaceId, workspaceId))
+      .limit(1);
+    return row?.chatId != null ? { chatId: row.chatId, title: row.title ?? null } : null;
+  }
+
   async setMainGroup(workspaceId: string, chatId: number, title: string | null): Promise<void> {
     const set = { telegramGroupChatId: chatId, telegramGroupTitle: title?.slice(0, 255) ?? null };
     await this.db

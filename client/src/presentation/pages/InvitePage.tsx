@@ -75,7 +75,13 @@ export function InvitePage(): React.ReactElement {
         toast.success('Вы добавлены в проект');
         navigate(`/projects/${res.projectId}`, { replace: true });
       } else {
-        toast.success('Вы присоединились к пространству');
+        if (res.telegram === 'linked') {
+          toast.success('Вы в пространстве, Telegram привязан. Задачу из группы бот создаст сам');
+        } else if (res.telegram === 'conflict') {
+          toast.warning('Вы в пространстве, но этот Telegram уже привязан к другому аккаунту');
+        } else {
+          toast.success('Вы присоединились к пространству');
+        }
         navigate('/', { replace: true });
       }
     } catch (e) {

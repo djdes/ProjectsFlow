@@ -28,7 +28,8 @@ export interface TelegramWorkGroupRepository {
   // Группа стала супергруппой и получила новый id: переносим рабочую группу и основную группу
   // сводок, чтобы бот и расписание продолжили работать.
   migrateChat(fromChatId: number, toChatId: number): Promise<void>;
-  // Основная группа сводок пространства (workspace_assignee_digest_settings), upsert.
+  // Основная группа сводок пространства (workspace_assignee_digest_settings).
+  getMainGroup(workspaceId: string): Promise<{ chatId: number; title: string | null } | null>;
   setMainGroup(workspaceId: string, chatId: number, title: string | null): Promise<void>;
   issueLinkCode(input: TelegramGroupLinkCode & { tokenHash: string; expiresAt: Date }): Promise<void>;
   // Атомарно гасит код. null — кода нет или он истёк.

@@ -533,8 +533,8 @@ export function workspacesRouter(deps: Deps): Router {
   router.get('/:id/telegram-groups', async (req, res, next) => {
     try {
       if (!deps.telegramGroups) { res.sendStatus(503); return; }
-      const { groups, botUsername } = await deps.telegramGroups.list(req.params.id, req.user!.id);
-      res.json({ groups: groups.map(telegramGroupToDto), botUsername });
+      const { groups, mainGroup, botUsername } = await deps.telegramGroups.list(req.params.id, req.user!.id);
+      res.json({ groups: groups.map(telegramGroupToDto), mainGroup, botUsername });
     } catch (error) { next(error); }
   });
   router.post('/:id/telegram-groups/link', async (req, res, next) => {

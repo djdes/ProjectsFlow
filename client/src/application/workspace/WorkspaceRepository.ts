@@ -7,6 +7,11 @@ import type {
 import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
 import type {
+  TelegramGroupLinkPurpose,
+  TelegramWorkGroup,
+  TelegramWorkGroups,
+} from '@/domain/workspace/TelegramWorkGroup';
+import type {
   SaveWorkspaceAssigneeDigestInput,
   WorkspaceAssigneeDigestGroup,
   WorkspaceAssigneeDigestMember,
@@ -69,6 +74,16 @@ export interface WorkspaceRepository {
   getInviteLink(workspaceId: string, inviteId: string): Promise<string>;
   createInvite(workspaceId: string, input: CreateWorkspaceInviteInput): Promise<WorkspaceInvite>;
   deleteInvite(workspaceId: string, inviteId: string): Promise<void>;
+
+  // Рабочие Telegram-группы (db/181). Ссылка «Подключить группу» открывает в Telegram выбор
+  // группы; бот сам сообщает серверу её id.
+  listTelegramGroups(id: string): Promise<TelegramWorkGroups>;
+  createTelegramGroupLink(
+    id: string,
+    purpose: TelegramGroupLinkPurpose,
+  ): Promise<{ url: string; expiresAt: string }>;
+  addTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
+  removeTelegramGroup(id: string, chatId: number): Promise<void>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;

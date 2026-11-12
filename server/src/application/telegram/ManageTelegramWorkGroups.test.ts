@@ -47,6 +47,10 @@ function makeRepo() {
       return true;
     },
     async migrateChat() {},
+    async getMainGroup(workspaceId) {
+      const last = main.filter((m) => m.workspaceId === workspaceId).at(-1);
+      return last ? { chatId: last.chatId, title: last.title } : null;
+    },
     async setMainGroup(workspaceId, chatId, title) {
       main.push({ workspaceId, chatId, title });
     },
@@ -160,6 +164,8 @@ test('bindFromCode: purpose main sets the digest group instead of a work group',
   });
   assert.deepEqual(main, [{ workspaceId: 'ws1', chatId: -1003, title: 'Сводки' }]);
   assert.equal(groups.size, 0);
+  const listed = await service.list('ws1', 'viewer');
+  assert.deepEqual(listed.mainGroup, { chatId: -1003, title: 'Сводки' });
 });
 
 test('addManual: requires a group the bot sees and the actor is a member of', async () => {

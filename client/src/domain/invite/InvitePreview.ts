@@ -19,4 +19,7 @@ export type InvitePreview = {
 export type InviteAcceptResult = {
   readonly workspaceId: string | null;
   readonly projectId: string | null;
+  // Приглашение из рабочей Telegram-группы: linked — Telegram привязан к аккаунту, а задача из
+  // группы создаётся; conflict — этот Telegram уже у другого аккаунта (db/181).
+  readonly telegram?: 'linked' | 'conflict' | null;
 };

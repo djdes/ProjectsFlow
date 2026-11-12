@@ -66,6 +66,8 @@ import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
 import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPicker';
 import { SectionPage } from '@/presentation/pages/SectionPage';
+import { TelegramWorkGroupsCard } from '@/presentation/components/workspace/TelegramWorkGroupsCard';
+import { TelegramGroupConnectDialog } from '@/presentation/components/workspace/TelegramGroupConnectDialog';
 
 // Нативный select в виде поля ввода (Input): bg-field, 44px на мобиле и 32px на десктопе.
 const ROLE_SELECT_CLASS =
@@ -131,6 +133,14 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         canManage={canEditSharedSettings}
         commitSyncMode={workspace.commitSyncMode}
       />
+      {/* Рабочие Telegram-группы (db/181) открывают вход в пространство — только командные
+          пространства (в личный хаб не приглашают), управляют owner/lead. */}
+      {!isDefault && (
+        <TelegramWorkGroupsCard
+          workspaceId={workspace.id}
+          canManage={isOwner || workspace.role === 'lead'}
+        />
+      )}
       {!isDefault && (
         <TaskApprovalCard
           workspaceId={workspace.id}
@@ -568,6 +578,9 @@ function AssigneeDigestCard({
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
+  // «Подключить автоматически» основную группу: id, который был до открытия окна.
+  const [mainConnectOpen, setMainConnectOpen] = useState(false);
+  const [mainKnownChatId, setMainKnownChatId] = useState<number | null>(null);
   // Snapshot of the shared commit-sync schedule (time/days/mode) as last persisted. Save compares
   // against it to detect a change and, if so, propagates the schedule to every project — the
   // per-project scheduler reads project times, not the workspace one.
@@ -998,10 +1011,44 @@ function AssigneeDigestCard({
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Бот ProjectsFlow_Bot должен быть добавлен в группу. Для супергруппы chat_id
-                обычно начинается с −100.
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  Бот ProjectsFlow_Bot должен быть в группе. ID группы бот пришлёт сам: нажмите
+                  «Подключить автоматически» или напишите в группе <code>/id</code>.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canManage}
+                  onClick={() => {
+                    const current = Number(draft.groupChatId.trim());
+                    setMainKnownChatId(draft.groupChatId.trim() && Number.isInteger(current) ? current : null);
+                    setMainConnectOpen(true);
+                  }}
+                >
+                  <Send className="size-4" />
+                  Подключить автоматически
+                </Button>
+              </div>
+              <TelegramGroupConnectDialog
+                open={mainConnectOpen}
+                onOpenChange={setMainConnectOpen}
+                workspaceId={workspaceId}
+                purpose="main"
+                detect={async () => {
+                  const result = await workspaceRepository.getAssigneeDigest(workspaceId);
+                  const chatId = result.settings.telegramGroupChatId;
+                  return chatId !== null && chatId !== mainKnownChatId
+                    ? { chatId, title: result.settings.telegramGroupTitle ?? null }
+                    : null;
+                }}
+                onConnected={(group) => {
+                  setMainConnectOpen(false);
+                  update({ groupChatId: String(group.chatId), groupTitle: group.title ?? '' });
+                  toast.success(`Группа «${group.title ?? group.chatId}» стала основной группой пространства`);
+                }}
+              />
             </div>
 
             <div className="space-y-3 border-bs pbs-4">

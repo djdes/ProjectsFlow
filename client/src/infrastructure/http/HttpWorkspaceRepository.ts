@@ -1,4 +1,9 @@
 import type {
+  TelegramGroupLinkPurpose,
+  TelegramWorkGroup,
+  TelegramWorkGroups,
+} from '@/domain/workspace/TelegramWorkGroup';
+import type {
   Workspace,
   WorkspaceCommitSyncMode,
   WorkspaceKind,
@@ -226,6 +231,34 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
 
   async deleteInvite(workspaceId: string, inviteId: string): Promise<void> {
     await httpClient.delete<void>(`/workspaces/${workspaceId}/invites/${inviteId}`);
+  }
+
+  async listTelegramGroups(id: string): Promise<TelegramWorkGroups> {
+    const res = await httpClient.get<{
+      groups: TelegramWorkGroup[];
+      mainGroup?: { chatId: number; title: string | null } | null;
+      botUsername?: string | null;
+    }>(`/workspaces/${id}/telegram-groups`);
+    return { groups: res.groups, mainGroup: res.mainGroup ?? null, botUsername: res.botUsername ?? null };
+  }
+
+  async createTelegramGroupLink(
+    id: string,
+    purpose: TelegramGroupLinkPurpose,
+  ): Promise<{ url: string; expiresAt: string }> {
+    return httpClient.post(`/workspaces/${id}/telegram-groups/link`, { purpose });
+  }
+
+  async addTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup> {
+    const { group } = await httpClient.post<{ group: TelegramWorkGroup }>(
+      `/workspaces/${id}/telegram-groups`,
+      { chatId },
+    );
+    return group;
+  }
+
+  async removeTelegramGroup(id: string, chatId: number): Promise<void> {
+    await httpClient.delete<void>(`/workspaces/${id}/telegram-groups/${chatId}`);
   }
 
   async listProjects(id: string): Promise<ProjectDto[]> {

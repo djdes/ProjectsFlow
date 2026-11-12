@@ -66,9 +66,17 @@ export class ManageTelegramWorkGroups {
   async list(
     workspaceId: string,
     actorUserId: string,
-  ): Promise<{ groups: TelegramWorkGroup[]; botUsername: string | null }> {
+  ): Promise<{
+    groups: TelegramWorkGroup[];
+    mainGroup: { chatId: number; title: string | null } | null;
+    botUsername: string | null;
+  }> {
     await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
-    return { groups: await this.deps.repo.listByWorkspace(workspaceId), botUsername: this.botUsername() };
+    const [groups, mainGroup] = await Promise.all([
+      this.deps.repo.listByWorkspace(workspaceId),
+      this.deps.repo.getMainGroup(workspaceId),
+    ]);
+    return { groups, mainGroup, botUsername: this.botUsername() };
   }
 
   async createLink(

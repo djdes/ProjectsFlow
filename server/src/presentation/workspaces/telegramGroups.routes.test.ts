@@ -44,6 +44,7 @@ test('GET telegram-groups lists the groups and the bot username', async () => {
     {
       list: async () => ({
         groups: [{ chatId: -1001, workspaceId: 'ws1', title: 'Команда', addedByUserId: 'lead', createdAt: NOW }],
+        mainGroup: { chatId: -1005, title: 'Сводки' },
         botUsername: 'ProjectsFlow_Bot',
       }),
     },
@@ -52,6 +53,7 @@ test('GET telegram-groups lists the groups and the bot username', async () => {
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), {
         groups: [{ chatId: -1001, title: 'Команда', createdAt: NOW.toISOString() }],
+        mainGroup: { chatId: -1005, title: 'Сводки' },
         botUsername: 'ProjectsFlow_Bot',
       });
     },
