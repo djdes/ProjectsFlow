@@ -230,3 +230,22 @@ test('личка: привязка Telegram обычной ссылкой соз
   assert.match(x.sent[0]!.text, /Telegram подключён/);
   assert.deepEqual(x.pairedTelegramIds, [777]);
 });
+
+test('CSharpFixer: configured chat bypasses account onboarding for text and voice', async () => {
+  const keys = ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY'];
+  const saved = keys.map(key => process.env[key]);
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-1001', CSHARP_FIXER_PROJECT_ID: 'fixer',
+    CSHARP_FIXER_SIGNING_KEY: 'test-only-signing-key-12345678901234567890' });
+  try {
+    const text = makeHarness({ workGroup: { workspaceId: 'ws1', workspaceName: 'Scripts' } });
+    await text.h.execute(groupMessage({ text: '@ProjectsFlow_Bot C#Config не открывается' }));
+    assert.equal(text.prompts.length, 0);
+    assert.equal(text.composerCalls.length, 1);
+    const voice = makeHarness({ workGroup: { workspaceId: 'ws1', workspaceName: 'Scripts' }, voiceTranscript: 'C#Config не открывается' });
+    await voice.h.execute(groupMessage({ voice: { file_id: 'voice', duration: 1 }, reply_to_message: { message_id: 3, from: { id: 1, is_bot: true, username: 'ProjectsFlow_Bot' } } }));
+    assert.equal(voice.prompts.length, 0);
+    assert.equal(voice.composerCalls.length, 1);
+  } finally {
+    keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; });
+  }
+});

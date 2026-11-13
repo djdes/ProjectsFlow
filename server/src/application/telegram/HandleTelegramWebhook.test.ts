@@ -181,6 +181,8 @@ test('привязанная группа: голосовое без упоми�
   assert.deepEqual(x.composerCalls[0]!.options, {
     sourceKey: 'm:-100500:22',
     background: true,
+    sourceMessageId: 22,
+    sourceThreadId: null,
   });
 
   // A duplicate webhook update must not produce a second transcription/proposal.

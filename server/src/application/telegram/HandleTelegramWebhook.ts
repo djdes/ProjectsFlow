@@ -1,3 +1,4 @@
+import { csharpFixerConfig } from './composer/csharpFixerIntake.js';
 import type {
   TelegramClient,
   InlineKeyboardMarkup,
@@ -87,6 +88,7 @@ export type TelegramUpdate = {
   readonly update_id: number;
   readonly message?: {
     readonly message_id: number;
+    readonly message_thread_id?: number;
     readonly from?: {
       readonly id: number;
       readonly username?: string;
@@ -561,7 +563,9 @@ export class HandleTelegramWebhook {
       const bu = this.deps.botUsername;
       const repliedToBot = msg.reply_to_message?.from?.is_bot === true;
       const mentioned = bu ? new RegExp('@' + bu + '\\b', 'i').test(text) : false;
-      if (!repliedToBot && !mentioned) return;
+      const continuation = this.isCSharpFixerChat(chatId) && sourceKey.startsWith('g:') &&
+        await this.deps.composer.isCSharpFixerSource?.(sourceKey);
+      if (!repliedToBot && !mentioned && !continuation) return;
       // Вырезаем @упоминание из текста: чтобы оно не попало в текст задачи и чтобы команды
       // вида «/help@BotName» (так TG шлёт команды в группах) распознавались как «/help».
       if (bu) text = text.replace(new RegExp('@' + bu, 'ig'), '').replace(/\s+/g, ' ').trim();
@@ -643,7 +647,7 @@ export class HandleTelegramWebhook {
       // Рабочая группа пространства: кто ещё не может ставить задачи (нет аккаунта/Telegram или
       // не участник), получает инструкцию с кнопкой, а текст ждёт подключения.
       const workGroup = await this.workGroupFor(chatId);
-      if (workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
+      if (!this.isCSharpFixerChat(chatId) && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
       const groupCtx: TelegramGroupContext = {
         ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
         senderName: formatSenderName(msg.from),
@@ -651,6 +655,8 @@ export class HandleTelegramWebhook {
       };
       return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, attachments, {
         sourceKey,
+        sourceMessageId: msg.message_id,
+        sourceThreadId: msg.message_thread_id ?? null,
         background: true,
         ...(replyContext ? { replyContext } : {}),
         ...(replyToMessageId !== null ? { replyToMessageId } : {}),
@@ -687,7 +693,7 @@ export class HandleTelegramWebhook {
 
       // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения. Сбой здесь
       // не «ошибка расшифровки»: текст уже есть, поэтому пробрасываем — Telegram повторит доставку.
-      if (workGroup) {
+      if (workGroup && !this.isCSharpFixerChat(msg.chat.id)) {
         let waiting: boolean;
         try {
           waiting = await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey);
@@ -721,7 +727,7 @@ export class HandleTelegramWebhook {
         transcript,
         groupCtx,
         attachments,
-        { sourceKey, background: true, ...(msg.reply_to_message?.message_id ? { reply: true } : {}) },
+        { sourceKey, background: true, sourceMessageId: msg.message_id, sourceThreadId: msg.message_thread_id ?? null, ...(msg.reply_to_message?.message_id ? { reply: true } : {}) },
       );
     } catch (err) {
       if (err instanceof VoiceOnboardingError) throw err.cause;
@@ -732,6 +738,10 @@ export class HandleTelegramWebhook {
         '⚠️ Не удалось расшифровать голосовое. Отправьте его ещё раз или напишите задачу текстом.',
       );
     }
+  }
+
+  private isCSharpFixerChat(chatId: number): boolean {
+    return process.env.CSHARP_FIXER_CHAT_ID === String(chatId) && csharpFixerConfig()?.chatId === chatId;
   }
 
   private wasVoiceSourceProcessed(sourceKey: string): boolean {

@@ -1,3 +1,4 @@
+import { csharpFixerConfig, signCsharpFixerRequest, stripCsharpFixerOrigin } from './csharpFixerIntake.js';
 import type {
   TelegramClient,
   TelegramDownloadedFile,
@@ -28,6 +29,7 @@ import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
+import type { MoveTask } from '../../task/MoveTask.js';
 import type { CreateTaskComment } from '../../task/CreateTaskComment.js';
 import type { TaskRepository } from '../../task/TaskRepository.js';
 import { taskActionKeyboard } from '../taskActionKeyboard.js';
@@ -111,6 +113,7 @@ type Deps = {
   readonly waitForAiPromptJob: WaitForAiPromptJob;
   readonly uploadAttachment?: UploadTaskAttachment;
   readonly updateTask?: UpdateTask;
+  readonly moveTask?: Pick<MoveTask, 'execute'>;
   // Оригинал сообщения — первым комментарием созданной задачи (см. postOriginalComment).
   readonly createTaskComment: Pick<CreateTaskComment, 'execute'>;
   // Проверка сегментов-дополнений (existingTaskId). Опционально: без него такие сегменты
@@ -518,6 +521,8 @@ type AttachmentDownloadCache = Map<string, Promise<TelegramDownloadedFile | null
 
 export type TelegramMessageIngestOptions = {
   readonly sourceKey?: string | null;
+  readonly sourceMessageId?: number;
+  readonly sourceThreadId?: number | null;
   // The Telegram transport only waits until the draft is durable. AI enrichment continues in
   // the background, so polling/webhook acknowledgements never depend on a long-running job.
   readonly background?: boolean;
@@ -735,6 +740,11 @@ export class TelegramComposerService {
   // ответственный/дедлайн); пока AI думает — «Ожидайте, перефразирую…» со спиннером. Если AI
   // недоступен (диспетчер офлайн / job упал / таймаут / битый JSON) — тихий откат на ручной
   // флоу. Все AI-вызовы best-effort: любая ошибка только логируется, бот остаётся рабочим.
+  async isCSharpFixerSource(sourceKey: string): Promise<boolean> {
+    const draft = await this.deps.drafts.findBySourceKey(sourceKey);
+    return draft !== null && this.isCSharpFixerDraft(draft);
+  }
+
   async startFromMessage(
     tgUserId: number,
     chatId: number,
@@ -743,6 +753,48 @@ export class TelegramComposerService {
     attachments: readonly TelegramDraftAttachment[] = [],
     options: TelegramMessageIngestOptions = {},
   ): Promise<void> {
+    const fixerConfig = groupCtx && process.env.CSHARP_FIXER_CHAT_ID === String(chatId) ? csharpFixerConfig() : null;
+    if (groupCtx && fixerConfig?.chatId === chatId) {
+      if (!groupCtx.ownerUserId || !options.sourceKey || !options.sourceMessageId) {
+        await this.send(chatId, '⚠️ Запрос не принят: администратор должен проверить подключение CSharpFixer.');
+        return;
+      }
+      const description = signCsharpFixerRequest(rawText, {
+        chatId, userId: tgUserId, messageId: options.sourceMessageId,
+        messageThreadId: options.sourceThreadId ?? null, senderName: groupCtx.senderName,
+      }, fixerConfig);
+      const existing = await this.deps.drafts.findBySourceKey(options.sourceKey);
+      if (existing) {
+        const merged = appendNewAttachments(existing.attachments, attachments);
+        if (merged.added > 0) {
+          if (existing.status === 'composing') {
+            await this.deps.drafts.patchComposing(existing.id, {
+              attachments: merged.attachments, autoCreateSeconds: 15,
+            });
+          } else {
+            // Preserve late evidence even when the quiet window has already closed.
+            await this.deps.drafts.patch(existing.id, { attachments: merged.attachments });
+            console.warn('[csharp-fixer] late album attachments preserved for operator', existing.id);
+            await this.send(chatId, '📎 Дополнительные файлы сохранены. Они пришли после начала обработки и доступны для проверки оператором.');
+          }
+        }
+        return;
+      }
+      const id = this.deps.shortIdGen();
+      const draft = await this.deps.drafts.create({
+        id, sourceKey: options.sourceKey, creatorUserId: groupCtx.ownerUserId, tgChatId: chatId,
+        taskText: description, projectId: fixerConfig.projectId, assigneeUserId: groupCtx.ownerUserId,
+        targetStatus: 'todo', attachments: withDefaultAttachmentTargets(attachments),
+        ttlSeconds: DRAFT_TTL_SECONDS, autoCreateSeconds: options.sourceKey.startsWith('g:') ? 15 : 5,
+      });
+      if (draft.id !== id) return;
+      const messageId = await this.sendReturningId(chatId, '🛠 Запрос сохранён. CSharpFixer проверит скрипт и сообщит результат здесь.');
+      if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
+      if (!options.sourceKey.startsWith('g:')) {
+        await this.finalize(draft, groupCtx.ownerUserId, chatId, messageId ?? undefined, null);
+      }
+      return;
+    }
     // Групповое сообщение: каждый привязанный участник работает «как отправитель» (в своё) —
     // продолжаем обычным флоу ниже. Непривязанный → в «Входящие» владельца (или просьба привязать).
     if (groupCtx) {
@@ -1595,7 +1647,8 @@ export class TelegramComposerService {
         projectId: targetId,
         ownerUserId: userId,
         description: text,
-        status: draft.targetStatus ?? DEFAULT_COLUMN,
+        status: this.isCSharpFixerDraft(draft) ? 'backlog' : draft.targetStatus ?? DEFAULT_COLUMN,
+        ralphMode: this.isCSharpFixerDraft(draft) ? 'silent' : undefined,
         assigneeUserId: draft.assigneeUserId ?? userId,
         // Ручной путь (без AI-сегментов) срока не собирает вовсе — без явного значения
         // CreateTask поставил бы «сегодня». Держим то же правило, что и для сегментов.
@@ -1616,6 +1669,17 @@ export class TelegramComposerService {
         userId,
         text,
       );
+      if (this.isCSharpFixerDraft(draft)) {
+        if (attachmentResult.failed > 0 || !this.deps.moveTask) {
+          if (messageId) await this.edit(chatId, messageId,
+            '⚠️ Запрос сохранён, но загрузка вложений не завершена. Администратор проверит журнал; повторять сообщение не нужно.');
+          return;
+        }
+        await this.deps.moveTask.execute({
+          projectId: targetId, ownerUserId: userId, taskId: task.id,
+          targetStatus: 'todo', beforeTaskId: null, afterTaskId: null,
+        });
+      }
       if (messageId) {
         await this.deps.taskMessages.upsert({
           tgChatId: chatId,
@@ -1634,13 +1698,15 @@ export class TelegramComposerService {
       const metadata = await this.createdTaskMetadata(
         task.assignee?.displayName, targetId, draft.targetStatus,
       );
-      const automatic = opts.automatic ? '\n\n⏱ Создано автоматически через 10 минут.' : '';
+      const automatic = opts.automatic && !this.isCSharpFixerDraft(draft) ? '\n\n⏱ Создано автоматически через 10 минут.' : '';
       const attachmentSuffix = this.attachmentResultText(attachmentResult);
       if (messageId) {
         await this.edit(
           chatId,
           messageId,
-          `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(text))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+          this.isCSharpFixerDraft(draft)
+            ? `🛠 Запрос передан CSharpFixer. Проверю скрипт и сообщу результат здесь.${attachmentSuffix}`
+            : `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(stripCsharpFixerOrigin(text)))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
         );
       }
       if (cqId) {
@@ -1657,7 +1723,9 @@ export class TelegramComposerService {
         await this.edit(
           chatId,
           messageId,
-          `⚠️ Не удалось создать задачу${why}.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n⛔ Черновик закрыт — поправьте и отправьте сообщение заново.`,
+          this.isCSharpFixerDraft(draft)
+            ? '⚠️ Запрос сохранён, но не принят в работу. Администратор проверит подключение; повторять сообщение не требуется.'
+            : `⚠️ Не удалось создать задачу${why}.\n📝 ${markdownToTelegramHtml(excerpt(stripCsharpFixerOrigin(text)))}\n\n⛔ Черновик закрыт — поправьте и отправьте сообщение заново.`,
         );
       }
       if (cqId) {
@@ -3543,7 +3611,15 @@ export class TelegramComposerService {
     }
   }
 
+  private isCSharpFixerDraft(draft: TelegramTaskDraft): boolean {
+    const config = process.env.CSHARP_FIXER_CHAT_ID === String(draft.tgChatId) ? csharpFixerConfig() : null;
+    return config !== null && draft.projectId === config.projectId && draft.tgChatId === config.chatId;
+  }
+
   private async rememberOrigin(chatId: number, messageId: number | null, taskId: string, projectId: string): Promise<void> {
+    // CSharpFixer preserves the real reporter and owns its durable result delivery.
+    const config = process.env.CSHARP_FIXER_CHAT_ID === String(chatId) ? csharpFixerConfig() : null;
+    if (config !== null && projectId === config.projectId) return;
     await this.deps.taskOrigins?.attach({ chatId, messageId, taskId, projectId });
   }
 
