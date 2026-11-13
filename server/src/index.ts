@@ -1448,6 +1448,10 @@ const telegramComposer = new TelegramComposerService({
     tasks: taskRepo,
     activity: activityRecorder,
   }),
+  moveTask: new MoveTask({
+    projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
+    approval: taskApprovalService, workerPolicy, activityRecorder,
+  }),
 });
 let telegramDraftAutoCreateRunning = false;
 const runTelegramDraftAutoCreate = (): void => {

@@ -57,10 +57,12 @@ type AiSeg = {
   deadline: string | null;
   taskType?: 'feature' | 'bug' | null;
   sourceExcerpt?: string | null;
+  ralphMode?: string;
 };
 
 function makeHarness(opts?: {
   workerEnabled?: boolean;
+  downloadGate?: Promise<void>;
   projects?: { id: string; name: string }[];
   shared?: { id: string; displayName: string; email: string }[];
   aiSegments?: AiSeg[];
@@ -116,6 +118,7 @@ function makeHarness(opts?: {
   const origins: Omit<TelegramTaskOrigin, 'requestedAt'>[] = [];
   let seq = 0;
   const createTaskCalls: CreateTaskCall[] = [];
+  const moveTaskCalls: any[] = [];
   const sent: { chatId: number; text: string }[] = [];
   const edits: { messageId: number; text: string; replyMarkup?: any }[] = [];
   const answers: { text?: string }[] = [];
@@ -302,6 +305,7 @@ function makeHarness(opts?: {
       return [];
     },
     async downloadFile(fileId: string) {
+      await opts?.downloadGate;
       downloadedFileIds.push(fileId);
       return {
         data: Buffer.from(fileId),
@@ -391,6 +395,7 @@ function makeHarness(opts?: {
           status: input.status,
           allowInboxDelegation: input.allowInboxDelegation ?? false,
           taskType: input.taskType ?? null,
+          ralphMode: input.ralphMode,
         });
         return {
           id: `t${createTaskCalls.length}`,
@@ -478,6 +483,7 @@ function makeHarness(opts?: {
         return { id: `att${uploadedAttachments.length}` } as any;
       },
     },
+    moveTask: { async execute(input: any) { moveTaskCalls.push(input); return {} as any; } },
     updateTask: {
       async execute(input: any) {
         updatedDescriptions.push(input.description);
@@ -542,6 +548,7 @@ function makeHarness(opts?: {
     origins,
     drafts,
     createTaskCalls,
+    moveTaskCalls,
     sent,
     edits,
     answers,
@@ -2661,5 +2668,111 @@ test('прод-регрессия: «@tepei_kms … маг производст�
   for (const c of h.createTaskCalls) {
     assert.equal(c.assigneeUserId, 'u2');
     assert.notEqual(c.projectId, 'tf');
+  }
+});
+
+test('CSharpFixer: an unlinked DJ immediately creates a silent worker task without AI or confirmation', async () => {
+  const saved = { ...process.env };
+  process.env.CSHARP_FIXER_CHAT_ID = '-100500';
+  process.env.CSHARP_FIXER_PROJECT_ID = 'p1';
+  process.env.CSHARP_FIXER_SIGNING_KEY = 'test-signing-key-not-a-secret-123456789';
+  try {
+    const h = makeHarness();
+    await h.service.startFromMessage(999, -100500, 'FilterMusic не открывается', gctx('u1', 'DJ Test'), [], {
+      sourceKey: 'm:-100500:77', sourceMessageId: 77, sourceThreadId: 17,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    assert.equal(h.createTaskCalls[0]?.projectId, 'p1');
+    assert.equal(h.createTaskCalls[0]?.ownerUserId, 'u1');
+    assert.equal(h.createTaskCalls[0]?.status, 'backlog');
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+    assert.equal((h.createTaskCalls[0] as any)?.ralphMode, 'silent');
+    assert.match(h.createTaskCalls[0]?.description ?? '', /csharp-fixer-origin:/);
+    assert.equal(h.origins.length, 0, 'new worker owns the source-chat result outbox');
+    assert.ok(!h.sent.some(m => /привяж|Перефразирую|выбер|подтверд/i.test(m.text)));
+    assert.ok(!h.edits.some(m => /csharp-fixer-origin:/.test(m.text)), 'signature stays out of chat text');
+    await h.service.startFromMessage(999, -100500, 'FilterMusic не открывается', gctx('u1', 'DJ Test'), [], {
+      sourceKey: 'm:-100500:77', sourceMessageId: 77, sourceThreadId: 17,
+    });
+    assert.equal(h.createTaskCalls.length, 1, 'redelivery does not create another task');
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: the runnable status is published only after a delayed attachment is saved', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  let release!: () => void;
+  const downloadGate = new Promise<void>(resolve => { release = resolve; });
+  try {
+    const h = makeHarness({ downloadGate });
+    const file = { key: 'log', kind: 'document' as const, fileId: 'log', fileUniqueId: 'log',
+      filename: 'error.log', mimeType: 'text/plain', width: null, height: null, duration: null,
+      fileSize: 10, targetSegmentIndexes: [] as number[] };
+    const intake = h.service.startFromMessage(999, -100500, 'C#Config ошибка', gctx('u1'), [file], {
+      sourceKey: 'm:-100500:79', sourceMessageId: 79,
+    });
+    for (let i = 0; i < 20 && h.createTaskCalls.length === 0; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.createTaskCalls[0]?.status, 'backlog');
+    assert.equal(h.moveTaskCalls.length, 0, 'worker cannot take the task while download is pending');
+    release();
+    await intake;
+    assert.equal(h.uploadedAttachments.length, 1);
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+  } finally {
+    release();
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: album parts crossing webhook batches merge before autonomous creation', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  try {
+    const h = makeHarness();
+    const file = (key: string) => ({ key, kind: 'document' as const, fileId: key, fileUniqueId: key,
+      filename: key+'.log', mimeType: 'text/plain', width: null, height: null, duration: null,
+      fileSize: 10, targetSegmentIndexes: [] as number[] });
+    const options = { sourceKey: 'g:-100500:999:album', sourceMessageId: 80 };
+    await h.service.startFromMessage(999, -100500, 'C#Config ошибка', gctx('u1'), [file('first')], options);
+    assert.equal(h.createTaskCalls.length, 0);
+    await h.service.startFromMessage(999, -100500, 'Дополнительный файл', gctx('u1'), [file('second')], { ...options, sourceMessageId: 81 });
+    const draft = [...h.drafts.values()][0]!;
+    assert.equal(draft.attachments.length, 2);
+    h.drafts.set(draft.id, { ...draft, autoCreateAt: new Date(0) });
+    await h.service.processDueAutoCreate();
+    assert.equal(h.createTaskCalls.length, 1);
+    assert.equal(h.uploadedAttachments.length, 2);
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: missing group binding does not create a task or ask the DJ for account setup', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  try {
+    const h = makeHarness();
+    await h.service.startFromMessage(999, -100500, 'Сломалось', gctx(null), [], {
+      sourceKey: 'm:-100500:78', sourceMessageId: 78,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    assert.match(h.sent.at(-1)?.text ?? '', /администратор/i);
+    assert.doesNotMatch(h.sent.at(-1)?.text ?? '', /привяж|подтверд/i);
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
   }
 });
