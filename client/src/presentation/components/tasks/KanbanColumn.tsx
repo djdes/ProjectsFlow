@@ -721,11 +721,12 @@ export function KanbanColumn({
           isOver && !lockOffer && 'rounded-be-xl bg-drop',
         )}
       >
-        {/* I6: на free-тарифе колонка «Воркер» — не список задач, а оффер (в обычном потоке,
-            колонка выглядит как нормальная). Иначе — обычный список карточек. */}
-        {lockOffer ? (
-          lockOffer
-        ) : (
+        {/* I6: на free-тарифе колонка «Воркер» — оффер (в обычном потоке, колонка выглядит как
+            нормальная). Задачи, которые уже стоят в колонке (кончился пробный час, задача из
+            Telegram или MCP — сервер ставит их сюда по умолчанию), остаются видны под оффером:
+            раньше оффер заменял список, счётчик показывал «5», а сами задачи было не открыть. */}
+        {lockOffer}
+        {(!lockOffer || listTasks.length > 0) && (
         <>
         {/* Notion-style inline-создание: сверху — уже созданные в этой сессии карточки (в
             порядке создания), ПОД ними — карточка создания (стабильный key, без ремаунта).
@@ -774,7 +775,7 @@ export function KanbanColumn({
             );
           })}
         </SortableContext>
-        {tasks.length === 0 && !inlineCard && !composing && (
+        {tasks.length === 0 && !inlineCard && !composing && !lockOffer && (
           <div className="pointer-events-none mx-0.5 rounded-lg border border-dashed border-drop-line px-3 py-5 text-center">
             <p className="text-xs font-medium text-muted-foreground">Здесь пока нет задач</p>
             {!readOnly && <p className="mbs-1 text-2xs leading-relaxed text-muted-foreground/80">Перенесите сюда задачу из другой колонки</p>}
