@@ -46,7 +46,7 @@ export function InboxLoadingLayout({ heading }: { heading?: React.ReactNode }): 
       <Skeleton className="h-11 w-[132px] shrink-0 rounded-lg md:h-7 md:w-[126px]" />
       <PeopleSkeleton />
       <div className="hidden min-w-0 flex-[1_1_auto] items-center justify-end gap-1 md:flex">
-        <Skeleton className="me-1 h-8 min-w-0 max-w-60 flex-[1_1_11rem]" />
+        <Skeleton className="me-1 h-8 w-36 min-w-0 max-w-60 grow" />
         <Skeleton className="h-8 w-[87px] shrink-0" /><Skeleton className="h-8 w-[97px] shrink-0" />
       </div>
     </div>
@@ -385,7 +385,7 @@ export function PageSkeleton({
   if (layout === 'inbox') return <div className="min-h-full min-w-0" data-pf-page-skeleton="inbox">
     <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex"><Skeleton className="h-3 w-40" /></div>
     {/* Заголовок страницы стоит в строке управления блока — как в InboxPage. */}
-    <div className="px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-4 lg:px-9"><InboxLoadingLayout /></div>
+    <div className="px-4 pbs-2 pbe-6 sm:px-6 sm:pbs-[1.125rem] lg:px-9"><InboxLoadingLayout /></div>
   </div>;
   if (
     layout === 'board' ||

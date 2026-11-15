@@ -358,7 +358,7 @@ export function FormatMenu({ editor, getRange, inline = false }: {
     fire(() => item.run(editor));
     setOpenSub(null);
   };
-  const fade = useEdgeFade();
+  const [attachFade, fadeProps] = useEdgeFade();
   return (
     <TooltipProvider delayDuration={650}>
       <div className={cn(inline ? 'w-full' : 'w-[19rem] max-w-[calc(100vw-2rem)]')}>
@@ -366,8 +366,8 @@ export function FormatMenu({ editor, getRange, inline = false }: {
             раньше 7 кнопок растягивались на всю ширину, «Тип блока» и цвет уходили во вторую
             строку, и панель съедала ~90px над текстом задачи. */}
         <div
-          ref={fade.ref}
-          {...fade.fadeProps}
+          ref={attachFade}
+          {...fadeProps}
           role="toolbar"
           aria-label="Форматирование текста"
           className={cn(

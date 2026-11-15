@@ -33,7 +33,7 @@ function findColumn(scroller: HTMLElement, status: string): HTMLElement | null {
 export function BoardColumnTabs({ columns, scrollerRef, className }: Props): React.ReactElement | null {
   const { animations } = useMotion();
   const stripRef = useRef<HTMLDivElement>(null);
-  const fade = useEdgeFade();
+  const [attachFade, fadeProps] = useEdgeFade();
   const [active, setActive] = useState<string | null>(columns[0]?.status ?? null);
   const statusesKey = columns.map((c) => c.status).join('|');
 
@@ -108,9 +108,9 @@ export function BoardColumnTabs({ columns, scrollerRef, className }: Props): Rea
       <div
         ref={(element) => {
           stripRef.current = element;
-          fade.ref(element);
+          attachFade(element);
         }}
-        {...fade.fadeProps}
+        {...fadeProps}
         // Ряд листается вбок сам по себе; полосу прокрутки не показываем, а край, за
         // которым ещё есть колонки, растворяется (pf-fade-x).
         className="pf-fade-x pf-scrollbar-hide flex gap-1.5 overflow-x-auto overscroll-x-contain pbe-2"

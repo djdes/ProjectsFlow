@@ -1851,11 +1851,11 @@ export function AssignedToMeBlock({
       {hasAny && tabsOrFocus}
       {hasAny && whoDivider}
       {hasAny && people}
-      {/* Поиск и действия — одна группа у правого края: поиск ужимается (176…240px), пока
+      {/* Поиск и действия — одна группа у правого края: поиск ужимается (144…240px), пока
           группа помещается в строку, а если нет — она переносится целиком и остаётся
           справа, а не рассыпается кнопками под заголовком. */}
       <div className="flex min-w-0 flex-[1_1_auto] items-center justify-end gap-1">
-        {hasAny && <InboxSearch value={query} onChange={setQuery} className="me-1 min-w-0 max-w-60 flex-[1_1_11rem]" />}
+        {hasAny && <InboxSearch value={query} onChange={setQuery} className="me-1 w-36 min-w-0 max-w-60 grow" />}
         <div className="flex shrink-0 items-center gap-1">
           {filtersPopover}
           {actions}

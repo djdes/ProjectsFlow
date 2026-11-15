@@ -57,7 +57,9 @@ export function AllWorkspaceTasksPage(): React.ReactElement {
       <PageTopBar className="hidden sm:flex">
         <span className="flex items-center gap-2 text-ui"><Globe className="size-4" /> Все пространства</span>
       </PageTopBar>
-      <div className="flex flex-1 flex-col gap-6 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9">
+      {/* Заголовок — на той же высоте, что на остальных страницах (16px на телефоне, 20px
+          на десктопе): при переходе между вкладками он не прыгает. */}
+      <div className="flex flex-1 flex-col gap-6 px-4 pbe-6 pbs-4 sm:px-6 sm:pbs-5 lg:px-9">
         <div className="space-y-3">
           <div className="space-y-1">
             <PageTitle>Все задачи</PageTitle>

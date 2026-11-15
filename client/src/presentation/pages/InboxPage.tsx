@@ -126,7 +126,10 @@ export function InboxPage({
       {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
           ответственных текущего пространства: заголовок, «Мои / Все», людей и поиск он
           ставит в одну строку сам. */}
-      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9'}>
+      {/* Верхний отступ меньше, чем у остальных страниц, ровно на то, на сколько строка
+          управления выше самого заголовка (44px с иконками на телефоне, 32px с поиском на
+          десктопе): заголовок встаёт на те же 16/20px от шапки, что и везде. */}
+      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-2 sm:px-6 sm:pbs-[1.125rem] lg:px-9'}>
         <AssignedToMeBlock
           regionId={embedded ? `workspace-board-${workspace?.id}` : undefined}
           initialTab={embedded ? 'toMe' : undefined}

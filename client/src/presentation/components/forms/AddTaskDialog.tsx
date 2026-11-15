@@ -151,7 +151,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const wasOpenRef = useRef(false);
   const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [saving, setSaving] = useState(false);
-  const toolsFade = useEdgeFade();
+  const [attachToolsFade, toolsFadeProps] = useEdgeFade();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -606,7 +606,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               «Добавить» во всю ширину, под большой палец. Раньше ряд переносился на две
               строки, а «Добавить» висела третьей строкой у правого края. */}
           <div className="max-sm:flex-shrink-0 flex flex-col gap-2 border-bs pbs-2 sm:pbs-3 sm:flex-row sm:items-center sm:justify-between">
-            <div ref={toolsFade.ref} {...toolsFade.fadeProps} className="pf-fade-x flex flex-wrap items-center gap-1 max-sm:-mx-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-1 max-sm:[&>*]:shrink-0 pf-scrollbar-hide">
+            <div ref={attachToolsFade} {...toolsFadeProps} className="pf-fade-x flex flex-wrap items-center gap-1 max-sm:-mx-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-1 max-sm:[&>*]:shrink-0 pf-scrollbar-hide">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
