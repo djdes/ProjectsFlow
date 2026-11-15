@@ -95,6 +95,8 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { EdgeFadeScroller } from '@/presentation/components/layout/EdgeFadeScroller';
+import { shortUserLabels } from '@/domain/user/shortUserLabels';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import { userLabel } from '@/domain/user/userLabel';
 import type { SharedMember } from '@/application/project/ProjectRepository';
@@ -1173,6 +1175,11 @@ export function AssignedToMeBlock({
   // drag-назначения. Грузим один раз; себя список уже не содержит (сервер исключает).
   const [members, setMembers] = useState<SharedMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
+  // Имя на чипе человека: одного имени хватает, пока в пространстве нет тёзок.
+  const shortLabels = useMemo(
+    () => shortUserLabels(members.map((m) => ({ id: m.id, label: userLabel(m) }))),
+    [members],
+  );
   useEffect(() => {
     let cancelled = false;
     projectRepository
@@ -1754,15 +1761,15 @@ export function AssignedToMeBlock({
   const tabsOrFocus = focusedMember ? (
     // Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для всех»
     // тут не про что — показывается одна конкретная доска. Возврат — ×.
-    <div className="flex h-12 min-w-0 items-center gap-1 rounded-lg bg-primary-soft pe-1 ps-2 sm:h-auto">
-      <span className="min-w-0 truncate text-ui font-semibold">Задачи · {focusedMember.displayName}</span>
-      <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{focusedVisible.length}</span>
+    <div className={cn(SCOPE_CHIP_CLASS, SCOPE_CHIP_ON_CLASS, 'max-w-full gap-1 pe-0 md:pe-0.5')}>
+      <span className="min-w-0 truncate">Задачи · {focusedMember.displayName}</span>
+      <span className="shrink-0 font-medium tabular-nums opacity-70">{focusedVisible.length}</span>
       <button
         type="button"
         onClick={() => setFocusedMember(null)}
         aria-label="Вернуться к своим входящим"
         title="Вернуться к своим входящим"
-        className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:size-6"
+        className="grid size-11 shrink-0 place-items-center rounded-md opacity-80 transition-opacity hover:opacity-100 md:size-6"
       >
         <X className="size-3.5" />
       </button>
@@ -1779,23 +1786,31 @@ export function AssignedToMeBlock({
       byMeCount={byMeVisible.length}
     />
   );
-  // Люди: своя ава (бросить задачу — забрать себе) и участники пространства (бросить —
-  // назначить; клик — их задачи). В покое — аватары, во время перетаскивания — крупные
-  // плитки с именем: в маленький кружок трудно попасть (задача 3a36e7e8).
+  // Люди — участники пространства: бросить задачу — назначить, клик — их задачи. В покое —
+  // ровный ряд чипов той же высоты, что «Мои / Все» (десктоп: аватар с именем; телефон:
+  // аватар, имя раскрывается у выбранного), во время перетаскивания — крупные плитки с
+  // именем: в маленький аватар трудно попасть (задача 3a36e7e8). Своя плитка «Себе»
+  // (бросить — забрать себе) нужна только как цель броска, поэтому в покое её нет: «мои
+  // задачи» — это чип «Мои» слева.
   const people =
-    user || members.length > 0 ? (
-      // Phone at rest: one even ribbon that scrolls sideways (wrapping staggered the avatars
-      // 3+1 / 2+2 next to the tabs). While dragging, tiles wrap so every drop target is visible.
+    members.length > 0 || (user && dragActive) ? (
+      // Phone at rest: one ribbon that scrolls sideways. While dragging, tiles wrap so every
+      // drop target is visible.
       <div
         role="group"
         aria-label="Люди"
-        className={cn('flex items-start gap-2', isWide || dragActive ? 'max-w-full flex-wrap' : 'w-max')}
+        className={cn(
+          'flex items-center',
+          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'max-w-full flex-wrap gap-1.5' : 'w-max gap-1',
+        )}
       >
-        {user && <SelfDropAvatar user={user} dragging={dragActive} />}
+        {user && dragActive && <SelfDropTile user={user} />}
         {members.map((m) => (
           <UserCube
             key={m.id}
             member={m}
+            shortLabel={shortLabels.get(m.id) ?? userLabel(m)}
+            compact={!isWide}
             dragging={dragActive}
             hasApproval={peopleWithApproval.has(m.id)}
             // Руководитель/владелец: клик открывает личные входящие сотрудника (на любой
@@ -1823,27 +1838,33 @@ export function AssignedToMeBlock({
       </div>
     ) : null;
 
-  // Строка управления (дизайн C4): заголовок страницы, «Мои / Для всех», люди, поиск,
-  // фильтры и действия страницы — одной строкой над доской.
-  // Телефон: заголовок с иконками (лупа, фильтры, выделение) — отдельной строкой; вкладки и
-  // люди — одной лентой, которая листается вбок, а не переносится в три строки; поле поиска
-  // появляется по лупе (и остаётся, пока в нём есть текст).
+  // Строка управления (дизайн C4): заголовок, «Мои / Все», люди, поиск, фильтры и действия
+  // страницы — одной строкой над доской; чьи задачи и люди читаются как одна лента «кто».
+  // Телефон: заголовок с иконками (фильтры, выделение) — первой строкой; под ней лента
+  // «кто»: чипы «Мои / Все» стоят на месте, люди листаются вбок и растворяются у края.
+  // Поле поиска появляется по лупе (и остаётся, пока в нём есть текст).
   const searchVisible = searchOpen || query !== '';
+  const whoDivider = people ? <span aria-hidden className="h-5 w-px shrink-0 bg-border" /> : null;
   const headRow = isWide ? (
-    <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-2 gap-y-2">
       {heading}
       {hasAny && tabsOrFocus}
+      {hasAny && whoDivider}
       {hasAny && people}
-      <span className="flex-1" />
-      {hasAny && <InboxSearch value={query} onChange={setQuery} className="w-60" />}
-      <div className="flex items-center gap-1">
-        {filtersPopover}
-        {actions}
+      {/* Поиск и действия — одна группа у правого края: поиск ужимается (176…240px), пока
+          группа помещается в строку, а если нет — она переносится целиком и остаётся
+          справа, а не рассыпается кнопками под заголовком. */}
+      <div className="flex min-w-0 flex-[1_1_auto] items-center justify-end gap-1">
+        {hasAny && <InboxSearch value={query} onChange={setQuery} className="me-1 min-w-0 max-w-60 flex-[1_1_11rem]" />}
+        <div className="flex shrink-0 items-center gap-1">
+          {filtersPopover}
+          {actions}
+        </div>
       </div>
     </div>
   ) : (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex min-h-10 items-center gap-1">
+    <div className="flex flex-col gap-3">
+      <div className="flex min-h-11 items-center gap-1">
         {heading}
         <span className="flex-1" />
         {hasLocalFilters && <button type="button" onClick={resetFilters} aria-label="Сбросить фильтры" title="Сбросить фильтры"
@@ -1854,9 +1875,11 @@ export function AssignedToMeBlock({
         {actions}
       </div>
       {hasAny && (
-        <div ref={inboxHeadRef} className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 max-w-[55%] shrink-0">{tabsOrFocus}</div>
-          <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1 px-1 pf-scrollbar-hide">{people}</div>
+        <div ref={inboxHeadRef} className={cn('flex min-h-11 min-w-0 gap-2', dragActive ? 'items-start' : 'items-center')}>
+          <div className={cn('shrink-0', focusedMember && 'min-w-0 max-w-[62%]')}>{tabsOrFocus}</div>
+          {whoDivider && !dragActive && whoDivider}
+          {/* p-1 -m-1: room for the focus ring, which the scroll box would clip. */}
+          {people && <EdgeFadeScroller className="-m-1 min-w-0 flex-1 p-1">{people}</EdgeFadeScroller>}
         </div>
       )}
     </div>
@@ -2311,14 +2334,16 @@ export function AssignedToMeBlock({
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
     // прокручивалась выше неё.
-    <section id={regionId} className={cn('flex flex-col gap-3', !isWide && 'gap-2.5 pbe-20')}>
+    <section id={regionId} className={cn('flex flex-col gap-3', !isWide && 'pbe-20')}>
       {headRow}
 
-      {/* Нулевая метка над переключателем; -mbe-2.5 гасит лишний зазор колонки. */}
-      {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-2.5" />}
+      {/* Нулевая метка над переключателем; -mbe-3 гасит лишний зазор колонки. */}
+      {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-3" />}
       {!isWide && (
         // Липнет к верху при прокрутке: раздел переключается, не возвращаясь наверх.
-        <div className="sticky inset-bs-0 z-20 -mx-4 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
+        // py-1.5 — воздух над переключателем, когда он прилип; -my-1.5 убирает эти же 6px
+        // из потока, чтобы зазоры до соседних строк остались теми же 12px, что везде.
+        <div className="sticky inset-bs-0 z-20 -mx-4 -my-1.5 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <InboxSectionSwitch
               className="min-w-0 flex-1"
@@ -3785,15 +3810,36 @@ function DraggableTask({
   );
 }
 
-// Участник пространства = drop-цель смены ответственного (дизайн C4: ряд аватаров рядом с
-// вкладками). В покое — аватар 30px с карточкой по наведению; фиолетовая точка — у человека
-// есть сданная работа. Во время drag'а аватар раскрывается в плитку с именем — большую цель,
-// в которую легко попасть (задача 3a36e7e8); под курсором подпись меняется на «Назначить».
+// Чипы ленты «кто» («Мои / Все» и люди): одна высота и одно скругление, выбранный —
+// инвертированный (тёмный на светлой теме, светлый на тёмной), чтобы «чьи задачи сейчас
+// на экране» читалось с первого взгляда и не путалось с чипами срока (те — про фильтр).
+const SCOPE_CHIP_CLASS =
+  'inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-ui transition-colors md:h-7 md:px-2.5 md:text-meta';
+const SCOPE_CHIP_ON_CLASS = 'border-foreground bg-foreground font-semibold text-background';
+const SCOPE_CHIP_OFF_CLASS =
+  'border-border font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active';
+
+// Плитка-цель на время перетаскивания: крупная, с именем, под курсором — действие.
+const DROP_TILE_CLASS =
+  'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]';
+const dropTileTone = (isOver: boolean): string =>
+  isOver
+    ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
+    : 'border-dashed border-primary/50 bg-primary-soft';
+
+// Участник пространства = drop-цель смены ответственного и чип ленты «кто» (дизайн C4).
+// В покое — чип: на десктопе аватар с именем, на телефоне (compact) — один аватар, а имя
+// раскрывается у выбранного: так в строке рядом с «Мои / Все» помещается вся небольшая
+// команда. Фиолетовая точка — у человека есть сданная работа. Во время drag'а чип
+// раскрывается в плитку с именем — большую цель, в которую легко попасть (задача 3a36e7e8);
+// под курсором подпись меняется на «Назначить».
 // filterActive/onToggleFilter — клик переключает состояние, за которое отвечает вызывающий:
 // у руководителя пространства это открытая доска входящих сотрудника, у остальных на
-// вкладке «Для всех» — single-фильтр «кому» (спека 2026-07-13).
+// вкладке «Все» — single-фильтр «кому» (спека 2026-07-13).
 function UserCube({
   member,
+  shortLabel,
+  compact = false,
   dragging,
   hasApproval = false,
   filterActive = false,
@@ -3801,6 +3847,10 @@ function UserCube({
   hint,
 }: {
   member: SharedMember;
+  // Короткое имя для чипа (shortUserLabels); полное остаётся в aria-label и подсказке.
+  shortLabel: string;
+  // Телефон: без имени, пока человек не выбран.
+  compact?: boolean;
   dragging: boolean;
   hasApproval?: boolean;
   filterActive?: boolean;
@@ -3812,15 +3862,7 @@ function UserCube({
   const label = userLabel(member);
   if (dragging) {
     return (
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]',
-          isOver
-            ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
-            : 'border-dashed border-primary/50 bg-primary-soft',
-        )}
-      >
+      <div ref={setNodeRef} className={cn(DROP_TILE_CLASS, dropTileTone(isOver))}>
         <UserAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} className="size-6 text-2xs" />
         <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : label}</span>
       </div>
@@ -3828,6 +3870,7 @@ function UserCube({
   }
   // Клик-фильтр доступен только когда проп передан (см. место рендера).
   const clickable = !!onToggleFilter;
+  const named = !compact || filterActive;
   return (
     <div
       ref={setNodeRef}
@@ -3847,41 +3890,51 @@ function UserCube({
           : undefined
       }
       className={cn(
-        'flex w-16 shrink-0 flex-col items-center gap-1 rounded-lg transition-shadow',
-        clickable && 'cursor-pointer active:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-        filterActive && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+        'inline-flex h-11 shrink-0 items-center rounded-lg border text-ui transition-colors md:h-7 md:text-meta',
+        named ? 'gap-1.5 pe-3 ps-1 md:gap-1.5 md:pe-2 md:ps-[3px]' : 'w-11 justify-center',
+        filterActive
+          ? SCOPE_CHIP_ON_CLASS
+          : cn(
+              'font-medium text-muted-foreground',
+              // Телефон: в покое рамки нет — ряд аватаров и так читается как лента.
+              compact ? 'border-transparent' : 'border-border',
+              clickable && 'hover:bg-hover hover:text-foreground active:bg-active',
+            ),
+        clickable &&
+          'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
       )}
     >
-      <span className="relative inline-flex">
+      <span className="relative inline-flex shrink-0">
         <UserAvatarHover
           displayName={label}
           avatarUrl={member.avatarUrl}
           subtitle={`участник пространства. Перетащите сюда задачу, чтобы назначить${
             hint ? `. ${hint}` : ''
           }`}
-          triggerClassName={cn('size-9 text-2xs sm:size-[30px]', clickable && 'cursor-pointer')}
+          triggerClassName={cn('size-9 text-2xs md:size-5 md:text-[9px]', clickable && 'cursor-pointer')}
         />
         {hasApproval && (
           <span
             aria-hidden
-            className="absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 ring-background"
+            className={cn(
+              'absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 md:size-2 md:ring-[1.5px]',
+              filterActive ? 'ring-foreground' : 'ring-background',
+            )}
           />
         )}
       </span>
-      <span className="block max-w-full break-words text-center text-2xs text-muted-foreground">{label}</span>
+      {named && <span className="max-w-[7rem] truncate">{shortLabel}</span>}
     </div>
   );
 }
 
-// Своя ава = drop-цель «забрать себе» — первая в ряду людей. В покое — обычный аватар;
-// во время drag'а — плитка «Себе», под курсором — «Забрать себе». Дроп сюда идёт по тому же
+// Своя плитка = drop-цель «забрать себе» — первая в ряду людей, только на время
+// перетаскивания: «Себе», под курсором — «Забрать себе». Дроп сюда идёт по тому же
 // type:'user' с member.id === user.id (см. handleDragEnd).
-function SelfDropAvatar({
+function SelfDropTile({
   user,
-  dragging,
 }: {
   user: { id: string; displayName: string; email: string; avatarUrl?: string | null };
-  dragging: boolean;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
     id: `user-${user.id}`,
@@ -3890,32 +3943,10 @@ function SelfDropAvatar({
       member: { id: user.id, displayName: userLabel(user), email: user.email, avatarUrl: user.avatarUrl ?? null },
     },
   });
-  if (dragging) {
-    return (
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]',
-          isOver
-            ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
-            : 'border-dashed border-primary/50 bg-primary-soft',
-        )}
-      >
-        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-6 text-2xs" />
-        <span className="whitespace-nowrap font-medium">{isOver ? 'Забрать себе' : 'Себе'}</span>
-      </div>
-    );
-  }
   return (
-    <div ref={setNodeRef} className="flex w-16 shrink-0 flex-col items-center gap-1" title={userLabel(user)}>
-      <UserAvatarHover
-        displayName={userLabel(user)}
-        avatarUrl={user.avatarUrl}
-        you
-        subtitle="перетащите сюда задачу, чтобы забрать себе"
-        triggerClassName="size-9 text-2xs sm:size-[30px]"
-      />
-      <span className="block max-w-full break-words text-center text-2xs text-muted-foreground">{userLabel(user)}</span>
+    <div ref={setNodeRef} className={cn(DROP_TILE_CLASS, dropTileTone(isOver))}>
+      <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-6 text-2xs" />
+      <span className="whitespace-nowrap font-medium">{isOver ? 'Забрать себе' : 'Себе'}</span>
     </div>
   );
 }
@@ -4091,8 +4122,8 @@ export function AssigneeConfirmDialog({
   );
 }
 
-// Вкладки блока ответственных: «Мои» / «Все» — переключатель в стиле C4: серая
-// подложка, выбранная вкладка — белая плашка (в тёмной теме — приподнятая графитовая).
+// Чьи задачи: «Мои» / «Все» — два чипа в начале ленты «кто», в одном ряду с людьми и
+// той же формы. Выбранный — инвертированный (SCOPE_CHIP_ON_CLASS).
 function AssigneeTabs({
   tab,
   onChange,
@@ -4109,14 +4140,7 @@ function AssigneeTabs({
   return (
     // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
     // стрелочной навигации — вместо ложной семантики честные toggle-кнопки (aria-pressed).
-    <div
-      role="group"
-      aria-label="Чьи задачи"
-      className={cn(
-        'flex min-w-0 items-center rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel',
-        className,
-      )}
-    >
+    <div role="group" aria-label="Чьи задачи" className={cn('flex min-w-0 items-center gap-1.5', className)}>
       <TabButton
         active={tab === 'toMe'}
         label="Мои"
@@ -4149,16 +4173,10 @@ function TabButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={cn(
-        // min-w-0 — на 320px подпись ужимается truncate'ом, а не вылезает из бокса.
-        'inline-flex h-11 min-w-0 items-center justify-center gap-1 rounded-md px-2 text-ui transition-colors md:h-7',
-        active
-          ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
-          : 'font-medium text-muted-foreground hover:text-foreground',
-      )}
+      className={cn(SCOPE_CHIP_CLASS, active ? SCOPE_CHIP_ON_CLASS : SCOPE_CHIP_OFF_CLASS)}
     >
       <span className="truncate">{label}</span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+      <span className={cn('shrink-0 font-medium tabular-nums', active ? 'opacity-70' : 'text-muted-foreground')}>{count}</span>
     </button>
   );
 }

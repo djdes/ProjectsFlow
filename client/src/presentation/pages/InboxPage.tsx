@@ -124,10 +124,9 @@ export function InboxPage({
       </PageTopBar>}
 
       {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
-          ответственных текущего пространства: название пространства, вкладки, люди и поиск
-          он ставит в одну строку сам. */}
+          ответственных текущего пространства: заголовок, «Мои / Все», людей и поиск он
+          ставит в одну строку сам. */}
       <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9'}>
-        {!embedded && <PageTitle>Задачи пространства</PageTitle>}
         <AssignedToMeBlock
           regionId={embedded ? `workspace-board-${workspace?.id}` : undefined}
           initialTab={embedded ? 'toMe' : undefined}
@@ -135,7 +134,13 @@ export function InboxPage({
           boardTasks={boardTasks}
           inboxProjectId={project.id}
           onChanged={() => void reloadInboxTasks(project.id)}
-          heading={<CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />}
+          // Своя страница — заголовок страницы прямо в строке управления: название
+          // пространства уже стоит в крошках (на телефоне — в шапке приложения), отдельная
+          // строка с ним только повторяла его и отодвигала задачи вниз. На «Всех задачах»
+          // блоков несколько, там заголовок блока — его пространство.
+          heading={embedded
+            ? <CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />
+            : <PageTitle className="me-1">Задачи пространства</PageTitle>}
           actions={
             <>
               {/* Выделение задач блока: режим включается сразу во всех его колонках, в шапке
@@ -179,8 +184,8 @@ export function InboxPage({
   );
 }
 
-// Заголовок первого блока — текущее пространство. Тот же вид, что у блоков других
-// пространств ниже, чтобы страница читалась как список пространств.
+// Заголовок блока на «Всех задачах» — его пространство: страница читается как список
+// пространств.
 function CurrentWorkspaceHeading({ name, icon }: { name: string; icon: string | null }): React.ReactElement {
   return (
     <h2 className="me-1 flex min-w-0 items-center gap-2 text-base font-semibold">
