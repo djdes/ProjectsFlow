@@ -47,6 +47,7 @@ const InboxPage = page(() => import('@/presentation/pages/InboxPage'), 'InboxPag
 const AllWorkspaceTasksPage = page(() => import('@/presentation/pages/AllWorkspaceTasksPage'), 'AllWorkspaceTasksPage');
 const AiPage = page(() => import('@/presentation/pages/AiPage'), 'AiPage');
 const ProfilePage = page(() => import('@/presentation/pages/ProfilePage'), 'ProfilePage');
+const DesktopNotesPage = page(() => import('@/presentation/pages/DesktopNotesPage'), 'DesktopNotesPage');
 const WorkspaceSettingsPage = page(
   () => import('@/presentation/pages/WorkspaceSettingsPage'),
   'WorkspaceSettingsPage',
@@ -156,6 +157,7 @@ export const router = createBrowserRouter(
       // Отдельная страница задачи (кнопка «развернуть на весь экран» в дровере).
       { path: 'projects/:projectId/tasks/:taskId', element: el(<TaskDetailPage />) },
       { path: 'profile', element: el(<ProfilePage />) },
+      { path: 'desktop-notes', element: el(<DesktopNotesPage />) },
       { path: 'workspaces/:workspaceId/settings', element: el(<WorkspaceSettingsPage />) },
       {
         path: 'admin',

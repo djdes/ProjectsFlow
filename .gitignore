@@ -19,6 +19,9 @@ coverage/
 .parcel-cache/
 .pm2/
 .deploy/
+.notes-build/
+desktop/notes/bin/
+desktop/notes/obj/
 # Astro auto-generated types
 */.astro/
 # Claude Code state

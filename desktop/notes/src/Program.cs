@@ -1,0 +1,105 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+
+namespace ProjectsFlowNotes
+{
+    internal static class Program
+    {
+        [STAThread]
+        private static int Main(string[] args)
+        {
+            // WPF на .NET Framework 4.8 масштабируется под каждый монитор только с этим переключателем.
+            AppContext.SetSwitch("Switch.System.Windows.DoNotScaleForDpiChanges", false);
+            bool Has(string flag) => args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
+            string After(string flag)
+            {
+                var i = Array.FindIndex(args, a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
+                return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+            }
+
+            try
+            {
+                if (After("--make-icon") is string icoPath)
+                {
+                    IconFactory.WriteIco(icoPath);
+                    return 0;
+                }
+                if (After("--preview") is string pngPath)
+                {
+                    RenderPreview(pngPath);
+                    return 0;
+                }
+                if (Has("--uninstall"))
+                {
+                    SingleInstance.AskRunningToQuit();
+                    var answer = MessageBox.Show("Удалить «ProjectsFlow Заметки» с этого компьютера?", "ProjectsFlow Заметки",
+                        MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (answer == MessageBoxResult.Yes) Installer.Uninstall();
+                    return 0;
+                }
+
+                Updater.CleanupOld();
+                if (!Installer.EnsureInstalled()) return 0;
+
+                var restarted = Has("--updated") || Has("--installed");
+                if (!SingleInstance.TryAcquire(waitForPrevious: restarted))
+                {
+                    SingleInstance.SignalShow();
+                    return 0;
+                }
+
+                var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                application.DispatcherUnhandledException += (s, e) =>
+                {
+                    Log.Write("unhandled: " + e.Exception);
+                    e.Handled = true;
+                };
+                AppDomain.CurrentDomain.UnhandledException += (s, e) => Log.Write("fatal: " + e.ExceptionObject);
+                var app = new App(application);
+                application.Startup += (s, e) => app.Start(welcome: Has("--installed"));
+                application.Run();
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Log.Write("startup failed: " + e);
+                MessageBox.Show("Не удалось запустить «ProjectsFlow Заметки»: " + e.Message, "ProjectsFlow Заметки",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return 1;
+            }
+        }
+
+        // Картинка с несколькими стикерами — проверить вид без запуска приложения.
+        private static void RenderPreview(string path)
+        {
+            var samples = new[]
+            {
+                (new NoteDto { TaskId = "1", ProjectName = "Wesetup", Title = "Исправить сохранение реквизитов клиента Wesetup", Excerpt = "Исправить сохранение реквизитов в карточке клиента, сейчас сбрасывается ИНН", Status = "manual", StatusLabel = "В работе", Deadline = DateTime.Today.ToString("yyyy-MM-dd") }, "yellow"),
+                (new NoteDto { TaskId = "2", ProjectName = "Личные", Title = "Обсудить выбор NVMe для сервера Dell", Excerpt = "", Status = "todo", StatusLabel = "Воркер", Deadline = DateTime.Today.AddDays(-2).ToString("yyyy-MM-dd") }, "pink"),
+                (new NoteDto { TaskId = "3", ProjectName = "OrdersFlow", Title = "SEO: семантика и стратегия статей", Excerpt = "Провести SEO-анализ под Google: собрать семантику", Status = "done", StatusLabel = "Готово", Deadline = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd") }, "green"),
+                (new NoteDto { TaskId = "4", ProjectName = "DocsFlow", Title = "Протестировать бота DocsFlow", Excerpt = "", Status = "backlog", StatusLabel = "Черновики", Deadline = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd") }, "blue"),
+            };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x31)) };
+            foreach (var (note, color) in samples)
+            {
+                var v = new NoteView(interactive: false) { Margin = new Thickness(16), VerticalAlignment = VerticalAlignment.Top };
+                v.Render(note, color);
+                row.Children.Add(v);
+            }
+            row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            row.Arrange(new Rect(row.DesiredSize));
+            row.UpdateLayout();
+            const double scale = 2;
+            var rtb = new RenderTargetBitmap((int)(row.ActualWidth * scale), (int)(row.ActualHeight * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            rtb.Render(row);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(rtb));
+            using (var fs = File.Create(path)) enc.Save(fs);
+        }
+    }
+}

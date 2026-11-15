@@ -17,6 +17,7 @@ import { HttpInviteRepository } from "@/infrastructure/http/HttpInviteRepository
 import { HttpNotificationRepository } from "@/infrastructure/http/HttpNotificationRepository";
 import { HttpAgentTokenRepository } from "@/infrastructure/http/HttpAgentTokenRepository";
 import { HttpAgentDeviceRepository } from "@/infrastructure/http/HttpAgentDeviceRepository";
+import { HttpDesktopNotesRepository } from "@/infrastructure/http/HttpDesktopNotesRepository";
 import { HttpAiPromptRepository } from "@/infrastructure/http/HttpAiPromptRepository";
 import { HttpAutomationRepository } from "@/infrastructure/http/HttpAutomationRepository";
 import { HttpWorkflowRepository } from "@/infrastructure/http/HttpWorkflowRepository";
@@ -76,6 +77,7 @@ import type { InviteRepository } from "@/application/project/InviteRepository";
 import type { NotificationRepository } from "@/application/notifications/NotificationRepository";
 import type { AgentTokenRepository } from "@/application/agent/AgentTokenRepository";
 import type { AgentDeviceRepository } from "@/application/agent/AgentDeviceRepository";
+import type { DesktopNotesRepository } from "@/application/desktop-notes/DesktopNotesRepository";
 import type { AdminRepository } from "@/application/admin/AdminRepository";
 import type { LlmAdminRepository } from "@/application/llm/LlmAdminRepository";
 import type { MailingRepository } from "@/application/mailing/MailingRepository";
@@ -138,6 +140,7 @@ type Container = {
   notificationRepository: NotificationRepository;
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
+  desktopNotesRepository: DesktopNotesRepository;
   adminRepository: AdminRepository;
   // Подписка ChatGPT платформы: вход по коду, статус, очереди на сервере (только админ).
   llmAdminRepository: LlmAdminRepository;
@@ -246,6 +249,7 @@ function buildContainer(): Container {
     notificationRepository: notificationRepo,
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
+    desktopNotesRepository: new HttpDesktopNotesRepository(),
     adminRepository: adminRepo,
     llmAdminRepository: new HttpLlmAdminRepository(),
     mailingRepository: new HttpMailingRepository(),

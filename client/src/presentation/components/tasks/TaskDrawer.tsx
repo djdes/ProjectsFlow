@@ -88,6 +88,7 @@ import { TaskHeaderMedia, type TaskMediaPatch } from './TaskHeaderMedia';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
+import { PinToScreenButton } from '@/presentation/components/desktop-notes/PinToScreenButton';
 import { STATUS_LABEL } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useMobileSheet } from '@/components/ui/mobile-sheet';
@@ -1667,6 +1668,7 @@ export function TaskDrawer({
       <span className={cn('inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-2xs font-medium', STATUS_BADGE_COLOR[task.status])}>
         {STATUS_LABEL[task.status]}
       </span>
+      <PinToScreenButton taskId={task.id} />
       {/* Копирование ссылки подтверждаем после успешной записи в буфер обмена. */}
       <Button
         variant="ghost"
