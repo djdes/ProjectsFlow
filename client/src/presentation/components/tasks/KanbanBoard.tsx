@@ -145,6 +145,10 @@ type Props = {
   viewFilters?: ViewFilters;
   viewSort?: ViewSort | null;
   canEdit?: boolean;
+  // Columns (rename, colour, hide, add/delete) and automation belong to the project's own
+  // workspace: a guest of a shared project (db/182) works with tasks but cannot manage
+  // the board. undefined — same as canEdit.
+  canManageColumns?: boolean;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -292,7 +296,9 @@ export function KanbanBoard({
   viewFilters,
   viewSort = null,
   canEdit = true,
+  canManageColumns: canManageColumnsProp,
 }: Props): React.ReactElement {
+  const canManageColumns = canEdit && (canManageColumnsProp ?? true);
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const moveWithUndo = useTaskMoveUndo(projectId, tasks, move);
   const { user } = useCurrentUser();
@@ -1222,7 +1228,7 @@ export function KanbanBoard({
         <div className="mbe-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
           <p className="text-sm text-muted-foreground">
             {canEdit
-              ? `Проект пуст — создайте первую задачу${onOpenAutomation ? ' или включите автоматизацию' : ''}.`
+              ? `Проект пуст — создайте первую задачу${canManageColumns && onOpenAutomation ? ' или включите автоматизацию' : ''}.`
               : 'В проекте пока нет задач.'}
           </p>
           <div className="flex items-center gap-1.5">
@@ -1230,7 +1236,7 @@ export function KanbanBoard({
               <Plus className="size-3.5" />
               Создать задачу
             </Button>}
-            {canEdit && onOpenAutomation && (
+            {canManageColumns && onOpenAutomation && (
               <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAutomation}>
                 <Bot className="size-3.5" />
                 Автоматизация
@@ -1372,7 +1378,7 @@ export function KanbanBoard({
                 liveTaskIds={liveTaskIds}
                 colorClasses={KANBAN_COLOR_CLASSES[color]}
                 onRename={
-                  canEdit && !approvalColumn && label.length > 0
+                  canManageColumns && !approvalColumn && label.length > 0
                     ? (l) => setLabel(status as KanbanColumnStatus, l)
                     : undefined
                 }
@@ -1418,7 +1424,7 @@ export function KanbanBoard({
                     ? () => enterSelection(status as KanbanColumnStatus)
                     : undefined
                 }
-                columnMenu={canEdit && !approvalColumn ? (
+                columnMenu={canManageColumns && !approvalColumn ? (
                   <KanbanColumnMenu
                     status={status as KanbanColumnStatus}
                     currentColor={color}
@@ -1488,7 +1494,7 @@ export function KanbanBoard({
           />
           {/* Своя колонка проекта (db/154). В личных «Входящих» не нужна: там доска
               персональная и без командного процесса. */}
-          {canEdit && !isInbox && (
+          {canManageColumns && !isInbox && (
             <KanbanAddColumnButton
               activeCount={activeCustomSlots(settings).length}
               onCreate={createColumn}

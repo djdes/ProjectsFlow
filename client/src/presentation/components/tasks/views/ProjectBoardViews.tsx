@@ -153,7 +153,10 @@ type Props = {
   projectId: string;
   projectName?: string;
   memberCount?: number;
+  // Work with tasks: create, move, complete, edit.
   canEdit?: boolean;
+  // Manage the board: views, columns, automation. undefined — same as canEdit.
+  canManage?: boolean;
   onOpenAutomation?: () => void;
   // Full-bleed классы канбана (см. KanbanBoard) — остальные виды обычной ширины.
   bleedNegClass?: string;
@@ -230,6 +233,7 @@ export function ProjectBoardViews({
   projectName,
   memberCount,
   canEdit = true,
+  canManage: canManageProp,
   onOpenAutomation,
   bleedNegClass = '',
   bleedPadClass = '',
@@ -238,6 +242,9 @@ export function ProjectBoardViews({
   const navigate = useNavigate();
   // Гость общего проекта (db/182) ведёт задачи, а Студия (сайт проекта) — за основным пространством.
   const guestProject = useOptionalProjectsContext()?.data?.find((p) => p.id === projectId)?.guest === true;
+  // Views, columns and automation stay with the project's own workspace: a guest of a
+  // shared project (db/182) creates and moves tasks but does not manage the board.
+  const canManage = canEdit && (canManageProp ?? true) && !guestProject;
   const rightPanelWidth = useRightPanelWidth();
   const storageKey = `pf:board-view:${projectId}`;
   const [views, setViews] = useState<BoardView[] | null>(null);
@@ -462,7 +469,7 @@ export function ProjectBoardViews({
   // Автосохранение конфига активной вью на сервер (debounce; query не сохраняем).
   const lastSavedRef = useRef<Record<string, string>>({});
   useEffect(() => {
-    if (!canEdit) return;
+    if (!canManage) return;
     if (activeId === DEFAULT_VIEW_ID) return;
     if (!views?.some((v) => v.id === activeId)) return;
     const st = perView[activeId];
@@ -482,7 +489,7 @@ export function ProjectBoardViews({
         .catch(() => undefined);
     }, 800);
     return () => window.clearTimeout(t);
-  }, [perView, activeId, views, boardViewRepository, projectId, canEdit]);
+  }, [perView, activeId, views, boardViewRepository, projectId, canManage]);
   const setFilters = (patch: Partial<ViewFilters>): void => {
     setPerView((prev) => ({
       ...prev,
@@ -510,7 +517,7 @@ export function ProjectBoardViews({
     }));
 
   const handleCreate = async (name: string, type: BoardViewType): Promise<void> => {
-    if (!canEdit) {
+    if (!canManage) {
       toast.info('Наблюдатель может просматривать проект, но не менять представления.');
       return;
     }
@@ -528,7 +535,7 @@ export function ProjectBoardViews({
   // Drag-reorder вкладок в окне «ещё…»: оптимистично переставляем локально,
   // затем PATCH sortOrder только изменившимся вью.
   const handleReorder = (orderedIds: string[]): void => {
-    if (!canEdit) return;
+    if (!canManage) return;
     const current = views ?? [];
     const byId = new Map(current.map((v) => [v.id, v]));
     const next = orderedIds
@@ -555,7 +562,7 @@ export function ProjectBoardViews({
     view: BoardView,
     patch: { name?: string; type?: BoardViewType },
   ): Promise<void> => {
-    if (!canEdit) return;
+    if (!canManage) return;
     try {
       const updated = await boardViewRepository.update(projectId, view.id, patch);
       setViews((prev) => (prev ?? []).map((v) => (v.id === view.id ? updated : v)));
@@ -566,7 +573,7 @@ export function ProjectBoardViews({
   };
 
   const handleDuplicate = async (view: BoardView): Promise<void> => {
-    if (!canEdit) return;
+    if (!canManage) return;
     try {
       const copy = await boardViewRepository.duplicate(projectId, view.id);
       setViews((prev) => [...(prev ?? []), copy]);
@@ -577,7 +584,7 @@ export function ProjectBoardViews({
   };
 
   const handleDelete = async (view: BoardView): Promise<void> => {
-    if (!canEdit) return;
+    if (!canManage) return;
     try {
       await boardViewRepository.remove(projectId, view.id);
       setViews((prev) => (prev ?? []).filter((v) => v.id !== view.id));
@@ -888,7 +895,7 @@ export function ProjectBoardViews({
                 <Settings2 className="size-4" />
                 Настройки отображения
               </DropdownMenuItem>
-              {canEdit && (
+              {canManage && (
                 <>
                   <DropdownMenuItem
                     className="gap-2"
@@ -994,7 +1001,7 @@ export function ProjectBoardViews({
             display={displayFor(DEFAULT_VIEW_ID)}
             active={activeId === DEFAULT_VIEW_ID}
             onSelect={() => selectView(DEFAULT_VIEW_ID)}
-            menu={canEdit ? defaultTabMenuEntries() : undefined}
+            menu={canManage ? defaultTabMenuEntries() : undefined}
             renameOpen={boardRenameOpen}
             onRenameClose={() => setBoardRenameOpen(false)}
             onRenameSubmit={renameBoard}
@@ -1007,7 +1014,7 @@ export function ProjectBoardViews({
               display={displayFor(v.id)}
               active={activeId === v.id}
               onSelect={() => selectView(v.id)}
-              menu={canEdit ? tabMenuEntries(v) : undefined}
+              menu={canManage ? tabMenuEntries(v) : undefined}
               renameOpen={renameTarget?.id === v.id}
               onRenameClose={() => setRenameTarget(null)}
               onRenameSubmit={(name) => void handleUpdate(v, { name })}
@@ -1027,10 +1034,10 @@ export function ProjectBoardViews({
               boardMenu={defaultTabMenuEntries()}
               iconFor={(v) => perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
               onCreate={(t) => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
-              canManage={canEdit}
+              canManage={canManage}
               label={`ещё ${hiddenViews.length}…`}
             />
-          ) : canEdit ? (
+          ) : canManage ? (
             /* «+» — только при наведении на строку вкладок (Notion): попап «Начать
                с нуля», клик по типу сразу создаёт вью с именем типа. */
             <Popover>
@@ -1084,7 +1091,7 @@ export function ProjectBoardViews({
           <div className="hidden items-center gap-0.5 md:flex">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
             <SortMenu sort={state.sort} onChange={setSort} />
-            {canEdit && onOpenAutomation && (
+            {canManage && onOpenAutomation && (
               <ToolbarIcon label="Автоматизации" onClick={onOpenAutomation}>
                 <Zap className="size-4" />
               </ToolbarIcon>
@@ -1298,6 +1305,7 @@ export function ProjectBoardViews({
           viewFilters={state.filters}
           viewSort={state.sort}
           canEdit={canEdit}
+          canManageColumns={canManage}
         />
       ) : activeType === 'table' ? (
         <TableView
@@ -1377,7 +1385,7 @@ export function ProjectBoardViews({
             <ViewSettingsCard
               view={active}
               focusName={settingsFocusName}
-              canEdit={canEdit}
+              canEdit={canManage}
               onClose={() => setPanel(null)}
               onRename={(name) => void handleUpdate(active, { name })}
               onType={(type) => void handleUpdate(active, { type })}
@@ -1412,7 +1420,7 @@ export function ProjectBoardViews({
                 createdAt: new Date(),
               }}
               focusName={settingsFocusName}
-              canEdit={canEdit}
+              canEdit={canManage}
               onClose={() => setPanel(null)}
               onRename={renameBoard}
               onType={(type) => {
