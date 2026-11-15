@@ -593,12 +593,13 @@ export function replyContextBlock(reply: TelegramReplyContext | null | undefined
 
 function withDefaultAttachmentTargets(
   attachments: readonly TelegramDraftAttachment[],
+  defaultTargets: readonly number[] = [0],
 ): TelegramDraftAttachment[] {
   return attachments.map((attachment) => {
     const targets = attachment.targetSegmentIndexes ?? [];
     return {
       ...attachment,
-      targetSegmentIndexes: targets.length > 0 ? [...new Set(targets)] : [0],
+      targetSegmentIndexes: targets.length > 0 ? [...new Set(targets)] : [...defaultTargets],
     };
   });
 }
@@ -606,6 +607,7 @@ function withDefaultAttachmentTargets(
 function appendNewAttachments(
   current: readonly TelegramDraftAttachment[],
   incoming: readonly TelegramDraftAttachment[],
+  segments: readonly TelegramDraftSegment[] | null = null,
 ): { readonly attachments: TelegramDraftAttachment[]; readonly added: number } {
   const attachments: TelegramDraftAttachment[] = current.map((attachment) => ({
     ...attachment,
@@ -613,7 +615,9 @@ function appendNewAttachments(
   }));
   const keys = new Set(attachments.map((attachment) => attachment.key));
   let added = 0;
-  for (const attachment of withDefaultAttachmentTargets(incoming)) {
+  for (const attachment of withDefaultAttachmentTargets(incoming,
+    segments ? segments.flatMap((segment, index) => segment.included ? [index] : []) : [0],
+  )) {
     if (keys.has(attachment.key)) continue;
     keys.add(attachment.key);
     attachments.push(attachment);
@@ -765,7 +769,7 @@ export class TelegramComposerService {
       }, fixerConfig);
       const existing = await this.deps.drafts.findBySourceKey(options.sourceKey);
       if (existing) {
-        const merged = appendNewAttachments(existing.attachments, attachments);
+        const merged = appendNewAttachments(existing.attachments, attachments, existing.segments);
         if (merged.added > 0) {
           if (existing.status === 'composing') {
             await this.deps.drafts.patchComposing(existing.id, {
@@ -832,7 +836,7 @@ export class TelegramComposerService {
         // A media group can straddle two getUpdates batches (or Telegram's batch limit). The
         // source key still identifies one task, but later album parts must be merged rather than
         // discarded as duplicate delivery. Replayed parts are deduplicated by stable file key.
-        const merged = appendNewAttachments(existing.attachments, attachments);
+        const merged = appendNewAttachments(existing.attachments, attachments, existing.segments);
         if (merged.added > 0 && existing.status === 'composing') {
           await this.deps.drafts.patchComposing(existing.id, { attachments: merged.attachments });
         }
@@ -1016,9 +1020,17 @@ export class TelegramComposerService {
         forceStatus === 'todo' ? draft.assigneeUserId ?? userId : parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
         // Без явного @ответственного — тот, что в черновике (из задачи, на которую ответили).
         parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId);
+      // Album parts may arrive during AI parsing. Use the latest draft, and initialize
+      // assignments only on the first split so resumed parsing preserves manual exclusions.
+      const current = await this.deps.drafts.getById(draft.id);
+      if (!current || current.status !== 'composing') return;
+      const defaultTargets = segments.flatMap((segment, index) => segment.included ? [index] : []);
       const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
+        ...(!current.segments ? { attachments: current.attachments.map(attachment => ({
+          ...attachment, targetSegmentIndexes: [...defaultTargets],
+        })) } : {}),
         aiStartedAt: null,
       });
       if (!patched) return;

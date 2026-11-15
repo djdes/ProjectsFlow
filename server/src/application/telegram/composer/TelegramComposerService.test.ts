@@ -1954,10 +1954,12 @@ test('5 задач и 2 файла: каждый файл назначается
     }
   }
 
-  // По умолчанию каждый файл назначен первой задаче. Первый оставляем в первой и
-  // добавляем ко второй и пятой: 1, 2, 5.
-  await h.service.handleCallback(cq(`fx:${draftId}:0:1:p0`));
-  await h.service.handleCallback(cq(`fx:${draftId}:0:4:p0`));
+  // По умолчанию оба файла назначены всем задачам. У первого снимаем третью
+  // и четвёртую, оставляя 1, 2, 5.
+  assert.deepEqual(h.drafts.get(draftId)!.attachments.map(file => file.targetSegmentIndexes),
+    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4]]);
+  await h.service.handleCallback(cq(`fx:${draftId}:0:2:p0`));
+  await h.service.handleCallback(cq(`fx:${draftId}:0:3:p0`));
 
   // Второй очищаем и назначаем второй и третьей: 2, 3.
   await h.service.handleCallback(cq(`fg:${draftId}:1:n:p0`));
@@ -2011,7 +2013,7 @@ test('быстрые параллельные нажатия распредел�
 
   assert.deepEqual(
     h.drafts.get(draftId)!.attachments.map((attachment) => attachment.targetSegmentIndexes),
-    [[0, 1], [0, 1]],
+    [[0], [0]],
   );
 });
 
@@ -2775,4 +2777,60 @@ test('CSharpFixer: missing group binding does not create a task or ask the DJ fo
       if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
     }
   }
+});
+
+
+const mediaFile = (key: string, kind: 'photo' | 'video' | 'document' = 'photo') => ({
+  key, kind, fileId: key, fileUniqueId: key, filename: `${key}.${kind === 'photo' ? 'jpg' : kind === 'video' ? 'mp4' : 'pdf'}`,
+  mimeType: kind === 'photo' ? 'image/jpeg' : kind === 'video' ? 'video/mp4' : 'application/pdf',
+  width: null, height: null, duration: null, fileSize: 10, targetSegmentIndexes: [],
+});
+
+test('фото, видео и документы по умолчанию прикрепляются ко всем распознанным задачам', async () => {
+  const h = makeHarness({ aiSegments: [seg1({ id: 's1', title: 'Первая' }), seg1({ id: 's2', title: 'Вторая' }), seg1({ id: 's3', title: 'Третья' })] });
+  await h.service.startFromMessage(111, 500, 'три задачи с медиа', undefined,
+    [mediaFile('photo'), mediaFile('video', 'video'), mediaFile('document', 'document')]);
+  const draft = [...h.drafts.values()][0]!;
+  assert.deepEqual(draft.attachments.map(file => file.targetSegmentIndexes), [[0, 1, 2], [0, 1, 2], [0, 1, 2]]);
+  await h.service.handleCallback(cq(`fs:${draft.id}:0:p0`));
+  const buttons = buttonTexts(h.edits.at(-1)!.replyMarkup);
+  for (let index = 1; index <= 3; index++) assert.ok(buttons.some(text => text.startsWith(`✅ ${index}.`)));
+  await h.service.handleCallback(cq(`fd:${draft.id}`));
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 3);
+  for (const taskId of ['t1', 't2', 't3']) {
+    assert.deepEqual(h.uploadedAttachments.filter(file => file.taskId === taskId).map(file => file.filename), ['photo.jpg', 'video.mp4', 'document.pdf']);
+  }
+  assert.deepEqual(h.downloadedFileIds.sort(), ['document', 'photo', 'video']);
+});
+
+test('позднее медиа назначается всем задачам, повтор альбома сохраняет ручные исключения', async () => {
+  const h = makeHarness({ aiSegments: [seg1({ id: 's1' }), seg1({ id: 's2' }), seg1({ id: 's3' })] });
+  const options = { sourceKey: 'g:500:media-all' };
+  await h.service.startFromMessage(111, 500, 'три задачи', undefined, [mediaFile('one'), mediaFile('two')], options);
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`fx:${draft.id}:0:1:p0`));
+  await h.service.handleCallback(cq(`fg:${draft.id}:1:n:p0`));
+  await h.service.startFromMessage(111, 500, 'три задачи', undefined, [mediaFile('one'), mediaFile('three')], options);
+  await h.service.startFromMessage(111, 500, 'три задачи', undefined, [mediaFile('three')], options);
+  assert.deepEqual(h.drafts.get(draft.id)!.attachments.map(file => file.targetSegmentIndexes), [[0, 2], [], [0, 1, 2]]);
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.deepEqual(h.uploadedAttachments.map(file => `${file.taskId}:${file.filename}`),
+    ['t1:one.jpg', 't1:three.jpg', 't2:three.jpg', 't3:one.jpg', 't3:three.jpg']);
+  assert.deepEqual(h.downloadedFileIds.sort(), ['one', 'three']);
+});
+
+test('части альбома, пришедшие во время ИИ-разбора, получают все задачи после разделения', async () => {
+  let release!: () => void;
+  const aiGate = new Promise<void>(resolve => { release = resolve; });
+  const h = makeHarness({ aiGate, aiSegments: [seg1({ id: 's1' }), seg1({ id: 's2' })] });
+  const options = { sourceKey: 'g:500:during-ai', background: true };
+  try {
+    await h.service.startFromMessage(111, 500, 'две задачи', undefined, [mediaFile('one')], options);
+    await h.service.startFromMessage(111, 500, 'две задачи', undefined, [mediaFile('two')], options);
+  } finally { release(); }
+  for (let i = 0; i < 100 && ![...h.drafts.values()][0]!.segments; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.segments?.length, 2);
+  assert.deepEqual(draft.attachments.map(file => file.targetSegmentIndexes), [[0, 1], [0, 1]]);
 });
