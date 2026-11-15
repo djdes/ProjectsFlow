@@ -12,7 +12,7 @@ import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Ta
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
-import { COLUMN_SCROLL_CLASS } from './ColumnPreview';
+import { CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS } from './ColumnPreview';
 import { TaskComposer } from './TaskComposer';
 import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { STATUS_SUBTITLE } from './statusLabels';
@@ -705,8 +705,9 @@ export function KanbanColumn({
         onPointerDown={selectionMode ? onDragSelectStart : undefined}
         className={cn(
           // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
-          // Дизайн C4: отступ 6px и зазор между карточками 5px — плотнее Notion.
-          'flex min-h-[4rem] flex-col gap-[5px] p-1.5 pbs-0.5 transition-colors',
+          // Дизайн C4: отступ 6px и зазор между карточками 5px — плотнее Notion (на телефоне 10px).
+          'flex min-h-[4rem] flex-col p-1.5 pbs-0.5 transition-colors',
+          CARD_STACK_GAP_CLASS,
           COLUMN_SCROLL_CLASS,
           // Телефон: колонка почти во всю ширину экрана, и почти любой вертикальный свайп
           // начинается внутри её списка. overscroll-contain запирал такой свайп в колонке —

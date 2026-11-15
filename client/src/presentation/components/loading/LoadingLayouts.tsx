@@ -45,16 +45,17 @@ export function InboxLoadingLayout({ heading }: { heading?: React.ReactNode }): 
       <span className="hidden md:contents">{title}</span>
       <Skeleton className="h-11 w-[132px] shrink-0 rounded-lg md:h-7 md:w-[126px]" />
       <PeopleSkeleton />
-      <div className="hidden min-w-0 flex-[1_1_auto] items-center justify-end gap-1 md:flex">
-        <Skeleton className="me-1 h-8 w-36 min-w-0 max-w-60 grow" />
-        <Skeleton className="h-8 w-[87px] shrink-0" /><Skeleton className="h-8 w-[97px] shrink-0" />
-      </div>
     </div>
     <div className="flex h-12 items-center gap-2 md:hidden">
       <Skeleton className="h-12 flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" />
     </div>
-    <div className="grid grid-cols-3 gap-1.5 md:flex">
+    {/* Desktop: search and page actions sit at the end of the due-chips row. */}
+    <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-wrap md:items-center">
       {['md:w-[115px]', 'md:w-[89px]', 'md:w-[98px]'].map((w) => <Skeleton key={w} className={cn('h-11 rounded-lg md:h-7', w)} />)}
+      <div className="hidden items-center gap-1 md:ms-auto md:flex">
+        <Skeleton className="me-1 h-8 w-44 2xl:w-60" />
+        <Skeleton className="h-8 w-[87px] shrink-0" /><Skeleton className="h-8 w-[97px] shrink-0" />
+      </div>
     </div>
     <BoardSkeleton shelf={false} now />
   </div>;
