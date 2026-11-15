@@ -3,10 +3,12 @@ import { z } from 'zod';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import {
   DesktopNotePinLimitError,
+  DesktopNoteStatusError,
   type DesktopNote,
   type DesktopNotesService,
 } from '../../application/desktop-notes/DesktopNotesService.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { TASK_STATUSES, type TaskStatus } from '../../domain/task/Task.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
@@ -15,6 +17,10 @@ type Deps = {
 };
 
 const taskIdSchema = z.string().uuid();
+const statusSchema = z.object({
+  status: z.enum(TASK_STATUSES as unknown as [TaskStatus, ...TaskStatus[]]),
+  restore: z.boolean().optional(),
+});
 const versionSchema = z.string().trim().max(32).regex(/^[0-9A-Za-z.+-]*$/u);
 
 const dto = (n: DesktopNote) => ({ ...n });
@@ -69,6 +75,20 @@ export function desktopNotesRouter(deps: Deps): Router {
     } catch (e) {
       if (e instanceof DesktopNotePinLimitError) {
         res.status(409).json({ error: 'pin_limit', message: e.message });
+        return;
+      }
+      next(e);
+    }
+  });
+
+  router.post('/:taskId/status', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { status, restore } = statusSchema.parse(req.body);
+      const note = await deps.service.setStatus(req.user!.id, taskIdSchema.parse(req.params['taskId']), status, restore ?? false);
+      res.json({ note: dto(note) });
+    } catch (e) {
+      if (e instanceof DesktopNoteStatusError) {
+        res.status(409).json({ error: 'status_change_failed', message: e.message });
         return;
       }
       next(e);

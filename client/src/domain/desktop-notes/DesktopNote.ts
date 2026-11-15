@@ -10,6 +10,8 @@ export type DesktopNote = {
   readonly excerpt: string;
   readonly status: TaskStatus;
   readonly statusLabel: string;
+  readonly statusOptions: ReadonlyArray<{ readonly status: TaskStatus; readonly label: string }>;
+  readonly canEdit: boolean;
   readonly deadline: string | null;
   readonly priority: TaskPriority | null;
   readonly path: string;

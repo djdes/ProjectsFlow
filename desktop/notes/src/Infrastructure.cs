@@ -90,6 +90,8 @@ namespace ProjectsFlowNotes
         public double X { get; set; }
         public double Y { get; set; }
         public string Color { get; set; }
+        // Непрозрачность в покое (0.3…1). Под курсором стикер всегда непрозрачный. null — 1.
+        public double? Opacity { get; set; }
     }
 
     public sealed class AppSettings

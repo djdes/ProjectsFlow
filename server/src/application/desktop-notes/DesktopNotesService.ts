@@ -2,7 +2,10 @@ import { InsufficientProjectRoleError, ProjectNotFoundError } from '../../domain
 import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
-import { STATUS_LABEL } from '../../domain/task/statusLabels.js';
+import { resolveStatusLabel } from '../../domain/task/statusLabels.js';
+import { activeCustomSlots, type KanbanBoardSettings } from '../../domain/kanban/KanbanSettings.js';
+import type { ProjectRepository } from '../project/ProjectRepository.js';
+import type { MoveTask } from '../task/MoveTask.js';
 import type { GetTask } from '../task/GetTask.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { DesktopNoteRepository } from './DesktopNoteRepository.js';
@@ -16,6 +19,9 @@ export type DesktopNote = {
   readonly excerpt: string;
   readonly status: TaskStatus;
   readonly statusLabel: string;
+  // Колонки доски проекта, в которые задачу можно перенести прямо со стикера.
+  readonly statusOptions: ReadonlyArray<{ readonly status: TaskStatus; readonly label: string }>;
+  readonly canEdit: boolean;
   readonly deadline: string | null;
   readonly priority: TaskPriority | null;
   readonly path: string;
@@ -36,11 +42,40 @@ export class DesktopNotePinLimitError extends Error {
 
 export const DESKTOP_NOTE_PIN_LIMIT = 30;
 
+export class DesktopNoteStatusError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DesktopNoteStatusError';
+  }
+}
+
 type Deps = {
   readonly repo: DesktopNoteRepository;
   readonly tasks: TaskRepository;
   readonly getTask: GetTask;
+  readonly projects?: Pick<ProjectRepository, 'getKanbanSettings'>;
+  readonly moveTask?: MoveTask;
+  // Те же оповещения, что у переноса задачи в интерфейсе: доска и колокольчик обновятся.
+  readonly notify?: {
+    readonly taskChanged: (projectId: string, extraUserIds?: readonly string[]) => void;
+    readonly statusChanged: (projectId: string, taskId: string, oldStatus: string, newStatus: string, actorUserId: string) => void;
+  };
 };
+
+const BUILT_IN: readonly TaskStatus[] = ['backlog', 'manual', 'todo', 'done'];
+
+// Колонки как на доске: встроенные (кроме скрытых), затем кастомные, «Готово» — последней.
+function statusOptions(settings: KanbanBoardSettings | null, current: TaskStatus): DesktopNote['statusOptions'] {
+  const builtIn = BUILT_IN.filter(
+    (s) => s === current || !settings?.[s as keyof KanbanBoardSettings]?.hidden,
+  );
+  const order: TaskStatus[] = [
+    ...builtIn.filter((s) => s !== 'done'),
+    ...activeCustomSlots(settings),
+    ...builtIn.filter((s) => s === 'done'),
+  ];
+  return order.map((status) => ({ status, label: resolveStatusLabel(settings, status) }));
+}
 
 const isAccessLoss = (e: unknown): boolean =>
   e instanceof TaskNotFoundError || e instanceof ProjectNotFoundError || e instanceof InsufficientProjectRoleError;
@@ -83,6 +118,33 @@ export class DesktopNotesService {
     return note;
   }
 
+  // Смена колонки со стикера — тот же перенос, что на доске.
+  // restore — снять «Готово»: задача вернётся в колонку, где была до выполнения.
+  async setStatus(userId: string, taskId: string, status: TaskStatus, restore = false): Promise<DesktopNote> {
+    const note = await this.read(userId, taskId);
+    if (!note) throw new TaskNotFoundError(taskId);
+    if (!this.deps.moveTask) throw new DesktopNoteStatusError('Смена статуса недоступна');
+    if (!note.canEdit) throw new DesktopNoteStatusError('У вас нет прав менять эту задачу');
+    if (!note.statusOptions.some((o) => o.status === status)) {
+      throw new DesktopNoteStatusError('Такой колонки нет на доске проекта');
+    }
+    if (status === note.status && !restore) return note;
+    const moved = await this.deps.moveTask.execute({
+      projectId: note.projectId,
+      ownerUserId: userId,
+      taskId,
+      targetStatus: status,
+      beforeTaskId: null,
+      afterTaskId: null,
+      restore: restore && note.status === 'done',
+    });
+    this.deps.notify?.taskChanged(note.projectId, [moved.assignee.userId]);
+    if (moved.status !== note.status) {
+      this.deps.notify?.statusChanged(note.projectId, taskId, note.status, moved.status, userId);
+    }
+    return (await this.read(userId, taskId)) ?? note;
+  }
+
   unpin(userId: string, taskId: string): Promise<void> {
     return this.deps.repo.unpin(userId, taskId);
   }
@@ -97,6 +159,7 @@ export class DesktopNotesService {
     if (!raw) return null;
     try {
       const task = await this.deps.getTask.execute(raw.projectId, userId, taskId);
+      const settings = (await this.deps.projects?.getKanbanSettings(task.projectId)) ?? null;
       const lines = taskExcerpt(task.description, 600)
         .split('\n')
         .map(plain)
@@ -108,7 +171,9 @@ export class DesktopNotesService {
         title: (lines[0] ?? 'Без названия').slice(0, 160),
         excerpt: lines.slice(1).join(' ').slice(0, 220),
         status: task.status,
-        statusLabel: STATUS_LABEL[task.status],
+        statusLabel: resolveStatusLabel(settings, task.status),
+        statusOptions: statusOptions(settings, task.status),
+        canEdit: task.canEdit,
         deadline: task.deadline,
         priority: task.priority,
         path: `/projects/${task.projectId}/tasks/${task.id}`,

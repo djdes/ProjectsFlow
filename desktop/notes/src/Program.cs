@@ -84,11 +84,24 @@ namespace ProjectsFlowNotes
                 (new NoteDto { TaskId = "3", ProjectName = "OrdersFlow", Title = "SEO: семантика и стратегия статей", Excerpt = "Провести SEO-анализ под Google: собрать семантику", Status = "done", StatusLabel = "Готово", Deadline = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd") }, "green"),
                 (new NoteDto { TaskId = "4", ProjectName = "DocsFlow", Title = "Протестировать бота DocsFlow", Excerpt = "", Status = "backlog", StatusLabel = "Черновики", Deadline = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd") }, "blue"),
             };
+            var options = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, string>>
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("backlog", "Черновики"),
+                new System.Collections.Generic.KeyValuePair<string, string>("manual", "В работе"),
+                new System.Collections.Generic.KeyValuePair<string, string>("done", "Готово"),
+            };
+            foreach (var (n, _) in samples)
+            {
+                n.CanEdit = true;
+                n.StatusOptions = options;
+            }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x31)) };
             foreach (var (note, color) in samples)
             {
                 var v = new NoteView(interactive: false) { Margin = new Thickness(16), VerticalAlignment = VerticalAlignment.Top };
                 v.Render(note, color);
+                if (note.TaskId == "1") v.ShowActions();
+                if (note.TaskId == "4") v.Opacity = 0.6;
                 row.Children.Add(v);
             }
             row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

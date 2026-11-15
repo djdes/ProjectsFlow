@@ -43,18 +43,26 @@ namespace ProjectsFlowNotes
         public string TaskId { get; }
         public NoteDto Note { get; private set; }
         public string ColorKey { get; private set; }
+        public double RestOpacity { get; private set; }
+
+        public static readonly double[] OpacitySteps = { 1, 0.9, 0.75, 0.6, 0.45 };
 
         public event Action<NoteWindow> UnpinRequested;
         public event Action<NoteWindow> Moved;
-        public event Action<NoteWindow> ColorChanged;
+        // Цвет или прозрачность поменялись — запомнить.
+        public event Action<NoteWindow> LookChanged;
+        public event Action<NoteWindow> ApplyLookToAll;
+        public event Action<NoteWindow, string, bool> StatusRequested; // окно, статус, restore
 
         private readonly NoteView view;
 
-        public NoteWindow(NoteDto note, string colorKey)
+        public NoteWindow(NoteDto note, string colorKey, double? opacity)
         {
             TaskId = note.TaskId;
             Note = note;
             ColorKey = colorKey ?? "yellow";
+            RestOpacity = opacity.HasValue && opacity.Value >= 0.3 && opacity.Value <= 1 ? opacity.Value : 1;
+            Opacity = RestOpacity;
 
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -72,6 +80,12 @@ namespace ProjectsFlowNotes
             view.Render(note, ColorKey);
             view.OpenClicked += OpenInBrowser;
             view.UnpinClicked += () => UnpinRequested?.Invoke(this);
+            view.DoneClicked += ToggleDone;
+            view.MenuClicked += anchor => OpenMenu(BuildMenu(), anchor);
+            view.StatusClicked += anchor => OpenMenu(BuildStatusMenu(), anchor);
+            // В покое — выбранная прозрачность, под курсором — полностью видно.
+            MouseEnter += (s, e) => Opacity = 1;
+            MouseLeave += (s, e) => Opacity = RestOpacity;
             view.Margin = new Thickness(Margin_);
             Content = view;
 
@@ -89,6 +103,9 @@ namespace ProjectsFlowNotes
             SourceInitialized += (s, e) => HideFromAltTab();
         }
 
+        // Вернуть стикер к последнему известному состоянию (после неудачного переноса).
+        public void ForceRender() => view.Render(Note, ColorKey);
+
         public void Update(NoteDto note)
         {
             if (note.SameAs(Note)) return;
@@ -98,12 +115,65 @@ namespace ProjectsFlowNotes
             ContextMenu = BuildMenu();
         }
 
+        public void SetLook(string colorKey, double opacity)
+        {
+            ColorKey = colorKey;
+            RestOpacity = opacity;
+            if (!IsMouseOver) Opacity = opacity;
+            view.Render(Note, colorKey);
+            ContextMenu = BuildMenu();
+        }
+
         private void SetColor(string key)
         {
-            ColorKey = key;
-            view.Render(Note, key);
-            ContextMenu = BuildMenu();
-            ColorChanged?.Invoke(this);
+            SetLook(key, RestOpacity);
+            LookChanged?.Invoke(this);
+        }
+
+        private void SetOpacity(double value)
+        {
+            SetLook(ColorKey, value);
+            LookChanged?.Invoke(this);
+        }
+
+        // Пока сервер переносит задачу, подпись статуса показывает выбранную колонку.
+        public void ShowPendingStatus(string label) => view.ShowStatus(label + "…");
+
+        private void ToggleDone()
+        {
+            if (!Note.CanEdit) return;
+            if (Note.Status == "done") StatusRequested?.Invoke(this, "manual", true);
+            else StatusRequested?.Invoke(this, "done", false);
+        }
+
+        private void OpenMenu(ContextMenu menu, UIElement anchor)
+        {
+            menu.PlacementTarget = anchor;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+        private void FillStatusItems(ItemsControl target)
+        {
+            foreach (var option in Note.StatusOptions)
+            {
+                var item = new MenuItem { Header = option.Value, IsCheckable = true, IsChecked = option.Key == Note.Status, IsEnabled = Note.CanEdit };
+                var status = option.Key;
+                item.Click += (s, e) =>
+                {
+                    if (status == Note.Status) return;
+                    StatusRequested?.Invoke(this, status, false);
+                };
+                target.Items.Add(item);
+            }
+            if (!Note.CanEdit) target.Items.Add(new MenuItem { Header = "Нет прав менять эту задачу", IsEnabled = false });
+        }
+
+        private ContextMenu BuildStatusMenu()
+        {
+            var menu = new ContextMenu();
+            FillStatusItems(menu);
+            return menu;
         }
 
         public void OpenInBrowser() => App.OpenUrl(ApiClient.BaseUrl + Note.Path);
@@ -114,6 +184,12 @@ namespace ProjectsFlowNotes
             var open = new MenuItem { Header = "Открыть задачу" };
             open.Click += (s, e) => OpenInBrowser();
             menu.Items.Add(open);
+            if (Note.StatusOptions.Count > 0)
+            {
+                var statusItem = new MenuItem { Header = "Статус: " + Note.StatusLabel };
+                FillStatusItems(statusItem);
+                menu.Items.Add(statusItem);
+            }
             var color = new MenuItem { Header = "Цвет" };
             foreach (var p in Paper.All)
             {
@@ -129,6 +205,25 @@ namespace ProjectsFlowNotes
                 color.Items.Add(item);
             }
             menu.Items.Add(color);
+            var opacity = new MenuItem { Header = "Прозрачность" };
+            foreach (var step in OpacitySteps)
+            {
+                var item = new MenuItem
+                {
+                    Header = step >= 1 ? "Непрозрачная" : $"{Math.Round((1 - step) * 100)}% прозрачности",
+                    IsCheckable = true,
+                    IsChecked = Math.Abs(step - RestOpacity) < 0.01,
+                };
+                var value = step;
+                item.Click += (s, e) => SetOpacity(value);
+                opacity.Items.Add(item);
+            }
+            opacity.Items.Add(new Separator());
+            opacity.Items.Add(new MenuItem { Header = "Под курсором заметка видна полностью", IsEnabled = false });
+            menu.Items.Add(opacity);
+            var all = new MenuItem { Header = "Такой цвет и прозрачность — всем заметкам" };
+            all.Click += (s, e) => ApplyLookToAll?.Invoke(this);
+            menu.Items.Add(all);
             menu.Items.Add(new Separator());
             var unpin = new MenuItem { Header = "Убрать с экрана" };
             unpin.Click += (s, e) => UnpinRequested?.Invoke(this);
@@ -166,6 +261,9 @@ namespace ProjectsFlowNotes
     {
         public event Action OpenClicked;
         public event Action UnpinClicked;
+        public event Action DoneClicked;
+        public event Action<UIElement> MenuClicked;
+        public event Action<UIElement> StatusClicked;
 
         private static readonly CultureInfo Ru = new CultureInfo("ru-RU");
         private static readonly FontFamily Text = new FontFamily("Segoe UI");
@@ -179,6 +277,9 @@ namespace ProjectsFlowNotes
         private readonly TextBlock deadline = new TextBlock();
         private readonly TextBlock status = new TextBlock();
         private readonly StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal };
+        private readonly Border doneButton;
+        private readonly TextBlock doneGlyph;
+        private NoteDto current;
 
         public NoteView(bool interactive)
         {
@@ -205,8 +306,24 @@ namespace ProjectsFlowNotes
             status.FontSize = 11; status.LineHeight = 15; status.Opacity = 0.7; status.TextWrapping = TextWrapping.NoWrap;
             status.HorizontalAlignment = HorizontalAlignment.Right;
 
+            doneButton = IconButton("", "Отметить «Готово»", () => DoneClicked?.Invoke());
+            doneGlyph = (TextBlock)doneButton.Child;
+            actions.Children.Add(doneButton);
+            Border more = null;
+            more = IconButton("", "Статус, цвет, прозрачность", () => MenuClicked?.Invoke(more));
+            actions.Children.Add(more);
             actions.Children.Add(IconButton("", "Открыть задачу", () => OpenClicked?.Invoke()));
             actions.Children.Add(IconButton("", "Убрать с экрана", () => UnpinClicked?.Invoke()));
+            // Подпись статуса — кнопка: клик открывает колонки доски.
+            status.MouseLeftButtonDown += (s, e) => { if (Editable) e.Handled = true; };
+            status.MouseLeftButtonUp += (s, e) =>
+            {
+                if (!Editable) return;
+                e.Handled = true;
+                StatusClicked?.Invoke(status);
+            };
+            status.MouseEnter += (s, e) => { if (Editable) status.TextDecorations = TextDecorations.Underline; };
+            status.MouseLeave += (s, e) => status.TextDecorations = null;
             actions.Opacity = interactive ? 0 : 0;
             actions.VerticalAlignment = VerticalAlignment.Center;
 
@@ -246,8 +363,16 @@ namespace ProjectsFlowNotes
             }
         }
 
+        private bool Editable => current != null && current.CanEdit && current.StatusOptions.Count > 0;
+
+        public void ShowStatus(string text) => status.Text = text;
+
+        // Для картинки-превью: кнопки, которые обычно видны только под курсором.
+        public void ShowActions() => actions.Opacity = 1;
+
         public void Render(NoteDto note, string colorKey)
         {
+            current = note;
             var (bodyColor, headColor) = Paper.Get(colorKey);
             Background = new SolidColorBrush(bodyColor);
             head.Background = new SolidColorBrush(headColor);
@@ -265,7 +390,12 @@ namespace ProjectsFlowNotes
             deadline.Visibility = label.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             deadline.Foreground = new SolidColorBrush(overdue ? Paper.Overdue : Paper.Ink);
             deadline.FontWeight = overdue ? FontWeights.SemiBold : FontWeights.Normal;
-            status.Text = done ? "✓ Готово" : note.StatusLabel;
+            status.Text = (done ? "✓ " + note.StatusLabel : note.StatusLabel) + (Editable ? " ▾" : "");
+            status.Cursor = Editable ? Cursors.Hand : null;
+            status.ToolTip = Editable ? "Сменить статус" : null;
+            doneButton.Visibility = note.CanEdit ? Visibility.Visible : Visibility.Collapsed;
+            doneButton.ToolTip = done ? "Вернуть в работу" : "Отметить «Готово»";
+            doneGlyph.Text = done ? "" : "";
             status.Margin = new Thickness(label.Length > 0 ? 8 : 0, 0, 0, 0);
         }
 
