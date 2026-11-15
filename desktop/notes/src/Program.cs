@@ -29,6 +29,11 @@ namespace ProjectsFlowNotes
                     IconFactory.WriteIco(icoPath);
                     return 0;
                 }
+                if (After("--preview-detail") is string detailPng)
+                {
+                    RenderDetailPreview(detailPng);
+                    return 0;
+                }
                 if (After("--preview") is string pngPath)
                 {
                     RenderPreview(pngPath);
@@ -72,6 +77,45 @@ namespace ProjectsFlowNotes
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return 1;
             }
+        }
+
+        private static void RenderDetailPreview(string path)
+        {
+            var note = new NoteDto
+            {
+                TaskId = "1", ProjectId = "p", ProjectName = "Wesetup", Title = "Исправить сохранение реквизитов клиента Wesetup",
+                Status = "manual", StatusLabel = "В работе", Deadline = DateTime.Today.AddDays(5).ToString("yyyy-MM-dd"), CanEdit = true,
+                StatusOptions = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, string>> { new System.Collections.Generic.KeyValuePair<string, string>("manual", "В работе") },
+            };
+            var detail = new DetailDto
+            {
+                Note = note,
+                AssigneeName = "Олег Боев",
+                Description = @"Исправить сохранение реквизитов клиента Wesetup
+Исправить сохранение реквизитов в клиенте Wesetup: введённые данные не сохраняются, **кнопка сохранения** ничего не делает.
+
+## Что проверить
+- ИНН и КПП
+- Банковские реквизиты
+- Подробнее: https://projectsflow.ru/docs",
+                Files = { new FileDto { Id = "a", Filename = "Скриншот ошибки.png", MimeType = "image/png", Size = 120000 }, new FileDto { Id = "b", Filename = "реквизиты.pdf", MimeType = "application/pdf", Size = 340000 } },
+                Comments =
+                {
+                    new CommentDto { Author = "Ярослав Боев", Body = "Проверь ещё форму на мобильном.", CreatedAt = DateTime.Now.AddHours(-3) },
+                    new CommentDto { Author = "Ralph", IsAgent = true, Body = "Нашёл причину: запрос уходит без поля `kpp`.", CreatedAt = DateTime.Now.AddMinutes(-20) },
+                },
+            };
+            var w = new DetailWindow(new ApiClient(), note, "yellow", (s, r) => { });
+            var element = w.RenderSample(detail);
+            element.Measure(new Size(480, 760));
+            element.Arrange(new Rect(0, 0, 480, 760));
+            element.UpdateLayout();
+            const double scale = 2;
+            var rtb = new RenderTargetBitmap((int)(480 * scale), (int)(760 * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            rtb.Render(element);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(rtb));
+            using (var fs = File.Create(path)) enc.Save(fs);
         }
 
         // Картинка с несколькими стикерами — проверить вид без запуска приложения.

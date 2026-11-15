@@ -93,7 +93,7 @@ namespace ProjectsFlowNotes
             Loaded += async (s, e) => await Start();
         }
 
-        private static void StyleButton(Button b, bool filled)
+        internal static void StyleButton(Button b, bool filled)
         {
             b.FontFamily = new FontFamily("Segoe UI");
             b.FontSize = 13;

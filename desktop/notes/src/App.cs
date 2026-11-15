@@ -24,6 +24,7 @@ namespace ProjectsFlowNotes
         private readonly ApiClient api = new ApiClient();
         private readonly AppSettings settings = AppSettings.Load();
         private readonly Dictionary<string, NoteWindow> windows = new Dictionary<string, NoteWindow>();
+        private readonly Dictionary<string, DetailWindow> details = new Dictionary<string, DetailWindow>();
         private readonly DispatcherTimer pollTimer;
         private readonly DispatcherTimer updateTimer;
         private Forms.NotifyIcon tray;
@@ -104,6 +105,7 @@ namespace ProjectsFlowNotes
             api.Token = null;
             foreach (var w in windows.Values.ToList()) w.Close();
             windows.Clear();
+            foreach (var d in details.Values.ToList()) d.Close();
             RebuildMenu();
             if (expired) Balloon("Нужно подключиться заново", "Доступ к аккаунту отозван или истёк.");
             ShowConnect();
@@ -168,9 +170,14 @@ namespace ProjectsFlowNotes
                 var w = new NoteWindow(note, placement?.Color, placement?.Opacity);
                 w.UnpinRequested += OnUnpin;
                 w.Moved += win => Remember(win);
-                w.LookChanged += win => Remember(win);
+                w.LookChanged += win =>
+                {
+                    Remember(win);
+                    if (details.TryGetValue(win.TaskId, out var d)) d.SetColor(win.ColorKey);
+                };
                 w.ApplyLookToAll += OnApplyLookToAll;
                 w.StatusRequested += OnStatusRequested;
+                w.ExpandRequested += OpenDetail;
                 windows[note.TaskId] = w;
                 Place(w, placement);
                 if (!settings.Hidden) w.Show();
@@ -185,6 +192,27 @@ namespace ProjectsFlowNotes
         {
             settings.Notes[w.TaskId] = new NotePlacement { X = w.Left, Y = w.Top, Color = w.ColorKey, Opacity = w.RestOpacity };
             settings.Save();
+        }
+
+        // Развёрнутая заметка — рядом со стикером (слева, если есть место), одна на задачу.
+        private void OpenDetail(NoteWindow note)
+        {
+            if (details.TryGetValue(note.TaskId, out var existing))
+            {
+                if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
+                existing.Activate();
+                return;
+            }
+            var d = new DetailWindow(api, note.Note, note.ColorKey, (status, restore) => OnStatusRequested(note, status, restore));
+            var area = SystemParameters.WorkArea;
+            var left = note.Left - d.Width + NoteWindow.Margin_;
+            if (left < area.Left) left = Math.Min(note.Left + note.Width - NoteWindow.Margin_, area.Right - d.Width);
+            d.Left = Math.Max(area.Left, left);
+            d.Top = Math.Max(area.Top, Math.Min(note.Top, area.Bottom - d.Height));
+            d.Closed += (s, e) => details.Remove(note.TaskId);
+            details[note.TaskId] = d;
+            d.Show();
+            d.Activate();
         }
 
         private void OnApplyLookToAll(NoteWindow source)
@@ -207,6 +235,7 @@ namespace ProjectsFlowNotes
                 var updated = await api.SetStatus(w.TaskId, status, restore);
                 if (updated != null) w.Update(updated);
                 else await Sync();
+                if (details.TryGetValue(w.TaskId, out var d)) await d.Refresh();
             }
             catch (UnauthorizedException)
             {
@@ -439,6 +468,7 @@ namespace ProjectsFlowNotes
                 tray.Dispose();
             }
             foreach (var w in windows.Values.ToList()) w.Close();
+            foreach (var d in details.Values.ToList()) d.Close();
             connectWindow?.Close();
             SingleInstance.Release();
             app.Shutdown();
