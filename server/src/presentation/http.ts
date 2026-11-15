@@ -275,6 +275,7 @@ import { invitesRouter } from './invites/routes.js';
 import { taskAssigneesRouter } from './assignees/routes.js';
 import { meStatsRouter } from './stats/routes.js';
 import { desktopNotesRouter } from './desktop-notes/routes.js';
+import { accountTokenOnTaskPaths } from './desktop-notes/accountTokenPaths.js';
 import type { DesktopNotesService } from '../application/desktop-notes/DesktopNotesService.js';
 import type { GetMyCompletedStats } from '../application/stats/GetMyCompletedStats.js';
 import { notificationsRouter } from './notifications/routes.js';
@@ -949,6 +950,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Каждый запрос проходит через session-resolver. Не делает auth обязательным —
   // только прикладывает req.user, если cookie валиден.
   app.use(sessionFromCookie(deps.auth.getCurrentUser));
+  // Развёрнутая заметка (приложение для Windows): комментарии и файлы задачи по токену аккаунта.
+  app.use(accountTokenOnTaskPaths(deps.agent.authenticateAgentToken));
   if (deps.workspaceScope) app.use('/api', deps.workspaceScope);
 
   app.get('/api/health', (_req, res) => {

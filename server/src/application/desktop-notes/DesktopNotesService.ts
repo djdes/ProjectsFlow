@@ -6,6 +6,10 @@ import { resolveStatusLabel } from '../../domain/task/statusLabels.js';
 import { activeCustomSlots, type KanbanBoardSettings } from '../../domain/kanban/KanbanSettings.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { MoveTask } from '../task/MoveTask.js';
+import type { ListTaskComments } from '../task/ListTaskComments.js';
+import type { ListTaskAttachments } from '../task/ListTaskAttachments.js';
+import type { UserRepository } from '../user/UserRepository.js';
+import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { GetTask } from '../task/GetTask.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { DesktopNoteRepository } from './DesktopNoteRepository.js';
@@ -25,6 +29,30 @@ export type DesktopNote = {
   readonly deadline: string | null;
   readonly priority: TaskPriority | null;
   readonly path: string;
+};
+
+export type DesktopNoteFile = {
+  readonly id: string;
+  readonly filename: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+};
+
+// Развёрнутая заметка: всё, что нужно прочитать и ответить, не открывая браузер.
+export type DesktopNoteDetail = {
+  readonly note: DesktopNote;
+  readonly description: string;
+  readonly assigneeName: string | null;
+  readonly startDate: string | null;
+  readonly attachments: DesktopNoteFile[];
+  readonly comments: ReadonlyArray<{
+    readonly id: string;
+    readonly author: string;
+    readonly isAgent: boolean;
+    readonly body: string;
+    readonly createdAt: Date;
+    readonly attachments: DesktopNoteFile[];
+  }>;
 };
 
 export type DesktopNotesView = {
@@ -55,12 +83,25 @@ type Deps = {
   readonly getTask: GetTask;
   readonly projects?: Pick<ProjectRepository, 'getKanbanSettings'>;
   readonly moveTask?: MoveTask;
+  readonly listComments?: ListTaskComments;
+  readonly listAttachments?: ListTaskAttachments;
+  readonly users?: Pick<UserRepository, 'getManyByIds'>;
   // Те же оповещения, что у переноса задачи в интерфейсе: доска и колокольчик обновятся.
   readonly notify?: {
     readonly taskChanged: (projectId: string, extraUserIds?: readonly string[]) => void;
     readonly statusChanged: (projectId: string, taskId: string, oldStatus: string, newStatus: string, actorUserId: string) => void;
   };
 };
+
+const file = (a: TaskAttachment): DesktopNoteFile => ({
+  id: a.id,
+  filename: a.filename,
+  mimeType: a.mimeType,
+  sizeBytes: a.sizeBytes,
+});
+
+// Текст для чтения: без HTML редактора, с переносами строк и markdown-разметкой строк.
+const readable = (text: string | null | undefined): string => taskExcerpt(text, 50000);
 
 const BUILT_IN: readonly TaskStatus[] = ['backlog', 'manual', 'todo', 'done'];
 
@@ -143,6 +184,37 @@ export class DesktopNotesService {
       this.deps.notify?.statusChanged(note.projectId, taskId, note.status, moved.status, userId);
     }
     return (await this.read(userId, taskId)) ?? note;
+  }
+
+  async detail(userId: string, taskId: string): Promise<DesktopNoteDetail> {
+    const note = await this.read(userId, taskId);
+    if (!note) throw new TaskNotFoundError(taskId);
+    const task = await this.deps.getTask.execute(note.projectId, userId, taskId);
+    const [comments, attachments] = await Promise.all([
+      this.deps.listComments?.execute(note.projectId, userId, taskId) ?? Promise.resolve([]),
+      this.deps.listAttachments?.execute(note.projectId, userId, taskId) ?? Promise.resolve([]),
+    ]);
+    const authorIds = [...new Set(comments.filter((c) => c.actorKind === 'user').map((c) => c.ownerUserId))];
+    const users = authorIds.length > 0 && this.deps.users ? await this.deps.users.getManyByIds(authorIds) : [];
+    const names = new Map(users.map((u) => [u.id, u.displayName]));
+    return {
+      note,
+      description: readable(task.description),
+      assigneeName: task.assignee?.displayName ?? null,
+      startDate: task.startDate,
+      attachments: attachments.filter((a) => !a.commentId).map(file),
+      comments: comments.map((c) => ({
+        id: c.id,
+        author:
+          c.actorKind === 'user'
+            ? (names.get(c.ownerUserId) ?? 'Участник')
+            : (c.agentName ?? (c.actorKind === 'system' ? 'ProjectsFlow' : 'Агент')),
+        isAgent: c.actorKind !== 'user',
+        body: readable(c.body),
+        createdAt: c.createdAt,
+        attachments: (c.attachments ?? []).map(file),
+      })),
+    };
   }
 
   unpin(userId: string, taskId: string): Promise<void> {

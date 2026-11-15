@@ -81,6 +81,19 @@ export function desktopNotesRouter(deps: Deps): Router {
     }
   });
 
+  router.get('/:taskId/detail', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const d = await deps.service.detail(req.user!.id, taskIdSchema.parse(req.params['taskId']));
+      res.set('Cache-Control', 'private, no-store').json({
+        ...d,
+        note: dto(d.note),
+        comments: d.comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.post('/:taskId/status', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { status, restore } = statusSchema.parse(req.body);

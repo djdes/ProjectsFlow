@@ -2685,6 +2685,21 @@ const { app, devProxyUpgrade } = createApp({
       activityRecorder,
     }),
     notify: { taskChanged: notifyTaskChanged, statusChanged: notifyStatusChanged },
+    listComments: new ListTaskComments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      attachments: taskAttachmentRepo,
+      acknowledgements: commentAcknowledgementRepo,
+    }),
+    listAttachments: new ListTaskAttachments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+    }),
+    users: userRepo,
   }),
   projectSharing: new ManageProjectSharing({
     projects: projectRepo,

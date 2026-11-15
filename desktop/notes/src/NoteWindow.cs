@@ -53,6 +53,7 @@ namespace ProjectsFlowNotes
         public event Action<NoteWindow> LookChanged;
         public event Action<NoteWindow> ApplyLookToAll;
         public event Action<NoteWindow, string, bool> StatusRequested; // окно, статус, restore
+        public event Action<NoteWindow> ExpandRequested;
 
         private readonly NoteView view;
 
@@ -78,9 +79,9 @@ namespace ProjectsFlowNotes
 
             view = new NoteView(interactive: true);
             view.Render(note, ColorKey);
-            view.OpenClicked += OpenInBrowser;
             view.UnpinClicked += () => UnpinRequested?.Invoke(this);
             view.DoneClicked += ToggleDone;
+            view.ExpandClicked += () => ExpandRequested?.Invoke(this);
             view.MenuClicked += anchor => OpenMenu(BuildMenu(), anchor);
             view.StatusClicked += anchor => OpenMenu(BuildStatusMenu(), anchor);
             // В покое — выбранная прозрачность, под курсором — полностью видно.
@@ -93,7 +94,7 @@ namespace ProjectsFlowNotes
             {
                 if (e.ClickCount == 2)
                 {
-                    OpenInBrowser();
+                    ExpandRequested?.Invoke(this);
                     return;
                 }
                 try { DragMove(); } catch (InvalidOperationException) { }
@@ -181,7 +182,10 @@ namespace ProjectsFlowNotes
         private ContextMenu BuildMenu()
         {
             var menu = new ContextMenu();
-            var open = new MenuItem { Header = "Открыть задачу" };
+            var expand = new MenuItem { Header = "Развернуть заметку" };
+            expand.Click += (s, e) => ExpandRequested?.Invoke(this);
+            menu.Items.Add(expand);
+            var open = new MenuItem { Header = "Открыть в браузере" };
             open.Click += (s, e) => OpenInBrowser();
             menu.Items.Add(open);
             if (Note.StatusOptions.Count > 0)
@@ -259,9 +263,9 @@ namespace ProjectsFlowNotes
     // Содержимое стикера. Отдельно от окна — чтобы этот же вид рисовать в картинку (--preview).
     internal sealed class NoteView : Border
     {
-        public event Action OpenClicked;
         public event Action UnpinClicked;
         public event Action DoneClicked;
+        public event Action ExpandClicked;
         public event Action<UIElement> MenuClicked;
         public event Action<UIElement> StatusClicked;
 
@@ -308,11 +312,11 @@ namespace ProjectsFlowNotes
 
             doneButton = IconButton("", "Отметить «Готово»", () => DoneClicked?.Invoke());
             doneGlyph = (TextBlock)doneButton.Child;
+            actions.Children.Add(IconButton("", "Развернуть: текст, файлы, комментарии", () => ExpandClicked?.Invoke()));
             actions.Children.Add(doneButton);
             Border more = null;
             more = IconButton("", "Статус, цвет, прозрачность", () => MenuClicked?.Invoke(more));
             actions.Children.Add(more);
-            actions.Children.Add(IconButton("", "Открыть задачу", () => OpenClicked?.Invoke()));
             actions.Children.Add(IconButton("", "Убрать с экрана", () => UnpinClicked?.Invoke()));
             // Подпись статуса — кнопка: клик открывает колонки доски.
             status.MouseLeftButtonDown += (s, e) => { if (Editable) e.Handled = true; };
@@ -399,7 +403,7 @@ namespace ProjectsFlowNotes
             status.Margin = new Thickness(label.Length > 0 ? 8 : 0, 0, 0, 0);
         }
 
-        private static (string label, bool overdue) DeadlineLabel(string deadline, bool done)
+        internal static (string label, bool overdue) DeadlineLabel(string deadline, bool done)
         {
             if (string.IsNullOrEmpty(deadline) ||
                 !DateTime.TryParseExact(deadline, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))

@@ -14,6 +14,7 @@ namespace ProjectsFlowNotes
     public sealed class NoteDto
     {
         public string TaskId;
+        public string ProjectId;
         public string ProjectName;
         public string Title;
         public string Excerpt;
@@ -49,7 +50,7 @@ namespace ProjectsFlowNotes
     }
 
     // Всё общение с ProjectsFlow: заметки, подключение по коду, обновления.
-    public sealed class ApiClient
+    public sealed partial class ApiClient
     {
         public static readonly string BaseUrl =
             (Environment.GetEnvironmentVariable("PF_NOTES_URL") ?? "https://projectsflow.ru").TrimEnd('/');
@@ -104,6 +105,7 @@ namespace ProjectsFlowNotes
             var note = new NoteDto
             {
                 TaskId = Str(item, "taskId"),
+                ProjectId = Str(item, "projectId"),
                 ProjectName = Str(item, "projectName") ?? "",
                 Title = Str(item, "title") ?? "Без названия",
                 Excerpt = Str(item, "excerpt") ?? "",
