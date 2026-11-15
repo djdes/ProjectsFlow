@@ -601,6 +601,24 @@ export const scenarios = [
         t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
       );
       await t.pageChecks('Входящие');
+      // The «who» ribbon: «Мои / Все» and the people sit on one line as chips of one height.
+      // Earlier the people wrapped into a staggered grid next to a boxed switch.
+      await t.check('лента «кто»: «Мои / Все» и люди — в одну строку, чипы одной высоты', async () => {
+        const boxes = await page.evaluate(() => {
+          const rect = (el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), height: Math.round(r.height), mid: Math.round(r.top + r.height / 2) }; };
+          const scope = [...document.querySelectorAll('[role="group"][aria-label="Чьи задачи"] button')].map(rect);
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')].map(rect);
+          return { scope, people };
+        });
+        t.assert(boxes.scope.length === 2, `чипов «Мои / Все»: ${boxes.scope.length}`);
+        t.assert(boxes.people.length > 0, 'людей в ленте нет');
+        const all = [...boxes.scope, ...boxes.people];
+        const mids = new Set(all.map((b) => b.mid));
+        t.assert(Math.max(...mids) - Math.min(...mids) <= 1, `чипы на разных строках: центры ${[...mids].join(', ')}`);
+        const heights = new Set(all.map((b) => b.height));
+        t.assert(heights.size === 1, `чипы разной высоты: ${[...heights].join(', ')}`);
+        t.assert(all[0].height >= 44, `высота чипа ${all[0].height}px меньше 44px`);
+      });
 
       const nowIds = [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id);
       const queueIds = myQueueTasks(state).map((x) => x.id);

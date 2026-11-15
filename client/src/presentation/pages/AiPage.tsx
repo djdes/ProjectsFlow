@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
 import { WorkspaceCrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import { PageTopBar } from '@/presentation/layout/PageChrome';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { announceAiConversationsChanged } from '@/presentation/hooks/useAiConversations';
 import { AiConversationView } from '@/presentation/components/ai/AiConversationView';
 import { AiComposer } from '@/presentation/components/ai/AiComposer';
@@ -20,6 +21,9 @@ export function AiPage(): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const [photoMode, setPhotoMode] = useState(false);
+  // Курсор сразу в поле — только там, где есть клавиатура. На сенсорном экране фокус
+  // поднимал экранную клавиатуру и прокручивал приветствие за верхний край.
+  const focusOnOpen = useMediaQuery('(hover: hover) and (pointer: fine)');
   const [searchParams] = useSearchParams();
   const tab = searchParams.get('tab') === 'images' ? 'images' : 'chat';
 
@@ -96,7 +100,7 @@ export function AiPage(): React.ReactElement {
             <h1 className="text-display font-semibold tracking-tight">ProjectsFlow ИИ</h1>
             <p className="mbs-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
             <div className="mbs-7 w-full max-w-2xl text-start">
-              <AiComposer conversationId={null} sending={busy} onSend={(body) => createAndSend(body)} imageMode={{ enabled: photoMode, onChange: setPhotoMode, onSend: (body) => createAndSend(body, true) }} autoFocus />
+              <AiComposer conversationId={null} sending={busy} onSend={(body) => createAndSend(body)} imageMode={{ enabled: photoMode, onChange: setPhotoMode, onSend: (body) => createAndSend(body, true) }} autoFocus={focusOnOpen} />
               <AiComposerPresets className="mbs-3" disabled={busy} onPick={(prompt) => void create(prompt)} />
             </div>
             <Button

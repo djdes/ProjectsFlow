@@ -59,9 +59,11 @@ export function ProjectPage(): React.ReactElement {
         <HeaderCompletedTodayPill />
       </div>
 
-      {/* Тело: отступы как у Входящих/доски (px-6/14/24), контент — центрированная
-          колонка max-w-4xl (Notion): на широких мониторах воздух по бокам симметричен. */}
-      <div className="px-6 pbe-12 pbs-6 sm:px-14 lg:px-24">
+      {/* Тело: отступы как у доски проекта (16/56/96px), контент — центрированная колонка
+          max-w-4xl (Notion): на широких мониторах воздух по бокам симметричен. На телефоне —
+          те же 16px по бокам и сверху, что на всех страницах: раньше обзор один стоял с
+          полями 24px, и его заголовок не попадал на ось крошек и соседних разделов. */}
+      <div className="px-4 pbe-12 pbs-4 sm:px-14 sm:pbs-6 lg:px-24">
         <div className="mx-auto w-full max-w-4xl space-y-6">
           <div className="space-y-3">
             <EditableProjectTitle projectId={data.id} name={data.name} />

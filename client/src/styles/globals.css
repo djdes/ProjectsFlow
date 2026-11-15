@@ -380,6 +380,38 @@
     display: none;
   }
 
+  /* Ribbons that scroll sideways (people, column tabs, toolbars): the edge that still hides
+     content dissolves, so a cut-off chip reads as «scroll for more», not as a layout bug.
+     EdgeFadeScroller sets the flags from the real scroll position — an edge with nothing
+     behind it stays crisp. */
+  .pf-fade-x {
+    --pf-fade-x: 1.75rem;
+    --pf-fade-x-start: 0px;
+    --pf-fade-x-end: 0px;
+  }
+  .pf-fade-x[data-fade-start] {
+    --pf-fade-x-start: var(--pf-fade-x);
+  }
+  .pf-fade-x[data-fade-end] {
+    --pf-fade-x-end: var(--pf-fade-x);
+  }
+  .pf-fade-x:is([data-fade-start], [data-fade-end]) {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      oklch(0% 0 none) var(--pf-fade-x-start),
+      oklch(0% 0 none) calc(100% - var(--pf-fade-x-end)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      oklch(0% 0 none) var(--pf-fade-x-start),
+      oklch(0% 0 none) calc(100% - var(--pf-fade-x-end)),
+      transparent 100%
+    );
+  }
+
   /* Затухание НИЖНЕЙ кромки списка проектов — 1:1 с Notion, значение снято через CDP
      с .notion-scroller в сайдбаре:
        linear-gradient(oklch(0% 0 none) 0%, oklch(0% 0 none) calc(100% - 34px), transparent 100%)

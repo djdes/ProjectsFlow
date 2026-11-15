@@ -45,7 +45,8 @@ export function SectionPage({
       <PageTopBar className="hidden sm:flex">
         <WorkspaceCrumbs icon={<Icon className="size-3.5 shrink-0" />} label={label} />
       </PageTopBar>
-      <div className={cn(PAGE_BODY_CLASS, narrow && 'mx-auto max-w-2xl')}>
+      {/* Широкие страницы держат те же боковые поля, что «Входящие» (16/24/36px). */}
+      <div className={cn(PAGE_BODY_CLASS, narrow ? 'mx-auto max-w-2xl' : 'lg:px-9')}>
         {back && (
           <Button asChild variant="ghost" size="sm" className="-mbe-2 -ms-3 gap-1 self-start sm:hidden">
             <Link to={back.to}>
