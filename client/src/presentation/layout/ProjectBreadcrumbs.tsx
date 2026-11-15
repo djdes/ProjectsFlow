@@ -163,6 +163,10 @@ type Props = {
   // Сегмент задачи (только на странице отдельной задачи). Если задан — текущим
   // становится он, а сегмент проекта снова кликабельный.
   task?: BreadcrumbTask;
+  // Phone row above a page that already shows the project name as its title: «Проекты»
+  // shrinks to its icon and the project segment names the current section instead of
+  // repeating the name — the same two menus (switch project / switch section) stay.
+  compact?: boolean;
 };
 
 export function ProjectBreadcrumbs({
@@ -171,6 +175,7 @@ export function ProjectBreadcrumbs({
   projectIcon,
   view,
   task,
+  compact = false,
 }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { data: projects } = useProjects();
@@ -207,7 +212,7 @@ export function ProjectBreadcrumbs({
           <FolderOpen className="size-3.5 shrink-0" />
           {/* На странице задачи справа ещё кластер кнопок: пока строке тесно, «Проекты» —
               только значком, иначе название задачи сжималось до нулевой ширины. */}
-          <span className={cn(task && 'sr-only lg:not-sr-only')}>Проекты</span>
+          <span className={cn(task && 'sr-only lg:not-sr-only', compact && 'sr-only')}>Проекты</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
@@ -311,16 +316,26 @@ export function ProjectBreadcrumbs({
           onMouseEnter={viewsMenu.openNow}
           onMouseLeave={viewsMenu.closeSoon}
         >
-          <ProjectChip name={projectName} icon={projectIcon} />
-          {/* Длинное имя проекта обрезаем многоточием, чтобы крошки не растягивали хедер. */}
-          <span
-            className={cn(
-              'min-w-0 max-w-[9rem] truncate sm:max-w-[14rem]',
-              task && 'hidden xl:block',
-            )}
-          >
-            {projectName}
-          </span>
+          {compact && currentView ? (
+            <>
+              {/* Under 360px the icon gives way so «Доска задач» is not cut to «Доска за…». */}
+              <currentView.Icon className="size-3.5 shrink-0 max-[359px]:hidden" />
+              <span className="min-w-0 truncate">{currentView.label}</span>
+            </>
+          ) : (
+            <>
+              <ProjectChip name={projectName} icon={projectIcon} />
+              {/* Длинное имя проекта обрезаем многоточием, чтобы крошки не растягивали хедер. */}
+              <span
+                className={cn(
+                  'min-w-0 max-w-[9rem] truncate sm:max-w-[14rem]',
+                  task && 'hidden xl:block',
+                )}
+              >
+                {projectName}
+              </span>
+            </>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"

@@ -21,7 +21,9 @@ export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRow
     <div className="group/prop -mx-1.5 flex min-h-11 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors [@media(hover:hover)_and_(pointer:fine)]:hover:bg-hover sm:min-h-9">
       {/* -mx-1.5 гасит собственный px-1.5 в раскладке: иконка свойства встаёт ровно на левый
           край контента — вровень с «+ Подзадача» — а мягкая hover-подложка всё равно шире. */}
-      <span className="flex w-[clamp(7.5rem,38%,9.5rem)] shrink-0 items-center gap-1.5 text-ui text-muted-foreground">
+      {/* 8rem — «Кто утверждает», самая длинная подпись, помещается в одну строку и на
+          320px (при 7.5rem ей не хватало пары пикселей, и ряд становился двухстрочным). */}
+      <span className="flex w-[clamp(8rem,38%,9.5rem)] shrink-0 items-center gap-1.5 text-ui text-muted-foreground">
         {handle ? (
           <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
             <Icon className="size-4 transition-opacity group-hover/prop:opacity-0 group-focus-within/prop:opacity-0" aria-hidden />

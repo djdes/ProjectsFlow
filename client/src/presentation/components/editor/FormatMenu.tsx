@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { useEdgeFade } from '@/presentation/components/layout/EdgeFadeScroller';
 import {
   Tooltip,
   TooltipContent,
@@ -357,6 +358,7 @@ export function FormatMenu({ editor, getRange, inline = false }: {
     fire(() => item.run(editor));
     setOpenSub(null);
   };
+  const fade = useEdgeFade();
   return (
     <TooltipProvider delayDuration={650}>
       <div className={cn(inline ? 'w-full' : 'w-[19rem] max-w-[calc(100vw-2rem)]')}>
@@ -364,11 +366,13 @@ export function FormatMenu({ editor, getRange, inline = false }: {
             раньше 7 кнопок растягивались на всю ширину, «Тип блока» и цвет уходили во вторую
             строку, и панель съедала ~90px над текстом задачи. */}
         <div
+          ref={fade.ref}
+          {...fade.fadeProps}
           role="toolbar"
           aria-label="Форматирование текста"
           className={cn(
             'flex flex-wrap items-center gap-0.5',
-            inline && 'py-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:overscroll-x-contain pf-scrollbar-hide',
+            inline && 'pf-fade-x py-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:overscroll-x-contain pf-scrollbar-hide',
           )}
           onMouseDown={e => e.preventDefault()}
           onKeyDown={e => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
+import { useEdgeFade } from '@/presentation/components/layout/EdgeFadeScroller';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 
 export type BoardColumnTab = {
@@ -32,6 +33,7 @@ function findColumn(scroller: HTMLElement, status: string): HTMLElement | null {
 export function BoardColumnTabs({ columns, scrollerRef, className }: Props): React.ReactElement | null {
   const { animations } = useMotion();
   const stripRef = useRef<HTMLDivElement>(null);
+  const fade = useEdgeFade();
   const [active, setActive] = useState<string | null>(columns[0]?.status ?? null);
   const statusesKey = columns.map((c) => c.status).join('|');
 
@@ -104,9 +106,14 @@ export function BoardColumnTabs({ columns, scrollerRef, className }: Props): Rea
   return (
     <nav aria-label="Колонки доски" className={className}>
       <div
-        ref={stripRef}
-        // Ряд листается вбок сам по себе; полосу прокрутки не показываем.
-        className="pf-scrollbar-hide flex gap-1.5 overflow-x-auto overscroll-x-contain pbe-2"
+        ref={(element) => {
+          stripRef.current = element;
+          fade.ref(element);
+        }}
+        {...fade.fadeProps}
+        // Ряд листается вбок сам по себе; полосу прокрутки не показываем, а край, за
+        // которым ещё есть колонки, растворяется (pf-fade-x).
+        className="pf-fade-x pf-scrollbar-hide flex gap-1.5 overflow-x-auto overscroll-x-contain pbe-2"
         data-pf-no-edge-swipe
       >
         {columns.map((column) => {

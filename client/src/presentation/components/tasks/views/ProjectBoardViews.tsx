@@ -64,6 +64,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { useEdgeFade } from '@/presentation/components/layout/EdgeFadeScroller';
 import { trackProjectAction } from '@/lib/productAnalytics';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { TaskTemplate } from '@/domain/task/TaskTemplate';
@@ -245,6 +246,7 @@ export function ProjectBoardViews({
   // Views, columns and automation stay with the project's own workspace: a guest of a
   // shared project (db/182) creates and moves tasks but does not manage the board.
   const canManage = canEdit && (canManageProp ?? true) && !guestProject;
+  const chipsFade = useEdgeFade();
   const rightPanelWidth = useRightPanelWidth();
   const storageKey = `pf:board-view:${projectId}`;
   const [views, setViews] = useState<BoardView[] | null>(null);
@@ -1223,7 +1225,7 @@ export function ProjectBoardViews({
       {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
           попап значений (чекбоксы) + «Убрать фильтр»; «+ Фильтр» добавляет следующий. */}
       {chipsVisible && (
-        <div className="flex max-w-full items-center gap-1 overflow-x-auto pbe-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
+        <div ref={chipsFade.ref} {...chipsFade.fadeProps} className="pf-fade-x flex max-w-full items-center gap-1 overflow-x-auto pbe-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
           {state.sort && (
             <button
               type="button"

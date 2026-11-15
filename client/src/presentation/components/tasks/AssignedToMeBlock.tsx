@@ -2477,7 +2477,9 @@ export function AssignedToMeBlock({
           type="button"
           onClick={openAddTask}
           aria-label="Новая задача"
-          className="fixed end-4 inset-be-[calc(5.25rem_+_env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-float transition-colors hover:bg-primary/90"
+          // Уже 360px кнопка меньше (48px) и ближе к краю: на таком экране 56-пиксельный
+          // круг закрывал заметную часть карточки под собой.
+          className="fixed end-4 inset-be-[calc(5.25rem_+_env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-float transition-colors hover:bg-primary/90 max-[359px]:end-3 max-[359px]:size-12"
         >
           <Plus className="size-6" />
         </button>

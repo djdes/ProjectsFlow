@@ -274,11 +274,17 @@ export function TasksPage(): React.ReactElement {
           висит шапка приложения, а при листании доски сверху закрепляется шапка колонки —
           третья липкая полоса отнимала у карточек ещё 48px экрана. Строка уезжает вместе со
           страницей и возвращается при прокрутке вверх. */}
-      <div id="pf-project-mobile-header" className="flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
-        <div className="min-w-0 truncate text-sm font-medium">
-          {data.icon ? `${data.icon} ` : ''}
-          {data.name}
-        </div>
+      {/* Название здесь не повторяем: оно стоит крупным заголовком сразу ниже. Слева — крошки
+          «Проекты › раздел»: тап по первой открывает список проектов, по второй — разделы
+          этого проекта (обзор, база знаний, финансы), без похода в меню. */}
+      <div id="pf-project-mobile-header" className="flex min-h-12 items-center justify-between gap-2 bg-background pe-4 ps-2.5 sm:hidden">
+        <ProjectBreadcrumbs
+          projectId={data.id}
+          projectName={data.name}
+          projectIcon={data.icon}
+          view="board"
+          compact
+        />
         <TooltipProvider delayDuration={550}>
           <div className="flex shrink-0 items-center gap-0.5">
             <ProjectActivityButton

@@ -40,7 +40,10 @@ export function AuthFormCard({ title, description, icon, children, footer }: Pro
   return (
     <main className="flex min-h-dvh flex-col bg-background pbe-[max(2rem,env(safe-area-inset-bottom))] pbs-[max(2rem,env(safe-area-inset-top))] pe-[max(1rem,env(safe-area-inset-right))] ps-[max(1rem,env(safe-area-inset-left))]">
       <div className="m-auto flex w-full max-w-sm flex-col gap-6">
-        <header className="flex flex-col gap-2">
+        {/* Phone: the header is centred — the form is a full-width column there, and a
+            left-pinned logo and title above centred links read as two different axes. From
+            640px the column sits in the middle of the page and keeps its left edge (Notion). */}
+        <header className="flex flex-col gap-2 max-sm:items-center max-sm:text-center">
           {icon ? (
             <div className="mbe-2">{icon}</div>
           ) : (
@@ -50,7 +53,7 @@ export function AuthFormCard({ title, description, icon, children, footer }: Pro
             </div>
           )}
           <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">{title}</h1>
-          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+          {description && <p className="text-balance text-sm text-muted-foreground">{description}</p>}
         </header>
         {children}
         {footer && <div className="border-bs pbs-5 text-center text-ui text-muted-foreground">{footer}</div>}
