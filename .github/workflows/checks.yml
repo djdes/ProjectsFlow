@@ -74,6 +74,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Приложение «ProjectsFlow Заметки» для Windows (.NET Framework 4.8, собирается и на Linux).
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build desktop notes app
+        run: npm run build:notes
+
       - name: Build landing
         run: npm run build:landing
 

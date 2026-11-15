@@ -19,6 +19,7 @@
     "build:client": "npm run build -w @projectsflow/client",
     "build:server": "npm run build -w @projectsflow/server",
     "build:landing": "npm run build -w @projectsflow/landing",
+    "build:notes": "node scripts/build-notes.mjs",
     "typecheck": "npm run typecheck -w @projectsflow/client && npm run typecheck -w @projectsflow/server",
     "typecheck:client": "npm run typecheck -w @projectsflow/client",
     "typecheck:server": "npm run typecheck -w @projectsflow/server",

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, Plus, Settings, UserPlus } from 'lucide-react';
+import { Check, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, Plus, Settings, StickyNote, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -172,6 +172,10 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             <DropdownMenuItem onClick={() => navigate('/profile')}>
               <Settings />
               Настройки
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/desktop-notes')}>
+              <StickyNote />
+              Заметки на рабочем столе
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => openSettings(current.id)}>
               <UserPlus />

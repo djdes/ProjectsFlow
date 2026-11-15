@@ -274,6 +274,8 @@ import { workflowRouter } from './automation/workflowRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { taskAssigneesRouter } from './assignees/routes.js';
 import { meStatsRouter } from './stats/routes.js';
+import { desktopNotesRouter } from './desktop-notes/routes.js';
+import type { DesktopNotesService } from '../application/desktop-notes/DesktopNotesService.js';
 import type { GetMyCompletedStats } from '../application/stats/GetMyCompletedStats.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
@@ -495,6 +497,8 @@ type AppDeps = {
   };
   // «Доступ пространств» проекта (db/182).
   readonly projectSharing?: ManageProjectSharing;
+  // Заметки на рабочем столе (приложение для Windows). Опционально — тестам не нужно.
+  readonly desktopNotes?: DesktopNotesService;
   readonly workspaces: {
     readonly service: WorkspaceService;
     readonly projectAccess: ManageWorkspaceProjectAccess;
@@ -1066,6 +1070,12 @@ export function createApp(deps: AppDeps): CreatedApp {
   if (deps.projectSharing) app.use('/api/projects', projectWorkspaceAccessRouter({ manage: deps.projectSharing }));
   app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
   app.use('/api/me', meStatsRouter(deps.meStats));
+  if (deps.desktopNotes) {
+    app.use(
+      '/api/desktop-notes',
+      desktopNotesRouter({ service: deps.desktopNotes, authenticate: deps.agent.authenticateAgentToken }),
+    );
+  }
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin/llm', llmAdminRouter(deps.llm));
   app.use('/api/admin/mailings', adminMailingRouter(deps.mailing));

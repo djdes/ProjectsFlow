@@ -25,6 +25,10 @@ export function DevicePage(): React.ReactElement {
   const { agentDeviceRepository } = useContainer();
   const [params, setParams] = useSearchParams();
   const codeFromUrl = params.get('code') ?? '';
+  // ?client=notes — подключение приложения «ProjectsFlow Заметки» (Windows): другой текст
+  // и подключение одной кнопкой, без поля названия. ?device= — имя компьютера.
+  const isNotes = params.get('client') === 'notes';
+  const deviceName = (params.get('device') ?? '').trim().slice(0, 60);
 
   if (codeFromUrl.length === 0) {
     return <ManualCodeEntry onSubmit={(code) => setParams({ code })} />;
@@ -35,6 +39,7 @@ export function DevicePage(): React.ReactElement {
       userCode={normalizeCode(codeFromUrl)}
       repo={agentDeviceRepository}
       onReset={() => setParams({})}
+      notes={isNotes ? { deviceName } : null}
     />
   );
 }
@@ -89,14 +94,19 @@ function DeviceFlow({
   userCode,
   repo,
   onReset,
+  notes,
 }: {
   userCode: string;
   repo: AgentDeviceRepository;
   onReset: () => void;
+  notes: { deviceName: string } | null;
 }): React.ReactElement {
   const [info, setInfo] = useState<DeviceCodeInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [tokenName, setTokenName] = useState('Claude Code');
+  const [tokenName, setTokenName] = useState(() =>
+    notes ? `Заметки · ${notes.deviceName || 'Windows'}` : 'Claude Code',
+  );
+  const clientName = notes ? 'приложении заметок' : 'Claude Code';
   const [submitting, setSubmitting] = useState(false);
   const [approved, setApproved] = useState(false);
   // Снимаем "сейчас" один раз при маунте — useState lazy-init, чтобы react-hooks/purity
@@ -113,7 +123,7 @@ function DeviceFlow({
       .catch((err: unknown) => {
         if (cancelled) return;
         if (err instanceof HttpError) {
-          if (err.status === 404) setLoadError('Код не найден или истёк. Запроси новый в Claude Code.');
+          if (err.status === 404) setLoadError(`Код не найден или истёк. Запросите новый в ${clientName}.`);
           else if (err.status === 410) setLoadError('Срок действия кода истёк. Запроси новый.');
           else setLoadError(err.body.message ?? 'Не удалось загрузить код');
         } else {
@@ -123,7 +133,7 @@ function DeviceFlow({
     return () => {
       cancelled = true;
     };
-  }, [userCode, repo]);
+  }, [userCode, repo, clientName]);
 
   if (loadError) {
     return (
@@ -152,10 +162,12 @@ function DeviceFlow({
 
   if (info.status !== 'pending') {
     const map: Record<Exclude<typeof info.status, 'pending'>, string> = {
-      approved: 'Этот код уже подтверждён — Claude Code должен забрать токен в ближайшие пару секунд.',
+      approved: notes
+        ? 'Этот код уже подтверждён — заметки подключатся через пару секунд.'
+        : 'Этот код уже подтверждён — Claude Code должен забрать токен в ближайшие пару секунд.',
       consumed: 'Этот код уже использован. Подключение выполнено.',
       denied: 'Этот код был отклонён.',
-      expired: 'Срок действия кода истёк. Запроси новый в Claude Code.',
+      expired: `Срок действия кода истёк. Запросите новый в ${clientName}.`,
     };
     return (
       <AuthFormCard
@@ -176,7 +188,11 @@ function DeviceFlow({
       <AuthFormCard
         icon={<StateIcon tone="done"><Check /></StateIcon>}
         title="Подключено"
-        description="Возвращайся в терминал — Claude Code заберёт токен и завершит setup."
+        description={
+          notes
+            ? 'Заметки подключены. Закрепляйте задачи кнопкой «На экран» — они появятся поверх окон. Эту вкладку можно закрыть.'
+            : 'Возвращайся в терминал — Claude Code заберёт токен и завершит setup.'
+        }
         footer={
           <Button asChild variant="ghost">
             <Link to="/">На главную</Link>
@@ -205,6 +221,39 @@ function DeviceFlow({
   };
 
   const minutesLeft = Math.max(0, Math.round((info.expiresAt.getTime() - mountedAt) / 60000));
+
+  if (notes) {
+    return (
+      <AuthFormCard
+        title="Подключить заметки на этом компьютере?"
+        description={
+          <>
+            Приложение «ProjectsFlow Заметки»
+            {notes.deviceName ? <> на&nbsp;компьютере «{notes.deviceName}»</> : null} будет показывать
+            закреплённые задачи стикерами поверх окон.
+          </>
+        }
+      >
+        <form onSubmit={handleApprove} className="flex flex-col gap-4">
+          <div className="rounded-xl bg-panel px-4 py-3 text-center">
+            <p className="font-mono text-lg tracking-widest text-foreground">{userCode}</p>
+            <p className="text-xs text-muted-foreground">
+              Код должен совпадать с&nbsp;тем, что показало приложение
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" size="lg" className="flex-1" onClick={onReset}>
+              Отмена
+            </Button>
+            <Button type="submit" size="lg" className="flex-1" disabled={submitting} autoFocus>
+              {submitting && <Loader2 className="size-4 motion-safe:animate-spin" />}
+              Подключить
+            </Button>
+          </div>
+        </form>
+      </AuthFormCard>
+    );
+  }
 
   return (
     <AuthFormCard

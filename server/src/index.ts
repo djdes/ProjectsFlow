@@ -1,4 +1,6 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
+import { DesktopNotesService } from './application/desktop-notes/DesktopNotesService.js';
+import { DrizzleDesktopNoteRepository } from './infrastructure/repositories/DrizzleDesktopNoteRepository.js';
 import { GetPlatformStats } from './application/admin/GetPlatformStats.js';
 import { DrizzlePlatformStatsRepository } from './infrastructure/repositories/DrizzlePlatformStatsRepository.js';
 import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
@@ -2670,6 +2672,11 @@ const { app, devProxyUpgrade } = createApp({
     maxCoverBytes: MAX_COVER_BYTES,
     hiddenTaskIds,
   },
+  desktopNotes: new DesktopNotesService({
+    repo: new DrizzleDesktopNoteRepository(db),
+    tasks: taskRepo,
+    getTask: new GetTask({ projects: projectRepo, members: projectMemberRepo, tasks: taskRepo }),
+  }),
   projectSharing: new ManageProjectSharing({
     projects: projectRepo,
     sharing: projectSharingRepo,
