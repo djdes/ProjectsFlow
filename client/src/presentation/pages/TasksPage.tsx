@@ -31,6 +31,7 @@ import { ProjectDescription } from '@/presentation/components/project/ProjectDes
 import { randomCover } from '@/presentation/components/project/coverGallery';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
 // Ключ и чтение переключателя «Скрыть описание» — пер-проектные, живут вне компонента,
 // чтобы их можно было звать из инициализатора состояния и при смене проекта в рендере.
@@ -60,6 +61,8 @@ export function TasksPage(): React.ReactElement {
   // Число активных алертов — для бейджа на кнопке.
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
   const [automationOpen, setAutomationOpen] = useState(false);
+  // Строка крошек вмещает подписи («Изменено …», «Поделиться», аватары) только от 1024px.
+  const wideCrumbs = useMediaQuery('(min-width: 1024px)');
   // Окно активности открыто? Пока открыто — действия в шапке страницы прячем (они в окне).
   // Окно активности переживает перезагрузку страницы (sessionStorage пер-проект): открыто
   // до reload → открыто после. Восстанавливаем синхронно в инициализаторе useState.
@@ -330,14 +333,18 @@ export function TasksPage(): React.ReactElement {
             {/* Активность/аналитика проекта. */}
             {/* Кнопка «Изменено …» открывает окно активности; ему же отдаём действия,
                 чтобы они были в правом верхнем углу окна (Notion-style). Пока окно открыто —
-                и кнопку «Изменено», и действия шапки прячем (они уже внутри окна). */}
+                и кнопку «Изменено», и действия шапки прячем (они уже внутри окна).
+                Уже 1024px (планшет, окно с панелью) — значками, как в мобильной шапке:
+                «Изменено 3 ч назад», аватары и «Поделиться» занимали почти всю строку, и
+                крошки «Проекты › Проект» уезжали под счётчик «сделано сегодня». */}
             <ProjectActivityButton
               projectId={data.id}
-              actions={projectActions()}
+              actions={projectActions(!wideCrumbs)}
               open={activityOpen}
               onOpenChange={setActivityOpen}
+              compact={!wideCrumbs}
             />
-            {projectActions()}
+            {projectActions(!wideCrumbs)}
           </div>
         </TooltipProvider>
       </div>

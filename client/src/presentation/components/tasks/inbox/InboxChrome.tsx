@@ -195,9 +195,11 @@ export function QueueHeader({
   const { back: canScrollBack, forward: canScrollForward } = useScrollEdges(scrollTarget);
   return (
     <div className="flex h-7 items-center gap-2 px-0.5">
-      <span aria-hidden className="size-3 rounded-full border-[2.4px] border-primary" />
-      <h2 className="text-ui font-semibold">{label}</h2>
-      <span className="text-meta tabular-nums text-muted-foreground">{count}</span>
+      <span aria-hidden className="size-3 shrink-0 rounded-full border-[2.4px] border-primary" />
+      {/* Узкий ряд очереди (планшет с панелью) — название в одну строку с «…», а не
+          столбиком «Очередь / по / проектам». */}
+      <h2 className="min-w-0 truncate text-ui font-semibold">{label}</h2>
+      <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{count}</span>
       <span className="flex-1" />
       {/* Листание — для мыши: на тач-экранах ряд листается пальцем. */}
       <div className="hidden items-center gap-1 sm:flex">

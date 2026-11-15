@@ -1801,7 +1801,7 @@ export function AssignedToMeBlock({
         aria-label="Люди"
         className={cn(
           'flex items-center',
-          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'max-w-full flex-wrap gap-1.5' : 'w-max gap-1',
+          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'w-max gap-1.5' : 'w-max gap-1',
         )}
       >
         {user && dragActive && <SelfDropTile user={user} />}
@@ -1845,22 +1845,28 @@ export function AssignedToMeBlock({
   // Поле поиска появляется по лупе (и остаётся, пока в нём есть текст).
   const searchVisible = searchOpen || query !== '';
   const whoDivider = people ? <span aria-hidden className="h-5 w-px shrink-0 bg-border" /> : null;
+  // Поиск и действия страницы — одна группа у правого края строки сроков (десктоп): первая
+  // строка целиком отдана «кто» (заголовок, «Мои / Все», люди). Раньше группа стояла в первой
+  // строке и при команде из 5+ человек уезжала отдельной строкой — шапка росла до трёх строк.
+  const searchGroup = (
+    <div className="ms-auto flex shrink-0 items-center gap-1">
+      {hasAny && <InboxSearch value={query} onChange={setQuery} className="me-1 w-44 2xl:w-60" />}
+      <div className="flex shrink-0 items-center gap-1">
+        {filtersPopover}
+        {actions}
+      </div>
+    </div>
+  );
   const headRow = isWide ? (
     <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-2 gap-y-2">
       {heading}
       {hasAny && tabsOrFocus}
-      {hasAny && whoDivider}
-      {hasAny && people}
-      {/* Поиск и действия — одна группа у правого края: поиск ужимается (144…240px), пока
-          группа помещается в строку, а если нет — она переносится целиком и остаётся
-          справа, а не рассыпается кнопками под заголовком. */}
-      <div className="flex min-w-0 flex-[1_1_auto] items-center justify-end gap-1">
-        {hasAny && <InboxSearch value={query} onChange={setQuery} className="me-1 w-36 min-w-0 max-w-60 grow" />}
-        <div className="flex shrink-0 items-center gap-1">
-          {filtersPopover}
-          {actions}
-        </div>
-      </div>
+      {/* Уже 1024px лента людей может уйти на свою строку — разделитель повис бы в конце. */}
+      {hasAny && people && <span aria-hidden className="h-5 w-px shrink-0 bg-border max-lg:hidden" />}
+      {/* Люди — одной лентой на всё свободное место строки (flex-basis 0: лента не
+          переносится второй строкой чипов). Не влезли — «+N ›» у края, как на телефоне. */}
+      {hasAny && people && <SteppedRibbon className="min-w-40 flex-[1_1_0%]">{people}</SteppedRibbon>}
+      {!hasAny && searchGroup}
     </div>
   ) : (
     <div className="flex flex-col gap-3">
@@ -2400,8 +2406,12 @@ export function AssignedToMeBlock({
             Сбросить фильтры
           </button>
         )}
-        {isWide && <span className="flex-1" />}
-        {isWide && <span className="hidden text-meta text-muted-foreground lg:inline">{subtitleBase}</span>}
+        {isWide && (
+          <span title={subtitleBase} className="hidden min-w-0 flex-[1_1_0%] truncate pe-2 text-end text-meta text-muted-foreground xl:block">
+            {subtitleBase}
+          </span>
+        )}
+        {isWide && searchGroup}
       </div>
 
       {focusedError ? (

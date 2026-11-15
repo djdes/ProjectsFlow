@@ -90,8 +90,9 @@ function useHiddenAfterCount(
   return count;
 }
 
+// 36px on touch screens, 28px next to the 28px chips of the desktop row (hit area +4px).
 const STEPPER_CLASS =
-  'pointer-events-auto relative inline-flex h-9 shrink-0 items-center justify-center gap-0.5 rounded-full border border-border bg-raised text-ui font-semibold tabular-nums text-foreground shadow-float transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary after:absolute after:-inset-1 after:content-[""]';
+  'pointer-events-auto relative inline-flex h-9 md:h-7 md:text-meta shrink-0 items-center justify-center gap-0.5 rounded-full border border-border bg-raised text-ui font-semibold tabular-nums text-foreground shadow-float transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary after:absolute after:-inset-1 after:content-[""]';
 
 // A sideways ribbon with explicit steppers at the edges that hide content: «+N ›» at the end
 // (N — how many items are cut off) and «‹» at the start. A fade alone did not read as «swipe
@@ -134,7 +135,7 @@ export function SteppedRibbon({
       </div>
       {back && (
         <div className="pointer-events-none absolute inset-bs-0 inset-be-0 start-0 flex items-center">
-          <button type="button" onClick={pageBack} aria-label="Листать назад" title="Листать назад" className={cn(STEPPER_CLASS, 'w-9')}>
+          <button type="button" onClick={pageBack} aria-label="Листать назад" title="Листать назад" className={cn(STEPPER_CLASS, 'w-9 md:w-7')}>
             <ChevronLeft aria-hidden className="size-4" />
           </button>
         </div>
@@ -147,7 +148,7 @@ export function SteppedRibbon({
             onClick={pageForward}
             aria-label={hidden > 0 ? `Ещё ${hidden} — листать вперёд` : 'Листать вперёд'}
             title="Листать вперёд"
-            className={cn(STEPPER_CLASS, 'min-w-9 pe-1.5 ps-2')}
+            className={cn(STEPPER_CLASS, 'min-w-9 pe-1.5 ps-2 md:min-w-7 md:pe-1 md:ps-1.5')}
           >
             {hidden > 0 && <span>+{hidden}</span>}
             <ChevronRight aria-hidden className="size-4" />
