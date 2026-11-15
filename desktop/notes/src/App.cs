@@ -165,10 +165,12 @@ namespace ProjectsFlowNotes
                     continue;
                 }
                 settings.Notes.TryGetValue(note.TaskId, out var placement);
-                var w = new NoteWindow(note, placement?.Color);
+                var w = new NoteWindow(note, placement?.Color, placement?.Opacity);
                 w.UnpinRequested += OnUnpin;
                 w.Moved += win => Remember(win);
-                w.ColorChanged += win => Remember(win);
+                w.LookChanged += win => Remember(win);
+                w.ApplyLookToAll += OnApplyLookToAll;
+                w.StatusRequested += OnStatusRequested;
                 windows[note.TaskId] = w;
                 Place(w, placement);
                 if (!settings.Hidden) w.Show();
@@ -181,8 +183,41 @@ namespace ProjectsFlowNotes
 
         private void Remember(NoteWindow w)
         {
-            settings.Notes[w.TaskId] = new NotePlacement { X = w.Left, Y = w.Top, Color = w.ColorKey };
+            settings.Notes[w.TaskId] = new NotePlacement { X = w.Left, Y = w.Top, Color = w.ColorKey, Opacity = w.RestOpacity };
             settings.Save();
+        }
+
+        private void OnApplyLookToAll(NoteWindow source)
+        {
+            foreach (var w in windows.Values)
+            {
+                if (w != source) w.SetLook(source.ColorKey, source.RestOpacity);
+                settings.Notes[w.TaskId] = new NotePlacement { X = w.Left, Y = w.Top, Color = w.ColorKey, Opacity = w.RestOpacity };
+            }
+            settings.Save();
+        }
+
+        // Смена колонки со стикера: сразу показываем выбранное, сервер переносит задачу как на доске.
+        private async void OnStatusRequested(NoteWindow w, string status, bool restore)
+        {
+            var label = w.Note.StatusOptions.FirstOrDefault(o => o.Key == status).Value ?? status;
+            w.ShowPendingStatus(restore ? "Возвращаю" : label);
+            try
+            {
+                var updated = await api.SetStatus(w.TaskId, status, restore);
+                if (updated != null) w.Update(updated);
+                else await Sync();
+            }
+            catch (UnauthorizedException)
+            {
+                SignOut(expired: true);
+            }
+            catch (Exception e)
+            {
+                Log.Write("status failed: " + e.Message);
+                Balloon("Статус не изменён", e is InvalidOperationException ? e.Message : "Нет связи с ProjectsFlow, попробуйте ещё раз.");
+                w.ForceRender();
+            }
         }
 
         // Новый стикер — в первую свободную ячейку колонки у правого края экрана.

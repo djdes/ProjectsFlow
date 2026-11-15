@@ -2676,6 +2676,15 @@ const { app, devProxyUpgrade } = createApp({
     repo: new DrizzleDesktopNoteRepository(db),
     tasks: taskRepo,
     getTask: new GetTask({ projects: projectRepo, members: projectMemberRepo, tasks: taskRepo }),
+    projects: projectRepo,
+    moveTask: new MoveTask({
+      projects: projectRepo,
+      approval: taskApprovalService,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      activityRecorder,
+    }),
+    notify: { taskChanged: notifyTaskChanged, statusChanged: notifyStatusChanged },
   }),
   projectSharing: new ManageProjectSharing({
     projects: projectRepo,

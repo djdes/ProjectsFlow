@@ -21,11 +21,15 @@ namespace ProjectsFlowNotes
         public string StatusLabel;
         public string Deadline; // YYYY-MM-DD или null
         public string Path;
+        public bool CanEdit;
+        public List<KeyValuePair<string, string>> StatusOptions = new List<KeyValuePair<string, string>>(); // status → подпись
+
+        private string OptionsKey => string.Join(";", StatusOptions.Select(o => o.Key + "=" + o.Value));
 
         public bool SameAs(NoteDto other) =>
             other != null && TaskId == other.TaskId && ProjectName == other.ProjectName && Title == other.Title &&
             Excerpt == other.Excerpt && Status == other.Status && StatusLabel == other.StatusLabel &&
-            Deadline == other.Deadline && Path == other.Path;
+            Deadline == other.Deadline && Path == other.Path && CanEdit == other.CanEdit && OptionsKey == other.OptionsKey;
     }
 
     public sealed class DeviceStart
@@ -89,22 +93,47 @@ namespace ProjectsFlowNotes
                 var list = new List<NoteDto>();
                 if (root.TryGetValue("notes", out var raw) && raw is object[] items)
                 {
-                    foreach (var item in items.OfType<Dictionary<string, object>>())
-                    {
-                        list.Add(new NoteDto
-                        {
-                            TaskId = Str(item, "taskId"),
-                            ProjectName = Str(item, "projectName") ?? "",
-                            Title = Str(item, "title") ?? "Без названия",
-                            Excerpt = Str(item, "excerpt") ?? "",
-                            Status = Str(item, "status") ?? "",
-                            StatusLabel = Str(item, "statusLabel") ?? "",
-                            Deadline = Str(item, "deadline"),
-                            Path = Str(item, "path") ?? "/",
-                        });
-                    }
+                    foreach (var item in items.OfType<Dictionary<string, object>>()) list.Add(ParseNote(item));
                 }
                 return list.Where(n => !string.IsNullOrEmpty(n.TaskId)).ToList();
+            }
+        }
+
+        private NoteDto ParseNote(Dictionary<string, object> item)
+        {
+            var note = new NoteDto
+            {
+                TaskId = Str(item, "taskId"),
+                ProjectName = Str(item, "projectName") ?? "",
+                Title = Str(item, "title") ?? "Без названия",
+                Excerpt = Str(item, "excerpt") ?? "",
+                Status = Str(item, "status") ?? "",
+                StatusLabel = Str(item, "statusLabel") ?? "",
+                Deadline = Str(item, "deadline"),
+                Path = Str(item, "path") ?? "/",
+                CanEdit = item.TryGetValue("canEdit", out var ce) && ce is bool b && b,
+            };
+            if (item.TryGetValue("statusOptions", out var raw) && raw is object[] opts)
+            {
+                foreach (var o in opts.OfType<Dictionary<string, object>>())
+                {
+                    var status = Str(o, "status");
+                    if (!string.IsNullOrEmpty(status)) note.StatusOptions.Add(new KeyValuePair<string, string>(status, Str(o, "label") ?? status));
+                }
+            }
+            return note;
+        }
+
+        // Перенос задачи в другую колонку прямо со стикера. Возвращает обновлённую заметку.
+        public async Task<NoteDto> SetStatus(string taskId, string status, bool restore)
+        {
+            var body = new Dictionary<string, object> { { "status", status }, { "restore", restore } };
+            using (var res = await http.SendAsync(Request(HttpMethod.Post, "/api/desktop-notes/" + Uri.EscapeDataString(taskId) + "/status", body)))
+            {
+                if (res.StatusCode == HttpStatusCode.Unauthorized) throw new UnauthorizedException();
+                var root = Parse(await res.Content.ReadAsStringAsync());
+                if (!res.IsSuccessStatusCode) throw new InvalidOperationException(Str(root, "message") ?? "Не удалось сменить статус");
+                return root.TryGetValue("note", out var n) && n is Dictionary<string, object> d ? ParseNote(d) : null;
             }
         }
 
