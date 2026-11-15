@@ -5,7 +5,7 @@ import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import type { TaskStatus } from '@/domain/task/Task';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
-import { ColumnPreviewList } from '@/presentation/components/tasks/ColumnPreview';
+import { CARD_STACK_GAP_CLASS, ColumnPreviewList } from '@/presentation/components/tasks/ColumnPreview';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import type { PublicColumn, PublicTask } from '@/domain/public/PublicBoard';
 
@@ -113,7 +113,7 @@ export function PublicKanban({
             </span>
             <span className="text-meta tabular-nums text-muted-foreground">{col.tasks.length}</span>
           </header>
-          <div className="flex flex-col gap-[5px]">
+          <div className={cn('flex flex-col', CARD_STACK_GAP_CLASS)}>
             {/* Порциями по 4 + «Показать ещё» — как на внутренних досках. */}
             <ColumnPreviewList
               items={col.tasks}

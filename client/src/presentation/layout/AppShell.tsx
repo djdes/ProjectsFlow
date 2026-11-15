@@ -459,7 +459,9 @@ function WorkspaceShell(): React.ReactElement {
                 className="w-[88vw] max-w-sm p-0 ease-out data-[state=closed]:duration-200 data-[state=open]:duration-200"
               >
                 <SheetTitle className="sr-only">Навигация</SheetTitle>
-                <div className="h-full">
+                {/* Drawer во всю высоту экрана: в PWA (viewport-fit=cover) шапка панели иначе
+                    уходила под часы и вырез iPhone. Полоса под статус-баром — цвета панели. */}
+                <div className="h-full bg-sidebar pbs-[env(safe-area-inset-top,0px)]">
                   <Sidebar onNavigate={() => setDrawerOpen(false)} />
                 </div>
                 {/* Свой крестик — выровнен по строке шапки Sidebar (p-3, иконки size-8),
@@ -468,7 +470,7 @@ function WorkspaceShell(): React.ReactElement {
                   type="button"
                   onClick={() => setDrawerOpen(false)}
                   aria-label="Закрыть"
-                  className="absolute end-2 inset-bs-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                  className="absolute end-2 inset-bs-[calc(env(safe-area-inset-top,0px)+0.75rem)] grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <X className="size-4" />
                 </button>

@@ -4,6 +4,7 @@ import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { ManualIcon } from './inbox/InboxChrome';
+import { CARD_STACK_GAP_CLASS } from './ColumnPreview';
 import { Check } from 'lucide-react';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
@@ -86,7 +87,7 @@ export function BoardWorkShelf({
           </div>
         ) : (
           <SortableContext items={tasks.map((t) => t.id)}>
-            <div className="flex flex-wrap gap-[5px]">
+            <div className={cn('flex flex-wrap', CARD_STACK_GAP_CLASS)}>
               {tasks.map((t) => (
                 <ShelfCard
                   key={t.id}

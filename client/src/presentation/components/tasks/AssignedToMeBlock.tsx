@@ -95,7 +95,7 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
-import { EdgeFadeScroller } from '@/presentation/components/layout/EdgeFadeScroller';
+import { SteppedRibbon } from '@/presentation/components/layout/EdgeFadeScroller';
 import { shortUserLabels } from '@/domain/user/shortUserLabels';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import { userLabel } from '@/domain/user/userLabel';
@@ -123,7 +123,7 @@ import {
   type SwipeAction,
 } from './inbox/InboxChrome';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
-import { COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
+import { CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { matchesInboxQuery } from './inbox/searchTasks';
@@ -1878,8 +1878,8 @@ export function AssignedToMeBlock({
         <div ref={inboxHeadRef} className={cn('flex min-h-11 min-w-0 gap-2', dragActive ? 'items-start' : 'items-center')}>
           <div className={cn('shrink-0', focusedMember && 'min-w-0 max-w-[62%]')}>{tabsOrFocus}</div>
           {whoDivider && !dragActive && whoDivider}
-          {/* p-1 -m-1: room for the focus ring, which the scroll box would clip. */}
-          {people && <EdgeFadeScroller className="-m-1 min-w-0 flex-1 p-1">{people}</EdgeFadeScroller>}
+          {/* «+N ›» at the cut edge: a fade alone did not read as «swipe for more». */}
+          {people && <SteppedRibbon className="flex-1">{people}</SteppedRibbon>}
         </div>
       )}
     </div>
@@ -2196,7 +2196,7 @@ export function AssignedToMeBlock({
                       </ColumnHead>
                       <div
                         onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
-                        className={cn('flex flex-col gap-[5px]', COLUMN_SCROLL_CLASS)}
+                        className={cn('flex flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS)}
                       >
                         {composer(group.key)}
                         {group.items.length === 0 && composingProject !== group.key && (
@@ -2675,10 +2675,10 @@ function ColumnSelectionControls({
 }
 
 // === Колонки доски «Входящих» (дизайн C4) ===
-// Колонка — серая панель 256px с радиусом 10px, карточки внутри с зазором 5px; шапка 28px:
+// Колонка — серая панель 256px с радиусом 10px, карточки внутри с зазором 5px (на телефоне 10px); шапка 28px:
 // метка-тон, счётчик, действия справа. Свёрнутая колонка — вертикальная полоска 38px.
 const INBOX_COLUMN_CLASS =
-  'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col gap-[5px] rounded-xl bg-panel p-1.5 transition-[background-color,outline-color] duration-150 sm:w-64 sm:max-w-none';
+  `flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col ${CARD_STACK_GAP_CLASS} rounded-xl bg-panel p-1.5 transition-[background-color,outline-color] duration-150 sm:w-64 sm:max-w-none`;
 const COLLAPSED_COLUMN_CLASS =
   'flex min-h-[200px] w-[38px] shrink-0 flex-col rounded-xl bg-panel transition-[background-color,outline-color] duration-150';
 // Ряд колонок: свой скролл вбок, родная полоса спрятана — видимую и закреплённую снизу даёт
@@ -2901,7 +2901,7 @@ function MobileQueueGroup({
         </button>
         {actions}
       </div>
-      {!collapsed && <div className="flex flex-col gap-[5px] px-1.5 pbe-1.5">{children}</div>}
+      {!collapsed && <div className={cn('flex flex-col px-1.5 pbe-1.5', CARD_STACK_GAP_CLASS)}>{children}</div>}
     </div>
   );
 }
@@ -3060,7 +3060,7 @@ function TimeBucketColumn({
           <div
             // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
             onPointerDown={selection ? onCardsPointerDown : undefined}
-            className={cn('flex min-h-[3rem] flex-col gap-[5px]', COLUMN_SCROLL_CLASS)}
+            className={cn('flex min-h-[3rem] flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS)}
           >
             {children}
           </div>
@@ -3385,7 +3385,8 @@ function ApprovalShelf({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col gap-[5px] rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        'flex flex-col rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        CARD_STACK_GAP_CLASS,
         canDrop && dragActive && !isOver && DROP_TARGET_CLASS,
         isOver && 'bg-approval-zone outline outline-2 -outline-offset-2 outline-primary',
         className,
@@ -3668,7 +3669,8 @@ function InProgressShelf({
     <div
       ref={setNodeRef}
       className={cn(
-        'relative flex flex-col gap-[5px] rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        'relative flex flex-col rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        CARD_STACK_GAP_CLASS,
         dragActive && !isOver && DROP_TARGET_CLASS,
         isOver && 'bg-manual-zone outline outline-2 -outline-offset-2 outline-primary',
         flash && 'pf-shelf-flash',

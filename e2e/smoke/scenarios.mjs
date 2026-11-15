@@ -583,6 +583,70 @@ export const scenarios = [
   },
 
   {
+    // A team that does not fit the phone: a fade alone did not read as «swipe for more», so
+    // the cut edge carries «+N ›» (N — people cut off) that pages the ribbon, and «‹» back.
+    id: 'inbox-people-ribbon',
+    title: 'Входящие на телефоне: лента людей листается кнопкой «+N»',
+    matrix: [
+      ['phone', 'light'],
+      ['narrow', 'dark'],
+    ],
+    async run(t) {
+      const { page, state } = t;
+      const extra = ['Денис Волков', 'Ирина Петрова', 'Максим Дронов', 'Олег Боев', 'Сергей Ким'].map((displayName, i) => ({
+        id: `u-extra-${i}`,
+        email: `extra${i}@smoke.test`,
+        displayName,
+        avatarUrl: null,
+      }));
+      state.membersByWorkspace = { ...(state.membersByWorkspace ?? {}), [WORKSPACE_ID]: [...COLLEAGUES, ...extra] };
+      await t.goto('/', {
+        ready: () => page.locator('[data-pf-task-id]:visible'),
+        readyName: 'карточки «Входящих» видны',
+      });
+      await t.pageChecks('Входящие с большой командой');
+      const forward = page.getByRole('button', { name: /листать вперёд/ });
+      const back = page.getByRole('button', { name: 'Листать назад' });
+      // People whose chip reaches under the «+N ›» button or past the ribbon's edge.
+      const cutOff = () =>
+        page.evaluate(() => {
+          const button = [...document.querySelectorAll('button')].find((b) => /листать вперёд/.test(b.getAttribute('aria-label') ?? ''));
+          if (!button) return { hidden: 0, label: null };
+          const edge = button.getBoundingClientRect().left;
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
+          return { hidden: people.filter((el) => el.getBoundingClientRect().right > edge + 1).length, label: button.textContent.trim() };
+        });
+      await t.step('у обрезанного края — «+N ›», N = сколько людей не видно', async () => {
+        await t.visible(forward, 'кнопка «+N ›» у края ленты людей');
+        await t.waitFor(async () => {
+          const { hidden, label } = await cutOff();
+          return { ok: hidden > 0 && label === `+${hidden}`, hidden, label };
+        }, 'число на кнопке не совпадает с числом обрезанных людей');
+        t.assert((await back.count()) === 0, 'у начала ленты не должно быть «‹»');
+      });
+      await t.step('«+N ›» листает ленту до последнего человека, «‹» возвращает', async () => {
+        for (let i = 0; i < 6 && (await forward.count()) > 0; i += 1) {
+          await forward.first().click();
+          await page.waitForTimeout(150);
+        }
+        t.assert((await forward.count()) === 0, 'после листания до конца кнопка «+N ›» осталась');
+        await t.visible(back, 'кнопка «‹» у начала ленты');
+        const last = await page.evaluate(() => {
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
+          const box = people.at(-1).getBoundingClientRect();
+          return { right: Math.round(box.right), viewport: document.documentElement.clientWidth };
+        });
+        t.assert(last.right <= last.viewport, `последний человек за краем экрана: ${last.right} > ${last.viewport}`);
+        for (let i = 0; i < 6 && (await back.count()) > 0; i += 1) {
+          await back.first().click();
+          await page.waitForTimeout(150);
+        }
+        t.assert((await back.count()) === 0, '«‹» не вернула ленту к началу');
+        await t.visible(forward, 'кнопка «+N ›» снова у края');
+      });
+    },
+  },
+  {
     id: 'inbox-mobile',
     title: 'Входящие на телефоне',
     matrix: [
