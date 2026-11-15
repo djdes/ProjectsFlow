@@ -326,15 +326,18 @@ export function AiComposer({
       <div className="mbs-2 flex flex-wrap items-center gap-1.5 px-2.5">
         <input ref={fileInput} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.target.value = ''; }} />
         <button type="button" disabled={photoMode} title={photoMode ? 'Для генерации фото напишите описание' : 'Вставьте скрин Ctrl+V или выберите файл'} aria-label="Прикрепить файл" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground disabled:opacity-40 max-sm:size-10" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></button>
-        <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Авто</span>
+        {/* «Авто» is only a hint: on a 320px phone it pushed the send button onto a second
+            row, so below 360px it gives way and the toolbar stays one even line. */}
+        <span className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground max-[359px]:hidden"><Sparkles className="size-3.5" /> Авто</span>
         {imageMode && <button
           type="button"
           aria-pressed={photoMode}
           disabled={sending || attachments.length > 0}
           title={attachments.length ? 'Уберите вложения, чтобы включить генерацию фото' : 'Создать фотографию по описанию'}
           onClick={() => imageMode.onChange(!photoMode)}
-          className={cn('inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:opacity-50', photoMode ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground')}
-        ><ImagePlus className="size-3.5 shrink-0" aria-hidden />Генерация фото</button>}
+          aria-label="Генерация фото"
+          className={cn('inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium max-[359px]:capitalize transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80 disabled:opacity-50', photoMode ? 'bg-primary-soft text-primary-ink' : 'bg-muted text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground')}
+        ><ImagePlus className="size-3.5 shrink-0" aria-hidden /><span><span className="max-[359px]:hidden">Генерация </span>фото</span></button>}
         <div className="flex-1" />
         {/* Чистый тумблер: коробка кнопки не меняется, меняются только заливка/цвет и
             плейсхолдер поля. Черновик и фокус остаются на месте — поле не перемонтируется. */}

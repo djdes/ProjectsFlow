@@ -1784,7 +1784,13 @@ export function AssignedToMeBlock({
   // плитки с именем: в маленький кружок трудно попасть (задача 3a36e7e8).
   const people =
     user || members.length > 0 ? (
-      <div role="group" aria-label="Люди" className="flex max-w-full flex-wrap items-start gap-2">
+      // Phone at rest: one even ribbon that scrolls sideways (wrapping staggered the avatars
+      // 3+1 / 2+2 next to the tabs). While dragging, tiles wrap so every drop target is visible.
+      <div
+        role="group"
+        aria-label="Люди"
+        className={cn('flex items-start gap-2', isWide || dragActive ? 'max-w-full flex-wrap' : 'w-max')}
+      >
         {user && <SelfDropAvatar user={user} dragging={dragActive} />}
         {members.map((m) => (
           <UserCube

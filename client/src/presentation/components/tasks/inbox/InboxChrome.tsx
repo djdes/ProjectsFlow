@@ -130,7 +130,7 @@ export function DueFilterChips({
             aria-pressed={on}
             onClick={() => onChange(on ? null : chip.key)}
             className={cn(
-              'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
+              'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active max-[359px]:text-2xs md:min-h-7 md:px-2.5',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
                 : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
