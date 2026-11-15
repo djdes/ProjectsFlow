@@ -1,5 +1,6 @@
 import { InsufficientProjectRoleError, ProjectNotFoundError } from '../../domain/project/errors.js';
 import { TaskNotFoundError } from '../../domain/task/errors.js';
+import { WorkerDisabledError } from '../../domain/workspace/errors.js';
 import type { TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import { resolveStatusLabel } from '../../domain/task/statusLabels.js';
@@ -12,6 +13,7 @@ import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { GetTask } from '../task/GetTask.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { WorkerPolicy } from '../workspace/WorkerPolicy.js';
 import type { DesktopNoteRepository } from './DesktopNoteRepository.js';
 
 // Стикер задачи для приложения «ProjectsFlow Заметки» (и список закреплённого в интерфейсе).
@@ -83,6 +85,8 @@ type Deps = {
   readonly getTask: GetTask;
   readonly projects?: Pick<ProjectRepository, 'getKanbanSettings'>;
   readonly moveTask?: MoveTask;
+  // Worker switched off in the workspace (db/152): the sticker must not offer its column.
+  readonly workerPolicy?: Pick<WorkerPolicy, 'isEnabledForProject'>;
   readonly listComments?: ListTaskComments;
   readonly listAttachments?: ListTaskAttachments;
   readonly users?: Pick<UserRepository, 'getManyByIds'>;
@@ -106,9 +110,16 @@ const readable = (text: string | null | undefined): string => taskExcerpt(text, 
 const BUILT_IN: readonly TaskStatus[] = ['backlog', 'manual', 'todo', 'done'];
 
 // Колонки как на доске: встроенные (кроме скрытых), затем кастомные, «Готово» — последней.
-function statusOptions(settings: KanbanBoardSettings | null, current: TaskStatus): DesktopNote['statusOptions'] {
+// Колонки «Воркер» нет и при выключенном воркере пространства — доска её тоже не показывает.
+function statusOptions(
+  settings: KanbanBoardSettings | null,
+  current: TaskStatus,
+  workerEnabled: boolean,
+): DesktopNote['statusOptions'] {
   const builtIn = BUILT_IN.filter(
-    (s) => s === current || !settings?.[s as keyof KanbanBoardSettings]?.hidden,
+    (s) =>
+      s === current ||
+      (!settings?.[s as keyof KanbanBoardSettings]?.hidden && (s !== 'todo' || workerEnabled)),
   );
   const order: TaskStatus[] = [
     ...builtIn.filter((s) => s !== 'done'),
@@ -166,19 +177,36 @@ export class DesktopNotesService {
     if (!note) throw new TaskNotFoundError(taskId);
     if (!this.deps.moveTask) throw new DesktopNoteStatusError('Смена статуса недоступна');
     if (!note.canEdit) throw new DesktopNoteStatusError('У вас нет прав менять эту задачу');
-    if (!note.statusOptions.some((o) => o.status === status)) {
-      throw new DesktopNoteStatusError('Такой колонки нет на доске проекта');
+    if (restore) {
+      // «Готово» сняли на устаревшем стикере, а задача уже не выполнена (например, её
+      // взял воркер): ничего не двигаем — иначе обычный перенос выдернул бы её из работы.
+      if (note.status !== 'done') return note;
+      // Целевую колонку выбирает MoveTask по снимку status_before_done — проверять
+      // присланный status по колонкам доски нельзя: при скрытой «В работе» снять
+      // «Готово» со стикера было бы невозможно.
+    } else {
+      if (!note.statusOptions.some((o) => o.status === status)) {
+        throw new DesktopNoteStatusError('Такой колонки нет на доске проекта');
+      }
+      if (status === note.status) return note;
     }
-    if (status === note.status && !restore) return note;
-    const moved = await this.deps.moveTask.execute({
-      projectId: note.projectId,
-      ownerUserId: userId,
-      taskId,
-      targetStatus: status,
-      beforeTaskId: null,
-      afterTaskId: null,
-      restore: restore && note.status === 'done',
-    });
+    let moved: Awaited<ReturnType<MoveTask['execute']>>;
+    try {
+      moved = await this.deps.moveTask.execute({
+        projectId: note.projectId,
+        ownerUserId: userId,
+        taskId,
+        targetStatus: status,
+        beforeTaskId: null,
+        afterTaskId: null,
+        restore,
+      });
+    } catch (e) {
+      if (e instanceof WorkerDisabledError) {
+        throw new DesktopNoteStatusError('Воркер выключен в этом пространстве — колонки «Воркер» нет');
+      }
+      throw e;
+    }
     this.deps.notify?.taskChanged(note.projectId, [moved.assignee.userId]);
     if (moved.status !== note.status) {
       this.deps.notify?.statusChanged(note.projectId, taskId, note.status, moved.status, userId);
@@ -231,7 +259,10 @@ export class DesktopNotesService {
     if (!raw) return null;
     try {
       const task = await this.deps.getTask.execute(raw.projectId, userId, taskId);
-      const settings = (await this.deps.projects?.getKanbanSettings(task.projectId)) ?? null;
+      const [settings, workerEnabled] = await Promise.all([
+        this.deps.projects?.getKanbanSettings(task.projectId) ?? Promise.resolve(null),
+        this.deps.workerPolicy?.isEnabledForProject(task.projectId) ?? Promise.resolve(true),
+      ]);
       const lines = taskExcerpt(task.description, 600)
         .split('\n')
         .map(plain)
@@ -244,7 +275,7 @@ export class DesktopNotesService {
         excerpt: lines.slice(1).join(' ').slice(0, 220),
         status: task.status,
         statusLabel: resolveStatusLabel(settings, task.status),
-        statusOptions: statusOptions(settings, task.status),
+        statusOptions: statusOptions(settings ?? null, task.status, workerEnabled),
         canEdit: task.canEdit,
         deadline: task.deadline,
         priority: task.priority,

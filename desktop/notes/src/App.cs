@@ -474,10 +474,48 @@ namespace ProjectsFlowNotes
             app.Shutdown();
         }
 
+        // Ссылки и файлы в задаче пишет любой участник (и гость, и агент), а Process.Start с
+        // UseShellExecute запускает что угодно: .bat, UNC-путь, обработчик протокола. Наружу
+        // уходят только веб-страницы.
+        public static bool IsWebUrl(string url) =>
+            Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
         public static void OpenUrl(string url)
         {
+            if (!IsWebUrl(url))
+            {
+                Log.Write("open url blocked: not a web address");
+                return;
+            }
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
             catch (Exception e) { Log.Write("open url failed: " + e.Message); }
+        }
+
+        // Документы и картинки открываются своей программой. Всё, что может исполнить код
+        // (.exe, .bat, .hta, .lnk, .js, .docm…), только показывается в Проводнике — решает человек.
+        private static readonly HashSet<string> OpenableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
+            ".pdf", ".txt", ".md", ".csv", ".log", ".json",
+            ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".rtf",
+            ".mp3", ".mp4", ".mov", ".webm", ".wav", ".zip",
+        };
+
+        public static void OpenDownloadedFile(string path)
+        {
+            // Метка «скачано из интернета» (Mark of the Web): SmartScreen и защищённый просмотр
+            // Office относятся к файлу как к пришедшему извне, а не как к созданному локально.
+            try { File.WriteAllText(path + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n"); }
+            catch (Exception e) { Log.Write("zone mark failed: " + e.Message); }
+            try
+            {
+                if (OpenableExtensions.Contains(Path.GetExtension(path)))
+                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                else
+                    Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + path + "\"") { UseShellExecute = false });
+            }
+            catch (Exception e) { Log.Write("open file failed: " + e.Message); }
         }
     }
 

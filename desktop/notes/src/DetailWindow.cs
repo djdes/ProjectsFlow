@@ -528,7 +528,7 @@ namespace ProjectsFlowNotes
                 var safe = string.Concat(file.Filename.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
                 var path = Path.Combine(dir, file.Id.Substring(0, Math.Min(8, file.Id.Length)) + "_" + safe);
                 if (!File.Exists(path)) File.WriteAllBytes(path, await api.DownloadAttachment(file.Id));
-                App.OpenUrl(path);
+                App.OpenDownloadedFile(path);
             }
             catch (Exception e)
             {
@@ -620,10 +620,15 @@ namespace ProjectsFlowNotes
                     var link = LinkRe.Match(token);
                     var label = link.Success ? link.Groups[1].Value : token;
                     var url = link.Success ? link.Groups[2].Value : token;
-                    if (url.StartsWith("/")) url = ApiClient.BaseUrl + url;
-                    var h = new Hyperlink(new Run(label)) { Foreground = new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0xD8)), Cursor = Cursors.Hand };
-                    h.Click += (s, e) => App.OpenUrl(url);
-                    p.Inlines.Add(h);
+                    if (url.StartsWith("/") && !url.StartsWith("//")) url = ApiClient.BaseUrl + url;
+                    // Только веб-ссылки кликабельны: UNC-путь или file:/ms-…: остаются текстом.
+                    if (App.IsWebUrl(url))
+                    {
+                        var h = new Hyperlink(new Run(label)) { Foreground = new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0xD8)), Cursor = Cursors.Hand };
+                        h.Click += (s, e) => App.OpenUrl(url);
+                        p.Inlines.Add(h);
+                    }
+                    else p.Inlines.Add(new Run(label));
                 }
                 pos = m.Index + m.Length;
             }
