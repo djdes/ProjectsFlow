@@ -2,9 +2,13 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { DesktopNotesRepository } from '@/application/desktop-notes/DesktopNotesRepository';
 import type { DesktopNote, DesktopNotesState } from '@/domain/desktop-notes/DesktopNote';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentUser } from './useCurrentUser';
 
 // Общее на всё приложение состояние «закреплено на экране»: кнопка в окне задачи и страница
 // приложения заметок видят одни и те же данные. Загружается один раз, дальше правится локально.
+// The cache belongs to one account: logout does not reload the page, so the next user in
+// the same tab must not see the previous user's pinned notes.
+let owner: string | null = null;
 let state: DesktopNotesState | null = null;
 let loading: Promise<void> | null = null;
 const listeners = new Set<() => void>();
@@ -16,11 +20,22 @@ const subscribe = (l: () => void): (() => void) => {
 };
 const snapshot = (): DesktopNotesState | null => state;
 
+function setOwner(userId: string | null): void {
+  if (owner === userId) return;
+  owner = userId;
+  state = null;
+  loading = null;
+  emit();
+}
+
 function load(repo: DesktopNotesRepository, force = false): Promise<void> {
   if (loading && !force) return loading;
+  const requestedFor = owner;
   loading = repo
     .list()
     .then((next) => {
+      // The account changed while the list was in flight — drop the stale answer.
+      if (owner !== requestedFor) return;
       state = next;
       emit();
     })
@@ -40,11 +55,14 @@ export function useDesktopNotes(): {
   readonly refresh: () => Promise<void>;
 } {
   const { desktopNotesRepository: repo } = useContainer();
+  const { user } = useCurrentUser();
+  const userId = user?.id ?? null;
   const current = useSyncExternalStore(subscribe, snapshot, snapshot);
 
   useEffect(() => {
-    void load(repo);
-  }, [repo]);
+    setOwner(userId);
+    if (userId) void load(repo);
+  }, [repo, userId]);
 
   const pin = useCallback(
     async (taskId: string) => {
