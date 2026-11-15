@@ -49,7 +49,9 @@ export function PageTitle({
       )}
     >
       {icon}
-      <span className="min-w-0 truncate">{children}</span>
+      {/* Phone: a long section title wraps in balanced lines («Мониторинг — все проекты»,
+          «Заметки на рабочем столе» were cut to «…» at 320px); wider screens keep one line. */}
+      <span className="min-w-0 break-words text-balance sm:truncate">{children}</span>
     </h1>
   );
 }

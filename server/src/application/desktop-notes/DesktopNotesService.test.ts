@@ -27,7 +27,12 @@ class FakeRepo implements DesktopNoteRepository {
   }
 }
 
-function service(repo: FakeRepo, noAccess: Set<string> = new Set(), moves: string[] = []) {
+type Options = {
+  readonly settings?: Record<string, unknown>;
+  readonly workerEnabled?: boolean;
+};
+
+function service(repo: FakeRepo, noAccess: Set<string> = new Set(), moves: string[] = [], options: Options = {}) {
   const tasks = {
     getById: async (id: string) => (id.startsWith('gone') ? null : { id, projectId: 'p1' }),
   } as unknown as TaskRepository;
@@ -38,7 +43,7 @@ function service(repo: FakeRepo, noAccess: Set<string> = new Set(), moves: strin
         id,
         projectId: 'p1',
         description: `## **Сделать** ${id}\nПодробности задачи`,
-        status: 'manual',
+        status: id.startsWith('done') ? 'done' : 'manual',
         canEdit: !id.startsWith('ro'),
         deadline: '2026-11-20',
         priority: null,
@@ -46,14 +51,16 @@ function service(repo: FakeRepo, noAccess: Set<string> = new Set(), moves: strin
       };
     },
   } as unknown as GetTask;
-  const projects = { getKanbanSettings: async () => ({ manual: { label: 'Делаю' }, todo: { hidden: true }, custom_1: { label: 'Тест' } }) };
+  const settings = options.settings ?? { manual: { label: 'Делаю' }, todo: { hidden: true }, custom_1: { label: 'Тест' } };
+  const projects = { getKanbanSettings: async () => settings };
   const moveTask = {
-    execute: async (c: { taskId: string; targetStatus: string }) => {
-      moves.push(`${c.taskId}->${c.targetStatus}`);
-      return { id: c.taskId, status: c.targetStatus, assignee: { userId: 'u1' } };
+    execute: async (c: { taskId: string; targetStatus: string; restore?: boolean }) => {
+      moves.push(`${c.taskId}->${c.targetStatus}${c.restore ? ' (restore)' : ''}`);
+      return { id: c.taskId, status: c.restore ? 'manual' : c.targetStatus, assignee: { userId: 'u1' } };
     },
   } as unknown as MoveTask;
-  return new DesktopNotesService({ repo, tasks, getTask, projects, moveTask });
+  const workerPolicy = { isEnabledForProject: async () => options.workerEnabled ?? true };
+  return new DesktopNotesService({ repo, tasks, getTask, projects, moveTask, workerPolicy });
 }
 
 test('стикер: заголовок без markdown, описание отдельно, подпись статуса и ссылка', async () => {
@@ -92,4 +99,32 @@ test('статус со стикера: только колонки доски �
   assert.deepEqual(moves, ['t1->done']);
   await assert.rejects(s.setStatus('u1', 't1', 'todo'), DesktopNoteStatusError);
   await assert.rejects(s.setStatus('u1', 'ro-1', 'done'), DesktopNoteStatusError);
+});
+
+test('выключенный воркер: колонки «Воркер» нет в стикере и перенос в неё отклоняется', async () => {
+  const moves: string[] = [];
+  const s = service(new FakeRepo(), new Set(), moves, { settings: {}, workerEnabled: false });
+  const note = await s.pin('u1', 't1');
+  assert.ok(!note.statusOptions.some((o) => o.status === 'todo'));
+  await assert.rejects(s.setStatus('u1', 't1', 'todo'), DesktopNoteStatusError);
+  assert.deepEqual(moves, []);
+  const enabled = await service(new FakeRepo(), new Set(), [], { settings: {} }).pin('u1', 't1');
+  assert.ok(enabled.statusOptions.some((o) => o.status === 'todo'));
+});
+
+test('снять «Готово» со стикера можно и при скрытой колонке «В работе»', async () => {
+  const moves: string[] = [];
+  const s = service(new FakeRepo(), new Set(), moves, { settings: { manual: { hidden: true } } });
+  const before = await s.pin('u1', 'done-1');
+  assert.ok(!before.statusOptions.some((o) => o.status === 'manual'));
+  await s.setStatus('u1', 'done-1', 'manual', true);
+  assert.deepEqual(moves, ['done-1->manual (restore)']);
+});
+
+test('устаревший стикер: снятие «Готово» у невыполненной задачи ничего не двигает', async () => {
+  const moves: string[] = [];
+  const s = service(new FakeRepo(), new Set(), moves);
+  const note = await s.setStatus('u1', 't1', 'manual', true);
+  assert.equal(note.status, 'manual');
+  assert.deepEqual(moves, []);
 });

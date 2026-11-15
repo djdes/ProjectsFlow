@@ -320,13 +320,15 @@ export function ProjectGithubOnboardingBanner({
 
   return (
     <>
-      <div className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 pe-12 sm:px-8 sm:pe-24">
+      {/* Phone: symmetric 16px sides — only the text clears the dismiss «×», so the three
+          tiles below span the full width instead of leaving a 48px gap on the right. */}
+      <div className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 sm:px-8 sm:pe-24">
         <ProjectBannerDismissButton className="end-1 inset-bs-1 size-11 rounded-lg sm:end-16 sm:inset-bs-2 sm:size-7" />
         <div
           className="mx-auto flex max-w-[1180px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 pe-8 sm:pe-0">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-raised shadow-card">
                 <Sparkles className="size-3.5 text-primary" />

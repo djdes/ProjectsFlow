@@ -64,8 +64,8 @@ export function WorkspaceInviteForm({ workspace, projects, onCreated }: {
   return <form onSubmit={event => void submit(event)} className="space-y-3 rounded-xl border border-primary/15 bg-primary/[0.035] p-3 sm:p-4">
     <div className="flex flex-wrap items-start gap-2.5">
       <UserPlus className="mbs-0.5 size-4 shrink-0 text-primary" />
-      <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Новое приглашение</p><p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
-      <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={busy} onClick={() => setNeighborsOpen(true)}><UsersRound className="size-4" />Из соседних пространств</Button>
+      <div className="min-w-0 flex-[1_1_11rem]"><p className="text-sm font-semibold">Новое приглашение</p><p className="mbs-0.5 text-xs leading-relaxed text-muted-foreground">В пространство <span className="font-medium text-foreground">«{workspace.name}»</span></p></div>
+      <Button type="button" variant="outline" size="sm" className="shrink-0 max-sm:w-full" disabled={busy} onClick={() => setNeighborsOpen(true)}><UsersRound className="size-4" />Из соседних пространств</Button>
     </div>
     <NeighborInviteDialog open={neighborsOpen} onOpenChange={setNeighborsOpen} workspace={workspace} onInvited={() => onCreated?.([])} />
     <div className="flex flex-wrap gap-2">

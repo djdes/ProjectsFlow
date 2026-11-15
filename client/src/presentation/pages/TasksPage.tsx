@@ -211,6 +211,9 @@ export function TasksPage(): React.ReactElement {
   }
 
   const canEdit = canEditProject;
+  // The board itself is task work, which a guest of a shared project does (GUEST_ACTIONS on
+  // the server: create/update/move tasks); only views, columns and automation stay closed.
+  const canEditTasks = hasOwnerRights(data.role) || data.role === 'editor';
   // Блок описания рендерим, только когда он реально что-то показывает. У редактора это всегда
   // так: пустое поле — это плейсхолдер «Добавьте описание проекта…», т.е. сам способ описание
   // завести. А наблюдателю ProjectDescription при пустом описании возвращает null, и обёртка
@@ -500,7 +503,8 @@ export function TasksPage(): React.ReactElement {
         projectId={data.id}
         projectName={data.name}
         memberCount={data.memberCount}
-        canEdit={canEdit}
+        canEdit={canEditTasks}
+        canManage={canEditProject}
         onOpenAutomation={() => setAutomationOpen(true)}
         // Full-bleed: доска и её нижний горизонтальный скролл во всю ширину окна (по краям
         // обложки/плашки). Первая колонка отступает как тело страницы (px-4/14/24), последняя

@@ -2680,10 +2680,12 @@ const { app, devProxyUpgrade } = createApp({
     moveTask: new MoveTask({
       projects: projectRepo,
       approval: taskApprovalService,
+      workerPolicy,
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,
     }),
+    workerPolicy,
     notify: { taskChanged: notifyTaskChanged, statusChanged: notifyStatusChanged },
     listComments: new ListTaskComments({
       projects: projectRepo,

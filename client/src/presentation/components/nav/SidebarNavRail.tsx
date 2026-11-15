@@ -113,8 +113,11 @@ export function SidebarNavRail({
             реальную ширину текста (тот же приём, что в Collapse по высоте); overflow-hidden
             обнуляет автоминимум флекс-айтема, иначе width:0 не схлопнул бы подпись.
             Многоточия намеренно нет: во время раскрытия оно висело бы на каждом кадре. */}
+        {/* min-w-0: overflow:clip is not a scroll container, so without it the flex
+            auto-minimum kept the label at full width — in a 320px drawer the button shrank
+            but «Команда …» spilled over the next rail icon. */}
         <motion.span
-          className="overflow-clip whitespace-nowrap"
+          className="min-w-0 overflow-clip whitespace-nowrap"
           initial={false}
           animate={{
             width: showLabel ? 'auto' : 0,
