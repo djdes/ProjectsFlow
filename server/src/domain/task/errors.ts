@@ -146,3 +146,11 @@ export class TaskAwaitingApprovalError extends Error {
     this.name = 'TaskAwaitingApprovalError';
   }
 }
+
+// Шаблон задачи пространства (db/187) не найден — или лежит в другом пространстве.
+export class TaskTemplateNotFoundError extends Error {
+  constructor() {
+    super('Шаблон не найден');
+    this.name = 'TaskTemplateNotFoundError';
+  }
+}

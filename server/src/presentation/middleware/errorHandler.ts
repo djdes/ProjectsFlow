@@ -93,6 +93,7 @@ import {
   AssigneeNotProjectMemberError,
   AssigneeNotSharedMemberError,
   TaskNotFoundError,
+  TaskTemplateNotFoundError,
   InboxOwnerRequiredError,
 } from '../../domain/task/errors.js';
 import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
@@ -551,6 +552,10 @@ export function errorHandler(
 
   if (err instanceof TaskNotFoundError) {
     res.status(404).json({ error: 'task_not_found' });
+    return;
+  }
+  if (err instanceof TaskTemplateNotFoundError) {
+    res.status(404).json({ error: 'task_template_not_found', message: err.message });
     return;
   }
   if (err instanceof TaskAwaitingApprovalError) {

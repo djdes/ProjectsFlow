@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeTaskRecurrence, type TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 
 // Полный список статусов задачи. 'pending_approval' долго отсутствовал здесь по недосмотру
 // (db/150) — из-за этого задачу нельзя было перенести в «На утверждении» через API.
@@ -36,6 +37,28 @@ const prioritySchema = z
 // Тип задачи (db/153). nullable: null = сбросить в «не определён».
 const taskTypeSchema = z.enum(['feature', 'bug']).nullable();
 
+// Правило повтора (db/185). nullable: null = не повторять. Дни недели — ISO (1 = пн … 7 = вс),
+// число месяца — 1..31. На выходе — канонический вид из домена (дни отсортированы, без повторов).
+export const taskRecurrenceSchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('daily') }),
+    z.object({ kind: z.literal('weekdays') }),
+    z.object({
+      kind: z.literal('weekly'),
+      days: z.array(z.number().int().min(1).max(7)).min(1, 'Выберите хотя бы один день недели').max(7),
+    }),
+    z.object({ kind: z.literal('monthly'), day: z.number().int().min(1).max(31) }),
+  ])
+  .transform((value, ctx): TaskRecurrence => {
+    const rule = normalizeTaskRecurrence(value);
+    if (!rule) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Некорректное правило повтора' });
+      return z.NEVER;
+    }
+    return rule;
+  })
+  .nullable();
+
 // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. nullable: null = убрать иконку.
 // Лимит 2_000_000 — вмещает base64 data-URL картинки, защищая от гигантского payload'а.
 const iconSchema = z.string().max(2_000_000).nullable();
@@ -67,6 +90,7 @@ export const createTaskSchema = z.object({
   parentTaskId: z.string().uuid().nullable().optional(),
   priority: prioritySchema.optional(),
   taskType: taskTypeSchema.optional(),
+  recurrence: taskRecurrenceSchema.optional(),
 });
 
 export const updateTaskSchema = z
@@ -80,6 +104,7 @@ export const updateTaskSchema = z
     startDate: deadlineSchema.optional(),
     priority: prioritySchema.optional(),
     taskType: taskTypeSchema.optional(),
+    recurrence: taskRecurrenceSchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 

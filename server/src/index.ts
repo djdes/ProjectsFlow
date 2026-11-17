@@ -150,6 +150,9 @@ import { BulkManageWorkspaceKanbanColumns } from './application/kanban/BulkManag
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
 import { DispatchTaskChangeNotifications } from './application/notifications/DispatchTaskChangeNotifications.js';
+import { SpawnNextRecurringTask } from './application/task/SpawnNextRecurringTask.js';
+import { ManageWorkspaceTaskTemplates } from './application/task/ManageWorkspaceTaskTemplates.js';
+import { DrizzleWorkspaceTaskTemplateRepository } from './infrastructure/repositories/DrizzleWorkspaceTaskTemplateRepository.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { DispatchCommentNotifications } from './application/notifications/DispatchCommentNotifications.js';
 import { ListCommentNotifyCandidates } from './application/task/ListCommentNotifyCandidates.js';
@@ -771,8 +774,20 @@ const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskVersionRepo = new DrizzleTaskVersionRepository(db);
 let taskChangeNotifications: DispatchTaskChangeNotifications | undefined;
+// Повторяющиеся задачи (db/185): следующий повтор ставится из того же центрального потока
+// изменений, что и уведомления, — так его ставит любой путь перевода задачи в 'done'.
+let recurringTasks: SpawnNextRecurringTask | undefined;
 const taskVersionRecorder = new TaskVersionRecorder({
-  onChanged: (change) => taskChangeNotifications?.execute(change) ?? Promise.resolve(),
+  onChanged: async (change) => {
+    // Независимые подписчики: сбой рассылки не должен отменять повтор и наоборот.
+    const results = await Promise.allSettled([
+      taskChangeNotifications?.execute(change),
+      recurringTasks?.onTaskChanged(change),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') console.warn('[task-changes] subscriber failed', result.reason);
+    }
+  },
   versions: taskVersionRepo,
   idGen: idGenerator,
   onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
@@ -1188,6 +1203,21 @@ taskChangeNotifications = new DispatchTaskChangeNotifications({
   projects: projectRepo, members: projectMemberRepo, users: userRepo,
   notifications: notificationRepo, email: emailSender, telegram: sendAgentTelegramNotification,
   appUrl: appBaseUrl, idGen: idGenerator,
+});
+recurringTasks = new SpawnNextRecurringTask({
+  ledger: taskRepo,
+  createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
+    approval: taskApprovalService,
+    workerPolicy,
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    idGen: idGenerator,
+    activityRecorder,
+  }),
+  idGen: idGenerator,
+  onCreated: (task) => notifyTaskChanged(task.projectId, [task.assignee.userId]),
 });
 
 
@@ -2686,6 +2716,13 @@ const { app, devProxyUpgrade } = createApp({
       // Только подписка платформы, без запасной модели: недоступна — карточка без сводки.
       llm: llmTextGenerator,
       log: (message) => console.warn(message),
+    }),
+  },
+  workspaceTaskTemplates: {
+    manage: new ManageWorkspaceTaskTemplates({
+      templates: new DrizzleWorkspaceTaskTemplateRepository(db),
+      workspaces: workspaceRepo,
+      idGen: idGenerator,
     }),
   },
   desktopNotes: new DesktopNotesService({

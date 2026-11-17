@@ -12,6 +12,7 @@ export const VERSION_FIELD_OPTIONS: ReadonlyArray<{
   { field: 'assignee', label: 'Ответственный' },
   { field: 'description', label: 'Описание' },
   { field: 'priority', label: 'Приоритет' },
+  { field: 'recurrence', label: 'Повтор' },
   { field: 'ralphMode', label: 'Режим работы' },
   { field: 'appearance', label: 'Оформление' },
   { field: 'parent', label: 'Родительская задача' },

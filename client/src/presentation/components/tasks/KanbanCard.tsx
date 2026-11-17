@@ -19,6 +19,7 @@ import { AssigneeBadge } from './AssigneeBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
+import { TaskRecurrenceBadge } from './TaskRecurrenceBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { useTaskOriginLabel } from '@/presentation/hooks/useTaskOriginLabel';
@@ -228,6 +229,7 @@ function KanbanCardImpl({
       originLabel ||
       task.priority ||
       task.deadline ||
+      task.recurrence ||
       task.status === 'in_progress' ||
       task.status === 'awaiting_clarification',
   );
@@ -393,6 +395,7 @@ function KanbanCardImpl({
     <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden max-sm:flex-wrap max-sm:gap-y-1">
       {question && <AwaitingReplyBadge question={question} />}
       {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
+      {task.recurrence && <TaskRecurrenceBadge recurrence={task.recurrence} />}
       {task.priority ? <PriorityBadge priority={task.priority} /> : null}
       {checklist && (
         <span

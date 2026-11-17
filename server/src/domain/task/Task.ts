@@ -1,5 +1,6 @@
 import type { TaskAssignee } from './TaskAssignee.js';
 import type { TaskCreator } from './TaskCreator.js';
+import type { TaskRecurrence } from './TaskRecurrence.js';
 
 // 'awaiting_clarification' — активная работа на паузе до действия человека
 // (ответ на ralph-question, разбор после maxAttempts retry, переформулировка задачи,
@@ -119,6 +120,13 @@ export type Task = {
   // Пространство, в котором задачу создали (общий проект, db/182). null = основное
   // пространство проекта. Optional — старые fake-репозитории его не заполняют.
   readonly originWorkspaceId?: string | null;
+  // Правило повтора (db/185). null = не повторяется. При переходе в 'done' сервер ставит
+  // следующий повтор (SpawnNextRecurringTask). Optional — старые fake-репозитории его не
+  // заполняют; Drizzle-репозиторий отдаёт всегда.
+  readonly recurrence?: TaskRecurrence | null;
+  // Уже поставленный следующий повтор (db/185) — серверная пометка идемпотентности,
+  // клиенту не отдаётся. null = ещё не ставили.
+  readonly recurrenceNextTaskId?: string | null;
   // Мягкое удаление (db/134). null = живая задача, Date = лежит в корзине.
   // Optional, а не обязательное: обычные выборки задач отдают только живые задачи,
   // поэтому подавляющее большинство мест не должно думать про это поле —

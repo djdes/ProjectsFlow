@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Repeat, Reply, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { TaskPropertyKey } from '@/domain/user/UiPrefs';
 import { TaskProperties, type TaskProperty } from './TaskProperties';
@@ -71,6 +71,8 @@ import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { TaskTypeChip } from './TaskTypeChip';
+import { TaskRecurrenceChip } from './TaskRecurrenceChip';
+import { SaveAsTemplateMenuItem } from './SaveAsTemplateMenuItem';
 import { TaskApproverRow } from './TaskApproverRow';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
 import { PropertyRow, PROPERTY_VALUE_CLASS } from './PropertyRow';
@@ -1711,6 +1713,8 @@ export function TaskDrawer({
           <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
             <Clock className="text-muted-foreground" /> История версий
           </DropdownMenuItem>
+          {/* Шаблоны пространства (db/187): текст, приоритет, тип и повтор этой задачи. */}
+          <SaveAsTemplateMenuItem task={task} description={editDescription || (task.description ?? '')} />
           <div className="mbs-1 border-bs border-border px-2 py-3">
             <p className="mbe-1.5 text-meta text-muted-foreground">Создано</p>
             <TaskCreatedValue task={task} dateLabel={formatTaskCreated(task.createdAt)} className="flex-wrap gap-y-1 [&_time]:text-meta" />
@@ -2040,6 +2044,15 @@ export function TaskDrawer({
                         disabled={!canEdit}
                       />
                     ),
+                    // Повтор (db/185): выполнили — сервер ставит следующую задачу по правилу.
+                    recurrence: (
+                      <TaskRecurrenceChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
                     priority: (
                       <TaskPriorityChip
                         task={task}
@@ -2086,6 +2099,7 @@ export function TaskDrawer({
                     assignee: { icon: UserPlus, label: 'Исполнитель', value: propValues.assignee },
                     approver: { icon: ShieldCheck, label: 'Кто утверждает', value: propValues.approver },
                     deadline: { icon: CalendarClock, label: 'Срок до', value: propValues.deadline },
+                    recurrence: { icon: Repeat, label: 'Повтор', value: propValues.recurrence },
                     priority: { icon: Flag, label: 'Приоритет', value: propValues.priority },
                     taskType: { icon: Tag, label: 'Тип', value: propValues.taskType },
                     mode: { icon: Bot, label: 'Режим', value: propValues.mode },

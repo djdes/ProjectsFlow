@@ -23,7 +23,8 @@ export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {
 };
 
 // Ключи строк-свойств в окне задачи. Порядок ниже — дефолтный;
-// новые ключи normalizeTaskPropertyOrder дописывает в конец сохранённого порядка.
+// новые ключи normalizeTaskPropertyOrder дописывает в конец сохранённого порядка
+// (кроме перечисленных в TASK_PROPERTY_INSERT_AFTER — те встают к своему соседу).
 export const TASK_PROPERTY_KEYS = [
   'status',
   'project',
@@ -31,12 +32,20 @@ export const TASK_PROPERTY_KEYS = [
   // «Кто утверждает» — справочный ряд с lead/owner пространства, рядом с исполнителем.
   'approver',
   'deadline',
+  // Повтор задачи (db/185) — продолжение срока: от срока считается следующий повтор.
+  'recurrence',
   'priority',
   'taskType',
   'mode',
   'files',
 ] as const;
 export type TaskPropertyKey = (typeof TASK_PROPERTY_KEYS)[number];
+
+// Новые строки, которым место рядом с уже существующей: у людей с сохранённым порядком
+// «Повтор» появляется прямо под «Сроком», а не после «Файлов».
+const TASK_PROPERTY_INSERT_AFTER: Partial<Record<TaskPropertyKey, TaskPropertyKey>> = {
+  recurrence: 'deadline',
+};
 
 // Нормализуем сохранённый порядок: оставляем только известные ключи, дополняем
 // недостающими в дефолтном порядке (устойчиво к добавлению новых свойств в будущем).
@@ -51,7 +60,14 @@ export function normalizeTaskPropertyOrder(saved: readonly string[] | undefined)
     }
   }
   for (const k of TASK_PROPERTY_KEYS) {
-    if (!seen.has(k)) out.push(k);
+    if (seen.has(k)) continue;
+    // Ключ, появившийся после сохранения порядка, встаёт к своему соседу (если тот есть
+    // в списке), остальные — в конец, как раньше.
+    const anchor = TASK_PROPERTY_INSERT_AFTER[k];
+    const at = anchor ? out.indexOf(anchor) : -1;
+    if (at >= 0) out.splice(at + 1, 0, k);
+    else out.push(k);
+    seen.add(k);
   }
   return out;
 }

@@ -25,10 +25,12 @@ import {
 } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
+  TaskRecurrenceLedger,
   TaskRepository,
   TrashedTaskRef,
   UpdateTaskPatch,
 } from '../../application/task/TaskRepository.js';
+import { parseTaskRecurrence, serializeTaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
 import { activeTasks, taskDeleted } from './taskSoftDelete.js';
 
@@ -95,6 +97,9 @@ function toTask(row: TaskRowJoined): Task {
     // читаем как «не определён», а не протаскиваем мусор в домен.
     taskType: isTaskType(row.taskType) ? row.taskType : null,
     originWorkspaceId: row.originWorkspaceId ?? null,
+    // VARCHAR в БД (db/185): битая строка читается как «не повторяется».
+    recurrence: parseTaskRecurrence(row.recurrence),
+    recurrenceNextTaskId: row.recurrenceNextTaskId ?? null,
     deletedAt: row.deletedAt ?? null,
     deletedBy: row.deletedBy ?? null,
     createdAt: row.createdAt,
@@ -102,7 +107,7 @@ function toTask(row: TaskRowJoined): Task {
   };
 }
 
-export class DrizzleTaskRepository implements TaskRepository {
+export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedger {
   constructor(
     private readonly db: Database,
     private readonly history?: TaskVersionRecorder,
@@ -141,6 +146,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         priority: tasks.priority,
         taskType: tasks.taskType,
         originWorkspaceId: tasks.originWorkspaceId,
+        recurrence: tasks.recurrence,
+        recurrenceNextTaskId: tasks.recurrenceNextTaskId,
         deletedAt: tasks.deletedAt,
         deletedBy: tasks.deletedBy,
         createdAt: tasks.createdAt,
@@ -279,6 +286,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
       ...(input.originWorkspaceId ? { originWorkspaceId: input.originWorkspaceId } : {}),
+      ...(input.recurrence ? { recurrence: serializeTaskRecurrence(input.recurrence) } : {}),
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');
@@ -309,6 +317,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         | 'parentTaskId'
         | 'priority'
         | 'taskType'
+        | 'recurrence'
         | 'ralphCancelRequestedAt'
         | 'ralphCancelRequestedBy'
       >
@@ -335,6 +344,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (patch.parentTaskId !== undefined) set.parentTaskId = patch.parentTaskId;
     if (patch.priority !== undefined) set.priority = patch.priority;
     if (patch.taskType !== undefined) set.taskType = patch.taskType;
+    if (patch.recurrence !== undefined) set.recurrence = serializeTaskRecurrence(patch.recurrence);
 
     if (Object.keys(set).length > 0) {
       await this.db.update(tasks).set(set).where(activeTasks(eq(tasks.id, taskId)));
@@ -342,6 +352,24 @@ export class DrizzleTaskRepository implements TaskRepository {
     const updated = await this.getById(taskId);
     if (updated && before) await this.history?.record(updated, actorUserId, before);
     return updated;
+  }
+
+  async claimNextOccurrence(taskId: string, nextTaskId: string): Promise<boolean> {
+    // Атомарный захват: из двух параллельных «выполнено» слот достанется ровно одному.
+    const result = await this.db
+      .update(tasks)
+      // Служебная пометка, не правка задачи: updated_at не трогаем (иначе «Изменено» прыгает).
+      .set({ recurrenceNextTaskId: nextTaskId, updatedAt: sql`${tasks.updatedAt}` })
+      .where(and(eq(tasks.id, taskId), sql`${tasks.recurrenceNextTaskId} IS NULL`));
+    const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+    return affected > 0;
+  }
+
+  async replaceNextOccurrence(taskId: string, expected: string, next: string | null): Promise<void> {
+    await this.db
+      .update(tasks)
+      .set({ recurrenceNextTaskId: next, updatedAt: sql`${tasks.updatedAt}` })
+      .where(and(eq(tasks.id, taskId), eq(tasks.recurrenceNextTaskId, expected)));
   }
 
   async softDelete(taskId: string, deletedByUserId: string | null): Promise<boolean> {

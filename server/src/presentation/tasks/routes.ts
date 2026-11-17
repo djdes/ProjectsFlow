@@ -134,7 +134,7 @@ type Deps = {
 
 type TaskDto = Omit<
   Task,
-  'createdBy' | 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt'
+  'createdBy' | 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt' | 'recurrenceNextTaskId'
 > & {
   createdAt: string;
   updatedAt: string;
@@ -148,9 +148,16 @@ type TaskDto = Omit<
 export function toDto(t: Task | TaskWithCounts): TaskDto {
   // Сырой createdBy остаётся серверным audit-id. Клиент получает отдельный creator
   // только для отображения рядом с датой создания; назначение живёт исключительно в assignee.
-  const { createdBy: _serverOnlyCreatedBy, ...publicTask } = t;
+  // recurrenceNextTaskId — серверная пометка идемпотентности повтора (db/185), не для UI.
+  const {
+    createdBy: _serverOnlyCreatedBy,
+    recurrenceNextTaskId: _serverOnlyNextOccurrence,
+    ...publicTask
+  } = t;
   const base: TaskDto = {
     ...publicTask,
+    // Всегда в ответе (null = не повторяется), даже если fake-репозиторий поле не заполнил.
+    recurrence: t.recurrence ?? null,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ralphCancelRequestedAt: t.ralphCancelRequestedAt
@@ -270,6 +277,7 @@ export function tasksRouter(deps: Deps): Router {
         parentTaskId: body.parentTaskId ?? null,
         priority: body.priority ?? null,
         taskType: body.taskType ?? null,
+        recurrence: body.recurrence ?? null,
       });
       deps.notifyTaskChanged(projectId);
       res.status(201).json({ task: toDto(task) });
@@ -333,6 +341,7 @@ export function tasksRouter(deps: Deps): Router {
         startDate: body.startDate,
         priority: body.priority,
         taskType: body.taskType,
+        recurrence: body.recurrence,
       });
       deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       res.json({ task: toDto(task) });
