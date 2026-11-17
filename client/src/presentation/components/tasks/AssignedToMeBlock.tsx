@@ -150,6 +150,8 @@ import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { RalphModeBadge } from './RalphMode';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { ApprovalSummary } from './ApprovalSummary';
+import { AcceptAllApprovalsButton } from './AcceptAllApprovalsDialog';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
@@ -3518,6 +3520,7 @@ function ApprovalShelf({
           </span>
           <span className="tabular-nums text-muted-foreground">{items.length}</span>
         </button>
+        {isApprover && !selecting && <AcceptAllApprovalsButton items={items} onAccept={onAccept} />}
         {headerEnd}
       </div>
       {collapsed ? null : items.length === 0 ? (
@@ -3684,7 +3687,7 @@ function ApprovalItemCard({
               onDelete={onReject}
               hideQuickActions
               showAssignee
-              footer={footer}
+              footer={footer && isApprover ? <><ApprovalSummary projectId={item.projectId} taskId={item.id} revision={item.updatedAt} className="mbe-1.5" />{footer}</> : footer}
               selecting={selecting}
               selected={selected}
               {...(onSelectToggle ? { onSelectToggle } : {})}

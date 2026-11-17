@@ -111,6 +111,8 @@ import type { AiActionBatchRepository } from "@/application/ai-action/AiActionBa
 import { HttpAiActionBatchRepository } from "@/infrastructure/http/HttpAiActionBatchRepository";
 import { HttpDeploymentRepository } from '@/infrastructure/http/HttpDeploymentRepository';
 import type { DeploymentRepository } from '@/application/deployment/DeploymentRepository';
+import { HttpApprovalSummaryRepository } from '@/infrastructure/http/HttpApprovalSummaryRepository';
+import { LoadApprovalSummary } from '@/application/approval/LoadApprovalSummary';
 
 type Container = {
   deploymentRepository: DeploymentRepository;
@@ -180,6 +182,8 @@ type Container = {
   openSiteEditorSession: OpenSiteEditorSession;
   applySiteEditorPatch: ApplySiteEditorPatch;
   startSiteEditorAiJob: StartSiteEditorAiJob;
+  // ИИ-сводка «что сделано» на карточках полки «На утверждении» (общий кэш на вкладку).
+  loadApprovalSummary: LoadApprovalSummary;
 };
 
 function buildContainer(): Container {
@@ -289,6 +293,7 @@ function buildContainer(): Container {
     openSiteEditorSession: new OpenSiteEditorSession(siteEditorRepo),
     applySiteEditorPatch: new ApplySiteEditorPatch(siteEditorRepo),
     startSiteEditorAiJob: new StartSiteEditorAiJob(siteEditorRepo),
+    loadApprovalSummary: new LoadApprovalSummary(new HttpApprovalSummaryRepository()),
   };
 }
 

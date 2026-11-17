@@ -294,6 +294,7 @@ import { fileSyncRouter } from './file-sync/routes.js';
 import type { FileSyncService } from '../application/file-sync/FileSyncService.js';
 import { liveAgentRouter } from './live/agentRoutes.js';
 import { liveUserRouter } from './live/routes.js';
+import { approvalSummaryRouter, type ApprovalSummaryRouterDeps } from './approval-summary/routes.js';
 import { siteAgentRouter } from './site/agentRoutes.js';
 import type { PublishSiteArtifact } from '../application/site/PublishSiteArtifact.js';
 import type { GetProjectSite } from '../application/site/GetProjectSite.js';
@@ -500,6 +501,8 @@ type AppDeps = {
   readonly projectSharing?: ManageProjectSharing;
   // Заметки на рабочем столе (приложение для Windows). Опционально — тестам не нужно.
   readonly desktopNotes?: DesktopNotesService;
+  // ИИ-сводка «что сделано» на карточках полки «На утверждении» (db/186).
+  readonly approvalSummary?: ApprovalSummaryRouterDeps;
   readonly workspaces: {
     readonly service: WorkspaceService;
     readonly projectAccess: ManageWorkspaceProjectAccess;
@@ -1067,6 +1070,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       activity: deps.live.activity,
     }),
   );
+  // ИИ-сводка «что сделано» для полки «На утверждении»: /:projectId/tasks/:taskId/approval-summary.
+  if (deps.approvalSummary) app.use('/api/projects', approvalSummaryRouter(deps.approvalSummary));
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
   app.use('/api/projects', digestRouter(deps.digest));
   // «Доступ пространств» проекта (db/182).
