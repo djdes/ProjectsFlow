@@ -470,6 +470,21 @@ export const scenarios = [
       });
 
       const chip = page.getByRole('group', { name: 'Срок' }).getByRole('button', { name: /^Просрочено/ });
+      // Colour is meaning: a due chip with tasks is tinted (overdue red), an empty one is not.
+      await t.check('чип «Просрочено» с задачами подсвечен, пустой «Без срока» — нет', async () => {
+        const counts = await page.getByRole('group', { name: 'Срок' }).getByRole('button').evaluateAll((els) =>
+          els.map((el) => ({
+            label: el.textContent.trim(),
+            count: Number(el.querySelector('[data-pf-due-count]')?.textContent ?? '0'),
+            tinted: el.hasAttribute('data-pf-due-tinted'),
+          })),
+        );
+        const late = counts.find((c) => c.label.startsWith('Просрочено'));
+        t.assert(late && late.count > 0, 'в фикстуре нет просроченных задач');
+        t.assert(late.tinted, '«Просрочено» с задачами не подсвечен');
+        const none = counts.find((c) => c.label.startsWith('Без срока'));
+        t.assert(none && !none.tinted, '«Без срока» подсвечен, хотя срок не горит');
+      });
       await t.check('чип «Просрочено» оставляет только просроченные', async () => {
         await chip.click();
         await t.waitFor(async () => (await chip.getAttribute('aria-pressed')) === 'true', 'чип не нажат');
@@ -625,25 +640,26 @@ export const scenarios = [
         }, 'число на кнопке не совпадает с числом обрезанных людей');
         t.assert((await back.count()) === 0, 'у начала ленты не должно быть «‹»');
       });
-      await t.step('«+N ›» листает ленту до последнего человека, «‹» возвращает', async () => {
-        for (let i = 0; i < 6 && (await forward.count()) > 0; i += 1) {
+      // On a phone the ribbon is swiped back; «‹» appears only in mouse layouts (from 768px):
+      // on 320–393px it left no room for a whole person between the two buttons.
+      await t.step('«+N ›» листает ленту до последнего человека; назад — свайпом, без «‹»', async () => {
+        for (let i = 0; i < 12 && (await forward.count()) > 0; i += 1) {
           await forward.first().click();
           await page.waitForTimeout(150);
         }
         t.assert((await forward.count()) === 0, 'после листания до конца кнопка «+N ›» осталась');
-        await t.visible(back, 'кнопка «‹» у начала ленты');
+        t.assert(!(await back.first().isVisible().catch(() => false)), 'на телефоне видна кнопка «‹»');
         const last = await page.evaluate(() => {
           const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
           const box = people.at(-1).getBoundingClientRect();
           return { right: Math.round(box.right), viewport: document.documentElement.clientWidth };
         });
         t.assert(last.right <= last.viewport, `последний человек за краем экрана: ${last.right} > ${last.viewport}`);
-        for (let i = 0; i < 6 && (await back.count()) > 0; i += 1) {
-          await back.first().click();
-          await page.waitForTimeout(150);
-        }
-        t.assert((await back.count()) === 0, '«‹» не вернула ленту к началу');
-        await t.visible(forward, 'кнопка «+N ›» снова у края');
+        await page.evaluate(() => {
+          const row = document.querySelector('[role="group"][aria-label="Люди"]');
+          row?.parentElement?.scrollTo({ left: 0 });
+        });
+        await t.visible(forward, 'кнопка «+N ›» снова у края после возврата к началу');
       });
     },
   },
@@ -666,23 +682,32 @@ export const scenarios = [
         t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
       );
       await t.pageChecks('Входящие');
-      // The «who» ribbon: «Мои / Все» and the people sit on one line as chips of one height.
-      // Earlier the people wrapped into a staggered grid next to a boxed switch.
-      await t.check('лента «кто»: «Мои / Все» и люди — в одну строку, чипы одной высоты', async () => {
+      // The «who» ribbon: «Мои / Все» and the people's avatars sit on one line at one height;
+      // each person's name hangs under the avatar (initials alone did not say who is who).
+      await t.check('лента «кто»: «Мои / Все» и аватары — в одну строку одной высоты, под аватарами имена', async () => {
         const boxes = await page.evaluate(() => {
-          const rect = (el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), height: Math.round(r.height), mid: Math.round(r.top + r.height / 2) }; };
+          const rect = (el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), height: Math.round(r.height) }; };
           const scope = [...document.querySelectorAll('[role="group"][aria-label="Чьи задачи"] button')].map(rect);
-          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')].map(rect);
-          return { scope, people };
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
+          const avatars = people.map((el) => el.querySelector('[data-pf-who-avatar]')).filter(Boolean).map(rect);
+          const names = people.map((el) => {
+            const name = el.querySelector('[data-pf-who-name]');
+            const r = name?.getBoundingClientRect();
+            return name && r && r.height > 0 ? name.textContent.trim() : '';
+          });
+          return { scope, people: people.length, avatars, names };
         });
         t.assert(boxes.scope.length === 2, `чипов «Мои / Все»: ${boxes.scope.length}`);
-        t.assert(boxes.people.length > 0, 'людей в ленте нет');
-        const all = [...boxes.scope, ...boxes.people];
-        const mids = new Set(all.map((b) => b.mid));
-        t.assert(Math.max(...mids) - Math.min(...mids) <= 1, `чипы на разных строках: центры ${[...mids].join(', ')}`);
+        t.assert(boxes.people > 0, 'людей в ленте нет');
+        t.assert(boxes.avatars.length === boxes.people, `аватаров ${boxes.avatars.length} из ${boxes.people} людей`);
+        const all = [...boxes.scope, ...boxes.avatars];
+        const tops = new Set(all.map((b) => b.top));
+        t.assert(Math.max(...tops) - Math.min(...tops) <= 1, `чипы и аватары на разной высоте: ${[...tops].join(', ')}`);
         const heights = new Set(all.map((b) => b.height));
-        t.assert(heights.size === 1, `чипы разной высоты: ${[...heights].join(', ')}`);
+        t.assert(heights.size === 1, `чипы и аватары разной высоты: ${[...heights].join(', ')}`);
         t.assert(all[0].height >= 44, `высота чипа ${all[0].height}px меньше 44px`);
+        const unnamed = boxes.names.filter((n) => !n).length;
+        t.assert(unnamed === 0, `без имени под аватаром: ${unnamed} из ${boxes.names.length}`);
       });
 
       const nowIds = [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id);

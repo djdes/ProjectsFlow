@@ -95,10 +95,13 @@ export function InboxSearch({
   );
 }
 
-const DUE_CHIPS: ReadonlyArray<{ key: Exclude<DueKind, 'future'>; label: string; dot: string }> = [
-  { key: 'late', label: 'Просрочено', dot: 'bg-destructive' },
-  { key: 'today', label: 'Сегодня', dot: 'bg-today' },
-  { key: 'none', label: 'Без срока', dot: 'bg-muted-foreground/60' },
+// tint — подложка чипа, когда в нём есть задачи: просроченные красным, на сегодня — цветом
+// срока «сегодня» (цвет = смысл). Раньше три одинаковых серых рамки с точкой-пикселем:
+// «Просрочено 3» читалось так же спокойно, как «Без срока 0».
+const DUE_CHIPS: ReadonlyArray<{ key: Exclude<DueKind, 'future'>; label: string; dot: string; tint: string | null }> = [
+  { key: 'late', label: 'Просрочено', dot: 'bg-destructive', tint: 'border-transparent bg-destructive-soft text-destructive' },
+  { key: 'today', label: 'Сегодня', dot: 'bg-today', tint: 'border-transparent bg-today/15 text-today' },
+  { key: 'none', label: 'Без срока', dot: 'bg-muted-foreground/60', tint: null },
 ];
 
 // Чипы срока: один выбранный за раз, повторный клик снимает. Точка — смысл срока, тем же
@@ -123,22 +126,36 @@ export function DueFilterChips({
     >
       {DUE_CHIPS.map((chip) => {
         const on = value === chip.key;
+        const count = counts[chip.key];
+        const tinted = !on && count > 0 && chip.tint !== null;
         return (
           <button
             key={chip.key}
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : chip.key)}
+            data-pf-due-tinted={tinted ? '' : undefined}
             className={cn(
               'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active max-[359px]:text-2xs md:min-h-7 md:px-2.5',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
-                : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
+                : tinted
+                  ? cn(chip.tint, 'font-medium')
+                  : cn(
+                      // Телефон — мягкая подложка без рамки: рамок в шапке и так четыре ряда.
+                      'border-border text-muted-foreground hover:bg-hover hover:text-foreground max-md:border-transparent max-md:bg-panel',
+                      count === 0 && 'text-muted-foreground/75',
+                    ),
             )}
           >
-            <span aria-hidden className={cn('hidden size-1.5 shrink-0 rounded-full min-[360px]:inline-block', chip.dot)} />
+            <span aria-hidden className={cn('hidden size-1.5 shrink-0 rounded-full min-[360px]:inline-block', chip.dot, count === 0 && !on && 'opacity-50')} />
             {chip.label}
-            <span className="shrink-0 tabular-nums text-muted-foreground" data-pf-due-count={chip.key}>{counts[chip.key]}</span>
+            <span
+              className={cn('shrink-0 tabular-nums', tinted ? 'font-semibold' : 'text-muted-foreground')}
+              data-pf-due-count={chip.key}
+            >
+              {count}
+            </span>
           </button>
         );
       })}

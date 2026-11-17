@@ -63,9 +63,12 @@ export function AllWorkspaceTasksPage(): React.ReactElement {
         <div className="space-y-3">
           <div className="space-y-1">
             <PageTitle>Все задачи</PageTitle>
-            <p className="text-sm text-muted-foreground">Мои задачи из всех пространств. Общие задачи и задачи коллег — во вкладке «Все».</p>
+            {/* Телефон: пояснение (две строки) и выбор из одного пространства отодвигали задачи
+                почти на полэкрана вниз — на телефоне пояснение прячем, выбор показываем, только
+                когда есть из чего выбирать (или что-то скрыто). */}
+            <p className="text-sm text-muted-foreground max-sm:hidden">Мои задачи из всех пространств. Общие задачи и задачи коллег — во вкладке «Все».</p>
           </div>
-          {workspaces.length > 0 && (
+          {(workspaces.length > 1 || hidden.length > 0) && (
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Видимость пространств">
               <span className="me-1 text-xs font-medium text-muted-foreground">
                 Пространства ({visibleWorkspaces.length} из {workspaces.length}):
