@@ -727,7 +727,7 @@ export class HandleTelegramWebhook {
         transcript,
         groupCtx,
         attachments,
-        { sourceKey, background: true, sourceMessageId: msg.message_id, sourceThreadId: msg.message_thread_id ?? null, ...(msg.reply_to_message?.message_id ? { reply: true } : {}) },
+        { sourceKey, background: true, sourceMessageId: msg.message_id, sourceThreadId: msg.message_thread_id ?? null, ...(msg.reply_to_message?.message_id ? { reply: true, replyToMessageId: msg.reply_to_message.message_id } : {}) },
       );
     } catch (err) {
       if (err instanceof VoiceOnboardingError) throw err.cause;
