@@ -1,4 +1,6 @@
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
+import { useServiceWorkerNavigation } from '@/presentation/hooks/useServiceWorkerNavigation';
+import { useDevicePushSync } from '@/presentation/hooks/useDevicePushSync';
 import { Fragment, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
@@ -68,9 +70,13 @@ function NoWorkspaceScreen(): React.ReactElement {
 export function WorkspaceNotifications(): null {
   const { current, switchTo } = useWorkspacesContext();
   const navigate = useNavigate();
-  useNotificationStream(current!.id, async (to, workspaceId) => {
+  const open = async (to: string, workspaceId?: string | null): Promise<void> => {
     if (workspaceId && workspaceId !== current!.id) await switchTo(workspaceId);
     navigate(to);
-  });
+  };
+  useNotificationStream(current!.id, open);
+  // A push notification tapped while the app is open opens like a toast does.
+  useServiceWorkerNavigation(open);
+  useDevicePushSync();
   return null;
 }

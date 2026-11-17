@@ -115,6 +115,9 @@ import { HttpDeploymentRepository } from '@/infrastructure/http/HttpDeploymentRe
 import type { DeploymentRepository } from '@/application/deployment/DeploymentRepository';
 import { HttpApprovalSummaryRepository } from '@/infrastructure/http/HttpApprovalSummaryRepository';
 import { LoadApprovalSummary } from '@/application/approval/LoadApprovalSummary';
+import { HttpPushSubscriptionRepository } from '@/infrastructure/http/HttpPushSubscriptionRepository';
+import { BrowserDevicePush } from '@/infrastructure/browser/BrowserDevicePush';
+import { DevicePushNotifications } from '@/application/push/DevicePushNotifications';
 
 type Container = {
   deploymentRepository: DeploymentRepository;
@@ -188,6 +191,8 @@ type Container = {
   startSiteEditorAiJob: StartSiteEditorAiJob;
   // ИИ-сводка «что сделано» на карточках полки «На утверждении» (общий кэш на вкладку).
   loadApprovalSummary: LoadApprovalSummary;
+  // "Notifications on this device" (Web Push): profile card, sync on start, sign-out.
+  devicePushNotifications: DevicePushNotifications;
 };
 
 function buildContainer(): Container {
@@ -299,6 +304,7 @@ function buildContainer(): Container {
     applySiteEditorPatch: new ApplySiteEditorPatch(siteEditorRepo),
     startSiteEditorAiJob: new StartSiteEditorAiJob(siteEditorRepo),
     loadApprovalSummary: new LoadApprovalSummary(new HttpApprovalSummaryRepository()),
+    devicePushNotifications: new DevicePushNotifications(new BrowserDevicePush(), new HttpPushSubscriptionRepository()),
   };
 }
 
