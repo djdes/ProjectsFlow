@@ -14,7 +14,7 @@
 //   t.boxFitsCheck(label, selector) — a dialog/sheet fits the screen horizontally,
 //   t.visible / t.hidden / t.waitFor / t.assert / t.waitForMutation — helpers.
 
-import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, SMOKE_PNG_BASE64, WORKSPACE_ID, firstLine } from './fixtures.mjs';
+import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, SMOKE_PNG_BASE64, WORKSPACE_ID, firstLine, moscowDate } from './fixtures.mjs';
 import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
 import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
@@ -139,6 +139,26 @@ async function touchSwipeRight(t, locator, distance = 150) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     for (let step = 1; step <= 15; step += 1) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (distance * step) / 15, y }] });
+      await t.page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+// Swipe left starts near the card's right edge so the finger stays on screen.
+async function touchSwipeLeft(t, locator, distance = 150) {
+  await locator.first().scrollIntoViewIfNeeded();
+  const box = await locator.first().boundingBox();
+  if (!box) throw new Error('карточка вне экрана');
+  const x = box.x + box.width - 24;
+  const y = box.y + Math.min(20, box.height / 2);
+  const cdp = await t.page.context().newCDPSession(t.page);
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let step = 1; step <= 15; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - (distance * step) / 15, y }] });
       await t.page.waitForTimeout(16);
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -793,6 +813,22 @@ export const scenarios = [
       } else {
         t.skip('взятая задача — в разделе «Сейчас»', 'свайп не сработал');
       }
+
+      // Swipe left = «Отложить»: pick a new deadline, the card moves, the toast offers undo.
+      await t.check('свайп влево по карточке очереди — «Отложить до» → «Завтра» (PATCH deadline)', async () => {
+        await showSection(t, 'queue');
+        const queueCard = page.locator(`${QUEUE} ${card('t-domain')}`);
+        await t.visible(queueCard, `карточка «${taskTitle(state, 't-domain')}» в очереди`);
+        await touchSwipeLeft(t, queueCard);
+        const dialog = page.getByRole('dialog', { name: 'Отложить до' });
+        await t.visible(dialog, 'окно «Отложить до»');
+        await dialog.getByRole('button', { name: 'Завтра' }).tap();
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path === `/projects/${INBOX_ID}/tasks/t-domain` && m.body?.deadline === moscowDate(1),
+          `нет PATCH срока ${moscowDate(1)} для t-domain`,
+        );
+        await t.visible(page.getByText(/^Отложено до /), 'тост «Отложено до …»');
+      });
 
       await t.check('долгий тап и бросок на «Готово» в доке закрывает задачу (POST move → done)', async () => {
         await showSection(t, 'queue');

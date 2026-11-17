@@ -36,6 +36,54 @@ async function checkSelected(t, member) {
 
 export const taskCreationDefaultsScenarios = [
   {
+    // «Поделиться → ProjectsFlow» (share_target): the system opens /share?title&text&url.
+    id: 'task-create-share-target', title: '«Поделиться» открывает новую задачу с присланным текстом',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      await t.goto('/share?title=Новый%20дизайн%20оплаты&url=https%3A%2F%2Fexample.com%2Fpay', { ready: () => dialog(page) });
+      await t.step('в окне — заголовок и ссылка, адрес вернулся на «Входящие»', async () => {
+        const editor = dialog(page).locator('[contenteditable="true"]');
+        await t.waitFor(async () => (await editor.innerText()).includes('Новый дизайн оплаты'), 'нет присланного заголовка в тексте задачи');
+        t.assert((await editor.innerText()).includes('https://example.com/pay'), 'нет присланной ссылки');
+        await t.waitFor(() => new URL(page.url()).pathname === '/' && !page.url().includes('share='), 'адрес не очищен от share');
+      });
+    },
+  },
+  {
+    // One line «завтра @Борис … !высокий»: deadline, assignee and priority are recognised,
+    // shown as chips, sent with the task and stripped from its title.
+    id: 'task-create-quick-syntax', title: 'Быстрый ввод одной строкой: срок, @исполнитель, !приоритет',
+    matrix: [['desktop', 'light'], ['phone', 'dark']],
+    async run(t) {
+      const { page } = t;
+      await page.clock.setFixedTime(new Date('2026-10-16T09:00:00+03:00'));
+      await t.goto('/', { ready: () => page.locator('[data-pf-task-id]').first() });
+      await activate(t, createButton(page));
+      const form = dialog(page);
+      const editor = form.locator('[contenteditable="true"]');
+      await t.visible(editor, 'редактор загрузился');
+      await activate(t, editor);
+      await page.keyboard.type('завтра @Борис проверить форму записи !высокий');
+      await t.step('распознанное показано чипами', async () => {
+        for (const kind of ['deadline', 'assignee', 'priority']) {
+          await t.visible(form.locator(`[data-pf-quick-token="${kind}"]`), `чип «${kind}»`);
+        }
+        await t.visible(form.locator('[data-pf-quick-token="assignee"]').getByText('Борис Котов'), 'исполнитель — Борис Котов');
+      });
+      await activate(t, form.getByRole('button', { name: 'Добавить', exact: true }));
+      await t.waitForMutation(
+        (m) => m.method === 'POST' && /\/tasks$/.test(m.path)
+          && m.body?.description === 'проверить форму записи'
+          && m.body?.deadline === '2026-10-17'
+          && m.body?.assigneeUserId === COLLEAGUES[0].id
+          && m.body?.priority === 2,
+        'задача создана без распознанных срока / исполнителя / приоритета или с метками в названии',
+      );
+      await t.pageChecks('после быстрого ввода');
+    },
+  },
+  {
     id: 'task-create-inline', title: 'Быстрое создание в колонке проекта получает срок',
     matrix: [['desktop', 'light'], ['phone', 'dark']],
     async run(t) {

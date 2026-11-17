@@ -12,14 +12,16 @@ const DOMINANCE = 1.5;
 type Options = {
   // Жест выключён (нет прав / идёт другое взаимодействие) — обработчики не вешаются.
   readonly disabled?: boolean;
-  // Палец отпущен за порогом.
-  readonly onCommit: () => void;
+  // Палец отпущен за порогом вправо — «дальше по процессу». Нет — вправо карточка не едет.
+  readonly onCommit?: (() => void) | null;
+  // Палец отпущен за порогом влево — «отложить». Нет — влево карточка не едет.
+  readonly onCommitBack?: (() => void) | null;
 };
 
 type Result = {
   // Ref на элемент карточки: на него вешаются touch-обработчики.
   readonly ref: (node: HTMLElement | null) => void;
-  // Текущее смещение в px (0 — жеста нет). Рисуется CSS-transform'ом, БЕЗ framer-motion:
+  // Текущее смещение в px (0 — жеста нет, < 0 — влево). Рисуется CSS-transform'ом, БЕЗ framer-motion:
   // на тач-устройствах framer-обёртка карточек отключена ради производительности.
   readonly offset: number;
   // Порог пройден — подложка должна показать, что отпускание сработает.
@@ -40,15 +42,17 @@ type Result = {
  * Слушатели вешаются вручную (не через React-пропсы), потому что touchmove нужен
  * НЕпассивным — иначе preventDefault не отменит прокрутку.
  */
-export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
+export function useCardSwipe({ disabled = false, onCommit = null, onCommitBack = null }: Options): Result {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const [offset, setOffset] = useState(0);
-  // Коллбек в ref: пересоздавать слушатели на каждый ре-рендер карточки не нужно.
+  // Коллбеки в ref: пересоздавать слушатели на каждый ре-рендер карточки не нужно.
   // Запись только в эффекте — писать в ref во время рендера нельзя (react-hooks/refs).
   const commitRef = useRef(onCommit);
+  const backRef = useRef(onCommitBack);
   useEffect(() => {
     commitRef.current = onCommit;
-  }, [onCommit]);
+    backRef.current = onCommitBack;
+  }, [onCommit, onCommitBack]);
 
   useEffect(() => {
     if (!node || disabled) return;
@@ -99,11 +103,12 @@ export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
       }
       // Жест наш — гасим прокрутку страницы, иначе карточка едет вместе с ней.
       e.preventDefault();
-      // Тянем только вправо: «дальше по процессу». Влево — ничего, чтобы жест не
-      // читался как «отменить» и не требовал второго смысла.
-      setOffset(Math.max(0, dx));
+      // Вправо — «дальше по процессу», влево — «отложить»; без действия в эту сторону
+      // карточка стоит на месте.
+      const moved = dx > 0 ? (commitRef.current ? dx : 0) : backRef.current ? dx : 0;
+      setOffset(moved);
       // Порог пройден — короткий отклик вибрацией (Android; где API нет — молча ничего).
-      const nowArmed = dx >= COMMIT_PX;
+      const nowArmed = Math.abs(moved) >= COMMIT_PX;
       if (nowArmed && !armedOnce) {
         try {
           navigator.vibrate?.(10);
@@ -115,7 +120,8 @@ export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
     };
 
     const onTouchEnd = (): void => {
-      if (claimed && dx >= COMMIT_PX) commitRef.current();
+      if (claimed && dx >= COMMIT_PX) commitRef.current?.();
+      else if (claimed && dx <= -COMMIT_PX) backRef.current?.();
       reset();
     };
 
@@ -131,5 +137,5 @@ export function useCardSwipe({ disabled = false, onCommit }: Options): Result {
     };
   }, [node, disabled]);
 
-  return { ref: setNode, offset, armed: offset >= COMMIT_PX };
+  return { ref: setNode, offset, armed: Math.abs(offset) >= COMMIT_PX };
 }

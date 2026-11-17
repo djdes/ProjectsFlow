@@ -71,6 +71,7 @@ import { useUsage } from '@/presentation/usage/UsageProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { isWorkerLockedByPlan } from './workerHandoff';
 import { BulkActionBar } from './BulkActionBar';
+import { bulkSnapshotFrom } from './bulkUndo';
 import {
   nextAnchor,
   nextSelection,
@@ -1583,6 +1584,7 @@ export function KanbanBoard({
       {/* Панель массовых действий — поверх доски, когда выбрана хотя бы одна задача. */}
       {selectionStatus !== null && selectedIds.size > 0 && (
         <BulkActionBar
+          snapshot={bulkSnapshotFrom([tasks])}
           selectedIds={selectionOrderedIds.filter((id) => selectedIds.has(id))}
           projectId={projectId}
           isInbox={isInbox}
