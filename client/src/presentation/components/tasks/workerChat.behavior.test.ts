@@ -395,3 +395,85 @@ test('new chat offers photo generation and Enter creates only an image job, reta
     await view.render(); assert.match(view.host.textContent ?? '', /Режим фото/);
   } finally { await view.close(); }
 });
+
+const liveContainer = (liveRepository: Partial<LiveRepository>) => ({
+  liveRepository: { async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; }, ...liveRepository },
+  taskRepository: { async listComments() { return []; } }, projectRepository: { async listMembers() { return []; } },
+});
+const liveProps = (status: Task['status'] = 'in_progress') => ({ task: { id: 'task', projectId: 'project', status } as Task, backlogTail: null, todoTail: null });
+const SPINNER = /\(\d+s\)/;
+
+test('a finished run stays finished when a slower refresh still reports it running', async () => {
+  const View = await component('LiveTab');
+  const held: Array<(sessions: LiveSession[]) => void> = [];
+  let hold = false;
+  state.container = liveContainer({
+    async listSessions() { return hold ? new Promise<LiveSession[]>(resolve => { held.push(resolve); }) : [run('race', 1, 'running')]; },
+    async listEvents() { return [event(1, 'Работаю', 1)]; },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    assert.match(view.host.textContent!, SPINNER);
+    const stream = Source.instances.at(-1)!;
+    const opened = Source.instances.length;
+    hold = true;
+    // A periodic/focus refresh is in flight and read the session before it ended.
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await act(async () => { stream.emit('live_end', { status: 'completed' }); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER, 'live_end stops the spinner');
+    await act(async () => { held.shift()!([run('race', 1, 'running')]); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER, 'a stale response must not resurrect the spinner');
+    assert.equal(Source.instances.length, opened, 'no stream is reopened for an ended run');
+    await act(async () => { held.shift()?.([{ ...run('race', 1, 'completed'), lastSeq: 1 }]); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER);
+    assert.match(view.host.textContent!, /Воркер завершено|завершено/);
+  } finally { await view.close(); }
+});
+
+test('the run timer shows the real elapsed time from the first frame', async () => {
+  const View = await component('LiveTab');
+  const startedAt = new Date(Date.now() - 300_000);
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('long', 1, 'running'), startedAt }]; },
+    async listEvents() { return [event(1, 'Работаю', 1)]; },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    assert.doesNotMatch(view.host.textContent!, /\(0s\)/);
+    assert.match(view.host.textContent!, /\(30[0-2]s\)/);
+  } finally { await view.close(); }
+});
+
+test('reading history keeps the rendered window while new actions stream in', async () => {
+  const View = await component('LiveTab');
+  const many = Array.from({ length: 305 }, (_, index) => ({ ...event(index + 1, `строка ${index + 1}`, 1) }));
+  state.container = liveContainer({ async listSessions() { return [{ ...run('long-feed', 1, 'running'), lastSeq: 305 }]; }, async listEvents() { return many; } });
+  const view = await mount(View, liveProps());
+  try {
+    const feed = view.host.querySelector<HTMLElement>('[data-pf-worker-chat]')!;
+    Object.defineProperties(feed, { clientHeight: { value: 300 }, scrollHeight: { get: () => 20_000 } });
+    const earlier = () => [...view.host.querySelectorAll('button')].find(button => button.textContent?.startsWith('Показать ранее'))?.textContent;
+    assert.equal(earlier(), 'Показать ранее (6)');
+    assert.match(view.host.textContent!, /строка 6(?!\d)/);
+    await act(async () => { feed.scrollTop = 4_000; feed.dispatchEvent(new Event('scroll')); });
+    await act(async () => { Source.instances.at(-1)!.emit('live', { ...event(306, 'строка 306', 2), createdAt: at(2).toISOString() }); });
+    assert.match(view.host.textContent!, /строка 306/);
+    assert.match(view.host.textContent!, /строка 6(?!\d)/, 'the oldest rendered row stays while the reader is above the tail');
+    assert.equal(earlier(), 'Показать ранее (6)');
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('[aria-label="К последнему сообщению"]')!.click(); });
+    assert.equal(earlier(), 'Показать ранее (7)', 'following the tail again restores the DOM cap');
+  } finally { await view.close(); }
+});
+
+test('the first load shows one loader, not one per data source', async () => {
+  const View = await component('LiveTab');
+  state.container = {
+    ...liveContainer({ async listSessions() { return new Promise<LiveSession[]>(() => {}); } }),
+    taskRepository: { async listComments() { return new Promise<TaskComment[]>(() => {}); } },
+  };
+  const view = await mount(View, liveProps('pending_approval'));
+  try {
+    assert.equal(view.host.textContent!.match(/Загрузка/g)?.length, 1);
+  } finally { await view.close(); }
+});
+
