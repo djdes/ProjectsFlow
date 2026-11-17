@@ -129,7 +129,8 @@ export function InboxPage({
       {/* Верхний отступ меньше, чем у остальных страниц, ровно на то, на сколько строка
           управления выше самого заголовка (44px с иконками на телефоне, 32px с поиском на
           десктопе): заголовок встаёт на те же 16/20px от шапки, что и везде. */}
-      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-2 sm:px-6 sm:pbs-[1.125rem] lg:px-9'}>
+      {/* Телефон: строки заголовка нет (см. compactHeading) — лента «кто» стоит в 12px от шапки. */}
+      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-[1.125rem] lg:px-9'}>
         <AssignedToMeBlock
           regionId={embedded ? `workspace-board-${workspace?.id}` : undefined}
           initialTab={embedded ? 'toMe' : undefined}
@@ -181,6 +182,7 @@ export function InboxPage({
           onHideDoneChange={handleHideDoneChange}
           selectionActive={selectionActive}
           onSelectionActiveChange={setSelectionActive}
+          compactHeading={!embedded}
         />
       </div>
     </div>

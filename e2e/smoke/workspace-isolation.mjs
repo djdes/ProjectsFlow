@@ -126,7 +126,9 @@ export const workspaceIsolationScenarios = [
         t.assert(await t.page.locator('#assigned-to-me [data-pf-task-id="queue-ws-other"]').count() === 0, 'чужая задача попала в основной блок');
       });
       await t.step('домик возвращает только выбранное пространство', async () => {
-        await t.goto('/', { ready: () => t.page.getByRole('heading', { name: 'Задачи пространства', level: 1 }) });
+        // The phone keeps this h1 for screen readers only (no title row): wait for the board.
+        await t.goto('/', { ready: () => t.page.locator('#assigned-to-me [data-pf-task-id]').first() });
+        t.assert(await t.page.getByRole('heading', { name: 'Задачи пространства', level: 1 }).count() === 1, 'нет h1 «Задачи пространства»');
         t.assert((t.state.activeWorkspaceId ?? WORKSPACE_ID) === selectedBefore, 'глобус изменил выбранное пространство');
         t.assert(await t.page.locator('[data-pf-task-id="queue-ws-other"]').count() === 0, 'домик показал чужое пространство');
         await t.goto('/all-tasks', { ready: () => t.page.getByRole('heading', { name: 'Все задачи', level: 1 }) });

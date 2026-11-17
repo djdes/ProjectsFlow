@@ -5,11 +5,13 @@ import { DragHandle } from '@tiptap/extension-drag-handle-react';
 import { GripVertical, Plus } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { buildExtensions, type MentionMember } from './extensions/buildExtensions';
 import { SlashCommand, SLASH_ITEMS, applyBlockType } from './extensions/slashCommand';
 import { SuggestionList, type SuggestionListHandle, type SuggestionItem } from './SuggestionList';
 import { FloatingFormatMenu, type FloatingAnchor } from './FloatingFormatMenu';
 import { FormatMenu } from './FormatMenu';
+import { TaskTitleLine } from './extensions/taskTitleLine';
 import { extractClipboardFiles, isImageFile } from '@/presentation/components/attachments/files';
 
 export type { MentionMember };
@@ -434,8 +436,14 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     setMenuAnchor(null);
   }, []);
 
+  // Сенсорный экран: панель форматирования появляется с первым фокусом и остаётся (а не
+  // прячется по blur — тап по её же кнопке снимает фокус с текста, и кнопка уезжала бы из-под
+  // пальца). До правки окно задачи на телефоне не тратит ~56px на ряд B I U над текстом.
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
+  const [toolbarRevealed, setToolbarRevealed] = React.useState(false);
   const editor = useEditor({
-    extensions: [...buildExtensions({ placeholder, members }), SlashCommand],
+    onFocus: () => setToolbarRevealed(true),
+    extensions: [...buildExtensions({ placeholder, members }), SlashCommand, ...(taskDocument ? [TaskTitleLine] : [])],
     content: value,
     contentType: 'markdown',
     autofocus: autoFocus ? 'end' : false,
@@ -741,8 +749,8 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         if (rootRef.current?.contains(active) || active?.closest('[data-editor-owner]')?.getAttribute('data-editor-owner') === ownerId) return;
         onBlurRef.current?.();
       }, 0);
-    }} className={cn('relative', taskDocument && '[&_.tiptap]:leading-relaxed [&_.tiptap>p:first-child]:text-lg [&_.tiptap>p:first-child]:font-medium [&_.tiptap>p:first-child]:leading-7 [&_.tiptap>p:first-child]:text-foreground [&_.tiptap>p:first-child]:mbe-3 [&_.tiptap_strong]:font-bold', className)}>
-      {editor && toolbar && !disabled ? (
+    }} className={cn('relative', taskDocument && '[&_.tiptap]:leading-relaxed [&_.pf-task-title-line]:text-lg [&_.pf-task-title-line]:font-medium [&_.pf-task-title-line]:leading-7 [&_.pf-task-title-line]:text-foreground [&_.tiptap>p:first-child]:mbe-3 [&_.tiptap_strong]:font-bold', className)}>
+      {editor && toolbar && !disabled && (!coarsePointer || toolbarRevealed) ? (
         <div data-editor-owner={ownerId} className="mbe-3 border-be border-border/70 pbe-1">
           <FormatMenu editor={editor} inline />
         </div>

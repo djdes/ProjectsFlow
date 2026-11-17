@@ -678,9 +678,18 @@ export const scenarios = [
         readyName: 'карточки «Входящих» видны',
       });
       await checkDarkTheme(t);
-      await t.check('заголовок «Задачи пространства»', () =>
-        t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
-      );
+      // Phone: no title row — the app header names the workspace, the bottom nav the section;
+      // the h1 stays for screen readers, «Фильтры» sit next to the section switch.
+      await t.check('заголовок «Задачи пространства» — только для скринридеров, «Фильтры» у «Сейчас / Очередь»', async () => {
+        const heading = page.getByRole('heading', { name: 'Задачи пространства', level: 1 });
+        t.assert((await heading.count()) === 1, 'нет h1 «Задачи пространства»');
+        t.assert(await heading.evaluate((el) => Boolean(el.closest('.sr-only'))), 'строка заголовка видна на телефоне');
+        const filtersNearSwitch = await page.evaluate(() => {
+          const row = document.querySelector('[data-pf-inbox-section-switch]')?.closest('[role="group"]')?.parentElement;
+          return Boolean(row?.querySelector('button[aria-label="Фильтры"]'));
+        });
+        t.assert(filtersNearSwitch, 'кнопки «Фильтры» нет рядом с «Сейчас / Очередь»');
+      });
       await t.pageChecks('Входящие');
       // The «who» ribbon: «Мои / Все» and the people's avatars sit on one line at one height;
       // each person's name hangs under the avatar (initials alone did not say who is who).
@@ -1287,7 +1296,8 @@ export const scenarios = [
       for (const [label, path, ready] of [
         ['ИИ', '/ai', () => page.getByRole('heading', { name: 'ProjectsFlow ИИ', level: 1 })],
         ['Профиль', '/profile', () => page.getByText('Личные данные', { exact: true })],
-        ['Входящие', '/', () => page.getByRole('heading', { name: 'Задачи пространства', level: 1 })],
+        // Phone: the inbox has no visible title row — its section switch is the content.
+        ['Входящие', '/', () => page.locator('[data-pf-inbox-section-switch="now"]')],
       ]) {
         await t.check(`нижняя панель: «${label}» открывает ${path}`, async () => {
           const button = nav.getByRole('button', { name: label, exact: true });

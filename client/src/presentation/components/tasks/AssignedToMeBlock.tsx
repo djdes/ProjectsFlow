@@ -182,6 +182,11 @@ type Props = {
   // панели действий, полностью успешное массовое действие) блок сообщает обратно.
   selectionActive?: boolean;
   onSelectionActiveChange?: (active: boolean) => void;
+  // Телефон: заголовок — это название страницы, его повторяют шапка приложения (пространство)
+  // и нижняя навигация («Входящие»). Строку заголовка тогда не рисуем (h1 остаётся для
+  // скринридеров), а фильтры и действия переезжают в липкую строку «Сейчас / Очередь».
+  // На «Всех задачах» заголовок — имя пространства блока, он нужен.
+  compactHeading?: boolean;
 };
 
 // Тип вкладки блока ответственных: «Для меня» / «Другим».
@@ -336,6 +341,7 @@ export function AssignedToMeBlock({
   onHideDoneChange,
   selectionActive = false,
   onSelectionActiveChange,
+  compactHeading = false,
 }: Props): React.ReactElement | null {
   const { taskAssigneeRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
@@ -1584,7 +1590,7 @@ export function AssignedToMeBlock({
   if (!inboxReady) {
     return (
       <section id={regionId} className="flex flex-col gap-3">
-        <InboxLoadingLayout heading={heading} />
+        <InboxLoadingLayout heading={heading} compactHeading={compactHeading} />
       </section>
     );
   }
@@ -1856,6 +1862,18 @@ export function AssignedToMeBlock({
       </div>
     </div>
   );
+  // Телефон: сброс фильтров, «Фильтры» и действия страницы — значками.
+  const phoneTools = (
+    <>
+      {hasLocalFilters && <button type="button" onClick={resetFilters} aria-label="Сбросить фильтры" title="Сбросить фильтры"
+        className="grid size-11 shrink-0 place-items-center rounded-lg text-primary-ink transition-colors hover:bg-hover active:bg-active">
+        <RotateCcw className="size-4" />
+      </button>}
+      {filtersPopover}
+      {actions}
+    </>
+  );
+  const toolsInSticky = !isWide && compactHeading && hasAny;
   const headRow = isWide ? (
     <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-2 gap-y-2">
       {heading}
@@ -1869,16 +1887,15 @@ export function AssignedToMeBlock({
     </div>
   ) : (
     <div className="flex flex-col gap-3">
-      <div className="flex min-h-11 items-center gap-1">
-        {heading}
-        <span className="flex-1" />
-        {hasLocalFilters && <button type="button" onClick={resetFilters} aria-label="Сбросить фильтры" title="Сбросить фильтры"
-          className="grid size-11 shrink-0 place-items-center rounded-lg text-primary-ink transition-colors hover:bg-hover active:bg-active">
-          <RotateCcw className="size-4" />
-        </button>}
-        {filtersPopover}
-        {actions}
-      </div>
+      {toolsInSticky ? (
+        <div className="sr-only">{heading}</div>
+      ) : (
+        <div className="flex min-h-11 items-center gap-1">
+          {heading}
+          <span className="flex-1" />
+          {phoneTools}
+        </div>
+      )}
       {hasAny && (
         // Имена висят под аватарами: «Мои / Все» и аватары — по верхнему краю, на одной оси.
         <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-2">
@@ -2342,6 +2359,41 @@ export function AssignedToMeBlock({
   // Тело блока (дизайн C4 «Одна доска»): строка управления, строка сроков, затем доска —
   // закреплённая колонка «В работе» и очередь по проектам, которая листается вбок. На телефоне
   // вместо доски — переключатель разделов и один раздел на всю ширину.
+  // Сроки (и «Ответить»). Телефон: три равные колонки внутри липкой полосы; десктоп — строка
+  // сроков с поиском и действиями у правого края.
+  const dueRow = (
+    <div
+      className={cn(
+        'flex items-center gap-x-2 gap-y-1.5',
+        // Телефон: три равные колонки, все фильтры доступны без прокрутки.
+        isWide ? 'flex-wrap' : 'min-w-0',
+      )}
+    >
+      <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
+      {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
+        <ReplyFilterChip
+          active={replyFilterOn}
+          count={awaitingReplyTasks.length}
+          onToggle={() => setReplyOnly((on) => !on)}
+        />
+      )}
+      {isWide && hasLocalFilters && (
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 text-sm font-medium text-primary-ink transition-colors hover:bg-hover sm:h-[26px] sm:text-meta"
+        >
+          Сбросить фильтры
+        </button>
+      )}
+      {isWide && (
+        <span title={subtitleBase} className="hidden min-w-0 flex-[1_1_0%] truncate pe-2 text-end text-meta text-muted-foreground xl:block">
+          {subtitleBase}
+        </span>
+      )}
+      {isWide && searchGroup}
+    </div>
+  );
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
     // прокручивалась выше неё.
@@ -2351,11 +2403,13 @@ export function AssignedToMeBlock({
       {/* Нулевая метка над переключателем; -mbe-3 гасит лишний зазор колонки. */}
       {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-3" />}
       {!isWide && (
-        // Липнет к верху при прокрутке: раздел переключается, не возвращаясь наверх.
+        // Липнет к верху при прокрутке: раздел, сроки, поиск и фильтры — одна полоса, которая
+        // остаётся под пальцем, пока листаешь список (раньше сроки уезжали вверх вместе с
+        // шапкой, и чтобы сменить фильтр, приходилось возвращаться к началу).
         // py-1.5 — воздух над переключателем, когда он прилип; -my-1.5 убирает эти же 6px
         // из потока, чтобы зазоры до соседних строк остались теми же 12px, что везде.
         <div className="sticky inset-bs-0 z-20 -mx-4 -my-1.5 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 max-[359px]:gap-1">
             <InboxSectionSwitch
               className="min-w-0 flex-1"
               value={section}
@@ -2374,50 +2428,22 @@ export function AssignedToMeBlock({
                 if (searchVisible) setQuery('');
               }}
               className={cn(
-                'grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                'grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-[359px]:size-11',
                 searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
               )}
             >
               {searchVisible ? <X className="size-4" /> : <Search className="size-4" />}
             </button>
+            {toolsInSticky && phoneTools}
           </div>
           {searchVisible && (
             <InboxSearch id={`${regionId}-mobile-search`} value={query} onChange={setQuery} autoFocus={searchOpen} />
           )}
+          {dueRow}
         </div>
       )}
 
-      <div
-        className={cn(
-          'flex items-center gap-x-2 gap-y-1.5',
-          // Телефон: три равные колонки, все фильтры доступны без прокрутки.
-          isWide ? 'flex-wrap' : 'min-w-0',
-        )}
-      >
-        <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
-        {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
-          <ReplyFilterChip
-            active={replyFilterOn}
-            count={awaitingReplyTasks.length}
-            onToggle={() => setReplyOnly((on) => !on)}
-          />
-        )}
-        {isWide && hasLocalFilters && (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 text-sm font-medium text-primary-ink transition-colors hover:bg-hover sm:h-[26px] sm:text-meta"
-          >
-            Сбросить фильтры
-          </button>
-        )}
-        {isWide && (
-          <span title={subtitleBase} className="hidden min-w-0 flex-[1_1_0%] truncate pe-2 text-end text-meta text-muted-foreground xl:block">
-            {subtitleBase}
-          </span>
-        )}
-        {isWide && searchGroup}
-      </div>
+      {isWide && dueRow}
 
       {focusedError ? (
         <div role="alert" className="space-y-3 rounded-xl border p-4 text-sm">
