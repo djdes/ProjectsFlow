@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import type { TaskComment } from '@/domain/task/TaskComment';
@@ -393,5 +394,196 @@ test('new chat offers photo generation and Enter creates only an image job, reta
     assert.deepEqual(state.navigation, { state: { imageMode: true } });
     state.params = { conversationId: 'new-photo' }; state.location = state.navigation;
     await view.render(); assert.match(view.host.textContent ?? '', /Режим фото/);
+  } finally { await view.close(); }
+});
+
+const liveContainer = (liveRepository: Partial<LiveRepository>) => ({
+  liveRepository: { async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; }, ...liveRepository },
+  taskRepository: { async listComments() { return []; } }, projectRepository: { async listMembers() { return []; } },
+});
+const liveProps = (status: Task['status'] = 'in_progress') => ({ task: { id: 'task', projectId: 'project', status } as Task, backlogTail: null, todoTail: null });
+// The run timer: «(45 с)», «(13 мин 3 с)», «(1 ч 5 мин)».
+const SPINNER = /\((?:\d+ ч \d+ мин|(?:\d+ мин )?\d+ с)\)/;
+
+test('a finished run stays finished when a slower refresh still reports it running', async () => {
+  const View = await component('LiveTab');
+  const held: Array<(sessions: LiveSession[]) => void> = [];
+  let hold = false;
+  state.container = liveContainer({
+    async listSessions() { return hold ? new Promise<LiveSession[]>(resolve => { held.push(resolve); }) : [run('race', 1, 'running')]; },
+    async listEvents() { return [event(1, 'Работаю', 1)]; },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    assert.match(view.host.textContent!, SPINNER);
+    const stream = Source.instances.at(-1)!;
+    const opened = Source.instances.length;
+    hold = true;
+    // A periodic/focus refresh is in flight and read the session before it ended.
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await act(async () => { stream.emit('live_end', { status: 'completed' }); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER, 'live_end stops the spinner');
+    await act(async () => { held.shift()!([run('race', 1, 'running')]); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER, 'a stale response must not resurrect the spinner');
+    assert.equal(Source.instances.length, opened, 'no stream is reopened for an ended run');
+    await act(async () => { held.shift()?.([{ ...run('race', 1, 'completed'), lastSeq: 1 }]); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER);
+    assert.match(view.host.textContent!, /Воркер завершено|завершено/);
+  } finally { await view.close(); }
+});
+
+test('the run timer shows the real elapsed time from the first frame', async () => {
+  const View = await component('LiveTab');
+  const startedAt = new Date(Date.now() - 300_000);
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('long', 1, 'running'), startedAt }]; },
+    async listEvents() { return [event(1, 'Работаю', 1)]; },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    assert.doesNotMatch(view.host.textContent!, /\(0 с\)/);
+    assert.match(view.host.textContent!, /\(5 мин [0-2] с\)/);
+    // Russian neutral words, not English jokes.
+    assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /^.(Работаю|Думаю|Разбираюсь)…/);
+  } finally { await view.close(); }
+});
+
+test('reading history keeps the rendered window while new actions stream in', async () => {
+  const View = await component('LiveTab');
+  const many = Array.from({ length: 305 }, (_, index) => ({ ...event(index + 1, `строка ${index + 1}`, 1) }));
+  state.container = liveContainer({ async listSessions() { return [{ ...run('long-feed', 1, 'running'), lastSeq: 305 }]; }, async listEvents() { return many; } });
+  const view = await mount(View, liveProps());
+  try {
+    const feed = view.host.querySelector<HTMLElement>('[data-pf-worker-chat]')!;
+    Object.defineProperties(feed, { clientHeight: { value: 300 }, scrollHeight: { get: () => 20_000 } });
+    const earlier = () => [...view.host.querySelectorAll('button')].find(button => button.textContent?.startsWith('Показать ранее'))?.textContent;
+    assert.equal(earlier(), 'Показать ранее (6)');
+    assert.match(view.host.textContent!, /строка 6(?!\d)/);
+    await act(async () => { feed.scrollTop = 4_000; feed.dispatchEvent(new Event('scroll')); });
+    await act(async () => { Source.instances.at(-1)!.emit('live', { ...event(306, 'строка 306', 2), createdAt: at(2).toISOString() }); });
+    assert.match(view.host.textContent!, /строка 306/);
+    assert.match(view.host.textContent!, /строка 6(?!\d)/, 'the oldest rendered row stays while the reader is above the tail');
+    assert.equal(earlier(), 'Показать ранее (6)');
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('[aria-label="К последнему сообщению"]')!.click(); });
+    assert.equal(earlier(), 'Показать ранее (7)', 'following the tail again restores the DOM cap');
+  } finally { await view.close(); }
+});
+
+test('the first load shows one loader, not one per data source', async () => {
+  const View = await component('LiveTab');
+  state.container = {
+    ...liveContainer({ async listSessions() { return new Promise<LiveSession[]>(() => {}); } }),
+    taskRepository: { async listComments() { return new Promise<TaskComment[]>(() => {}); } },
+  };
+  const view = await mount(View, liveProps('pending_approval'));
+  try {
+    assert.equal(view.host.textContent!.match(/Загрузка/g)?.length, 1);
+  } finally { await view.close(); }
+});
+
+// The §6 pipeline contract, shared with the smoke fixtures.
+const orchestratorRun = JSON.parse(readFileSync(fileURLToPath(new URL('../../../../../e2e/smoke/live-orchestrator-run.json', import.meta.url)), 'utf8')) as {
+  agentName: string; events: Array<{ at: number; kind: string; text?: string; payload?: unknown }>;
+};
+const pipelineEvents = (extra: LiveEvent[] = []): LiveEvent[] => [...orchestratorRun.events.map((item, index) => ({
+  seq: index + 1, kind: item.kind, text: item.text ?? null, payload: item.payload ?? null, createdAt: new Date(at(1).getTime() + item.at * 1000),
+})), ...extra];
+
+test('a pipeline run shows the stepper, role turns, folded executor tools, checks, verdicts and handoffs', async () => {
+  const View = await component('LiveTab');
+  const extra: LiveEvent[] = [
+    { seq: 900, kind: 'telemetry', text: null, payload: { actor: 'planner' }, createdAt: at(40) },
+    { seq: 901, kind: 'assistant_text', text: 'Неизвестная роль пишет', payload: { actor: 'planner' }, createdAt: at(40) },
+    { seq: 902, kind: 'review_verdict', text: null, payload: { actor: 'reviewer', approved: 'да' }, createdAt: at(40) },
+  ];
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('pipeline', 1, 'running'), agentName: orchestratorRun.agentName, lastSeq: 902 }]; },
+    async listEvents() { return pipelineEvents(extra); },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    const text = () => view.host.textContent ?? '';
+    const stepper = view.host.querySelector('[data-pf-pipeline-stepper]')!;
+    assert.ok(stepper, 'stepper above the feed');
+    assert.deepEqual([...stepper.querySelectorAll('[data-stage]')].map(step => `${step.getAttribute('data-stage')}:${step.getAttribute('data-state')}`),
+      ['prepare:passed', 'execute:passed', 'checks:passed', 'review:passed', 'publish:passed', 'deliver:passed', 'health:active']);
+    assert.match(stepper.textContent!, /Проверка версии · идёт/);
+    assert.match(stepper.textContent!, /раунд 4/);
+    assert.match(stepper.textContent!, /усиленный исполнитель/);
+
+    const headers = [...view.host.querySelectorAll('[data-live-role-header]')].map(header => header.textContent);
+    for (const label of ['Оркестратор', 'Исполнительраунд 1', 'Ревьюерраунд 2', 'Исполнитель · усиленныйраунд 4']) assert.ok(headers.includes(label), `${label} in ${headers.join(' | ')}`);
+
+    // Executor text is visible at once, its tool noise is folded per round.
+    assert.match(text(), /Разбираюсь, почему скидка/);
+    assert.doesNotMatch(text(), /ApplyPromoCode\|DeliveryPrice/);
+    const journals = [...view.host.querySelectorAll<HTMLElement>('[data-live-journal]')];
+    assert.deepEqual(journals.map(journal => journal.querySelector('button')!.textContent!.replace(/журнал$/, '')), [
+      'Раунд 1 · правки: 2 файла, команд: 2',
+      'Раунд 2 · правки: 1 файл, команд: 1',
+      'Раунд 3 · правки: 2 файла, команд: 11 ошибка',
+      'Раунд 4 · правки: 3 файла, команд: 1',
+    ]);
+    await act(async () => { journals[0].querySelector('button')!.click(); });
+    assert.match(journals[0].textContent!, /ApplyPromoCode\|DeliveryPrice/);
+    assert.match(journals[0].textContent!, /var baseAmount = cart\.Total - cart\.DeliveryPrice;/);
+
+    // Checks: compact rows, the output tail by click.
+    const failed = view.host.querySelector<HTMLElement>('[data-live-check="tests"][data-live-check-passed="false"]')!;
+    assert.match(failed.textContent!, /tests.*код 1.*23 с/);
+    assert.doesNotMatch(failed.textContent!, /PromoCode_IgnoresDeliveryPrice/);
+    await act(async () => { failed.querySelector('button')!.click(); });
+    assert.match(failed.textContent!, /\$ dotnet test tests\/Shop\.Tests\/Shop\.Tests\.csproj/);
+    assert.match(failed.textContent!, /PromoCode_IgnoresDeliveryPrice/);
+    assert.match(view.host.querySelector('[data-live-check="deploy"]')!.textContent!, /deployпройденодоставка1 мин 3 с/);
+
+    // Reviewer verdict cards.
+    const verdicts = [...view.host.querySelectorAll('[data-live-verdict]')];
+    assert.deepEqual(verdicts.map(card => card.getAttribute('data-live-verdict')), ['changes', 'changes', 'approved']);
+    assert.match(verdicts[0].textContent!, /Нужны правки2 замечания/);
+    assert.match(verdicts[0].textContent!, /важноеsrc\/Shop\.Web\/Features\/Checkout\/CheckoutService\.cs:87/);
+    assert.match(verdicts[0].textContent!, /мелочь/);
+    assert.match(verdicts[1].textContent!, /блокерsrc\/Shop\.Web\/Features\/Cart\/Pricing\/PricingService\.cs:52/);
+    assert.match(verdicts[2].textContent!, /Одобрено.*Замечаний нет/);
+
+    // Handoffs are thin dividers.
+    const handoffs = [...view.host.querySelectorAll('[data-live-handoff]')].map(divider => divider.getAttribute('aria-label'));
+    assert.deepEqual(handoffs, ['Замечания переданы исполнителю · раунд 2', 'Замечания переданы исполнителю · раунд 3', 'Эскалация: усиленный исполнитель · раунд 4']);
+
+    // Unknown kinds/actors and malformed payloads do not break the feed.
+    assert.match(text(), /Неизвестная роль пишет/);
+    assert.match(text(), SPINNER);
+
+    // One line per stage entry: a start and its result share it, only the current one spins.
+    const stageLines = [...view.host.querySelectorAll('[data-live-stage]')];
+    const publish = stageLines.filter(line => line.getAttribute('data-live-stage') === 'publish');
+    assert.equal(publish.length, 1);
+    assert.equal(publish[0].getAttribute('data-live-stage-status'), 'passed');
+    assert.match(publish[0].textContent!, /^Публикация — Коммит 3c9e1d2/);
+    assert.deepEqual(stageLines.filter(line => line.getAttribute('data-live-stage-status') === 'started').map(line => line.textContent),
+      ['Жду, пока сайт отдаст новую версию…: идёт']);
+    assert.equal(view.host.querySelectorAll('[data-live-stage-live]').length, 1);
+    // The spinner names the current stage of the stepper; the run caption is short.
+    assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /Проверка версии…/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Конвейер · попытка 1 · идёт$/);
+  } finally { await view.close(); }
+});
+
+test('old ralph-worker sessions keep the plain feed even when events carry role fields', async () => {
+  const View = await component('LiveTab');
+  state.container = liveContainer({
+    async listSessions() { return [run('legacy', 1, 'completed')]; },
+    async listEvents() { return [
+      { seq: 1, kind: 'assistant_text', text: 'Старый воркер', payload: { actor: 'reviewer', round: 2 }, createdAt: at(1) },
+      { seq: 2, kind: 'bash', text: null, payload: { command: 'npm test', actor: 'executor', round: 1 }, createdAt: at(1) },
+      { seq: 3, kind: 'stage', text: null, payload: { stage: 'checks', status: 'started' }, createdAt: at(1) },
+    ]; },
+  });
+  const view = await mount(View, liveProps('pending_approval'));
+  try {
+    assert.match(view.host.textContent!, /Старый воркер/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Воркер завершено$/);
+    assert.match(view.host.textContent!, /терминал\$ npm test/);
+    assert.equal(view.host.querySelector('[data-pf-pipeline-stepper], [data-live-role-header], [data-live-journal]'), null);
   } finally { await view.close(); }
 });
