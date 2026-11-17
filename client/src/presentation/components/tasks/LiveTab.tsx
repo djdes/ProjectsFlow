@@ -18,7 +18,7 @@ import {
   parseStagePayload,
   pipelineProgress,
 } from '@/domain/live/LivePipeline';
-import { CheckResultRow, HandoffDivider, PipelineStepper, ReviewVerdictCard, RoleTurn, StageLine, ToolJournal } from './LivePipeline';
+import { CheckResultRow, formatElapsed, HandoffDivider, PipelineStepper, ReviewVerdictCard, RoleTurn, STAGE_LABEL, StageLine, ToolJournal } from './LivePipeline';
 import { WorkerChatMessage } from './WorkerChatMessage';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type {
@@ -65,6 +65,23 @@ const STATUS_LABEL_RU: Record<LiveSession['status'], string> = {
   timeout: 'таймаут',
   canceled: 'отменено',
 };
+
+// Конвейер — мужской род и короче: «Конвейер · попытка 2 · идёт».
+const PIPELINE_STATUS_RU: Record<LiveSession['status'], string> = {
+  running: 'идёт',
+  completed: 'завершён',
+  failed: 'ошибка',
+  timeout: 'таймаут',
+  canceled: 'отменён',
+};
+
+// Подпись начала запуска. Сессия, которая уже не текущая, но всё ещё «running» в ответе
+// сервера, читается как завершённая (её сменил следующий запуск).
+function runCaption(session: LiveSession, current: boolean): string {
+  const status = session.status === 'running' && !current ? 'completed' : session.status;
+  if (isPipelineSession(session)) return `Конвейер · попытка ${session.attempt} · ${PIPELINE_STATUS_RU[status]}`;
+  return `Воркер ${status === 'running' ? 'работает' : STATUS_LABEL_RU[status]}`;
+}
 
 // Богатый markdown для текста ассистента: крупные заголовки (H1 как заголовок),
 // жирные акценты — в духе Notion/Cursor. Перебивает мелкий prose-sm у CommentBody
@@ -300,7 +317,9 @@ function TaskLiveChat({
 
   const pipelineRun = latestRun && isPipelineSession(latestRun.session) ? latestRun : undefined;
   const progress = useMemo(() => pipelineRun ? pipelineProgress(pipelineRun.events, pipelineRun.session.status) : null, [pipelineRun]);
-  const executing = progress?.steps.find(step => step.stage === 'execute')?.state === 'active';
+  const activeStage = progress?.outcome === 'running' ? progress.steps.find(step => step.state === 'active')?.stage : undefined;
+  const executing = activeStage === 'execute';
+  const spinnerStage = activeStage ? STAGE_LABEL[activeStage] : undefined;
   const liveJournalKey = runningRun && pipelineRun === runningRun && executing
     ? rows.findLast(row => row.kind === 'tools' && row.sessionId === runningRun.session.id)?.key ?? null : null;
 
@@ -331,9 +350,9 @@ function TaskLiveChat({
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
           if (entry.kind === 'event' || entry.kind === 'tools') return <FeedRow key={entry.key} row={entry} firstShown={index === 0} live={entry.key === liveJournalKey} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
-          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' && entry.session.id === runningRun?.session.id ? 'работает' : STATUS_LABEL_RU[entry.session.status === 'running' ? 'completed' : entry.session.status]}</p>;
+          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}</p>;
         })}
-        {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} />}
+        {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} label={pipelineRun === runningRun ? spinnerStage : undefined} />}
         {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
         {!sessionsLoading && runs.length === 0 && rows.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
         {questionsLoading && !sessionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
@@ -486,27 +505,13 @@ function EmptyState({ working, task, queued: queuedByUser }: { working: boolean;
 
 // === Claude Code-style спиннер (мерцающая «снежинка» + ротация слов) ===
 const SPINNER_FRAMES = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
-const SPINNER_WORDS = [
-  'Booping',
-  'Noodling',
-  'Percolating',
-  'Simmering',
-  'Cogitating',
-  'Conjuring',
-  'Vibing',
-  'Tinkering',
-  'Marinating',
-  'Computing',
-  'Pondering',
-  'Brewing',
-  'Finagling',
-  'Manifesting',
-  'Schlepping',
-];
+// Нейтральные русские слова: лента не знает, что именно делает воркер в эту секунду.
+const SPINNER_WORDS = ['Работаю', 'Думаю', 'Разбираюсь'];
 
 const elapsedSeconds = (startedAtMs: number): number => Math.max(0, Math.round((Date.now() - startedAtMs) / 1000));
 
-function ClaudeSpinner({ startedAt }: { startedAt: Date }): React.ReactElement {
+// label — текущий этап конвейера («Проверка версии»); без него слова сменяются по кругу.
+function ClaudeSpinner({ startedAt, label }: { startedAt: Date; label?: string }): React.ReactElement {
   // Every refresh brings a new Date for the same start: timers are keyed by its value.
   const startedAtMs = startedAt.getTime();
   const [frame, setFrame] = useState(0);
@@ -516,7 +521,7 @@ function ClaudeSpinner({ startedAt }: { startedAt: Date }): React.ReactElement {
 
   useEffect(() => {
     const f = window.setInterval(() => setFrame((x) => (x + 1) % SPINNER_FRAMES.length), 110);
-    const w = window.setInterval(() => setWord((x) => (x + 1) % SPINNER_WORDS.length), 2800);
+    const w = window.setInterval(() => setWord((x) => (x + 1) % SPINNER_WORDS.length), 4000);
     const s = window.setInterval(() => setSecs(elapsedSeconds(startedAtMs)), 1000);
     return () => {
       window.clearInterval(f);
@@ -526,10 +531,10 @@ function ClaudeSpinner({ startedAt }: { startedAt: Date }): React.ReactElement {
   }, [startedAtMs]);
 
   return (
-    <div data-pf-live-spinner="" className="flex items-center gap-2 px-1 py-1.5 font-mono text-xs text-muted-foreground">
-      <span className="pf-tone-purple text-tone">{SPINNER_FRAMES[frame]}</span>
-      <span className="text-foreground">{SPINNER_WORDS[word]}…</span>
-      <span className="opacity-60">({secs}s)</span>
+    <div data-pf-live-spinner="" className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground">
+      <span className="pf-tone-purple w-3 text-center font-mono text-tone">{SPINNER_FRAMES[frame]}</span>
+      <span className="text-foreground">{label ?? SPINNER_WORDS[word]}…</span>
+      <span className="tabular-nums opacity-60" data-pf-live-elapsed="">({formatElapsed(secs)})</span>
     </div>
   );
 }
@@ -564,7 +569,8 @@ function FeedRow({ row, firstShown, live, finalFiles = [] }: {
     const handoff = parseHandoffPayload(event.payload);
     return handoff ? <HandoffDivider handoff={handoff} /> : <LiveEventRow event={event} />;
   }
-  const content = pipelineContent(event) ?? <LiveEventRow event={event} finalFiles={finalFiles} bare />;
+  const content = (row.stage ? <StageLine stage={row.stage.payload} live={row.stage.live} /> : pipelineContent(event))
+    ?? <LiveEventRow event={event} finalFiles={finalFiles} bare />;
   return <RoleTurn role={role} header={header}>{content}</RoleTurn>;
 }
 

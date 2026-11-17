@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { BOARD_PROJECT_ID, firstLine } from './fixtures.mjs';
+import { BOARD_PROJECT_ID, ME, firstLine } from './fixtures.mjs';
 
 async function openLive(t) {
   // A running session adds «LIVE-сессия запущена» to the tab name.
@@ -140,6 +140,12 @@ export const liveRolesScenarios = [{
     });
     await t.step('лента конвейера: хвост', async () => {
       await t.visible(t.page.getByText('Расчёт скидки в одном месте', { exact: false }), 'итоговый вердикт ревьюера');
+      // One line per stage entry: the start and its result share it, only the current one spins.
+      const publish = await t.page.locator('[data-live-stage="publish"]').evaluateAll(lines => lines.map(line => `${line.getAttribute('data-live-stage-status')}|${line.textContent}`));
+      t.assert(publish.length === 1 && publish[0].startsWith('passed|Публикация — Коммит 3c9e1d2'), `строки публикации: ${publish.join(' / ')}`);
+      t.assert(await t.page.locator('[data-live-stage-status="started"]').count() === 1, 'незакрытой осталась не одна строка этапа');
+      await t.visible(t.page.locator('[data-pf-live-spinner]').getByText('Проверка версии…', { exact: true }), 'спиннер называет текущий этап');
+      await t.visible(t.page.locator('[data-worker-run]').getByText(/Конвейер · попытка 1 · идёт$/), 'подпись запуска конвейера');
       await liveShot(t, 'roles-tail');
     });
     await t.step('лента конвейера: середина и начало', async () => {
@@ -163,5 +169,29 @@ export const liveRolesScenarios = [{
       await liveShot(t, 'roles-expanded');
     });
     await t.pageChecks('лента конвейера');
+
+    // Inline code is shared Markdown: the discussion tab outside LIVE must render it too.
+    const created = new Date(now - 5 * 60_000).toISOString();
+    t.state.comments = { ...(t.state.comments ?? {}), [task.id]: [{
+      id: 'c-smoke-inline-code', taskId: task.id, ownerUserId: ME.id, actorKind: 'user', agentName: null,
+      body: 'Проверь `CheckoutService.ApplyPromo` — там скидка от `order.Total`.\n\n```\ndotnet test --filter PricingServiceTests\n```',
+      notifyMode: 'none', replyToCommentId: null, quotedText: null, createdAt: created, updatedAt: created, attachments: [], acknowledgements: [],
+    }] };
+    await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/${task.id}`, { ready: () => t.page.locator('[data-pf-task-properties]') });
+    await t.page.getByRole('tab', { name: /^Обсуждение/ }).click();
+    await t.step('инлайн-код в обсуждении без обратных кавычек', async () => {
+      const code = t.page.locator('code', { hasText: 'CheckoutService.ApplyPromo' }).first();
+      await t.visible(code, 'инлайн-код в комментарии');
+      const look = await code.evaluate(el => ({
+        before: getComputedStyle(el, '::before').content, after: getComputedStyle(el, '::after').content,
+        weight: getComputedStyle(el).fontWeight, background: getComputedStyle(el).backgroundColor,
+      }));
+      t.assert(['none', 'normal'].includes(look.before) && ['none', 'normal'].includes(look.after), `кавычки вокруг кода: ${look.before} ${look.after}`);
+      t.assert(Number(look.weight) <= 400, `код жирный: ${look.weight}`);
+      t.assert(look.background !== 'rgba(0, 0, 0, 0)', 'у инлайн-кода нет подложки');
+      await code.evaluate(el => el.scrollIntoView({ block: 'center' }));
+      await liveShot(t, 'discussion-inline-code');
+    });
+    await t.pageChecks('обсуждение с инлайн-кодом');
   },
 }];

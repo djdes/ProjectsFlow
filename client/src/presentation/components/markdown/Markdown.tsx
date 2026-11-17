@@ -27,6 +27,12 @@ const BASE_PROSE = cn(
   // блок-картинка: небольшой симметричный отступ (prose по умолчанию даёт ~2em)
   '[&_figure]:my-2 [&_figure]:flex [&_figure]:flex-col [&_figure]:items-start [&_figure_img]:my-0',
   '[&_table]:block [&_table]:w-fit [&_table]:max-w-full [&_table]:overflow-x-auto',
+  // инлайн-код: typography дорисовывает обратные кавычки через ::before/::after и делает
+  // код жирным — убираем; вместо этого лёгкая подложка обычного веса (токен muted, обе темы).
+  // Блоки кода (pre > code) не трогаем: подложка у них своя, на pre.
+  '[&_code]:before:content-none [&_code]:after:content-none',
+  '[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-muted [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-px',
+  '[&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.875em] [&_:not(pre)>code]:font-normal',
 );
 
 // memo: полный remark/rehype-парсинг синхронный и дорогой; на досках он висит в каждой

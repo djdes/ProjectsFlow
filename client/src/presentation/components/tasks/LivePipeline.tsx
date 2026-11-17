@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Check, ChevronRight, CircleDashed, CornerDownRight, Minus, ShieldCheck, SquareTerminal, Workflow, X, Zap,
+  Check, ChevronRight, CircleDashed, CornerDownRight, Loader2, Minus, ShieldCheck, SquareTerminal, Workflow, X, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
@@ -140,20 +140,31 @@ export function PipelineStepper({ progress }: { progress: PipelineProgress }): R
 
 // ---- in-feed orchestrator rows ----
 
-export function StageLine({ stage }: { stage: LiveStagePayload }): React.ReactElement {
+// One line per stage entry. While the stage runs it spins («Публикация…»); its result
+// turns the same line into ✓ / ✗ / –. A start that never got a result (the run ended)
+// stays a neutral dashed circle.
+export function StageLine({ stage, live = false }: { stage: LiveStagePayload; live?: boolean }): React.ReactElement {
   const label = stage.title ?? STAGE_LABEL[stage.stage];
   const failed = stage.status === 'failed' || stage.stage === 'blocked';
-  const done = stage.stage === 'done' || stage.status === 'passed';
+  const passed = !failed && (stage.stage === 'done' || stage.status === 'passed');
+  const started = stage.status === 'started' && !failed;
+  // Baseline-aligned: on a wrapped line the icon stays with the first row of text.
+  const icon = 'size-3.5 shrink-0 translate-y-[3px]';
   return (
-    <div data-live-stage={stage.stage} data-live-stage-status={stage.status}
+    <div data-live-stage={stage.stage} data-live-stage-status={stage.status} data-live-stage-live={live || undefined}
       className={cn('flex min-w-0 items-baseline gap-1.5 py-0.5 text-xs', failed ? 'text-destructive' : 'text-muted-foreground')}>
-      <span aria-hidden className={cn('shrink-0 font-mono', done && !failed && 'text-done')}>
-        {failed ? '✗' : stage.status === 'skipped' ? '–' : done ? '✓' : '›'}
-      </span>
+      {failed ? <X className={icon} strokeWidth={3} aria-hidden />
+        : stage.status === 'skipped' ? <Minus className={icon} strokeWidth={3} aria-hidden />
+          : passed ? <Check className={cn(icon, 'text-done')} strokeWidth={3} aria-hidden />
+            : live ? <Loader2 className={cn(icon, 'text-primary motion-safe:animate-spin')} aria-hidden />
+              : <CircleDashed className={icon} aria-hidden />}
       <span className="min-w-0 [overflow-wrap:anywhere]">
-        <span className={cn('font-medium', !failed && 'text-foreground')}>
-          {stage.status === 'skipped' ? `${STAGE_LABEL[stage.stage]}: пропущено` : failed && stage.stage !== 'blocked' ? `${label}: не пройдено` : label}
+        <span className={cn('font-medium', !failed && 'text-foreground', started && !live && 'text-muted-foreground')}>
+          {stage.status === 'skipped' ? `${STAGE_LABEL[stage.stage]}: пропущено`
+            : failed && stage.stage !== 'blocked' ? `${label}: не пройдено`
+              : started && live ? `${label}…` : label}
         </span>
+        <span className="sr-only">{started ? (live ? ': идёт' : ': без результата') : ''}</span>
         {stage.detail && <span> — {stage.detail}</span>}
       </span>
     </div>
@@ -166,6 +177,14 @@ export function formatDuration(ms: number): string {
   if (ms < 60_000) return `${DURATION_FMT.format(ms < 10_000 ? Math.round(ms / 100) / 10 : Math.round(ms / 1000))} с`;
   const total = Math.round(ms / 1000);
   return `${Math.floor(total / 60)} мин ${total % 60} с`;
+}
+
+// Running time of a run: «45 с», «13 мин 3 с», «1 ч 5 мин».
+export function formatElapsed(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  if (total < 60) return `${total} с`;
+  if (total < 3600) return `${Math.floor(total / 60)} мин ${total % 60} с`;
+  return `${Math.floor(total / 3600)} ч ${Math.floor((total % 3600) / 60)} мин`;
 }
 
 const PHASE_LABEL: Record<LiveCheckResult['phase'], string | null> = { checks: null, delivery: 'доставка', health: 'проверка версии' };

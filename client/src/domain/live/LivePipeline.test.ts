@@ -87,19 +87,54 @@ test('feed rows: one journal per executor round, the avatar once per role turn, 
   const journals = rows.filter(row => row.kind === 'tools');
   assert.deepEqual(journals.map(row => row.kind === 'tools' ? `${row.role.round}:${row.events.length}` : ''), ['1:5', '2:2', '3:4', '4:4']);
   assert.deepEqual(summarizeToolJournal(journals[2].kind === 'tools' ? journals[2].events : []), { files: 2, commands: 1, tools: 0, errors: 1 });
-  // Plain «passed» stages repeat the stepper and are not rows; those with a detail are.
-  const stageRows = rows.flatMap(row => row.kind === 'event' && row.event.kind === 'stage' ? [parseStagePayload(row.event.payload)!] : []);
-  assert.ok(stageRows.every(item => item.status !== 'passed' || item.detail));
+  // Every stage start became one line; its result merged into it, no separate result rows.
+  const stageRows = rows.flatMap(row => row.kind === 'event' && row.stage ? [row.stage] : []);
+  const starts = events.filter(event => event.kind === 'stage' && parseStagePayload(event.payload)?.status === 'started').length;
+  assert.equal(stageRows.length, starts);
+  assert.deepEqual(stageRows.filter(item => item.payload.status === 'started').map(item => `${item.payload.stage}:${item.live}`), ['health:true']);
   // Round 1 of the executor: header on its text, then the journal and the closing text share the turn.
   const round1 = rows.filter(row => (row.kind === 'event' || row.kind === 'tools') && row.role?.actor === 'executor' && row.role.round === 1);
   assert.deepEqual(round1.map(row => (row.kind === 'event' || row.kind === 'tools') && row.header), [true, false, false]);
-  // A handoff divider ends the turn: the next orchestrator row names itself again.
+  // The orchestrator before and after a handoff divider is one speaker: its stage line
+  // right after the divider does not repeat the header.
   const afterHandoff = rows.findIndex(row => row.kind === 'event' && row.event.kind === 'handoff') + 1;
   const next = rows[afterHandoff];
-  assert.ok(next.kind === 'event' && next.role?.actor === 'orchestrator' && next.header);
+  assert.ok(next.kind === 'event' && next.role?.actor === 'orchestrator' && next.stage && !next.header);
   // Legacy sessions are untouched.
   const legacy = [{ session: session('ralph-worker'), events, fileDiffs: [] }];
   const legacyRows = liveFeedRows(taskLiveTimeline(legacy, []), legacy);
   assert.equal(legacyRows.filter(row => row.kind === 'event').length, events.length);
   assert.ok(legacyRows.every(row => row.kind !== 'tools' && (row.kind !== 'event' || (row.role === null && !row.header))));
+});
+
+test('feed rows: a stage start and its result are one line that changes in place', () => {
+  const pipelineRun = (stages: LiveEvent[], status: LiveSession['status'] = 'running') => {
+    const runs = [{ session: { ...session(fixture.agentName, status), lastSeq: stages.length }, events: stages, fileDiffs: [] }];
+    return liveFeedRows(taskLiveTimeline(runs, []), runs).flatMap(row => row.kind === 'event' && row.stage ? [row] : []);
+  };
+  const orch = (seq: number, payload: Record<string, unknown>) => stage(seq, { actor: 'orchestrator', ...payload });
+  // In progress: the line spins under the start's title.
+  const running = pipelineRun([orch(1, { stage: 'publish', status: 'started', title: 'Публикую' })]);
+  assert.equal(running.length, 1);
+  assert.deepEqual(running[0].stage, { payload: { stage: 'publish', status: 'started', title: 'Публикую', detail: null, round: null }, live: true });
+  // Passed: the same row (same key, same place) becomes the result with its detail.
+  const passed = pipelineRun([orch(1, { stage: 'publish', status: 'started', title: 'Публикую' }), orch(2, { stage: 'publish', status: 'passed', detail: 'Коммит 3c9e1d2' })]);
+  assert.equal(passed.length, 1);
+  assert.equal(passed[0].key, running[0].key);
+  assert.deepEqual(passed[0].stage, { payload: { stage: 'publish', status: 'passed', title: null, detail: 'Коммит 3c9e1d2', round: null }, live: false });
+  // Failed and skipped close the line the same way; the round of the start is kept.
+  const failed = pipelineRun([orch(1, { stage: 'checks', status: 'started', round: 2 }), orch(2, { stage: 'checks', status: 'failed', detail: 'tests: код 1' })]);
+  assert.deepEqual(failed.map(row => [row.stage!.payload.status, row.stage!.payload.round, row.stage!.payload.detail]), [['failed', 2, 'tests: код 1']]);
+  assert.equal(pipelineRun([orch(1, { stage: 'deliver', status: 'started' }), orch(2, { stage: 'deliver', status: 'skipped' })])[0].stage!.payload.status, 'skipped');
+  // A result of another round does not close the line (a stray plain «passed» stays silent);
+  // each round has its own entry.
+  const rounds = pipelineRun([
+    orch(1, { stage: 'execute', status: 'started', round: 1 }), orch(2, { stage: 'execute', status: 'passed', round: 1 }),
+    orch(3, { stage: 'execute', status: 'started', round: 2 }), orch(4, { stage: 'execute', status: 'passed', round: 3 }),
+  ]);
+  assert.deepEqual(rounds.map(row => `${row.stage!.payload.status}:${row.stage!.payload.round}:${row.stage!.live}`), ['passed:1:false', 'started:2:true']);
+  // Only the latest open stage spins, and nothing spins once the run is over.
+  const twoOpen = [orch(1, { stage: 'prepare', status: 'started' }), orch(2, { stage: 'execute', status: 'started' })];
+  assert.deepEqual(pipelineRun(twoOpen).map(row => row.stage!.live), [false, true]);
+  assert.deepEqual(pipelineRun(twoOpen, 'failed').map(row => row.stage!.live), [false, false]);
 });

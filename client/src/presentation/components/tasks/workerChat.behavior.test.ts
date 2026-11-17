@@ -402,7 +402,8 @@ const liveContainer = (liveRepository: Partial<LiveRepository>) => ({
   taskRepository: { async listComments() { return []; } }, projectRepository: { async listMembers() { return []; } },
 });
 const liveProps = (status: Task['status'] = 'in_progress') => ({ task: { id: 'task', projectId: 'project', status } as Task, backlogTail: null, todoTail: null });
-const SPINNER = /\(\d+s\)/;
+// The run timer: «(45 с)», «(13 мин 3 с)», «(1 ч 5 мин)».
+const SPINNER = /\((?:\d+ ч \d+ мин|(?:\d+ мин )?\d+ с)\)/;
 
 test('a finished run stays finished when a slower refresh still reports it running', async () => {
   const View = await component('LiveTab');
@@ -440,8 +441,10 @@ test('the run timer shows the real elapsed time from the first frame', async () 
   });
   const view = await mount(View, liveProps());
   try {
-    assert.doesNotMatch(view.host.textContent!, /\(0s\)/);
-    assert.match(view.host.textContent!, /\(30[0-2]s\)/);
+    assert.doesNotMatch(view.host.textContent!, /\(0 с\)/);
+    assert.match(view.host.textContent!, /\(5 мин [0-2] с\)/);
+    // Russian neutral words, not English jokes.
+    assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /^.(Работаю|Думаю|Разбираюсь)…/);
   } finally { await view.close(); }
 });
 
@@ -549,8 +552,20 @@ test('a pipeline run shows the stepper, role turns, folded executor tools, check
 
     // Unknown kinds/actors and malformed payloads do not break the feed.
     assert.match(text(), /Неизвестная роль пишет/);
-    assert.match(text(), /Жду, пока сайт отдаст новую версию/);
     assert.match(text(), SPINNER);
+
+    // One line per stage entry: a start and its result share it, only the current one spins.
+    const stageLines = [...view.host.querySelectorAll('[data-live-stage]')];
+    const publish = stageLines.filter(line => line.getAttribute('data-live-stage') === 'publish');
+    assert.equal(publish.length, 1);
+    assert.equal(publish[0].getAttribute('data-live-stage-status'), 'passed');
+    assert.match(publish[0].textContent!, /^Публикация — Коммит 3c9e1d2/);
+    assert.deepEqual(stageLines.filter(line => line.getAttribute('data-live-stage-status') === 'started').map(line => line.textContent),
+      ['Жду, пока сайт отдаст новую версию…: идёт']);
+    assert.equal(view.host.querySelectorAll('[data-live-stage-live]').length, 1);
+    // The spinner names the current stage of the stepper; the run caption is short.
+    assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /Проверка версии…/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Конвейер · попытка 1 · идёт$/);
   } finally { await view.close(); }
 });
 
@@ -567,6 +582,7 @@ test('old ralph-worker sessions keep the plain feed even when events carry role 
   const view = await mount(View, liveProps('pending_approval'));
   try {
     assert.match(view.host.textContent!, /Старый воркер/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Воркер завершено$/);
     assert.match(view.host.textContent!, /терминал\$ npm test/);
     assert.equal(view.host.querySelector('[data-pf-pipeline-stepper], [data-live-role-header], [data-live-journal]'), null);
   } finally { await view.close(); }
