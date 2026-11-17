@@ -1,6 +1,8 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
 import { DesktopNotesService } from './application/desktop-notes/DesktopNotesService.js';
 import { DrizzleDesktopNoteRepository } from './infrastructure/repositories/DrizzleDesktopNoteRepository.js';
+import { GetApprovalSummary } from './application/approval-summary/GetApprovalSummary.js';
+import { DrizzleApprovalSummaryRepository } from './infrastructure/repositories/DrizzleApprovalSummaryRepository.js';
 import { GetPlatformStats } from './application/admin/GetPlatformStats.js';
 import { DrizzlePlatformStatsRepository } from './infrastructure/repositories/DrizzlePlatformStatsRepository.js';
 import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
@@ -2671,6 +2673,20 @@ const { app, devProxyUpgrade } = createApp({
     coverStorage: attachmentStorage,
     maxCoverBytes: MAX_COVER_BYTES,
     hiddenTaskIds,
+  },
+  approvalSummary: {
+    get: new GetApprovalSummary({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      live: liveRepo,
+      taskCommits: taskCommitRepo,
+      comments: taskCommentRepo,
+      summaries: new DrizzleApprovalSummaryRepository(db),
+      // Только подписка платформы, без запасной модели: недоступна — карточка без сводки.
+      llm: llmTextGenerator,
+      log: (message) => console.warn(message),
+    }),
   },
   desktopNotes: new DesktopNotesService({
     repo: new DrizzleDesktopNoteRepository(db),

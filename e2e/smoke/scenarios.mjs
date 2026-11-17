@@ -599,6 +599,50 @@ export const scenarios = [
   },
 
   {
+    id: 'inbox-approval-summary',
+    title: 'Полка «На утверждении»: сводка ИИ на карточке и «Принять все»',
+    matrix: [['desktop', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
+      await t.check('сводка ИИ на карточке задачи на утверждении', async () => {
+        const summary = page.locator(`${NOW} ${card('t-doctors')} [data-pf-approval-summary="ready"]`);
+        await t.visible(summary, 'сводка на карточке «Сверстать страницу врачей»');
+        const text = await summary.innerText();
+        t.assert(text.includes(`Сделано по задаче «${taskTitle(state, 't-doctors')}»`), `неожиданный текст сводки: ${text}`);
+      });
+      const dialog = page.getByRole('dialog', { name: 'Принять все задачи на утверждении' });
+      await t.check('«Принять все» открывает окно со всеми задачами полки', async () => {
+        await page.locator(NOW).getByRole('button', { name: 'Принять все', exact: true }).click();
+        await t.visible(dialog, 'окно «Принять все»');
+        for (const task of approvalTasks(state)) {
+          await t.visible(dialog.locator(`[data-pf-accept-all-item="${task.id}"]`), `задача «${taskTitle(state, task.id)}» в окне`);
+        }
+        await t.visible(
+          dialog.locator(`[data-pf-accept-all-item="t-brands"] [data-pf-approval-summary="ready"]`),
+          'сводка ИИ у задачи в окне',
+        );
+        await dialog.getByRole('button', { name: 'Отмена' }).click();
+        await t.waitFor(async () => (await dialog.count()) === 0, 'окно не закрылось по «Отмена»');
+      });
+      await t.check('«Принять все (N)» принимает задачи по одной и закрывает окно', async () => {
+        const ids = approvalTasks(state).map((task) => ({ id: task.id, projectId: task.projectId }));
+        await page.locator(NOW).getByRole('button', { name: 'Принять все', exact: true }).click();
+        await dialog.getByRole('button', { name: `Принять все (${ids.length})` }).click();
+        for (const { id, projectId } of ids) {
+          await t.waitForMutation(
+            (m) => m.method === 'POST' && m.path === `/projects/${projectId}/tasks/${id}/move` && m.body?.targetStatus === 'done',
+            `нет POST move → done для ${id}`,
+          );
+        }
+        await t.waitFor(async () => (await dialog.count()) === 0, 'окно не закрылось после приёмки');
+        for (const { id } of ids) await expectGone(t, `${NOW} ${card(id)}`, `принятая задача ${id} осталась на полке`);
+      });
+      await t.pageChecks('Входящие: сводка и «Принять все»');
+    },
+  },
+
+  {
     // A team that does not fit the phone: a fade alone did not read as «swipe for more», so
     // the cut edge carries «+N ›» (N — people cut off) that pages the ribbon, and «‹» back.
     id: 'inbox-people-ribbon',

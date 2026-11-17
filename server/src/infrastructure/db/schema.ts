@@ -2742,3 +2742,12 @@ export const urgentTaskReminders = mysqlTable(
   },
   (t) => [primaryKey({ columns: [t.taskId, t.slotKey] })],
 );
+
+// ИИ-сводки «что сделано» полки «На утверждении» (db/186): одна строка на задачу, хэш входа
+// для модели решает, можно ли отдать сводку из кэша.
+export const approvalSummaries = mysqlTable('approval_summaries', {
+  taskId: char('task_id', { length: 36 }).notNull().primaryKey(),
+  inputHash: char('input_hash', { length: 64 }).notNull(),
+  summary: text('summary').notNull(),
+  generatedAt: timestamp('generated_at').notNull().defaultNow(),
+});

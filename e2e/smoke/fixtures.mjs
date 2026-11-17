@@ -426,6 +426,15 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/attachments$/, () => json({ attachments: [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/commits$/, () => json({ commits: [] })],
+    // ИИ-сводка «что сделано» на карточках полки «На утверждении»; не на утверждении — null.
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/approval-summary$/, ([, projectId, taskId]) => {
+      const task = state.tasks.find((t) => t.id === taskId && t.projectId === projectId);
+      if (!task || task.status !== 'pending_approval') return json({ summary: null, generatedAt: null });
+      return json({
+        summary: state.approvalSummaries?.[taskId] ?? `Сделано по задаче «${firstLine(task)}».\nСборка и проверки прошли.`,
+        generatedAt: hoursAgo(1),
+      });
+    }],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/versions$/, ([, , taskId]) =>
       json({ plan: 'vip', cutoffAt: null, versions: [], taskId })],
     [/^\/projects\/([^/]+)\/live\/activity$/, ([, projectId]) => {
