@@ -1801,7 +1801,7 @@ export function AssignedToMeBlock({
         aria-label="Люди"
         className={cn(
           'flex items-center',
-          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'w-max gap-1.5' : 'w-max gap-1',
+          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'w-max gap-1.5' : 'w-max items-start gap-1',
         )}
       >
         {user && dragActive && <SelfDropTile user={user} />}
@@ -1844,7 +1844,6 @@ export function AssignedToMeBlock({
   // «кто»: чипы «Мои / Все» стоят на месте, люди листаются вбок и растворяются у края.
   // Поле поиска появляется по лупе (и остаётся, пока в нём есть текст).
   const searchVisible = searchOpen || query !== '';
-  const whoDivider = people ? <span aria-hidden className="h-5 w-px shrink-0 bg-border" /> : null;
   // Поиск и действия страницы — одна группа у правого края строки сроков (десктоп): первая
   // строка целиком отдана «кто» (заголовок, «Мои / Все», люди). Раньше группа стояла в первой
   // строке и при команде из 5+ человек уезжала отдельной строкой — шапка росла до трёх строк.
@@ -1881,11 +1880,17 @@ export function AssignedToMeBlock({
         {actions}
       </div>
       {hasAny && (
-        <div ref={inboxHeadRef} className={cn('flex min-h-11 min-w-0 gap-2', dragActive ? 'items-start' : 'items-center')}>
+        // Имена висят под аватарами: «Мои / Все» и аватары — по верхнему краю, на одной оси.
+        <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-2">
           <div className={cn('shrink-0', focusedMember && 'min-w-0 max-w-[62%]')}>{tabsOrFocus}</div>
-          {whoDivider && !dragActive && whoDivider}
+          {/* Без разделителя: заливка «Мои / Все» и аватары и так читаются как две группы, а
+              8px на 393px — это ещё один человек с именем в ленте. */}
           {/* «+N ›» at the cut edge: a fade alone did not read as «swipe for more». */}
-          {people && <SteppedRibbon className="flex-1">{people}</SteppedRibbon>}
+          {people && (
+            <SteppedRibbon className="flex-1" controlsClassName={dragActive ? undefined : 'h-11'}>
+              {people}
+            </SteppedRibbon>
+          )}
         </div>
       )}
     </div>
@@ -3828,10 +3833,12 @@ function DraggableTask({
 // инвертированный (тёмный на светлой теме, светлый на тёмной), чтобы «чьи задачи сейчас
 // на экране» читалось с первого взгляда и не путалось с чипами срока (те — про фильтр).
 const SCOPE_CHIP_CLASS =
-  'inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-ui transition-colors md:h-7 md:px-2.5 md:text-meta';
+  'inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-ui transition-colors md:h-7 md:px-2.5 md:text-meta';
 const SCOPE_CHIP_ON_CLASS = 'border-foreground bg-foreground font-semibold text-background';
+// Телефон: невыбранный чип — мягкая подложка без рамки (как чипы сроков и переключатель
+// разделов ниже): шапка из четырёх рядов рамок читалась как стена одинаковых коробок.
 const SCOPE_CHIP_OFF_CLASS =
-  'border-border font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active';
+  'border-border font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active max-md:border-transparent max-md:bg-panel';
 
 // Плитка-цель на время перетаскивания: крупная, с именем, под курсором — действие.
 const DROP_TILE_CLASS =
@@ -3884,6 +3891,60 @@ function UserCube({
   }
   // Клик-фильтр доступен только когда проп передан (см. место рендера).
   const clickable = !!onToggleFilter;
+  const interactiveProps = clickable
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        'aria-pressed': filterActive,
+        onClick: onToggleFilter,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          onToggleFilter?.();
+        },
+      }
+    : {};
+  if (compact) {
+    // Телефон: аватар 44px (как чипы «Мои / Все»), имя — под ним, как в ленте историй.
+    // Одни инициалы не читались: кто есть кто, было видно только по наведению, которого на
+    // телефоне нет. Выбранный — обводка вокруг аватара и имя основным цветом.
+    return (
+      <div
+        ref={setNodeRef}
+        {...interactiveProps}
+        aria-label={label}
+        title={label}
+        data-pf-who-person
+        className={cn(
+          'flex w-[3.25rem] shrink-0 flex-col items-center gap-1 rounded-lg',
+          clickable &&
+            'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        )}
+      >
+        <span
+          data-pf-who-avatar
+          className={cn(
+            'relative grid size-11 place-items-center rounded-[28%] transition-shadow',
+            filterActive && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+          )}
+        >
+          <UserAvatar displayName={label} avatarUrl={member.avatarUrl} className="size-11 text-ui" />
+          {hasApproval && (
+            <span aria-hidden className="absolute -end-0.5 -inset-be-0.5 size-3 rounded-full bg-approval ring-2 ring-background" />
+          )}
+        </span>
+        <span
+          data-pf-who-name
+          className={cn(
+            'max-w-full truncate text-2xs leading-tight',
+            filterActive ? 'font-semibold text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {shortLabel}
+        </span>
+      </div>
+    );
+  }
   const named = !compact || filterActive;
   return (
     <div

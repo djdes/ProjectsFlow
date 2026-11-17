@@ -47,7 +47,9 @@ const STEPPER_PX = 44;
 function hiddenAfter(scroller: HTMLElement, stepper: HTMLElement | null): { count: number; first: Element | null } {
   const row = scroller.firstElementChild;
   if (!row) return { count: 0, first: null };
-  const edge = scroller.getBoundingClientRect().right - Math.max(stepper?.offsetWidth ?? 0, STEPPER_PX);
+  // The button's own left edge: the scroll box sticks out 4px (-m-1 p-1 for focus rings),
+  // so «box right − button width» missed an item hidden in those 4px.
+  const edge = stepper ? stepper.getBoundingClientRect().left : scroller.getBoundingClientRect().right - STEPPER_PX;
   let count = 0;
   let first: Element | null = null;
   for (const item of Array.from(row.children)) {
@@ -81,6 +83,8 @@ function useHiddenAfterCount(
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     ro?.observe(scroller);
     if (scroller.firstElementChild) ro?.observe(scroller.firstElementChild);
+    // «+9» → «+12» widens the button and moves its edge.
+    if (stepper.current) ro?.observe(stepper.current);
     return () => {
       cancelAnimationFrame(frame);
       scroller.removeEventListener('scroll', measure);
@@ -101,9 +105,14 @@ const STEPPER_CLASS =
 // ribbon so the first cut-off item lands at the start.
 export function SteppedRibbon({
   className,
+  controlsClassName = 'inset-be-0',
   children,
   ...rest
-}: React.HTMLAttributes<HTMLDivElement>): React.ReactElement {
+}: React.HTMLAttributes<HTMLDivElement> & {
+  // Vertical box of the edge buttons inside the ribbon: the whole height by default; `h-11`
+  // centres them on a 44px row of avatars whose names hang below.
+  controlsClassName?: string;
+}): React.ReactElement {
   const { animations } = useMotion();
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const { back, forward } = useScrollEdges(scroller);
@@ -113,8 +122,10 @@ export function SteppedRibbon({
   const pageForward = useCallback(() => {
     if (!scroller) return;
     const { first } = hiddenAfter(scroller, stepperRef.current);
+    // Room at the start after paging: the «‹» button (mouse layouts) or just the start fade.
+    const startRoom = window.matchMedia?.('(min-width: 768px)').matches ? STEPPER_PX : 28;
     const left = first
-      ? first.getBoundingClientRect().left - scroller.getBoundingClientRect().left - STEPPER_PX
+      ? first.getBoundingClientRect().left - scroller.getBoundingClientRect().left - startRoom
       : scroller.clientWidth - 2 * STEPPER_PX;
     scroller.scrollBy({ left: Math.max(left, STEPPER_PX), behavior });
   }, [scroller, behavior]);
@@ -133,15 +144,17 @@ export function SteppedRibbon({
       >
         {children}
       </div>
+      {/* «‹» — only with a mouse (from 768px): on a phone the ribbon is swiped back, and on
+          320–393px the button left room for no whole person between «‹» and «+N ›». */}
       {back && (
-        <div className="pointer-events-none absolute inset-bs-0 inset-be-0 start-0 flex items-center">
+        <div className={cn('pointer-events-none absolute inset-bs-0 start-0 hidden items-center md:flex', controlsClassName)}>
           <button type="button" onClick={pageBack} aria-label="Листать назад" title="Листать назад" className={cn(STEPPER_CLASS, 'w-9 md:w-7')}>
             <ChevronLeft aria-hidden className="size-4" />
           </button>
         </div>
       )}
       {forward && (
-        <div className="pointer-events-none absolute inset-bs-0 inset-be-0 end-0 flex items-center">
+        <div className={cn('pointer-events-none absolute inset-bs-0 end-0 flex items-center', controlsClassName)}>
           <button
             ref={stepperRef}
             type="button"

@@ -399,10 +399,13 @@
   .pf-fade-x[data-fade-end] {
     --pf-fade-x-end: var(--pf-fade-x);
   }
-  /* Next to a button the fade is shorter: the button already says «there is more». */
-  .pf-fade-x[data-stepper-start] {
-    --pf-fade-x-start-inset: 2.5rem;
-    --pf-fade-x-start: 1rem;
+  /* Next to a button the fade is shorter: the button already says «there is more». The «‹»
+     button exists only from 768px (SteppedRibbon); on a phone the start keeps a plain fade. */
+  @media (min-width: 768px) {
+    .pf-fade-x[data-stepper-start] {
+      --pf-fade-x-start-inset: 2.5rem;
+      --pf-fade-x-start: 1rem;
+    }
   }
   .pf-fade-x[data-stepper-end] {
     --pf-fade-x-end-inset: 3.25rem;
