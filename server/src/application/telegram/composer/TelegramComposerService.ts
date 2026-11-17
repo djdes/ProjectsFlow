@@ -762,6 +762,7 @@ export class TelegramComposerService {
       const description = signCsharpFixerRequest(rawText, {
         chatId, userId: tgUserId, messageId: options.sourceMessageId,
         messageThreadId: options.sourceThreadId ?? null, senderName: groupCtx.senderName,
+        ...(options.replyToMessageId !== undefined ? { replyToMessageId: options.replyToMessageId } : {}),
       }, fixerConfig);
       const existing = await this.deps.drafts.findBySourceKey(options.sourceKey);
       if (existing) {

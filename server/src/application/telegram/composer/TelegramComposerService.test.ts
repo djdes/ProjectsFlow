@@ -2776,3 +2776,24 @@ test('CSharpFixer: missing group binding does not create a task or ask the DJ fo
     }
   }
 });
+
+test('CSharpFixer: replyToMessageId is included in signed origin when replying to a message', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  try {
+    const h = makeHarness();
+    await h.service.startFromMessage(999, -100500, 'Это в FilterMusic', gctx('u1', 'DJ Test'), [], {
+      sourceKey: 'm:-100500:88', sourceMessageId: 88, sourceThreadId: 17, replyToMessageId: 44,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    const match = /<!-- csharp-fixer-origin:([^:]+):[a-f0-9]{64} -->/.exec(h.createTaskCalls[0]?.description ?? '');
+    assert.ok(match, 'expected signed origin marker');
+    const payload = JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+    assert.equal(payload.replyToMessageId, 44);
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
