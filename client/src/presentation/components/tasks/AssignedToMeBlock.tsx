@@ -148,6 +148,7 @@ import { DeadlineBadge } from './DeadlineBadge';
 import { AwaitingReplyBadge } from './AwaitingReplyBadge';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { RalphModeBadge } from './RalphMode';
+import { TaskRecurrenceBadge } from './TaskRecurrenceBadge';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { ApprovalSummary } from './ApprovalSummary';
@@ -4859,6 +4860,7 @@ function AcceptedCard({
     item.priority !== null && item.priority !== undefined ? (
       <PriorityBadge key="priority" priority={item.priority} />
     ) : null,
+    item.recurrence ? <TaskRecurrenceBadge key="repeat" recurrence={item.recurrence} /> : null,
     item.ralphMode !== 'normal' ? <RalphModeBadge key="ralph" mode={item.ralphMode} /> : null,
     (item.commentCount ?? 0) > 0 ? (
       <span key="comments" className="flex shrink-0 items-center gap-1 whitespace-nowrap" title="Комментарии">

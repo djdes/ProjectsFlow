@@ -895,6 +895,12 @@ export const tasks = mysqlTable(
     taskType: varchar('task_type', { length: 16 }),
     // Пространство, в котором задачу создали (общий проект, db/182). NULL = основное.
     originWorkspaceId: char('origin_workspace_id', { length: 36 }),
+    // Правило повтора (db/185): 'daily' | 'weekdays' | 'weekly:1,3' | 'monthly:31'.
+    // NULL = не повторяется. Разбор — domain/task/TaskRecurrence.
+    recurrence: varchar('recurrence', { length: 64 }),
+    // Следующий повтор, поставленный при выполнении этой задачи (db/185) — защита от
+    // второй копии при «выполнить → вернуть → выполнить». NULL = ещё не ставили.
+    recurrenceNextTaskId: char('recurrence_next_task_id', { length: 36 }),
     // Мягкое удаление (db/134). NULL = живая задача. Заполнено = задача в корзине:
     // скрыта из ВСЕХ выборок, но строка и все её child-таблицы целы, поэтому
     // восстановление возвращает задачу с ТЕМ ЖЕ id.

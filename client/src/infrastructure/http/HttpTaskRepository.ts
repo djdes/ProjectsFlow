@@ -47,6 +47,7 @@ export type TaskDto = Omit<
   | 'parentTaskId'
   | 'priority'
   | 'taskType'
+  | 'recurrence'
   | 'statusBeforeDone'
   | 'icon'
   | 'cover'
@@ -77,6 +78,8 @@ export type TaskDto = Omit<
   priority?: import('@/domain/task/Task').TaskPriority | null;
   // Optional — старый backend без db/153 не присылает.
   taskType?: import('@/domain/task/Task').TaskType | null;
+  // Optional — старый backend без db/185 не присылает.
+  recurrence?: import('@/domain/task/TaskRecurrence').TaskRecurrence | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -129,6 +132,7 @@ export function fromDto(dto: TaskDto): Task {
     parentTaskId: dto.parentTaskId ?? null,
     priority: dto.priority ?? null,
     taskType: dto.taskType ?? null,
+    recurrence: dto.recurrence ?? null,
   };
 }
 

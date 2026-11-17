@@ -106,6 +106,7 @@ function taskDto({
   deadline = null,
   priority = null,
   taskType = null,
+  recurrence = null,
   createdHoursAgo = 48,
 }) {
   positionSeq += 1;
@@ -135,6 +136,7 @@ function taskDto({
     parentTaskId: null,
     priority,
     taskType,
+    recurrence,
   };
 }
 
@@ -162,7 +164,7 @@ export function createState() {
     taskDto({ id: 't-release-doc', projectId: 'p-docs', title: 'Описать процесс релиза', status: 'backlog', priority: 4, createdHoursAgo: 30 }),
     taskDto({ id: 't-delivery', projectId: 'p-shop', title: 'Подключить службу доставки', status: 'done', createdHoursAgo: 200 }),
     // Assigned to me, status manual — the «В работе» shelf of «Сейчас».
-    taskDto({ id: 't-form', projectId: 'p-site', title: 'Поправить форму записи к врачу', status: 'manual', deadline: today, priority: 2, createdHoursAgo: 50 }),
+    taskDto({ id: 't-form', projectId: 'p-site', title: 'Поправить форму записи к врачу', status: 'manual', deadline: today, priority: 2, recurrence: { kind: 'weekdays' }, createdHoursAgo: 50 }),
     // My personal inbox.
     taskDto({ id: 't-domain', projectId: INBOX_ID, title: 'Продлить домен для лендинга', status: 'backlog', deadline: nextWeek, createdHoursAgo: 20 }),
     // Assigned to colleagues — «На утверждении» from other people and the «Все» tab.
@@ -891,6 +893,7 @@ function mutate(state, method, path, body) {
       assignee: body?.assigneeUserId ?? ME.id,
       deadline: body?.deadline ?? null,
       priority: body?.priority ?? null,
+      recurrence: body?.recurrence ?? null,
       createdHoursAgo: 0,
     });
     state.tasks.push(created);

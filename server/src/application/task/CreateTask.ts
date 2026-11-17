@@ -4,6 +4,7 @@ import {
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
 import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import type { TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskApprovalService } from './TaskApprovalService.js';
@@ -88,6 +89,8 @@ export type CreateTaskCommand = {
   // Пространство, в котором создают задачу общего проекта (db/182). undefined — решает
   // resolveOrigin (пространство запроса или единственное пространство автора в проекте).
   readonly originWorkspaceId?: string | null;
+  // Правило повтора (db/185). null/undefined — задача не повторяется.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 const POSITION_STEP = 1024;
@@ -195,6 +198,7 @@ export class CreateTask {
       priority: input.priority ?? null,
       taskType: input.taskType ?? null,
       originWorkspaceId,
+      recurrence: input.recurrence ?? null,
     });
 
     // Лента действий (best-effort, не блокирует создание).

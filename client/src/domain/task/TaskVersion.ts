@@ -1,6 +1,7 @@
 import type { RalphMode, TaskPriority, TaskStatus } from './Task';
 import type { PlanId } from '@/domain/usage/Usage';
 import type { TaskAssignee } from './TaskAssignee';
+import type { TaskRecurrence } from './TaskRecurrence';
 
 export type TaskVersionField =
   | 'created'
@@ -11,6 +12,8 @@ export type TaskVersionField =
   | 'assignee'
   | 'deadline'
   | 'priority'
+  // Правило повтора (db/185).
+  | 'recurrence'
   | 'ralphMode'
   | 'appearance'
   | 'parent'
@@ -35,6 +38,8 @@ export type TaskSnapshot = {
   readonly startDate: string | null;
   readonly parentTaskId: string | null;
   readonly priority: TaskPriority | null;
+  // Отсутствует в снимках, снятых до db/185.
+  readonly recurrence?: TaskRecurrence | null;
   readonly ralphCancelRequestedAt: string | null;
   readonly ralphCancelRequestedBy: string | null;
 };

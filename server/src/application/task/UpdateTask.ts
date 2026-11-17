@@ -1,6 +1,11 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { RalphMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
+import {
+  sameTaskRecurrence,
+  taskRecurrenceLabel,
+  type TaskRecurrence,
+} from '../../domain/task/TaskRecurrence.js';
 import { taskTitleExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ActivityFieldChange } from '../../domain/activity/ActivityEvent.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -46,6 +51,8 @@ export type UpdateTaskCommand = {
   readonly priority?: TaskPriority | null;
   // null = сбросить тип задачи; undefined = не менять.
   readonly taskType?: TaskType | null;
+  // null = больше не повторять; undefined = не менять. См. db/185.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export class UpdateTask {
@@ -77,6 +84,7 @@ export class UpdateTask {
     if (input.startDate !== undefined) patch.startDate = input.startDate;
     if (input.priority !== undefined) patch.priority = input.priority;
     if (input.taskType !== undefined) patch.taskType = input.taskType;
+    if (input.recurrence !== undefined) patch.recurrence = input.recurrence;
 
     const updated = await this.deps.tasks.update(input.taskId, patch, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
@@ -98,6 +106,13 @@ export class UpdateTask {
           field: 'priority',
           old: existing.priority != null ? String(existing.priority) : null,
           new: updated.priority != null ? String(updated.priority) : null,
+        });
+      }
+      if (patch.recurrence !== undefined && !sameTaskRecurrence(existing.recurrence, updated.recurrence)) {
+        changes.push({
+          field: 'recurrence',
+          old: existing.recurrence ? taskRecurrenceLabel(existing.recurrence) : null,
+          new: updated.recurrence ? taskRecurrenceLabel(updated.recurrence) : null,
         });
       }
       if (changes.length > 0) {

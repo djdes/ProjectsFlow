@@ -982,6 +982,11 @@ export const scenarios = [
           );
         }
       });
+      await t.check('повторяющаяся задача отмечена значком повтора', async () => {
+        const badge = page.locator(card('t-form')).first().locator('[data-pf-recurrence-badge]');
+        await t.visible(badge, 'значок повтора на карточке');
+        t.assert((await badge.getAttribute('aria-label')) === 'Повторяется: по будням', 'нет подписи правила у значка повтора');
+      });
       await t.pageChecks('доска проекта');
       await openAndCloseTask(t, page.locator(card('t-home')), taskTitle(state, 't-home'));
       await t.check('кнопка «Взять в работу» на черновике переносит его в «В работе»', async () => {
@@ -1117,7 +1122,7 @@ export const scenarios = [
       const press = (locator) => t.isMobile ? locator.tap() : locator.click();
       await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => properties });
       await t.check('подписи свойств и «Создано» в меню', async () => {
-        for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Кто утверждает']) {
+        for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Повтор', 'Кто утверждает']) {
           await t.visible(properties.getByText(label, { exact: true }), label);
         }
         t.assert(await properties.getByText('Создано', { exact: true }).count() === 0, 'метаданные остались среди свойств');
@@ -1133,6 +1138,30 @@ export const scenarios = [
         await press(menu.getByRole('menuitemradio', { name: 'В работе', exact: true }));
         await t.waitForMutation((m) => m.path.endsWith('/t-home/move') && m.body?.targetStatus === 'manual', 'статус не сохранён');
         await t.waitFor(async () => (await page.getByRole('button', { name: 'Сменить статус', exact: true }).innerText()).includes('В работе'), 'статус не обновился');
+      });
+      await t.check('повтор: «Каждую неделю» сохраняется, дни недели выбираются в том же меню', async () => {
+        await press(properties.getByRole('button', { name: 'Повтор задачи', exact: true }));
+        // Имя меню Radix берёт у кнопки, а та после выбора называет правило — ищем без имени.
+        const menu = page.getByRole('menu');
+        await t.visible(menu.getByText('Не повторять', { exact: true }), 'пункт «Не повторять»');
+        if (t.isMobile) t.assert(await menu.getAttribute('data-pf-mobile-sheet') === 'true', 'повтор открылся не нижней шторкой');
+        await press(menu.getByRole('menuitem', { name: 'Каждую неделю', exact: true }));
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path.endsWith('/t-home') && m.body?.recurrence?.kind === 'weekly' && m.body.recurrence.days.length === 1,
+          'недельный повтор не сохранён',
+        );
+        await t.visible(menu.getByText('Дни недели', { exact: true }), 'выбор дней недели');
+        await press(menu.getByRole('menuitemcheckbox', { checked: false }).first());
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path.endsWith('/t-home') && m.body?.recurrence?.days?.length === 2,
+          'второй день недели не сохранён',
+        );
+        await page.keyboard.press('Escape');
+        await t.hidden(menu, 'меню повтора закрылось');
+        await t.waitFor(
+          async () => (await properties.locator('[data-pf-task-property="recurrence"]').innerText()).includes('Каждую неделю'),
+          'правило повтора не показано в строке',
+        );
       });
       await t.check('список утверждающих открывается с полными именами', async () => {
         await press(properties.getByRole('button', { name: 'Кто утверждает', exact: true }));

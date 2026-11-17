@@ -1,5 +1,6 @@
 import type { TaskAssignee } from './TaskAssignee';
 import type { TaskCreator } from './TaskCreator';
+import type { TaskRecurrence } from './TaskRecurrence';
 
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
 // ralph-question, разбор после maxAttempts retry, переформулировка). Между in_progress
@@ -141,6 +142,9 @@ export type Task = {
   readonly taskType: TaskType | null;
   // Пространство, где создана задача общего проекта (db/182). null — основное.
   readonly originWorkspaceId?: string | null;
+  // Правило повтора (db/185). null = не повторяется. Выполнили задачу — сервер сам ставит
+  // следующую. Optional — старые кэши/фикстуры поля не знают.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

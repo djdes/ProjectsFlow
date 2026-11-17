@@ -1,4 +1,5 @@
 import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
+import type { TaskRecurrence } from '@/domain/task/TaskRecurrence';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskVersionsResult } from '@/domain/task/TaskVersion';
@@ -35,6 +36,8 @@ export type CreateTaskInput = {
   readonly priority?: TaskPriority | null;
   // Тип задачи. null/undefined = не определён.
   readonly taskType?: TaskType | null;
+  // Правило повтора (db/185). null/undefined = не повторяется.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export type UpdateTaskInput = {
@@ -54,6 +57,8 @@ export type UpdateTaskInput = {
   readonly priority?: TaskPriority | null;
   // null = сбросить тип задачи; undefined = не менять.
   readonly taskType?: TaskType | null;
+  // null = больше не повторять; undefined = не менять. См. db/185.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export type MoveTaskInput = {
