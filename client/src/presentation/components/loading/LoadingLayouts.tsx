@@ -19,11 +19,13 @@ function useSkeletonSizes(): void {
 
 // People chips of the inbox «who» ribbon: avatars on a phone (44px cells), avatar-with-name
 // chips from 768px (28px high).
+// Phone: avatar 44px with the name under it; desktop: a 28px chip with the name inside.
 function PeopleSkeleton(): React.ReactElement {
-  return <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden md:flex-none md:gap-1.5">
+  return <div className="flex min-w-0 flex-1 items-start gap-1 overflow-hidden md:flex-none md:items-center md:gap-1.5">
     {[0, 1, 2].map((i) => (
-      <span key={i} className="grid size-11 shrink-0 place-items-center md:block md:size-auto">
-        <Skeleton className="size-9 rounded-lg md:h-7 md:w-[76px]" />
+      <span key={i} className="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 md:block md:w-auto">
+        <Skeleton className="size-11 rounded-[28%] md:h-7 md:w-[76px] md:rounded-lg" />
+        <Skeleton className="h-3.5 w-9 md:hidden" />
       </span>
     ))}
   </div>;
@@ -32,25 +34,35 @@ function PeopleSkeleton(): React.ReactElement {
 // The rows of AssignedToMeBlock at their real sizes: on a phone the heading row, the «who»
 // ribbon, the section switch and the due chips; from 768px one toolbar row and the chips.
 // The «who» row keeps the height remembered from the last visit (--pf-skel-inbox-head-*).
-export function InboxLoadingLayout({ heading }: { heading?: React.ReactNode }): React.ReactElement {
+export function InboxLoadingLayout({
+  heading,
+  compactHeading = false,
+}: {
+  heading?: React.ReactNode;
+  // Phone without the title row (AssignedToMeBlock compactHeading): filters and actions sit
+  // next to the section switch.
+  compactHeading?: boolean;
+}): React.ReactElement {
   useSkeletonSizes();
   // Line box of PageTitle: text-h1 × leading-tight.
   const title = heading ?? <Skeleton className="h-[calc(1.375rem*1.25)] w-56 max-w-[60%]" />;
   return <div className="flex min-w-0 flex-col gap-3" data-pf-inbox-loading>
-    <div className="flex min-h-11 items-center gap-1 md:hidden">
+    {!compactHeading && <div className="flex min-h-11 items-center gap-1 md:hidden">
       {title}
       <span className="flex-1" /><Skeleton className="size-11 rounded-lg" /><Skeleton className="size-11 rounded-lg" />
-    </div>
-    <div className="flex min-h-[var(--pf-skel-inbox-head-m,2.75rem)] min-w-0 items-center gap-2 md:min-h-[var(--pf-skel-inbox-head-d,2rem)] md:flex-wrap">
+    </div>}
+    <div className="flex min-h-[var(--pf-skel-inbox-head-m,2.75rem)] min-w-0 items-start gap-2 md:min-h-[var(--pf-skel-inbox-head-d,2rem)] md:flex-wrap md:items-center">
       <span className="hidden md:contents">{title}</span>
       <Skeleton className="h-11 w-[132px] shrink-0 rounded-lg md:h-7 md:w-[126px]" />
       <PeopleSkeleton />
     </div>
-    <div className="flex h-12 items-center gap-2 md:hidden">
+    <div className="flex h-12 items-center gap-1.5 md:hidden">
       <Skeleton className="h-12 flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" />
+      {compactHeading && <><Skeleton className="size-11 rounded-lg" /><Skeleton className="size-11 rounded-lg" /></>}
     </div>
-    {/* Desktop: search and page actions sit at the end of the due-chips row. */}
-    <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-wrap md:items-center">
+    {/* Desktop: search and page actions sit at the end of the due-chips row. Phone: the chips
+        share the sticky strip with the section switch — 8px apart, not the 12px of the column. */}
+    <div className="grid grid-cols-3 gap-1.5 max-md:-mbs-1 md:flex md:flex-wrap md:items-center">
       {['md:w-[115px]', 'md:w-[89px]', 'md:w-[98px]'].map((w) => <Skeleton key={w} className={cn('h-11 rounded-lg md:h-7', w)} />)}
       <div className="hidden items-center gap-1 md:ms-auto md:flex">
         <Skeleton className="me-1 h-8 w-44 2xl:w-60" />
@@ -386,7 +398,7 @@ export function PageSkeleton({
   if (layout === 'inbox') return <div className="min-h-full min-w-0" data-pf-page-skeleton="inbox">
     <div className="hidden h-11 items-center gap-3 border-be px-3 sm:flex"><Skeleton className="h-3 w-40" /></div>
     {/* Заголовок страницы стоит в строке управления блока — как в InboxPage. */}
-    <div className="px-4 pbs-2 pbe-6 sm:px-6 sm:pbs-[1.125rem] lg:px-9"><InboxLoadingLayout /></div>
+    <div className="px-4 pbs-3 pbe-6 sm:px-6 sm:pbs-[1.125rem] lg:px-9"><InboxLoadingLayout compactHeading /></div>
   </div>;
   if (
     layout === 'board' ||

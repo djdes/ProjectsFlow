@@ -702,6 +702,8 @@ export function TaskDrawer({
   };
   // Императивные handle'ы редакторов — для «+ Подзадача» (вставить пункт и сфокусироваться).
   const bodyEditorRef = useRef<RichTextEditorHandle>(null);
+  // Задача, текст которой уже начали править в этом окне (телефон: показываем инструменты).
+  const [editingTextOf, setEditingTextOf] = useState<string | null>(null);
   const createEditorRef = useRef<RichTextEditorHandle>(null);
   // Ref на скрытый file input для кнопки «Вложение» в create-mode.
   const createFileInputRef = useRef<HTMLInputElement>(null);
@@ -1867,6 +1869,7 @@ export function TaskDrawer({
                 onSave={saveMedia}
                 hovered={topZoneHover}
                 onHoverChange={(enter) => (enter ? enterTopZone() : leaveTopZone())}
+                revealOnPhone={editingTextOf === task.id}
               />
 
               {/* Заморозка приёмкой: объясняем, ПОЧЕМУ ничего не правится. Без плашки окно
@@ -1897,7 +1900,13 @@ export function TaskDrawer({
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
-              <div ref={bodyContainerRef} className="px-[var(--pf-drawer-px)] pbe-1 pbs-0">
+              <div
+                ref={bodyContainerRef}
+                className="px-[var(--pf-drawer-px)] pbe-1 pbs-0"
+                // Телефон: с первым фокусом в тексте открываются инструменты правки (ряд
+                // «Иконка / Обложка» здесь, панель форматирования — в самом редакторе).
+                onFocusCapture={() => setEditingTextOf(task.id)}
+              >
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}

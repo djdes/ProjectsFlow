@@ -63,6 +63,8 @@ export function TasksPage(): React.ReactElement {
   const [automationOpen, setAutomationOpen] = useState(false);
   // Строка крошек вмещает подписи («Изменено …», «Поделиться», аватары) только от 1024px.
   const wideCrumbs = useMediaQuery('(min-width: 1024px)');
+  // Телефон: описание проекта свёрнуто в строку-превью, пока его не открыли.
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
   // Окно активности открыто? Пока открыто — действия в шапке страницы прячем (они в окне).
   // Окно активности переживает перезагрузку страницы (sessionStorage пер-проект): открыто
   // до reload → открыто после. Восстанавливаем синхронно в инициализаторе useState.
@@ -224,6 +226,13 @@ export function TasksPage(): React.ReactElement {
   // от НИЖНЕГО ВИДИМОГО элемента шапки, поэтому невидимых узлов внутри неё быть не должно.
   const descriptionVisible =
     !descriptionHidden && (canEdit || (data.description ?? '').trim().length > 0);
+  // Телефон: строка-превью вместо поля, пока описание не открыли (или не правят «Оформлением»).
+  const descriptionPreview = !descriptionOpen && !appearanceOpen && (data.description ?? '').trim().length > 0;
+  const openDescription = (): void => {
+    setDescriptionOpen(true);
+    // Поле правки — сразу в фокус; наблюдателю просто показываем текст целиком.
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Описание проекта"]')?.focus());
+  };
   const addRandomCover = async (): Promise<void> => {
     if (coverBusy) return;
     setCoverBusy(true);
@@ -499,8 +508,36 @@ export function TasksPage(): React.ReactElement {
           // вплотную (строка описания начинается ровно на нижней кромке названия, y=118),
           // а весь зазор до вкладок живёт в нижнем паддинге блока. На мобиле оставляем
           // mt-2.5: там название набрано мельче и слипание читается хуже.
-          <div className={cn('order-1 mbs-1 max-w-3xl sm:mbs-0 sm:ps-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}>
-            <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
+          <div
+            className={cn('order-1 mbs-1 max-w-3xl sm:mbs-0 sm:ps-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}
+            // Телефон: превью уходит, как только поле теряет фокус.
+            onBlurCapture={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDescriptionOpen(false);
+            }}
+          >
+            {/* Телефон: описание — одной строкой мелким вторичным текстом, нажатие раскрывает
+                его целиком (и поле правки). Поле набрано 16px, чтобы iOS не увеличивал
+                страницу при фокусе, и две такие строки отодвигали доску ещё на 52px. */}
+            {descriptionPreview && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={openDescription}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openDescription();
+                  }
+                }}
+                className="line-clamp-1 cursor-text text-meta text-muted-foreground sm:hidden"
+                data-pf-project-description-preview
+              >
+                {(data.description ?? '').trim()}
+              </div>
+            )}
+            <div className={cn(descriptionPreview && 'max-sm:hidden')}>
+              <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
+            </div>
           </div>
         )}
       </div>

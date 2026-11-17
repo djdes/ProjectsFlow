@@ -335,10 +335,13 @@ export function ProjectGithubOnboardingBanner({
               </span>
               Подключите код проекта
             </div>
-            <p className="mbs-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+            {/* Телефон: пояснение и три галочки прячем — плашка вместе с ними отодвигала доску
+                за край экрана (первая колонка начиналась на 745px из 852). Что даст каждый
+                способ, объясняет окно, которое открывает плитка. */}
+            <p className="mbs-1 max-w-xl text-xs leading-relaxed text-muted-foreground max-sm:hidden">
               Выберите способ подключения — делегация доступа воркеру и локальная база знаний настроятся автоматически.
             </p>
-            <div className="mbs-1.5 flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-muted-foreground">
+            <div className="mbs-1.5 flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-muted-foreground max-sm:hidden">
               {['Репозиторий', 'Делегация', 'База знаний'].map((label) => (
                 <span key={label} className="inline-flex items-center gap-1">
                   <CheckCircle2 className="size-3 text-done" />

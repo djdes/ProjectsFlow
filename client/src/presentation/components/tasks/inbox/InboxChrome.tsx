@@ -283,16 +283,17 @@ export function InboxSectionSwitch({
         aria-pressed={on}
         onClick={() => onChange(key)}
         className={cn(
-          'relative flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active',
+          // ≤359px рядом стоят поиск, фильтры и выделение — подписи мельче и плотнее.
+          'relative flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active max-[359px]:gap-0.5 max-[359px]:px-1 max-[359px]:text-2xs',
           on
             ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
             : 'font-medium text-muted-foreground',
         )}
       >
-        {label}
-        <span className="tabular-nums text-muted-foreground">{count}</span>
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
         {attention && (
-          <span aria-hidden className="size-1.5 rounded-full bg-approval" />
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-approval" />
         )}
       </button>
     );
