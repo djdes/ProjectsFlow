@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
@@ -9,7 +10,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, Inbox, Plus, RotateCcw, X } from 'lucide-react';
+import { CalendarDays, ChevronDown, FileText, Flag, Hash, Inbox, Plus, RotateCcw, UserRound, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useEdgeFade } from '@/presentation/components/layout/EdgeFadeScroller';
+import { parseQuickTask, stripQuickTaskTokens, type QuickTaskTokenKind } from '@/domain/task/quickTaskSyntax';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useContainer } from '@/infrastructure/di/container';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
 import { useProjects } from '@/presentation/hooks/useProjects';
@@ -54,6 +57,8 @@ const RichTextEditor = lazy(() =>
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Текст новой задачи заранее («Поделиться → ProjectsFlow»).
+  initialDescription?: string | null;
 };
 
 type PendingFile = { id: string; file: File; previewUrl: string };
@@ -131,12 +136,25 @@ function stripDeadBlobFigures(description: string): { text: string; removed: boo
   return { text: text.trim(), removed };
 }
 
+const QUICK_TOKEN_ICON: Record<QuickTaskTokenKind, typeof CalendarDays> = {
+  deadline: CalendarDays,
+  assignee: UserRound,
+  priority: Flag,
+  project: Hash,
+};
+
+// «чт, 19 нояб.» — срок в чипе быстрого ввода.
+function formatQuickDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 // Глобальное окно создания задачи (кнопка «Создать задачу» в левой панели). Как окно
 // создания по проекту: Tiptap rich-редактор (форматирование по выделению, WYSIWYG,
 // вставка картинок), плюсики «+ Подзадача»/«+ Файл», ряд icon-контролов (Приоритет,
 // Дедлайн, Ответственный), внизу — выбор проекта (Входящие/проект) + RalphMode + AI + Submit.
 // Файлы — chips над редактором; drag&drop и Ctrl+V на форме кладут их в аттачи.
-export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement {
+export function AddTaskDialog({ open, onOpenChange, initialDescription = null }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { taskRepository, projectRepository } = useContainer();
   const { user } = useCurrentUser();
@@ -259,6 +277,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       const defaultDeadline = getTaskCreationDeadline(creationFilters.due);
       setInitialDeadline(defaultDeadline);
       setDeadline(defaultDeadline);
+      if (initialDescription) setDescription(initialDescription);
       return;
     }
     // Files belong to the stashed draft until restoration or explicit discard.
@@ -272,7 +291,30 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     setDragActive(false);
     setPending([]);
     inlineImagesRef.current = new Map();
-  }, [open, user?.id, defaultAssigneeUserId, creationFilters]);
+  }, [open, user?.id, defaultAssigneeUserId, creationFilters, initialDescription]);
+
+  // Быстрый ввод одной строкой: «завтра @Денис сверстать лендинг !высокий #Сайт». Участники
+  // пространства — кандидаты для «@», грузим при открытии окна.
+  const [quickMembers, setQuickMembers] = useState<{ id: string; label: string }[]>([]);
+  const [ignoredTokens, setIgnoredTokens] = useState<ReadonlySet<QuickTaskTokenKind>>(() => new Set());
+  useEffect(() => {
+    if (!open) {
+      setIgnoredTokens(new Set());
+      return;
+    }
+    let cancelled = false;
+    projectRepository
+      .listSharedMembers()
+      .then((list) => {
+        if (!cancelled) setQuickMembers(list.map((m) => ({ id: m.id, label: m.displayName })));
+      })
+      .catch(() => {
+        /* без списка «@имя» просто не распознаётся */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectRepository]);
 
   // При открытии этого окна закрываем inline-композер на доске (единая поверхность
   // создания — см. KanbanBoard). Слушатель — в KanbanBoard.
@@ -348,14 +390,33 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   };
 
   // Только реальные проекты — inbox выбирается пунктом «Без проекта».
-  const realProjects = (projects ?? []).filter((p) => !p.isInbox);
-  const selectedName =
-    projectId === null
-      ? 'Без проекта (Входящие)'
-      : (realProjects.find((p) => p.id === projectId)?.name ?? 'Без проекта (Входящие)');
+  const realProjects = useMemo(() => (projects ?? []).filter((p) => !p.isInbox), [projects]);
 
   const trimmed = description.trim();
-  const disabled = saving || trimmed.length === 0 || assigneeUserId === null;
+  const quick = useMemo(
+    () =>
+      parseQuickTask(trimmed, new Date(), {
+        members: quickMembers,
+        projects: realProjects.filter((p) => p.status !== 'archived').map((p) => ({ id: p.id, name: p.name })),
+      }),
+    [trimmed, quickMembers, realProjects],
+  );
+  const quickTokens = quick.tokens.filter((t) => !ignoredTokens.has(t.kind));
+  const useToken = (kind: QuickTaskTokenKind): boolean => quickTokens.some((t) => t.kind === kind);
+  // Что уйдёт в задачу: распознанное в строке важнее значений по умолчанию в контролах.
+  const finalProjectId = (useToken('project') && quick.project?.id) || projectId;
+  const finalAssigneeUserId = (useToken('assignee') && quick.assignee?.id) || assigneeUserId;
+  const finalDeadline = (useToken('deadline') && quick.deadline) || deadline;
+  const finalPriority = (useToken('priority') && quick.priority) || priority;
+  const disabled = saving || trimmed.length === 0 || finalAssigneeUserId === null;
+  const selectedName =
+    finalProjectId === null
+      ? 'Без проекта (Входящие)'
+      : (realProjects.find((p) => p.id === finalProjectId)?.name ?? 'Без проекта (Входящие)');
+  // Ручной выбор в контроле важнее слова в строке: чип этого поля гаснет.
+  const ignoreToken = (kind: QuickTaskTokenKind): void => {
+    if (quick.tokens.some((t) => t.kind === kind)) setIgnoredTokens((prev) => new Set(prev).add(kind));
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -364,14 +425,16 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     setError(null);
     try {
       // По умолчанию (без проекта) — во «Входящие»; иначе в выбранный проект.
-      const createTargetId = projectId ?? (await projectRepository.getInbox()).id;
+      const createTargetId = finalProjectId ?? (await projectRepository.getInbox()).id;
+      // Метки быстрого ввода («завтра», «@Денис», «!высокий», «#Сайт») из названия убираем.
+      const finalDescription = stripQuickTaskTokens(trimmed, quick, ignoredTokens);
       const task = await taskRepository.create(createTargetId, {
-        description: trimmed,
+        description: finalDescription,
         status: 'backlog',
         ralphMode,
-        assigneeUserId,
-        deadline,
-        priority,
+        assigneeUserId: finalAssigneeUserId,
+        deadline: finalDeadline,
+        priority: finalPriority,
       });
       // BUG E: дальше используем task.projectId ИЗ ОТВЕТА, а не createTargetId. Сервер мог
       // переселить задачу инбокса в инбокс ответственного (правило «я ответственный ⇒ задача
@@ -385,7 +448,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       let uploadFailed = false;
       // Inline-скрины: грузим отложенные картинки и заменяем blob-URL на URL вложений.
       if (inlineImagesRef.current.size > 0) {
-        let desc = trimmed;
+        let desc = finalDescription;
         let changed = false;
         for (const [blobUrl, file] of inlineImagesRef.current) {
           if (desc.includes(blobUrl)) {
@@ -564,6 +627,45 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             </Suspense>
           </div>
 
+          {/* Быстрый ввод: что распознано в первой строке — срок, исполнитель, приоритет,
+              проект. Крестик — не использовать (слово останется в названии). */}
+          {quickTokens.length > 0 && (
+            <div role="group" aria-label="Распознано в тексте" data-pf-quick-tokens className="flex flex-wrap items-center gap-1.5">
+              {quickTokens.map((t) => {
+                const label =
+                  t.kind === 'deadline' && quick.deadline
+                    ? formatQuickDate(quick.deadline)
+                    : t.kind === 'assignee' && quick.assignee
+                      ? quick.assignee.label
+                      : t.kind === 'priority' && quick.priority
+                        ? PRIORITY_META[quick.priority].label
+                        : t.kind === 'project' && quick.project
+                          ? quick.project.name
+                          : t.text;
+                const Icon = QUICK_TOKEN_ICON[t.kind];
+                return (
+                  <span
+                    key={t.kind}
+                    data-pf-quick-token={t.kind}
+                    className="inline-flex h-7 max-w-full items-center gap-1 rounded-md bg-primary-soft pe-0.5 ps-2 text-meta text-foreground"
+                  >
+                    <Icon aria-hidden className="size-3.5 shrink-0 text-primary-ink" />
+                    <span className="min-w-0 truncate">{label}</span>
+                    <button
+                      type="button"
+                      aria-label={`Не использовать: ${label}`}
+                      title="Не использовать"
+                      onClick={() => setIgnoredTokens((prev) => new Set(prev).add(t.kind))}
+                      className="relative grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-hover hover:text-foreground after:absolute after:-inset-2 after:content-['']"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           {/* Плюсики: + Подзадача / + Файл — как в окне создания задачи по проекту. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <button
@@ -623,9 +725,10 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="max-h-72 min-w-[260px] overflow-y-auto">
                   <DropdownMenuRadioGroup
-                    value={projectId ?? INBOX_VALUE}
+                    value={finalProjectId ?? INBOX_VALUE}
                     onValueChange={(v) => {
                       setProjectId(v === INBOX_VALUE ? null : v);
+                      ignoreToken('project');
                     }}
                   >
                     <DropdownMenuRadioItem value={INBOX_VALUE}>
@@ -639,19 +742,34 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <PrioritySelect value={priority} onChange={setPriority} disabled={saving} iconOnly className="size-8" />
-              <DeadlinePicker
-                value={deadline}
-                onChange={setDeadline}
+              <PrioritySelect
+                value={finalPriority}
+                onChange={(v) => {
+                  setPriority(v);
+                  ignoreToken('priority');
+                }}
                 disabled={saving}
                 iconOnly
-                className={cn('h-8', deadline === null ? 'w-8 px-0' : 'px-2')}
+                className="size-8"
+              />
+              <DeadlinePicker
+                value={finalDeadline}
+                onChange={(v) => {
+                  setDeadline(v);
+                  ignoreToken('deadline');
+                }}
+                disabled={saving}
+                iconOnly
+                className={cn('h-8', finalDeadline === null ? 'w-8 px-0' : 'px-2')}
               />
               <AssigneeSelect
-                value={assigneeUserId}
-                onChange={setAssigneeUserId}
+                value={finalAssigneeUserId}
+                onChange={(v) => {
+                  setAssigneeUserId(v);
+                  ignoreToken('assignee');
+                }}
                 disabled={saving}
-                projectId={projectId ?? undefined}
+                projectId={finalProjectId ?? undefined}
                 className="size-8"
               />
               <RalphModeSelect

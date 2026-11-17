@@ -4,7 +4,7 @@ import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -99,6 +99,7 @@ import { SteppedRibbon } from '@/presentation/components/layout/EdgeFadeScroller
 import { shortUserLabels } from '@/domain/user/shortUserLabels';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import { userLabel } from '@/domain/user/userLabel';
+import { peopleWorkload, workloadLabel, type PersonWorkload } from './peopleWorkload';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import {
   endOfMonthYmd,
@@ -128,6 +129,7 @@ import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { matchesInboxQuery } from './inbox/searchTasks';
 import { BulkActionBar } from './BulkActionBar';
+import { bulkSnapshotFrom } from './bulkUndo';
 import {
   nextAnchor,
   nextSelection,
@@ -824,6 +826,11 @@ export function AssignedToMeBlock({
     [user?.id],
   );
   const byMeDisplayTasks = useMemo(() => applyPatches(byMeRaw, patches), [byMeRaw, patches]);
+  // Что горит у каждого участника (просрочено / на сегодня) — счётчик на его аватаре.
+  const workload = useMemo(
+    () => peopleWorkload(byMeDisplayTasks, ymd(startOfDay(new Date()))),
+    [byMeDisplayTasks],
+  );
   const toMeVisible = useMemo(
     () => (hideDone ? toMeTasks.filter(notDone) : toMeTasks),
     [toMeTasks, hideDone],
@@ -1146,6 +1153,8 @@ export function AssignedToMeBlock({
   // Дроп в «Будущее» не применяет срок сразу — открывает всплывашку выбора (неделя / конец
   // месяца / конкретный день). null = закрыта.
   const [futureDrop, setFutureDrop] = useState<InboxBlockTask | null>(null);
+  // Карточка, которую отложили свайпом влево: ждёт выбора нового срока.
+  const [snoozeItem, setSnoozeItem] = useState<InboxBlockTask | null>(null);
   // Дроп на кубик ДРУГОГО участника не переназначает сразу — открывает подтверждение
   // В подтверждении видны текущий и новый ответственные. null = диалог закрыт.
   const [pendingReassign, setPendingReassign] = useState<{
@@ -1175,6 +1184,18 @@ export function AssignedToMeBlock({
       }
     },
     [patchDeadlineLocal, taskRepository],
+  );
+  // Срок сменили жестом (бросок в колонку срока, «Будущее», «Отложить») — в тосте «Отменить».
+  const applyDeadlineWithUndo = useCallback(
+    async (item: InboxBlockTask, deadline: string | null, message: string): Promise<void> => {
+      const prev = item.deadline ?? null;
+      if (prev === deadline) return;
+      await applyDeadline(item, deadline);
+      toast(message, {
+        action: { label: 'Отменить', onClick: () => void applyDeadline({ ...item, deadline }, prev) },
+      });
+    },
+    [applyDeadline],
   );
 
   // Кубики людей: все участники проектов пространства (shared-members) — цель для
@@ -1227,14 +1248,32 @@ export function AssignedToMeBlock({
     grouping === 'priority' &&
     PRIORITY_BUCKET_KEYS.some((k) => !groups.some((g) => g.key === k));
 
+  // «Отменить» после смены ответственного — вернуть прежнего.
+  const undoAssign = useCallback(
+    async (item: InboxBlockTask, prevAssigneeId: string): Promise<void> => {
+      try {
+        await taskRepository.assign(item.projectId, item.id, prevAssigneeId);
+        toast.success('Ответственный возвращён');
+        void refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось вернуть ответственного: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, refresh, onChanged],
+  );
+
   // Назначить ответственного дропом на участника. Операция одна для любого
   // предыдущего ответственного и идемпотентна.
   const reassignTo = useCallback(
     async (item: InboxBlockTask, member: SharedMember): Promise<void> => {
       if (member.id === item.assignee.userId) return;
+      const prevAssignee = item.assignee.userId;
       try {
         await taskRepository.assign(item.projectId, item.id, member.id);
-        toast.success(`Ответственный — ${member.displayName}`);
+        toast.success(`Ответственный — ${member.displayName}`, {
+          action: { label: 'Отменить', onClick: () => void undoAssign(item, prevAssignee) },
+        });
         // Не await: перерисовка списков не должна удерживать жест (см. setWorkStatus).
         void refresh();
         onChanged?.();
@@ -1242,7 +1281,7 @@ export function AssignedToMeBlock({
         toast.error(`Не удалось переназначить: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, refresh, onChanged, undoAssign],
   );
 
   // Забрать задачу себе — та же смена ответственного. В именованном проекте это
@@ -1254,16 +1293,19 @@ export function AssignedToMeBlock({
         toast.info('Задача уже назначена вам');
         return;
       }
+      const prevAssignee = item.assignee.userId;
       try {
         await taskRepository.assign(item.projectId, item.id, user.id);
-        toast.success('Теперь вы ответственный');
+        toast.success('Теперь вы ответственный', {
+          action: { label: 'Отменить', onClick: () => void undoAssign(item, prevAssignee) },
+        });
         void refresh();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
     },
-    [user, taskRepository, refresh, onChanged],
+    [user, taskRepository, refresh, onChanged, undoAssign],
   );
 
   // Отзыв задачи с утверждения самим исполнителем: «случайно нажал выполнено». Он же —
@@ -1570,8 +1612,8 @@ export function AssignedToMeBlock({
     const today = ymd(startOfDay(new Date()));
     const cur = item.deadline == null ? 'none' : item.deadline <= today ? 'today' : 'future';
     if (cur === data.bucket) return;
-    if (data.bucket === 'none') void applyDeadline(item, null);
-    else if (data.bucket === 'today') void applyDeadline(item, today);
+    if (data.bucket === 'none') void applyDeadlineWithUndo(item, null, 'Срок снят');
+    else if (data.bucket === 'today') void applyDeadlineWithUndo(item, today, 'Срок — сегодня');
     else if (data.bucket === 'future') setFutureDrop(item); // всплывашка выбора срока
   };
   // Отмена drag'а (Esc/потеря захвата): гасим оверлей и подсветку кубиков.
@@ -1634,6 +1676,12 @@ export function AssignedToMeBlock({
     !selectionActive && canTake(item)
       ? { label: 'Взять в работу', tone: 'manual', onCommit: () => void setWorkStatus(item, 'manual') }
       : null;
+  // Свайп влево по карточке очереди — «Отложить»: выбор нового срока (завтра / неделя /
+  // месяц / день), карточка переезжает в свою колонку срока, в тосте — «Отменить».
+  const queueSnooze = (item: InboxBlockTask): SwipeAction | null =>
+    !selectionActive && item.canModify && item.status !== 'done'
+      ? { label: 'Отложить', tone: 'snooze', onCommit: () => setSnoozeItem(item) }
+      : null;
   const manualSwipe = (item: InboxBlockTask): SwipeAction | null => {
     if (selectionActive || !item.canModify) return null;
     if (approvalEnabled && canSendToApproval(item, user?.id ?? null)) {
@@ -1648,6 +1696,7 @@ export function AssignedToMeBlock({
     opts: { showCreatedAt?: boolean; hideProjectLabel?: boolean } = {},
   ): React.ReactNode => {
     const swipe = ghost ? null : queueSwipe(item);
+    const snooze = ghost ? null : queueSnooze(item);
     const card = (
       <AcceptedCard
         item={item}
@@ -1678,8 +1727,8 @@ export function AssignedToMeBlock({
         // схлопывание, — dnd-id суффиксуется, чтобы не затереть живую (см. draggableTaskId).
         ghost={ghost}
       >
-        {swipe ? (
-          <SwipeToAct action={swipe} disabled={dragActive}>
+        {swipe || snooze ? (
+          <SwipeToAct action={swipe} back={snooze} disabled={dragActive}>
             {card}
           </SwipeToAct>
         ) : (
@@ -1815,6 +1864,7 @@ export function AssignedToMeBlock({
           <UserCube
             key={m.id}
             member={m}
+            workload={workload.get(m.id)}
             shortLabel={shortLabels.get(m.id) ?? userLabel(m)}
             compact={!isWide}
             dragging={dragActive}
@@ -2569,6 +2619,7 @@ export function AssignedToMeBlock({
           дайджест сервер рендерит одним project-scoped запросом. */}
       {selectionActive && orderedSelectedIds.length > 0 && (
         <BulkActionBar
+          snapshot={bulkSnapshotFrom([toMeTasks, byMeDisplayTasks, focusedMemberTasks, approvalQueue])}
           selectedIds={orderedSelectedIds}
           projectId={bulkProjectId}
           isInbox
@@ -2587,7 +2638,20 @@ export function AssignedToMeBlock({
         onPick={(deadline) => {
           const it = futureDrop;
           setFutureDrop(null);
-          if (it) void applyDeadline(it, deadline);
+          if (it) void applyDeadlineWithUndo(it, deadline, `Срок — ${formatShortDate(deadline)}`);
+        }}
+      />
+      {/* Свайп влево — «Отложить»: тот же выбор срока плюс «Завтра», в тосте «Отменить». */}
+      <FutureDeadlineDialog
+        title="Отложить до"
+        withTomorrow
+        open={snoozeItem !== null}
+        onClose={() => setSnoozeItem(null)}
+        onPick={(deadline) => {
+          const it = snoozeItem;
+          setSnoozeItem(null);
+          if (!it) return;
+          void applyDeadlineWithUndo(it, deadline, `Отложено до ${formatShortDate(deadline)}`);
         }}
       />
 
@@ -3885,6 +3949,7 @@ const dropTileTone = (isOver: boolean): string =>
 // вкладке «Все» — single-фильтр «кому» (спека 2026-07-13).
 function UserCube({
   member,
+  workload,
   shortLabel,
   compact = false,
   dragging,
@@ -3894,6 +3959,8 @@ function UserCube({
   hint,
 }: {
   member: SharedMember;
+  // Что у человека горит (просрочено / на сегодня) — счётчик на аватаре.
+  workload?: PersonWorkload;
   // Короткое имя для чипа (shortUserLabels); полное остаётся в aria-label и подсказке.
   shortLabel: string;
   // Телефон: без имени, пока человек не выбран.
@@ -3906,12 +3973,26 @@ function UserCube({
   hint?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
-  const label = userLabel(member);
+  const name = userLabel(member);
+  const load = workloadLabel(workload);
+  // Имя кнопки — только человек (по нему его находят и скринридер, и тесты); загрузка —
+  // описанием (aria-describedby) и в подсказке.
+  const label = name;
+  const loadId = useId();
+  const tooltip = load ? `${name}: ${load}` : name;
+  const burning = workload ? workload.late + workload.today : 0;
+  const burningTone =
+    workload && workload.late > 0 ? 'bg-destructive text-destructive-foreground' : 'bg-today text-background';
   if (dragging) {
     return (
       <div ref={setNodeRef} className={cn(DROP_TILE_CLASS, dropTileTone(isOver))}>
         <UserAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} className="size-6 text-2xs" />
-        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : label}</span>
+        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : name}</span>
+        {!isOver && burning > 0 && (
+          <span aria-hidden className={cn('grid h-4 min-w-4 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums', burningTone)}>
+            {burning}
+          </span>
+        )}
       </div>
     );
   }
@@ -3939,7 +4020,8 @@ function UserCube({
         ref={setNodeRef}
         {...interactiveProps}
         aria-label={label}
-        title={label}
+        aria-describedby={load ? loadId : undefined}
+        title={tooltip}
         data-pf-who-person
         className={cn(
           'flex w-[3.25rem] shrink-0 flex-col items-center gap-1 rounded-lg',
@@ -3954,9 +4036,21 @@ function UserCube({
             filterActive && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
           )}
         >
-          <UserAvatar displayName={label} avatarUrl={member.avatarUrl} className="size-11 text-ui" />
+          <UserAvatar displayName={name} avatarUrl={member.avatarUrl} className="size-11 text-ui" />
           {hasApproval && (
             <span aria-hidden className="absolute -end-0.5 -inset-be-0.5 size-3 rounded-full bg-approval ring-2 ring-background" />
+          )}
+          {burning > 0 && (
+            <span
+              aria-hidden
+              data-pf-who-load
+              className={cn(
+                'absolute -end-1.5 -inset-bs-1.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums ring-2 ring-background',
+                burningTone,
+              )}
+            >
+              {burning}
+            </span>
           )}
         </span>
         <span
@@ -3968,6 +4062,7 @@ function UserCube({
         >
           {shortLabel}
         </span>
+        {load && <span id={loadId} className="sr-only">{load}</span>}
       </div>
     );
   }
@@ -3979,7 +4074,8 @@ function UserCube({
       tabIndex={clickable ? 0 : undefined}
       aria-pressed={clickable ? filterActive : undefined}
       aria-label={label}
-      title={label}
+      aria-describedby={load ? loadId : undefined}
+      title={tooltip}
       onClick={clickable ? onToggleFilter : undefined}
       onKeyDown={
         clickable
@@ -4007,7 +4103,7 @@ function UserCube({
     >
       <span className="relative inline-flex shrink-0">
         <UserAvatarHover
-          displayName={label}
+          displayName={name}
           avatarUrl={member.avatarUrl}
           subtitle={`участник пространства. Перетащите сюда задачу, чтобы назначить${
             hint ? `. ${hint}` : ''
@@ -4025,6 +4121,20 @@ function UserCube({
         )}
       </span>
       {named && <span className="max-w-[7rem] truncate">{shortLabel}</span>}
+      {burning > 0 && (
+        <span
+          aria-hidden
+          data-pf-who-load
+          className={cn(
+            'grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums',
+            !named && 'absolute -end-1 -inset-bs-1',
+            burningTone,
+          )}
+        >
+          {burning}
+        </span>
+      )}
+      {load && <span id={loadId} className="sr-only">{load}</span>}
     </div>
   );
 }
@@ -4055,14 +4165,25 @@ function SelfDropTile({
 // Всплывашка выбора срока при дропе в «Будущее»: неделя / до конца месяца / конкретный день.
 // Отмена (закрытие) — ничего не меняем, карточка остаётся где была. От задачи ей ничего не
 // нужно (только open/onPick).
+// «18 нояб.» — срок в тосте «Отложено до …».
+function formatShortDate(ymdValue: string): string {
+  const [y, m, d] = ymdValue.split('-').map(Number);
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
 export function FutureDeadlineDialog({
   open,
   onClose,
   onPick,
+  title = 'Срок на будущее',
+  withTomorrow = false,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (deadline: string) => void;
+  title?: string;
+  // «Отложить» свайпом: первым вариантом — завтра.
+  withTomorrow?: boolean;
 }): React.ReactElement {
   const dateRef = useRef<HTMLInputElement>(null);
   const now = new Date();
@@ -4083,9 +4204,19 @@ export function FutureDeadlineDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xs gap-3 p-5">
         <DialogHeader>
-          <DialogTitle className="text-base">Срок на будущее</DialogTitle>
+          <DialogTitle className="text-base">{title}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-1.5">
+          {withTomorrow && (
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => onPick(ymd(startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))))}
+            >
+              <CalendarClock className="size-4" />
+              Завтра
+            </Button>
+          )}
           <Button
             variant="outline"
             className="justify-start gap-2"

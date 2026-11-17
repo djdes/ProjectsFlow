@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { AtSign, Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
+import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -316,7 +316,7 @@ export function InboxSectionSwitch({
 // отпустите, и действие выполнится. Мышью жест не срабатывает: на десктопе есть плашка.
 export type SwipeAction = {
   readonly label: string;
-  readonly tone: 'manual' | 'done' | 'approval';
+  readonly tone: 'manual' | 'done' | 'approval' | 'snooze';
   readonly onCommit: () => void;
 };
 
@@ -324,28 +324,40 @@ const SWIPE_TONE: Record<SwipeAction['tone'], { readonly soft: string; readonly 
   manual: { soft: 'bg-manual-soft text-manual-ink', armed: 'bg-manual text-background' },
   done: { soft: 'bg-done-soft text-done-ink', armed: 'bg-done text-background' },
   approval: { soft: 'bg-approval-soft text-approval-ink', armed: 'bg-approval text-background' },
+  // «Отложить» — цветом срока «сегодня»: жест про срок, а не про статус.
+  snooze: { soft: 'bg-today/15 text-today', armed: 'bg-today text-background' },
 };
 
 // Функция, а не таблица элементов: JSX на уровне модуля исполнялся бы при импорте (в том
 // числе в node-тестах, где нет React-рантайма).
 function swipeIcon(tone: SwipeAction['tone']): React.ReactElement {
   if (tone === 'manual') return <Play className="size-3.5 fill-current" />;
+  if (tone === 'snooze') return <CalendarClock className="size-4" />;
   if (tone === 'done') return <Check className="size-4" strokeWidth={2.6} />;
   return <ShieldCheck className="size-4" />;
 }
 
 export function SwipeToAct({
   action,
+  back = null,
   disabled = false,
   children,
 }: {
-  action: SwipeAction;
+  // Свайп вправо — «дальше по процессу».
+  action: SwipeAction | null;
+  // Свайп влево — «отложить» (срок).
+  back?: SwipeAction | null;
   disabled?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const { animations } = useMotion();
-  const { ref, offset, armed } = useCardSwipe({ disabled, onCommit: action.onCommit });
-  const tone = SWIPE_TONE[action.tone];
+  const { ref, offset, armed } = useCardSwipe({
+    disabled,
+    onCommit: action?.onCommit ?? null,
+    onCommitBack: back?.onCommit ?? null,
+  });
+  const shown = offset > 0 ? action : offset < 0 ? back : null;
+  const tone = shown ? SWIPE_TONE[shown.tone] : null;
   return (
     // data-pf-no-edge-swipe — свайп карточки не должен открывать боковое меню. Обрезаем
     // уехавшую карточку только во время жеста: в покое её свечение (непрочитанная,
@@ -353,24 +365,26 @@ export function SwipeToAct({
     <div
       ref={ref}
       data-pf-no-edge-swipe
-      className={cn('relative rounded-lg', offset > 0 && 'overflow-hidden')}
+      className={cn('relative rounded-lg', offset !== 0 && 'overflow-hidden')}
     >
-      {offset > 0 && (
+      {shown && tone && (
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-0 flex items-center gap-1.5 rounded-lg ps-3 text-meta font-semibold transition-colors duration-150',
+            'pointer-events-none absolute inset-0 flex items-center gap-1.5 rounded-lg text-meta font-semibold transition-colors duration-150',
+            // Подпись — с той стороны, откуда уехала карточка.
+            offset > 0 ? 'ps-3' : 'justify-end pe-3',
             armed ? tone.armed : tone.soft,
           )}
         >
-          {swipeIcon(action.tone)}
-          {action.label}
+          {swipeIcon(shown.tone)}
+          {shown.label}
         </div>
       )}
       <div
         className="relative"
         style={{
-          transform: offset > 0 ? `translateX(${offset}px)` : undefined,
+          transform: offset !== 0 ? `translateX(${offset}px)` : undefined,
           // Возврат на место — только когда палец отпущен и анимации не выключены.
           transition: offset === 0 && animations ? 'transform 180ms ease-out' : undefined,
         }}
