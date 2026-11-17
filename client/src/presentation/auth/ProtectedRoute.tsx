@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 import { AppShellSkeleton, RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { Button } from '@/components/ui/button';
+import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus';
 
 type Props = {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ type Props = {
 export function ProtectedRoute({ children }: Props): React.ReactElement | null {
   const { status, retrySession } = useAuth();
   const location = useLocation();
+  const online = useOnlineStatus();
 
   if (status === 'loading') {
     return location.pathname === '/device' ? <RouteSkeleton /> : <AppShellSkeleton />;
@@ -26,8 +28,14 @@ export function ProtectedRoute({ children }: Props): React.ReactElement | null {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-6">
         <div role="alert" className="max-w-sm text-center">
-          <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">Не удалось проверить соединение</h1>
-          <p className="mbs-2 text-sm text-muted-foreground">Проверьте интернет и попробуйте ещё раз. После восстановления сети проверим доступ снова.</p>
+          <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">
+            {online ? 'Не удалось проверить соединение' : 'Нет сети'}
+          </h1>
+          <p className="mbs-2 text-sm text-muted-foreground">
+            {online
+              ? 'Проверьте интернет и попробуйте ещё раз. После восстановления сети проверим доступ снова.'
+              : 'Приложение открылось из сохранённой версии, но задачи без сети не загрузить. Как только связь появится, проверим доступ снова.'}
+          </p>
           <Button size="lg" className="mbs-5" onClick={() => { void retrySession(); }}>Повторить</Button>
         </div>
       </div>

@@ -37,6 +37,7 @@ import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
 import { TelegramSection } from '@/presentation/components/profile/TelegramSection';
 import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsShareCard';
 import { NotificationDefaultsCard } from '@/presentation/components/profile/NotificationDefaultsCard';
+import { DevicePushCard } from '@/presentation/components/profile/DevicePushCard';
 import { KanbanColorsCard } from '@/presentation/components/profile/KanbanColorsCard';
 import { PlanAndUsageCard } from '@/presentation/components/profile/PlanAndUsageCard';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
@@ -338,6 +339,7 @@ export function ProfilePage(): React.ReactElement {
           <PlanAndUsageCard />
           <ProjectsShareCard />
           <EmployeesCard />
+          <DevicePushCard />
           <NotificationDefaultsCard />
           <KanbanColorsCard />
           <TelegramSection />
