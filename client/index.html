@@ -9,7 +9,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ProjectsFlow</title>
 
-    <!-- PWA: установка на экран «Домой». Минимальный набор (manifest + meta), без service worker. -->
+    <!-- PWA: Home Screen install + service worker (public/sw.js, registered by main.tsx).
+         pf-app-shell marks the app shell: only such a response is kept by the service worker
+         for offline start (the landing page and other pages never get cached as the shell). -->
+    <meta name="pf-app-shell" content="1" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="application-name" content="ProjectsFlow" />

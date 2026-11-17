@@ -72,6 +72,13 @@ import { NotificationHub } from './infrastructure/notifications/NotificationHub.
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
 import { PublishingNotificationRepository } from './infrastructure/notifications/PublishingNotificationRepository.js';
+import { CompositeNotificationPublisher } from './infrastructure/notifications/CompositeNotificationPublisher.js';
+import { PushNotificationDispatcher } from './application/push/PushNotificationDispatcher.js';
+import { ManagePushSubscriptions } from './application/push/ManagePushSubscriptions.js';
+import { VapidKeyProvider } from './application/push/VapidKeyProvider.js';
+import { WebPushSender, WebPushVapidKeyGenerator } from './infrastructure/push/WebPushSender.js';
+import { DrizzlePushSubscriptionRepository } from './infrastructure/repositories/DrizzlePushSubscriptionRepository.js';
+import { DrizzleVapidKeyStore } from './infrastructure/repositories/DrizzleVapidKeyStore.js';
 import { SmtpEmailSender } from './infrastructure/email/SmtpEmailSender.js';
 import { LoggingEmailSender } from './infrastructure/email/LoggingEmailSender.js';
 import type { EmailSender } from './application/notifications/EmailSender.js';
@@ -572,10 +579,42 @@ const setActiveWorkspaceForProject = async (userId: string, projectId: string): 
 // Real-time-доставка: хаб + декоратор поверх Drizzle-репозитория. Любое создание
 // уведомления автоматически push'ится подписчикам SSE.
 const notificationHub = new NotificationHub();
+// Web Push (db/184): every bell notification also goes to the recipient's devices. Without
+// configuration the VAPID keys are generated on first use and stored in the DB; the private key
+// is encrypted with the same secret as the LLM subscription tokens (plain without a secret).
+const pushSubscriptionRepo = new DrizzlePushSubscriptionRepository(db);
+const vapidKeys = new VapidKeyProvider({
+  store: new DrizzleVapidKeyStore(
+    db,
+    new TokenCipher(process.env['LLM_TOKEN_KEY'] || process.env['SECRETS_MASTER_KEY'] || process.env['REPO_ACCESS_HMAC_SECRET']),
+  ),
+  generator: new WebPushVapidKeyGenerator(),
+  env: { publicKey: process.env['VAPID_PUBLIC_KEY'], privateKey: process.env['VAPID_PRIVATE_KEY'] },
+  onRotated: async () => {
+    await pushSubscriptionRepo.removeAll();
+  },
+  log: (message) => console.warn(message),
+});
+// Push services (Apple included) require an https: or mailto: sender contact.
+const vapidSubject = ((): string => {
+  const explicit = process.env['VAPID_SUBJECT']?.trim();
+  if (explicit) return explicit;
+  const app = process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? '';
+  return /^https:\/\/(?!localhost[:/]|localhost$)/u.test(app) ? app.replace(/\/$/u, '') : 'https://projectsflow.ru';
+})();
+const pushNotificationDispatcher = new PushNotificationDispatcher({
+  subscriptions: pushSubscriptionRepo,
+  sender: new WebPushSender({ proxy: process.env['WEB_PUSH_HTTP_PROXY'] || undefined }),
+  vapid: vapidKeys,
+  subject: vapidSubject,
+  // The same recipient check as for toasts (notificationAlerts below).
+  canReceive: (userId, notification): Promise<boolean> => notificationAlerts.canReceive(userId, notification),
+});
 const notificationRepo = new PublishingNotificationRepository(
   new DrizzleNotificationRepository(db),
-  notificationHub,
+  new CompositeNotificationPublisher([notificationHub, pushNotificationDispatcher]),
 );
+const notificationAlerts = new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo });
 
 // === Лента действий (activity feed) ===
 const activityRepo = new DrizzleActivityRepository(db, projectMemberRepo);
@@ -2688,6 +2727,10 @@ const { app, devProxyUpgrade } = createApp({
       log: (message) => console.warn(message),
     }),
   },
+  push: {
+    manage: new ManagePushSubscriptions({ repo: pushSubscriptionRepo, vapid: vapidKeys }),
+    tester: pushNotificationDispatcher,
+  },
   desktopNotes: new DesktopNotesService({
     repo: new DrizzleDesktopNoteRepository(db),
     tasks: taskRepo,
@@ -2797,7 +2840,7 @@ const { app, devProxyUpgrade } = createApp({
     getProjectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
     tasks: taskRepo,
     list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace, actionStates: notificationActionStates }),
-    alerts: new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo }),
+    alerts: notificationAlerts,
     countUnread: new CountUnreadNotifications({
       repo: notificationRepo,
       resolveActiveWorkspace,

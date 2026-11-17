@@ -510,6 +510,8 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/me\/ui-prefs$/, () => json({ prefs: state.uiPrefs })],
     [/^\/me\/kanban-colors$/, () => json({ colors: {} })],
     [/^\/me\/notification-prefs$/, () => json({ prefs: NOTIFICATION_PREFS })],
+    // "Notifications on this device" (Web Push): the server's public VAPID key.
+    [/^\/push\/public-key$/, () => json({ publicKey: 'BSmokeVapidPublicKeyForProfileCardOnly0000000000000000000000000000000000000000000' })],
     [/^\/me\/unread-tasks$/, () => json({ taskIds: [] })],
     [/^\/me\/stats\/completed-today$/, () => json({ count: state.completedByWorkspace?.[workspaceId] ?? 2 })],
     [/^\/me\/stats\/completed-by-workspace$/, () => json({ workspaces: [] })],

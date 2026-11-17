@@ -277,6 +277,9 @@ import { meStatsRouter } from './stats/routes.js';
 import { desktopNotesRouter } from './desktop-notes/routes.js';
 import { accountTokenOnTaskPaths } from './desktop-notes/accountTokenPaths.js';
 import type { DesktopNotesService } from '../application/desktop-notes/DesktopNotesService.js';
+import { pushRouter } from './push/routes.js';
+import type { ManagePushSubscriptions } from '../application/push/ManagePushSubscriptions.js';
+import type { PushNotificationDispatcher } from '../application/push/PushNotificationDispatcher.js';
 import type { GetMyCompletedStats } from '../application/stats/GetMyCompletedStats.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
@@ -503,6 +506,11 @@ type AppDeps = {
   readonly desktopNotes?: DesktopNotesService;
   // ИИ-сводка «что сделано» на карточках полки «На утверждении» (db/186).
   readonly approvalSummary?: ApprovalSummaryRouterDeps;
+  // "Notifications on this device", Web Push (db/184). Optional: tests do not need it.
+  readonly push?: {
+    readonly manage: ManagePushSubscriptions;
+    readonly tester: Pick<PushNotificationDispatcher, 'sendTest'>;
+  };
   readonly workspaces: {
     readonly service: WorkspaceService;
     readonly projectAccess: ManageWorkspaceProjectAccess;
@@ -1084,6 +1092,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       desktopNotesRouter({ service: deps.desktopNotes, authenticate: deps.agent.authenticateAgentToken }),
     );
   }
+  if (deps.push) app.use('/api/push', pushRouter(deps.push));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin/llm', llmAdminRouter(deps.llm));
   app.use('/api/admin/mailings', adminMailingRouter(deps.mailing));
@@ -1493,6 +1502,19 @@ export function createApp(deps: AppDeps): CreatedApp {
     });
   }
 
+  // The app service worker and the copy of index.html it caches on install (client/public/sw.js,
+  // the pwa-service-worker plugin in vite.config.ts). Never cached: the browser must see a new
+  // version right after a deploy. Mounted before the landing static files.
+  if (!isDev && hasClient) {
+    for (const file of ['sw.js', 'app-shell.html']) {
+      app.get(`/${file}`, (_req, res, next) => {
+        const abs = resolve(clientDist, file);
+        if (!existsSync(abs)) return next();
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        res.sendFile(abs);
+      });
+    }
+  }
   if (hasLanding) mountBuildAssets(app, '/_astro', resolve(landingDist, '_astro'));
   if (!isDev && hasClient) mountBuildAssets(app, '/assets', resolve(clientDist, 'assets'));
   if (hasLanding) app.use(express.static(landingDist, { index: false }));
