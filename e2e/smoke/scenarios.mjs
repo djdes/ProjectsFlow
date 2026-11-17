@@ -19,7 +19,7 @@ import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
 import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
 import { quickTaskSettingsScenarios } from './quick-task-settings.mjs';
-import { liveChatScenarios } from './live-chat.mjs';
+import { liveChatScenarios, liveRolesScenarios } from './live-chat.mjs';
 import { adminMailingScenarios } from './admin-mailing.mjs';
 import { adminUsersScenarios } from './admin-users.mjs';
 
@@ -216,6 +216,7 @@ async function openAndCloseTask(t, cardLocator, title) {
 
 export const scenarios = [
   ...liveChatScenarios,
+  ...liveRolesScenarios,
   ...adminMailingScenarios,
   ...adminUsersScenarios,
   ...telegramConnectScenarios,

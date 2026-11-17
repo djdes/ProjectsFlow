@@ -9,6 +9,16 @@ import { WorkerResultMessage } from './WorkerResultMessage';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTaskLiveTimeline } from '@/presentation/hooks/useTaskLiveTimeline';
 import { taskLiveTimeline } from '@/domain/live/TaskLiveTimeline';
+import { liveFeedRows, type LiveFeedRow } from '@/domain/live/LiveFeedRows';
+import {
+  isPipelineSession,
+  parseCheckResultPayload,
+  parseHandoffPayload,
+  parseReviewVerdictPayload,
+  parseStagePayload,
+  pipelineProgress,
+} from '@/domain/live/LivePipeline';
+import { CheckResultRow, HandoffDivider, PipelineStepper, ReviewVerdictCard, RoleTurn, StageLine, ToolJournal } from './LivePipeline';
 import { WorkerChatMessage } from './WorkerChatMessage';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type {
@@ -281,15 +291,23 @@ function TaskLiveChat({
   }, [active, scrollToBottom]);
 
   const entries = useMemo(() => taskLiveTimeline(runs, questionComments), [runs, questionComments]);
-  const tailStart = Math.max(0, entries.length - visibleCount);
-  const pinnedIndex = pinnedKey ? entries.findIndex(entry => entry.key === pinnedKey) : -1;
-  const shown = entries.slice(pinnedIndex >= 0 ? Math.min(pinnedIndex, tailStart) : tailStart);
-  const hiddenCount = entries.length - shown.length;
+  const rows = useMemo(() => liveFeedRows(entries, runs), [entries, runs]);
+  const tailStart = Math.max(0, rows.length - visibleCount);
+  const pinnedIndex = pinnedKey ? rows.findIndex(row => row.key === pinnedKey) : -1;
+  const shown = rows.slice(pinnedIndex >= 0 ? Math.min(pinnedIndex, tailStart) : tailStart);
+  const hiddenCount = rows.length - shown.length;
   useLayoutEffect(() => { firstShownKeyRef.current = shown[0]?.key ?? null; });
+
+  const pipelineRun = latestRun && isPipelineSession(latestRun.session) ? latestRun : undefined;
+  const progress = useMemo(() => pipelineRun ? pipelineProgress(pipelineRun.events, pipelineRun.session.status) : null, [pipelineRun]);
+  const executing = progress?.steps.find(step => step.stage === 'execute')?.state === 'active';
+  const liveJournalKey = runningRun && pipelineRun === runningRun && executing
+    ? rows.findLast(row => row.kind === 'tools' && row.sessionId === runningRun.session.id)?.key ?? null : null;
 
   return (
     <div ref={panelRef} data-pf-live-panel="" className={cn('flex min-h-0 flex-col bg-panel text-foreground', fillHeight ? 'h-full flex-1' : 'h-[70dvh] shrink-0')}>
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
+      {progress && <PipelineStepper progress={progress} />}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
@@ -306,18 +324,18 @@ function TaskLiveChat({
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pbs-3 pbe-14 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
       >
       <div ref={contentRef} className="space-y-2.5">
-        {sessionsLoading && entries.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
+        {sessionsLoading && rows.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
         {timelineError && <p role="status" className="text-sm text-muted-foreground">{timelineError}</p>}
         {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-md border px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
-        {shown.map(entry => {
+        {shown.map((entry, index) => {
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
-          if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
+          if (entry.kind === 'event' || entry.kind === 'tools') return <FeedRow key={entry.key} row={entry} firstShown={index === 0} live={entry.key === liveJournalKey} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
           return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' && entry.session.id === runningRun?.session.id ? 'работает' : STATUS_LABEL_RU[entry.session.status === 'running' ? 'completed' : entry.session.status]}</p>;
         })}
         {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} />}
         {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
-        {!sessionsLoading && runs.length === 0 && entries.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
+        {!sessionsLoading && runs.length === 0 && rows.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
         {questionsLoading && !sessionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка вопросов…
@@ -523,8 +541,52 @@ function Dot({ tone }: { tone: string }): React.ReactElement {
   return <span className={cn('mbs-[7px] size-1.5 shrink-0 rounded-full', tone)} aria-hidden />;
 }
 
+// === Ряд конвейера: роль (аватар один раз на реплику), журнал инструментов, карточки ===
+function FeedRow({ row, firstShown, live, finalFiles = [] }: {
+  row: Extract<LiveFeedRow, { kind: 'event' | 'tools' }>;
+  firstShown: boolean;
+  live: boolean;
+  finalFiles?: readonly LiveFileDiff[];
+}): React.ReactElement | null {
+  if (!row.role) return row.kind === 'event' ? <LiveEventRow event={row.event} finalFiles={finalFiles} /> : null;
+  const role = row.role;
+  // A window that starts mid-turn still names the speaker of its first row.
+  const header = row.header || firstShown;
+  if (row.kind === 'tools') return (
+    <RoleTurn role={role} header={header}>
+      <ToolJournal round={role.round} events={row.events} live={live}>
+        {event => <LiveEventRow event={event} finalFiles={finalFiles} />}
+      </ToolJournal>
+    </RoleTurn>
+  );
+  const { event } = row;
+  if (event.kind === 'handoff') {
+    const handoff = parseHandoffPayload(event.payload);
+    return handoff ? <HandoffDivider handoff={handoff} /> : <LiveEventRow event={event} />;
+  }
+  const content = pipelineContent(event) ?? <LiveEventRow event={event} finalFiles={finalFiles} bare />;
+  return <RoleTurn role={role} header={header}>{content}</RoleTurn>;
+}
+
+// Orchestrator and reviewer kinds; a malformed payload falls back to the generic row.
+function pipelineContent(event: LiveEvent): React.ReactElement | null {
+  if (event.kind === 'stage') {
+    const stage = parseStagePayload(event.payload);
+    return stage ? <StageLine stage={stage} /> : null;
+  }
+  if (event.kind === 'check_result') {
+    const check = parseCheckResultPayload(event.payload);
+    return check ? <CheckResultRow check={check} /> : null;
+  }
+  if (event.kind === 'review_verdict') {
+    const verdict = parseReviewVerdictPayload(event.payload);
+    return verdict ? <ReviewVerdictCard verdict={verdict} /> : null;
+  }
+  return null;
+}
+
 // === Ряд ленты — рендер по kind ===
-function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles?: readonly LiveFileDiff[] }): React.ReactElement | null {
+function LiveEventRow({ event, finalFiles = [], bare = false }: { event: LiveEvent; finalFiles?: readonly LiveFileDiff[]; bare?: boolean }): React.ReactElement | null {
   switch (event.kind) {
     case 'worker_notice':
       return <p role="status" className="px-1 py-1.5 text-xs text-muted-foreground">{event.text}</p>;
@@ -533,6 +595,8 @@ function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles
       if (text.trim().length === 0) return null;
       const result = parseWorkerResult(text);
       if (result) return <WorkerResultMessage result={result} />;
+      // Inside a role turn the avatar already marks the speaker.
+      if (bare) return <div className="min-w-0 leading-relaxed"><CommentBody body={text} className={RICH_MD} /></div>;
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-purple bg-tone" />
