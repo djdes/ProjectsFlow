@@ -2446,6 +2446,28 @@ export const taskTemplates = mysqlTable(
 export type TaskTemplateRow = typeof taskTemplates.$inferSelect;
 
 // ============================================================================
+// workspace_task_templates — миграция db/187. Шаблоны задач пространства: «Сохранить как
+// шаблон» в окне задачи и выбор «Шаблон» в окне «Новая задача».
+// ============================================================================
+export const workspaceTaskTemplates = mysqlTable(
+  'workspace_task_templates',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    description: mediumtext('description').notNull(),
+    priority: tinyint('priority', { unsigned: true }),
+    taskType: varchar('task_type', { length: 16 }),
+    recurrence: varchar('recurrence', { length: 64 }),
+    createdBy: char('created_by', { length: 36 }),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index('idx_wtt_workspace').on(t.workspaceId, t.createdAt)],
+);
+
+export type WorkspaceTaskTemplateRow = typeof workspaceTaskTemplates.$inferSelect;
+
+// ============================================================================
 // task_properties / task_property_values — миграция db/109. Кастомные свойства
 // задач (Notion custom properties): определения пер-проект + значения пер-задача.
 // options/value — строки (JSON/кодировка по типу), парсит репозиторий.

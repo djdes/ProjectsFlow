@@ -32,6 +32,8 @@ type Props = {
   anchorDate: string;
   disabled?: boolean;
   className?: string;
+  // Значок для панели композера (как у Срока): подпись появляется, только когда повтор задан.
+  iconOnly?: boolean;
 };
 
 // Выбор повтора задачи. Обычный dropdown на десктопе; на телефоне DropdownMenu сам
@@ -44,6 +46,7 @@ export function TaskRecurrenceSelect({
   anchorDate,
   disabled,
   className,
+  iconOnly = false,
 }: Props): React.ReactElement {
   const inPropertyRow = (className ?? '').includes('justify-start');
   const label = value ? taskRecurrenceLabel(value) : inPropertyRow ? 'Не повторять' : 'Повтор';
@@ -59,19 +62,19 @@ export function TaskRecurrenceSelect({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size={iconOnly && !value ? 'icon' : 'sm'}
           disabled={disabled}
           className={cn(
-            inPropertyRow ? '' : 'h-7 gap-1.5 px-2 text-xs',
+            iconOnly ? 'shrink-0 gap-1.5 text-xs' : inPropertyRow ? '' : 'h-7 gap-1.5 px-2 text-xs',
             className,
             value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
           )}
           title={value ? `Повтор: ${taskRecurrenceLabel(value)}` : 'Повтор задачи'}
           aria-label={value ? `Повтор: ${taskRecurrenceLabel(value)}` : 'Повтор задачи'}
         >
-          {!inPropertyRow && <Repeat className="size-3.5" aria-hidden />}
-          <span className="min-w-0 truncate">{label}</span>
-          {!disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : 'size-3'} />}
+          {!inPropertyRow && <Repeat className={iconOnly ? 'size-4' : 'size-3.5'} aria-hidden />}
+          {(!iconOnly || value) && <span className="min-w-0 truncate">{label}</span>}
+          {!iconOnly && !disabled && <ChevronDown className={inPropertyRow ? PROPERTY_CARET_CLASS : 'size-3'} />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-56">

@@ -42,9 +42,14 @@ import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
 import { AssigneeSelect } from '@/presentation/components/tasks/AssigneeSelect';
 import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
 import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
+import { TaskRecurrenceSelect } from '@/presentation/components/tasks/TaskRecurrenceSelect';
+import { TaskTemplatePicker } from '@/presentation/components/tasks/TaskTemplatePicker';
+import { TaskTypeSelect } from '@/presentation/components/tasks/TaskTypeSelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import type { RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
-import type { RalphMode, TaskPriority } from '@/domain/task/Task';
+import type { RalphMode, TaskPriority, TaskType } from '@/domain/task/Task';
+import { recurrenceAnchorDate, type TaskRecurrence } from '@/domain/task/TaskRecurrence';
+import type { WorkspaceTaskTemplate } from '@/domain/task/WorkspaceTaskTemplate';
 import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
 
 // Tiptap-редактор грузим лениво (тяжёлый chunk) — как в композере/окне задачи.
@@ -73,6 +78,8 @@ type DraftStash = {
   assigneeUserId: string | null;
   deadline: string | null;
   priority: TaskPriority | null;
+  taskType: TaskType | null;
+  recurrence: TaskRecurrence | null;
   pending: PendingFile[];
   inlineImages: [string, File][];
 };
@@ -91,6 +98,9 @@ type PersistedDraft = {
   assigneeUserId: string | null;
   deadline: string | null;
   priority: TaskPriority | null;
+  // Optional: черновики, сохранённые до шаблонов и повтора, этих полей не знают.
+  taskType?: TaskType | null;
+  recurrence?: TaskRecurrence | null;
 };
 function readDraft(): PersistedDraft | null {
   try {
@@ -168,6 +178,9 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
   const [initialDeadline, setInitialDeadline] = useState<string | null>(null);
   const wasOpenRef = useRef(false);
   const [priority, setPriority] = useState<TaskPriority | null>(null);
+  // Тип и повтор задаёт шаблон (db/187); повтор можно выбрать и вручную в панели.
+  const [taskType, setTaskType] = useState<TaskType | null>(null);
+  const [recurrence, setRecurrence] = useState<TaskRecurrence | null>(null);
   const [saving, setSaving] = useState(false);
   const [attachToolsFade, toolsFadeProps] = useEdgeFade();
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +209,9 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
     description.trim() !== '' ||
     pending.length > 0 ||
     deadline !== initialDeadline ||
-    priority !== null;
+    priority !== null ||
+    taskType !== null ||
+    recurrence !== null;
 
   // Освободить blob-URL'ы снимка и забыть его.
   const discardStash = (): void => {
@@ -220,11 +235,13 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
       assigneeUserId,
       deadline,
       priority,
+      taskType,
+      recurrence,
       pending: [...pending],
       inlineImages: [...inlineImagesRef.current.entries()],
     };
     // Персистим сериализуемую часть — переживёт перезагрузку страницы (файлы/картинки — нет).
-    writeDraft({ description, projectId, ralphMode, assigneeUserId, deadline, priority });
+    writeDraft({ description, projectId, ralphMode, assigneeUserId, deadline, priority, taskType, recurrence });
   };
 
   // Закрытие пользователем (Esc / клик вне / крестик / «Отмена»): сохраняем черновик.
@@ -244,6 +261,8 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
       setAssigneeUserId(s.assigneeUserId ?? user?.id ?? null);
       setDeadline(s.deadline);
       setPriority(s.priority);
+      setTaskType(s.taskType);
+      setRecurrence(s.recurrence);
       setPending(s.pending);
       inlineImagesRef.current = new Map(s.inlineImages);
       stashRef.current = null; // blob'ы теперь снова «живые» в форме — не ревокаем
@@ -259,6 +278,8 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
       setAssigneeUserId(d.assigneeUserId ?? user?.id ?? null);
       setDeadline(d.deadline);
       setPriority(d.priority);
+      setTaskType(d.taskType ?? null);
+      setRecurrence(d.recurrence ?? null);
       if (removed) {
         toast.warning('Вставленные картинки не сохранились в черновике — вставьте их заново.');
       }
@@ -287,6 +308,8 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
     setAssigneeUserId(null);
     setDeadline(null);
     setPriority(null);
+    setTaskType(null);
+    setRecurrence(null);
     setError(null);
     setDragActive(false);
     setPending([]);
@@ -418,6 +441,23 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
     if (quick.tokens.some((t) => t.kind === kind)) setIgnoredTokens((prev) => new Set(prev).add(kind));
   };
 
+  // Шаблон заполняет то, что в нём сохранено: текст с чеклистом, приоритет, тип и повтор.
+  // Проект, исполнитель и срок остаются выбранными здесь — они про конкретную задачу.
+  const applyTemplate = (template: WorkspaceTaskTemplate): void => {
+    setDescription(template.description);
+    setPriority(template.priority);
+    setTaskType(template.taskType);
+    setRecurrence(template.recurrence);
+    // Название шаблона — готовый текст, а не быстрый ввод: «Отчёт в пятницу» не должен
+    // превратиться в срок и потерять слова. Распознанное в нём сразу помечаем «не трогать».
+    const parsed = parseQuickTask(template.description.trim(), new Date(), {
+      members: quickMembers,
+      projects: realProjects.map((p) => ({ id: p.id, name: p.name })),
+    });
+    setIgnoredTokens(new Set(parsed.tokens.map((t) => t.kind)));
+    if (!isCoarsePointer) window.setTimeout(() => editorRef.current?.focusEnd(), 0);
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (disabled) return;
@@ -435,6 +475,8 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
         assigneeUserId: finalAssigneeUserId,
         deadline: finalDeadline,
         priority: finalPriority,
+        taskType,
+        recurrence,
       });
       // BUG E: дальше используем task.projectId ИЗ ОТВЕТА, а не createTargetId. Сервер мог
       // переселить задачу инбокса в инбокс ответственного (правило «я ответственный ⇒ задача
@@ -686,6 +728,8 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
               <Plus className="size-4 shrink-0" />
               Файл
             </button>
+            {/* Шаблоны пространства (db/187): заполняют текст, приоритет, тип и повтор. */}
+            <TaskTemplatePicker onApply={applyTemplate} disabled={saving} className="ms-auto" />
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
@@ -762,6 +806,18 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
                 iconOnly
                 className={cn('h-8', finalDeadline === null ? 'w-8 px-0' : 'px-2')}
               />
+              <TaskRecurrenceSelect
+                value={recurrence}
+                onChange={setRecurrence}
+                anchorDate={recurrenceAnchorDate(finalDeadline, new Date())}
+                disabled={saving}
+                iconOnly
+                className={cn('h-8', recurrence === null ? 'w-8 px-0' : 'max-w-48 px-2')}
+              />
+              {/* Тип приходит из шаблона: показываем, чтобы его было видно и можно было сбросить. */}
+              {taskType !== null && (
+                <TaskTypeSelect value={taskType} onChange={setTaskType} disabled={saving} compact className="h-8" />
+              )}
               <AssigneeSelect
                 value={finalAssigneeUserId}
                 onChange={(v) => {

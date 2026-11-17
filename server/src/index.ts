@@ -151,6 +151,8 @@ import { ToggleProjectFavorite } from './application/project/ToggleProjectFavori
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
 import { DispatchTaskChangeNotifications } from './application/notifications/DispatchTaskChangeNotifications.js';
 import { SpawnNextRecurringTask } from './application/task/SpawnNextRecurringTask.js';
+import { ManageWorkspaceTaskTemplates } from './application/task/ManageWorkspaceTaskTemplates.js';
+import { DrizzleWorkspaceTaskTemplateRepository } from './infrastructure/repositories/DrizzleWorkspaceTaskTemplateRepository.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { DispatchCommentNotifications } from './application/notifications/DispatchCommentNotifications.js';
 import { ListCommentNotifyCandidates } from './application/task/ListCommentNotifyCandidates.js';
@@ -2714,6 +2716,13 @@ const { app, devProxyUpgrade } = createApp({
       // Только подписка платформы, без запасной модели: недоступна — карточка без сводки.
       llm: llmTextGenerator,
       log: (message) => console.warn(message),
+    }),
+  },
+  workspaceTaskTemplates: {
+    manage: new ManageWorkspaceTaskTemplates({
+      templates: new DrizzleWorkspaceTaskTemplateRepository(db),
+      workspaces: workspaceRepo,
+      idGen: idGenerator,
     }),
   },
   desktopNotes: new DesktopNotesService({

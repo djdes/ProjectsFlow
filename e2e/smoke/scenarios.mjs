@@ -1130,6 +1130,16 @@ export const scenarios = [
         await t.visible(page.getByRole('menu').getByText('Создано', { exact: true }), 'дата создания в меню');
         await page.keyboard.press('Escape');
       });
+      await t.check('«Сохранить как шаблон» отправляет текст, приоритет и тип в шаблоны пространства', async () => {
+        await press(page.getByRole('button', { name: 'Ещё', exact: true }));
+        await press(page.getByRole('menuitem', { name: 'Сохранить как шаблон', exact: true }));
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === `/workspaces/${WORKSPACE_ID}/task-templates`
+            && String(m.body?.description ?? '').startsWith('Обновить главную страницу клиники') && m.body?.priority === 2,
+          'шаблон не сохранён',
+        );
+        await t.visible(page.getByText('Шаблон «Обновить главную страницу клиники» сохранён', { exact: true }), 'тост о сохранении шаблона');
+      });
       await t.check('выбор статуса сохраняет ручную работу', async () => {
         await press(page.getByRole('button', { name: 'Сменить статус', exact: true }));
         const menu = page.getByRole('menu');

@@ -149,6 +149,44 @@ export const taskCreationDefaultsScenarios = [
     },
   },
   {
+    id: 'task-create-template', title: 'Создание по шаблону пространства: текст, приоритет и повтор',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      await t.goto('/', { ready: () => createButton(page) });
+      const templates = () => page.getByRole('dialog', { name: 'Шаблоны задач', exact: true });
+      await t.step('шаблон заполняет текст, приоритет и повтор новой задачи', async () => {
+        await activate(t, createButton(page));
+        await t.visible(dialog(page).locator('[contenteditable="true"]'), 'редактор загрузился');
+        await activate(t, dialog(page).getByRole('button', { name: 'Шаблон', exact: true }));
+        await t.visible(templates(), 'список шаблонов');
+        if (t.isMobile) t.assert(await templates().getAttribute('data-pf-mobile-sheet') === 'true', 'шаблоны открылись не нижней шторкой');
+        await activate(t, templates().getByRole('button', { name: /^Планёрка по понедельникам/ }));
+        await t.hidden(templates(), 'список шаблонов закрылся');
+        await t.visible(dialog(page).getByRole('button', { name: 'Повтор: Каждую неделю: пн', exact: true }), 'повтор из шаблона');
+        await dialog(page).getByRole('button', { name: 'Добавить', exact: true }).click();
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path.endsWith('/tasks')
+            && String(m.body?.description ?? '').startsWith('Планёрка по понедельникам\n- [ ] Собрать статусы')
+            && m.body?.priority === 3 && m.body?.recurrence?.kind === 'weekly' && m.body.recurrence.days?.[0] === 1,
+          'задача по шаблону отправлена без его полей',
+        );
+        await t.hidden(dialog(page), 'форма после создания');
+      });
+      await t.step('шаблон удаляется прямо из списка', async () => {
+        await activate(t, createButton(page));
+        await activate(t, dialog(page).getByRole('button', { name: 'Шаблон', exact: true }));
+        await activate(t, templates().getByRole('button', { name: 'Удалить шаблон «Планёрка по понедельникам»', exact: true }));
+        await t.waitForMutation((m) => m.method === 'DELETE' && m.path === `/workspaces/${WORKSPACE_ID}/task-templates/tpl-standup`, 'шаблон не удалён');
+        await t.visible(templates().getByText(/Шаблонов пока нет/), 'пустой список после удаления');
+        await page.keyboard.press('Escape');
+        await t.hidden(templates(), 'список шаблонов закрылся');
+        await closeForm(t);
+      });
+      await t.pageChecks('после создания по шаблону');
+    },
+  },
+  {
     id: 'task-create-filter', title: 'Создание: обычный фильтр, сброс и ошибка списка сотрудников',
     matrix: [['desktop', 'light'], ['phone', 'dark']],
     async run(t) {

@@ -304,6 +304,10 @@ import type { SiteArtifactStorage } from '../application/site/SiteArtifactStorag
 import type { LiveService } from '../application/live/LiveService.js';
 import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
 import { chatRouter, type ChatRouterDeps } from './chat/routes.js';
+import {
+  workspaceTaskTemplatesRouter,
+  type WorkspaceTaskTemplatesRouterDeps,
+} from './task-templates/routes.js';
 import type { AiConversationService } from '../application/ai-conversation/AiConversationService.js';
 import type { AiConversationEventHub } from '../infrastructure/realtime/AiConversationEventHub.js';
 import { aiConversationRouter, projectStudioConversationRouter } from './ai-conversation/routes.js';
@@ -424,6 +428,8 @@ type AppDeps = {
   };
   readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
+  // Шаблоны задач пространства (db/187). Опционально — тестам не нужно.
+  readonly workspaceTaskTemplates?: WorkspaceTaskTemplatesRouterDeps;
   readonly aiConversations: {
     readonly service: AiConversationService;
     readonly eventHub: AiConversationEventHub;
@@ -1010,6 +1016,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).
   app.use('/api/workspaces', chatRouter(deps.chat));
+  // Шаблоны задач пространства — подпути /:workspaceId/task-templates.
+  if (deps.workspaceTaskTemplates) {
+    app.use('/api/workspaces', workspaceTaskTemplatesRouter(deps.workspaceTaskTemplates));
+  }
   // Долговечные личные и проектные ИИ-чаты. Отдельный контур от коротких
   // ai-prompt-jobs: история сообщений не очищается вместе с очередью воркера.
   if (deps.imageGeneration) {

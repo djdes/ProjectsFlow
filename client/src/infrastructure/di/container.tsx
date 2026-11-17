@@ -35,6 +35,7 @@ import { HttpActivityRepository } from "@/infrastructure/http/HttpActivityReposi
 import { HttpRecentTaskViewRepository } from "@/infrastructure/http/HttpRecentTaskViewRepository";
 import { HttpBoardViewRepository } from "@/infrastructure/http/HttpBoardViewRepository";
 import { HttpTaskTemplateRepository } from "@/infrastructure/http/HttpTaskTemplateRepository";
+import { HttpWorkspaceTaskTemplateRepository } from "@/infrastructure/http/HttpWorkspaceTaskTemplateRepository";
 import { HttpTaskPropertyRepository } from "@/infrastructure/http/HttpTaskPropertyRepository";
 import { HttpSiteEditorRepository } from "@/infrastructure/http/HttpSiteEditorRepository";
 import { HttpProjectCodeRepository } from "@/infrastructure/http/HttpProjectCodeRepository";
@@ -97,6 +98,7 @@ import { HttpPublicBoardRepository } from "@/infrastructure/http/HttpPublicBoard
 import type { PublicBoardRepository } from "@/application/public/PublicBoardRepository";
 import type { BoardViewRepository } from "@/application/project/BoardViewRepository";
 import type { TaskTemplateRepository } from "@/application/task/TaskTemplateRepository";
+import type { WorkspaceTaskTemplateRepository } from "@/application/task/WorkspaceTaskTemplateRepository";
 import type { TaskPropertyRepository } from "@/application/task/TaskPropertyRepository";
 import type { SiteEditorRepository } from "@/application/site-editor/SiteEditorRepository";
 import type { ProjectCodeRepository } from "@/application/project-code/ProjectCodeRepository";
@@ -177,6 +179,8 @@ type Container = {
   publicBoardRepository: PublicBoardRepository;
   boardViewRepository: BoardViewRepository;
   taskTemplateRepository: TaskTemplateRepository;
+  // Шаблоны задач пространства (db/187): «Сохранить как шаблон» и «Шаблон» в новой задаче.
+  workspaceTaskTemplateRepository: WorkspaceTaskTemplateRepository;
   taskPropertyRepository: TaskPropertyRepository;
   siteEditorRepository: SiteEditorRepository;
   openSiteEditorSession: OpenSiteEditorSession;
@@ -288,6 +292,7 @@ function buildContainer(): Container {
     publicBoardRepository: publicBoardRepo,
     boardViewRepository: boardViewRepo,
     taskTemplateRepository: taskTemplateRepo,
+    workspaceTaskTemplateRepository: new HttpWorkspaceTaskTemplateRepository(),
     taskPropertyRepository: taskPropertyRepo,
     siteEditorRepository: siteEditorRepo,
     openSiteEditorSession: new OpenSiteEditorSession(siteEditorRepo),

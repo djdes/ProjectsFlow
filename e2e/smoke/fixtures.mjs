@@ -202,6 +202,20 @@ export function createState() {
     tasks,
     views,
     uiPrefs: { inboxAssignedGrouping: 'project' },
+    // Шаблоны задач пространства (db/187).
+    taskTemplates: [
+      {
+        id: 'tpl-standup',
+        workspaceId: WORKSPACE_ID,
+        name: 'Планёрка по понедельникам',
+        description: 'Планёрка по понедельникам\n- [ ] Собрать статусы\n- [ ] Разослать итоги',
+        priority: 3,
+        taskType: null,
+        recurrence: { kind: 'weekly', days: [1] },
+        createdBy: ME.id,
+        createdAt: hoursAgo(300),
+      },
+    ],
     today,
   };
 }
@@ -321,6 +335,8 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           },
         ],
       })],
+    [/^\/workspaces\/([^/]+)\/task-templates$/, (m) =>
+      json({ templates: (state.taskTemplates ?? []).filter((t) => t.workspaceId === m[1]) })],
     [/^\/workspaces\/([^/]+)\/members$/, () =>
       json({
         members: PEOPLE.map((p, i) => ({
@@ -893,6 +909,7 @@ function mutate(state, method, path, body) {
       assignee: body?.assigneeUserId ?? ME.id,
       deadline: body?.deadline ?? null,
       priority: body?.priority ?? null,
+      taskType: body?.taskType ?? null,
       recurrence: body?.recurrence ?? null,
       createdHoursAgo: 0,
     });
@@ -933,6 +950,22 @@ function mutate(state, method, path, body) {
   if (method === 'POST' && path === '/notifications/read-all') return json({ updated: 0 });
   if (method === 'POST' && path === '/recent-task-views') return noContent();
   if (method === 'PUT' && path === '/workspaces/current') { state.activeWorkspaceId = body.workspaceId; return noContent(); }
+  const templates = path.match(/^\/workspaces\/([^/]+)\/task-templates(?:\/([^/]+))?$/);
+  if (templates && method === 'POST' && !templates[2]) {
+    const description = String(body?.description ?? '').replace(/\[[xX]\]/g, '[ ]');
+    const template = {
+      id: `tpl-new-${(state.taskTemplates ?? []).length + 1}`, workspaceId: templates[1],
+      name: body?.name || description.split('\n')[0], description,
+      priority: body?.priority ?? null, taskType: body?.taskType ?? null, recurrence: body?.recurrence ?? null,
+      createdBy: ME.id, createdAt: new Date().toISOString(),
+    };
+    state.taskTemplates = [template, ...(state.taskTemplates ?? [])];
+    return json({ template }, 201);
+  }
+  if (templates && method === 'DELETE' && templates[2]) {
+    state.taskTemplates = (state.taskTemplates ?? []).filter((t) => t.id !== templates[2]);
+    return noContent();
+  }
   if (method === 'POST' && path === '/auth/logout') return noContent();
   if (method === 'POST' && path === '/telemetry/actions') return noContent();
   return undefined;
