@@ -14,6 +14,8 @@ type Deps = {
 export type ProjectGroupHints = {
   readonly aliases: readonly string[];
   readonly shortDescription: string | null;
+  // db/193: «Полный прогон по умолчанию для задач из групп». undefined — не трогать.
+  readonly groupFullRunDefault?: boolean;
 };
 
 // Привычные названия и короткое описание проекта (db/192): по ним бот выбирает проект из
@@ -29,6 +31,7 @@ export class SetProjectGroupHints {
     const updated = await this.deps.projects.update(projectId, {
       aliases: normalizeAliases(hints.aliases),
       shortDescription: description || null,
+      ...(hints.groupFullRunDefault !== undefined ? { groupFullRunDefault: hints.groupFullRunDefault } : {}),
     });
     if (!updated) throw new ProjectNotFoundError();
     return updated;

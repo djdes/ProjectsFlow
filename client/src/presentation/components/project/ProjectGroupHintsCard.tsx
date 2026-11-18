@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import type { Project } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
-import { parseAliasInput } from './projectGroupHints';
+import { isGroupHintsDirty, parseAliasInput } from './projectGroupHints';
 
 type Props = {
   readonly project: Project;
@@ -17,17 +17,17 @@ export function ProjectGroupHintsCard({ project, onProjectUpdated }: Props): Rea
   const { projectRepository } = useContainer();
   const [aliases, setAliases] = useState(project.aliases.join(', '));
   const [description, setDescription] = useState(project.shortDescription ?? '');
+  const [fullRun, setFullRun] = useState(project.groupFullRunDefault);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setAliases(project.aliases.join(', '));
     setDescription(project.shortDescription ?? '');
-  }, [project.id, project.aliases, project.shortDescription]);
+    setFullRun(project.groupFullRunDefault);
+  }, [project.id, project.aliases, project.shortDescription, project.groupFullRunDefault]);
 
   const parsed = parseAliasInput(aliases);
-  const dirty =
-    parsed.join('\n') !== project.aliases.join('\n') ||
-    (description.trim() || null) !== (project.shortDescription ?? null);
+  const dirty = isGroupHintsDirty(project, { aliases: parsed, description, fullRun });
 
   const save = async (): Promise<void> => {
     setSaving(true);
@@ -35,8 +35,14 @@ export function ProjectGroupHintsCard({ project, onProjectUpdated }: Props): Rea
       const updated = await projectRepository.setGroupHints(project.id, {
         aliases: parsed,
         shortDescription: description.trim() || null,
+        groupFullRunDefault: fullRun,
       });
-      onProjectUpdated({ ...project, aliases: updated.aliases, shortDescription: updated.shortDescription });
+      onProjectUpdated({
+        ...project,
+        aliases: updated.aliases,
+        shortDescription: updated.shortDescription,
+        groupFullRunDefault: updated.groupFullRunDefault,
+      });
       toast.success('Подсказки для Telegram-групп сохранены');
     } catch {
       toast.error('Не удалось сохранить подсказки');
@@ -80,6 +86,22 @@ export function ProjectGroupHintsCard({ project, onProjectUpdated }: Props): Rea
           />
         </label>
       </div>
+      <label className="mbs-3 flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={fullRun}
+          onChange={(e) => setFullRun(e.target.checked)}
+          disabled={saving}
+          className="mbs-0.5 size-4"
+        />
+        <span>
+          <span className="font-medium">Полный прогон по умолчанию для задач из групп</span>
+          <span className="block text-xs text-muted-foreground">
+            Задачи воркеру из смешанной группы пойдут полным прогоном (сборка, тесты, проверка).
+            Включайте, если для проекта настроен конвейер воркера. Выключено — обычное изменение.
+          </span>
+        </span>
+      </label>
       <div className="mbs-3 flex justify-end">
         <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}>
           {saving && <Loader2 className="me-1.5 size-4 motion-safe:animate-spin" />}

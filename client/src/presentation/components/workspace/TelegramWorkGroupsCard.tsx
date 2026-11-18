@@ -25,6 +25,7 @@ import {
   findNewGroup,
   groupLabel,
   groupModeHint,
+  groupModeToast,
   groupProjects,
   parseChatIdInput,
   splitGroupsByStatus,
@@ -146,7 +147,7 @@ export function TelegramWorkGroupsCard({
     replaceGroup({ ...group, mode });
     try {
       replaceGroup(await workspaceRepository.setTelegramGroupMode(workspaceId, group.chatId, mode));
-      toast.success(mode === 'incident' ? 'Группа переведена в режим инцидентов' : 'Группа снова обычная');
+      toast.success(groupModeToast(mode));
     } catch (error) {
       replaceGroup(group);
       toast.error((error as Error).message || 'Не удалось сменить режим группы');
@@ -407,9 +408,13 @@ export function TelegramWorkGroupsCard({
   );
 }
 
-const MODE_LABELS: Record<TelegramWorkGroupMode, string> = { standard: 'Обычная', incident: 'Инциденты' };
+const MODE_LABELS: Record<TelegramWorkGroupMode, string> = {
+  standard: 'Обычная',
+  incident: 'Инциденты',
+  mixed: 'Смешанная',
+};
 
-// Режим группы: Обычная / Инциденты. Меняют владелец и руководители (spec 2026-11-17, раздел 3).
+// Режим группы: Обычная / Инциденты / Смешанная. Меняют владелец и руководители (spec 2026-11-17, раздел 3).
 function GroupMode({
   group,
   canManage,
@@ -424,7 +429,7 @@ function GroupMode({
     <div className="mbs-1.5 space-y-1">
       {canManage ? (
         <div role="group" aria-label="Режим группы" className="inline-flex rounded-md border border-border p-0.5">
-          {(['standard', 'incident'] as const).map((value) => (
+          {(['standard', 'incident', 'mixed'] as const).map((value) => (
             <button
               key={value}
               type="button"

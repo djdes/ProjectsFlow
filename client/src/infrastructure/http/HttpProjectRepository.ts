@@ -91,6 +91,7 @@ type ProjectDto = {
   multiTaskWorker?: boolean;
   aliases?: string[] | null;
   shortDescription?: string | null;
+  groupFullRunDefault?: boolean;
   // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
   isFavorite?: boolean;
   favoriteSortOrder?: number;
@@ -131,6 +132,7 @@ function fromDto(dto: ProjectDto): Project {
     multiTaskWorker: dto.multiTaskWorker ?? false,
     aliases: dto.aliases ?? [],
     shortDescription: dto.shortDescription ?? null,
+    groupFullRunDefault: dto.groupFullRunDefault ?? false,
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
     ...(dto.sharedWorkspaces && dto.sharedWorkspaces.length > 0 ? { sharedWorkspaces: dto.sharedWorkspaces } : {}),
@@ -314,7 +316,7 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async setGroupHints(
     projectId: string,
-    hints: { aliases: readonly string[]; shortDescription: string | null },
+    hints: { aliases: readonly string[]; shortDescription: string | null; groupFullRunDefault?: boolean },
   ): Promise<Project> {
     const { project } = await this.client.put<{ project: ProjectDto }>(
       `/projects/${projectId}/group-hints`,

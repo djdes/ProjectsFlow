@@ -5,6 +5,7 @@ import {
   findNewGroup,
   groupLabel,
   groupModeHint,
+  groupModeToast,
   groupProjects,
   parseChatIdInput,
   splitGroupsByStatus,
@@ -54,4 +55,12 @@ test('groupModeHint: explains the mode; incident without projects warns that not
   assert.match(groupModeHint('standard', false), /перефразирует/);
   assert.match(groupModeHint('incident', true), /простым языком/);
   assert.match(groupModeHint('incident', false), /Выберите проекты/);
+});
+
+test('смешанный режим: подсказка про исполнителя и воркера, без проектов — предупреждение; тост', () => {
+  assert.match(groupModeHint('mixed', true), /исполнитель.*воркеру/s);
+  assert.match(groupModeHint('mixed', false), /Выберите проекты/);
+  assert.match(groupModeToast('mixed'), /смешанный/);
+  assert.match(groupModeToast('incident'), /инцидентов/);
+  assert.match(groupModeToast('standard'), /обычная/);
 });

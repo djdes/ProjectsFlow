@@ -1,3 +1,4 @@
+-- УСТАРЕЛ: чат переводится в смешанный режим — см. docs/runbooks/csharp-fixer-to-mixed-group.sql.
 -- Перевод чата CSharpFixer в рабочую группу YesBeat с режимом incident.
 -- Spec: docs/superpowers/specs/2026-11-17-telegram-group-projects-and-worker-orchestrator-design.md, раздел 3.
 --

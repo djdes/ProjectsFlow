@@ -289,7 +289,7 @@ export const workspaceTelegramGroups = mysqlTable(
     addedByUserId: char('added_by_user_id', { length: 36 }),
     // db/189: черновик (бот сам добавил группу) → active после подтверждения руководителем.
     status: mysqlEnum('status', ['draft', 'active', 'disconnected']).notNull().default('active'),
-    mode: mysqlEnum('mode', ['standard', 'incident']).notNull().default('standard'),
+    mode: mysqlEnum('mode', ['standard', 'incident', 'mixed']).notNull().default('standard'),
     invitedByTgUserId: bigint('invited_by_tg_user_id', { mode: 'number' }),
     // Запрос на перенос отключённой группы в другое пространство (ждёт владельца текущего).
     transferToWorkspaceId: char('transfer_to_workspace_id', { length: 36 }),
@@ -445,6 +445,8 @@ export const projects = mysqlTable(
     // короткое описание для ИИ-выбора. NULL — не задано.
     aliases: json('aliases').$type<string[] | null>(),
     shortDescription: varchar('short_description', { length: 300 }),
+    // db/193: задачи воркеру из рабочих групп — полный прогон (runMode='full'), иначе 'quick'.
+    groupFullRunDefault: boolean('group_full_run_default').notNull().default(false),
     // Публичная ссылка доски (Publish to web, db/096). publicSlug — случайный неугадываемый
     // slug (URL: /p/<slug>), NULL = не публиковали. isPublic гейтит анонимный доступ.
     // publicIndexing — тоггл индексации поисковиками (default off). publishedAt — момент

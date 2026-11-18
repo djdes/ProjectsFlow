@@ -1411,7 +1411,10 @@ const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
   members: projectMemberRepo,
   client: telegramClient,
   users: userRepo,
-  incidentChats: { isIncident: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'incident' },
+  incidentChats: {
+    isIncident: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'incident',
+    isMixed: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'mixed',
+  },
   now,
   idGen: idGenerator,
 });
@@ -1422,7 +1425,13 @@ const notifyIncidentGroup = new NotifyIncidentGroup({
   projects: projectRepo,
   members: projectMemberRepo,
   client: telegramClient,
-  incidentChats: { isIncident: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'incident' },
+  // Смешанная группа (db/193) — тоже: в группу пишем только по подписанному источнику задачи воркеру.
+  incidentChats: {
+    isIncident: async (chatId) => {
+      const mode = (await telegramWorkGroups.resolveChat(chatId))?.mode;
+      return mode === 'incident' || mode === 'mixed';
+    },
+  },
   ralphQuestionMessages: telegramRalphQuestionRepo,
 });
 setInterval(reportTelegramWorkerResult.wake, 15_000).unref();

@@ -10,7 +10,7 @@ import type { TelegramWorkerResultOutbox, WorkerResultDelivery, WorkerResultDest
 import { escapeTelegramHtml } from './telegramMarkdown.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import { telegramPersonMention } from './telegramMention.js';
-import { stripIntakeOrigin } from './composer/incidentIntake.js';
+import { incidentSigningKey, readIncidentOrigin, stripIntakeOrigin } from './composer/incidentIntake.js';
 
 type Deps = {
   readonly origins: Pick<TelegramTaskOriginRepository, 'getByTask'>;
@@ -23,7 +23,9 @@ type Deps = {
   readonly client: Pick<TelegramClient, 'sendMessage'>;
   readonly users?: Pick<UserRepository, 'getTelegramLink'>;
   // Группа в режиме incident (spec 2026-11-17, раздел 3): ответ простым языком, без Git.
-  readonly incidentChats?: { isIncident(chatId: number): Promise<boolean> };
+  // Смешанная группа (db/193): isMixed — простой язык только задачам воркеру (подписанный
+  // источник из этой группы); задачам людей — обычный отчёт с коммитом.
+  readonly incidentChats?: { isIncident(chatId: number): Promise<boolean>; isMixed?(chatId: number): Promise<boolean> };
   readonly now: () => Date;
   readonly idGen: () => string;
 };
@@ -115,7 +117,7 @@ export class ReportTelegramWorkerResult {
       }
       const description = stripIntakeOrigin(task.description ?? '') || 'Задача';
       const title = compact(description.split('\n')[0] ?? description, 140);
-      if (await this.isIncident(origin.chatId)) {
+      if (await this.isIncident(origin.chatId) || (await this.isMixedWorkerTask(origin.chatId, task))) {
         // Автор жалобы — не разработчик: ни коммитов, ни упоминаний, только итог по-человечески.
         const text = task.status === 'pending_approval'
           ? `✅ Исправление по вашему обращению готово и ждёт проверки ответственным: ${escapeTelegramHtml(title)}`
@@ -147,6 +149,13 @@ export class ReportTelegramWorkerResult {
       await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + RETRY_MS));
       console.warn('[telegram-worker-result] retry', origin.taskId, error);
     }
+  }
+
+  private async isMixedWorkerTask(chatId: number, task: Task): Promise<boolean> {
+    if (!this.deps.incidentChats?.isMixed) return false;
+    const signed = readIncidentOrigin(task.description ?? '', incidentSigningKey());
+    if (!signed || signed.chatId !== chatId || signed.mode !== 'mixed') return false;
+    return this.deps.incidentChats.isMixed(chatId).catch(() => false);
   }
 
   private async isIncident(chatId: number): Promise<boolean> {

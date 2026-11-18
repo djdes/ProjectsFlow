@@ -17,7 +17,14 @@ export type IncidentOrigin = {
   readonly projectId: string;
   readonly textSha256: string;
   readonly replyToMessageId?: number;
+  // Смешанная группа (db/193): задача воркеру из сообщения без исполнителя. runMode — выбран по
+  // флагу проекта «Полный прогон по умолчанию для задач из групп». Нет полей — режим incident.
+  readonly mode?: 'mixed';
+  readonly runMode?: 'full' | 'quick';
 };
+
+// Проект ещё не выбран (смешанная группа ждёт кнопку): подпись с заглушкой, задача не создаётся.
+export const PENDING_PROJECT_ID = '-';
 
 export function incidentSigningKey(env: NodeJS.ProcessEnv = process.env): string | null {
   const key = env.TELEGRAM_ORIGIN_SIGNING_KEY;
@@ -38,6 +45,7 @@ export function signIncidentRequest(
   source: IntakeSource,
   projectId: string,
   signingKey: string,
+  extra?: { readonly mode: 'mixed'; readonly runMode: 'full' | 'quick' },
 ): string {
   if (!Number.isSafeInteger(source.chatId) || source.chatId >= 0 || !positive(source.userId) ||
       !positive(source.messageId) ||
@@ -58,6 +66,10 @@ export function signIncidentRequest(
   };
   if (source.replyToMessageId !== undefined && source.replyToMessageId !== null) {
     data.replyToMessageId = source.replyToMessageId;
+  }
+  if (extra) {
+    data.mode = extra.mode;
+    data.runMode = extra.runMode;
   }
   const payload = Buffer.from(JSON.stringify(data), 'utf8').toString('base64');
   const signature = createHmac('sha256', signingKey).update(payload, 'utf8').digest('hex');
@@ -91,4 +103,24 @@ export function pickIncidentProject(
 ): string | null {
   if (projects.length === 1) return projects[0]!.id;
   return pickProjectByHints(text, projects)?.id ?? null;
+}
+
+// Переподписать источник под выбранный проект (смешанная группа: проект выбрали кнопкой).
+// null — подпись чужая/битая.
+export function resignIncidentForProject(
+  text: string,
+  projectId: string,
+  signingKey: string,
+  extra?: { readonly mode: 'mixed'; readonly runMode: 'full' | 'quick' },
+): string | null {
+  const origin = readIncidentOrigin(text, signingKey);
+  if (!origin) return null;
+  return signIncidentRequest(stripIntakeOrigin(text), {
+    chatId: origin.chatId,
+    userId: origin.userId,
+    messageId: origin.messageId,
+    messageThreadId: origin.messageThreadId,
+    senderName: origin.senderName,
+    ...(origin.replyToMessageId !== undefined ? { replyToMessageId: origin.replyToMessageId } : {}),
+  }, projectId, signingKey, extra);
 }

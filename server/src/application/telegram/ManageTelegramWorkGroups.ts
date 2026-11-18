@@ -279,10 +279,11 @@ export class ManageTelegramWorkGroups {
   }
 
   // Активная рабочая группа обычного режима — для пометки «из группы» на задачах (db/190).
+  // Смешанная группа (db/193) — тоже: задачи людям в ней ставятся как в обычной.
   // null — не рабочая группа (личка, черновик, отключена) или режим incident.
   async standardGroupInfo(chatId: number): Promise<{ readonly title: string | null } | null> {
     const group = await this.deps.repo.findByChat(chatId);
-    if (!group || group.status !== 'active' || (group.mode ?? 'standard') !== 'standard') return null;
+    if (!group || group.status !== 'active' || (group.mode ?? 'standard') === 'incident') return null;
     return { title: group.title };
   }
 

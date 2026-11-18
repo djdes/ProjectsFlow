@@ -265,6 +265,7 @@ export const setMultiTaskWorkerSchema = z.object({
 export const setGroupHintsSchema = z.object({
   aliases: z.array(z.string().max(60)).max(20),
   shortDescription: z.string().max(300).nullable(),
+  groupFullRunDefault: z.boolean().optional(),
 });
 
 // Включить/выключить per-member делегацию GitHub-токена. Default granter =

@@ -37,3 +37,19 @@ test('group hints: editor cannot change them', async () => {
   await assert.rejects(uc.execute('p1', 'u1', { aliases: ['x'], shortDescription: null }), InsufficientProjectRoleError);
   assert.equal(patches.length, 0);
 });
+
+test('group hints: «Полный прогон по умолчанию для задач из групп» — владелец/руководитель, без поля не трогаем', async () => {
+  const { uc, patches } = make('lead');
+  const updated = await uc.execute('p1', 'u1', { aliases: [], shortDescription: null, groupFullRunDefault: true });
+  assert.deepEqual(patches[0], { aliases: [], shortDescription: null, groupFullRunDefault: true });
+  assert.equal(updated.groupFullRunDefault, true);
+  const untouched = make('owner');
+  await untouched.uc.execute('p1', 'u1', { aliases: [], shortDescription: null });
+  assert.equal('groupFullRunDefault' in (untouched.patches[0] as object), false);
+  const editor = make('editor');
+  await assert.rejects(
+    editor.uc.execute('p1', 'u1', { aliases: [], shortDescription: null, groupFullRunDefault: true }),
+    InsufficientProjectRoleError,
+  );
+  assert.equal(editor.patches.length, 0);
+});

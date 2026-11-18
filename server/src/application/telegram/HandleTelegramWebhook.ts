@@ -1,4 +1,6 @@
 import { csharpFixerConfig } from './composer/csharpFixerIntake.js';
+import { incidentSigningKey, readIncidentOrigin } from './composer/incidentIntake.js';
+import { mixedRouteOf } from './composer/mixedRouting.js';
 import type {
   TelegramClient,
   InlineKeyboardMarkup,
@@ -610,7 +612,7 @@ export class HandleTelegramWebhook {
       const repliedToBot = msg.reply_to_message?.from?.is_bot === true;
       const mentioned = bu ? new RegExp('@' + bu + '\\b', 'i').test(text) : false;
       const continuation = sourceKey.startsWith('g:') &&
-        (this.isCSharpFixerChat(chatId) || (await this.workGroupFor(chatId))?.mode === 'incident') &&
+        (this.isCSharpFixerChat(chatId) || isWorkerIntakeMode((await this.workGroupFor(chatId))?.mode)) &&
         await this.deps.composer.isCSharpFixerSource?.(sourceKey);
       if (!repliedToBot && !mentioned && !continuation) return;
       // Вырезаем @упоминание из текста: чтобы оно не попало в текст задачи и чтобы команды
@@ -696,7 +698,7 @@ export class HandleTelegramWebhook {
       // не участник), получает инструкцию с кнопкой, а текст ждёт подключения.
       const workGroup = await this.workGroupFor(chatId);
       // Группа инцидентов (spec 2026-11-17, раздел 3): писать может любой участник, аккаунт не нужен.
-      const incident = this.incidentOf(chatId, workGroup);
+      const incident = this.incidentOf(chatId, workGroup, text);
       if (!this.isCSharpFixerChat(chatId) && !incident && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
       const groupCtx: TelegramGroupContext = {
         ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
@@ -744,7 +746,7 @@ export class HandleTelegramWebhook {
 
       // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения. Сбой здесь
       // не «ошибка расшифровки»: текст уже есть, поэтому пробрасываем — Telegram повторит доставку.
-      if (workGroup && !this.isCSharpFixerChat(msg.chat.id) && !this.incidentOf(msg.chat.id, workGroup)) {
+      if (workGroup && !this.isCSharpFixerChat(msg.chat.id) && !this.incidentOf(msg.chat.id, workGroup, transcript)) {
         let waiting: boolean;
         try {
           waiting = await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey);
@@ -771,7 +773,7 @@ export class HandleTelegramWebhook {
         ownerUserId,
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
-        ...(this.incidentOf(msg.chat.id, workGroup) ? { incident: this.incidentOf(msg.chat.id, workGroup)! } : {}),
+        ...(this.incidentOf(msg.chat.id, workGroup, transcript) ? { incident: this.incidentOf(msg.chat.id, workGroup, transcript)! } : {}),
       };
       await this.deps.composer.startFromMessage(
         msg.from.id,
@@ -792,13 +794,20 @@ export class HandleTelegramWebhook {
     }
   }
 
-  // Режим incident рабочей группы. Чат из CSHARP_FIXER_* (env) пока обслуживается старым путём.
+  // Обращение «воркеру» рабочей группы: режим incident целиком, а в смешанном (db/193) — только
+  // сообщение без исполнителя (с исполнителем — обычный поток группы, задача человеку).
+  // Чат из CSHARP_FIXER_* (env) пока обслуживается старым путём.
   private incidentOf(
     chatId: number,
     workGroup: ResolvedWorkGroup | null,
-  ): { readonly addedByUserId: string | null } | null {
-    if (!workGroup || workGroup.mode !== 'incident' || this.isCSharpFixerChat(chatId)) return null;
-    return { addedByUserId: workGroup.addedByUserId };
+    text: string,
+  ): { readonly addedByUserId: string | null; readonly mode: 'incident' | 'mixed' } | null {
+    if (!workGroup || this.isCSharpFixerChat(chatId)) return null;
+    if (workGroup.mode === 'incident') return { addedByUserId: workGroup.addedByUserId, mode: 'incident' };
+    if (workGroup.mode === 'mixed' && mixedRouteOf(text) === 'worker') {
+      return { addedByUserId: workGroup.addedByUserId, mode: 'mixed' };
+    }
+    return null;
   }
 
   private isCSharpFixerChat(chatId: number): boolean {
@@ -907,7 +916,14 @@ export class HandleTelegramWebhook {
     const linkedUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     // Группа «Инциденты»: у автора жалобы аккаунта может не быть — ответ reply'ем на вопрос
     // принимаем от участника группы и пишем от того, на кого заведена задача (как CSharpFixer).
-    const incidentGroup = chatId < 0 && (await this.workGroupFor(chatId))?.mode === 'incident';
+    // Смешанная группа (db/193): так же — но только для задачи воркеру (с подписанным источником
+    // из этой группы); уточнения по задачам людей отвечает их адресат, как обычно.
+    const groupMode = chatId < 0 ? (await this.workGroupFor(chatId))?.mode : undefined;
+    let incidentGroup = groupMode === 'incident';
+    if (groupMode === 'mixed') {
+      const mixedTask = await this.deps.tasks.getById(mapping.taskId).catch(() => null);
+      incidentGroup = readIncidentOrigin(mixedTask?.description ?? '', incidentSigningKey())?.chatId === chatId;
+    }
     const senderUserId = incidentGroup ? mapping.recipientUserId : linkedUserId;
     if (!senderUserId || senderUserId !== mapping.recipientUserId) {
       // Защита от того что чужой TG-аккаунт отвечает на чужое уточнение (после share
@@ -2690,4 +2706,9 @@ function escapeHtml(s: string): string {
         return '&#39;';
     }
   });
+}
+
+// Группы, где обращения без исполнителя уходят воркеру: incident и смешанная (db/193).
+function isWorkerIntakeMode(mode: string | undefined): boolean {
+  return mode === 'incident' || mode === 'mixed';
 }

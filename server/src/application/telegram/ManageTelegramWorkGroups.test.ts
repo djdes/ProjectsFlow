@@ -644,3 +644,15 @@ test('onActivated: снимок участников при подключени
   await service.confirm('ws1', 'owner', -2005);
   assert.deepEqual(activated, [-1001, -2005], 'confirming an active group again does nothing');
 });
+
+test('setMode: смешанный режим включают владелец/руководитель; для пометки задач группа как обычная', async () => {
+  const { service } = makeService();
+  await service.addManual('ws1', 'lead', -1001);
+  await assert.rejects(service.setMode('ws1', 'viewer', -1001, 'mixed'), NotWorkspaceLeadError);
+  const mixed = await service.setMode('ws1', 'lead', -1001, 'mixed');
+  assert.equal(mixed.mode, 'mixed');
+  assert.equal((await service.resolveChat(-1001))?.mode, 'mixed');
+  assert.notEqual(await service.standardGroupInfo(-1001), null);
+  const back = await service.setMode('ws1', 'owner', -1001, 'standard');
+  assert.equal(back.mode, 'standard');
+});
