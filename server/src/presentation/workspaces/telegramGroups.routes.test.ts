@@ -291,3 +291,45 @@ test('POST telegram-groups/:chatId/transfer/:decision → owner decides; draft e
     },
   );
 });
+
+test('GET /telegram-groups/:chatId/members — сводка участников группы', async () => {
+  const calls: Array<[string, string, number]> = [];
+  const app = express();
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    req.user = { id: 'lead', email: 'lead@test.dev', displayName: 'Lead', avatarUrl: null, isAdmin: false, createdAt: NOW } as User;
+    next();
+  });
+  app.use(
+    '/api/workspaces',
+    workspacesRouter({
+      appUrl: 'https://app.test',
+      telegramGroupMembers: {
+        async summary(workspaceId: string, actorUserId: string, chatId: number) {
+          calls.push([workspaceId, actorUserId, chatId]);
+          return {
+            telegramCount: 3,
+            linked: [{ tgUserId: 5, userId: 'u5', displayName: 'Иван', avatarUrl: null, status: 'member' as const }],
+            botIsAdmin: false,
+          };
+        },
+      },
+    } as unknown as Parameters<typeof workspacesRouter>[0]),
+  );
+  app.use(errorHandler);
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  try {
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/workspaces/ws1`;
+    const res = await fetch(`${base}/telegram-groups/-1001/members`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), {
+      telegramCount: 3,
+      linked: [{ tgUserId: 5, userId: 'u5', displayName: 'Иван', avatarUrl: null, status: 'member' }],
+      botIsAdmin: false,
+    });
+    assert.deepEqual(calls, [['ws1', 'lead', -1001]]);
+    assert.equal((await fetch(`${base}/telegram-groups/abc/members`)).status, 400);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});

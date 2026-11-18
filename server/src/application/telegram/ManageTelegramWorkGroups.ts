@@ -56,6 +56,8 @@ type Deps = {
   readonly now: () => Date;
   // Группу отключили: закрыть ждущие подключения людей и их приглашения.
   readonly onRemoved?: (workspaceId: string, chatId: number) => Promise<void>;
+  // Группа стала активной: снимок администраторов в участники группы (db/191). Best-effort.
+  readonly onActivated?: (chatId: number) => Promise<void>;
 };
 
 export type BindWorkGroupResult =
@@ -173,10 +175,12 @@ export class ManageTelegramWorkGroups {
       // Свой черновик или своя отключённая группа: руководитель (он — админ группы) подключает.
       if (existing.status !== 'active') {
         await this.deps.repo.replace({ ...group, status: 'active' });
+        await this.activated(chatId);
         return (await this.deps.repo.findByChat(chatId)) ?? existing;
       }
       return existing;
     }
+    await this.activated(chatId);
     return (
       (await this.deps.repo.findByChat(chatId)) ?? {
         ...group,
@@ -220,7 +224,10 @@ export class ManageTelegramWorkGroups {
       title: chat.title,
       addedByUserId: claimed.createdByUserId,
     });
-    if (inserted === 'created') return { kind: 'bound', workspaceName: workspace.name };
+    if (inserted === 'created') {
+      await this.activated(chat.id);
+      return { kind: 'bound', workspaceName: workspace.name };
+    }
     const existing = await this.deps.repo.findByChat(chat.id);
     const claim = await this.claim(existing, workspace.id, claimed.createdByUserId, 'active');
     if (claim !== 'free') return { kind: claim };
@@ -233,6 +240,7 @@ export class ManageTelegramWorkGroups {
         addedByUserId: claimed.createdByUserId,
         status: 'active',
       });
+      await this.activated(chat.id);
       return { kind: 'bound', workspaceName: workspace.name };
     }
     if (chat.title) await this.deps.repo.updateTitle(chat.id, chat.title);
@@ -272,7 +280,10 @@ export class ManageTelegramWorkGroups {
     await this.requireTeamLead(workspaceId, actorUserId);
     const group = await this.groupOf(workspaceId, chatId);
     if (group.status === 'disconnected') throw new TelegramGroupNotFoundError();
-    if (group.status === 'draft') await this.deps.repo.setStatus(chatId, 'active');
+    if (group.status === 'draft') {
+      await this.deps.repo.setStatus(chatId, 'active');
+      await this.activated(chatId);
+    }
     return (await this.deps.repo.findByChat(chatId)) ?? group;
   }
 
@@ -424,6 +435,7 @@ export class ManageTelegramWorkGroups {
       addedByUserId: transfer.requestedByUserId,
       status: transfer.targetStatus,
     });
+    if (transfer.targetStatus === 'active') await this.activated(chatId);
   }
 
   // Владелец прежнего пространства отклоняет перенос: группа остаётся у него отключённой.
@@ -438,6 +450,13 @@ export class ManageTelegramWorkGroups {
     const group = await this.deps.repo.findByChat(chatId);
     if (!group || group.workspaceId !== workspaceId) throw new TelegramGroupNotFoundError();
     return group;
+  }
+
+  // Группа стала активной — участники группы (db/191). Сбой не мешает подключению.
+  private async activated(chatId: number): Promise<void> {
+    await this.deps.onActivated?.(chatId).catch((err: unknown) => {
+      console.warn('[tg-work-groups] members snapshot failed:', err);
+    });
   }
 
   migrateChat(fromChatId: number, toChatId: number): Promise<void> {

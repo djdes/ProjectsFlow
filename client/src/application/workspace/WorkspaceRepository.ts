@@ -9,6 +9,7 @@ import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProject
 import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/InviteCandidate';
 import type {
   TelegramGroupLinkPurpose,
+  TelegramGroupMembers,
   TelegramWorkGroup,
   TelegramWorkGroupMode,
   TelegramWorkGroups,
@@ -101,6 +102,8 @@ export interface WorkspaceRepository {
   decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void>;
   setTelegramGroupProjects(id: string, chatId: number, projectIds: readonly string[]): Promise<TelegramWorkGroup>;
   setTelegramGroupMode(id: string, chatId: number, mode: TelegramWorkGroupMode): Promise<TelegramWorkGroup>;
+  // Участники группы: «N в Telegram, M связаны с PF» и связанные поимённо (db/191).
+  getTelegramGroupMembers(id: string, chatId: number): Promise<TelegramGroupMembers>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;

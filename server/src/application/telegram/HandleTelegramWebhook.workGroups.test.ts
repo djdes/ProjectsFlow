@@ -27,6 +27,7 @@ function makeHarness(opts: {
   const groupStarts: number[] = [];
   const pairedTelegramIds: number[] = [];
   const bindSenders: number[] = [];
+  const memberEvents: Array<[string, ...unknown[]]> = [];
   let workGroup = opts.workGroup ?? null;
 
   const deps = {
@@ -78,6 +79,13 @@ function makeHarness(opts: {
         return opts.chooseResult ?? { kind: 'draft', workspaceName: 'Офис' };
       },
     },
+    groupMembers: {
+      async recordMessageAuthor(chatId: number, tgUserId: number) { memberEvents.push(['author', chatId, tgUserId]); },
+      async handleMemberUpdate(chatId: number, tgUserId: number, status: string, o?: unknown) {
+        memberEvents.push(['update', chatId, tgUserId, status, ...(o && Object.keys(o).length ? [o] : [])]);
+      },
+      async handleBotRightsChanged(chatId: number, isAdmin: boolean) { memberEvents.push(['bot', chatId, isAdmin]); },
+    },
     onboarding: {
       async prompt(input: OnboardingPromptInput) { prompts.push(input); },
       async handlePrivateStart(input: { id: string; chatId: number; from: { id: number } }) {
@@ -100,7 +108,7 @@ function makeHarness(opts: {
   const h = new HandleTelegramWebhook(deps as never);
   return {
     h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts,
-    pairedTelegramIds, bindSenders, botAddedCalls, botRemovedCalls, chooseCalls,
+    pairedTelegramIds, bindSenders, botAddedCalls, botRemovedCalls, chooseCalls, memberEvents,
   };
 }
 
@@ -351,4 +359,49 @@ test('обычная рабочая группа не получает режи�
   const x = makeHarness({ workGroup: { workspaceId: 'ws1', workspaceName: 'Программисты' }, senderUserId: 'u-ivan', member: true });
   await x.h.execute(groupMessage({ text: '@ProjectsFlow_Bot Сделать отчёт' }));
   assert.equal((x.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, undefined);
+});
+
+// Участники рабочих групп (db/191).
+test('участники группы: автор сообщения записывается, даже без упоминания бота; боты — нет', async () => {
+  const x = makeHarness();
+  await x.h.execute(groupMessage({ text: 'просто болтаем' }));
+  await x.h.execute(groupMessage({ text: 'я бот', from: { id: 888, is_bot: true } }));
+  assert.deepEqual(x.memberEvents, [['author', -1001, 777]]);
+  assert.equal(x.composerCalls.length, 0);
+});
+
+test('участники группы: вступление и выход из сервисных сообщений (без бота)', async () => {
+  const x = makeHarness();
+  await x.h.execute(groupMessage({ new_chat_members: [{ id: 601 }, { id: 42, is_bot: true, username: 'Other_Bot' }] }));
+  await x.h.execute(groupMessage({ left_chat_member: { id: 601 } }));
+  assert.deepEqual(x.memberEvents, [
+    ['update', -1001, 601, 'member'],
+    ['update', -1001, 601, 'left'],
+  ]);
+});
+
+test('chat_member: статус участника передаётся, боты и личка пропускаются', async () => {
+  const x = makeHarness();
+  const chatMember = (status: string, user: { id: number; is_bot?: boolean }, type = 'supergroup', extra = {}) => ({
+    update_id: 9,
+    chat_member: {
+      chat: { id: -1001, type },
+      new_chat_member: { status, user, ...extra },
+    },
+  }) as TelegramUpdate;
+  await x.h.execute(chatMember('administrator', { id: 610 }));
+  await x.h.execute(chatMember('restricted', { id: 611 }, 'supergroup', { is_member: false }));
+  await x.h.execute(chatMember('member', { id: 612, is_bot: true }));
+  await x.h.execute(chatMember('member', { id: 613 }, 'private'));
+  assert.deepEqual(x.memberEvents, [
+    ['update', -1001, 610, 'administrator'],
+    ['update', -1001, 611, 'restricted', { isMember: false }],
+  ]);
+});
+
+test('my_chat_member: бот стал администратором / снят — участникам сообщается', async () => {
+  const x = makeHarness({ botAdded: { kind: 'active' } });
+  await x.h.execute(myChatMember('administrator', 'member'));
+  await x.h.execute(myChatMember('member', 'administrator'));
+  assert.deepEqual(x.memberEvents, [['bot', -1001, true], ['bot', -1001, false]]);
 });

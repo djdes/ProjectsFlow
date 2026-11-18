@@ -199,6 +199,18 @@ export type TaskChangedPayload = {
   readonly taskAvailable: boolean;
 };
 
+// Участника рабочей Telegram-группы с аккаунтом PF молча добавили в пространство редактором
+// (db/191, spec 2026-11-17 §4). Прилетает владельцам и руководителям пространства.
+export type TelegramGroupMemberAddedPayload = {
+  readonly type: 'telegram_group_member_added';
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly groupChatId: number;
+  readonly groupTitle: string | null;
+  readonly memberUserId: string;
+  readonly memberDisplayName: string;
+};
+
 export type NotificationPayload =
   | TaskChangedPayload
   | CommentMentionPayload
@@ -214,7 +226,8 @@ export type NotificationPayload =
   | DailyDigestPayload
   | ChatMentionPayload
   | SupportTicketPayload
-  | CloseProposalPayload;
+  | CloseProposalPayload
+  | TelegramGroupMemberAddedPayload;
 
 // Чем кончилось действие по уведомлению (приглашение, запрос доступа) на сейчас: pending —
 // ещё ждёт ответа; expired — отвечать не на что (приглашение отозвано или просрочено,

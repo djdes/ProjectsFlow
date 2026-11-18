@@ -19,6 +19,7 @@ import type { ListWorkspaceCommitSyncProjects } from '../../application/commit-s
 import type { SetWorkspaceCommitSyncProjects } from '../../application/commit-sync/SetWorkspaceCommitSyncProjects.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import type { ManageTelegramWorkGroups } from '../../application/telegram/ManageTelegramWorkGroups.js';
+import type { SyncTelegramGroupMembers } from '../../application/telegram/SyncTelegramGroupMembers.js';
 import type { TelegramWorkGroup } from '../../application/telegram/TelegramWorkGroupRepository.js';
 import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../../application/workspace/InviteNeighbors.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -180,6 +181,8 @@ type Deps = {
   readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
   // Рабочие Telegram-группы (db/181). Необязательно: без бота роуты отвечают 503.
   readonly telegramGroups?: ManageTelegramWorkGroups;
+  // Участники рабочих групп (db/191): «N в Telegram, M связаны с PF».
+  readonly telegramGroupMembers?: Pick<SyncTelegramGroupMembers, 'summary'>;
   // «Добавить из соседних»: люди из других пространств приглашающего.
   readonly neighborInvites?: {
     readonly list: ListWorkspaceInviteCandidates;
@@ -626,6 +629,16 @@ export function workspacesRouter(deps: Deps): Router {
       const { mode } = setTelegramGroupModeSchema.parse(req.body);
       const group = await deps.telegramGroups.setMode(req.params.id, req.user!.id, chatId, mode);
       res.json({ group: telegramGroupToDto(group) });
+    } catch (error) { next(error); }
+  });
+  // Участники группы: сколько знает бот, кто связан с PF, админ ли бот (иначе — подсказка).
+  router.get('/:id/telegram-groups/:chatId/members', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroupMembers) { res.sendStatus(503); return; }
+      const chatId = Number(req.params.chatId);
+      if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
+      const summary = await deps.telegramGroupMembers.summary(req.params.id, req.user!.id, chatId);
+      res.json(summary);
     } catch (error) { next(error); }
   });
   router.delete('/:id/telegram-groups/:chatId', async (req, res, next) => {

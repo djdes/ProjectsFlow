@@ -91,6 +91,8 @@ export function notificationKind(payload: NotificationPayload): FeedKind {
       return kind('Сводка', 'gray', Newspaper);
     case 'support_ticket':
       return kind('Поддержка', 'manual', LifeBuoy);
+    case 'telegram_group_member_added':
+      return kind('Новый участник', 'queue', UserPlus);
     default:
       // Тип, которого клиент ещё не знает (сервер новее), — без метки строка всё равно читается.
       return kind('Уведомление', 'gray', CircleDot);

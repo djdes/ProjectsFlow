@@ -15,6 +15,7 @@ import {
 import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
 import type { ManageTelegramWorkGroups, ResolvedWorkGroup } from './ManageTelegramWorkGroups.js';
 import { WORK_GROUP_CODE_PREFIX } from './ManageTelegramWorkGroups.js';
+import type { SyncTelegramGroupMembers } from './SyncTelegramGroupMembers.js';
 import type { TelegramGroupOnboarding } from './TelegramGroupOnboarding.js';
 import { ONBOARDING_CALLBACK_PREFIX, ONBOARDING_START_PREFIX } from './TelegramGroupOnboarding.js';
 import type { UserRepository } from '../user/UserRepository.js';
@@ -91,6 +92,7 @@ export type TelegramUpdate = {
     readonly message_thread_id?: number;
     readonly from?: {
       readonly id: number;
+      readonly is_bot?: boolean;
       readonly username?: string;
       readonly first_name?: string;
       readonly last_name?: string;
@@ -182,6 +184,7 @@ export type TelegramUpdate = {
       readonly is_bot?: boolean;
       readonly username?: string;
     }>;
+    readonly left_chat_member?: { readonly id: number; readonly is_bot?: boolean };
     readonly migrate_to_chat_id?: number;
     readonly migrate_from_chat_id?: number;
   };
@@ -189,6 +192,8 @@ export type TelegramUpdate = {
   readonly callback_query?: TelegramCallbackQuery;
   // Бота добавили в группу или удалили из неё (db/189): черновик/отключение рабочей группы.
   readonly my_chat_member?: TelegramMyChatMember;
+  // Участник группы вступил/вышел/сменил права (db/191). Приходит, только если бот — админ.
+  readonly chat_member?: TelegramChatMemberUpdated;
   // Inline-режим (Phase D): `@ProjectsFlow_Bot ...` в поле ввода.
   readonly inline_query?: {
     readonly id: string;
@@ -203,6 +208,17 @@ export type TelegramMyChatMember = {
   readonly from: { readonly id: number };
   readonly new_chat_member: { readonly status: string; readonly user?: { readonly id: number } };
   readonly old_chat_member?: { readonly status: string };
+};
+
+// https://core.telegram.org/bots/api#chatmemberupdated — событие об обычном участнике группы.
+export type TelegramChatMemberUpdated = {
+  readonly chat: { readonly id: number; readonly type: string };
+  readonly new_chat_member: {
+    readonly status: string;
+    readonly user: { readonly id: number; readonly is_bot?: boolean };
+    // Только у restricted: состоит ли человек в группе.
+    readonly is_member?: boolean;
+  };
 };
 
 // Callback выбора пространства для черновика группы: wd:<chatId>:<workspaceId>.
@@ -384,6 +400,11 @@ type Deps = {
   // группы на новый id. Без них группы ведут себя как раньше.
   readonly workGroups?: Pick<ManageTelegramWorkGroups, 'bindFromCode' | 'resolveChat' | 'migrateChat'> &
     Partial<Pick<ManageTelegramWorkGroups, 'handleBotAdded' | 'handleBotRemoved' | 'chooseDraftWorkspace'>>;
+  // Участники рабочих групп (db/191): авторы сообщений, вступления/выходы, права бота.
+  readonly groupMembers?: Pick<
+    SyncTelegramGroupMembers,
+    'recordMessageAuthor' | 'handleMemberUpdate' | 'handleBotRightsChanged'
+  >;
   // Подключение людей, написавших задачу в рабочей группе (нет аккаунта или вне пространства).
   readonly onboarding?: Pick<
     TelegramGroupOnboarding,
@@ -481,6 +502,7 @@ export class HandleTelegramWebhook {
       return this.deps.composer.handleCallback(cq);
     }
     if (update.my_chat_member) return this.handleMyChatMember(update.my_chat_member);
+    if (update.chat_member) return this.handleChatMember(update.chat_member);
     // Inline-режим (Phase D).
     if (update.inline_query) {
       return this.handleInlineQuery(
@@ -559,6 +581,7 @@ export class HandleTelegramWebhook {
       }
       return;
     }
+    if (isGroup && this.deps.groupMembers) await this.trackGroupMembers(msg);
     // Бота добавили в группу вручную — здороваемся и сразу называем id группы.
     if (isGroup && msg.new_chat_members?.some((member) => this.isThisBot(member))) {
       return this.greetAddedBot(chatId);
@@ -1468,6 +1491,12 @@ export class HandleTelegramWebhook {
       return;
     }
     if (!BOT_IN_GROUP_STATUSES.has(status)) return;
+    // Бот стал администратором (начнут приходить chat_member) или перестал им быть.
+    if (this.deps.groupMembers && update.old_chat_member?.status !== status) {
+      await this.deps.groupMembers.handleBotRightsChanged(chatId, status === 'administrator').catch((err) => {
+        console.warn('[tg-webhook] group members bot rights failed:', err);
+      });
+    }
     // Права бота поменялись, а сам он в группе был и раньше — не новое добавление.
     if (update.old_chat_member && BOT_IN_GROUP_STATUSES.has(update.old_chat_member.status)) return;
     const run = () =>
@@ -1480,6 +1509,38 @@ export class HandleTelegramWebhook {
     if (delay <= 0) return run();
     const timer = setTimeout(() => void run(), delay);
     timer.unref?.();
+  }
+
+  // Участники рабочей группы (db/191): вступившие и вышедшие из сервисных сообщений, иначе —
+  // автор сообщения. Боты не участники. Сбой не мешает обработке сообщения.
+  private async trackGroupMembers(msg: TelegramMessage): Promise<void> {
+    const members = this.deps.groupMembers;
+    if (!members || !msg.from) return;
+    const chatId = msg.chat.id;
+    const fail = (err: unknown): void => console.warn('[tg-webhook] group member tracking failed:', err);
+    if (msg.new_chat_members || msg.left_chat_member) {
+      for (const joined of msg.new_chat_members ?? []) {
+        if (!joined.is_bot) await members.handleMemberUpdate(chatId, joined.id, 'member').catch(fail);
+      }
+      const left = msg.left_chat_member;
+      if (left && !left.is_bot) await members.handleMemberUpdate(chatId, left.id, 'left').catch(fail);
+      return;
+    }
+    if (msg.from.is_bot) return;
+    await members.recordMessageAuthor(chatId, msg.from.id).catch(fail);
+  }
+
+  // chat_member: участник вступил, вышел, его повысили или ограничили (бот — админ группы).
+  private async handleChatMember(update: TelegramChatMemberUpdated): Promise<void> {
+    if (!this.deps.groupMembers) return;
+    if (update.chat.type !== 'group' && update.chat.type !== 'supergroup') return;
+    const member = update.new_chat_member;
+    if (member.user.is_bot) return;
+    await this.deps.groupMembers
+      .handleMemberUpdate(update.chat.id, member.user.id, member.status, {
+        ...(member.is_member !== undefined ? { isMember: member.is_member } : {}),
+      })
+      .catch((err) => console.warn('[tg-webhook] chat_member failed:', err));
   }
 
   private async createGroupDraft(chatId: number, title: string | null, inviterTgUserId: number): Promise<void> {
