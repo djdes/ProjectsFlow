@@ -572,6 +572,12 @@ export const scenarios = [
         await t.visible(queueCard, `карточка «${taskTitle(state, 't-home')}» в очереди`);
         await queueCard.hover();
         await queueCard.locator(`${handoff}:visible`).click();
+        // Передача спрашивает режим запуска: выбранный сохраняется ДО постановки в очередь.
+        await page.locator('[role="menuitem"][data-run-mode="full"]').click();
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path === '/projects/p-site/tasks/t-home' && m.body?.runMode === 'full',
+          'нет PATCH /api/projects/p-site/tasks/t-home с runMode "full"',
+        );
         await t.waitForMutation(
           (m) => m.method === 'POST' && m.path === '/projects/p-site/tasks/t-home/move' && m.body?.targetStatus === 'todo',
           'нет POST /api/projects/p-site/tasks/t-home/move с targetStatus "todo"',
