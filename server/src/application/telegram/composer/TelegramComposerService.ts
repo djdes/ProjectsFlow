@@ -29,6 +29,7 @@ import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
+import type { RunMode } from '../../../domain/task/Task.js';
 import type { MoveTask } from '../../task/MoveTask.js';
 import type { CreateTaskComment } from '../../task/CreateTaskComment.js';
 import type { TaskRepository } from '../../task/TaskRepository.js';
@@ -447,6 +448,28 @@ function parseCallback(data: string | undefined): ParsedCallback {
     default:
       return null;
   }
+}
+
+// --- режим запуска воркера (spec 2026-11-17 §5) -----------------------------
+// rm:<taskUuid>:<q|f> = 3 + 36 + 2 = 41 байт < 64.
+export function parseRunModeCallback(
+  data: string | undefined,
+): { readonly taskId: string; readonly runMode: RunMode } | null {
+  if (!data?.startsWith('rm:')) return null;
+  const [taskId, code] = data.slice(3).split(':');
+  if (!taskId || !/^[0-9a-f-]{36}$/iu.test(taskId)) return null;
+  if (code === 'q') return { taskId, runMode: 'quick' };
+  if (code === 'f') return { taskId, runMode: 'full' };
+  return null;
+}
+
+export function runModeKeyboard(taskId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      { text: '⚡ Обычное изменение', callback_data: `rm:${taskId}:q` },
+      { text: '🧪 Полный прогон', callback_data: `rm:${taskId}:f` },
+    ]],
+  };
 }
 
 function parsePage(value: string | undefined): number {
@@ -1391,6 +1414,8 @@ export class TelegramComposerService {
 
   // Точка входа из HandleTelegramWebhook для callback_query (нажатия кнопок).
   async handleCallback(cq: TelegramCallbackQuery): Promise<void> {
+    const runMode = parseRunModeCallback(cq.data);
+    if (runMode) return this.onRunModeSel(cq, runMode.taskId, runMode.runMode);
     const cb = parseCallback(cq.data);
     if (!cb) {
       await this.deps.client.answerCallbackQuery(cq.id);
@@ -1708,6 +1733,10 @@ export class TelegramComposerService {
           this.isCSharpFixerDraft(draft)
             ? `🛠 Запрос передан CSharpFixer. Проверю скрипт и сообщу результат здесь.${attachmentSuffix}`
             : `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(stripCsharpFixerOrigin(text)))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+          // Проект распознан — предлагаем режим запуска воркера (по умолчанию «обычное»).
+          draft.projectId && !this.isCSharpFixerDraft(draft) && this.deps.updateTask
+            ? runModeKeyboard(task.id)
+            : undefined,
         );
       }
       if (cqId) {
@@ -3422,6 +3451,7 @@ export class TelegramComposerService {
     let retryable = 0;
     let lastTaskId: string | null = null;
     let lastProjectId: string | null = null;
+    let lastFromProject = false;
     const createdTargets: {
       readonly segmentIndex: number;
       readonly taskId: string;
@@ -3509,6 +3539,7 @@ export class TelegramComposerService {
         });
         lastTaskId = task.id;
         lastProjectId = targetId;
+        lastFromProject = Boolean(seg.projectId);
         // У делегированных — чьи это «Входящие»: иначе «→ Входящие» читается как свои.
         const projName = await this.destinationLabel(
           seg.projectId,
@@ -3599,6 +3630,10 @@ export class TelegramComposerService {
         chatId,
         messageId,
         [header, attachmentSummary, '', ...summary, outcome].filter(Boolean).join('\n'),
+        // Одна задача в распознанном проекте — предлагаем режим запуска воркера (spec §5).
+        created === 1 && lastFromProject && lastTaskId && this.deps.updateTask
+          ? runModeKeyboard(lastTaskId)
+          : undefined,
       );
     }
     if (cqId) {
@@ -3920,6 +3955,31 @@ export class TelegramComposerService {
     await this.deps.client
       .sendMessage({ chatId, text, parseMode: 'HTML', disableWebPagePreview: true, replyMarkup })
       .catch((err: unknown) => console.warn('[tg-composer] send failed:', err));
+  }
+
+  // rm:<taskId>:<q|f> — выбор режима запуска воркера после создания задачи (spec §5).
+  // Черновик к этому моменту уже confirmed, поэтому проверяем по привязке сообщения к задаче:
+  // менять режим может только адресат карточки. Без нажатия остаётся дефолт 'quick'.
+  private async onRunModeSel(cq: TelegramCallbackQuery, taskId: string, runMode: RunMode): Promise<void> {
+    const chatId = cq.message?.chat.id;
+    const messageId = cq.message?.message_id;
+    const link = chatId !== undefined && messageId !== undefined
+      ? await this.deps.taskMessages.findByMessage(chatId, messageId)
+      : null;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!link || link.taskId !== taskId || !userId || link.recipientUserId !== userId || !this.deps.updateTask) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Режим здесь поменять нельзя.' });
+      return;
+    }
+    try {
+      await this.deps.updateTask.execute({ projectId: link.projectId, ownerUserId: userId, taskId, description: undefined, runMode });
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: runMode === 'full' ? 'Режим: полный прогон' : 'Режим: обычное изменение',
+      });
+    } catch (err) {
+      console.warn('[tg-composer] run mode update failed:', err);
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Не удалось сменить режим.', showAlert: true });
+    }
   }
 
   private async edit(

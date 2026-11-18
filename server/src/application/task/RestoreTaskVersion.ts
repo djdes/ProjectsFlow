@@ -75,6 +75,8 @@ export class RestoreTaskVersion {
       ...(s.taskType !== undefined ? { taskType: s.taskType } : {}),
       // То же для повтора (db/185): старый снимок не знает правила и не стирает его.
       ...(s.recurrence !== undefined ? { recurrence: s.recurrence } : {}),
+      // Режим запуска (db/188): старые снимки его не знают и не сбрасывают.
+      ...(s.runMode !== undefined ? { runMode: s.runMode } : {}),
       // Legacy snapshots (before db/115) use an empty assignee sentinel and did not store
       // appearance/parent fields, so those rows must not erase newer task data on restore.
       ...(s.assignee.userId

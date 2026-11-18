@@ -1106,6 +1106,13 @@ const TOOLS = [
             "New Ralph mode for this task. 'normal' | 'silent' | 'grillme' " +
             '(see pf_create_task for semantics). Omit to leave unchanged.',
         },
+        runMode: {
+          type: 'string',
+          enum: ['quick', 'full'],
+          description:
+            "Worker run mode. 'quick' = executor only, no reviewer (default); " +
+            "'full' = checks, reviewer, escalation, delivery (2-3x tokens). Omit to leave unchanged.",
+        },
         priority: {
           type: ['integer', 'null'],
           description: 'Priority 1..4 (1=urgent, 4=low). null clears it. Omit to leave unchanged.',
@@ -1898,6 +1905,7 @@ const UpdateTaskInputZ = z
     taskId: z.string().min(1),
     description: z.string().trim().min(1).max(10_000).optional(),
     ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+    runMode: z.enum(['quick', 'full']).optional(),
     priority: z.number().int().min(1).max(4).nullable().optional(),
     deadline: z
       .string()
@@ -1910,12 +1918,13 @@ const UpdateTaskInputZ = z
     (o) =>
       o.description !== undefined ||
       o.ralphMode !== undefined ||
+      o.runMode !== undefined ||
       o.priority !== undefined ||
       o.deadline !== undefined ||
       o.taskType !== undefined,
     {
       message:
-        'Pass at least one of `description`, `ralphMode`, `priority`, `deadline` or `taskType`.',
+        'Pass at least one of `description`, `ralphMode`, `runMode`, `priority`, `deadline` or `taskType`.',
     },
   );
 const DeleteTaskInputZ = z.object({
@@ -2359,6 +2368,7 @@ async function main(): Promise<void> {
           const task = await api.updateTask(input.projectId, input.taskId, {
             description: input.description,
             ralphMode: input.ralphMode,
+            runMode: input.runMode,
             priority: input.priority,
             deadline: input.deadline,
             taskType: input.taskType,

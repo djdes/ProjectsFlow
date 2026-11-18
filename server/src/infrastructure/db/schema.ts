@@ -879,6 +879,8 @@ export const tasks = mysqlTable(
     // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
     // VARCHAR (не enum) — forward-compat под новые режимы без миграции схемы Drizzle.
     ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('normal'),
+    // Режим запуска воркера ('quick' | 'full'). См. db/188 и domain RunMode.
+    runMode: varchar('run_mode', { length: 16 }).notNull().default('quick'),
     // Pull-based отмена работы Ralph (см. db/037). NULL = нет запроса; иначе момент
     // когда юзер запросил. Ralph каждые ~5с поллит — увидит флаг, убьёт worker'а, ack-нет.
     ralphCancelRequestedAt: timestamp('ralph_cancel_requested_at'),

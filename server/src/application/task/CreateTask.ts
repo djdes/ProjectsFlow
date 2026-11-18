@@ -3,7 +3,7 @@ import {
   AssigneeNotSharedMemberError,
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
-import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
 import type { TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -56,6 +56,7 @@ export type CreateTaskCommand = {
   readonly afterTaskId?: string | null;
   // Режим работы Ralph по задаче. Если не указан — БД проставит DEFAULT 'normal'.
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // Единственный ответственный. Если не указан — actor (для attributeToOwner automation
   // это владелец проекта, чтобы системный админ не становился ответственным).
   readonly assigneeUserId?: string | null;
@@ -192,6 +193,7 @@ export class CreateTask {
       status,
       position,
       ralphMode: input.ralphMode,
+      runMode: input.runMode,
       deadline: this.resolveDeadline(input),
       startDate: input.startDate ?? null,
       parentTaskId,

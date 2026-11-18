@@ -115,6 +115,9 @@ export type TaskStatus =
 //   'grillme' — принудительно запускается grillme (до 10 вопросов), затем worker как normal.
 export type RalphMode = 'normal' | 'silent' | 'grillme';
 
+// Режим запуска воркера (db/188): 'quick' — без ревьюера, 'full' — весь конвейер.
+export type RunMode = 'quick' | 'full';
+
 export type Task = {
   id: string;
   projectId: string;
@@ -124,6 +127,8 @@ export type Task = {
   position: number;
   // Optional на проводе — старый backend без миграции 035 не присылает.
   ralphMode?: RalphMode;
+  // Optional на проводе — старый backend без миграции 188 не присылает (читать как 'quick').
+  runMode?: RunMode;
   createdAt: string;
   updatedAt: string;
   commitCount?: number;
@@ -232,6 +237,7 @@ export type CreateTaskInput = {
 export type UpdateTaskInput = {
   description?: string;
   ralphMode?: RalphMode;
+  runMode?: RunMode;
   // Приоритет 1..4 (1=urgent, 4=low). null очищает. undefined — не менять.
   priority?: number | null;
   // Дедлайн 'YYYY-MM-DD'. null очищает. undefined — не менять.
@@ -1068,6 +1074,7 @@ export class ApiClient {
     const body: Record<string, unknown> = {};
     if (patch.description !== undefined) body.description = patch.description;
     if (patch.ralphMode !== undefined) body.ralphMode = patch.ralphMode;
+    if (patch.runMode !== undefined) body.runMode = patch.runMode;
     if (patch.priority !== undefined) body.priority = patch.priority;
     if (patch.deadline !== undefined) body.deadline = patch.deadline;
     if (patch.taskType !== undefined) body.taskType = patch.taskType;

@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
 import type { TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 
 export type CreateTaskInput = {
@@ -21,6 +21,7 @@ export type CreateTaskInput = {
   readonly position: number;
   // Режим работы Ralph (default 'normal'). См. domain RalphMode.
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // Срок выполнения (ISO 'YYYY-MM-DD'). null = без deadline.
   readonly deadline?: string | null;
   // Дата начала (диапазон startDate → deadline). null = событие одного дня.
@@ -51,6 +52,7 @@ export type UpdateTaskPatch = {
   readonly statusBeforeDone?: TaskStatus | null;
   readonly position?: number;
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // null = очистить deadline. undefined = не менять.
   readonly deadline?: string | null;
   // null = очистить дату начала. undefined = не менять.
