@@ -93,6 +93,10 @@ export interface WorkspaceRepository {
   ): Promise<{ url: string; expiresAt: string }>;
   addTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
   removeTelegramGroup(id: string, chatId: number): Promise<void>;
+  // Черновик группы (бот сам добавлен в группу, db/189): «Подключить». «Отклонить» — remove.
+  confirmTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
+  // Проекты группы целиком; пустой список — все проекты пространства.
+  setTelegramGroupProjects(id: string, chatId: number, projectIds: readonly string[]): Promise<TelegramWorkGroup>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;

@@ -1513,6 +1513,9 @@ export const scenarios = [
       await t.check('рабочие Telegram-группы и «Из соседних пространств»', async () => {
         await t.visible(page.getByText('Рабочие Telegram-группы', { exact: true }), 'карточка «Рабочие Telegram-группы»');
         await t.visible(page.getByText('Команда · задачи'), 'рабочая группа из фикстуры');
+        await t.visible(page.getByText('Новая группа «Поддержка клиентов» ждёт подтверждения'), 'черновик группы');
+        await t.visible(page.getByRole('button', { name: 'Подключить «Поддержка клиентов»' }), 'кнопка «Подключить» черновика');
+        await t.visible(page.getByRole('button', { name: 'Добавить проект' }).first(), 'кнопка «Добавить проект»');
         await t.visible(page.getByRole('button', { name: 'Из соседних пространств' }), 'кнопка «Из соседних пространств»');
       });
       await t.check('включатель напоминаний о срочных задачах', async () => {
