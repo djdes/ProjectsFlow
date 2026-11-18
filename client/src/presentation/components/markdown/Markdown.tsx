@@ -33,6 +33,9 @@ const BASE_PROSE = cn(
   '[&_code]:before:content-none [&_code]:after:content-none',
   '[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-muted [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-px',
   '[&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.875em] [&_:not(pre)>code]:font-normal',
+  // GFM-чеклист (`- [ ] пункт`): маркер пункта — сам чекбокс. Без этого prose рисовал ещё и
+  // точку списка, и у каждого пункта было два маркера «• ☐» (карточки доски, «Входящие»).
+  '[&_ul.contains-task-list]:list-none [&_ul.contains-task-list]:ps-0 [&_li.task-list-item]:ps-0',
 );
 
 // memo: полный remark/rehype-парсинг синхронный и дорогой; на досках он висит в каждой
