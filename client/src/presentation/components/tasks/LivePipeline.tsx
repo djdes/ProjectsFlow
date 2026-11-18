@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { retryCaption } from '@/domain/live/QueueLiveness';
 import {
   Check, ChevronRight, CircleDashed, CornerDownRight, Loader2, Minus, ShieldCheck, SquareTerminal, Workflow, X, Zap,
 } from 'lucide-react';
@@ -166,9 +167,26 @@ export function StageLine({ stage, live = false }: { stage: LiveStagePayload; li
         </span>
         <span className="sr-only">{started ? (live ? ': идёт' : ': без результата') : ''}</span>
         {stage.detail && <span> — {stage.detail}</span>}
+        <StageRetry stage={stage} />
       </span>
     </div>
   );
+}
+
+// «повтор через 1:42, попытка 2 из 3» — тикает раз в секунду, пока повтор впереди.
+function StageRetry({ stage }: { stage: LiveStagePayload }): React.ReactElement | null {
+  const [now, setNow] = useState(() => new Date());
+  const retryAtMs = stage.retryAt?.getTime() ?? null;
+  useEffect(() => {
+    if (retryAtMs === null || retryAtMs <= Date.now()) return;
+    const timer = window.setInterval(() => {
+      setNow(new Date());
+      if (Date.now() >= retryAtMs) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAtMs]);
+  const caption = retryCaption(stage, now);
+  return caption ? <span data-live-stage-retry="" className="tabular-nums text-muted-foreground"> · {caption}</span> : null;
 }
 
 const DURATION_FMT = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });

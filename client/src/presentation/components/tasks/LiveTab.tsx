@@ -35,6 +35,7 @@ import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { RunWithWorkerButton } from './RunWithWorkerButton';
+import { LiveQueueStatus, LiveRunModeNote } from './LiveQueueStatus';
 import { isLiveNearBottom, scrollLiveToBottom } from './liveScroll';
 import {
   isRalphQuestionComment,
@@ -105,6 +106,8 @@ type Props = {
   onRunningChange?: (running: boolean) => void;
   onCommentCreated?: (c: TaskComment) => void;
   onTaskChanged?: () => void;
+  // Ответ PATCH из LIVE (смена режима запуска) — окно задачи обновляет свой снимок.
+  onTaskUpdated?: (updated: Task) => void;
 };
 
 // LIVE-вкладка: живая лента действий воркера в стиле IDE Cursor, но в теме сайта
@@ -125,6 +128,7 @@ function TaskLiveChat({
   onRunningChange,
   onCommentCreated,
   onTaskChanged,
+  onTaskUpdated,
 }: Props): React.ReactElement {
   const [cancelResult, setCancelResult] = useState<{ source: Task; task: Task } | null>(null);
   const task = cancelResult?.source === sourceTask ? cancelResult.task : sourceTask;
@@ -132,6 +136,14 @@ function TaskLiveChat({
     setCancelResult({ source: sourceTask, task: updated });
     onTaskChanged?.();
   };
+  const handleModeChanged = (updated: Task): void => {
+    setCancelResult({ source: sourceTask, task: { ...task, runMode: updated.runMode, updatedAt: updated.updatedAt } });
+    onTaskUpdated?.(updated);
+    onTaskChanged?.();
+  };
+  // Когда задачу поставили в очередь отсюда — точное время клика; иначе — последнее
+  // изменение задачи (перенос в «Воркер» его обновляет).
+  const [queuedAt, setQueuedAt] = useState<Date | null>(null);
   const projectId = task.projectId;
   const taskId = task.id;
   const { taskRepository, projectRepository } = useContainer();
@@ -237,6 +249,7 @@ function TaskLiveChat({
   const anyRunning = !!runningRun;
   useEffect(() => { onRunningChange?.(anyRunning); }, [anyRunning, onRunningChange]);
   useEffect(() => {
+    if (anyRunning) setQueuedAt(null);
     if (anyRunning || (queuedAfterSession !== null && (runs.at(-1)?.session.id ?? '') !== queuedAfterSession)) setQueuedAfterSession(null);
   }, [anyRunning, runs, queuedAfterSession]);
   const isWorking = anyRunning;
@@ -356,7 +369,8 @@ function TaskLiveChat({
           return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}{entry.session.id === runs.at(-1)?.session.id && <span data-run-mode={taskRunMode(task)}> · {RUN_MODE_META[taskRunMode(task)].label}</span>}</p>;
         })}
         {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} label={pipelineRun === runningRun ? spinnerStage : undefined} />}
-        {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
+        {runningRun && <LiveRunModeNote task={task} />}
+        {(queued || task.status === 'todo') && !isWorking && <LiveQueueStatus task={task} queuedSince={queuedAt ?? task.updatedAt} canEdit={canEdit} onTaskChanged={handleModeChanged} />}
         {!sessionsLoading && runs.length === 0 && rows.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
         {questionsLoading && !sessionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
@@ -388,7 +402,7 @@ function TaskLiveChat({
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
       <div className="shrink-0">
-        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }} onChanged={onTaskChanged} />}
+        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); setQueuedAt(new Date()); }} onChanged={onTaskChanged} />}
         {isWorking || task.status === 'in_progress' ? (
           canEdit ? <CancelWorkButton task={task} workerRunning={isWorking} onChanged={handleCancelChanged} /> : null
         ) : task.status === 'awaiting_clarification' ? (
@@ -400,7 +414,7 @@ function TaskLiveChat({
               todoTail={todoTail}
               onCommentCreated={handleChatComment}
             defaultTarget="worker"
-            onWorkerQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }}
+            onWorkerQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); setQueuedAt(new Date()); }}
               onTaskChanged={() => onTaskChanged?.()}
             />
           </>
@@ -411,7 +425,7 @@ function TaskLiveChat({
             todoTail={todoTail}
             onCommentCreated={handleChatComment}
               defaultTarget="worker"
-              onWorkerQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }}
+              onWorkerQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); setQueuedAt(new Date()); }}
             onTaskChanged={() => onTaskChanged?.()}
           />
         )}
@@ -556,7 +570,12 @@ function FeedRow({ row, firstShown, live, finalFiles = [] }: {
   live: boolean;
   finalFiles?: readonly LiveFileDiff[];
 }): React.ReactElement | null {
-  if (!row.role) return row.kind === 'event' ? <LiveEventRow event={row.event} finalFiles={finalFiles} /> : null;
+  if (!row.role) {
+    if (row.kind !== 'event') return null;
+    // ralph-worker: этапы подготовки диспетчера — той же строкой этапа, что в конвейере.
+    if (row.stage) return <StageLine stage={row.stage.payload} live={row.stage.live} />;
+    return <LiveEventRow event={row.event} finalFiles={finalFiles} />;
+  }
   const role = row.role;
   // A window that starts mid-turn still names the speaker of its first row.
   const header = row.header || firstShown;

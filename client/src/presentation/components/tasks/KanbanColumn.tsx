@@ -8,7 +8,7 @@ import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
 const noReflowStrategy: SortingStrategy = () => null;
 import { ListChecks, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
@@ -84,6 +84,7 @@ type InlineCreateInput = {
   // Позиция: поставить сразу ПОСЛЕ этой задачи (цепочка inline-создания, порядок создания).
   afterTaskId?: string | null;
   ralphMode?: RalphMode;
+  runMode?: RunMode;
   assigneeUserId?: string;
   deadline?: string | null;
   priority?: TaskPriority | null;
@@ -105,7 +106,7 @@ type Props = {
   showShortId?: boolean;
   // Если задан — на карточках колонки появляются быстрые переносы: стрелка → «шаг вперёд»
   // и «Взять в работу» (target = 'manual'). См. KanbanCard.onQuickPromote.
-  onQuickPromote?: (task: Task, target?: TaskStatus) => void;
+  onQuickPromote?: (task: Task, target?: TaskStatus, runMode?: RunMode) => void;
   // Триггер refetch после изменения agent-job на карточке (enqueue / cancel).
   onTaskChanged?: () => void;
   // Доп. контрол в шапке колонки (слева от «+»). Сейчас используется done-колонкой
@@ -440,6 +441,7 @@ export function KanbanColumn({
         onCreate={handleInlineCreate}
         onCreated={appendSession}
         onClose={closeInline}
+        showRunMode={status === 'todo'}
       />
     ) : null;
 

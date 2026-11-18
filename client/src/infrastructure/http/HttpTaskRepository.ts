@@ -1,3 +1,4 @@
+import type { DispatcherHeartbeat } from '@/domain/live/QueueLiveness';
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -260,6 +261,23 @@ export class HttpTaskRepository implements TaskRepository {
   async get(projectId: string, taskId: string): Promise<Task> {
     const { task } = await this.client.get<{ task: TaskDto }>(`/projects/${projectId}/tasks/${taskId}`);
     return { ...fromDto(task), canEdit: task.canEdit };
+  }
+  async getDispatcherHeartbeat(projectId: string, taskId: string): Promise<DispatcherHeartbeat> {
+    const body = await this.client.get<{ dispatcherAssigned?: boolean; lastSeenAt?: string | null; trackedSince?: string; serverNow?: string }>(
+      `/projects/${projectId}/tasks/${taskId}/dispatcher-heartbeat`,
+    );
+    // Часы браузера и сервера расходятся: переводим метки в локальное время по serverNow.
+    const skew = body.serverNow ? Date.now() - new Date(body.serverNow).getTime() : 0;
+    const local = (iso: string | null | undefined): Date | null => {
+      if (!iso) return null;
+      const at = new Date(iso).getTime();
+      return Number.isFinite(at) ? new Date(at + (Number.isFinite(skew) ? skew : 0)) : null;
+    };
+    return {
+      dispatcherAssigned: body.dispatcherAssigned !== false,
+      lastSeenAt: local(body.lastSeenAt),
+      trackedSince: local(body.trackedSince) ?? new Date(0),
+    };
   }
   async list(projectId: string): Promise<Task[]> {
     const { tasks } = await this.client.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);

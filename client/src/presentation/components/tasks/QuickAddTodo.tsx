@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TaskComposer } from './TaskComposer';
 
 type Props = {
@@ -6,6 +6,7 @@ type Props = {
     description: string;
     status?: TaskStatus;
     ralphMode?: RalphMode;
+    runMode?: RunMode;
     assigneeUserId: string;
     deadline?: string | null;
     priority?: TaskPriority | null;

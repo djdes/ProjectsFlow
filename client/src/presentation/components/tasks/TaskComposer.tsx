@@ -10,7 +10,7 @@ import { FileText, Inbox, Loader2, NotebookPen, Paperclip, RotateCcw, Send, X } 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { RalphModeSelect } from './RalphMode';
+import { RunModeSelect } from './RunMode';
 import { AssigneeSelect } from './AssigneeSelect';
 import { PrioritySelect } from './PrioritySelect';
 import { DeadlinePicker } from './DeadlinePicker';
@@ -79,6 +80,7 @@ type Props = {
     description: string;
     status?: TaskStatus;
     ralphMode?: RalphMode;
+    runMode?: RunMode;
     assigneeUserId: string;
     deadline?: string | null;
     priority?: TaskPriority | null;
@@ -137,6 +139,10 @@ export function TaskComposer({
   // иначе кнопка отправляла бы в статус, который сервер не примет.
   const workerEnabled = useWorkerEnabled();
   const effectiveQuickStatus = !workerEnabled && quickStatus === 'todo' ? 'backlog' : quickStatus;
+  // Задача уходит воркеру сразу (колонка «Воркер» / цель «Воркеру») — режим запуска
+  // выбирают здесь же: потом диспетчер может забрать её раньше, чем откроют карточку.
+  const targetsWorker = workerEnabled && (forcedStatus ?? effectiveQuickStatus) === 'todo';
+  const [runMode, setRunMode] = useState<RunMode>('quick');
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(
     initialDraft.assigneeUserId ?? defaultAssigneeUserId,
   );
@@ -255,6 +261,7 @@ export function TaskComposer({
         description: trimmed,
         status: forcedStatus ?? effectiveQuickStatus,
         ralphMode,
+        ...(targetsWorker ? { runMode } : {}),
         assigneeUserId,
         priority,
         deadline,
@@ -537,6 +544,16 @@ export function TaskComposer({
           iconOnly
           className={cn('!size-7 shrink-0 !p-0 max-sm:!size-10', ICON_BTN_ANIM)}
         />
+        {targetsWorker && (
+          <RunModeSelect
+            value={runMode}
+            onChange={setRunMode}
+            disabled={submitting}
+            variant="ghost"
+            iconOnly
+            className={cn('!size-7 shrink-0 !p-0 max-sm:!size-10', ICON_BTN_ANIM)}
+          />
+        )}
         <PrioritySelect
           value={priority}
           onChange={setPriority}

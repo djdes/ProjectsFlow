@@ -587,3 +587,52 @@ test('old ralph-worker sessions keep the plain feed even when events carry role 
     assert.equal(view.host.querySelector('[data-pf-pipeline-stepper], [data-live-role-header], [data-live-journal]'), null);
   } finally { await view.close(); }
 });
+
+test('a queued task is alive: waiting time, dispatcher pulse and an editable run mode', async () => {
+  const View = await component('LiveTab');
+  const seen = new Date(Date.now() - 42_000);
+  let heartbeat = { dispatcherAssigned: true, lastSeenAt: seen as Date | null, trackedSince: new Date(Date.now() - 3_600_000) };
+  state.container = {
+    ...liveContainer({ async listSessions() { return []; } }),
+    taskRepository: { async listComments() { return []; }, async getDispatcherHeartbeat() { return heartbeat; } },
+  };
+  const task = { id: 'task', projectId: 'project', status: 'todo', runMode: 'full', canEdit: true, updatedAt: new Date(Date.now() - 75_000) } as Task;
+  const view = await mount(View, { task, backlogTail: null, todoTail: null });
+  try {
+    const queue = view.host.querySelector('[data-pf-live-queue]')!;
+    assert.ok(queue, 'the queued state is a living block, not a static line');
+    assert.match(queue.textContent!, /ожидает запуска диспетчера/);
+    assert.match(queue.querySelector('[data-pf-live-queue-elapsed]')!.textContent!, /^1 мин 1[56] с$/);
+    assert.match(queue.querySelector('[data-pf-dispatcher-pulse="seen"]')!.textContent!, /Диспетчер видел очередь 4[23] с назад/);
+    assert.equal(queue.querySelector('[data-pf-live-run-mode]')!.getAttribute('data-pf-live-run-mode'), 'full');
+    assert.ok(queue.querySelector('button[aria-label="Режим запуска: Полный прогон"]'), 'the mode can still be changed before the worker starts');
+    // Silent dispatcher for longer than 3 minutes → a warning.
+    heartbeat = { ...heartbeat, lastSeenAt: new Date(Date.now() - 5 * 60_000) };
+    await view.render({ task: { ...task, id: 'task-2' }, backlogTail: null, todoTail: null });
+    assert.match(view.host.querySelector('[data-pf-dispatcher-pulse="offline"]')!.textContent!, /похоже, он офлайн/);
+  } finally { await view.close(); }
+});
+
+test('ralph-worker prepare stages render with a retry countdown; a running run shows the mode read-only', async () => {
+  const View = await component('LiveTab');
+  const now = Date.now();
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('prep', 1, 'running'), startedAt: new Date(now - 60_000) }]; },
+    async listEvents() { return [
+      { seq: 1, kind: 'stage', text: null, payload: { stage: 'prepare', status: 'started', title: 'Готовим рабочую копию', attempt: 1, maxAttempts: 3 }, createdAt: new Date(now - 50_000) },
+      { seq: 2, kind: 'stage', text: null, payload: { stage: 'prepare', status: 'failed', detail: 'git fetch: timeout', attempt: 1, retryAt: new Date(now + 102_400).toISOString(), future: { x: 1 } }, createdAt: new Date(now - 40_000) },
+      { seq: 3, kind: 'mystery_kind', text: null, payload: { whatever: true }, createdAt: new Date(now - 30_000) },
+    ]; },
+  });
+  const view = await mount(View, { task: { id: 'task', projectId: 'project', status: 'todo', runMode: 'full', canEdit: true } as Task, backlogTail: null, todoTail: null });
+  try {
+    const line = view.host.querySelector('[data-live-stage="prepare"]')!;
+    assert.ok(line, 'prepare is drawn as a stage line in a ralph-worker session');
+    assert.equal(line.getAttribute('data-live-stage-status'), 'failed');
+    assert.match(line.textContent!, /git fetch: timeout/);
+    assert.match(line.querySelector('[data-live-stage-retry]')!.textContent!, /повтор через 1:4[23], попытка 2 из 3/);
+    assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, 'the worker already picked the task');
+    const note = view.host.querySelector('[data-pf-live-run-mode-locked]')!;
+    assert.match(note.textContent!, /Полный прогон.*применится к следующему запуску/);
+  } finally { await view.close(); }
+});

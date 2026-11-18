@@ -1,3 +1,4 @@
+import { agentActivity, AgentActivityTracker } from '../../application/agent/AgentActivityTracker.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import type { ListTasks, TaskWithCounts } from '../../application/task/ListTasks.js';
@@ -130,6 +131,8 @@ type Deps = {
   readonly listCommentNotifyCandidates: ListCommentNotifyCandidates;
   // Для получения имени проекта в TG-сообщениях.
   readonly projectRepo: ProjectRepository;
+  // Пульс агентов (диспетчера) — в памяти процесса; по умолчанию общий экземпляр.
+  readonly agentActivity?: AgentActivityTracker;
 };
 
 type TaskDto = Omit<
@@ -925,6 +928,25 @@ export function tasksRouter(deps: Deps): Router {
       }
     },
   );
+
+  // «Живость» очереди в LIVE: когда диспетчер проекта последний раз обращался к API.
+  // lastSeenAt=null при trackedSince недавно — данных ещё нет (рестарт сервера).
+  router.get('/:taskId/dispatcher-heartbeat', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      await deps.getTask.execute(projectId, req.user!.id, req.params['taskId'] as string);
+      const project = await deps.projectRepo.getById(projectId);
+      const dispatcherUserId = project?.dispatcherUserId ?? null;
+      const activity = deps.agentActivity ?? agentActivity;
+      const lastSeenAt = dispatcherUserId ? activity.lastSeen(dispatcherUserId) : null;
+      res.json({
+        dispatcherAssigned: dispatcherUserId !== null,
+        lastSeenAt: lastSeenAt?.toISOString() ?? null,
+        trackedSince: activity.trackedSince.toISOString(),
+        serverNow: new Date().toISOString(),
+      });
+    } catch (error) { next(error); }
+  });
 
   router.get('/:taskId', async (req: Request, res: Response, next: NextFunction) => {
     try {

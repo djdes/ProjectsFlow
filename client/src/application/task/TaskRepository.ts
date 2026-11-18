@@ -1,3 +1,4 @@
+import type { DispatcherHeartbeat } from '@/domain/live/QueueLiveness';
 import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
 import type { TaskRecurrence } from '@/domain/task/TaskRecurrence';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
@@ -104,6 +105,9 @@ export type TaskDigestResult = {
 
 export interface TaskRepository {
   get(projectId: string, taskId: string): Promise<Task>;
+  // Пульс диспетчера проекта для LIVE (задача в очереди). Опционально — тестовые фейки
+  // и старые сборки без него просто не показывают «видел очередь N с назад».
+  getDispatcherHeartbeat?(projectId: string, taskId: string): Promise<DispatcherHeartbeat>;
   list(projectId: string): Promise<Task[]>;
   create(projectId: string, input: CreateTaskInput): Promise<Task>;
   update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task>;
