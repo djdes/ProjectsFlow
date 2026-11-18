@@ -614,6 +614,7 @@ export class HandleTelegramWebhook {
         return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text, {
           quote: msg.quote?.text ?? null,
           messageId: msg.message_id,
+          senderName: formatSenderName(msg.from),
         });
       }
       replyContext = context;
@@ -868,7 +869,7 @@ export class HandleTelegramWebhook {
     chatId: number,
     replyToMessageId: number,
     text: string,
-    reply: { readonly quote: string | null; readonly messageId: number } = { quote: null, messageId: 0 },
+    reply: { readonly quote: string | null; readonly messageId: number; readonly senderName?: string } = { quote: null, messageId: 0 },
   ): Promise<void> {
     const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
     if (!mapping) {
@@ -877,7 +878,11 @@ export class HandleTelegramWebhook {
       return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text, reply);
     }
 
-    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    const linkedUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    // Группа «Инциденты»: у автора жалобы аккаунта может не быть — ответ reply'ем на вопрос
+    // принимаем от участника группы и пишем от того, на кого заведена задача (как CSharpFixer).
+    const incidentGroup = chatId < 0 && (await this.workGroupFor(chatId))?.mode === 'incident';
+    const senderUserId = incidentGroup ? mapping.recipientUserId : linkedUserId;
     if (!senderUserId || senderUserId !== mapping.recipientUserId) {
       // Защита от того что чужой TG-аккаунт отвечает на чужое уточнение (после share
       // chat'а, например). По spec'е — отвечает только адресат.
@@ -903,8 +908,9 @@ export class HandleTelegramWebhook {
       source: 'tg-reply-projectsflow-bot',
       answeredAt: new Date().toISOString(),
     };
+    const via = incidentGroup ? `через группу Telegram${reply.senderName ? `, ${reply.senderName}` : ''}` : 'через Telegram reply';
     const body =
-      `**✅ Ответ на уточнение** (через Telegram reply)\n\n${text}\n\n` +
+      `**✅ Ответ на уточнение** (${via})\n\n${text}\n\n` +
       `<!-- ralph-answer ${JSON.stringify(answerPayload)} -->`;
 
     let comment;
@@ -962,7 +968,9 @@ export class HandleTelegramWebhook {
     const preview = text.length > 80 ? text.slice(0, 79).trimEnd() + '…' : text;
     await this.reply(
       chatId,
-      `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
+      incidentGroup
+        ? '✅ Спасибо, ответ получен. Продолжаем работу и напишем здесь, когда будет результат.'
+        : `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
     );
   }
 

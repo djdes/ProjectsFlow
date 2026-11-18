@@ -1,4 +1,5 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
+import { NotifyIncidentGroup } from './application/telegram/NotifyIncidentGroup.js';
 import { DesktopNotesService } from './application/desktop-notes/DesktopNotesService.js';
 import { DrizzleDesktopNoteRepository } from './infrastructure/repositories/DrizzleDesktopNoteRepository.js';
 import { GetApprovalSummary } from './application/approval-summary/GetApprovalSummary.js';
@@ -1396,6 +1397,14 @@ const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
 });
 // Durable retries and reconciliation also recover completions missed during a deploy.
 reportTelegramWorkerResult.wake();
+const notifyIncidentGroup = new NotifyIncidentGroup({
+  tasks: taskRepo,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  client: telegramClient,
+  incidentChats: { isIncident: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'incident' },
+  ralphQuestionMessages: telegramRalphQuestionRepo,
+});
 setInterval(reportTelegramWorkerResult.wake, 15_000).unref();
 // Пространства пользователя для выбора, куда бот кладёт задачи без проекта (db/164).
 const listWorkspaceOptionsForUser = async (userId: string) =>
@@ -3839,6 +3848,7 @@ const { app, devProxyUpgrade } = createApp({
     dispatchCommentNotifications,
     sendTelegramNotification: sendAgentTelegramNotification,
     broadcastTelegramByTask,
+    notifyIncidentGroup,
     projects: projectRepo,
   },
   github: {
