@@ -1516,6 +1516,8 @@ export const scenarios = [
         await t.visible(page.getByText('Новая группа «Поддержка клиентов» ждёт подтверждения'), 'черновик группы');
         await t.visible(page.getByRole('button', { name: 'Подключить «Поддержка клиентов»' }), 'кнопка «Подключить» черновика');
         await t.visible(page.getByRole('button', { name: 'Добавить проект' }).first(), 'кнопка «Добавить проект»');
+        await t.visible(page.getByRole('group', { name: 'Режим группы' }).first(), 'переключатель режима группы');
+        await t.visible(page.getByRole('button', { name: 'Инциденты', pressed: true }).first(), 'режим «Инциденты» у группы из фикстуры');
         await t.visible(page.getByText('Пространство «Офис» просит перенести группу', { exact: false }), 'запрос на перенос группы');
         await t.visible(page.getByRole('button', { name: 'Из соседних пространств' }), 'кнопка «Из соседних пространств»');
       });

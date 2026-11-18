@@ -50,3 +50,11 @@ export function addableProjects<P extends { readonly id: string }>(
 export function groupLabel(group: { readonly chatId: number; readonly title: string | null }): string {
   return group.title?.trim() || `Группа ${group.chatId}`;
 }
+
+// Подсказка к переключателю режима группы (spec 2026-11-17, раздел 3).
+export function groupModeHint(mode: 'standard' | 'incident', hasProjects: boolean): string {
+  if (mode === 'standard') return 'Участники ставят задачи через бота, бот перефразирует и уточняет детали.';
+  return hasProjects
+    ? 'Любой участник пишет о проблеме — задача молча уходит воркеру в проект группы, ответ придёт сюда простым языком.'
+    : 'Выберите проекты группы — без них сообщения об инцидентах не принимаются.';
+}
