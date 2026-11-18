@@ -52,6 +52,14 @@ import { parseDonePrefix } from './parseDonePrefix.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
 import { endOfWeekDeadline } from './defaultDeadline.js';
+import {
+  coAssigneeAiText,
+  coAssigneeNames,
+  coAssigneesOf,
+  extractAssigneeQueries,
+  fanOutCoAssignees,
+  type CoAssignee,
+} from './coAssignees.js';
 import type { GenerateLlmText } from '../../llm/LlmTextGenerator.js';
 import {
   allowedWorkspaces,
@@ -763,7 +771,9 @@ export class TelegramComposerService {
         text,
         parsed,
         { projectId: draft.projectId, taskText: text },
-        this.buildAiText(text, null),
+        coAssigneesOf(draft.segments).length >= 2
+          ? coAssigneeAiText(text, coAssigneesOf(draft.segments))
+          : this.buildAiText(text, null),
         draft.targetStatus,
         false,
         draft.tgMessageId,
@@ -1147,45 +1157,72 @@ export class TelegramComposerService {
         options.sourceKey ?? null, column, { replyContext: options.replyContext ?? null, defaults: inherited });
       return;
     }
-    // «@мне» — ответственный сам автор (то же, что без @, но явно).
-    let selfAssigned = false;
-    if (parsedEff.assigneeQuery !== null && isSelfAssigneeQuery(parsedEff.assigneeQuery)) {
-      parsedEff = { ...parsedEff, assigneeQuery: null };
-      selfAssigned = true;
-    }
-    // Рабочая группа (db/190): названный ответственный должен быть участником проекта
-    // (или его основного пространства). Не нашли — отвечаем в группе, кого можно назначить.
-    if (hint.projectId && parsedEff.assigneeQuery?.trim() && (await this.standardGroup(chatId))) {
-      const candidates = await this.assigneeCandidates(userId, hint.projectId);
-      const match = await this.matchAssignee(parsedEff.assigneeQuery, candidates);
-      if (!match.unique) {
-        await this.send(chatId, await this.assigneeHelpText(hint.projectId, parsedEff.assigneeQuery, match.matches, candidates));
+    // Совместная задача (2026-11-18): «@Бот … @Вася @Петя» — двум и больше названным людям
+    // ставится по копии одной задачи, в описании каждой перечислены все исполнители.
+    let coAssignees: CoAssignee[] = [];
+    const coQueries = extractAssigneeQueries(worker.text);
+    if (coQueries.length >= 2) {
+      const co = await this.resolveCoAssignees(userId, chatId, hint.projectId, parsedEff.projectQuery !== null, coQueries);
+      if (co.kind === 'help') {
+        await this.send(chatId, co.text);
         return;
       }
+      if (co.assignees.length >= 2) {
+        coAssignees = co.assignees;
+        if (co.dropProject) hint = { ...hint, projectId: null };
+      }
     }
-    const aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
-    let fallbackAssigneeUserId: string | null = selfAssigned ? userId : null;
-    try {
-      fallbackAssigneeUserId ??= await this.resolveUniqueAssignee(
-        userId,
-        hint.projectId,
-        parsedEff.assigneeQuery,
-      );
-      if (!fallbackAssigneeUserId && parsedEff.projectQuery === null) {
-        const yielded = await this.assigneeOverImplicitProject(userId, hint.projectId, parsedEff.assigneeQuery);
-        if (yielded) {
-          fallbackAssigneeUserId = yielded;
-          hint = { ...hint, projectId: null };
+    let aiText: string;
+    let fallbackAssigneeUserId: string | null = null;
+    if (coAssignees.length >= 2) {
+      aiText = coAssigneeAiText(hint.taskText, coAssignees);
+      fallbackAssigneeUserId = coAssignees[0]!.userId;
+    } else {
+      // «@мне» — ответственный сам автор (то же, что без @, но явно).
+      let selfAssigned = false;
+      if (parsedEff.assigneeQuery !== null && isSelfAssigneeQuery(parsedEff.assigneeQuery)) {
+        parsedEff = { ...parsedEff, assigneeQuery: null };
+        selfAssigned = true;
+      }
+      // Рабочая группа (db/190): названный ответственный должен быть участником проекта
+      // (или его основного пространства). Не нашли — отвечаем в группе, кого можно назначить.
+      if (hint.projectId && parsedEff.assigneeQuery?.trim() && (await this.standardGroup(chatId))) {
+        const candidates = await this.assigneeCandidates(userId, hint.projectId);
+        const match = await this.matchAssignee(parsedEff.assigneeQuery, candidates);
+        if (!match.unique) {
+          await this.send(chatId, await this.assigneeHelpText(hint.projectId, parsedEff.assigneeQuery, match.matches, candidates));
+          return;
         }
       }
-    } catch (err) {
-      // The durable raw fallback still works with the creator as assignee. AI/manual enrichment
-      // will retry the richer resolution without making intake depend on this optional lookup.
-      console.warn('[tg-composer] fallback assignee hint failed:', err);
+      aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
+      fallbackAssigneeUserId = selfAssigned ? userId : null;
+      try {
+        fallbackAssigneeUserId ??= await this.resolveUniqueAssignee(
+          userId,
+          hint.projectId,
+          parsedEff.assigneeQuery,
+        );
+        if (!fallbackAssigneeUserId && parsedEff.projectQuery === null) {
+          const yielded = await this.assigneeOverImplicitProject(userId, hint.projectId, parsedEff.assigneeQuery);
+          if (yielded) {
+            fallbackAssigneeUserId = yielded;
+            hint = { ...hint, projectId: null };
+          }
+        }
+      } catch (err) {
+        // The durable raw fallback still works with the creator as assignee. AI/manual enrichment
+        // will retry the richer resolution without making intake depend on this optional lookup.
+        console.warn('[tg-composer] fallback assignee hint failed:', err);
+      }
+      if (parsedEff.assigneeQuery === null && !fallbackAssigneeUserId) {
+        fallbackAssigneeUserId = worker.requested ? userId : inherited?.assigneeUserId ?? null;
+      }
     }
-    if (parsedEff.assigneeQuery === null && !fallbackAssigneeUserId) {
-      fallbackAssigneeUserId = worker.requested ? userId : inherited?.assigneeUserId ?? null;
-    }
+    // Совместная задача сразу хранится копиями: если авто-создание опередит долгий ИИ-разбор
+    // (или он упадёт), каждый исполнитель всё равно получит свою задачу.
+    const rawCoSegments = coAssignees.length >= 2
+      ? this.rawCoAssigneeSegments(hint.taskText, hint.projectId, column, coAssignees)
+      : null;
     const draftId = this.deps.shortIdGen();
     const draft = await this.deps.drafts.create({
       id: draftId,
@@ -1200,7 +1237,10 @@ export class TelegramComposerService {
       assigneeUserId: fallbackAssigneeUserId,
       // «Готово»-режим или колонка задачи, на которую ответили; иначе null (ЧЕРНОВИКИ).
       targetStatus: column,
-      attachments: withDefaultAttachmentTargets(attachments),
+      ...(rawCoSegments ? { segments: rawCoSegments } : {}),
+      attachments: rawCoSegments
+        ? attachments.map((attachment) => ({ ...attachment, targetSegmentIndexes: rawCoSegments.map((_s, i) => i) }))
+        : withDefaultAttachmentTargets(attachments),
       replyContext: options.replyContext ?? null,
       ttlSeconds: DRAFT_TTL_SECONDS,
       autoCreateSeconds: AUTO_CREATE_SECONDS,
@@ -1270,13 +1310,27 @@ export class TelegramComposerService {
         }
         stopSpinner = null;
       }
-      const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
-        forceStatus === 'todo' ? draft.assigneeUserId ?? userId : parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
-        // Без явного @ответственного — тот, что в черновике (из задачи, на которую ответили).
-        parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId, chatId);
+      const coAssignees = coAssigneesOf(draft.segments);
+      let segments: TelegramDraftSegment[];
+      let attachments: TelegramDraftAttachment[] | undefined;
+      if (coAssignees.length >= 2) {
+        // Совместная задача: разбор как обычно, затем каждая задача — копией каждому исполнителю.
+        const base = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus, null, allowAppend, null, chatId);
+        const fanned = await this.fanOutForCoAssignees(base, coAssignees, hint.projectId, userId);
+        segments = fanned.segments;
+        // Файлы — во все копии первой задачи (обычный черновик кладёт их в первую задачу).
+        const firstCopies = fanned.origin.flatMap((origin, index) => (origin === 0 ? [index] : []));
+        attachments = draft.attachments.map((attachment) => ({ ...attachment, targetSegmentIndexes: firstCopies }));
+      } else {
+        segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
+          forceStatus === 'todo' ? draft.assigneeUserId ?? userId : parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
+          // Без явного @ответственного — тот, что в черновике (из задачи, на которую ответили).
+          parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId, chatId);
+      }
       const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
+        ...(attachments ? { attachments } : {}),
         aiStartedAt: null,
       });
       if (!patched) return;
@@ -1296,6 +1350,14 @@ export class TelegramComposerService {
       await this.deps.drafts.patchComposing(draft.id, { aiStartedAt: null }).catch(() => null);
       const current = await this.deps.drafts.getById(draft.id);
       if (!current || current.status !== 'composing') return;
+      // Совместная задача: копии исполнителям уже лежат в черновике — показываем их без
+      // перефразирования. Ручной флоу умеет только одного ответственного и потерял бы остальных.
+      if (coAssigneesOf(current.segments).length >= 2) {
+        const card = await this.mainCard(await this.decideWorkspace(current));
+        const tgMessageId = await this.respond(chatId, waitMsgId, `${aiFailureNotice(err)}\n\n${card.text}`, card.replyMarkup);
+        if (tgMessageId !== null) await this.deps.drafts.patch(current.id, { tgMessageId });
+        return;
+      }
       await this.manualFlow(
         userId,
         chatId,
@@ -2631,6 +2693,113 @@ export class TelegramComposerService {
     return { projectId: null, taskText };
   }
 
+  /**
+   * Совместная задача: кого назвали в «@Вася @Петя». Порядок резолва тот же, что у одиночного
+   * @ответственного: участники проекта (Telegram @username, затем имя); в рабочей группе с
+   * проектом неизвестное имя — ответ со списком, кого можно назначить; угаданный (не явный)
+   * проект уступает названному человеку — тогда задачи уходят без проекта.
+   * Справочник недоступен — пустой список: сообщение пойдёт обычным потоком.
+   */
+  private async resolveCoAssignees(
+    userId: string,
+    chatId: number,
+    projectId: string | null,
+    projectExplicit: boolean,
+    queries: readonly string[],
+  ): Promise<
+    | { readonly kind: 'help'; readonly text: string }
+    | { readonly kind: 'ok'; readonly assignees: CoAssignee[]; readonly dropProject: boolean }
+  > {
+    try {
+      const candidates = await this.assigneeCandidates(userId, projectId);
+      const group = projectId ? await this.standardGroup(chatId) : null;
+      let everyone: readonly { id: string; displayName: string }[] | null = null;
+      const assignees: CoAssignee[] = [];
+      let dropProject = false;
+      const add = (id: string, displayName: string) => {
+        if (!assignees.some((a) => a.userId === id)) assignees.push({ userId: id, displayName });
+      };
+      for (const query of queries) {
+        if (isSelfAssigneeQuery(query)) {
+          const self = candidates.find((c) => c.id === userId)
+            ?? (await this.deps.users.getById(userId).catch(() => null));
+          add(userId, self?.displayName ?? 'Автор');
+          continue;
+        }
+        const match = await this.matchAssignee(query, candidates);
+        if (match.unique) {
+          add(match.unique.id, match.unique.displayName);
+          continue;
+        }
+        if (projectId && group) {
+          return { kind: 'help', text: await this.assigneeHelpText(projectId, query, match.matches, candidates) };
+        }
+        if (projectId && !projectExplicit) {
+          everyone ??= await this.assigneeCandidates(userId, null);
+          const wide = await this.matchAssignee(query, everyone);
+          if (wide.unique) {
+            add(wide.unique.id, wide.unique.displayName);
+            dropProject = true;
+          }
+        }
+      }
+      return { kind: 'ok', assignees, dropProject };
+    } catch (err) {
+      console.warn('[tg-composer] co-assignee resolve failed:', err);
+      return { kind: 'ok', assignees: [], dropProject: false };
+    }
+  }
+
+  // Черновик совместной задачи до ИИ-разбора: копия исходного текста каждому исполнителю.
+  private rawCoAssigneeSegments(
+    taskText: string,
+    projectId: string | null,
+    column: VisibleKanbanStatus | null,
+    assignees: readonly CoAssignee[],
+  ): TelegramDraftSegment[] {
+    const base: TelegramDraftSegment = {
+      title: '',
+      body: taskText.trim(),
+      projectId,
+      projectName: null,
+      assigneeUserId: null,
+      assigneeName: null,
+      deadline: endOfWeekDeadline(this.now()),
+      included: true,
+      targetStatus: column,
+      taskType: null,
+      existingTaskId: null,
+      sourceExcerpt: null,
+    };
+    return fanOutCoAssignees([base], assignees).segments;
+  }
+
+  // Размножение разобранных задач по исполнителям. Проект, выбранный моделью, может не
+  // включать кого-то из них — его копию переносим так же, как задачу одиночного
+  // @ответственного (keepAssigneeProjects), иначе CreateTask её отвергнет.
+  private async fanOutForCoAssignees(
+    segments: readonly TelegramDraftSegment[],
+    assignees: readonly CoAssignee[],
+    hintProjectId: string | null,
+    creatorUserId: string,
+  ): Promise<{ segments: TelegramDraftSegment[]; origin: number[] }> {
+    const fanned = fanOutCoAssignees(segments, assignees);
+    if (hintProjectId) return fanned;
+    const result = fanned.segments.slice();
+    for (const assignee of assignees) {
+      if (assignee.userId === creatorUserId) continue;
+      const indexes = fanned.segments.flatMap((segment, index) =>
+        segment.coAssignees && segment.assigneeUserId === assignee.userId ? [index] : [],
+      );
+      if (indexes.length === 0) continue;
+      const kept = await this.keepAssigneeProjects(indexes.map((i) => fanned.segments[i]!), assignee.userId, creatorUserId);
+      indexes.forEach((segmentIndex, k) => {
+        result[segmentIndex] = kept[k]!;
+      });
+    }
+    return { segments: result, origin: fanned.origin };
+  }
+
   // Текст для AI: задача + (если в `@ответственный` назван человек) явная подсказка модели.
   private buildAiText(taskText: string, assigneeQuery: string | null): string {
     const t = taskText.trim();
@@ -3052,6 +3221,10 @@ export class TelegramComposerService {
     const view = await this.workspaceView(draft);
     const spaces = await this.spaceNames(draft.creatorUserId);
     const lines = [`🆕 <b>Распознал задач: ${segs.length}</b>`, ''];
+    const coAssignees = coAssigneesOf(segs);
+    if (coAssignees.length >= 2) {
+      lines.splice(1, 0, `👥 Совместная задача — копия каждому исполнителю: <b>${escapeHtml(coAssigneeNames(coAssignees))}</b>`);
+    }
     // Кэш kanban-настроек в пределах ОДНОГО рендера (function-local, без гонок при
     // конкурентной обработке) — дедупит getKanbanSettings для сегментов одного проекта.
     const settingsCache = new Map<string, KanbanBoardSettings | null>();
