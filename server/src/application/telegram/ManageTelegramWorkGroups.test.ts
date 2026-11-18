@@ -8,8 +8,11 @@ import type {
   TelegramWorkGroupRepository,
 } from './TelegramWorkGroupRepository.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
-import { NotWorkspaceLeadError, CannotInviteToDefaultWorkspaceError, WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
+import { NotWorkspaceLeadError, NotWorkspaceOwnerError, CannotInviteToDefaultWorkspaceError, WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
 import {
+  TelegramGroupDraftElsewhereError,
+  TelegramGroupTransferNotFoundError,
+  TelegramGroupTransferRequestedError,
   TelegramGroupNotAdminError,
   TelegramGroupNotFoundError,
   TelegramGroupProjectInvalidError,
@@ -54,7 +57,16 @@ function makeRepo() {
         title: group.title ?? g.title,
         invitedByTgUserId: group.invitedByTgUserId ?? g.invitedByTgUserId,
         projectIds: g.workspaceId === group.workspaceId ? g.projectIds : [],
+        transfer: null,
       });
+    },
+    async requestTransfer(chatId, transfer) {
+      const g = groups.get(chatId);
+      if (g) groups.set(chatId, { ...g, transfer: { ...transfer, requestedAt: NOW } });
+    },
+    async clearTransfer(chatId) {
+      const g = groups.get(chatId);
+      if (g) groups.set(chatId, { ...g, transfer: null });
     },
     async setStatus(chatId, status) {
       const g = groups.get(chatId);
@@ -108,6 +120,8 @@ function makeService(opts: {
   chatExists?: boolean;
   // Командные пространства, где пригласивший бота (Telegram 777 → user 'lead') руководит.
   leadSpaces?: Array<{ id: string; name: string; role: WorkspaceRole }>;
+  // Роли в пространстве ws2 («Офис»): по умолчанию там никого.
+  ws2Roles?: Record<string, WorkspaceRole>;
 } = {}) {
   const store = makeRepo();
   const roles = opts.roles ?? { owner: 'owner', lead: 'lead', viewer: 'viewer' };
@@ -115,7 +129,8 @@ function makeService(opts: {
     repo: store.repo,
     workspaces: {
       async getMembership(workspaceId, userId) {
-        const role = workspaceId === 'ws1' ? roles[userId] : undefined;
+        const role =
+          workspaceId === 'ws1' ? roles[userId] : workspaceId === 'ws2' ? opts.ws2Roles?.[userId] : undefined;
         return role ? { workspaceId, userId, role, displayName: null, email: null, avatarUrl: null } : null;
       },
       async getById(id) {
@@ -379,4 +394,97 @@ test('bindFromCode: a draft group becomes active in the workspace of the code', 
   const result = await service.bindFromCode(TOKEN, { id: -2005, title: 'Поддержка' }, 555);
   assert.deepEqual(result, { kind: 'bound', workspaceName: 'Программисты' });
   assert.equal(groups.get(-2005)?.status, 'active');
+});
+
+// --- Защита от перехвата чужих групп (draft / disconnected / active в другом пространстве) ---
+
+const foreign = (status: TelegramWorkGroup['status']): TelegramWorkGroup => ({
+  chatId: -3001,
+  workspaceId: 'ws2',
+  title: 'Офис',
+  addedByUserId: 'ws2owner',
+  createdAt: NOW,
+  status,
+  invitedByTgUserId: null,
+  projectIds: [],
+});
+
+test('takeover: a draft of another workspace cannot be activated by code, id or confirm', async () => {
+  const { service, groups } = makeService();
+  groups.set(-3001, foreign('draft'));
+  await service.createLink('ws1', 'lead', 'work');
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -3001, title: 'Офис' }, 555), { kind: 'draft_elsewhere' });
+  await assert.rejects(service.addManual('ws1', 'lead', -3001), TelegramGroupDraftElsewhereError);
+  await assert.rejects(service.confirm('ws1', 'lead', -3001), TelegramGroupNotFoundError);
+  // Бот-приглашение руководителем ws1 тоже не переписывает чужой черновик.
+  assert.deepEqual(await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777), { kind: 'draft_elsewhere' });
+  assert.deepEqual(groups.get(-3001), foreign('draft'));
+});
+
+test('takeover: a draft is activated in its own workspace by code and by id', async () => {
+  const byCode = makeService();
+  byCode.groups.set(-3001, { ...foreign('draft'), workspaceId: 'ws1' });
+  await byCode.service.createLink('ws1', 'lead', 'work');
+  assert.equal((await byCode.service.bindFromCode(TOKEN, { id: -3001, title: 'Офис' }, 555)).kind, 'bound');
+  assert.equal(byCode.groups.get(-3001)?.status, 'active');
+  const byId = makeService();
+  byId.groups.set(-3001, { ...foreign('draft'), workspaceId: 'ws1' });
+  assert.equal((await byId.service.addManual('ws1', 'lead', -3001)).status, 'active');
+});
+
+test('takeover: a disconnected group of another workspace moves only after its owner approves', async () => {
+  const { service, groups } = makeService({ ws2Roles: { ws2owner: 'owner', ws2lead: 'lead' } });
+  groups.set(-3001, foreign('disconnected'));
+  await service.createLink('ws1', 'lead', 'work');
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -3001, title: 'Офис' }, 555), {
+    kind: 'transfer_requested',
+  });
+  await assert.rejects(service.addManual('ws1', 'lead', -3001), TelegramGroupTransferRequestedError);
+  let group = groups.get(-3001);
+  assert.equal(group?.workspaceId, 'ws2', 'group stays in its workspace until approval');
+  assert.equal(group?.status, 'disconnected');
+  assert.deepEqual(group?.transfer, { toWorkspaceId: 'ws1', requestedByUserId: 'lead', targetStatus: 'active', requestedAt: NOW });
+  assert.equal(await service.resolveChat(-3001), null);
+  // Владелец ws2 видит запрос с именем пространства, куда просят перенести.
+  const listed = await service.list('ws2', 'ws2owner');
+  assert.equal(listed.groups[0]?.transferWorkspaceName, 'Программисты');
+  // Решать может только владелец пространства группы — не руководитель и не запросивший.
+  await assert.rejects(service.approveTransfer('ws2', 'ws2lead', -3001), NotWorkspaceOwnerError);
+  await assert.rejects(service.approveTransfer('ws1', 'owner', -3001), TelegramGroupNotFoundError);
+  await service.approveTransfer('ws2', 'ws2owner', -3001);
+  group = groups.get(-3001);
+  assert.equal(group?.workspaceId, 'ws1');
+  assert.equal(group?.status, 'active');
+  assert.equal(group?.addedByUserId, 'lead');
+  assert.equal(group?.transfer, null);
+  assert.equal((await service.resolveChat(-3001))?.workspaceId, 'ws1');
+});
+
+test('takeover: owner rejects the transfer; reconnecting to the own workspace works as before', async () => {
+  const { service, groups } = makeService({ ws2Roles: { ws2owner: 'owner' } });
+  groups.set(-3001, foreign('disconnected'));
+  assert.deepEqual(await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777), { kind: 'transfer_requested' });
+  assert.equal(groups.get(-3001)?.transfer?.targetStatus, 'draft');
+  await service.rejectTransfer('ws2', 'ws2owner', -3001);
+  assert.equal(groups.get(-3001)?.transfer, null);
+  assert.equal(groups.get(-3001)?.workspaceId, 'ws2');
+  await assert.rejects(service.approveTransfer('ws2', 'ws2owner', -3001), TelegramGroupTransferNotFoundError);
+  // Своя отключённая группа подключается обратно без одобрений.
+  const own = makeService();
+  own.groups.set(-3001, { ...foreign('disconnected'), workspaceId: 'ws1' });
+  await own.service.createLink('ws1', 'lead', 'work');
+  assert.equal((await own.service.bindFromCode(TOKEN, { id: -3001, title: 'Офис' }, 555)).kind, 'bound');
+  assert.equal(own.groups.get(-3001)?.status, 'active');
+});
+
+test('takeover: an active group of another workspace cannot be taken by code, id or bot invite', async () => {
+  const { service, groups } = makeService();
+  groups.set(-3001, foreign('active'));
+  await service.createLink('ws1', 'lead', 'work');
+  assert.deepEqual(await service.bindFromCode(TOKEN, { id: -3001, title: 'Офис' }, 555), { kind: 'taken' });
+  await assert.rejects(service.addManual('ws1', 'lead', -3001), TelegramGroupTakenError);
+  await assert.rejects(service.confirm('ws1', 'lead', -3001), TelegramGroupNotFoundError);
+  assert.deepEqual(await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777), { kind: 'active' });
+  assert.deepEqual(await service.chooseDraftWorkspace({ id: -3001, title: 'Офис' }, 'ws1', 777), { kind: 'active' });
+  assert.deepEqual(groups.get(-3001), foreign('active'));
 });

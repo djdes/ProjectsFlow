@@ -6,7 +6,12 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { workspacesRouter } from './routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import type { ManageTelegramWorkGroups } from '../../application/telegram/ManageTelegramWorkGroups.js';
-import { TelegramGroupProjectInvalidError, TelegramGroupTakenError } from '../../domain/telegram/errors.js';
+import {
+  TelegramGroupDraftElsewhereError,
+  TelegramGroupProjectInvalidError,
+  TelegramGroupTakenError,
+  TelegramGroupTransferRequestedError,
+} from '../../domain/telegram/errors.js';
 import type { TelegramWorkGroup } from '../../application/telegram/TelegramWorkGroupRepository.js';
 import { NotWorkspaceLeadError } from '../../domain/workspace/errors.js';
 import type { User } from '../../domain/user/User.js';
@@ -67,7 +72,7 @@ test('GET telegram-groups lists the groups and the bot username', async () => {
       const res = await fetch(`${url}/telegram-groups`);
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), {
-        groups: [{ chatId: -1001, title: 'Команда', createdAt: NOW.toISOString(), status: 'draft', projectIds: ['p1'] }],
+        groups: [{ chatId: -1001, title: 'Команда', createdAt: NOW.toISOString(), status: 'draft', projectIds: ['p1'], transferRequest: null }],
         mainGroup: { chatId: -1005, title: 'Сводки' },
         botUsername: 'ProjectsFlow_Bot',
       });
@@ -222,6 +227,67 @@ test('PUT telegram-groups/:chatId/projects saves the list; foreign project → 4
       });
       assert.equal(res.status, 400);
       assert.equal(((await res.json()) as { error: string }).error, 'telegram_group_project_invalid');
+    },
+  );
+});
+
+test('POST telegram-groups/:chatId/transfer/:decision → owner decides; draft elsewhere / transfer → 409', async () => {
+  const calls: string[] = [];
+  await withApp(
+    {
+      approveTransfer: async (_ws: string, _actor: string, chatId: number) => {
+        calls.push(`approve:${chatId}`);
+      },
+      rejectTransfer: async (_ws: string, _actor: string, chatId: number) => {
+        calls.push(`reject:${chatId}`);
+      },
+      addManual: async () => {
+        throw new TelegramGroupDraftElsewhereError();
+      },
+      list: async () => ({
+        groups: [
+          {
+            ...group({ status: 'disconnected' }),
+            transfer: { toWorkspaceId: 'ws2', requestedByUserId: 'u2', targetStatus: 'active' as const, requestedAt: NOW },
+            transferWorkspaceName: 'Офис',
+          },
+        ],
+        mainGroup: null,
+        botUsername: null,
+      }),
+    },
+    async (url) => {
+      assert.equal((await fetch(`${url}/telegram-groups/-1001/transfer/approve`, { method: 'POST' })).status, 204);
+      assert.equal((await fetch(`${url}/telegram-groups/-1001/transfer/reject`, { method: 'POST' })).status, 204);
+      assert.equal((await fetch(`${url}/telegram-groups/-1001/transfer/steal`, { method: 'POST' })).status, 404);
+      assert.deepEqual(calls, ['approve:-1001', 'reject:-1001']);
+      const listed = (await (await fetch(`${url}/telegram-groups`)).json()) as {
+        groups: Array<{ transferRequest: { workspaceName: string } | null }>;
+      };
+      assert.equal(listed.groups[0]?.transferRequest?.workspaceName, 'Офис');
+      const res = await fetch(`${url}/telegram-groups`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chatId: -1001 }),
+      });
+      assert.equal(res.status, 409);
+      assert.equal(((await res.json()) as { error: string }).error, 'telegram_group_draft_elsewhere');
+    },
+  );
+  await withApp(
+    {
+      addManual: async () => {
+        throw new TelegramGroupTransferRequestedError();
+      },
+    },
+    async (url) => {
+      const res = await fetch(`${url}/telegram-groups`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chatId: -1001 }),
+      });
+      assert.equal(res.status, 409);
+      assert.equal(((await res.json()) as { error: string }).error, 'telegram_group_transfer_requested');
     },
   );
 });

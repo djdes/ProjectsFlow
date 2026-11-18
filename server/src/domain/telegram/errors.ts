@@ -48,3 +48,30 @@ export class TelegramGroupProjectInvalidError extends Error {
     this.name = 'TelegramGroupProjectInvalidError';
   }
 }
+
+// Черновик группы ждёт подтверждения в другом пространстве: забрать его к себе нельзя (db/189).
+export class TelegramGroupDraftElsewhereError extends Error {
+  constructor() {
+    super('Группа уже ждёт подтверждения в другом пространстве. Его владелец или руководитель может её отклонить.');
+    this.name = 'TelegramGroupDraftElsewhereError';
+  }
+}
+
+// Отключённая группа принадлежала другому пространству: перенос — только с одобрения его владельца.
+export class TelegramGroupTransferRequestedError extends Error {
+  constructor() {
+    super(
+      'Группа раньше была подключена к другому пространству. Его владельцу отправлен запрос на перенос — ' +
+        'группа подключится после одобрения.',
+    );
+    this.name = 'TelegramGroupTransferRequestedError';
+  }
+}
+
+// Одобрить/отклонить перенос нечего: запроса нет или группа уже не отключена.
+export class TelegramGroupTransferNotFoundError extends Error {
+  constructor() {
+    super('Запрос на перенос группы не найден.');
+    this.name = 'TelegramGroupTransferNotFoundError';
+  }
+}

@@ -11,6 +11,8 @@ export type TelegramWorkGroup = {
   readonly status: TelegramWorkGroupStatus;
   // Проекты группы: задачи из неё ставятся только в них. Пусто — все проекты пространства.
   readonly projectIds: readonly string[];
+  // Другое пространство просит забрать отключённую группу: решает владелец этого пространства.
+  readonly transferRequest: { readonly workspaceName: string | null; readonly requestedAt: string } | null;
 };
 
 // work — рабочая группа; main — основная группа сводок (карточка Telegram-расписания).

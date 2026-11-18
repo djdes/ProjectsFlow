@@ -7,13 +7,16 @@ import {
 } from '../../domain/workspace/errors.js';
 import {
   TelegramBotUnavailableError,
+  TelegramGroupDraftElsewhereError,
+  TelegramGroupTransferNotFoundError,
+  TelegramGroupTransferRequestedError,
   TelegramGroupNotAdminError,
   TelegramGroupNotFoundError,
   TelegramGroupProjectInvalidError,
   TelegramGroupTakenError,
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
-import { requireWorkspaceLead, requireWorkspaceMember } from '../workspace/workspaceAccess.js';
+import { requireWorkspaceLead, requireWorkspaceMember, requireWorkspaceOwner } from '../workspace/workspaceAccess.js';
 import type { TelegramClient } from './TelegramClient.js';
 import type {
   TelegramGroupLinkPurpose,
@@ -57,6 +60,8 @@ type Deps = {
 export type BindWorkGroupResult =
   | { readonly kind: 'bound' | 'already' | 'main'; readonly workspaceName: string }
   | { readonly kind: 'taken' }
+  // Черновик ждёт подтверждения в другом пространстве / ушёл запрос владельцу прежнего пространства.
+  | { readonly kind: 'draft_elsewhere' | 'transfer_requested' }
   | { readonly kind: 'not_admin' }
   | { readonly kind: 'invalid' };
 
@@ -77,7 +82,15 @@ export type BotAddedResult =
   | { readonly kind: 'draft'; readonly workspaceName: string }
   | { readonly kind: 'choose'; readonly options: readonly { readonly id: string; readonly name: string }[] }
   | { readonly kind: 'not_linked' }
-  | { readonly kind: 'no_workspace' };
+  | { readonly kind: 'no_workspace' }
+  | { readonly kind: 'draft_elsewhere' | 'transfer_requested' };
+
+// Можно ли занять группу пространством (защита от перехвата чужой группы):
+//  free               — группы нет или она уже этого пространства;
+//  taken              — активна в другом пространстве;
+//  draft_elsewhere    — черновик другого пространства (активирует только оно);
+//  transfer_requested — отключена в другом пространстве: записан запрос его владельцу.
+type ClaimOutcome = 'free' | 'taken' | 'draft_elsewhere' | 'transfer_requested';
 
 const LEAD_ROLES: ReadonlySet<WorkspaceRole> = new Set<WorkspaceRole>(['owner', 'lead']);
 
@@ -95,15 +108,23 @@ export class ManageTelegramWorkGroups {
     workspaceId: string,
     actorUserId: string,
   ): Promise<{
-    groups: TelegramWorkGroup[];
+    groups: Array<TelegramWorkGroup & { readonly transferWorkspaceName?: string | null }>;
     mainGroup: { chatId: number; title: string | null } | null;
     botUsername: string | null;
   }> {
     await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
-    const [groups, mainGroup] = await Promise.all([
+    const [raw, mainGroup] = await Promise.all([
       this.deps.repo.listByWorkspace(workspaceId),
       this.deps.repo.getMainGroup(workspaceId),
     ]);
+    // Запрос на перенос показываем с именем пространства, куда просят перенести группу.
+    const groups = await Promise.all(
+      raw.map(async (g) =>
+        g.transfer && g.status === 'disconnected'
+          ? { ...g, transferWorkspaceName: (await this.deps.workspaces.getById(g.transfer.toWorkspaceId))?.name ?? null }
+          : { ...g, transfer: null },
+      ),
+    );
     return { groups, mainGroup, botUsername: this.botUsername() };
   }
 
@@ -142,12 +163,16 @@ export class ManageTelegramWorkGroups {
     const group = { chatId, workspaceId, title: chat.title, addedByUserId: actorUserId };
     if ((await this.deps.repo.insert(group)) === 'exists') {
       const existing = await this.deps.repo.findByChat(chatId);
-      // Черновик или отключённую группу руководитель подключает к себе (он — админ группы).
-      if (existing && existing.status !== 'active') {
+      const claim = await this.claim(existing, workspaceId, actorUserId, 'active');
+      if (claim === 'taken') throw new TelegramGroupTakenError();
+      if (claim === 'draft_elsewhere') throw new TelegramGroupDraftElsewhereError();
+      if (claim === 'transfer_requested') throw new TelegramGroupTransferRequestedError();
+      if (!existing) throw new TelegramGroupNotFoundError();
+      // Свой черновик или своя отключённая группа: руководитель (он — админ группы) подключает.
+      if (existing.status !== 'active') {
         await this.deps.repo.replace({ ...group, status: 'active' });
         return (await this.deps.repo.findByChat(chatId)) ?? existing;
       }
-      if (existing?.workspaceId !== workspaceId) throw new TelegramGroupTakenError();
       return existing;
     }
     return (
@@ -194,7 +219,9 @@ export class ManageTelegramWorkGroups {
     });
     if (inserted === 'created') return { kind: 'bound', workspaceName: workspace.name };
     const existing = await this.deps.repo.findByChat(chat.id);
-    // Черновик/отключённая группа: код выдал руководитель, отправил админ группы — подключаем.
+    const claim = await this.claim(existing, workspace.id, claimed.createdByUserId, 'active');
+    if (claim !== 'free') return { kind: claim };
+    // Свой черновик/отключённая группа: код выдал руководитель, отправил админ группы — подключаем.
     if (existing && existing.status !== 'active') {
       await this.deps.repo.replace({
         chatId: chat.id,
@@ -205,7 +232,6 @@ export class ManageTelegramWorkGroups {
       });
       return { kind: 'bound', workspaceName: workspace.name };
     }
-    if (existing?.workspaceId !== workspace.id) return { kind: 'taken' };
     if (chat.title) await this.deps.repo.updateTitle(chat.id, chat.title);
     return { kind: 'already', workspaceName: workspace.name };
   }
@@ -277,7 +303,8 @@ export class ManageTelegramWorkGroups {
       return { kind: 'choose', options: spaces.map((w) => ({ id: w.id, name: w.name })) };
     }
     const space = spaces[0]!;
-    await this.saveDraft(chat, space.id, userId, inviterTelegramUserId);
+    const saved = await this.saveDraft(chat, space.id, userId, inviterTelegramUserId);
+    if (saved !== 'free') return { kind: saved === 'taken' ? 'active' : saved };
     return { kind: 'draft', workspaceName: space.name };
   }
 
@@ -286,7 +313,10 @@ export class ManageTelegramWorkGroups {
     chat: { readonly id: number; readonly title: string | null },
     workspaceId: string,
     telegramUserId: number,
-  ): Promise<{ readonly kind: 'draft'; readonly workspaceName: string } | { readonly kind: 'active' | 'forbidden' }> {
+  ): Promise<
+    | { readonly kind: 'draft'; readonly workspaceName: string }
+    | { readonly kind: 'active' | 'forbidden' | 'draft_elsewhere' | 'transfer_requested' }
+  > {
     const userId = await this.deps.users.findUserIdByTelegramUserId?.(telegramUserId);
     if (!userId) return { kind: 'forbidden' };
     const member = await this.deps.workspaces.getMembership(workspaceId, userId);
@@ -296,7 +326,8 @@ export class ManageTelegramWorkGroups {
     }
     const existing = await this.deps.repo.findByChat(chat.id);
     if (existing?.status === 'active') return { kind: 'active' };
-    await this.saveDraft(chat, workspaceId, userId, telegramUserId);
+    const saved = await this.saveDraft(chat, workspaceId, userId, telegramUserId);
+    if (saved !== 'free') return { kind: saved === 'taken' ? 'active' : saved };
     return { kind: 'draft', workspaceName: workspace.name };
   }
 
@@ -314,7 +345,10 @@ export class ManageTelegramWorkGroups {
     workspaceId: string,
     userId: string,
     inviterTelegramUserId: number,
-  ): Promise<void> {
+  ): Promise<ClaimOutcome> {
+    const existing = await this.deps.repo.findByChat(chat.id);
+    const claim = await this.claim(existing, workspaceId, userId, 'draft');
+    if (claim !== 'free') return claim;
     const draft = {
       chatId: chat.id,
       workspaceId,
@@ -324,6 +358,50 @@ export class ManageTelegramWorkGroups {
       invitedByTgUserId: inviterTelegramUserId,
     };
     if ((await this.deps.repo.insert(draft)) === 'exists') await this.deps.repo.replace(draft);
+    return 'free';
+  }
+
+  // Защита от перехвата: чужой черновик не трогаем, чужую активную группу не забираем, чужую
+  // отключённую — только через запрос владельцу её пространства (approveTransfer).
+  private async claim(
+    existing: TelegramWorkGroup | null,
+    workspaceId: string,
+    requestedByUserId: string,
+    targetStatus: 'draft' | 'active',
+  ): Promise<ClaimOutcome> {
+    if (!existing || existing.workspaceId === workspaceId) return 'free';
+    if (existing.status === 'active') return 'taken';
+    if (existing.status === 'draft') return 'draft_elsewhere';
+    await this.deps.repo.requestTransfer(existing.chatId, { toWorkspaceId: workspaceId, requestedByUserId, targetStatus });
+    return 'transfer_requested';
+  }
+
+  // Владелец прежнего пространства отключённой группы разрешает перенос в запросившее пространство.
+  async approveTransfer(workspaceId: string, actorUserId: string, chatId: number): Promise<void> {
+    await requireWorkspaceOwner(this.deps.workspaces, workspaceId, actorUserId);
+    const group = await this.groupOf(workspaceId, chatId);
+    const transfer = group.transfer;
+    if (!transfer || group.status !== 'disconnected') throw new TelegramGroupTransferNotFoundError();
+    const target = await this.deps.workspaces.getById(transfer.toWorkspaceId);
+    if (!target || target.kind !== 'team') {
+      await this.deps.repo.clearTransfer(chatId);
+      throw new TelegramGroupTransferNotFoundError();
+    }
+    await this.deps.repo.replace({
+      chatId,
+      workspaceId: target.id,
+      title: group.title,
+      addedByUserId: transfer.requestedByUserId,
+      status: transfer.targetStatus,
+    });
+  }
+
+  // Владелец прежнего пространства отклоняет перенос: группа остаётся у него отключённой.
+  async rejectTransfer(workspaceId: string, actorUserId: string, chatId: number): Promise<void> {
+    await requireWorkspaceOwner(this.deps.workspaces, workspaceId, actorUserId);
+    const group = await this.groupOf(workspaceId, chatId);
+    if (!group.transfer) throw new TelegramGroupTransferNotFoundError();
+    await this.deps.repo.clearTransfer(chatId);
   }
 
   private async groupOf(workspaceId: string, chatId: number): Promise<TelegramWorkGroup> {

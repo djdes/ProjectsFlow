@@ -291,6 +291,11 @@ export const workspaceTelegramGroups = mysqlTable(
     status: mysqlEnum('status', ['draft', 'active', 'disconnected']).notNull().default('active'),
     mode: mysqlEnum('mode', ['standard', 'incident']).notNull().default('standard'),
     invitedByTgUserId: bigint('invited_by_tg_user_id', { mode: 'number' }),
+    // Запрос на перенос отключённой группы в другое пространство (ждёт владельца текущего).
+    transferToWorkspaceId: char('transfer_to_workspace_id', { length: 36 }),
+    transferRequestedByUserId: char('transfer_requested_by_user_id', { length: 36 }),
+    transferTargetStatus: mysqlEnum('transfer_target_status', ['draft', 'active']),
+    transferRequestedAt: timestamp('transfer_requested_at'),
     createdAt: createdAtCol(),
   },
   (t) => [index('idx_wtg_workspace').on(t.workspaceId)],

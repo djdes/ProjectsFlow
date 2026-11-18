@@ -1495,6 +1495,20 @@ export class HandleTelegramWebhook {
         })
         .catch((err) => console.warn('[tg-webhook] draft workspace choice DM failed:', err));
     }
+    if (result.kind === 'draft_elsewhere') {
+      this.recentlyBoundChats.set(chatId, Date.now());
+      await this.reply(chatId, '⚠️ Группа уже ждёт подтверждения в другом пространстве. Подключить её можно только там.');
+      return;
+    }
+    if (result.kind === 'transfer_requested') {
+      this.recentlyBoundChats.set(chatId, Date.now());
+      await this.reply(
+        chatId,
+        '🕓 Группа раньше была подключена к другому пространству. Его владельцу отправлен запрос на перенос: ' +
+            'группа подключится, когда он одобрит его в «Настройках пространства».',
+      );
+      return;
+    }
     // not_linked / no_workspace — черновик не создаём, приветствие объяснит подключение кодом.
   }
 
@@ -1514,7 +1528,11 @@ export class HandleTelegramWebhook {
         ? `🕓 Группа добавлена в пространство «${escapeHtml(result.workspaceName)}» и ждёт подтверждения в настройках пространства.`
         : result.kind === 'active'
           ? 'ℹ️ Группа уже подключена к пространству.'
-          : '⚠️ Добавить группу в это пространство могут только его владелец или руководитель.';
+          : result.kind === 'draft_elsewhere'
+            ? '⚠️ Группа уже ждёт подтверждения в другом пространстве.'
+            : result.kind === 'transfer_requested'
+              ? '🕓 Группа раньше была подключена к другому пространству: его владельцу отправлен запрос на перенос.'
+              : '⚠️ Добавить группу в это пространство могут только его владелец или руководитель.';
     await this.deps.client.answerCallbackQuery(cq.id);
     if (cq.message) {
       await this.deps.client
@@ -1561,6 +1579,16 @@ export class HandleTelegramWebhook {
         return;
       case 'taken':
         await this.reply(chatId, '⚠️ Эта группа уже подключена к другому пространству. Сначала отключите её там.');
+        return;
+      case 'draft_elsewhere':
+        await this.reply(chatId, '⚠️ Группа уже ждёт подтверждения в другом пространстве. Подключить её можно только там.');
+        return;
+      case 'transfer_requested':
+        await this.reply(
+          chatId,
+          '🕓 Группа раньше была подключена к другому пространству. Его владельцу отправлен запрос на перенос: ' +
+            'группа подключится, когда он одобрит его в «Настройках пространства».',
+        );
         return;
       case 'not_admin':
         await this.reply(

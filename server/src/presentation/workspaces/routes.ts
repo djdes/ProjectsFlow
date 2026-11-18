@@ -187,12 +187,13 @@ type Deps = {
   readonly appUrl: string;
 };
 
-function telegramGroupToDto(g: TelegramWorkGroup): {
+function telegramGroupToDto(g: TelegramWorkGroup & { readonly transferWorkspaceName?: string | null }): {
   chatId: number;
   title: string | null;
   createdAt: string;
   status: TelegramWorkGroup['status'];
   projectIds: readonly string[];
+  transferRequest: { workspaceName: string | null; requestedAt: string } | null;
 } {
   return {
     chatId: g.chatId,
@@ -200,6 +201,11 @@ function telegramGroupToDto(g: TelegramWorkGroup): {
     createdAt: g.createdAt.toISOString(),
     status: g.status,
     projectIds: g.projectIds,
+    // Запрос другого пространства забрать отключённую группу — ждёт решения владельца.
+    transferRequest:
+      g.transfer && g.status === 'disconnected'
+        ? { workspaceName: g.transferWorkspaceName ?? null, requestedAt: g.transfer.requestedAt.toISOString() }
+        : null,
   };
 }
 
@@ -582,6 +588,19 @@ export function workspacesRouter(deps: Deps): Router {
       if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
       const group = await deps.telegramGroups.confirm(req.params.id, req.user!.id, chatId);
       res.json({ group: telegramGroupToDto(group) });
+    } catch (error) { next(error); }
+  });
+  // Перенос отключённой группы в другое пространство: решает только владелец пространства группы.
+  router.post('/:id/telegram-groups/:chatId/transfer/:decision', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const chatId = Number(req.params.chatId);
+      if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
+      const decision = req.params.decision;
+      if (decision === 'approve') await deps.telegramGroups.approveTransfer(req.params.id, req.user!.id, chatId);
+      else if (decision === 'reject') await deps.telegramGroups.rejectTransfer(req.params.id, req.user!.id, chatId);
+      else { res.sendStatus(404); return; }
+      res.sendStatus(204);
     } catch (error) { next(error); }
   });
   // Проекты группы целиком (db/189). Пустой список — все проекты пространства.

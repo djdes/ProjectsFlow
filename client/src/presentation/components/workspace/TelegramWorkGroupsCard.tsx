@@ -33,10 +33,13 @@ type WorkspaceProject = { readonly id: string; readonly name: string };
 export function TelegramWorkGroupsCard({
   workspaceId,
   canManage,
+  isOwner = false,
 }: {
   workspaceId: string;
   // Владелец или руководитель: рабочая группа открывает вход в пространство.
   canManage: boolean;
+  // Перенос отключённой группы в другое пространство одобряет только владелец.
+  isOwner?: boolean;
 }): React.ReactElement {
   const { workspaceRepository } = useContainer();
   const [data, setData] = useState<TelegramWorkGroups | null>(null);
@@ -88,6 +91,19 @@ export function TelegramWorkGroupsCard({
       toast.success(`Группа «${groupLabel(group)}» подключена`);
     } catch (error) {
       toast.error((error as Error).message || 'Не удалось подключить группу');
+    } finally {
+      setBusyChatId(null);
+    }
+  };
+
+  const decideTransfer = async (group: TelegramWorkGroup, decision: 'approve' | 'reject'): Promise<void> => {
+    setBusyChatId(group.chatId);
+    try {
+      await workspaceRepository.decideTelegramGroupTransfer(workspaceId, group.chatId, decision);
+      toast.success(decision === 'approve' ? 'Группа перенесена' : 'Перенос отклонён');
+      await load();
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось сохранить решение');
     } finally {
       setBusyChatId(null);
     }
@@ -236,7 +252,38 @@ export function TelegramWorkGroupsCard({
                   <div className="truncate text-sm font-medium">{groupLabel(group)}</div>
                   <div className="font-mono text-xs text-muted-foreground">{group.chatId}</div>
                   {group.status === 'disconnected' ? (
-                    <div className="text-xs text-muted-foreground">Бота удалили из&nbsp;группы&nbsp;— задачи не&nbsp;принимаются.</div>
+                    <>
+                      <div className="text-xs text-muted-foreground">Бота удалили из&nbsp;группы&nbsp;— задачи не&nbsp;принимаются.</div>
+                      {group.transferRequest && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-approval/40 bg-approval/5 px-2 py-1.5 text-xs">
+                          <span className="min-w-0 flex-1">
+                            Пространство «{group.transferRequest.workspaceName ?? 'другое'}» просит перенести группу к&nbsp;себе.
+                            {!isOwner && ' Решает владелец пространства.'}
+                          </span>
+                          {isOwner && (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={busyChatId === group.chatId}
+                                onClick={() => void decideTransfer(group, 'approve')}
+                              >
+                                Разрешить перенос
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={busyChatId === group.chatId}
+                                onClick={() => void decideTransfer(group, 'reject')}
+                              >
+                                Отклонить
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <GroupProjects
                       group={group}

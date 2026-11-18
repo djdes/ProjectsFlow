@@ -96,6 +96,8 @@ export interface WorkspaceRepository {
   // Черновик группы (бот сам добавлен в группу, db/189): «Подключить». «Отклонить» — remove.
   confirmTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
   // Проекты группы целиком; пустой список — все проекты пространства.
+  // Перенос отключённой группы в другое пространство — решение владельца (db/189).
+  decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void>;
   setTelegramGroupProjects(id: string, chatId: number, projectIds: readonly string[]): Promise<TelegramWorkGroup>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;

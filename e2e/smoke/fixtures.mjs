@@ -367,6 +367,15 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
             status: 'draft',
             projectIds: [],
           },
+          // Отключённая группа, которую просит забрать другое пространство (решает владелец).
+          {
+            chatId: -1005555555555,
+            title: 'Старый чат продаж',
+            createdAt: '2026-10-01T09:00:00.000Z',
+            status: 'disconnected',
+            projectIds: [],
+            transferRequest: { workspaceName: 'Офис', requestedAt: '2026-11-17T10:00:00.000Z' },
+          },
         ],
         mainGroup: null,
         botUsername: 'ProjectsFlow_Bot',

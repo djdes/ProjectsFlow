@@ -6,11 +6,17 @@
 --           disconnected — бота удалили из группы.
 --   mode: задел для шага 4 (incident), пока без поведения.
 --   invited_by_tg_user_id — кто добавил бота в группу (Telegram id).
+--   transfer_* — запрос другого пространства забрать отключённую группу; группа переезжает
+--           только после одобрения владельцем текущего пространства.
 
 ALTER TABLE workspace_telegram_groups
   ADD COLUMN status ENUM('draft','active','disconnected') NOT NULL DEFAULT 'active',
   ADD COLUMN mode ENUM('standard','incident') NOT NULL DEFAULT 'standard',
-  ADD COLUMN invited_by_tg_user_id BIGINT NULL;
+  ADD COLUMN invited_by_tg_user_id BIGINT NULL,
+  ADD COLUMN transfer_to_workspace_id CHAR(36) NULL,
+  ADD COLUMN transfer_requested_by_user_id CHAR(36) NULL,
+  ADD COLUMN transfer_target_status ENUM('draft','active') NULL,
+  ADD COLUMN transfer_requested_at TIMESTAMP NULL;
 
 -- Проекты, доступные группе. Пусто — все проекты пространства (как до этой фичи).
 -- ON UPDATE CASCADE — группа переезжает на новый id при миграции в супергруппу.

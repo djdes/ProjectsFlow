@@ -62,6 +62,7 @@ function normalizeTelegramGroup(group: Partial<TelegramWorkGroup> & Pick<Telegra
     createdAt: group.createdAt ?? '',
     status: group.status ?? 'active',
     projectIds: group.projectIds ?? [],
+    transferRequest: group.transferRequest ?? null,
   };
 }
 
@@ -301,6 +302,10 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
       {},
     );
     return normalizeTelegramGroup(group);
+  }
+
+  async decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void> {
+    await httpClient.post<void>(`/workspaces/${id}/telegram-groups/${chatId}/transfer/${decision}`, {});
   }
 
   async setTelegramGroupProjects(

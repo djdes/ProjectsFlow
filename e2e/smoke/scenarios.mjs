@@ -1516,6 +1516,7 @@ export const scenarios = [
         await t.visible(page.getByText('Новая группа «Поддержка клиентов» ждёт подтверждения'), 'черновик группы');
         await t.visible(page.getByRole('button', { name: 'Подключить «Поддержка клиентов»' }), 'кнопка «Подключить» черновика');
         await t.visible(page.getByRole('button', { name: 'Добавить проект' }).first(), 'кнопка «Добавить проект»');
+        await t.visible(page.getByText('Пространство «Офис» просит перенести группу', { exact: false }), 'запрос на перенос группы');
         await t.visible(page.getByRole('button', { name: 'Из соседних пространств' }), 'кнопка «Из соседних пространств»');
       });
       await t.check('включатель напоминаний о срочных задачах', async () => {

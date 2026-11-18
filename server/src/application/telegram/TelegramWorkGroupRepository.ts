@@ -15,6 +15,17 @@ export type TelegramWorkGroup = {
   readonly invitedByTgUserId: number | null;
   // Проекты группы (db/189). Пусто — все проекты пространства.
   readonly projectIds: readonly string[];
+  // Запрос другого пространства забрать отключённую группу (db/189). Ждёт одобрения владельца
+  // текущего пространства группы; до этого группа остаётся за ним.
+  readonly transfer?: TelegramGroupTransfer | null;
+};
+
+export type TelegramGroupTransfer = {
+  readonly toWorkspaceId: string;
+  readonly requestedByUserId: string;
+  // Каким группа станет в новом пространстве: active — подключение кодом/по id, draft — бот добавлен.
+  readonly targetStatus: 'draft' | 'active';
+  readonly requestedAt: Date;
 };
 
 export type NewTelegramWorkGroup = {
@@ -43,8 +54,11 @@ export interface TelegramWorkGroupRepository {
   insert(group: NewTelegramWorkGroup): Promise<'created' | 'exists'>;
   // Перезаписать существующую строку (черновик/отключённая группа снова подключается или
   // снова становится черновиком): пространство, статус, кто добавил. Проекты сбрасываются,
-  // если пространство сменилось.
+  // если пространство сменилось; запрос на перенос снимается.
   replace(group: NewTelegramWorkGroup): Promise<void>;
+  // Запрос на перенос отключённой группы в другое пространство (новый заменяет прежний).
+  requestTransfer(chatId: number, transfer: Omit<TelegramGroupTransfer, 'requestedAt'>): Promise<void>;
+  clearTransfer(chatId: number): Promise<void>;
   setStatus(chatId: number, status: TelegramWorkGroupStatus): Promise<void>;
   // Проекты группы заменяются целиком (db/189).
   setProjects(chatId: number, projectIds: readonly string[], actorUserId: string): Promise<void>;

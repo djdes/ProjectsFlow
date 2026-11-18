@@ -29,8 +29,24 @@ function toGroup(row: WorkspaceTelegramGroupRow, projectIds: readonly string[] =
     status: row.status,
     invitedByTgUserId: row.invitedByTgUserId ?? null,
     projectIds,
+    transfer:
+      row.transferToWorkspaceId && row.transferRequestedByUserId && row.transferTargetStatus
+        ? {
+            toWorkspaceId: row.transferToWorkspaceId,
+            requestedByUserId: row.transferRequestedByUserId,
+            targetStatus: row.transferTargetStatus,
+            requestedAt: row.transferRequestedAt ?? row.createdAt,
+          }
+        : null,
   };
 }
+
+const NO_TRANSFER = {
+  transferToWorkspaceId: null,
+  transferRequestedByUserId: null,
+  transferTargetStatus: null,
+  transferRequestedAt: null,
+} as const;
 
 function isDuplicateKey(error: unknown): boolean {
   const e = error as { code?: string; cause?: { code?: string } };
@@ -114,11 +130,34 @@ export class DrizzleTelegramWorkGroupRepository implements TelegramWorkGroupRepo
           workspaceId: group.workspaceId,
           addedByUserId: group.addedByUserId,
           status: group.status ?? 'active',
+          ...NO_TRANSFER,
           ...(group.title ? { title: group.title.slice(0, 255) } : {}),
           ...(group.invitedByTgUserId !== undefined ? { invitedByTgUserId: group.invitedByTgUserId } : {}),
         })
         .where(eq(workspaceTelegramGroups.tgChatId, group.chatId));
     });
+  }
+
+  async requestTransfer(
+    chatId: number,
+    transfer: { toWorkspaceId: string; requestedByUserId: string; targetStatus: 'draft' | 'active' },
+  ): Promise<void> {
+    await this.db
+      .update(workspaceTelegramGroups)
+      .set({
+        transferToWorkspaceId: transfer.toWorkspaceId,
+        transferRequestedByUserId: transfer.requestedByUserId,
+        transferTargetStatus: transfer.targetStatus,
+        transferRequestedAt: new Date(),
+      })
+      .where(eq(workspaceTelegramGroups.tgChatId, chatId));
+  }
+
+  async clearTransfer(chatId: number): Promise<void> {
+    await this.db
+      .update(workspaceTelegramGroups)
+      .set(NO_TRANSFER)
+      .where(eq(workspaceTelegramGroups.tgChatId, chatId));
   }
 
   async setStatus(chatId: number, status: TelegramWorkGroupStatus): Promise<void> {
