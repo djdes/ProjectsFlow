@@ -428,6 +428,10 @@ export const projects = mysqlTable(
     description: text('description'),
     coverUrl: varchar('cover_url', { length: 500 }),
     coverPosition: int('cover_position').notNull().default(50),
+    // Выбор проекта из сообщения рабочей Telegram-группы (db/192): привычные названия и
+    // короткое описание для ИИ-выбора. NULL — не задано.
+    aliases: json('aliases').$type<string[] | null>(),
+    shortDescription: varchar('short_description', { length: 300 }),
     // Публичная ссылка доски (Publish to web, db/096). publicSlug — случайный неугадываемый
     // slug (URL: /p/<slug>), NULL = не публиковали. isPublic гейтит анонимный доступ.
     // publicIndexing — тоггл индексации поисковиками (default off). publishedAt — момент

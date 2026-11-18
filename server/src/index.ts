@@ -202,6 +202,7 @@ import { GetMyAccount } from './application/agent/GetMyAccount.js';
 import { DeleteProject } from './application/project/DeleteProject.js';
 import { SetProjectDispatcher } from './application/project/SetProjectDispatcher.js';
 import { SetProjectMultiTaskWorker } from './application/project/SetProjectMultiTaskWorker.js';
+import { SetProjectGroupHints } from './application/project/SetProjectGroupHints.js';
 import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
 import { GetProjectWorkerOverview } from './application/agent/GetProjectWorkerOverview.js';
 import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
@@ -2670,6 +2671,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
     }),
+    setGroupHints: new SetProjectGroupHints({ projects: projectRepo, members: projectMemberRepo }),
     listDispatcherCandidates: new ListDispatcherCandidates({
       projects: projectRepo,
       members: projectMemberRepo,

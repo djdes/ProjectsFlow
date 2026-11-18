@@ -69,6 +69,7 @@ import { publicBoardRouter } from './public/routes.js';
 import { telemetryRouter } from './telemetry/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
+import type { SetProjectGroupHints } from '../application/project/SetProjectGroupHints.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
 import type { GetProjectWorkerOverview } from '../application/agent/GetProjectWorkerOverview.js';
 import type { ListMyDispatchedProjects } from '../application/agent/ListMyDispatchedProjects.js';
@@ -458,6 +459,7 @@ type AppDeps = {
     readonly launchProject: LaunchProject;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
+    readonly setGroupHints: SetProjectGroupHints;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
     readonly getWorkerOverview: GetProjectWorkerOverview;
     readonly setGitTokenDelegation: SetGitTokenDelegation;

@@ -73,6 +73,8 @@ function toProject(row: ProjectRow): Project {
     dispatcherUserId: row.dispatcherUserId ?? null,
     multiTaskWorker: row.multiTaskWorker,
     description: row.description ?? null,
+    aliases: parseAliases(row.aliases),
+    shortDescription: row.shortDescription ?? null,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
     publicSlug: row.publicSlug ?? null,
@@ -777,4 +779,17 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       }
     });
   }
+}
+
+// JSON-колонка aliases (db/192): MySQL-драйвер может отдать строку — разбираем бережно.
+function parseAliases(raw: unknown): string[] {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(value) ? value.filter((a): a is string => typeof a === 'string') : [];
 }

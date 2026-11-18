@@ -31,6 +31,9 @@ export type UpdateProjectInput = {
   // GitHub-репо приложения проекта (db/097). Ставится EnsureProjectAppRepo.
   readonly appRepoFullName?: string | null;
   readonly publicAppearance?: PublicAppearance;
+  // Выбор проекта из рабочей Telegram-группы (db/192). Пустой список хранится как NULL.
+  readonly aliases?: readonly string[];
+  readonly shortDescription?: string | null;
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через
