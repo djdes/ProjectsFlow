@@ -315,6 +315,19 @@ export const telegramGroupProjects = mysqlTable(
   (t) => [primaryKey({ columns: [t.tgChatId, t.projectId] }), index('idx_tgp_project').on(t.projectId)],
 );
 
+// Участники рабочих Telegram-групп (db/191): снимок администраторов, chat_member, авторы сообщений.
+export const telegramGroupMembers = mysqlTable(
+  'telegram_group_members',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgUserId: bigint('tg_user_id', { mode: 'number' }).notNull(),
+    status: mysqlEnum('status', ['member', 'admin', 'left']).notNull(),
+    source: mysqlEnum('source', ['admins', 'join', 'message']).notNull(),
+    seenAt: timestamp('seen_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tgChatId, t.tgUserId] }), index('idx_tgm_user').on(t.tgUserId)],
+);
+
 // Одноразовые коды «Подключить группу» (db/181): t.me/<bot>?startgroup=wg_<code>. Только хеш.
 export const telegramGroupLinkTokens = mysqlTable(
   'telegram_group_link_tokens',

@@ -29,3 +29,22 @@ export type TelegramWorkGroups = {
   readonly mainGroup: { readonly chatId: number; readonly title: string | null } | null;
   readonly botUsername: string | null;
 };
+
+// Участники рабочей группы (db/191). Полного списка Telegram не даёт: бот знает
+// администраторов, вступивших/вышедших (если он сам администратор) и авторов сообщений.
+export type TelegramGroupLinkedMember = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly status: 'member' | 'admin';
+};
+
+export type TelegramGroupMembers = {
+  // Сколько участников группы знает бот (без вышедших).
+  readonly telegramCount: number;
+  // Из них — с аккаунтом PF (они молча добавляются в пространство редактором).
+  readonly linked: readonly TelegramGroupLinkedMember[];
+  // false — бот не администратор группы: о вступлениях и выходах Telegram ему не сообщает.
+  // null — неизвестно.
+  readonly botIsAdmin: boolean | null;
+};

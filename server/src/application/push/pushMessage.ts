@@ -153,6 +153,15 @@ function content(payload: NotificationPayload): { title: string; body: string; u
         body: `${payload.submitterDisplayName ?? 'Без входа'}: ${oneLine(payload.messageExcerpt)}`,
         url: '/admin?tab=support',
       };
+    case 'telegram_group_member_added':
+      return {
+        title: 'Новый участник из Telegram-группы',
+        body: lines(
+          `${payload.memberDisplayName} добавлен(а) редактором из группы «${payload.groupTitle ?? 'без названия'}»`,
+          payload.workspaceName,
+        ),
+        url: `/workspaces/${encodeURIComponent(payload.workspaceId)}/settings`,
+      };
   }
 }
 

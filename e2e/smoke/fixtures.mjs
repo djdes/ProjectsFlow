@@ -351,6 +351,13 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
       })],
     [/^\/workspaces\/([^/]+)\/invites$/, () => json({ invites: [] })],
     // Рабочие Telegram-группы (db/181) и кандидаты «Из соседних пространств».
+    // Участники рабочей группы (db/191): бот не админ — карточка показывает подсказку.
+    [/^\/workspaces\/([^/]+)\/telegram-groups\/-?\d+\/members$/, () =>
+      json({
+        telegramCount: 5,
+        linked: [{ userId: 'smoke-member-vera', displayName: 'Вера Лебедева', avatarUrl: null, status: 'admin' }],
+        botIsAdmin: false,
+      })],
     [/^\/workspaces\/([^/]+)\/telegram-groups$/, () =>
       json({
         groups: [

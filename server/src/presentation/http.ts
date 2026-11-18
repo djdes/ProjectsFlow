@@ -240,6 +240,7 @@ import { workspacesRouter } from './workspaces/routes.js';
 import { projectWorkspaceAccessRouter } from './projects/workspaceAccessRoutes.js';
 import type { ManageProjectSharing } from '../application/project/ManageProjectSharing.js';
 import type { ManageTelegramWorkGroups } from '../application/telegram/ManageTelegramWorkGroups.js';
+import type { SyncTelegramGroupMembers } from '../application/telegram/SyncTelegramGroupMembers.js';
 import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../application/workspace/InviteNeighbors.js';
 import type { ManageWorkspaceProjectAccess } from '../application/workspace/ManageWorkspaceProjectAccess.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
@@ -531,6 +532,8 @@ type AppDeps = {
     readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
     // Рабочие Telegram-группы (db/181).
     readonly telegramGroups?: ManageTelegramWorkGroups;
+    // Участники рабочих групп (db/191).
+    readonly telegramGroupMembers?: Pick<SyncTelegramGroupMembers, 'summary'>;
     readonly neighborInvites?: {
       readonly list: ListWorkspaceInviteCandidates;
       readonly invite: InviteNeighbors;
