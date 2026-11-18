@@ -136,3 +136,9 @@ test('scope=all при одном пространстве — подписи н
   assert.ok(ctx);
   assert.doesNotMatch(ctx!.block, /Пространство:/);
 });
+
+test('scope={projectIds} (рабочая Telegram-группа): только проекты группы', async () => {
+  const ctx = await prepareComposeContext('u1', spacesDeps(), 'поправить сайт', { projectIds: ['b1'] });
+  assert.ok(ctx);
+  assert.deepEqual(ctx!.candidates.map((c) => c.projectId), ['b1']);
+});

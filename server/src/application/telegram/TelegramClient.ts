@@ -238,4 +238,6 @@ export const TELEGRAM_ALLOWED_UPDATES = [
   'message',
   'callback_query',
   'inline_query',
+  // Бота добавили в группу или удалили из неё — черновик/отключение рабочей группы (db/189).
+  'my_chat_member',
 ] as const;

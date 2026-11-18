@@ -101,6 +101,8 @@ function makeHarness(opts?: {
   projectMembers?: Record<string, string[]>;
   // Мок LLM для автовыбора пространства по таймауту (id пространства или функция от промпта).
   llmWorkspacePick?: string | ((prompt: string) => string | Promise<string>);
+  // Проекты рабочей группы (db/189): chatId → id проектов. Без опции — без ограничения.
+  groupProjects?: Record<number, string[]>;
 }) {
   const projects: { id: string; name: string; workspaceId?: string }[] = opts?.projects ?? [
     { id: 'p1', name: 'Альфа' },
@@ -540,6 +542,9 @@ function makeHarness(opts?: {
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
     ...(opts?.now ? { now: opts.now } : {}),
+    ...(opts?.groupProjects
+      ? { groupProjects: { async allowedProjectIds(chatId: number) { return opts.groupProjects![chatId] ?? []; } } }
+      : {}),
   };
 
   const service = new TelegramComposerService(deps as any);
@@ -2796,4 +2801,38 @@ test('CSharpFixer: replyToMessageId is included in signed origin when replying t
       if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
     }
   }
+});
+// --- Проекты рабочей группы (db/189) ---
+const GROUP_CHAT = -1001;
+const TWO_PROJECTS = [
+  { id: 'p1', name: 'Альфа' },
+  { id: 'p2', name: 'Бета' },
+  { id: 'p3', name: 'Гамма' },
+];
+
+test('группа с одним проектом: задача без «+проекта» идёт в него без вопросов', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p2'] } });
+  await h.service.startFromMessage(111, GROUP_CHAT, 'починить сборку', gctx('u1'));
+  const d = [...h.drafts.values()][0]!;
+  assert.equal(d.projectId, 'p2');
+});
+
+test('группа со списком: проект вне списка — «В этой группе доступны», задача не создаётся', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] } });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+Гамма поправить парсинг', gctx('u1'));
+  assert.equal(h.drafts.size, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.match(h.sent.at(-1)!.text, /В этой группе доступны: «Альфа», «Бета»/);
+});
+
+test('группа со списком: «+проект» из списка выбирается как обычно', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] } });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+Бета поправить парсинг', gctx('u1'));
+  assert.equal([...h.drafts.values()][0]!.projectId, 'p2');
+});
+
+test('группа без списка проектов — как раньше, доступны все проекты автора', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: {} });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+Гамма поправить парсинг', gctx('u1'));
+  assert.equal([...h.drafts.values()][0]!.projectId, 'p3');
 });

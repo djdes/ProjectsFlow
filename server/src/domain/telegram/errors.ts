@@ -40,3 +40,11 @@ export class TelegramBotUnavailableError extends Error {
     this.name = 'TelegramBotUnavailableError';
   }
 }
+
+// Проект для группы — только из её пространства (db/189).
+export class TelegramGroupProjectInvalidError extends Error {
+  constructor() {
+    super('Для группы можно выбрать только проекты этого пространства.');
+    this.name = 'TelegramGroupProjectInvalidError';
+  }
+}

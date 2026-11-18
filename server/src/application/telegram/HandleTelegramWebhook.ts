@@ -187,6 +187,8 @@ export type TelegramUpdate = {
   };
   // Нажатие inline-кнопки (конструктор задач, Принять/Отказать, /tasks-навигация).
   readonly callback_query?: TelegramCallbackQuery;
+  // Бота добавили в группу или удалили из неё (db/189): черновик/отключение рабочей группы.
+  readonly my_chat_member?: TelegramMyChatMember;
   // Inline-режим (Phase D): `@ProjectsFlow_Bot ...` в поле ввода.
   readonly inline_query?: {
     readonly id: string;
@@ -194,6 +196,19 @@ export type TelegramUpdate = {
     readonly query: string;
   };
 };
+
+// https://core.telegram.org/bots/api#chatmemberupdated — только нужные поля.
+export type TelegramMyChatMember = {
+  readonly chat: { readonly id: number; readonly type: string; readonly title?: string };
+  readonly from: { readonly id: number };
+  readonly new_chat_member: { readonly status: string; readonly user?: { readonly id: number } };
+  readonly old_chat_member?: { readonly status: string };
+};
+
+// Callback выбора пространства для черновика группы: wd:<chatId>:<workspaceId>.
+const DRAFT_WORKSPACE_CALLBACK_PREFIX = 'wd:';
+const BOT_IN_GROUP_STATUSES = new Set(['member', 'administrator', 'creator', 'restricted']);
+const BOT_GONE_STATUSES = new Set(['left', 'kicked']);
 
 type TelegramMessage = NonNullable<TelegramUpdate['message']>;
 type TelegramAttachmentKind = TelegramDraftAttachment['kind'];
@@ -367,7 +382,8 @@ type Deps = {
   readonly groupOwners: TelegramGroupOwnerRepository;
   // Рабочие группы пространства (db/181): привязка по коду из deep link, «чья группа», переезд
   // группы на новый id. Без них группы ведут себя как раньше.
-  readonly workGroups?: Pick<ManageTelegramWorkGroups, 'bindFromCode' | 'resolveChat' | 'migrateChat'>;
+  readonly workGroups?: Pick<ManageTelegramWorkGroups, 'bindFromCode' | 'resolveChat' | 'migrateChat'> &
+    Partial<Pick<ManageTelegramWorkGroups, 'handleBotAdded' | 'handleBotRemoved' | 'chooseDraftWorkspace'>>;
   // Подключение людей, написавших задачу в рабочей группе (нет аккаунта или вне пространства).
   readonly onboarding?: Pick<
     TelegramGroupOnboarding,
@@ -457,10 +473,14 @@ export class HandleTelegramWebhook {
       if (data.startsWith(ONBOARDING_CALLBACK_PREFIX) && this.deps.onboarding) {
         return this.deps.onboarding.handleJoinCallback(cq, data.slice(ONBOARDING_CALLBACK_PREFIX.length));
       }
+      if (data.startsWith(DRAFT_WORKSPACE_CALLBACK_PREFIX)) {
+        return this.handleDraftWorkspaceChoice(cq, data.slice(DRAFT_WORKSPACE_CALLBACK_PREFIX.length));
+      }
       if (data.startsWith('ba:')) return this.handleAssigneeCallback(cq);
       if (data.startsWith('bt:')) return this.handleBrowseCallback(cq);
       return this.deps.composer.handleCallback(cq);
     }
+    if (update.my_chat_member) return this.handleMyChatMember(update.my_chat_member);
     // Inline-режим (Phase D).
     if (update.inline_query) {
       return this.handleInlineQuery(
@@ -1408,6 +1428,101 @@ export class HandleTelegramWebhook {
         '«Telegram-группы» → «Подключить группу».\n' +
         `Задачи пишите так: <code>@${escapeHtml(bot)} текст задачи</code>`,
     );
+  }
+
+  // Бота добавили в группу / удалили из неё (my_chat_member, db/189). Добавили — не рабочая
+  // группа становится черновиком пространства пригласившего (подтверждает руководитель в
+  // настройках). Удалили — рабочая группа отключается.
+  private async handleMyChatMember(update: TelegramMyChatMember): Promise<void> {
+    const workGroups = this.deps.workGroups;
+    if (!workGroups) return;
+    if (update.chat.type !== 'group' && update.chat.type !== 'supergroup') return;
+    const chatId = update.chat.id;
+    const status = update.new_chat_member.status;
+    if (BOT_GONE_STATUSES.has(status)) {
+      await workGroups.handleBotRemoved?.(chatId).catch((err) => {
+        console.warn('[tg-webhook] work group disconnect failed:', err);
+      });
+      return;
+    }
+    if (!BOT_IN_GROUP_STATUSES.has(status)) return;
+    // Права бота поменялись, а сам он в группе был и раньше — не новое добавление.
+    if (update.old_chat_member && BOT_IN_GROUP_STATUSES.has(update.old_chat_member.status)) return;
+    const run = () =>
+      this.createGroupDraft(chatId, update.chat.title ?? null, update.from.id).catch((err) => {
+        console.warn('[tg-webhook] work group draft failed:', err);
+      });
+    // Кнопка «Подключить группу» шлёт /start с кодом сразу после добавления: даём ему успеть,
+    // тогда черновик не нужен (как с приветствием).
+    const delay = this.deps.greetingDelayMs ?? 3_000;
+    if (delay <= 0) return run();
+    const timer = setTimeout(() => void run(), delay);
+    timer.unref?.();
+  }
+
+  private async createGroupDraft(chatId: number, title: string | null, inviterTgUserId: number): Promise<void> {
+    const workGroups = this.deps.workGroups;
+    if (!workGroups?.handleBotAdded) return;
+    const boundAt = this.recentlyBoundChats.get(chatId);
+    if (boundAt !== undefined && Date.now() - boundAt < 60_000) return;
+    const result = await workGroups.handleBotAdded({ id: chatId, title }, inviterTgUserId);
+    const label = title ? `Группа «${escapeHtml(title)}»` : 'Группа';
+    if (result.kind === 'draft') {
+      // Приветствие «как подключить» уже не нужно: группа ждёт подтверждения.
+      this.recentlyBoundChats.set(chatId, Date.now());
+      await this.reply(
+        chatId,
+        `🕓 ${label} добавлена в пространство «${escapeHtml(result.workspaceName)}» и ждёт подтверждения.
+
+` +
+          'Владелец или руководитель пространства подключит её в «Настройках пространства» → ' +
+          '«Рабочие Telegram-группы» и выберет проекты группы.',
+      );
+      return;
+    }
+    if (result.kind === 'choose') {
+      // Пространство выбирает пригласивший — в личке, чтобы не показывать группе чужие пространства.
+      const rows = result.options.slice(0, 20).map((option) => [
+        { text: option.name, callback_data: `${DRAFT_WORKSPACE_CALLBACK_PREFIX}${chatId}:${option.id}` },
+      ]);
+      await this.deps.client
+        .sendMessage({
+          chatId: inviterTgUserId,
+          text: `В какое пространство добавить ${label.charAt(0).toLowerCase()}${label.slice(1)}? ` +
+            'После выбора её подтвердит владелец или руководитель пространства.',
+          parseMode: 'HTML',
+          replyMarkup: { inline_keyboard: rows },
+        })
+        .catch((err) => console.warn('[tg-webhook] draft workspace choice DM failed:', err));
+    }
+    // not_linked / no_workspace — черновик не создаём, приветствие объяснит подключение кодом.
+  }
+
+  private async handleDraftWorkspaceChoice(cq: TelegramCallbackQuery, payload: string): Promise<void> {
+    const match = /^(-\d+):([0-9a-f-]{36})$/i.exec(payload);
+    const workGroups = this.deps.workGroups;
+    if (!match || !workGroups?.chooseDraftWorkspace) {
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const chatId = Number(match[1]);
+    const chat = await this.deps.client.getChat?.(chatId).catch(() => null);
+    const title = chat?.title ?? null;
+    const result = await workGroups.chooseDraftWorkspace({ id: chatId, title }, match[2]!, cq.from.id);
+    const text =
+      result.kind === 'draft'
+        ? `🕓 Группа добавлена в пространство «${escapeHtml(result.workspaceName)}» и ждёт подтверждения в настройках пространства.`
+        : result.kind === 'active'
+          ? 'ℹ️ Группа уже подключена к пространству.'
+          : '⚠️ Добавить группу в это пространство могут только его владелец или руководитель.';
+    await this.deps.client.answerCallbackQuery(cq.id);
+    if (cq.message) {
+      await this.deps.client
+        .editMessageText({ chatId: cq.message.chat.id, messageId: cq.message.message_id, text, parseMode: 'HTML' })
+        .catch(() => this.reply(cq.message!.chat.id, text));
+    } else {
+      await this.reply(cq.from.id, text);
+    }
   }
 
   private async handleWorkGroupBind(

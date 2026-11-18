@@ -172,6 +172,7 @@ import {
   TelegramBotUnavailableError,
   TelegramGroupNotFoundError,
   TelegramGroupNotAdminError,
+  TelegramGroupProjectInvalidError,
   TelegramGroupTakenError,
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
@@ -1015,6 +1016,10 @@ export function errorHandler(
   }
   if (err instanceof TelegramGroupTakenError) {
     res.status(409).json({ error: 'telegram_group_taken', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupProjectInvalidError) {
+    res.status(400).json({ error: 'telegram_group_project_invalid', message: err.message });
     return;
   }
   if (err instanceof TelegramNotLinkedError) {

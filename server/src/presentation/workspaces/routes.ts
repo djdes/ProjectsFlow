@@ -26,6 +26,7 @@ import { z } from 'zod';
 import {
   addMemberSchema,
   addTelegramWorkGroupSchema,
+  setTelegramGroupProjectsSchema,
   changeRoleSchema,
   createTelegramGroupLinkSchema,
   inviteNeighborsSchema,
@@ -186,8 +187,20 @@ type Deps = {
   readonly appUrl: string;
 };
 
-function telegramGroupToDto(g: TelegramWorkGroup): { chatId: number; title: string | null; createdAt: string } {
-  return { chatId: g.chatId, title: g.title, createdAt: g.createdAt.toISOString() };
+function telegramGroupToDto(g: TelegramWorkGroup): {
+  chatId: number;
+  title: string | null;
+  createdAt: string;
+  status: TelegramWorkGroup['status'];
+  projectIds: readonly string[];
+} {
+  return {
+    chatId: g.chatId,
+    title: g.title,
+    createdAt: g.createdAt.toISOString(),
+    status: g.status,
+    projectIds: g.projectIds,
+  };
 }
 
 export function workspacesRouter(deps: Deps): Router {
@@ -558,6 +571,28 @@ export function workspacesRouter(deps: Deps): Router {
       const { chatId } = addTelegramWorkGroupSchema.parse(req.body);
       const group = await deps.telegramGroups.addManual(req.params.id, req.user!.id, chatId);
       res.status(201).json({ group: telegramGroupToDto(group) });
+    } catch (error) { next(error); }
+  });
+  // Черновик группы (бот сам добавлен в группу, db/189): «Подключить» — владелец/руководитель.
+  // «Отклонить» — тот же DELETE ниже.
+  router.post('/:id/telegram-groups/:chatId/confirm', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const chatId = Number(req.params.chatId);
+      if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
+      const group = await deps.telegramGroups.confirm(req.params.id, req.user!.id, chatId);
+      res.json({ group: telegramGroupToDto(group) });
+    } catch (error) { next(error); }
+  });
+  // Проекты группы целиком (db/189). Пустой список — все проекты пространства.
+  router.put('/:id/telegram-groups/:chatId/projects', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const chatId = Number(req.params.chatId);
+      if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
+      const { projectIds } = setTelegramGroupProjectsSchema.parse(req.body);
+      const group = await deps.telegramGroups.setProjects(req.params.id, req.user!.id, chatId, projectIds);
+      res.json({ group: telegramGroupToDto(group) });
     } catch (error) { next(error); }
   });
   router.delete('/:id/telegram-groups/:chatId', async (req, res, next) => {
