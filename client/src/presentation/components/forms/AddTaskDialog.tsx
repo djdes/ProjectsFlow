@@ -39,6 +39,7 @@ import {
   isImageMime,
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
+import { RunModeSelect } from '@/presentation/components/tasks/RunMode';
 import { AssigneeSelect } from '@/presentation/components/tasks/AssigneeSelect';
 import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
 import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
@@ -47,7 +48,7 @@ import { TaskTemplatePicker } from '@/presentation/components/tasks/TaskTemplate
 import { TaskTypeSelect } from '@/presentation/components/tasks/TaskTypeSelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import type { RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
-import type { RalphMode, TaskPriority, TaskType } from '@/domain/task/Task';
+import type { RalphMode, RunMode, TaskPriority, TaskType } from '@/domain/task/Task';
 import { recurrenceAnchorDate, type TaskRecurrence } from '@/domain/task/TaskRecurrence';
 import type { WorkspaceTaskTemplate } from '@/domain/task/WorkspaceTaskTemplate';
 import { getTaskCreationDeadline } from '@/domain/task/defaultTaskDeadline';
@@ -173,6 +174,8 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
   const { defaultAssigneeUserId, creationFilters } = useFocusedInbox();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
+  // Режим запуска воркера (spec §5): по умолчанию «Обычное изменение».
+  const [runMode, setRunMode] = useState<RunMode>('quick');
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(user?.id ?? null);
   const [deadline, setDeadline] = useState<string | null>(null);
   const [initialDeadline, setInitialDeadline] = useState<string | null>(null);
@@ -305,6 +308,7 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
     setDescription('');
     setProjectId(null);
     setRalphMode('normal');
+    setRunMode('quick');
     setAssigneeUserId(null);
     setDeadline(null);
     setPriority(null);
@@ -472,6 +476,7 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
         description: finalDescription,
         status: 'backlog',
         ralphMode,
+        runMode,
         assigneeUserId: finalAssigneeUserId,
         deadline: finalDeadline,
         priority: finalPriority,
@@ -831,6 +836,14 @@ export function AddTaskDialog({ open, onOpenChange, initialDescription = null }:
               <RalphModeSelect
                 value={ralphMode}
                 onChange={setRalphMode}
+                disabled={saving}
+                variant="ghost"
+                iconOnly
+                className="!size-8 shrink-0 !p-0"
+              />
+              <RunModeSelect
+                value={runMode}
+                onChange={setRunMode}
                 disabled={saving}
                 variant="ghost"
                 iconOnly

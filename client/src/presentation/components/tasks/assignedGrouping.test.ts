@@ -56,6 +56,7 @@ function mk(overrides: {
     createdAt: overrides.createdAt ?? NOW,
     updatedAt: NOW,
     ralphMode: 'normal',
+    runMode: 'quick',
     ralphCancelRequestedAt: null,
     ralphCancelRequestedBy: null,
     ralphCancelRequestedByDisplayName: null,

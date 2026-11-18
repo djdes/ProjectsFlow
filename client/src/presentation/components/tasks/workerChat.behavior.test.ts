@@ -565,7 +565,7 @@ test('a pipeline run shows the stepper, role turns, folded executor tools, check
     assert.equal(view.host.querySelectorAll('[data-live-stage-live]').length, 1);
     // The spinner names the current stage of the stepper; the run caption is short.
     assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /Проверка версии…/);
-    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Конвейер · попытка 1 · идёт$/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Конвейер · попытка 1 · идёт · Обычное изменение$/);
   } finally { await view.close(); }
 });
 
@@ -582,7 +582,7 @@ test('old ralph-worker sessions keep the plain feed even when events carry role 
   const view = await mount(View, liveProps('pending_approval'));
   try {
     assert.match(view.host.textContent!, /Старый воркер/);
-    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Воркер завершено$/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Воркер завершено · Обычное изменение$/);
     assert.match(view.host.textContent!, /терминал\$ npm test/);
     assert.equal(view.host.querySelector('[data-pf-pipeline-stepper], [data-live-role-header], [data-live-journal]'), null);
   } finally { await view.close(); }

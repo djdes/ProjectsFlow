@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
 import type { TaskRecurrence } from '@/domain/task/TaskRecurrence';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -23,6 +23,8 @@ export type CreateTaskInput = {
   readonly afterTaskId?: string | null;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
+  // Режим запуска воркера; не передан — backend дефолтит 'quick'.
+  readonly runMode?: RunMode;
   // Единственный обязательный ответственный. Для inbox-задач это владелец inbox либо
   // shared-member; для именованного проекта — его участник. Сервер валидирует доступность.
   readonly assigneeUserId: string;
@@ -49,6 +51,8 @@ export type UpdateTaskInput = {
   // Вертикальное положение фокуса обложки (0..100); undefined = не менять. См. db/094.
   readonly coverPosition?: number;
   readonly ralphMode?: RalphMode;
+  // Режим запуска воркера; не передан — backend дефолтит 'quick'.
+  readonly runMode?: RunMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;
   // null = очистить дату начала; undefined = не менять.

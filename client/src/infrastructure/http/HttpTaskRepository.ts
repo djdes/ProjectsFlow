@@ -38,6 +38,7 @@ export type TaskDto = Omit<
   | 'createdAt'
   | 'updatedAt'
   | 'ralphMode'
+  | 'runMode'
   | 'ralphCancelRequestedAt'
   | 'ralphCancelRequestedBy'
   | 'ralphCancelRequestedByDisplayName'
@@ -65,6 +66,8 @@ export type TaskDto = Omit<
   statusBeforeDone?: import('@/domain/task/Task').TaskStatus | null;
   // Optional на проводе — старый backend без миграции 035 не присылает.
   ralphMode?: import('@/domain/task/Task').RalphMode;
+  // Optional — старый backend без db/188 не присылает.
+  runMode?: import('@/domain/task/Task').RunMode;
   // Optional — старый backend без 037 не отдаёт эти поля.
   ralphCancelRequestedAt?: string | null;
   ralphCancelRequestedBy?: string | null;
@@ -122,6 +125,7 @@ export function fromDto(dto: TaskDto): Task {
     statusBeforeDone: dto.statusBeforeDone ?? null,
     // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
     ralphMode: dto.ralphMode ?? 'normal',
+    runMode: dto.runMode === 'full' ? 'full' : 'quick',
     ralphCancelRequestedAt: dto.ralphCancelRequestedAt
       ? new Date(dto.ralphCancelRequestedAt)
       : null,

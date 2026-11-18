@@ -27,7 +27,7 @@ import type {
   LiveToolUsePayload,
 } from '@/domain/live/LiveEvent';
 import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
-import { type Task } from '@/domain/task/Task';
+import { RUN_MODE_META, type RunMode, type Task } from '@/domain/task/Task';
 import type { TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { CommentBody } from './CommentBody';
@@ -77,6 +77,9 @@ const PIPELINE_STATUS_RU: Record<LiveSession['status'], string> = {
 
 // Подпись начала запуска. Сессия, которая уже не текущая, но всё ещё «running» в ответе
 // сервера, читается как завершённая (её сменил следующий запуск).
+// Режим запуска сессии берём из задачи (spec §5); старые данные без поля — 'quick'.
+const taskRunMode = (task: Task): RunMode => (task.runMode === 'full' ? 'full' : 'quick');
+
 function runCaption(session: LiveSession, current: boolean): string {
   const status = session.status === 'running' && !current ? 'completed' : session.status;
   if (isPipelineSession(session)) return `Конвейер · попытка ${session.attempt} · ${PIPELINE_STATUS_RU[status]}`;
@@ -350,7 +353,7 @@ function TaskLiveChat({
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
           if (entry.kind === 'event' || entry.kind === 'tools') return <FeedRow key={entry.key} row={entry} firstShown={index === 0} live={entry.key === liveJournalKey} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
-          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}</p>;
+          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}{entry.session.id === runs.at(-1)?.session.id && <span data-run-mode={taskRunMode(task)}> · {RUN_MODE_META[taskRunMode(task)].label}</span>}</p>;
         })}
         {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} label={pipelineRun === runningRun ? spinnerStage : undefined} />}
         {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
