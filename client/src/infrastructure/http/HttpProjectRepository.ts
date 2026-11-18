@@ -89,6 +89,8 @@ type ProjectDto = {
   dispatcherUserId?: string | null;
   // Мультизадачный воркер. На старых list-ответах может отсутствовать — дефолтим false.
   multiTaskWorker?: boolean;
+  aliases?: string[] | null;
+  shortDescription?: string | null;
   // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
   isFavorite?: boolean;
   favoriteSortOrder?: number;
@@ -127,6 +129,8 @@ function fromDto(dto: ProjectDto): Project {
     financeVisibility: dto.financeVisibility ?? "owner",
     dispatcherUserId: dto.dispatcherUserId ?? null,
     multiTaskWorker: dto.multiTaskWorker ?? false,
+    aliases: dto.aliases ?? [],
+    shortDescription: dto.shortDescription ?? null,
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
     ...(dto.sharedWorkspaces && dto.sharedWorkspaces.length > 0 ? { sharedWorkspaces: dto.sharedWorkspaces } : {}),
@@ -306,6 +310,17 @@ export class HttpProjectRepository implements ProjectRepository {
     return this.client.get<ProjectWorkerOverview>(
       `/projects/${projectId}/worker-overview`,
     );
+  }
+
+  async setGroupHints(
+    projectId: string,
+    hints: { aliases: readonly string[]; shortDescription: string | null },
+  ): Promise<Project> {
+    const { project } = await this.client.put<{ project: ProjectDto }>(
+      `/projects/${projectId}/group-hints`,
+      hints,
+    );
+    return fromDto(project);
   }
 
   async setMultiTaskWorker(

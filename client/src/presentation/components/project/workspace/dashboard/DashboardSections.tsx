@@ -32,6 +32,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { hasOwnerRights } from "@/domain/project/ProjectMembership";
+import { ProjectGroupHintsCard } from "@/presentation/components/project/ProjectGroupHintsCard";
 import { toast } from "@/components/ui/sonner";
 import { useContainer } from "@/infrastructure/di/container";
 import {
@@ -567,6 +569,9 @@ export function OverviewSection({
           </div>
         </section>
       </div>
+      {hasOwnerRights(project.role) && !project.isInbox && (
+        <ProjectGroupHintsCard project={project} onProjectUpdated={onProjectUpdated} />
+      )}
     </div>
   );
 }

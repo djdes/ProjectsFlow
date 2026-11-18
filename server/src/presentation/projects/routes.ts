@@ -4,6 +4,7 @@ import type { ListProjects, ProjectWithRole } from '../../application/project/Li
 import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
+import type { SetProjectGroupHints } from '../../application/project/SetProjectGroupHints.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { PublishProject } from '../../application/project/PublishProject.js';
 import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
@@ -78,6 +79,7 @@ import {
   setPublicIndexingSchema,
   setPublicAppearanceSchema,
   setGitTokenDelegationSchema,
+  setGroupHintsSchema,
   toggleFavoriteSchema,
   updateProjectSchema,
 } from './schemas.js';
@@ -102,6 +104,7 @@ type Deps = {
   readonly launchProject: LaunchProject;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
+  readonly setGroupHints: SetProjectGroupHints;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
   // Карточка воркера в разделе Agents: capabilities + LIVE-статус + история прогонов.
   readonly getWorkerOverview: GetProjectWorkerOverview;
@@ -1207,6 +1210,21 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const body = setMultiTaskWorkerSchema.parse(req.body);
       const project = await deps.setMultiTaskWorker.execute(id, req.user!.id, body.enabled);
+      deps.notifyProjectChanged(id);
+      res.json({ project: toDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Привычные названия и описание проекта для выбора из рабочих Telegram-групп (db/192).
+  // Владелец/руководитель — проверка внутри SetProjectGroupHints.
+  router.put('/:id/group-hints', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const body = setGroupHintsSchema.parse(req.body);
+      const project = await deps.setGroupHints.execute(id, req.user!.id, body);
       deps.notifyProjectChanged(id);
       res.json({ project: toDto(project) });
     } catch (e) {

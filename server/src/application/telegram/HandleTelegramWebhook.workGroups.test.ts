@@ -17,6 +17,7 @@ function makeHarness(opts: {
   const botAddedCalls: Array<{ chatId: number; title: string | null; inviter: number }> = [];
   const botRemovedCalls: number[] = [];
   const chooseCalls: Array<{ chatId: number; workspaceId: string; tgUserId: number }> = [];
+  const transferCalls: Array<{ chatId: number; tgUserId: number; approve: boolean }> = [];
   const sent: Array<{ chatId: number; text: string }> = [];
   const composerCalls: Array<{ text: string; groupCtx: unknown }> = [];
   const prompts: OnboardingPromptInput[] = [];
@@ -78,6 +79,12 @@ function makeHarness(opts: {
         chooseCalls.push({ chatId: chat.id, workspaceId, tgUserId });
         return opts.chooseResult ?? { kind: 'draft', workspaceName: 'Офис' };
       },
+      async decideTransferFromTelegram(chatId: number, tgUserId: number, approve: boolean) {
+        transferCalls.push({ chatId, tgUserId, approve });
+        return tgUserId === 801
+          ? { kind: approve ? 'approved' : 'rejected', groupTitle: 'Офис', toWorkspaceName: 'Программисты' }
+          : { kind: 'forbidden' };
+      },
     },
     groupMembers: {
       async recordMessageAuthor(chatId: number, tgUserId: number) { memberEvents.push(['author', chatId, tgUserId]); },
@@ -108,7 +115,7 @@ function makeHarness(opts: {
   const h = new HandleTelegramWebhook(deps as never);
   return {
     h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts,
-    pairedTelegramIds, bindSenders, botAddedCalls, botRemovedCalls, chooseCalls, memberEvents,
+    pairedTelegramIds, bindSenders, botAddedCalls, botRemovedCalls, chooseCalls, transferCalls, memberEvents,
   };
 }
 
@@ -361,6 +368,24 @@ test('обычная рабочая группа не получает режи�
   assert.equal((x.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, undefined);
 });
 
+test('запрос на перенос: кнопки в личке владельца решают перенос, чужое нажатие — нет', async () => {
+  const x = makeHarness();
+  const press = (from: number, data: string) => x.h.execute({
+    update_id: 7,
+    callback_query: { id: 'cq2', from: { id: from }, message: { message_id: 10, chat: { id: from } }, data },
+  } as TelegramUpdate);
+  await press(802, 'wt:a:-3001');
+  assert.equal(x.sent.length, 0, 'not the owner: only an alert');
+  await press(801, 'wt:a:-3001');
+  assert.match(x.sent.at(-1)!.text, /Перенос группы «Офис» в «Программисты» разрешён/);
+  await press(801, 'wt:r:-3001');
+  assert.match(x.sent.at(-1)!.text, /отклонён/);
+  assert.deepEqual(x.transferCalls, [
+    { chatId: -3001, tgUserId: 802, approve: true },
+    { chatId: -3001, tgUserId: 801, approve: true },
+    { chatId: -3001, tgUserId: 801, approve: false },
+  ]);
+});
 // Участники рабочих групп (db/191).
 test('участники группы: автор сообщения записывается, даже без упоминания бота; боты — нет', async () => {
   const x = makeHarness();

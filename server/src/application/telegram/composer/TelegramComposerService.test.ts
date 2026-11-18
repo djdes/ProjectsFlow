@@ -2855,6 +2855,28 @@ test('группа без списка проектов — как раньше,
   assert.equal([...h.drafts.values()][0]!.projectId, 'p3');
 });
 
+// --- Привычные названия проектов в группе (db/192) ---
+const HINTED_PROJECTS = [
+  { id: 'p1', name: 'Конфигуратор', aliases: ['конфиг', 'кассы'] },
+  { id: 'p2', name: 'Планер' },
+];
+
+test('рабочая группа: проект по привычному названию и основе, без «+проекта»', async () => {
+  const opts = { projects: HINTED_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] }, standardGroups: { [GROUP_CHAT]: 'Скрипты' } };
+  const byAlias = makeHarness(opts);
+  await byAlias.service.startFromMessage(111, GROUP_CHAT, 'в конфиг добавить поле скидки', gctx('u1'));
+  assert.equal([...byAlias.drafts.values()][0]!.projectId, 'p1');
+  const byStem = makeHarness(opts);
+  await byStem.service.startFromMessage(111, GROUP_CHAT, 'в планере пропали события', gctx('u1'));
+  assert.equal([...byStem.drafts.values()][0]!.projectId, 'p2');
+});
+
+test('рабочая группа: «+псевдоним» выбирает проект', async () => {
+  const h = makeHarness({ projects: HINTED_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] }, standardGroups: { [GROUP_CHAT]: null } });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+кассы добавить поле', gctx('u1'));
+  assert.equal([...h.drafts.values()][0]!.projectId, 'p1');
+});
+
 // --- Режим группы incident (spec 2026-11-17, раздел 3) ---
 const INCIDENT_CHAT = -100777;
 const INCIDENT_KEY = 'incident-signing-key-not-a-secret-1234567';

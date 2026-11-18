@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { stripCsharpFixerOrigin, type IntakeSource } from './csharpFixerIntake.js';
+import { pickProjectByHints, type HintedProject } from './projectHints.js';
 
 // Режим группы `incident` (spec 2026-11-17, раздел 3) — обобщение чата CSharpFixer: chatId и
 // projectId берутся из рабочей группы, а не из env. Подпись HMAC — общий секрет сервер ↔ воркер
@@ -83,21 +84,11 @@ export function readIncidentOrigin(text: string, signingKey: string | null): Inc
 }
 
 // Проект инцидента по тексту среди проектов группы. Один проект — без вопросов; иначе ищем
-// упоминание названия (или его основы) в тексте. null — не понять, надо переспросить.
+// название, привычное название (aliases, db/192) или их основу. null — не понять, переспросить.
 export function pickIncidentProject(
   text: string,
-  projects: readonly { readonly id: string; readonly name: string }[],
+  projects: readonly HintedProject[],
 ): string | null {
   if (projects.length === 1) return projects[0]!.id;
-  const haystack = ` ${text.toLowerCase().replace(/ё/g, 'е')} `;
-  const hits = projects.filter((p) => {
-    const name = p.name.toLowerCase().replace(/ё/g, 'е').trim();
-    if (name.length < 2) return false;
-    if (haystack.includes(name)) return true;
-    // «в планере» ↔ «Планер»: основа слова без окончания, только для достаточно длинных имён.
-    const cut = name.length >= 6 ? 2 : name.length >= 4 ? 1 : 0;
-    const stem = cut > 0 ? name.slice(0, name.length - cut) : null;
-    return stem !== null && !stem.includes(' ') && haystack.includes(stem);
-  });
-  return hits.length === 1 ? hits[0]!.id : null;
+  return pickProjectByHints(text, projects)?.id ?? null;
 }

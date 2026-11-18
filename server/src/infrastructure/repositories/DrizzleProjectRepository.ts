@@ -74,6 +74,8 @@ function toProject(row: ProjectRow): Project {
     dispatcherUserId: row.dispatcherUserId ?? null,
     multiTaskWorker: row.multiTaskWorker,
     description: row.description ?? null,
+    aliases: parseAliases(row.aliases),
+    shortDescription: row.shortDescription ?? null,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
     publicSlug: row.publicSlug ?? null,
@@ -190,7 +192,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance' | 'aliases' | 'shortDescription'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
@@ -205,6 +207,8 @@ export class DrizzleProjectRepository implements ProjectRepository {
     if (patch.coverPosition !== undefined) set.coverPosition = patch.coverPosition;
     if (patch.appRepoFullName !== undefined) set.appRepoFullName = patch.appRepoFullName;
     if (patch.publicAppearance !== undefined) set.publicAppearance = patch.publicAppearance;
+    if (patch.aliases !== undefined) set.aliases = patch.aliases.length > 0 ? [...patch.aliases] : null;
+    if (patch.shortDescription !== undefined) set.shortDescription = patch.shortDescription;
 
     if (Object.keys(set).length > 0) {
       try {
@@ -485,4 +489,17 @@ export async function deleteProjectRows(tx: Transaction, projectId: string): Pro
 
   // Финальный — сам проект.
   await tx.delete(projects).where(eq(projects.id, projectId));
+}
+
+// JSON-колонка aliases (db/192): MySQL-драйвер может отдать строку — разбираем бережно.
+function parseAliases(raw: unknown): string[] {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(value) ? value.filter((a): a is string => typeof a === 'string') : [];
 }

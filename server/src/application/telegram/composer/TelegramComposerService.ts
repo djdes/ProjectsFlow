@@ -26,6 +26,7 @@ import type { TelegramTaskMessageRepository } from '../TelegramTaskMessageReposi
 import type { TelegramTaskOriginRepository } from '../TelegramTaskOriginRepository.js';
 import { extractWorkerMention } from './workerMention.js';
 import { matchProjectMention } from './projectMention.js';
+import { matchProjectAlias, pickProjectByHints } from './projectHints.js';
 import type { WorkerPolicy } from '../../workspace/WorkerPolicy.js';
 import { WorkerDisabledError } from '../../../domain/workspace/errors.js';
 import type { SendAgentTelegramNotification } from '../SendAgentTelegramNotification.js';
@@ -1365,8 +1366,10 @@ export class TelegramComposerService {
         else projectId = greedy.item.id;
       } else {
         const r = fuzzyMatch(parsed.projectQuery, all, (p) => p.name);
-        if (r.unique) {
-          projectId = r.unique.id;
+        // Привычное название проекта (aliases, db/192): «+конфиг» → «Конфигуратор».
+        const alias = r.unique ? null : matchProjectAlias(parsed.projectQuery, all);
+        if (r.unique || alias) {
+          projectId = (r.unique ?? alias)!.id;
         } else {
           const list = r.matches.length > 0 ? r.matches : all;
           offeredProjects = await this.offeredProjects(userId, list);
@@ -1378,8 +1381,11 @@ export class TelegramComposerService {
     if (parsed.projectQuery === null && !projectId) {
       const all = (await this.chatProjects(userId, chatId)).filter(p => !p.isInbox);
       projectId = matchProjectMention(taskText, all)?.id ?? null;
+      const inGroup = chatId < 0 && (await this.deps.groupProjects?.standardGroupInfo?.(chatId).catch(() => null)) != null;
       // В группе с одним доступным проектом — он, без вопросов (db/189).
       if (!projectId && all.length === 1 && (await this.chatProjectScope(chatId))) projectId = all[0]!.id;
+      // В рабочей группе — по названию, привычному названию или их основе (db/192).
+      if (!projectId && inGroup) projectId = pickProjectByHints(taskText, all)?.id ?? null;
     }
 
     if (taskText.length === 0) {
@@ -2489,7 +2495,13 @@ export class TelegramComposerService {
       ).filter((p) => !p.isInbox);
     if (parsed.projectQuery === null) {
       const all = await list();
-      return { projectId: matchProjectMention(taskText, all)?.id ?? null, taskText };
+      const mentioned = matchProjectMention(taskText, all)?.id ?? null;
+      // В рабочей группе — ещё и по привычному названию/основе (db/192); иначе решит ИИ.
+      const inGroup =
+        chatId !== null && chatId < 0 &&
+        (await this.deps.groupProjects?.standardGroupInfo?.(chatId).catch(() => null)) != null;
+      const hinted = !mentioned && inGroup ? (pickProjectByHints(taskText, all)?.id ?? null) : null;
+      return { projectId: mentioned ?? hinted, taskText };
     }
     const all = await list();
     const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
@@ -2499,6 +2511,8 @@ export class TelegramComposerService {
     if (greedy) return { projectId: greedy.item.id, taskText: greedy.remainder.trim() };
     const r = fuzzyMatch(parsed.projectQuery, all, (p) => p.name);
     if (r.unique) return { projectId: r.unique.id, taskText };
+    const alias = matchProjectAlias(parsed.projectQuery, all);
+    if (alias) return { projectId: alias.id, taskText };
     return { projectId: null, taskText };
   }
 

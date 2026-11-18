@@ -14,7 +14,7 @@ import {
 } from './replyCommentTarget.js';
 import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
 import type { ManageTelegramWorkGroups, ResolvedWorkGroup } from './ManageTelegramWorkGroups.js';
-import { WORK_GROUP_CODE_PREFIX } from './ManageTelegramWorkGroups.js';
+import { TRANSFER_CALLBACK_PREFIX, WORK_GROUP_CODE_PREFIX } from './ManageTelegramWorkGroups.js';
 import type { SyncTelegramGroupMembers } from './SyncTelegramGroupMembers.js';
 import type { TelegramGroupOnboarding } from './TelegramGroupOnboarding.js';
 import { ONBOARDING_CALLBACK_PREFIX, ONBOARDING_START_PREFIX } from './TelegramGroupOnboarding.js';
@@ -399,7 +399,7 @@ type Deps = {
   // Рабочие группы пространства (db/181): привязка по коду из deep link, «чья группа», переезд
   // группы на новый id. Без них группы ведут себя как раньше.
   readonly workGroups?: Pick<ManageTelegramWorkGroups, 'bindFromCode' | 'resolveChat' | 'migrateChat'> &
-    Partial<Pick<ManageTelegramWorkGroups, 'handleBotAdded' | 'handleBotRemoved' | 'chooseDraftWorkspace'>>;
+    Partial<Pick<ManageTelegramWorkGroups, 'handleBotAdded' | 'handleBotRemoved' | 'chooseDraftWorkspace' | 'decideTransferFromTelegram'>>;
   // Участники рабочих групп (db/191): авторы сообщений, вступления/выходы, права бота.
   readonly groupMembers?: Pick<
     SyncTelegramGroupMembers,
@@ -493,6 +493,9 @@ export class HandleTelegramWebhook {
       if (data.startsWith('px:')) return this.handleCloseProposalDismiss(cq, data.slice(3));
       if (data.startsWith(ONBOARDING_CALLBACK_PREFIX) && this.deps.onboarding) {
         return this.deps.onboarding.handleJoinCallback(cq, data.slice(ONBOARDING_CALLBACK_PREFIX.length));
+      }
+      if (data.startsWith(TRANSFER_CALLBACK_PREFIX)) {
+        return this.handleTransferDecision(cq, data.slice(TRANSFER_CALLBACK_PREFIX.length));
       }
       if (data.startsWith(DRAFT_WORKSPACE_CALLBACK_PREFIX)) {
         return this.handleDraftWorkspaceChoice(cq, data.slice(DRAFT_WORKSPACE_CALLBACK_PREFIX.length));
@@ -1593,6 +1596,41 @@ export class HandleTelegramWebhook {
       return;
     }
     // not_linked / no_workspace — черновик не создаём, приветствие объяснит подключение кодом.
+  }
+
+  // «Разрешить перенос» / «Отклонить» в личке владельца прежнего пространства группы.
+  private async handleTransferDecision(cq: TelegramCallbackQuery, payload: string): Promise<void> {
+    const match = /^([ar]):(-\d+)$/.exec(payload);
+    const workGroups = this.deps.workGroups;
+    if (!match || !workGroups?.decideTransferFromTelegram) {
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const result = await workGroups.decideTransferFromTelegram(Number(match[2]), cq.from.id, match[1] === 'a');
+    if (result.kind === 'forbidden') {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Решить может только владелец пространства группы.',
+        showAlert: true,
+      });
+      return;
+    }
+    const decided = 'groupTitle' in result ? result : null;
+    const group = decided?.groupTitle ? `«${escapeHtml(decided.groupTitle)}»` : '';
+    const target = decided?.toWorkspaceName ? ` в «${escapeHtml(decided.toWorkspaceName)}»` : '';
+    const text =
+      result.kind === 'approved'
+        ? `✅ Перенос группы ${group}${target} разрешён.`
+        : result.kind === 'rejected'
+          ? `🚫 Перенос группы ${group}${target} отклонён: группа осталась у вас отключённой.`
+          : 'ℹ️ Запрос на перенос уже решён или отменён.';
+    await this.deps.client.answerCallbackQuery(cq.id);
+    if (cq.message) {
+      await this.deps.client
+        .editMessageText({ chatId: cq.message.chat.id, messageId: cq.message.message_id, text, parseMode: 'HTML' })
+        .catch(() => this.reply(cq.message!.chat.id, text));
+    } else {
+      await this.reply(cq.from.id, text);
+    }
   }
 
   private async handleDraftWorkspaceChoice(cq: TelegramCallbackQuery, payload: string): Promise<void> {

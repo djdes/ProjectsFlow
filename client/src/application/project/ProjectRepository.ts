@@ -499,6 +499,11 @@ export interface ProjectRepository {
   // Мультизадачный воркер проекта: вкл/выкл параллельное выполнение задач диспетчером.
   // Любой участник проекта (viewer+). Сервер вернёт обновлённый проект.
   setMultiTaskWorker(projectId: string, enabled: boolean): Promise<Project>;
+  // Привычные названия + короткое описание для рабочих Telegram-групп (db/192). Владелец/руководитель.
+  setGroupHints(
+    projectId: string,
+    hints: { aliases: readonly string[]; shortDescription: string | null },
+  ): Promise<Project>;
   // Публичная ссылка доски (Publish to web, db/096). Owner-only. publish → возвращает
   // slug + полный url; unpublish снимает; setPublicIndexing тогглит индексацию поисковиками.
   publish(projectId: string): Promise<{ slug: string; url: string }>;

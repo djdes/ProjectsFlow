@@ -54,6 +54,10 @@ export type Project = {
   readonly description: string | null;
   readonly coverUrl: string | null;
   readonly coverPosition: number;
+  // Выбор проекта из сообщения рабочей Telegram-группы (db/192): привычные названия
+  // («конфиг», «планер») и короткое описание для ИИ-выбора. Необязательны в тестовых фабриках.
+  readonly aliases?: readonly string[];
+  readonly shortDescription?: string | null;
   // Публичная ссылка доски (db/096, Publish to web). publicSlug — случайный неугадываемый
   // slug (URL: /p/<slug>); NULL = проект не публиковали. isPublic — опубликовано ли сейчас
   // (гейтит анонимный доступ). publicIndexing — тоггл индексации поисковиками (default off).

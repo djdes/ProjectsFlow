@@ -1,4 +1,5 @@
 import { selectInboxView } from './inbox/selectInboxView';
+import { filterFromGroups, isFromGroup } from '@/domain/task/groupOriginFilter';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
@@ -116,6 +117,7 @@ import {
 import {
   DueFilterChips,
   ReplyFilterChip,
+  GroupFilterChip,
   InboxSearch,
   InboxSectionSwitch,
   ManualIcon,
@@ -439,6 +441,8 @@ export function AssignedToMeBlock({
   const [due, setDue] = useState<DueKind | null>(null);
   // «Ответить»: вместо вкладок — задачи, где мне адресовали комментарий и я не ответил.
   const [replyOnly, setReplyOnly] = useState(false);
+  // «Только из групп» (groupOrigin, db/190) — поверх вкладки, как поиск.
+  const [groupOnly, setGroupOnly] = useState(false);
   useEffect(() => {
     setCreationFilters({ projectId: filterProject, due: due === 'today' || due === 'none' ? due : null });
     return () => setCreationFilters({ projectId: null, due: null });
@@ -949,9 +953,14 @@ export function AssignedToMeBlock({
   // (без учёта самого срока), иначе выбранный чип обнулял бы соседние.
   const today = ymd(startOfDay(new Date()));
   const normalizedQuery = query.trim().toLowerCase();
+  const groupTaskCount = useMemo(() => visibleTasks.filter(isFromGroup).length, [visibleTasks]);
   const queriedTasks = useMemo(
-    () => (normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks),
-    [visibleTasks, normalizedQuery],
+    () =>
+      filterFromGroups(
+        normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks,
+        groupOnly,
+      ) as InboxBlockTask[],
+    [visibleTasks, normalizedQuery, groupOnly],
   );
   // Приёмка руководителем (db/150). Состав полки зависит от роли, и это не косметика:
   //
@@ -972,11 +981,11 @@ export function AssignedToMeBlock({
     [toMeTasks, byMeDisplayTasks, focusedTasks, approvalQueueTasks, focusedMemberId, isApprover],
   );
   const approvalQueried = useMemo(
-    () => replyFilterOn
+    () => filterFromGroups(replyFilterOn
       ? awaitingReplyTasks.filter((task) => task.status === 'pending_approval' && matchesInboxQuery(task, normalizedQuery))
       : approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
-        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))),
-    [replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
+        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))), groupOnly) as InboxBlockTask[],
+    [groupOnly, replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
   );
   const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
     () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide, workerEnabled }),
@@ -1760,12 +1769,13 @@ export function AssignedToMeBlock({
   // Единая кнопка «Фильтры»: сортировка (когда есть задачи) + скрыть-выполненные (всегда) +
   // фильтры ответственного/проекта (только вкладка «Для всех»).
   const hasLocalFilters =
-    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn;
+    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn || groupOnly;
   const resetFilters = (): void => {
     setQuery('');
     setSearchOpen(false);
     setDue(null);
     setReplyOnly(false);
+    setGroupOnly(false);
     setFilterTo(null);
     setFilterProject(null);
   };
@@ -2435,6 +2445,9 @@ export function AssignedToMeBlock({
           count={awaitingReplyTasks.length}
           onToggle={() => setReplyOnly((on) => !on)}
         />
+      )}
+      {(groupOnly || groupTaskCount > 0) && (
+        <GroupFilterChip active={groupOnly} count={groupTaskCount} onToggle={() => setGroupOnly((on) => !on)} />
       )}
       {isWide && hasLocalFilters && (
         <button

@@ -38,3 +38,14 @@ test('project pick: single project, name/stem match, ambiguity', () => {
   assert.equal(pickIncidentProject('всё сломалось', projects), null);
   assert.equal(pickIncidentProject('планер и конфигуратор', projects), null);
 });
+
+test('project pick: aliases and their stems', () => {
+  const projects = [
+    { id: 'a', name: 'YesBeat Planner', aliases: ['планер'] },
+    { id: 'b', name: 'YesBeat Config', aliases: ['конфиг', 'настройки'] },
+  ];
+  assert.equal(pickIncidentProject('в конфиге не сохраняется', projects), 'b');
+  assert.equal(pickIncidentProject('Планер не открывается', projects), 'a');
+  assert.equal(pickIncidentProject('yesbeat config упал', projects), 'b');
+  assert.equal(pickIncidentProject('в планере и в конфиге', projects), null);
+});
