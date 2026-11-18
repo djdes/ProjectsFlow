@@ -111,6 +111,10 @@ export type ComposeProjectScope = 'active' | 'all' | { readonly projectIds: read
  */
 // Привычные названия и короткое описание проекта (db/192): по ним модель выбирает проект,
 // когда в сообщении (например из рабочей группы) нет его точного названия.
+// Люди пишут латинские названия проектов русским транслитом — подсказка модели.
+const TRANSLIT_NOTE =
+  'Названия проектов часто пишут по-русски транслитом или на слух (например «есбит» — Yesbeat, «конфиг» — Config): сопоставляй их с проектами по звучанию.';
+
 export function projectHintLine(p: { readonly aliases?: readonly string[]; readonly shortDescription?: string | null }): string {
   const aliases = (p.aliases ?? []).filter((a) => a.trim().length > 0);
   const description = p.shortDescription?.trim() ?? '';
@@ -261,6 +265,6 @@ export async function prepareComposeContext(
   }
 
   // «Сегодня» — в начале блока: модель резолвит относительные сроки от этой даты.
-  const block = `Сегодня: ${todayIso()}\n\n${parts.join('\n\n---\n\n')}`;
+  const block = `Сегодня: ${todayIso()}\n${TRANSLIT_NOTE}\n\n${parts.join('\n\n---\n\n')}`;
   return { block, candidates };
 }

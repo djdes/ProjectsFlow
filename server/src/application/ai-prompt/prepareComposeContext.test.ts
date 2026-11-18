@@ -155,3 +155,8 @@ test('привычные названия и описание проекта (db
   assert.match(ctx!.block, /\[projectId=p1\] Конфигуратор\nТакже называют: конфиг\nО проекте: Настройки касс\n/);
   assert.match(ctx!.block, /\[projectId=p2\] Бета\nУчастники/);
 });
+
+test('модели сказано, что названия проектов пишут транслитом', async () => {
+  const ctx = await prepareComposeContext('u1', makeDeps());
+  assert.match(ctx!.block, /транслитом/);
+});
