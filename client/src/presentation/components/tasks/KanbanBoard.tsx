@@ -44,7 +44,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
-import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RunMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
@@ -1024,12 +1024,14 @@ export function KanbanBoard({
   const topAnchorFor = (status: TaskStatus): string | null =>
     status === 'done' ? null : (grouped[status][0]?.id ?? null);
 
-  const handleQuickPromote = async (task: Task, target?: TaskStatus): Promise<void> => {
+  const handleQuickPromote = async (task: Task, target?: TaskStatus, runMode?: RunMode): Promise<void> => {
     // «Шаг вперёд» по колонкам: Черновики→В работе→Воркер→Готово (quickPromoteNext).
     // Явный target — кнопка «Взять в работу» (→ 'manual') с любой колонки.
     const next = target ?? quickPromoteNext(task.status, workerEnabled);
     if (!next) return;
     try {
+      // Режим из меню «Передать воркеру» сохраняем ДО очереди: диспетчер читает его из задачи.
+      if (next === 'todo' && runMode && runMode !== task.runMode) await update(task.id, { runMode });
       await moveWithUndo(task, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
     } catch (err) {
       toast.error(`Не удалось перенести: ${(err as Error).message}`);

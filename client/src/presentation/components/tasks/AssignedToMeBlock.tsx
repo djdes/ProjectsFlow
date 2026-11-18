@@ -24,7 +24,8 @@ import {
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual } from './statusLabels';
-import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
+import { WorkerHandoffMenu } from './WorkerHandoffMenu';
+import { WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
 import {
   applyPatches,
   settledPatchIds,
@@ -86,7 +87,7 @@ import { useInboxRealtimeRefresh } from '@/presentation/hooks/useInboxRealtimeRe
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
-import type { Task, RalphMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { Task, RalphMode, RunMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import {
   ASSIGNED_GROUPING_LABELS,
@@ -1430,7 +1431,7 @@ export function AssignedToMeBlock({
   // Возврат НЕ в todo: в личных входящих это колонка «Воркер», задачу забрал бы Ralph.
   // 'todo' — только явная кнопка «Передать воркеру» на проектной карточке очереди.
   const setWorkStatus = useCallback(
-    async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo'): Promise<void> => {
+    async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo', runMode?: RunMode): Promise<void> => {
       if (item.status === next) return;
       // Карточка переезжает на полку сразу, ещё до ответа сервера — иначе после дропа она
       // секунду висит на старом месте и жест читается как неудавшийся.
@@ -1438,6 +1439,10 @@ export function AssignedToMeBlock({
       // Вспышка полки — тоже сразу: она подтверждает жест, а не ответ сервера.
       if (next === 'manual') setWorkFlash((prev) => ({ id: item.id, key: (prev?.key ?? 0) + 1 }));
       try {
+        // Режим из меню «Передать воркеру» — до постановки в очередь (диспетчер читает задачу).
+        if (next === 'todo' && runMode && runMode !== item.runMode) {
+          await taskRepository.update(item.projectId, item.id, { runMode });
+        }
         await taskRepository.move(item.projectId, item.id, {
           targetStatus: next,
           beforeTaskId: null,
@@ -1665,13 +1670,13 @@ export function AssignedToMeBlock({
     workerHandoffAvailable && item.canModify && !item.isInbox && canSendToWorker(item.status);
   const workerHandoffAction = (item: InboxBlockTask): React.ReactNode =>
     canHandOff(item) ? (
-      <QuickAction
-        label={WORKER_HANDOFF_LABEL}
-        className="text-primary"
-        onClick={() => void setWorkStatus(item, 'todo')}
+      <WorkerHandoffMenu
+        runMode={item.runMode}
+        className={cn(QUICK_ACTION_CLASS, 'text-primary')}
+        onPick={(mode) => void setWorkStatus(item, 'todo', mode)}
       >
         <WorkerHandoffIcon className="size-3.5" />
-      </QuickAction>
+      </WorkerHandoffMenu>
     ) : null;
   // Свайп вправо на тач-экране — «дальше по процессу»: карточка очереди → в работу; карточка
   // «В работе» → на утверждение (своя, где работу принимает руководитель) или в готово.

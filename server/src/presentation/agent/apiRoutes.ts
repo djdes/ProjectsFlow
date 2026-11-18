@@ -1,3 +1,4 @@
+import { agentActivity, AgentActivityTracker } from '../../application/agent/AgentActivityTracker.js';
 import { Router, raw, type NextFunction, type Request, type Response } from 'express';
 import { contentDisposition } from '../contentDisposition.js';
 import { z } from 'zod';
@@ -116,6 +117,7 @@ import { writeDocSchema } from '../kb/schemas.js';
 
 type Deps = {
   readonly authenticate: AuthenticateAgentToken;
+  readonly agentActivity?: AgentActivityTracker;
   readonly issueWorkerCapability: IssueProjectWorkerCapability;
   readonly revokeWorkerCapability: RevokeProjectWorkerCapability;
   readonly listProjects: ListProjects;
@@ -747,6 +749,12 @@ export function agentApiRouter(deps: Deps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
   router.use(requireAgentCapabilityScope());
+  // Пульс диспетчера для LIVE: любой успешно авторизованный запрос агента = «жив».
+  const activity = deps.agentActivity ?? agentActivity;
+  router.use((req: Request, _res: Response, next: NextFunction) => {
+    if (req.user) activity.touch(req.user.id);
+    next();
+  });
 
   // The dispatcher exchanges its long-lived account token for a short-lived
   // project capability before spawning Claude. Plaintext is returned once and

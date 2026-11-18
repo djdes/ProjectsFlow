@@ -490,6 +490,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
         .map(s => ({ taskId:s.taskId,state:s.status==='running'?'running':'error',sessionId:s.id,questionCommentId:null })) });
     }],
     [/^\/projects\/([^/]+)\/live\/running$/, ([, projectId]) => json({ taskIds: Object.values(state.liveSessions ?? {}).flat().filter(s => s.projectId === projectId && s.status === 'running').map(s => s.taskId) })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/dispatcher-heartbeat$/, () => json({ dispatcherAssigned: true, lastSeenAt: new Date(Date.now() - 20_000).toISOString(), trackedSince: new Date(Date.now() - 3_600_000).toISOString(), serverNow: new Date().toISOString() })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions$/, ([, , taskId]) => json({ sessions: state.liveSessions?.[taskId] ?? [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/events$/, ([, , , sessionId]) => json({ events: state.liveEvents?.[sessionId] ?? [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/file-diffs$/, () => json({ files: [] })],

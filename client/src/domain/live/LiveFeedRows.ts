@@ -47,7 +47,10 @@ const DIVIDER_KINDS: ReadonlySet<string> = new Set(['handoff']);
 // The result keeps what the start said only where the result is silent: a finished
 // stage is named by its label, not by the «in progress» title of its start.
 function closeStage(started: LiveStagePayload, result: LiveStagePayload): LiveStagePayload {
-  return { ...result, detail: result.detail ?? started.detail, round: result.round ?? started.round };
+  return {
+    ...result, detail: result.detail ?? started.detail, round: result.round ?? started.round,
+    attempt: result.attempt ?? started.attempt, maxAttempts: result.maxAttempts ?? started.maxAttempts,
+  };
 }
 
 export function liveFeedRows(entries: readonly TaskLiveEntry[], runs: readonly TaskLiveRun[]): LiveFeedRow[] {
@@ -62,6 +65,34 @@ export function liveFeedRows(entries: readonly TaskLiveEntry[], runs: readonly T
   // The turn before a divider: an orchestrator stage line right after a handoff continues it.
   let beforeDivider: string | null = null;
   for (const entry of entries) {
+    if (entry.kind === 'event' && !pipeline.has(entry.sessionId) && entry.event.kind === 'stage') {
+      // ralph-worker: подготовка (stage 'prepare' и др.) от диспетчера — та же строка этапа,
+      // без ролей. Результат закрывает открытую строку; без разбора — общий вид события.
+      const stage = parseStagePayload(entry.event.payload);
+      if (stage && stage.stage !== 'done' && stage.stage !== 'blocked') {
+        const stageKey = `${entry.sessionId}:${stage.stage}`;
+        const at = openStages.get(stageKey);
+        const opened = at !== undefined ? rows[at] : undefined;
+        if (stage.status !== 'started' && opened?.kind === 'event' && opened.stage) {
+          openStages.delete(stageKey);
+          rows[at!] = { ...opened, stage: { payload: closeStage(opened.stage.payload, stage), live: false } };
+          continue;
+        }
+        if (stage.status === 'started' && opened?.kind === 'event' && opened.stage) {
+          // Повтор того же старта («В очереди», раз в 20 с) обновляет строку, а не множит её.
+          rows[at!] = { ...opened, event: entry.event, stage: { payload: stage, live: false } };
+          continue;
+        }
+        if (stage.status === 'started') {
+          openStages.set(stageKey, rows.length);
+          lastOpened.set(entry.sessionId, stageKey);
+        }
+      }
+      rows.push({ ...entry, role: null, header: false, ...(stage ? { stage: { payload: stage, live: false } } : {}) });
+      turn = null;
+      beforeDivider = null;
+      continue;
+    }
     if (entry.kind !== 'event' || !pipeline.has(entry.sessionId)) {
       rows.push(entry.kind === 'event' ? { ...entry, role: null, header: false } : entry);
       turn = null;
@@ -74,6 +105,13 @@ export function liveFeedRows(entries: readonly TaskLiveEntry[], runs: readonly T
     if (stage && stage.stage !== 'done' && stage.stage !== 'blocked') {
       const stageKey = `${entry.sessionId}:${stage.stage}`;
       if (stage.status === 'started') {
+        const reopened = openStages.get(stageKey);
+        const previous = reopened !== undefined ? rows[reopened] : undefined;
+        if (previous?.kind === 'event' && previous.stage && previous.stage.payload.round === stage.round) {
+          // Тот же этап объявлен ещё раз (ожидание в очереди) — обновляем строку на месте.
+          rows[reopened!] = { ...previous, event: entry.event, stage: { payload: stage, live: false } };
+          continue;
+        }
         const header = turn !== roleKey && !(turn === null && beforeDivider === roleKey);
         openStages.set(stageKey, rows.length);
         lastOpened.set(entry.sessionId, stageKey);

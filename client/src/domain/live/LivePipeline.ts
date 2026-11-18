@@ -65,7 +65,22 @@ export type LiveStagePayload = {
   readonly title: string | null;
   readonly detail: string | null;
   readonly round: number | null;
+  // Подготовка (stage 'prepare', диспетчер Ralph до старта воркера): попытка N из M и
+  // момент следующей попытки — для обратного отсчёта «повтор через 1:42».
+  readonly attempt: number | null;
+  readonly maxAttempts: number | null;
+  readonly retryAt: Date | null;
+  // Ожидание слота: место в очереди диспетчера.
+  readonly queuePosition: number | null;
+  // Режим запуска, с которым диспетчер стартует (или на который переключился).
+  readonly runMode: 'quick' | 'full' | null;
 };
+
+function date(value: unknown): Date | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const at = new Date(value);
+  return Number.isFinite(at.getTime()) ? at : null;
+}
 
 const STAGE_STATUSES: readonly StageStatus[] = ['started', 'passed', 'failed', 'skipped'];
 
@@ -77,7 +92,12 @@ export function parseStagePayload(payload: unknown): LiveStagePayload | null {
   const status = STAGE_STATUSES.includes(row.status as StageStatus) ? row.status as StageStatus
     : stage === 'done' ? 'passed' : stage === 'blocked' ? 'failed' : null;
   if (!status) return null;
-  return { stage: stage as LiveStagePayload['stage'], status, title: text(row.title), detail: text(row.detail), round: round(row.round) };
+  return {
+    stage: stage as LiveStagePayload['stage'], status, title: text(row.title), detail: text(row.detail), round: round(row.round),
+    attempt: round(row.attempt), maxAttempts: round(row.maxAttempts ?? row.attempts ?? row.totalAttempts), retryAt: date(row.retryAt),
+    queuePosition: round(row.queuePosition),
+    runMode: row.runMode === 'quick' || row.runMode === 'full' ? row.runMode : null,
+  };
 }
 
 export type StepState = 'pending' | 'active' | 'passed' | 'failed' | 'skipped';

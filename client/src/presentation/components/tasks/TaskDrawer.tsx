@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
@@ -472,7 +473,8 @@ function TaskRalphModeChip({
   disabled = false,
 }: {
   task: Task;
-  onChanged: () => void;
+  // updated — ответ PATCH: окно держит его, пока родитель не пришлёт свежую задачу.
+  onChanged: (updated: Task) => void;
   className?: string;
   disabled?: boolean;
 }): React.ReactElement {
@@ -491,8 +493,8 @@ function TaskRalphModeChip({
     setMode(next); // optimistic
     setSaving(true);
     try {
-      await taskRepository.update(task.projectId, task.id, { ralphMode: next });
-      onChanged();
+      const updated = await taskRepository.update(task.projectId, task.id, { ralphMode: next });
+      onChanged(updated);
     } catch (err) {
       setMode(prev);
       toast.error(`Не удалось сменить режим: ${(err as Error).message}`);
@@ -522,7 +524,8 @@ function TaskRunModeChip({
   disabled = false,
 }: {
   task: Task;
-  onChanged: () => void;
+  // updated — ответ PATCH: окно держит его, пока родитель не пришлёт свежую задачу.
+  onChanged: (updated: Task) => void;
   className?: string;
   disabled?: boolean;
 }): React.ReactElement {
@@ -540,8 +543,8 @@ function TaskRunModeChip({
     setMode(next);
     setSaving(true);
     try {
-      await taskRepository.update(task.projectId, task.id, { runMode: next });
-      onChanged();
+      const updated = await taskRepository.update(task.projectId, task.id, { runMode: next });
+      onChanged(updated);
     } catch (err) {
       setMode(prev);
       toast.error(`Не удалось сменить режим запуска: ${(err as Error).message}`);
@@ -1582,9 +1585,19 @@ export function TaskDrawer({
   const [statusResult, setStatusResult] = useState<Task | null>(null);
   // Inbox can retain the initial task prop. Keep the acknowledged status until the
   // parent supplies a newer version; approval may change the requested target.
-  const task = sourceTask && statusResult?.id === sourceTask.id && statusResult.updatedAt >= sourceTask.updatedAt
-    ? { ...sourceTask, status: statusResult.status, statusBeforeDone: statusResult.statusBeforeDone }
-    : sourceTask;
+  // Режимы (Ralph / запуск) — тот же приём: доска и «Входящие» держат снимок задачи с
+  // момента открытия, а refetch списка его не заменяет. Без этого LIVE и кнопка запуска
+  // читали старый runMode («Обычное изменение»), хотя на сервере уже «Полный прогон».
+  const [modeResult, setModeResult] = useState<Task | null>(null);
+  // useMemo: стабильная ссылка — LiveTab сравнивает задачу по идентичности.
+  const task = useMemo(() => {
+    const withStatus = sourceTask && statusResult?.id === sourceTask.id && statusResult.updatedAt >= sourceTask.updatedAt
+      ? { ...sourceTask, status: statusResult.status, statusBeforeDone: statusResult.statusBeforeDone }
+      : sourceTask;
+    return withStatus && modeResult?.id === withStatus.id && modeResult.updatedAt >= withStatus.updatedAt
+      ? { ...withStatus, runMode: modeResult.runMode, ralphMode: modeResult.ralphMode }
+      : withStatus;
+  }, [sourceTask, statusResult, modeResult]);
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
   // композером-футером (плашка «в ответ …») и уходит в createComment. db/080.
@@ -2120,7 +2133,7 @@ export function TaskDrawer({
                     mode: (
                       <TaskRalphModeChip
                         task={task}
-                        onChanged={() => notifyChanged()}
+                        onChanged={(updated) => { setModeResult(updated); notifyChanged(); }}
                         className={PROPERTY_VALUE_CLASS}
                         disabled={!canEdit}
                       />
@@ -2128,7 +2141,7 @@ export function TaskDrawer({
                     runMode: (
                       <TaskRunModeChip
                         task={task}
-                        onChanged={() => notifyChanged()}
+                        onChanged={(updated) => { setModeResult(updated); notifyChanged(); }}
                         className={PROPERTY_VALUE_CLASS}
                         disabled={!canEdit}
                       />
@@ -2272,6 +2285,7 @@ export function TaskDrawer({
               >
                 <LiveTab
                   task={task}
+                  onTaskUpdated={setModeResult}
                   fillHeight={isSplit}
                   canEdit={canEdit}
                   active={activeTab === 'live'}

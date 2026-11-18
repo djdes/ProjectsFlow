@@ -100,10 +100,12 @@ test('feed rows: one journal per executor round, the avatar once per role turn, 
   const afterHandoff = rows.findIndex(row => row.kind === 'event' && row.event.kind === 'handoff') + 1;
   const next = rows[afterHandoff];
   assert.ok(next.kind === 'event' && next.role?.actor === 'orchestrator' && next.stage && !next.header);
-  // Legacy sessions are untouched.
+  // Legacy sessions keep every non-stage event as is, without roles; stage events (the
+  // dispatcher's prepare) fold start + result into one line, like in the pipeline.
   const legacy = [{ session: session('ralph-worker'), events, fileDiffs: [] }];
   const legacyRows = liveFeedRows(taskLiveTimeline(legacy, []), legacy);
-  assert.equal(legacyRows.filter(row => row.kind === 'event').length, events.length);
+  assert.equal(legacyRows.filter(row => row.kind === 'event' && row.event.kind !== 'stage').length, events.filter(event => event.kind !== 'stage').length);
+  assert.ok(legacyRows.filter(row => row.kind === 'event' && row.event.kind === 'stage').every(row => row.kind === 'event' && row.stage));
   assert.ok(legacyRows.every(row => row.kind !== 'tools' && (row.kind !== 'event' || (row.role === null && !row.header))));
 });
 
@@ -116,12 +118,12 @@ test('feed rows: a stage start and its result are one line that changes in place
   // In progress: the line spins under the start's title.
   const running = pipelineRun([orch(1, { stage: 'publish', status: 'started', title: 'Публикую' })]);
   assert.equal(running.length, 1);
-  assert.deepEqual(running[0].stage, { payload: { stage: 'publish', status: 'started', title: 'Публикую', detail: null, round: null }, live: true });
+  assert.deepEqual(running[0].stage, { payload: { stage: 'publish', status: 'started', title: 'Публикую', detail: null, round: null, attempt: null, maxAttempts: null, retryAt: null, queuePosition: null, runMode: null }, live: true });
   // Passed: the same row (same key, same place) becomes the result with its detail.
   const passed = pipelineRun([orch(1, { stage: 'publish', status: 'started', title: 'Публикую' }), orch(2, { stage: 'publish', status: 'passed', detail: 'Коммит 3c9e1d2' })]);
   assert.equal(passed.length, 1);
   assert.equal(passed[0].key, running[0].key);
-  assert.deepEqual(passed[0].stage, { payload: { stage: 'publish', status: 'passed', title: null, detail: 'Коммит 3c9e1d2', round: null }, live: false });
+  assert.deepEqual(passed[0].stage, { payload: { stage: 'publish', status: 'passed', title: null, detail: 'Коммит 3c9e1d2', round: null, attempt: null, maxAttempts: null, retryAt: null, queuePosition: null, runMode: null }, live: false });
   // Failed and skipped close the line the same way; the round of the start is kept.
   const failed = pipelineRun([orch(1, { stage: 'checks', status: 'started', round: 2 }), orch(2, { stage: 'checks', status: 'failed', detail: 'tests: код 1' })]);
   assert.deepEqual(failed.map(row => [row.stage!.payload.status, row.stage!.payload.round, row.stage!.payload.detail]), [['failed', 2, 'tests: код 1']]);

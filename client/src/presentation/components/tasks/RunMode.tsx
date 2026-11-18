@@ -21,6 +21,7 @@ export function RunModeSelect({
   className,
   variant = 'outline',
   iconOnly = false,
+  onOpenChange,
 }: {
   value: RunMode;
   onChange: (next: RunMode) => void;
@@ -29,11 +30,13 @@ export function RunModeSelect({
   variant?: 'outline' | 'ghost';
   // Компактный квадрат для тулбара композера: иконка, режим — в title/aria-label.
   iconOnly?: boolean;
+  // Inline-карточка создания держит фокус, пока открыт пикер (blur не коммитит карточку).
+  onOpenChange?: (open: boolean) => void;
 }): React.ReactElement {
   const meta = RUN_MODE_META[value];
   const inPropertyRow = (className ?? '').includes('justify-start');
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"

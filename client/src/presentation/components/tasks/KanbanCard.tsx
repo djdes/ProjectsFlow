@@ -12,7 +12,7 @@ import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from '
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
-import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { RunMode, Task, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AssigneeBadge } from './AssigneeBadge';
@@ -25,7 +25,8 @@ import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { useTaskOriginLabel } from '@/presentation/hooks/useTaskOriginLabel';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
-import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon } from './workerHandoff';
+import { WorkerHandoffIcon } from './workerHandoff';
+import { WorkerHandoffMenu } from './WorkerHandoffMenu';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
@@ -49,7 +50,8 @@ type Props = {
   showShortId?: boolean;
   // Если задан — на карточке появляются быстрые переносы без drag'а: стрелка → «шаг
   // вперёд» (quickPromoteNext) и «Взять в работу» (target = 'manual').
-  onQuickPromote?: (task: Task, target?: TaskStatus) => void;
+  // runMode — выбран в меню «Передать воркеру» (только для target = 'todo').
+  onQuickPromote?: (task: Task, target?: TaskStatus, runMode?: RunMode) => void;
   // Вызывается после изменения состояния agent-job (enqueue / cancel) — триггерит
   // refetch tasks в родителе чтобы обновить бейдж.
   onTaskChanged?: () => void;
@@ -278,7 +280,20 @@ function KanbanCardImpl({
       </span>
     ) : null;
     const promote =
-      onQuickPromote && promoteNext ? (
+      onQuickPromote && promoteNext === 'todo' ? (
+        // Шаг вперёд в «Воркер» = передача воркеру: сначала выбор режима запуска.
+        <WorkerHandoffMenu
+          key="promote"
+          runMode={task.runMode}
+          onPick={(mode) => onQuickPromote(task, 'todo', mode)}
+          className={cn(
+            'group/promote inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
+            big ? bigAction : 'size-6',
+          )}
+        >
+          <ArrowRight className={big ? 'size-4' : 'size-3'} />
+        </WorkerHandoffMenu>
+      ) : onQuickPromote && promoteNext ? (
         <Button
           key="promote"
           variant="ghost"
@@ -322,23 +337,17 @@ function KanbanCardImpl({
       </Button>
     ) : null;
     const worker = showWorkerAction && workerEnabled && onQuickPromote && canSendToWorker(task.status) ? (
-      <Button
+      <WorkerHandoffMenu
         key="worker"
-        variant="ghost"
-        size="icon"
+        runMode={task.runMode}
+        onPick={(mode) => onQuickPromote(task, 'todo', mode)}
         className={cn(
-          'shrink-0 cursor-pointer rounded-[5px] text-primary hover:bg-hover',
+          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-primary hover:bg-hover',
           big ? bigAction : 'size-6',
         )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onQuickPromote(task, 'todo');
-        }}
-        aria-label={WORKER_HANDOFF_LABEL}
-        title={WORKER_HANDOFF_LABEL}
       >
         <WorkerHandoffIcon className={big ? 'size-4' : 'size-3'} />
-      </Button>
+      </WorkerHandoffMenu>
     ) : null;
     const withdrawButton = canWithdraw ? (
       <Button
