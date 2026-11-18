@@ -1,4 +1,5 @@
 import { agentActivity, AgentActivityTracker } from '../../application/agent/AgentActivityTracker.js';
+import { onlyFromGroups } from './groupOriginFilter.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import type { ListTasks, TaskWithCounts } from '../../application/task/ListTasks.js';
@@ -256,7 +257,8 @@ export function tasksRouter(deps: Deps): Router {
     try {
       const projectId = req.params['projectId'] as string;
       const list = await deps.listTasks.execute(projectId, req.user!.id);
-      res.json({ tasks: list.map(toDto) });
+      // «Только из групп» (db/190): ?fromGroups=1.
+      res.json({ tasks: onlyFromGroups(list, req.query, (t) => t).map(toDto) });
     } catch (e) {
       next(e);
     }

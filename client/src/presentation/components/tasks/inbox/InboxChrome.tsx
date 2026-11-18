@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
+import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, MessagesSquare, Play, Search, ShieldCheck, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -191,6 +191,37 @@ export function ReplyFilterChip({
       <AtSign aria-hidden className="size-3.5 shrink-0 text-approval-ink" />
       <span className="max-sm:hidden">Ответить</span>
       <span className="shrink-0 tabular-nums text-muted-foreground" data-pf-reply-count>{count}</span>
+    </button>
+  );
+}
+
+// «Только из групп»: задачи, поставленные в рабочих Telegram-группах (groupOrigin, db/190).
+export function GroupFilterChip({
+  active,
+  count,
+  onToggle,
+}: {
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`Только из групп: ${count}`}
+      title="Только задачи, поставленные в рабочих Telegram-группах"
+      onClick={onToggle}
+      className={cn(
+        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
+        active
+          ? 'border-primary bg-accent text-foreground'
+          : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
+      )}
+    >
+      <MessagesSquare aria-hidden className="size-3.5 shrink-0" />
+      <span className="max-sm:hidden">Только из групп</span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
     </button>
   );
 }

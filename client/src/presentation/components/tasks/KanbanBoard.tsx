@@ -1,6 +1,7 @@
 import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { isFromGroup } from '@/domain/task/groupOriginFilter';
 import {
   DndContext,
   DragOverlay,
@@ -24,6 +25,7 @@ import {
   CalendarClock,
   Filter,
   Flag,
+  MessagesSquare,
   Plus,
   Search,
   Users,
@@ -670,6 +672,9 @@ export function KanbanBoard({
   const [filterPriority, setFilterPriority] = useState<TaskPriority | null>(null);
   const [filterDeadline, setFilterDeadline] = useState<'overdue' | 'week' | null>(null);
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
+  // «Только из групп»: задачи из рабочих Telegram-групп (groupOrigin, db/190).
+  const [filterFromGroup, setFilterFromGroup] = useState(false);
+  const hasGroupTasks = useMemo(() => tasks.some(isFromGroup), [tasks]);
   const assigneeOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const task of tasks) byId.set(task.assignee.userId, task.assignee.displayName);
@@ -682,7 +687,8 @@ export function KanbanBoard({
     filterQuery.trim().length > 0 ||
     filterPriority !== null ||
     filterDeadline !== null ||
-    filterAssignee !== null;
+    filterAssignee !== null ||
+    filterFromGroup;
 
   const filterTasks = useCallback(
     (list: Task[]): Task[] => {
@@ -699,10 +705,11 @@ export function KanbanBoard({
           if (!t.deadline || t.deadline > weekIso) return false;
         }
         if (filterAssignee !== null && t.assignee.userId !== filterAssignee) return false;
+        if (filterFromGroup && !isFromGroup(t)) return false;
         return true;
       });
     },
-    [filterActive, filterQuery, filterPriority, filterDeadline, filterAssignee],
+    [filterActive, filterQuery, filterPriority, filterDeadline, filterAssignee, filterFromGroup],
   );
 
   const resetFilters = (): void => {
@@ -710,6 +717,7 @@ export function KanbanBoard({
     setFilterPriority(null);
     setFilterDeadline(null);
     setFilterAssignee(null);
+    setFilterFromGroup(false);
   };
 
   // Вспышка полки «В работе»: key перезапускает анимацию, id — какую карточку подсветить.
@@ -1213,6 +1221,20 @@ export function KanbanBoard({
             ]}
             onSelect={(key) => setFilterAssignee(key === 'all' ? null : key)}
           />
+        )}
+        {(hasGroupTasks || filterFromGroup) && (
+          <button
+            type="button"
+            aria-pressed={filterFromGroup}
+            onClick={() => setFilterFromGroup((on) => !on)}
+            className={cn(
+              'inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs transition-colors hover:bg-accent',
+              filterFromGroup ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <MessagesSquare className="size-3.5" />
+            Только из групп
+          </button>
         )}
         {filterActive && (
           <button
