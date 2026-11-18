@@ -1531,6 +1531,8 @@ export const scenarios = [
         await t.visible(page.getByRole('group', { name: 'Режим группы' }).first(), 'переключатель режима группы');
         await t.visible(page.getByRole('button', { name: 'Инциденты', pressed: true }).first(), 'режим «Инциденты» у группы из фикстуры');
         await t.visible(page.getByText('Пространство «Офис» просит перенести группу', { exact: false }), 'запрос на перенос группы');
+        await t.visible(page.getByText('Участники: 5 в Telegram, 1 связаны с PF'), 'участники рабочей группы');
+        await t.visible(page.getByText('Бот не администратор группы', { exact: false }), 'подсказка «сделайте бота администратором»');
         await t.visible(page.getByRole('button', { name: 'Из соседних пространств' }), 'кнопка «Из соседних пространств»');
       });
       await t.check('включатель напоминаний о срочных задачах', async () => {

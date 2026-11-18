@@ -13,11 +13,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type {
+  TelegramGroupMembers,
   TelegramWorkGroup,
   TelegramWorkGroupMode,
   TelegramWorkGroups,
 } from '@/domain/workspace/TelegramWorkGroup';
 import { TelegramGroupConnectDialog } from './TelegramGroupConnectDialog';
+import { TelegramGroupMembersView } from './TelegramGroupMembersView';
 import {
   addableProjects,
   findNewGroup,
@@ -310,6 +312,7 @@ export function TelegramWorkGroupsCard({
                         canManage={canManage}
                         onChange={(projectIds) => void saveProjects(group, projectIds)}
                       />
+                      {group.status === 'active' && <GroupMembers workspaceId={workspaceId} chatId={group.chatId} />}
                     </>
                   )}
                 </div>
@@ -442,6 +445,29 @@ function GroupMode({
       <div className="text-xs text-muted-foreground">{groupModeHint(mode, group.projectIds.length > 0)}</div>
     </div>
   );
+}
+
+// Участники группы (db/191): грузятся отдельно, чтобы список групп не ждал Telegram.
+function GroupMembers({ workspaceId, chatId }: { workspaceId: string; chatId: number }): React.ReactElement | null {
+  const { workspaceRepository } = useContainer();
+  const [members, setMembers] = useState<TelegramGroupMembers | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    workspaceRepository
+      .getTelegramGroupMembers(workspaceId, chatId)
+      .then((next) => {
+        if (!cancelled) setMembers(next);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, chatId, workspaceRepository]);
+  if (failed) return null;
+  return <TelegramGroupMembersView members={members} />;
 }
 
 // Проекты группы (db/189): чипы + «Добавить проект». Пусто — все проекты пространства.

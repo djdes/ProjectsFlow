@@ -384,6 +384,8 @@ import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositor
 import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositories/DrizzleTelegramMessageTaskRepository.js';
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
 import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
+import { DrizzleTelegramGroupMemberRepository } from './infrastructure/repositories/DrizzleTelegramGroupMemberRepository.js';
+import { SyncTelegramGroupMembers } from './application/telegram/SyncTelegramGroupMembers.js';
 import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
 import { DrizzleProjectSharingRepository } from './infrastructure/repositories/DrizzleProjectSharingRepository.js';
 import type { Task } from './domain/task/Task.js';
@@ -1217,8 +1219,22 @@ setInterval(() => {
 const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
 // Рабочие Telegram-группы пространства (db/181): подключение по deep link, ручное добавление,
 // «чья это группа» для бота.
+const telegramWorkGroupRepo = new DrizzleTelegramWorkGroupRepository(db);
+// Участники рабочих групп (db/191): снимок админов, chat_member, авторы сообщений; связанные с
+// PF молча добавляются в пространство редактором.
+const telegramGroupMembers = new SyncTelegramGroupMembers({
+  repo: new DrizzleTelegramGroupMemberRepository(db),
+  groups: telegramWorkGroupRepo,
+  workspaces: workspaceRepo,
+  users: userRepo,
+  notifications: notificationRepo,
+  telegram: telegramClient,
+  botUsername: telegramBotUsername,
+  idGen: idGenerator,
+  now,
+});
 const telegramWorkGroups: ManageTelegramWorkGroups = new ManageTelegramWorkGroups({
-  repo: new DrizzleTelegramWorkGroupRepository(db),
+  repo: telegramWorkGroupRepo,
   workspaces: workspaceRepo,
   users: userRepo,
   projects: projectRepo,
@@ -1229,6 +1245,9 @@ const telegramWorkGroups: ManageTelegramWorkGroups = new ManageTelegramWorkGroup
   // Группу отключили — закрыть ждущие подключения людей и отозвать их приглашения.
   onRemoved: (workspaceId: string, chatId: number): Promise<void> =>
     telegramGroupOnboarding.cancelForGroup(workspaceId, chatId),
+  onActivated: async (chatId: number): Promise<void> => {
+    await telegramGroupMembers.snapshotAdmins(chatId);
+  },
 });
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
@@ -1674,6 +1693,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   messageTasks: telegramMessageTaskRepo,
   groupOwners: telegramGroupOwnerRepo,
   workGroups: telegramWorkGroups,
+  groupMembers: telegramGroupMembers,
   onboarding: telegramGroupOnboarding,
   isWorkspaceMember: (workspaceId, userId) => isWorkspaceMember(userId, workspaceId),
   createComment: createTaskCommentUseCase,
@@ -2851,6 +2871,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
     }),
     telegramGroups: telegramWorkGroups,
+    telegramGroupMembers,
     neighborInvites: {
       list: new ListWorkspaceInviteCandidates({ neighbors: workspaceNeighborsRepo, workspaces: workspaceRepo, now }),
       invite: new InviteNeighbors({

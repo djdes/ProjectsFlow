@@ -230,6 +230,20 @@ function describe(payload: NotificationPayload): NotificationView {
         metaTitle: `${requester} просит доступ к проекту «${payload.projectName}»`,
       };
     }
+    case 'telegram_group_member_added': {
+      const group = payload.groupTitle ? `«${payload.groupTitle}»` : 'Telegram-группы';
+      return {
+        avatarName: payload.memberDisplayName,
+        context: payload.workspaceName,
+        subject: `${payload.memberDisplayName} — новый редактор`,
+        meta: (
+          <>
+            <Who name={payload.memberDisplayName} /> добавлен(а) из группы {group}
+          </>
+        ),
+        metaTitle: `${payload.memberDisplayName} добавлен(а) в пространство редактором из группы ${group}`,
+      };
+    }
     default:
       return { avatarName: '', subject: 'Уведомление', meta: '', metaTitle: '' };
   }

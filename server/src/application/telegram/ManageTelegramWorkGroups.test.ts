@@ -527,3 +527,19 @@ test('standardGroupInfo: только активная группа обычно
   assert.equal(await service.standardGroupInfo(-3003), null);
   assert.equal(await service.standardGroupInfo(-9999), null);
 });
+
+test('onActivated: снимок участников при подключении — вручную, подтверждением черновика; сбой не мешает', async () => {
+  const activated: number[] = [];
+  const { service } = makeService();
+  (service as unknown as { deps: { onActivated: (c: number) => Promise<void> } }).deps.onActivated = async (c) => {
+    activated.push(c);
+    if (c === -2005) throw new Error('telegram down');
+  };
+  await service.addManual('ws1', 'lead', -1001);
+  await service.handleBotAdded({ id: -2005, title: 'Поддержка' }, 777);
+  assert.deepEqual(activated, [-1001], 'a draft does not snapshot members');
+  const group = await service.confirm('ws1', 'owner', -2005);
+  assert.equal(group.status, 'active');
+  await service.confirm('ws1', 'owner', -2005);
+  assert.deepEqual(activated, [-1001, -2005], 'confirming an active group again does nothing');
+});

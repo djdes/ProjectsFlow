@@ -327,7 +327,9 @@ export class HttpTelegramClient implements TelegramClient {
 
   // getChatAdministrators — администраторы группы (проверка «подключает администратор группы»).
   // Best-effort: ошибка/отказ → null.
-  async getChatAdministrators(chatId: number): Promise<ReadonlyArray<{ userId: number; status: string }> | null> {
+  async getChatAdministrators(
+    chatId: number,
+  ): Promise<ReadonlyArray<{ userId: number; status: string; isBot: boolean; username?: string }> | null> {
     try {
       const res = await this.tgFetch('/getChatAdministrators', {
         method: 'POST',
@@ -335,11 +337,18 @@ export class HttpTelegramClient implements TelegramClient {
         body: JSON.stringify({ chat_id: chatId }),
       });
       const body = (await res.json().catch(() => null)) as TgResponse<
-        Array<{ status?: string; user?: { id?: number } }>
+        Array<{ status?: string; user?: { id?: number; is_bot?: boolean; username?: string } }>
       > | null;
       if (!res.ok || !body?.ok || !Array.isArray(body.result)) return null;
       return body.result.flatMap((m) =>
-        typeof m.user?.id === 'number' && typeof m.status === 'string' ? [{ userId: m.user.id, status: m.status }] : [],
+        typeof m.user?.id === 'number' && typeof m.status === 'string'
+          ? [{
+              userId: m.user.id,
+              status: m.status,
+              isBot: m.user.is_bot === true,
+              ...(typeof m.user.username === 'string' ? { username: m.user.username } : {}),
+            }]
+          : [],
       );
     } catch {
       return null;

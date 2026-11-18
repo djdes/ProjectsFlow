@@ -1,6 +1,7 @@
 import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/InviteCandidate';
 import type {
   TelegramGroupLinkPurpose,
+  TelegramGroupMembers,
   TelegramWorkGroup,
   TelegramWorkGroupMode,
   TelegramWorkGroups,
@@ -304,6 +305,17 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
       {},
     );
     return normalizeTelegramGroup(group);
+  }
+
+  async getTelegramGroupMembers(id: string, chatId: number): Promise<TelegramGroupMembers> {
+    const res = await httpClient.get<Partial<TelegramGroupMembers>>(
+      `/workspaces/${id}/telegram-groups/${chatId}/members`,
+    );
+    return {
+      telegramCount: res.telegramCount ?? 0,
+      linked: res.linked ?? [],
+      botIsAdmin: res.botIsAdmin ?? null,
+    };
   }
 
   async decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void> {
