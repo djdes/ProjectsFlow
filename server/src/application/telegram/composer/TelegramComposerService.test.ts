@@ -58,6 +58,7 @@ type AiSeg = {
   taskType?: 'feature' | 'bug' | null;
   sourceExcerpt?: string | null;
   ralphMode?: string;
+  runMode?: string;
 };
 
 function makeHarness(opts?: {
@@ -398,6 +399,7 @@ function makeHarness(opts?: {
           allowInboxDelegation: input.allowInboxDelegation ?? false,
           taskType: input.taskType ?? null,
           ralphMode: input.ralphMode,
+          runMode: input.runMode,
         });
         return {
           id: `t${createTaskCalls.length}`,
@@ -2835,4 +2837,90 @@ test('группа без списка проектов — как раньше,
   const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: {} });
   await h.service.startFromMessage(111, GROUP_CHAT, '+Гамма поправить парсинг', gctx('u1'));
   assert.equal([...h.drafts.values()][0]!.projectId, 'p3');
+});
+
+// --- Режим группы incident (spec 2026-11-17, раздел 3) ---
+const INCIDENT_CHAT = -100777;
+const INCIDENT_KEY = 'incident-signing-key-not-a-secret-1234567';
+const ictx = (addedByUserId: string | null, senderName = 'DJ') => ({
+  ...gctx('owner-of-group', senderName), incident: { addedByUserId },
+});
+async function withIncidentKey(fn: () => Promise<void>): Promise<void> {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  process.env.TELEGRAM_ORIGIN_SIGNING_KEY = INCIDENT_KEY;
+  try { await fn(); } finally {
+    if (saved === undefined) delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+    else process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
+}
+
+test('incident group: any member creates a silent full-run task in the group project with a signed origin', () =>
+  withIncidentKey(async () => {
+    const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p2'] } });
+    await h.service.startFromMessage(999, INCIDENT_CHAT, 'Не открывается отчёт', ictx('u1', 'DJ Test'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:77`, sourceMessageId: 77, sourceThreadId: 17,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'p2');
+    assert.equal(call.ownerUserId, 'u1', 'task is created by whoever connected the group');
+    assert.equal(call.status, 'backlog');
+    assert.equal(call.ralphMode, 'silent');
+    assert.equal(call.runMode, 'full');
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+    const match = /<!-- tg-incident-origin:([^:]+):[a-f0-9]{64} -->/.exec(call.description ?? '');
+    assert.ok(match, 'signed origin marker');
+    const payload = JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+    assert.equal(payload.chatId, INCIDENT_CHAT);
+    assert.equal(payload.userId, 999);
+    assert.equal(payload.messageThreadId, 17);
+    assert.equal(payload.projectId, 'p2');
+    assert.equal(payload.senderName, 'DJ Test');
+    // Ответ воркера — reply на исходное сообщение автора, а не на квитанцию бота.
+    assert.equal(h.origins.length, 1);
+    assert.equal(h.origins[0]?.messageId, 77);
+    assert.ok(!h.sent.some((m) => /привяж|Перефразирую|выбер|подтверд/i.test(m.text)));
+    assert.ok(![...h.sent, ...h.edits].some((m) => /tg-incident-origin|github|коммит/i.test(m.text)));
+  }));
+
+test('incident group: project is picked by name among several, otherwise the bot asks in plain words', () =>
+  withIncidentKey(async () => {
+    const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p1', 'p2'] } });
+    await h.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось что-то', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:1`, sourceMessageId: 1,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    assert.match(h.sent.at(-1)?.text ?? '', /Уточните.*Альфа.*Бета/s);
+    await h.service.startFromMessage(999, INCIDENT_CHAT, 'В Бете не грузится список', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:2`, sourceMessageId: 2,
+    });
+    assert.equal(h.createTaskCalls[0]?.projectId, 'p2');
+  }));
+
+test('incident group: without signing key, projects or binding owner nothing is created', async () => {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  const h0 = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p1'] } });
+  try {
+    await h0.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:3`, sourceMessageId: 3,
+    });
+  } finally {
+    if (saved !== undefined) process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
+  assert.equal(h0.createTaskCalls.length, 0);
+  assert.match(h0.sent.at(-1)?.text ?? '', /администратор/i);
+  await withIncidentKey(async () => {
+    const h1 = makeHarness({ projects: TWO_PROJECTS, groupProjects: {} });
+    await h1.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:4`, sourceMessageId: 4,
+    });
+    assert.equal(h1.createTaskCalls.length, 0);
+    assert.match(h1.sent.at(-1)?.text ?? '', /не выбраны/);
+    const h2 = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p1'] } });
+    await h2.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось', ictx(null), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:5`, sourceMessageId: 5,
+    });
+    assert.equal(h2.createTaskCalls.length, 0);
+  });
 });

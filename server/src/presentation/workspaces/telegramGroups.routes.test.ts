@@ -72,7 +72,7 @@ test('GET telegram-groups lists the groups and the bot username', async () => {
       const res = await fetch(`${url}/telegram-groups`);
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), {
-        groups: [{ chatId: -1001, title: 'Команда', createdAt: NOW.toISOString(), status: 'draft', projectIds: ['p1'], transferRequest: null }],
+        groups: [{ chatId: -1001, title: 'Команда', createdAt: NOW.toISOString(), status: 'draft', mode: 'standard', projectIds: ['p1'], transferRequest: null }],
         mainGroup: { chatId: -1005, title: 'Сводки' },
         botUsername: 'ProjectsFlow_Bot',
       });

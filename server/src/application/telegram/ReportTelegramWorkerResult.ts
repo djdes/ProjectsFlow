@@ -10,6 +10,7 @@ import type { TelegramWorkerResultOutbox, WorkerResultDelivery, WorkerResultDest
 import { escapeTelegramHtml } from './telegramMarkdown.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import { telegramPersonMention } from './telegramMention.js';
+import { stripIntakeOrigin } from './composer/incidentIntake.js';
 
 type Deps = {
   readonly origins: Pick<TelegramTaskOriginRepository, 'getByTask'>;
@@ -21,6 +22,8 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly client: Pick<TelegramClient, 'sendMessage'>;
   readonly users?: Pick<UserRepository, 'getTelegramLink'>;
+  // Группа в режиме incident (spec 2026-11-17, раздел 3): ответ простым языком, без Git.
+  readonly incidentChats?: { isIncident(chatId: number): Promise<boolean> };
   readonly now: () => Date;
   readonly idGen: () => string;
 };
@@ -110,6 +113,16 @@ export class ReportTelegramWorkerResult {
         await this.deps.outbox.finish(origin.id, token, now);
         return;
       }
+      const description = stripIntakeOrigin(task.description ?? '') || 'Задача';
+      const title = compact(description.split('\n')[0] ?? description, 140);
+      if (await this.isIncident(origin.chatId)) {
+        // Автор жалобы — не разработчик: ни коммитов, ни упоминаний, только итог по-человечески.
+        const text = task.status === 'pending_approval'
+          ? `✅ Исправление по вашему обращению готово и ждёт проверки ответственным: ${escapeTelegramHtml(title)}`
+          : `✅ Готово — проблему исправили: ${escapeTelegramHtml(title)}\nЕсли что-то всё ещё не так, ответьте на это сообщение.`;
+        await this.send(origin, token, now, task.id, text);
+        return;
+      }
       const commits = await this.deps.commits.listByTask(task.id);
       const commit = [...commits].sort((a, b) => b.committedAt.getTime() - a.committedAt.getTime())[0];
       // Auto-linking can lag behind completion. Give it time before reporting no commit.
@@ -117,8 +130,6 @@ export class ReportTelegramWorkerResult {
         await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + RETRY_MS));
         return;
       }
-      const description = task.description ?? 'Задача';
-      const title = compact(description.split('\n')[0] ?? description, 140);
       const status = task.status === 'pending_approval' ? 'Воркер закончил — на утверждении' : 'Воркер выполнил';
       // The task title describes the result. Raw git subjects can contain terminal mojibake
       // and technical bookkeeping; the verified commit remains available through its link.
@@ -130,24 +141,34 @@ export class ReportTelegramWorkerResult {
       const mention = assignee
         ? telegramPersonMention(assignee.displayName, await this.deps.users?.getTelegramLink(assignee.userId) ?? null)
         : '';
-      const result = await this.deps.client.sendMessage({
-        chatId: origin.chatId,
-        replyToMessageId: origin.messageId ?? undefined,
-        text: [mention, `✅ <b>${status}:</b> ${escapeTelegramHtml(title)}`, commitLink].filter(Boolean).join('\n'),
-        parseMode: 'HTML',
-        disableWebPagePreview: true,
-      });
-      if (result.kind === 'ok' || result.kind === 'forbidden') {
-        await this.deps.outbox.finish(origin.id, token, now);
-        if (result.kind === 'ok') console.info('[telegram-worker-result] sent', task.id, result.messageId);
-        else console.warn('[telegram-worker-result] forbidden', task.id);
-      } else {
-        const delay = result.kind === 'rate_limited' ? Math.max(result.retryAfter * 1000, RETRY_MS) : RETRY_MS;
-        await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + delay));
-      }
+      await this.send(origin, token, now, task.id,
+        [mention, `✅ <b>${status}:</b> ${escapeTelegramHtml(title)}`, commitLink].filter(Boolean).join('\n'));
     } catch (error) {
       await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + RETRY_MS));
       console.warn('[telegram-worker-result] retry', origin.taskId, error);
+    }
+  }
+
+  private async isIncident(chatId: number): Promise<boolean> {
+    if (!this.deps.incidentChats) return false;
+    return this.deps.incidentChats.isIncident(chatId).catch(() => false);
+  }
+
+  private async send(origin: WorkerResultDelivery, token: string, now: Date, taskId: string, text: string): Promise<void> {
+    const result = await this.deps.client.sendMessage({
+      chatId: origin.chatId,
+      replyToMessageId: origin.messageId ?? undefined,
+      text,
+      parseMode: 'HTML',
+      disableWebPagePreview: true,
+    });
+    if (result.kind === 'ok' || result.kind === 'forbidden') {
+      await this.deps.outbox.finish(origin.id, token, now);
+      if (result.kind === 'ok') console.info('[telegram-worker-result] sent', taskId, result.messageId);
+      else console.warn('[telegram-worker-result] forbidden', taskId);
+    } else {
+      const delay = result.kind === 'rate_limited' ? Math.max(result.retryAfter * 1000, RETRY_MS) : RETRY_MS;
+      await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + delay));
     }
   }
 }

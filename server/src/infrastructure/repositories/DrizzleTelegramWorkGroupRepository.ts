@@ -16,6 +16,7 @@ import type {
   TelegramGroupLinkCode,
   TelegramWorkGroup,
   TelegramWorkGroupRepository,
+  TelegramWorkGroupMode,
   TelegramWorkGroupStatus,
 } from '../../application/telegram/TelegramWorkGroupRepository.js';
 
@@ -27,6 +28,7 @@ function toGroup(row: WorkspaceTelegramGroupRow, projectIds: readonly string[] =
     addedByUserId: row.addedByUserId ?? null,
     createdAt: row.createdAt,
     status: row.status,
+    mode: row.mode ?? 'standard',
     invitedByTgUserId: row.invitedByTgUserId ?? null,
     projectIds,
     transfer:
@@ -121,7 +123,8 @@ export class DrizzleTelegramWorkGroupRepository implements TelegramWorkGroupRepo
         .where(eq(workspaceTelegramGroups.tgChatId, group.chatId))
         .limit(1)
         .for('update');
-      if (row && row.workspaceId !== group.workspaceId) {
+      const movedSpace = row !== undefined && row.workspaceId !== group.workspaceId;
+      if (movedSpace) {
         await tx.delete(telegramGroupProjects).where(eq(telegramGroupProjects.tgChatId, group.chatId));
       }
       await tx
@@ -131,6 +134,8 @@ export class DrizzleTelegramWorkGroupRepository implements TelegramWorkGroupRepo
           addedByUserId: group.addedByUserId,
           status: group.status ?? 'active',
           ...NO_TRANSFER,
+          // Режим инцидентов настраивал руководитель прежнего пространства — в новом начинаем с обычного.
+          ...(movedSpace ? { mode: 'standard' as const } : {}),
           ...(group.title ? { title: group.title.slice(0, 255) } : {}),
           ...(group.invitedByTgUserId !== undefined ? { invitedByTgUserId: group.invitedByTgUserId } : {}),
         })
@@ -164,6 +169,13 @@ export class DrizzleTelegramWorkGroupRepository implements TelegramWorkGroupRepo
     await this.db
       .update(workspaceTelegramGroups)
       .set({ status })
+      .where(eq(workspaceTelegramGroups.tgChatId, chatId));
+  }
+
+  async setMode(chatId: number, mode: TelegramWorkGroupMode): Promise<void> {
+    await this.db
+      .update(workspaceTelegramGroups)
+      .set({ mode })
       .where(eq(workspaceTelegramGroups.tgChatId, chatId));
   }
 

@@ -21,6 +21,7 @@ import type { TelegramClient } from './TelegramClient.js';
 import type {
   TelegramGroupLinkPurpose,
   TelegramWorkGroup,
+  TelegramWorkGroupMode,
   TelegramWorkGroupRepository,
 } from './TelegramWorkGroupRepository.js';
 
@@ -69,6 +70,7 @@ export type ResolvedWorkGroup = {
   readonly workspaceId: string;
   readonly workspaceName: string;
   readonly addedByUserId: string | null;
+  readonly mode: TelegramWorkGroupMode;
 };
 
 // Бота добавили в группу (my_chat_member, db/189).
@@ -180,6 +182,7 @@ export class ManageTelegramWorkGroups {
         ...group,
         createdAt: this.deps.now(),
         status: 'active',
+        mode: 'standard',
         invitedByTgUserId: null,
         projectIds: [],
       }
@@ -243,7 +246,12 @@ export class ManageTelegramWorkGroups {
     if (!group || group.status !== 'active') return null;
     const workspace = await this.deps.workspaces.getById(group.workspaceId);
     if (!workspace || workspace.kind !== 'team') return null;
-    return { workspaceId: workspace.id, workspaceName: workspace.name, addedByUserId: group.addedByUserId };
+    return {
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      addedByUserId: group.addedByUserId,
+      mode: group.mode ?? 'standard',
+    };
   }
 
   // Проекты, доступные группе в боте. Пусто — все проекты пространства (spec, раздел 2).
@@ -258,6 +266,20 @@ export class ManageTelegramWorkGroups {
     if (group.status === 'disconnected') throw new TelegramGroupNotFoundError();
     if (group.status === 'draft') await this.deps.repo.setStatus(chatId, 'active');
     return (await this.deps.repo.findByChat(chatId)) ?? group;
+  }
+
+  // Режим группы (spec 2026-11-17, раздел 3): только активная группа, владелец/руководитель.
+  async setMode(
+    workspaceId: string,
+    actorUserId: string,
+    chatId: number,
+    mode: TelegramWorkGroupMode,
+  ): Promise<TelegramWorkGroup> {
+    await this.requireTeamLead(workspaceId, actorUserId);
+    const group = await this.groupOf(workspaceId, chatId);
+    if (group.status !== 'active') throw new TelegramGroupNotFoundError();
+    if (group.mode !== mode) await this.deps.repo.setMode(chatId, mode);
+    return (await this.deps.repo.findByChat(chatId)) ?? { ...group, mode };
   }
 
   // Проекты группы целиком: только проекты пространства группы (spec, раздел 2).

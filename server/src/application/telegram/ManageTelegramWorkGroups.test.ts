@@ -57,6 +57,7 @@ function makeRepo() {
         title: group.title ?? g.title,
         invitedByTgUserId: group.invitedByTgUserId ?? g.invitedByTgUserId,
         projectIds: g.workspaceId === group.workspaceId ? g.projectIds : [],
+        mode: g.workspaceId === group.workspaceId ? g.mode : 'standard',
         transfer: null,
       });
     },
@@ -71,6 +72,10 @@ function makeRepo() {
     async setStatus(chatId, status) {
       const g = groups.get(chatId);
       if (g) groups.set(chatId, { ...g, status });
+    },
+    async setMode(chatId, mode) {
+      const g = groups.get(chatId);
+      if (g) groups.set(chatId, { ...g, mode });
     },
     async setProjects(chatId, projectIds) {
       const g = groups.get(chatId);
@@ -286,7 +291,7 @@ test('addManual: a group of another workspace is rejected', async () => {
 test('resolveChat: work group of a team workspace → its id and name', async () => {
   const { service, groups } = makeService();
   groups.set(-1001, { chatId: -1001, workspaceId: 'ws1', title: 'Команда', addedByUserId: 'lead', createdAt: NOW, status: 'active', invitedByTgUserId: null, projectIds: [] });
-  assert.deepEqual(await service.resolveChat(-1001), { workspaceId: 'ws1', workspaceName: 'Программисты', addedByUserId: 'lead' });
+  assert.deepEqual(await service.resolveChat(-1001), { workspaceId: 'ws1', workspaceName: 'Программисты', addedByUserId: 'lead', mode: 'standard' });
   assert.equal(await service.resolveChat(-9999), null);
 });
 
@@ -349,6 +354,7 @@ test('confirm: owner/lead turn a draft into a work group; others cannot', async 
     workspaceId: 'ws1',
     workspaceName: 'Программисты',
     addedByUserId: 'lead',
+    mode: 'standard',
   });
 });
 
@@ -487,4 +493,25 @@ test('takeover: an active group of another workspace cannot be taken by code, id
   assert.deepEqual(await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777), { kind: 'active' });
   assert.deepEqual(await service.chooseDraftWorkspace({ id: -3001, title: 'Офис' }, 'ws1', 777), { kind: 'active' });
   assert.deepEqual(groups.get(-3001), foreign('active'));
+});
+
+test('setMode: only owner/lead switch an active group to incidents and back', async () => {
+  const { service } = makeService();
+  await service.addManual('ws1', 'lead', -1001);
+  await assert.rejects(service.setMode('ws1', 'viewer', -1001, 'incident'), NotWorkspaceLeadError);
+  await assert.rejects(service.setMode('ws2', 'lead', -1001, 'incident'), WorkspaceNotFoundError);
+  const incident = await service.setMode('ws1', 'lead', -1001, 'incident');
+  assert.equal(incident.mode, 'incident');
+  assert.equal((await service.resolveChat(-1001))?.mode, 'incident');
+  const back = await service.setMode('ws1', 'owner', -1001, 'standard');
+  assert.equal(back.mode, 'standard');
+});
+
+test('setMode: a draft or disconnected group cannot become an incident group', async () => {
+  const { service } = makeService();
+  await service.handleBotAdded({ id: -2005, title: 'Черновик' }, 777);
+  await assert.rejects(service.setMode('ws1', 'lead', -2005, 'incident'), TelegramGroupNotFoundError);
+  await service.addManual('ws1', 'lead', -1001);
+  await service.handleBotRemoved(-1001);
+  await assert.rejects(service.setMode('ws1', 'lead', -1001, 'incident'), TelegramGroupNotFoundError);
 });

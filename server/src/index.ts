@@ -1390,6 +1390,7 @@ const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
   members: projectMemberRepo,
   client: telegramClient,
   users: userRepo,
+  incidentChats: { isIncident: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'incident' },
   now,
   idGen: idGenerator,
 });

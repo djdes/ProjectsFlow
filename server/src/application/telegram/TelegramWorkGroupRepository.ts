@@ -5,6 +5,11 @@
 // disconnected — бота удалили из группы (db/189).
 export type TelegramWorkGroupStatus = 'draft' | 'active' | 'disconnected';
 
+// standard — обычная рабочая группа; incident — замена CSharpFixer-чата: писать может любой,
+// задача ставится в проект группы молча (ralphMode=silent, runMode=full), результат — reply
+// простым языком в группу (spec 2026-11-17, раздел 3).
+export type TelegramWorkGroupMode = 'standard' | 'incident';
+
 export type TelegramWorkGroup = {
   readonly chatId: number;
   readonly workspaceId: string;
@@ -12,6 +17,8 @@ export type TelegramWorkGroup = {
   readonly addedByUserId: string | null;
   readonly createdAt: Date;
   readonly status: TelegramWorkGroupStatus;
+  // Нет значения — standard (группы до db/189 и фейки тестов).
+  readonly mode?: TelegramWorkGroupMode;
   readonly invitedByTgUserId: number | null;
   // Проекты группы (db/189). Пусто — все проекты пространства.
   readonly projectIds: readonly string[];
@@ -60,6 +67,7 @@ export interface TelegramWorkGroupRepository {
   requestTransfer(chatId: number, transfer: Omit<TelegramGroupTransfer, 'requestedAt'>): Promise<void>;
   clearTransfer(chatId: number): Promise<void>;
   setStatus(chatId: number, status: TelegramWorkGroupStatus): Promise<void>;
+  setMode(chatId: number, mode: TelegramWorkGroupMode): Promise<void>;
   // Проекты группы заменяются целиком (db/189).
   setProjects(chatId: number, projectIds: readonly string[], actorUserId: string): Promise<void>;
   // Проекты активной группы, ещё лежащие в её пространстве. Пусто — ограничения нет.

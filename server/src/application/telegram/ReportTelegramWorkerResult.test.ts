@@ -9,7 +9,7 @@ import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 
-function harness() {
+function harness(opts: { incident?: boolean } = {}) {
   let clock = new Date('2026-10-20T10:00:00Z');
   let row: TelegramTaskOrigin | null = { taskId: 't', projectId: 'p', chatId: -100123, messageId: 42, requestedAt: null };
   let seq = 0;
@@ -34,6 +34,7 @@ function harness() {
     members: {} as never,
     client: { async sendMessage(input: SendMessageInput) { messages.push(input); return sendResult; } },
     users: { async getTelegramLink() { return link; } },
+    incidentChats: { async isIncident() { return opts.incident === true; } },
     now: () => clock,
     idGen: () => `lease-${++seq}`,
   };
@@ -283,4 +284,25 @@ test('absence of a commit is reported honestly after five minutes; arbitrary URL
   await foreign.service.request('t', 'dispatcher');
   await drain(foreign.service);
   assert.doesNotMatch(foreign.messages[0]!.text, /attacker/);
+});
+
+test('incident group gets a plain-language reply to the original message: no commit link, no mention, no marker', async () => {
+  const h = harness({ incident: true });
+  h.setLink({ telegramUserId: 5, telegramUsername: 'dev' } as never);
+  h.setTask({ ...h.task, description: `Не открывается отчёт\n\n<!-- tg-incident-origin:eyJ9:${'a'.repeat(64)} -->` } as Task);
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.equal(h.messages.length, 1);
+  assert.equal(h.messages[0]?.replyToMessageId, 42);
+  assert.match(h.messages[0]!.text, /Готово — проблему исправили: Не открывается отчёт/);
+  assert.doesNotMatch(h.messages[0]!.text, /github|Коммит|@dev|tg-incident-origin|Воркер/);
+});
+
+test('incident group: a result waiting for approval says so without technical words', async () => {
+  const h = harness({ incident: true });
+  h.setTask({ ...h.task, status: 'pending_approval' } as Task);
+  await h.service.request('t', 'dispatcher');
+  await drain(h.service);
+  assert.match(h.messages[0]!.text, /ждёт проверки ответственным/);
+  assert.doesNotMatch(h.messages[0]!.text, /github|Коммит|Воркер/);
 });
