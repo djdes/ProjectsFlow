@@ -64,7 +64,7 @@ type AiSeg = {
 function makeHarness(opts?: {
   workerEnabled?: boolean;
   downloadGate?: Promise<void>;
-  projects?: { id: string; name: string }[];
+  projects?: { id: string; name: string; workspaceId?: string }[];
   shared?: { id: string; displayName: string; email: string }[];
   aiSegments?: AiSeg[];
   aiOutcome?: 'enqueue-throw' | 'timeout' | 'fail' | 'bad';
@@ -104,6 +104,8 @@ function makeHarness(opts?: {
   llmWorkspacePick?: string | ((prompt: string) => string | Promise<string>);
   // Проекты рабочей группы (db/189): chatId → id проектов. Без опции — без ограничения.
   groupProjects?: Record<number, string[]>;
+  // Рабочие группы обычного режима (db/190): chatId → название.
+  standardGroups?: Record<number, string | null>;
 }) {
   const projects: { id: string; name: string; workspaceId?: string }[] = opts?.projects ?? [
     { id: 'p1', name: 'Альфа' },
@@ -119,6 +121,7 @@ function makeHarness(opts?: {
 
   const drafts = new Map<string, TelegramTaskDraft>();
   const origins: Omit<TelegramTaskOrigin, 'requestedAt'>[] = [];
+  const groupOrigins: any[] = [];
   let seq = 0;
   const createTaskCalls: CreateTaskCall[] = [];
   const moveTaskCalls: any[] = [];
@@ -400,7 +403,8 @@ function makeHarness(opts?: {
           taskType: input.taskType ?? null,
           ralphMode: input.ralphMode,
           runMode: input.runMode,
-        });
+          originWorkspaceId: input.originWorkspaceId,
+        } as any);
         return {
           id: `t${createTaskCalls.length}`,
           projectId: input.projectId,
@@ -545,14 +549,26 @@ function makeHarness(opts?: {
     appUrl: 'https://pf.test',
     ...(opts?.now ? { now: opts.now } : {}),
     ...(opts?.groupProjects
-      ? { groupProjects: { async allowedProjectIds(chatId: number) { return opts.groupProjects![chatId] ?? []; } } }
+      ? {
+          groupProjects: {
+            async allowedProjectIds(chatId: number) { return opts.groupProjects![chatId] ?? []; },
+            async standardGroupInfo(chatId: number) {
+              const groups = opts.standardGroups ?? {};
+              return chatId in groups ? { title: groups[chatId] ?? null } : null;
+            },
+          },
+        }
       : {}),
+    groupOrigins: {
+      async setGroupOrigin(taskId: string, origin: any) { groupOrigins.push({ taskId, ...origin }); },
+    },
   };
 
   const service = new TelegramComposerService(deps as any);
   return {
     service,
     origins,
+    groupOrigins,
     drafts,
     createTaskCalls,
     moveTaskCalls,
@@ -2923,4 +2939,91 @@ test('incident group: without signing key, projects or binding owner nothing is 
     });
     assert.equal(h2.createTaskCalls.length, 0);
   });
+});
+
+// --- Задачи из рабочей группы с ответственным (db/190) ---
+// «Скрипты»: SMM ставит задачу по Yesbeat разработчику. Проект живёт в своём (основном)
+// пространстве ws-home — туда задача и ложится, а на карточке пометка «из группы».
+const SCRIPTS_CHAT = -100200;
+const YESBEAT = [{ id: 'yb', name: 'Yesbeat', workspaceId: 'ws-home' }];
+function scriptsHarness(extra: Record<string, unknown> = {}) {
+  return makeHarness({
+    projects: YESBEAT,
+    groupProjects: { [SCRIPTS_CHAT]: ['yb'] },
+    standardGroups: { [SCRIPTS_CHAT]: 'Скрипты' },
+    shared: [{ id: 'u2', displayName: 'Денис', email: 'd@e.com' }, { id: 'u3', displayName: 'Ольга', email: 'o@e.com' }],
+    telegramUsernames: { djdes: 'u2', olga_smm: 'u3' },
+    projectMembers: { yb: ['u2'] },
+    aiOutcome: 'enqueue-throw',
+    ...extra,
+  } as any);
+}
+const groupCq = (data: string): TelegramCallbackQuery => ({
+  id: 'cq-g', from: { id: 111 }, message: { message_id: 99, chat: { id: SCRIPTS_CHAT } }, data,
+});
+
+test('группа: «@djdes» — задача Денису в Yesbeat, в основном пространстве проекта, с пометкой группы', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, 'поправить плеер в Yesbeat @djdes', gctx('u1', 'SMM', 'Скрипты'));
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.projectId, 'yb');
+  assert.equal(draft.assigneeUserId, 'u2');
+  await h.service.handleCallback(groupCq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  const call = h.createTaskCalls[0] as any;
+  assert.equal(call.projectId, 'yb');
+  assert.equal(call.assigneeUserId, 'u2');
+  assert.equal(call.originWorkspaceId, 'ws-home');
+  assert.deepEqual(h.groupOrigins, [
+    { taskId: 't1', chatId: SCRIPTS_CHAT, title: 'Скрипты', authorUserId: 'u1', authorName: 'Создатель' },
+  ]);
+  const dm = h.assigneeMessages.find((m) => m.userId === 'u2');
+  assert.ok(dm, 'ответственный получил уведомление');
+  const confirm = h.edits.at(-1)!.text;
+  assert.match(confirm, /Задача создана в <b>Yesbeat<\/b>/);
+  assert.match(confirm, /Открыть задачу/);
+});
+
+test('группа: ответственный по имени в ProjectsFlow тоже находится', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, '+Yesbeat обновить сборку @Денис', gctx('u1', 'SMM', 'Скрипты'));
+  assert.equal([...h.drafts.values()][0]!.assigneeUserId, 'u2');
+});
+
+test('группа: «@мне» — ответственный сам автор', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, '+Yesbeat проверить логи @мне', gctx('u1', 'SMM', 'Скрипты'));
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.assigneeUserId, 'u1');
+  assert.doesNotMatch(draft.taskText ?? '', /мне/);
+});
+
+test('группа: ответственный не участник проекта — бот отвечает, кого можно назначить, задачу не ставит', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, '+Yesbeat поправить плеер @olga_smm', gctx('u1', 'SMM', 'Скрипты'));
+  assert.equal(h.drafts.size, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  const reply = h.sent.at(-1)!.text;
+  assert.match(reply, /не участник проекта «Yesbeat»/);
+  assert.match(reply, /Назначить можно: Создатель, Денис/);
+});
+
+test('группа без явного ответственного — как раньше, на автора; пометка группы есть, уведомления нет', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, 'поправить плеер', gctx('u1', 'SMM', 'Скрипты'));
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(groupCq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u1');
+  assert.equal(h.groupOrigins.length, 1);
+  assert.equal(h.assigneeMessages.filter((m) => m.kind === 'task_changed').length, 0);
+});
+
+test('не рабочая группа (личка) — пометки «из группы» нет, пространство как раньше', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, 500, '+Yesbeat поправить плеер @djdes');
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal((h.createTaskCalls[0] as any).originWorkspaceId, null);
+  assert.equal(h.groupOrigins.length, 0);
 });

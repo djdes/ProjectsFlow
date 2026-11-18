@@ -993,6 +993,12 @@ export const scenarios = [
         await t.visible(badge, 'значок повтора на карточке');
         t.assert((await badge.getAttribute('aria-label')) === 'Повторяется: по будням', 'нет подписи правила у значка повтора');
       });
+      await t.check('задача из рабочей группы помечена «из группы «Скрипты»»', async () => {
+        const badge = page.locator(card('t-prices')).first().locator('[data-testid="task-group-origin"]');
+        await t.visible(badge, 'пометка группы на карточке');
+        t.assert(/из группы «Скрипты»/.test((await badge.textContent()) ?? ''), 'нет названия группы в пометке');
+        t.assert(/Автор: Вера/.test((await badge.getAttribute('title')) ?? ''), 'нет автора в подсказке пометки');
+      });
       await t.pageChecks('доска проекта');
       await openAndCloseTask(t, page.locator(card('t-home')), taskTitle(state, 't-home'));
       await t.check('кнопка «Взять в работу» на черновике переносит его в «В работе»', async () => {

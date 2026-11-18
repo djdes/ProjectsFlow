@@ -1,4 +1,4 @@
-import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskGroupOrigin, TaskStatus, TaskType } from '../../domain/task/Task.js';
 import type { TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 
 export type CreateTaskInput = {
@@ -94,6 +94,9 @@ export type TrashedTaskRef = {
 
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
+  // Пометить задачу как поставленную из рабочей Telegram-группы (db/190). Optional — старые
+  // fake-репозитории без него.
+  setGroupOrigin?(taskId: string, origin: TaskGroupOrigin): Promise<void>;
   /**
    * Сколько задач пользователя закрыто — по пространствам. Считаем ТЕКУЩЕЕ состояние
    * доски (status='done', ответственный — он), а не события журнала: журнал чистится

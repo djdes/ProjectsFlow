@@ -143,6 +143,7 @@ import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from '
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
+import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 import { AssigneeBadge } from './AssigneeBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
@@ -4866,6 +4867,9 @@ function AcceptedCard({
       <PriorityBadge key="priority" priority={item.priority} />
     ) : null,
     item.recurrence ? <TaskRecurrenceBadge key="repeat" recurrence={item.recurrence} /> : null,
+    item.groupOrigin ? (
+      <TaskGroupOriginBadge key="group" origin={item.groupOrigin} createdAt={item.createdAt} className="max-w-[12rem]" />
+    ) : null,
     item.ralphMode !== 'normal' ? <RalphModeBadge key="ralph" mode={item.ralphMode} /> : null,
     (item.commentCount ?? 0) > 0 ? (
       <span key="comments" className="flex shrink-0 items-center gap-1 whitespace-nowrap" title="Комментарии">

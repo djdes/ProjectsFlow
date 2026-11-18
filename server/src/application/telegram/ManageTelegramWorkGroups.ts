@@ -259,6 +259,14 @@ export class ManageTelegramWorkGroups {
     return this.deps.repo.listActiveProjectIds(chatId);
   }
 
+  // Активная рабочая группа обычного режима — для пометки «из группы» на задачах (db/190).
+  // null — не рабочая группа (личка, черновик, отключена) или режим incident.
+  async standardGroupInfo(chatId: number): Promise<{ readonly title: string | null } | null> {
+    const group = await this.deps.repo.findByChat(chatId);
+    if (!group || group.status !== 'active' || (group.mode ?? 'standard') !== 'standard') return null;
+    return { title: group.title };
+  }
+
   // «Подключить» черновик — владелец/руководитель пространства (решение владельца №2).
   async confirm(workspaceId: string, actorUserId: string, chatId: number): Promise<TelegramWorkGroup> {
     await this.requireTeamLead(workspaceId, actorUserId);

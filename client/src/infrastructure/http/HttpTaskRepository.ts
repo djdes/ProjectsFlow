@@ -138,6 +138,7 @@ export function fromDto(dto: TaskDto): Task {
     priority: dto.priority ?? null,
     taskType: dto.taskType ?? null,
     recurrence: dto.recurrence ?? null,
+    groupOrigin: dto.groupOrigin ?? null,
   };
 }
 

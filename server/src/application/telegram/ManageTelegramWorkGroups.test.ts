@@ -515,3 +515,15 @@ test('setMode: a draft or disconnected group cannot become an incident group', a
   await service.handleBotRemoved(-1001);
   await assert.rejects(service.setMode('ws1', 'lead', -1001, 'incident'), TelegramGroupNotFoundError);
 });
+
+test('standardGroupInfo: только активная группа обычного режима отдаёт название для пометки задач', async () => {
+  const { service, groups } = makeService();
+  const base = { workspaceId: 'ws1', addedByUserId: 'lead', createdAt: NOW, invitedByTgUserId: null, projectIds: [] };
+  groups.set(-3001, { ...base, chatId: -3001, title: 'Скрипты', status: 'active' });
+  groups.set(-3002, { ...base, chatId: -3002, title: 'Инциденты', status: 'active', mode: 'incident' });
+  groups.set(-3003, { ...base, chatId: -3003, title: 'Черновик', status: 'draft' });
+  assert.deepEqual(await service.standardGroupInfo(-3001), { title: 'Скрипты' });
+  assert.equal(await service.standardGroupInfo(-3002), null);
+  assert.equal(await service.standardGroupInfo(-3003), null);
+  assert.equal(await service.standardGroupInfo(-9999), null);
+});

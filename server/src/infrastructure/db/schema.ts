@@ -918,6 +918,11 @@ export const tasks = mysqlTable(
     taskType: varchar('task_type', { length: 16 }),
     // Пространство, в котором задачу создали (общий проект, db/182). NULL = основное.
     originWorkspaceId: char('origin_workspace_id', { length: 36 }),
+    // Рабочая Telegram-группа, из которой поставили задачу (db/190). NULL — не из группы.
+    originGroupChatId: bigint('origin_group_chat_id', { mode: 'number' }),
+    originGroupTitle: varchar('origin_group_title', { length: 255 }),
+    originGroupAuthorUserId: char('origin_group_author_user_id', { length: 36 }),
+    originGroupAuthorName: varchar('origin_group_author_name', { length: 255 }),
     // Правило повтора (db/185): 'daily' | 'weekdays' | 'weekly:1,3' | 'monthly:31'.
     // NULL = не повторяется. Разбор — domain/task/TaskRecurrence.
     recurrence: varchar('recurrence', { length: 64 }),

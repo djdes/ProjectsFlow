@@ -36,7 +36,7 @@ import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
-import type { RunMode } from '../../../domain/task/Task.js';
+import type { RunMode, Task, TaskGroupOrigin } from '../../../domain/task/Task.js';
 import type { MoveTask } from '../../task/MoveTask.js';
 import type { CreateTaskComment } from '../../task/CreateTaskComment.js';
 import type { TaskRepository } from '../../task/TaskRepository.js';
@@ -138,7 +138,13 @@ type Deps = {
   readonly llm?: GenerateLlmText;
   // Проекты рабочей группы (db/189): задачи из группы ставятся только в них. Пусто — без
   // ограничения (все проекты, как раньше). Необязательно.
-  readonly groupProjects?: { allowedProjectIds(chatId: number): Promise<readonly string[]> };
+  readonly groupProjects?: {
+    allowedProjectIds(chatId: number): Promise<readonly string[]>;
+    // Активная группа обычного режима (db/190): её название — в пометку «из группы» задачи.
+    standardGroupInfo?(chatId: number): Promise<{ readonly title: string | null } | null>;
+  };
+  // Пометка «задача из группы» на созданной задаче (db/190).
+  readonly groupOrigins?: { setGroupOrigin(taskId: string, origin: TaskGroupOrigin): Promise<void> };
 };
 
 // Пространство задач черновика без проекта — для карточки и создания.
@@ -966,7 +972,7 @@ export class TelegramComposerService {
           .filter((s): s is string => !!s && s.trim().length > 0)
           .join(' ')
       : worker.text;
-    const parsedEff = donePrefix.isDone ? parseComposerMessage(effectiveRaw) : parsed;
+    let parsedEff = donePrefix.isDone ? parseComposerMessage(effectiveRaw) : parsed;
     // Ответ на сообщение, из которого уже сделали задачу: новая — в тот же контекст (проект,
     // ответственный, колонка), если сам текст их не называет.
     const inherited = options.replyToMessageId
@@ -1031,10 +1037,26 @@ export class TelegramComposerService {
         options.sourceKey ?? null, column, { replyContext: options.replyContext ?? null, defaults: inherited });
       return;
     }
+    // «@мне» — ответственный сам автор (то же, что без @, но явно).
+    let selfAssigned = false;
+    if (parsedEff.assigneeQuery !== null && isSelfAssigneeQuery(parsedEff.assigneeQuery)) {
+      parsedEff = { ...parsedEff, assigneeQuery: null };
+      selfAssigned = true;
+    }
+    // Рабочая группа (db/190): названный ответственный должен быть участником проекта
+    // (или его основного пространства). Не нашли — отвечаем в группе, кого можно назначить.
+    if (hint.projectId && parsedEff.assigneeQuery?.trim() && (await this.standardGroup(chatId))) {
+      const candidates = await this.assigneeCandidates(userId, hint.projectId);
+      const match = await this.matchAssignee(parsedEff.assigneeQuery, candidates);
+      if (!match.unique) {
+        await this.send(chatId, await this.assigneeHelpText(hint.projectId, parsedEff.assigneeQuery, match.matches, candidates));
+        return;
+      }
+    }
     const aiText = this.buildAiText(hint.taskText, parsedEff.assigneeQuery);
-    let fallbackAssigneeUserId: string | null = null;
+    let fallbackAssigneeUserId: string | null = selfAssigned ? userId : null;
     try {
-      fallbackAssigneeUserId = await this.resolveUniqueAssignee(
+      fallbackAssigneeUserId ??= await this.resolveUniqueAssignee(
         userId,
         hint.projectId,
         parsedEff.assigneeQuery,
@@ -1315,7 +1337,10 @@ export class TelegramComposerService {
     forceStatus: VisibleKanbanStatus | null = null,
     extras: ManualFlowExtras = {},
   ): Promise<void> {
-    const parsed = parseComposerMessage(rawText);
+    let parsed = parseComposerMessage(rawText);
+    // «@мне» — ответственный сам автор.
+    const selfAssigned = parsed.assigneeQuery !== null && isSelfAssigneeQuery(parsed.assigneeQuery);
+    if (selfAssigned) parsed = { ...parsed, assigneeQuery: null };
     // Чем заполнить то, что текст не называет: задача, на которую ответили, или (повтор после
     // сбоя ИИ) то, что уже лежит в черновике.
     const defaults: ReplyDefaults | null =
@@ -1388,6 +1413,7 @@ export class TelegramComposerService {
 
     if (parsed.assigneeQuery === null && defaults?.assigneeUserId) assigneeUserId = defaults.assigneeUserId;
     if (forceStatus === 'todo' && parsed.assigneeQuery === null) assigneeUserId = userId;
+    if (selfAssigned) assigneeUserId = userId;
 
     if (offeredProjects && assigneeUserId && assigneeUserId !== userId && this.deps.workspaces) {
       const all = await this.chatProjects(userId, chatId);
@@ -1773,6 +1799,7 @@ export class TelegramComposerService {
       const targetId =
         draft.projectId ?? (await this.inboxFor(inboxOwnerId, userId, inboxWorkspaceId)).id;
       if (draft.targetStatus === 'todo') await this.deps.workerPolicy?.requireEnabledForProject(targetId);
+      const group = this.isCSharpFixerDraft(draft) ? null : await this.standardGroup(chatId);
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
@@ -1787,12 +1814,14 @@ export class TelegramComposerService {
         deadline: endOfWeekDeadline(this.now()),
         allowInboxDelegation: delegatedInbox,
         // Общий проект (db/182): задача из чата пространства — задача этого пространства.
-        originWorkspaceId: draft.workspaceId ?? null,
+        // Из рабочей группы — в основное пространство проекта (db/190).
+        originWorkspaceId: await this.originWorkspaceFor(draft, draft.projectId, group),
       });
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
       await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
       await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId, text);
+      await this.markFromGroup(group, chatId, task, targetId, userId, text);
       await this.postOriginalComment(task.id, targetId, userId, text, [], draft.replyContext);
       const attachmentResult = await this.attachDraftAttachments(
         draft.attachments,
@@ -3611,6 +3640,7 @@ export class TelegramComposerService {
       readonly sourceExcerpt: string | null;
     }[] = [];
     const summary: string[] = [];
+    const group = await this.standardGroup(chatId);
     for (const { segment: seg, index: segmentIndex } of segmentEntries) {
       try {
         const title = seg.title.trim();
@@ -3669,7 +3699,8 @@ export class TelegramComposerService {
           allowInboxDelegation: delegatedInbox,
           taskType: seg.taskType ?? null,
           // Общий проект (db/182): задача из чата пространства — задача этого пространства.
-          originWorkspaceId: draft.workspaceId ?? null,
+          // Из рабочей группы — в основное пространство проекта (db/190).
+          originWorkspaceId: await this.originWorkspaceFor(draft, seg.projectId, group),
         });
         created += 1;
         if (created === 1) {
@@ -3677,6 +3708,7 @@ export class TelegramComposerService {
           await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
         }
         await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId);
+        await this.markFromGroup(group, chatId, task, targetId, userId, description);
         createdTargets.push({
           segmentIndex,
           taskId: task.id,
@@ -3809,6 +3841,90 @@ export class TelegramComposerService {
   private isIncidentGroupDraft(draft: TelegramTaskDraft): boolean {
     const origin = readIncidentOrigin(draft.taskText ?? '', incidentSigningKey());
     return origin !== null && origin.chatId === draft.tgChatId && origin.projectId === draft.projectId;
+  }
+
+  // Рабочая группа обычного режима (db/190), из которой ставят задачу. null — личка или не она.
+  private async standardGroup(chatId: number): Promise<{ readonly title: string | null } | null> {
+    if (chatId >= 0 || !this.deps.groupProjects?.standardGroupInfo) return null;
+    return this.deps.groupProjects.standardGroupInfo(chatId).catch((err) => {
+      console.warn('[tg-composer] group info lookup failed:', err);
+      return null;
+    });
+  }
+
+  // Пространство создания задачи. Из рабочей группы — основное пространство проекта, даже
+  // если группа принадлежит пространству, которому проект только расшарен (db/190):
+  // CreateTask всё равно сверит, что автор там состоит, иначе возьмёт доступное ему.
+  private async originWorkspaceFor(
+    draft: TelegramTaskDraft,
+    projectId: string | null,
+    group: { readonly title: string | null } | null,
+  ): Promise<string | null> {
+    if (group && projectId) {
+      const project = await this.deps.projects.getById(projectId).catch(() => null);
+      if (project && !project.isInbox && project.workspaceId) return project.workspaceId;
+    }
+    return draft.workspaceId ?? null;
+  }
+
+  // Пометка «из группы» + уведомление ответственному. Best-effort: задача уже создана.
+  private async markFromGroup(
+    group: { readonly title: string | null } | null,
+    chatId: number,
+    task: Task,
+    projectId: string,
+    authorUserId: string,
+    text: string,
+  ): Promise<void> {
+    if (!group) return;
+    try {
+      const author = await this.deps.users.getById(authorUserId).catch(() => null);
+      const authorName = author?.displayName ?? null;
+      await this.deps.groupOrigins?.setGroupOrigin(task.id, {
+        chatId, title: group.title, authorUserId, authorName,
+      });
+      const assigneeId = task.assignee?.userId;
+      if (!assigneeId || assigneeId === authorUserId) return;
+      const projName = await this.projNameOf(projectId);
+      const from = group.title ? ` из группы «${escapeHtml(group.title)}»` : ' из рабочей группы';
+      const by = authorName ? ` от ${escapeHtml(authorName)}` : '';
+      await this.deps.sendNotification.execute({
+        userId: assigneeId,
+        kind: 'task_changed',
+        taskId: task.id,
+        projectId,
+        text:
+          `📌 Новая задача${from}${by}\n` +
+          `📁 <b>${escapeHtml(projName)}</b>\n` +
+          `📝 ${markdownToTelegramHtml(excerpt(stripIntakeOrigin(text)))}\n` +
+          `🔗 <a href="${this.taskUrl(projectId, task.id)}">Открыть задачу</a>`,
+      });
+    } catch (err) {
+      console.warn('[tg-composer] group origin/notify failed:', err);
+    }
+  }
+
+  // Ответ в группе, когда названного ответственного нельзя назначить в проект.
+  private async assigneeHelpText(
+    projectId: string,
+    query: string,
+    matches: readonly { id: string; displayName: string }[],
+    candidates: readonly { id: string; displayName: string }[],
+  ): Promise<string> {
+    const projName = await this.projNameOf(projectId);
+    const names = (list: readonly { displayName: string }[]) =>
+      list.map((c) => escapeHtml(c.displayName)).join(', ');
+    if (matches.length > 1) {
+      return `❓ «${escapeHtml(query)}» — подходит несколько человек: ${names(matches)}. Уточните, кому поставить задачу.`;
+    }
+    const shown = candidates.slice(0, 15);
+    const more = candidates.length > shown.length ? ` и ещё ${candidates.length - shown.length}` : '';
+    return (
+      `⚠️ «${escapeHtml(query)}» не участник проекта «${escapeHtml(projName)}» — задачу не поставил.\n` +
+      (shown.length > 0
+        ? `Назначить можно: ${names(shown)}${more}. Пишите @username в Telegram, имя или «@мне».`
+        : 'В проекте пока нет участников, кому можно её назначить.')
+    );
   }
 
   private async rememberOrigin(
@@ -4166,4 +4282,9 @@ export class TelegramComposerService {
       replyMarkup,
     });
   }
+}
+
+// «@мне» / «@я» / «@me» / «@себе» — ответственный сам автор.
+function isSelfAssigneeQuery(query: string): boolean {
+  return /^(мне|я|себе|меня|me)$/i.test(query.trim().replace(/[.,:;!]+$/, ''));
 }
