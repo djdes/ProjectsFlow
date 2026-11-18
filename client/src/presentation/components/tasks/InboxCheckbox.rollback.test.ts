@@ -34,6 +34,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     createdAt: new Date(),
     updatedAt: new Date(),
     ralphMode: 'normal',
+    runMode: 'quick',
     ralphCancelRequestedAt: null,
     ralphCancelRequestedBy: null,
     ralphCancelRequestedByDisplayName: null,

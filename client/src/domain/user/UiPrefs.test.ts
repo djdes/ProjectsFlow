@@ -17,7 +17,7 @@ test('saved property layouts retain their order, drop creation metadata and add 
 test('a saved layout gets the new «Повтор» row right under the deadline', () => {
   const saved = ['status', 'project', 'assignee', 'approver', 'priority', 'deadline', 'taskType', 'mode', 'files'];
   assert.deepEqual(normalizeTaskPropertyOrder(saved), [
-    'status', 'project', 'assignee', 'approver', 'priority', 'deadline', 'recurrence', 'taskType', 'mode', 'files',
+    'status', 'project', 'assignee', 'approver', 'priority', 'deadline', 'recurrence', 'taskType', 'mode', 'runMode', 'files',
   ]);
   // Срока в сохранённом порядке нет — «Повтор» дописывается следом за ним, в конец.
   const partial = normalizeTaskPropertyOrder(['files', 'status']);

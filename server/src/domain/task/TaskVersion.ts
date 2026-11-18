@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from './Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from './Task.js';
 import type { TaskAssignee } from './TaskAssignee.js';
 import { sameTaskRecurrence, type TaskRecurrence } from './TaskRecurrence.js';
 
@@ -14,6 +14,7 @@ export type TaskVersionField =
   | 'taskType'
   | 'recurrence'
   | 'ralphMode'
+  | 'runMode'
   | 'appearance'
   | 'parent'
   | 'project'
@@ -33,6 +34,8 @@ export type TaskSnapshot = {
   readonly status: TaskStatus;
   readonly statusBeforeDone: TaskStatus | null;
   readonly ralphMode: RalphMode;
+  // Нет в снимках до db/188 — читаем как «не определён», restore поле не трогает.
+  readonly runMode?: RunMode;
   readonly deadline: string | null;
   readonly startDate: string | null;
   readonly parentTaskId: string | null;
@@ -75,6 +78,7 @@ export function snapshotOfTask(task: Task): TaskSnapshot {
     status: task.status,
     statusBeforeDone: task.statusBeforeDone,
     ralphMode: task.ralphMode,
+    runMode: task.runMode,
     deadline: task.deadline,
     startDate: task.startDate,
     parentTaskId: task.parentTaskId,
@@ -105,6 +109,11 @@ export function changedTaskFields(
     previous.statusBeforeDone !== current.statusBeforeDone
   ) fields.push('status');
   if (previous.ralphMode !== current.ralphMode) fields.push('ralphMode');
+  if (
+    previous.runMode !== undefined &&
+    current.runMode !== undefined &&
+    previous.runMode !== current.runMode
+  ) fields.push('runMode');
   if (previous.deadline !== current.deadline || previous.startDate !== current.startDate) {
     fields.push('deadline');
   }

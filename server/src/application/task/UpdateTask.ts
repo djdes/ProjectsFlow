@@ -1,6 +1,6 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
-import type { RalphMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
 import {
   sameTaskRecurrence,
   taskRecurrenceLabel,
@@ -43,6 +43,7 @@ export type UpdateTaskCommand = {
   readonly coverPosition?: number;
   // Сменить режим Ralph можно в любой момент — диспетчер на следующем тике увидит.
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;
   // null = очистить дату начала; undefined = не менять.
@@ -80,6 +81,7 @@ export class UpdateTask {
     if (input.cover !== undefined) patch.cover = input.cover;
     if (input.coverPosition !== undefined) patch.coverPosition = input.coverPosition;
     if (input.ralphMode !== undefined) patch.ralphMode = input.ralphMode;
+    if (input.runMode !== undefined) patch.runMode = input.runMode;
     if (input.deadline !== undefined) patch.deadline = input.deadline;
     if (input.startDate !== undefined) patch.startDate = input.startDate;
     if (input.priority !== undefined) patch.priority = input.priority;
@@ -97,6 +99,9 @@ export class UpdateTask {
       }
       if (patch.ralphMode !== undefined && existing.ralphMode !== updated.ralphMode) {
         changes.push({ field: 'ralphMode', old: existing.ralphMode ?? null, new: updated.ralphMode ?? null });
+      }
+      if (patch.runMode !== undefined && existing.runMode !== updated.runMode) {
+        changes.push({ field: 'runMode', old: existing.runMode ?? null, new: updated.runMode ?? null });
       }
       if (patch.deadline !== undefined && existing.deadline !== updated.deadline) {
         changes.push({ field: 'deadline', old: existing.deadline ?? null, new: updated.deadline ?? null });

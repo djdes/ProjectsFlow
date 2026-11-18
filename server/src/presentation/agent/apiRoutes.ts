@@ -285,6 +285,8 @@ const updateTaskAgentSchema = z
     description: z.string().trim().min(1).max(50_000).optional(),
     // Worker может выставить режим (например 'silent' → дальше работает без вопросов).
     ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+    // Режим запуска воркера: 'quick' (без ревьюера) | 'full' (весь конвейер). spec §5.
+    runMode: z.enum(['quick', 'full']).optional(),
     // Срок выполнения 'YYYY-MM-DD'. null = очистить. См. db/041.
     deadline: z
       .string()
@@ -994,6 +996,7 @@ export function agentApiRouter(deps: Deps): Router {
           description: body.description,
           status: agentTaskCreateStatus(body.status),
           ralphMode: body.ralphMode,
+          runMode: body.runMode,
           deadline: body.deadline ?? null,
           priority: body.priority ?? null,
           taskType: body.taskType ?? null,
@@ -1808,6 +1811,7 @@ export function agentApiRouter(deps: Deps): Router {
           taskId,
           description: body.description,
           ralphMode: body.ralphMode,
+          runMode: body.runMode,
           deadline: body.deadline,
           priority: body.priority,
           taskType: body.taskType,

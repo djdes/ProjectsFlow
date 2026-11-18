@@ -86,6 +86,22 @@ export const RALPH_MODE_META: Record<RalphMode, { label: string; description: st
   },
 };
 
+// Режим запуска воркера по задаче (spec 2026-11-17 §5, db/188). Выбирает человек.
+export type RunMode = 'quick' | 'full';
+
+export const RUN_MODES: readonly RunMode[] = ['quick', 'full'];
+
+export const RUN_MODE_META: Record<RunMode, { label: string; description: string }> = {
+  quick: {
+    label: 'Обычное изменение',
+    description: 'Исполнитель без ревьюера — быстрее и дешевле',
+  },
+  full: {
+    label: 'Полный прогон',
+    description: 'Проверки, ревьюер, эскалация, доставка; расход токенов в 2–3 раза выше',
+  },
+};
+
 export type Task = {
   // Task-scoped capability returned by the direct task endpoint.
   readonly canEdit?: boolean;
@@ -124,6 +140,8 @@ export type Task = {
   readonly commentCount?: number;
   // Режим работы Ralph (default 'normal' если backend без 035).
   readonly ralphMode: RalphMode;
+  // Режим запуска воркера (default 'quick', если backend без db/188).
+  readonly runMode: RunMode;
   // Pull-based отмена Ralph-работы (db/037). null = нет запроса. См. spec
   // C:/www/ralph/prompts/task-ralph-cancel.md.
   readonly ralphCancelRequestedAt: Date | null;

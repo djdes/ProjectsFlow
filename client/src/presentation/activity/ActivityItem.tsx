@@ -49,6 +49,7 @@ const FIELD_LABEL: Record<string, string> = {
   assigneeUserId: 'ответственный',
   assignee: 'ответственный',
   ralphMode: 'режим',
+  runMode: 'режим запуска',
   recurrence: 'повтор',
   name: 'название',
   cover: 'обложка',

@@ -53,6 +53,13 @@ export type RalphMode = 'normal' | 'silent' | 'grillme';
 
 export const RALPH_MODES: readonly RalphMode[] = ['normal', 'silent', 'grillme'];
 
+// Режим запуска воркера по задаче (spec 2026-11-17 §5, db/188). Выбирает человек.
+//   'quick' — «Обычное изменение»: исполнитель без ревьюера (дефолт, дешевле и быстрее).
+//   'full'  — «Полный прогон»: проверки, ревьюер, эскалация, доставка (токенов в 2–3 раза больше).
+export type RunMode = 'quick' | 'full';
+
+export const RUN_MODES: readonly RunMode[] = ['quick', 'full'];
+
 // Приоритет в стиле Todoist: 1=urgent (red), 2=high (orange), 3=medium (blue),
 // 4=low (slate). null = без приоритета (без подсветки). См. db/041.
 export type TaskPriority = 1 | 2 | 3 | 4;
@@ -96,6 +103,7 @@ export type Task = {
   readonly statusBeforeDone: TaskStatus | null;
   readonly position: number;
   readonly ralphMode: RalphMode;
+  readonly runMode: RunMode;
   // Pull-based cancel: момент когда юзер запросил отмену Ralph-работы (NULL = нет
   // запроса). См. db/037, spec C:/www/ralph/prompts/task-ralph-cancel.md.
   readonly ralphCancelRequestedAt: Date | null;

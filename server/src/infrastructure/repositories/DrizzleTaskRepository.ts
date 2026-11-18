@@ -19,6 +19,7 @@ import {
   TASK_STATUSES,
   isTaskType,
   type RalphMode,
+  type RunMode,
   type Task,
   type TaskPriority,
   type TaskStatus,
@@ -79,6 +80,7 @@ function toTask(row: TaskRowJoined): Task {
     // VARCHAR в БД, cast в domain enum. Дефолт 'normal' — соответствует SQL DEFAULT,
     // защита от unexpected значений (если миграция/ручной UPDATE проставит чушь).
     ralphMode: (row.ralphMode as RalphMode) ?? 'normal',
+    runMode: row.runMode === 'full' ? 'full' : ('quick' as RunMode),
     ralphCancelRequestedAt: row.ralphCancelRequestedAt ?? null,
     ralphCancelRequestedBy: row.ralphCancelRequestedBy ?? null,
     ralphCancelRequestedByDisplayName: row.cancelByDisplayName ?? null,
@@ -138,6 +140,7 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
         statusBeforeDone: tasks.statusBeforeDone,
         position: tasks.position,
         ralphMode: tasks.ralphMode,
+        runMode: tasks.runMode,
         ralphCancelRequestedAt: tasks.ralphCancelRequestedAt,
         ralphCancelRequestedBy: tasks.ralphCancelRequestedBy,
         deadline: tasks.deadline,
@@ -280,6 +283,7 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
       position: input.position,
       // Не выставляем если undefined — пусть отработает SQL DEFAULT.
       ...(input.ralphMode !== undefined ? { ralphMode: input.ralphMode } : {}),
+      ...(input.runMode !== undefined ? { runMode: input.runMode } : {}),
       ...(input.deadline !== undefined ? { deadline: input.deadline } : {}),
       ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
       ...(input.parentTaskId !== undefined ? { parentTaskId: input.parentTaskId } : {}),
@@ -312,6 +316,7 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
         | 'statusBeforeDone'
         | 'position'
         | 'ralphMode'
+        | 'runMode'
         | 'deadline'
         | 'startDate'
         | 'parentTaskId'
@@ -339,6 +344,7 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
     if (patch.statusBeforeDone !== undefined) set.statusBeforeDone = patch.statusBeforeDone;
     if (patch.position !== undefined) set.position = patch.position;
     if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
+    if (patch.runMode !== undefined) set.runMode = patch.runMode;
     if (patch.deadline !== undefined) set.deadline = patch.deadline;
     if (patch.startDate !== undefined) set.startDate = patch.startDate;
     if (patch.parentTaskId !== undefined) set.parentTaskId = patch.parentTaskId;

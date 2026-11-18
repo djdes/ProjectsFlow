@@ -21,6 +21,7 @@ export const taskStatusSchema = z.enum([
 
 // Режим работы Ralph. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
 export const ralphModeSchema = z.enum(['normal', 'silent', 'grillme']);
+export const runModeSchema = z.enum(['quick', 'full']);
 
 // Дата 'YYYY-MM-DD' (без времени). Жёсткий regex — backend хранит как есть, UI парсит
 // для отображения. nullable: null = очистить deadline; не передано = не менять.
@@ -81,6 +82,7 @@ export const createTaskSchema = z.object({
   // Позиция: поставить новую задачу сразу ПОСЛЕ этой (цепочка inline-создания). Только на create.
   afterTaskId: z.string().uuid().nullable().optional(),
   ralphMode: ralphModeSchema.optional(),
+  runMode: runModeSchema.optional(),
   // Единственный ответственный. Старые клиенты могут не прислать — сервер назначит actor'а.
   assigneeUserId: z.string().uuid().nullable().optional(),
   deadline: deadlineSchema.optional(),
@@ -100,6 +102,7 @@ export const updateTaskSchema = z
     cover: coverSchema.optional(),
     coverPosition: coverPositionSchema.optional(),
     ralphMode: ralphModeSchema.optional(),
+    runMode: runModeSchema.optional(),
     deadline: deadlineSchema.optional(),
     startDate: deadlineSchema.optional(),
     priority: prioritySchema.optional(),

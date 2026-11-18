@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Repeat, Reply, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Repeat, Reply, Rocket, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { TaskPropertyKey } from '@/domain/user/UiPrefs';
 import { TaskProperties, type TaskProperty } from './TaskProperties';
@@ -62,7 +62,8 @@ import {
 } from '@/presentation/components/attachments/files';
 import { paceAppend, runFilesLimited } from '@/presentation/components/attachments/pace';
 import { RalphModeSelect } from './RalphMode';
-import type { RalphMode, TaskStatus } from '@/domain/task/Task';
+import { RunModeSelect } from './RunMode';
+import type { RalphMode, RunMode, TaskStatus } from '@/domain/task/Task';
 import { AssigneeSelect } from './AssigneeSelect';
 import { getDefaultTaskDeadline } from '@/domain/task/defaultTaskDeadline';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
@@ -504,6 +505,53 @@ function TaskRalphModeChip({
   // «Выбрать режим…» для дефолта / имя режима когда выбран (единый вид с дедлайном).
   return (
     <RalphModeSelect
+      value={mode}
+      onChange={(v) => void change(v)}
+      disabled={saving || disabled}
+      variant="ghost"
+      className={className}
+    />
+  );
+}
+
+// Режим запуска воркера (spec §5) в ряду свойств: смена — сразу PATCH, ошибка → toast.
+function TaskRunModeChip({
+  task,
+  onChanged,
+  className,
+  disabled = false,
+}: {
+  task: Task;
+  onChanged: () => void;
+  className?: string;
+  disabled?: boolean;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const [mode, setMode] = useState<RunMode>(task.runMode);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setMode(task.runMode);
+  }, [task.runMode]);
+
+  const change = async (next: RunMode): Promise<void> => {
+    if (next === mode || saving) return;
+    const prev = mode;
+    setMode(next);
+    setSaving(true);
+    try {
+      await taskRepository.update(task.projectId, task.id, { runMode: next });
+      onChanged();
+    } catch (err) {
+      setMode(prev);
+      toast.error(`Не удалось сменить режим запуска: ${(err as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <RunModeSelect
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving || disabled}
@@ -2077,6 +2125,14 @@ export function TaskDrawer({
                         disabled={!canEdit}
                       />
                     ),
+                    runMode: (
+                      <TaskRunModeChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
                     files: (
                       <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-1.5">
                         <TaskDrawerAttachmentRow
@@ -2103,6 +2159,7 @@ export function TaskDrawer({
                     priority: { icon: Flag, label: 'Приоритет', value: propValues.priority },
                     taskType: { icon: Tag, label: 'Тип', value: propValues.taskType },
                     mode: { icon: Bot, label: 'Режим', value: propValues.mode },
+                    runMode: { icon: Rocket, label: 'Запуск', value: propValues.runMode },
                     files: { icon: Paperclip, label: 'Файлы', value: propValues.files },
                   };
                   return <TaskProperties taskId={task.id} items={props} />;

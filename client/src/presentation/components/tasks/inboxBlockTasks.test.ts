@@ -29,6 +29,7 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
     createdAt: NOW,
     updatedAt: NOW,
     ralphMode: 'normal',
+    runMode: 'quick',
     ralphCancelRequestedAt: null,
     ralphCancelRequestedBy: null,
     ralphCancelRequestedByDisplayName: null,

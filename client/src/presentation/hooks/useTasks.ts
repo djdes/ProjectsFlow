@@ -9,6 +9,7 @@ import { usePageRefresh } from '@/presentation/components/experience/usePageRefr
 import { useContainer } from '@/infrastructure/di/container';
 import type {
   RalphMode,
+  RunMode,
   Task,
   TaskPriority,
   TaskStatus,
@@ -35,6 +36,7 @@ export type UseTasks = State & {
     status: TaskStatus;
     afterTaskId?: string | null;
     ralphMode?: RalphMode;
+    runMode?: RunMode;
     assigneeUserId?: string;
     deadline?: string | null;
     startDate?: string | null;
@@ -49,6 +51,7 @@ export type UseTasks = State & {
       cover?: string | null;
       coverPosition?: number;
       ralphMode?: RalphMode;
+      runMode?: RunMode;
       deadline?: string | null;
       startDate?: string | null;
       priority?: TaskPriority | null;

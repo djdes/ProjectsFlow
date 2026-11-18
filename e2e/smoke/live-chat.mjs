@@ -145,7 +145,7 @@ export const liveRolesScenarios = [{
       t.assert(publish.length === 1 && publish[0].startsWith('passed|Публикация — Коммит 3c9e1d2'), `строки публикации: ${publish.join(' / ')}`);
       t.assert(await t.page.locator('[data-live-stage-status="started"]').count() === 1, 'незакрытой осталась не одна строка этапа');
       await t.visible(t.page.locator('[data-pf-live-spinner]').getByText('Проверка версии…', { exact: true }), 'спиннер называет текущий этап');
-      await t.visible(t.page.locator('[data-worker-run]').getByText(/Конвейер · попытка 1 · идёт$/), 'подпись запуска конвейера');
+      await t.visible(t.page.locator('[data-worker-run]').getByText(/Конвейер · попытка 1 · идёт · Обычное изменение$/), 'подпись запуска конвейера');
       await liveShot(t, 'roles-tail');
     });
     await t.step('лента конвейера: середина и начало', async () => {

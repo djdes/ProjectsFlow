@@ -14,6 +14,7 @@ export const VERSION_FIELD_OPTIONS: ReadonlyArray<{
   { field: 'priority', label: 'Приоритет' },
   { field: 'recurrence', label: 'Повтор' },
   { field: 'ralphMode', label: 'Режим работы' },
+  { field: 'runMode', label: 'Режим запуска' },
   { field: 'appearance', label: 'Оформление' },
   { field: 'parent', label: 'Родительская задача' },
   { field: 'project', label: 'Проект' },

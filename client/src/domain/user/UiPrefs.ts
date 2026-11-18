@@ -37,6 +37,8 @@ export const TASK_PROPERTY_KEYS = [
   'priority',
   'taskType',
   'mode',
+  // Режим запуска воркера (db/188) — рядом с режимом Ralph.
+  'runMode',
   'files',
 ] as const;
 export type TaskPropertyKey = (typeof TASK_PROPERTY_KEYS)[number];
@@ -45,6 +47,7 @@ export type TaskPropertyKey = (typeof TASK_PROPERTY_KEYS)[number];
 // «Повтор» появляется прямо под «Сроком», а не после «Файлов».
 const TASK_PROPERTY_INSERT_AFTER: Partial<Record<TaskPropertyKey, TaskPropertyKey>> = {
   recurrence: 'deadline',
+  runMode: 'mode',
 };
 
 // Нормализуем сохранённый порядок: оставляем только известные ключи, дополняем
