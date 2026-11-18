@@ -64,7 +64,8 @@ type Props = {
   onCommentCreated: (created: TaskComment) => void;
   onTaskChanged: () => void;
   defaultTarget?: ComposerTarget;
-  onWorkerQueued?: () => void;
+  // Сообщает подтверждённую сервером задачу в статусе «Воркер».
+  onWorkerQueued?: (updated: Task) => void;
   // Ответ/цитата (db/080): на какой коммент отвечаем + опц. фрагмент. Плашка над полем.
   replyDraft?: ReplyDraft | null;
   onClearReply?: () => void;
@@ -288,16 +289,17 @@ function TaskDrawerComposerForm({
       if (moveTo !== null) {
         const tail = moveTo === 'backlog' ? backlogTail : todoTail;
         try {
-          await taskRepository.move(task.projectId, task.id, {
+          const moved = await taskRepository.move(task.projectId, task.id, {
             targetStatus: moveTo, beforeTaskId: tail?.id ?? null, afterTaskId: null,
           });
-          if (moveTo === 'todo') onWorkerQueued?.();
+          if (moved.status !== moveTo) throw new Error(`сервер оставил статус «${moved.status}»`);
+          if (moveTo === 'todo') onWorkerQueued?.(moved);
           toast.success(moveTo === 'todo' ? 'Задача в очереди воркера' : 'Задача в черновиках');
         } catch (error) {
           toast.error(`Комментарий отправлен, но не удалось изменить статус: ${(error as Error).message}`);
         }
       }
-      if (moveTo === null && effectiveTarget === 'worker' && task.status === 'todo') onWorkerQueued?.();
+      if (moveTo === null && effectiveTarget === 'worker' && task.status === 'todo') onWorkerQueued?.(task);
       if (mountedRef.current) onTaskChanged();
     } finally {
       if (mountedRef.current) refocusAfterSendRef.current = true;

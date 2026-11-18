@@ -100,14 +100,19 @@ export function parseStagePayload(payload: unknown): LiveStagePayload | null {
   };
 }
 
-export type StepState = 'pending' | 'active' | 'passed' | 'failed' | 'skipped';
+export type StepState = 'pending' | 'active' | 'passed' | 'failed' | 'skipped' | 'waiting';
 
 export type PipelineProgress = {
   readonly steps: ReadonlyArray<{ readonly stage: PipelineStage; readonly state: StepState }>;
   readonly round: number | null;
   readonly escalated: boolean;
-  readonly outcome: 'running' | 'done' | 'blocked' | 'stopped';
+  // 'clarification' — диспетчер до старта задал вопрос и запарковал задачу: это не провал.
+  readonly outcome: 'running' | 'done' | 'blocked' | 'stopped' | 'clarification';
 };
+
+function isClarificationStage(stage: LiveStagePayload): boolean {
+  return /уточн|clarif/i.test(`${stage.title ?? ''} ${stage.detail ?? ''}`);
+}
 
 // The stepper reflects the latest `stage` events. A stage that starts again (next fix
 // round) resets the stages after it: the earlier review verdict no longer applies.
@@ -117,6 +122,7 @@ export function pipelineProgress(events: readonly LiveEvent[], sessionStatus: Li
   let currentRound: number | null = null;
   let escalated = false;
   let outcome: PipelineProgress['outcome'] = 'running';
+  let clarification = false;
   for (const event of events) {
     if (event.kind === 'handoff') {
       const handoff = parseHandoffPayload(event.payload);
@@ -134,6 +140,8 @@ export function pipelineProgress(events: readonly LiveEvent[], sessionStatus: Li
       for (const [key, state] of states) if (state === 'active') states.set(key, 'failed');
       continue;
     }
+    // Ralph-readiness: prepare failed «Нужно уточнение» — задача ждёт ответа, а не упала.
+    clarification = stage.stage === 'prepare' && stage.status === 'failed' && isClarificationStage(stage);
     if (stage.status === 'started') {
       const index = PIPELINE_STAGES.indexOf(stage.stage);
       for (const later of PIPELINE_STAGES.slice(index + 1)) states.set(later, 'pending');
@@ -143,6 +151,10 @@ export function pipelineProgress(events: readonly LiveEvent[], sessionStatus: Li
     }
   }
   if (!seen) return null;
+  if (clarification && outcome !== 'blocked') {
+    states.set('prepare', 'waiting');
+    if (sessionStatus !== 'running') outcome = 'clarification';
+  }
   if (sessionStatus !== 'running' && outcome === 'running') {
     outcome = sessionStatus === 'completed' ? 'done' : 'stopped';
     // A finished session leaves nothing «in progress»: an interrupted stage failed.
@@ -248,4 +260,26 @@ export function summarizeToolJournal(events: readonly LiveEvent[]): ToolJournalS
     else tools += 1;
   }
   return { files: files.size, commands, tools, errors };
+}
+
+// Короткое человеческое «почему конвейер остановился»: последняя упавшая проверка и
+// первая содержательная строка её вывода; без проверок — пояснение этапа blocked.
+export type PipelineStopReason = { readonly title: string; readonly line: string | null };
+
+export function pipelineStopReason(events: readonly LiveEvent[]): PipelineStopReason | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.kind !== 'check_result') continue;
+    const check = parseCheckResultPayload(event.payload);
+    if (!check || check.passed) continue;
+    const line = check.outputTail?.split(/\r?\n/).map(part => part.trim()).find(Boolean) ?? null;
+    return { title: check.name, line };
+  }
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.kind !== 'stage') continue;
+    const stage = parseStagePayload(event.payload);
+    if (stage?.stage === 'blocked' && (stage.detail || stage.title)) return { title: stage.title ?? 'Конвейер остановлен', line: stage.detail };
+  }
+  return null;
 }

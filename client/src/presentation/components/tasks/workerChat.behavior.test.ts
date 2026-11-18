@@ -35,8 +35,8 @@ async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'A
         '@/infrastructure/di/container': 'export const useContainer=()=>globalThis.__workerChatTest.container;',
         '@/presentation/hooks/useCurrentUser': 'export const useCurrentUser=()=>({user:{id:"me",displayName:"benzin"}});',
         './useCurrentUser': 'export const useCurrentUser=()=>({user:{id:"me",displayName:"benzin"}});',
-        '@/components/ui/sonner': 'export const toast={error:()=>{},success:()=>{},info:()=>{}};',
-        './TaskDrawerComposer': `import React from 'react';export const TaskDrawerComposer=p=>React.createElement('button',{onClick:()=>{p.onCommentCreated(globalThis.__workerChatTest.nextComment);p.onWorkerQueued();}},'Отправить воркеру');`,
+        '@/components/ui/sonner': 'export const toast={error:(m)=>{(globalThis.__workerChatTest.toasts||=[]).push(m);},success:()=>{},info:()=>{}};',
+        './TaskDrawerComposer': `import React from 'react';export const TaskDrawerComposer=p=>React.createElement('button',{onClick:()=>{p.onCommentCreated(globalThis.__workerChatTest.nextComment);p.onWorkerQueued({...p.task,status:'todo'});}},'Отправить воркеру');`,
         './CancelWorkButton': `import React from 'react';export const CancelWorkButton=()=>React.createElement('button',null,'Отменить работу');`,
         '@/presentation/hooks/useWorkerEnabled': 'export const useWorkerEnabled=()=>true;',
         './CommentBody': `import React from 'react';export const CommentBody=({body})=>React.createElement('div',null,body);`,
@@ -245,12 +245,12 @@ test('drafts show an explicit worker handoff with or without past sessions and q
   const View = await component('LiveTab');
   for (const history of [false, true]) {
     const moves: unknown[] = [];
+    const props = { task: { id: 'task', projectId: 'project', status: 'backlog', canEdit: true } as Task, backlogTail: null, todoTail: null };
     state.container = {
       liveRepository: { async listSessions() { return history ? [run('past', 1, 'completed')] : []; }, async listEvents() { return [event(1, 'Предыдущий результат', 1)]; }, async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; } },
-      taskRepository: { async listComments() { return []; }, async move(...args: unknown[]) { moves.push(args); } },
+      taskRepository: { async listComments() { return []; }, async move(...args: unknown[]) { moves.push(args); return { ...props.task, status: 'todo' }; }, async get() { return { ...props.task, status: 'todo' }; } },
       projectRepository: { async listMembers() { return []; } },
     };
-    const props = { task: { id: 'task', projectId: 'project', status: 'backlog', canEdit: true } as Task, backlogTail: null, todoTail: null };
     const view = await mount(View, props);
     try {
       const button = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера');
@@ -603,7 +603,7 @@ test('a queued task is alive: waiting time, dispatcher pulse and an editable run
     assert.ok(queue, 'the queued state is a living block, not a static line');
     assert.match(queue.textContent!, /ожидает запуска диспетчера/);
     assert.match(queue.querySelector('[data-pf-live-queue-elapsed]')!.textContent!, /^1 мин 1[56] с$/);
-    assert.match(queue.querySelector('[data-pf-dispatcher-pulse="seen"]')!.textContent!, /Диспетчер видел очередь 4[23] с назад/);
+    assert.match(queue.querySelector('[data-pf-dispatcher-pulse="seen"]')!.textContent!, /^Диспетчер на связи \(4[23] с назад\)$/);
     assert.equal(queue.querySelector('[data-pf-live-run-mode]')!.getAttribute('data-pf-live-run-mode'), 'full');
     assert.ok(queue.querySelector('button[aria-label="Режим запуска: Полный прогон"]'), 'the mode can still be changed before the worker starts');
     // Silent dispatcher for longer than 3 minutes → a warning.
@@ -634,5 +634,186 @@ test('ralph-worker prepare stages render with a retry countdown; a running run s
     assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, 'the worker already picked the task');
     const note = view.host.querySelector('[data-pf-live-run-mode-locked]')!;
     assert.match(note.textContent!, /Полный прогон.*применится к следующему запуску/);
+  } finally { await view.close(); }
+});
+
+// Прод-инцидент: полный прогон отменён через 2 с, Ralph вернул задачу в backlog и закрыл
+// сессию canceled. Повторный запуск должен реально уйти на сервер, а «в очереди» —
+// показываться только по серверному статусу todo.
+test('cancel → relaunch: the relaunch reaches the server and the queue follows the server status', async () => {
+  const View = await component('LiveTab');
+  const canceled = { ...run('canceled-run', 1, 'canceled'), agentName: 'ralph-orchestrator' };
+  let sessions: LiveSession[] = [];
+  let serverStatus: Task['status'] = 'backlog';
+  const moves: unknown[] = [];
+  state.toasts = [];
+  const base = { id: 'task', projectId: 'project', canEdit: true, runMode: 'full', ralphCancelRequestedAt: null, updatedAt: new Date(Date.now() - 112_000) } as unknown as Task;
+  state.container = {
+    ...liveContainer({
+      async listSessions() { return sessions; },
+      async listEvents() { return [{ seq: 1, kind: 'stage', text: null, payload: { stage: 'execute', status: 'started' }, createdAt: at(1) }]; },
+    }),
+    taskRepository: {
+      async listComments() { return []; },
+      async getDispatcherHeartbeat() { return { dispatcherAssigned: true, lastSeenAt: new Date(Date.now() - 2_000), trackedSince: new Date(Date.now() - 3_600_000) }; },
+      async move(...args: unknown[]) { moves.push(args); serverStatus = 'todo'; return { ...base, status: 'todo' }; },
+      async get() { return { ...base, status: serverStatus }; },
+    },
+  };
+  const props = (status: Task['status']) => ({ task: { ...base, status }, backlogTail: null, todoTail: null });
+  const startButton = (host: HTMLElement) => [...host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера' || b.textContent === 'Запустить снова');
+  const view = await mount(View, props('backlog'));
+  try {
+    // 1. First launch (local optimistic state used to stick from here on).
+    await act(async () => { startButton(view.host)!.click(); });
+    assert.equal(moves.length, 1);
+    assert.ok(view.host.querySelector('[data-pf-live-queue]'));
+    // 2. Worker starts and is cancelled within 2 s; Ralph returns the task to backlog
+    //    and the session finishes canceled — the client never saw it running.
+    sessions = [canceled];
+    serverStatus = 'backlog';
+    await view.render(props('in_progress'));
+    await view.render(props('backlog'));
+    const button = startButton(view.host);
+    assert.ok(button, 'after a cancel the task is NOT shown as queued');
+    assert.equal(button.disabled, false);
+    assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, 'no queue block while the server task is backlog');
+  } finally { await view.close(); }
+
+  // Reopened LIVE with the canceled run in history.
+  const again = await mount(View, props('backlog'));
+  try {
+    assert.match(again.host.querySelector('[data-pf-pipeline-stepper]')?.textContent ?? '', /Конвейер прерван/);
+    const button = startButton(again.host)!;
+    assert.equal(button.textContent, 'Запустить снова', 'an interrupted run offers a relaunch');
+    // 3. Relaunch really goes to the server.
+    await act(async () => { button.click(); });
+    assert.equal(moves.length, 2, 'the relaunch is sent to the server');
+    const queue = again.host.querySelector('[data-pf-live-queue]');
+    assert.ok(queue, 'confirmed todo → queue block');
+    assert.match(queue.querySelector('[data-pf-live-queue-elapsed]')!.textContent!, /^\d+ с$/, 'waiting time counts from the relaunch, not the first launch');
+    assert.match(queue.querySelector('[data-pf-dispatcher-pulse="seen"]')!.textContent!, /^Диспетчер на связи \(\d+ с назад\)$/);
+    // 4. The old canceled run is collapsed history, not the header.
+    const previous = again.host.querySelector('details[data-pf-previous-run]');
+    assert.ok(previous, 'the previous run is collapsed');
+    assert.equal(previous.hasAttribute('open'), false);
+    assert.match(previous.querySelector('summary')!.textContent!, /Предыдущий запуск · Конвейер прерван/);
+    // 5. A server refetch saying backlog removes the stale queue state.
+    await again.render(props('backlog'));
+    assert.equal(again.host.querySelector('[data-pf-live-queue]'), null);
+    assert.equal(again.host.querySelector('details[data-pf-previous-run]'), null);
+    assert.deepEqual(state.toasts, []);
+  } finally { await again.close(); }
+});
+
+test('a relaunch the server does not keep in the queue is rolled back with a visible error', async () => {
+  const View = await component('LiveTab');
+  state.toasts = [];
+  const base = { id: 'task', projectId: 'project', canEdit: true, runMode: 'quick', status: 'backlog', ralphCancelRequestedAt: null } as unknown as Task;
+  for (const failure of ['move-rejected', 'move-throws', 'refetch-backlog'] as const) {
+    state.container = {
+      ...liveContainer({ async listSessions() { return []; } }),
+      taskRepository: {
+        async listComments() { return []; },
+        async move() { if (failure === 'move-throws') throw new Error('409 Conflict'); return { ...base, status: failure === 'move-rejected' ? 'backlog' : 'todo' }; },
+        async get() { return { ...base, status: 'backlog' }; },
+      },
+    };
+    const view = await mount(View, { task: base, backlogTail: null, todoTail: null });
+    try {
+      const button = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера')!;
+      await act(async () => { button.click(); });
+      assert.match(view.host.querySelector('[role="alert"]')!.textContent!, /Не удалось отправить задачу воркеру/, failure);
+      assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, failure);
+      const after = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера');
+      assert.equal(after?.disabled, false, `${failure}: the user can retry`);
+    } finally { await view.close(); }
+  }
+  assert.equal((state.toasts as string[]).length, 3, 'every failure is toasted');
+});
+
+const readinessQuestion = (): TaskComment => ({
+  ...message(), id: 'readiness', ownerUserId: 'ralph', actorKind: 'agent', agentName: 'ralph-readiness',
+  body: '**🤔 Уточнение перед стартом**\n\nПереоткрыть задачу?\n\n<!-- ralph-question {"v":1,"id":"readiness-7bd423a1","type":"open","allowOpen":true} -->',
+});
+const prepareRun = (status: LiveSession['status']) => ({ ...run('prep-run', 1, status), agentName: 'ralph-orchestrator' });
+
+test('a readiness question without options offers Да/Нет; answering switches LIVE to the server-driven queue', async () => {
+  const View = await component('LiveTab');
+  state.toasts = [];
+  let comments: TaskComment[] = [readinessQuestion()];
+  const created: string[] = [];
+  const base = { id: 'task', projectId: 'project', canEdit: true, runMode: 'quick', status: 'awaiting_clarification', ralphCancelRequestedAt: null } as unknown as Task;
+  let resolveGet: (task: Task) => void = () => {};
+  state.container = {
+    ...liveContainer({
+      async listSessions() { return [prepareRun('completed')]; },
+      async listEvents() { return [{ seq: 1, kind: 'stage', text: null, payload: { actor: 'orchestrator', stage: 'prepare', status: 'failed', title: 'Нужно уточнение', detail: 'Перед стартом задан вопрос в комментариях; задача ждёт ответа в «На уточнении».' }, createdAt: at(1) }]; },
+    }),
+    taskRepository: {
+      async listComments() { return comments; },
+      async createComment(_p: string, _t: string, body: string) {
+        created.push(body);
+        const answer = { ...message(), id: 'answer', body };
+        comments = [...comments, answer];
+        return answer;
+      },
+      get() { return new Promise<Task>(resolve => { resolveGet = resolve; }); },
+      async getDispatcherHeartbeat() { return null; },
+    },
+  };
+  const view = await mount(View, { task: base, backlogTail: null, todoTail: null });
+  try {
+    // 3. The parked readiness run is «Ждёт ответа», not a red finished/failed pipeline.
+    const stepper = view.host.querySelector('[data-pf-pipeline-stepper]')!;
+    assert.match(stepper.textContent!, /Ждёт ответа/);
+    assert.doesNotMatch(stepper.textContent!, /Конвейер завершён/);
+    assert.equal(stepper.querySelector('[data-stage="prepare"]')!.getAttribute('data-state'), 'waiting');
+    assert.equal(stepper.querySelector('[data-state="failed"]'), null, 'no red ✕ on «Подготовка»');
+    // Parked task without a running worker: no «Отменить работу», a relaunch instead.
+    assert.equal([...view.host.querySelectorAll('button')].some(b => /Отменить работу/.test(b.textContent!)), false);
+    assert.ok([...view.host.querySelectorAll('button')].find(b => b.textContent === 'Запустить снова'));
+    // 1. Quick replies on an option-less question, free text kept.
+    const quick = view.host.querySelector('[data-pf-ralph-quick-replies]')!;
+    assert.deepEqual([...quick.querySelectorAll('button')].map(b => b.textContent), ['Да', 'Нет']);
+    assert.ok(view.host.querySelector('input[placeholder="Ответь словами…"]'));
+    // 2. Answer → immediately «Ответ принят — задача снова в очереди».
+    await act(async () => { [...quick.querySelectorAll('button')].find(b => b.textContent === 'Да')!.click(); });
+    assert.match(created[0], /<!-- ralph-answer \{"v":1,"q":"readiness-7bd423a1","value":"Да"/);
+    assert.match(view.host.querySelector('[data-pf-live-answer-accepted]')!.textContent!, /Ответ принят — задача снова в очереди/);
+    assert.equal(view.host.querySelector('[data-pf-ralph-quick-replies]'), null, 'the old question card does not stay interactive');
+    // The server reopened the task → the living queue state, driven by the server status.
+    await act(async () => { resolveGet({ ...base, status: 'todo' }); });
+    assert.ok(view.host.querySelector('[data-pf-live-queue]'));
+    assert.ok(view.host.querySelector('[data-pf-live-answer-accepted]'));
+    assert.ok(view.host.querySelector('details[data-pf-previous-run]'), 'the parked run collapses into history');
+    assert.deepEqual(state.toasts, []);
+  } finally { await view.close(); }
+});
+
+test('an exhausted pipeline offers «Запустить снова» with the reason it stopped and no cancel button', async () => {
+  const View = await component('LiveTab', true);
+  state.container = {
+    ...liveContainer({
+      async listSessions() { return [prepareRun('completed')]; },
+      async listEvents() { return [
+        { seq: 1, kind: 'stage', text: null, payload: { stage: 'checks', status: 'started' }, createdAt: at(1) },
+        { seq: 2, kind: 'check_result', text: null, payload: { phase: 'checks', name: 'npm test', command: ['npm', 'test'], exitCode: 1, passed: false, outputTail: '\n  FAIL src/config.test.ts\n  expected 2 got 3' }, createdAt: at(1) },
+        { seq: 3, kind: 'stage', text: null, payload: { stage: 'blocked', status: 'failed', title: 'Остановлено — попытки исчерпаны' }, createdAt: at(2) },
+      ]; },
+    }),
+    taskRepository: { async listComments() { return []; } },
+  };
+  const view = await mount(View, { task: { id: 'task', projectId: 'project', canEdit: true, runMode: 'full', status: 'awaiting_clarification', ralphCancelRequestedAt: null } as unknown as Task, backlogTail: null, todoTail: null });
+  try {
+    assert.match(view.host.querySelector('[data-pf-pipeline-stepper]')!.textContent!, /Конвейер остановлен/);
+    const reason = view.host.querySelector('[data-pf-live-stop-reason]')!;
+    assert.match(reason.textContent!, /Почему остановлено: npm test/);
+    assert.match(reason.textContent!, /FAIL src\/config\.test\.ts/);
+    assert.doesNotMatch(reason.textContent!, /expected 2 got 3/, 'only the first line');
+    assert.equal([...view.host.querySelectorAll('button')].some(b => /Отменить работу/.test(b.textContent!)), false, 'nothing is running — no cancel');
+    const start = view.host.querySelector('[data-pf-worker-start]')!;
+    assert.ok([...start.querySelectorAll('button')].find(b => b.textContent === 'Запустить снова'));
+    assert.ok(start.querySelector('button[aria-label^="Режим запуска"]'), 'relaunch comes with the run-mode menu');
   } finally { await view.close(); }
 });
