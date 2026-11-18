@@ -2,18 +2,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HandleTelegramWebhook, type TelegramUpdate } from './HandleTelegramWebhook.js';
 import type { OnboardingPromptInput } from './TelegramGroupOnboarding.js';
+import { signIncidentRequest } from './composer/incidentIntake.js';
 
 // Рабочие группы пространства (db/181): привязка по коду, /id, приветствие, переезд группы,
 // гейт подключения людей. Минимальные стабы (tsx + node:test).
 function makeHarness(opts: {
-  workGroup?: { workspaceId: string; workspaceName: string; mode?: 'standard' | 'incident'; addedByUserId?: string | null } | null;
+  workGroup?: { workspaceId: string; workspaceName: string; mode?: 'standard' | 'incident' | 'mixed'; addedByUserId?: string | null } | null;
   senderUserId?: string | null;
   member?: boolean;
   bindResult?: { kind: string; workspaceName?: string };
   voiceTranscript?: string;
   botAdded?: { kind: string; workspaceName?: string; options?: Array<{ id: string; name: string }> };
   chooseResult?: { kind: string; workspaceName?: string };
+  // Уточнение воркера, отправленное в группу: reply на него — ответ (db/193).
+  clarification?: { task: { id: string; projectId: string; description: string }; recipientUserId: string };
 } = {}) {
+  const comments: Array<{ ownerUserId: string; body: string }> = [];
   const botAddedCalls: Array<{ chatId: number; title: string | null; inviter: number }> = [];
   const botRemovedCalls: number[] = [];
   const chooseCalls: Array<{ chatId: number; workspaceId: string; tgUserId: number }> = [];
@@ -38,7 +42,9 @@ function makeHarness(opts: {
       async markTelegramStarted() {},
     },
     members: {},
-    tasks: {},
+    tasks: { async getById() { return opts.clarification?.task ?? null; } },
+    maybeReopenForClarification: { async execute() { return null; } },
+    notifyTaskChanged() {},
     client: {
       async sendMessage(i: { chatId: number; text: string }) { sent.push({ chatId: i.chatId, text: i.text }); return { kind: 'ok' as const, messageId: 1 }; },
       async answerCallbackQuery() {},
@@ -47,9 +53,16 @@ function makeHarness(opts: {
     },
     appUrl: 'https://pf.test',
     botUsername: 'ProjectsFlow_Bot',
-    ralphQuestionMessages: { async findByMessage() { return null; } },
+    ralphQuestionMessages: {
+      async findByMessage() {
+        const c = opts.clarification;
+        return c ? { taskId: c.task.id, ralphQuestionId: 'q1', recipientUserId: c.recipientUserId } : null;
+      },
+    },
     taskMessages: { async findByMessage() { return null; } },
-    createComment: {},
+    createComment: {
+      async execute(i: { ownerUserId: string; body: string }) { comments.push(i); return { id: 'c1' }; },
+    },
     dispatchCommentNotifications: {},
     groupOwners: {
       async getOwnerUserId() { return null; },
@@ -114,7 +127,7 @@ function makeHarness(opts: {
   };
   const h = new HandleTelegramWebhook(deps as never);
   return {
-    h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts,
+    h, sent, composerCalls, prompts, comments, privateStarts, joinCallbacks, binds, migrations, groupStarts,
     pairedTelegramIds, bindSenders, botAddedCalls, botRemovedCalls, chooseCalls, transferCalls, memberEvents,
   };
 }
@@ -355,11 +368,11 @@ test('группа инцидентов: любой участник без ак
   await text.h.execute(groupMessage({ text: '@ProjectsFlow_Bot Не открывается отчёт' }));
   assert.equal(text.prompts.length, 0, 'no account onboarding in an incident group');
   assert.equal(text.composerCalls.length, 1);
-  assert.deepEqual((text.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead' });
+  assert.deepEqual((text.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead', mode: 'incident' });
   const voice = makeHarness({ workGroup: group, senderUserId: null, voiceTranscript: 'Не открывается отчёт' });
   await voice.h.execute(groupMessage({ voice: { file_id: 'voice', duration: 1 }, reply_to_message: { message_id: 3, from: { id: 1, is_bot: true, username: 'ProjectsFlow_Bot' } } }));
   assert.equal(voice.prompts.length, 0);
-  assert.deepEqual((voice.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead' });
+  assert.deepEqual((voice.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead', mode: 'incident' });
 });
 
 test('обычная рабочая группа не получает режим incident', async () => {
@@ -429,4 +442,59 @@ test('my_chat_member: бот стал администратором / снят 
   await x.h.execute(myChatMember('administrator', 'member'));
   await x.h.execute(myChatMember('member', 'administrator'));
   assert.deepEqual(x.memberEvents, [['bot', -1001, true], ['bot', -1001, false]]);
+});
+
+test('смешанная группа: без исполнителя — в композер как задача воркеру, аккаунт автору не нужен', async () => {
+  const group = { workspaceId: 'ws1', workspaceName: 'YesBeat', mode: 'mixed' as const, addedByUserId: 'u-lead' };
+  const text = makeHarness({ workGroup: group, senderUserId: null });
+  await text.h.execute(groupMessage({ text: '@ProjectsFlow_Bot в конфиге не сохраняется тариф' }));
+  assert.equal(text.prompts.length, 0, 'без онбординга аккаунта');
+  assert.equal(text.composerCalls.length, 1);
+  assert.deepEqual((text.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead', mode: 'mixed' });
+  const voice = makeHarness({ workGroup: group, senderUserId: null, voiceTranscript: 'на есбите пропала кнопка' });
+  await voice.h.execute(groupMessage({ voice: { file_id: 'voice', duration: 1 }, reply_to_message: { message_id: 3, from: { id: 1, is_bot: true, username: 'ProjectsFlow_Bot' } } }));
+  assert.equal(voice.prompts.length, 0);
+  assert.deepEqual((voice.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead', mode: 'mixed' });
+});
+
+test('смешанная группа: с исполнителем — обычный поток группы (онбординг и задача человеку)', async () => {
+  const group = { workspaceId: 'ws1', workspaceName: 'YesBeat', mode: 'mixed' as const, addedByUserId: 'u-lead' };
+  const member = makeHarness({ workGroup: group, senderUserId: 'u-ivan', member: true });
+  await member.h.execute(groupMessage({ text: '@ProjectsFlow_Bot поправить плеер @djdes' }));
+  assert.equal(member.composerCalls.length, 1);
+  assert.equal((member.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, undefined);
+  const stranger = makeHarness({ workGroup: group, senderUserId: null });
+  await stranger.h.execute(groupMessage({ text: '@ProjectsFlow_Bot поправить плеер @djdes' }));
+  assert.equal(stranger.composerCalls.length, 0, 'без аккаунта задачу человеку не поставить');
+  assert.equal(stranger.prompts.length, 1, 'бот предлагает подключиться');
+});
+
+test('смешанная группа: на уточнение задачи воркеру отвечает любой участник, на уточнение задачи человека — только адресат', async () => {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  const key = 'mixed-signing-key-not-a-secret-123456789';
+  process.env.TELEGRAM_ORIGIN_SIGNING_KEY = key;
+  try {
+    const group = { workspaceId: 'ws1', workspaceName: 'YesBeat', mode: 'mixed' as const, addedByUserId: 'u-lead' };
+    const source = { chatId: -1001, userId: 777, messageId: 5, messageThreadId: null, senderName: 'Оля' };
+    const workerTask = {
+      id: 't1', projectId: 'p1',
+      description: signIncidentRequest('Не сохраняется тариф', source, 'p1', key, { mode: 'mixed', runMode: 'full' }),
+    };
+    const reply = groupMessage({ text: 'В разделе тарифов', reply_to_message: { message_id: 50, from: { id: 1, is_bot: true, username: 'ProjectsFlow_Bot' } } });
+    const worker = makeHarness({ workGroup: group, senderUserId: null, clarification: { task: workerTask, recipientUserId: 'u-lead' } });
+    await worker.h.execute(reply);
+    assert.equal(worker.comments.length, 1);
+    assert.equal(worker.comments[0]!.ownerUserId, 'u-lead');
+    assert.match(worker.comments[0]!.body, /через группу Telegram/);
+    assert.match(worker.sent.at(-1)!.text, /Спасибо, ответ получен/);
+
+    const personTask = { id: 't2', projectId: 'p1', description: 'Поправить плеер' };
+    const person = makeHarness({ workGroup: group, senderUserId: 'u-ivan', clarification: { task: personTask, recipientUserId: 'u-denis' } });
+    await person.h.execute(reply);
+    assert.equal(person.comments.length, 0);
+    assert.match(person.sent.at(-1)!.text, /только адресат/);
+  } finally {
+    if (saved === undefined) delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+    else process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
 });

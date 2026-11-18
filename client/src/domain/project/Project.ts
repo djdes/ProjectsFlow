@@ -64,6 +64,8 @@ export type Project = {
   // короткое описание для ИИ-выбора. В старых ответах может не быть — дефолты на маппинге.
   readonly aliases: readonly string[];
   readonly shortDescription: string | null;
+  // db/193: «Полный прогон по умолчанию для задач из групп» (задачи воркеру из рабочих групп).
+  readonly groupFullRunDefault: boolean;
   // Персональный favorite-флаг + порядок в секции «Избранное» (см. db/040 + spec). На
   // get/create/update эндпоинтах сервер их не отдаёт — клиент использует поля только из
   // списка `GET /api/projects`. Дефолты применяются на маппинге, чтобы тип оставался строгим.

@@ -502,7 +502,7 @@ export interface ProjectRepository {
   // Привычные названия + короткое описание для рабочих Telegram-групп (db/192). Владелец/руководитель.
   setGroupHints(
     projectId: string,
-    hints: { aliases: readonly string[]; shortDescription: string | null },
+    hints: { aliases: readonly string[]; shortDescription: string | null; groupFullRunDefault?: boolean },
   ): Promise<Project>;
   // Публичная ссылка доски (Publish to web, db/096). Owner-only. publish → возвращает
   // slug + полный url; unpublish снимает; setPublicIndexing тогглит индексацию поисковиками.

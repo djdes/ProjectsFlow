@@ -1,9 +1,13 @@
 import { csharpFixerConfig, signCsharpFixerRequest } from './csharpFixerIntake.js';
+import { pickGroupProjectWithAi } from './pickGroupProjectWithAi.js';
 import {
+  PENDING_PROJECT_ID,
   incidentSigningKey,
   pickIncidentProject,
   readIncidentOrigin,
+  resignIncidentForProject,
   signIncidentRequest,
+  type IncidentOrigin,
   stripIntakeOrigin,
 } from './incidentIntake.js';
 import type {
@@ -38,6 +42,7 @@ import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
 import type { UpdateTask } from '../../task/UpdateTask.js';
 import type { RunMode, Task, TaskGroupOrigin } from '../../../domain/task/Task.js';
+import type { Project } from '../../../domain/project/Project.js';
 import type { MoveTask } from '../../task/MoveTask.js';
 import type { CreateTaskComment } from '../../task/CreateTaskComment.js';
 import type { TaskRepository } from '../../task/TaskRepository.js';
@@ -95,7 +100,8 @@ export type TelegramGroupContext = {
   readonly groupTitle: string | null;
   // Рабочая группа в режиме incident (spec 2026-11-17, раздел 3): задачи ставятся от того,
   // кто подключил группу, а реальный автор — в подписанном источнике.
-  readonly incident?: { readonly addedByUserId: string | null };
+  // mode='mixed' — смешанная группа (db/193), сообщение без исполнителя: задача воркеру.
+  readonly incident?: { readonly addedByUserId: string | null; readonly mode?: 'incident' | 'mixed' };
 };
 
 type Deps = {
@@ -810,7 +816,12 @@ export class TelegramComposerService {
       const merged = appendNewAttachments(existing.attachments, attachments);
       if (merged.added > 0) {
         if (existing.status === 'composing') {
-          await this.deps.drafts.patchComposing(existing.id, { attachments: merged.attachments, autoCreateSeconds: 15 });
+          // Смешанная группа ждёт выбора проекта кнопкой — таймер не включаем, иначе задача
+          // без проекта ушла бы во «Входящие».
+          await this.deps.drafts.patchComposing(existing.id, {
+            attachments: merged.attachments,
+            ...(existing.projectId ? { autoCreateSeconds: 15 } : {}),
+          });
         } else {
           await this.deps.drafts.patch(existing.id, { attachments: merged.attachments });
           console.warn('[tg-incident] late album attachments preserved for operator', existing.id);
@@ -829,6 +840,11 @@ export class TelegramComposerService {
     if (projects.length === 0) {
       await this.send(chatId, '⚠️ Запрос не принят: для группы ещё не выбраны системы. Администратор настроит это в ProjectsFlow.');
       return;
+    }
+    if (groupCtx.incident?.mode === 'mixed') {
+      return this.startMixedWorker(tgUserId, chatId, rawText, groupCtx, attachments, options, {
+        creatorUserId, signingKey, sourceKey: options.sourceKey, sourceMessageId: options.sourceMessageId, projects,
+      });
     }
     const projectId = pickIncidentProject(stripIntakeOrigin(rawText), projects);
     if (!projectId) {
@@ -854,6 +870,99 @@ export class TelegramComposerService {
     if (!options.sourceKey.startsWith('g:')) {
       await this.finalize(draft, creatorUserId, chatId, messageId ?? undefined, null);
     }
+  }
+
+  // Смешанная группа (db/193), сообщение без исполнителя → задача воркеру. Как инцидент (автору
+  // аккаунт не нужен, задача от подключившего группу, ответы — в группу простым языком), но
+  // проект выбирается как в обычной группе: название/привычное название/транслит → ИИ → кнопки,
+  // а режим прогона — по флагу проекта «Полный прогон по умолчанию для задач из групп».
+  private async startMixedWorker(
+    tgUserId: number,
+    chatId: number,
+    rawText: string,
+    groupCtx: TelegramGroupContext,
+    attachments: readonly TelegramDraftAttachment[],
+    options: TelegramMessageIngestOptions,
+    ctx: {
+      readonly creatorUserId: string;
+      readonly signingKey: string;
+      readonly sourceKey: string;
+      readonly sourceMessageId: number;
+      readonly projects: readonly Project[];
+    },
+  ): Promise<void> {
+    const plain = stripIntakeOrigin(rawText);
+    const text = extractWorkerMention(plain).text || plain;
+    const projects = ctx.projects.filter((p) => !p.isInbox);
+    let projectId = pickIncidentProject(text, projects);
+    if (!projectId) projectId = await pickGroupProjectWithAi(this.deps.llm, ctx.creatorUserId, text, projects);
+    const project = projectId ? projects.find((p) => p.id === projectId) ?? null : null;
+    const description = signIncidentRequest(rawText, {
+      chatId, userId: tgUserId, messageId: ctx.sourceMessageId,
+      messageThreadId: options.sourceThreadId ?? null, senderName: groupCtx.senderName,
+      ...(options.replyToMessageId !== undefined ? { replyToMessageId: options.replyToMessageId } : {}),
+    }, project?.id ?? PENDING_PROJECT_ID, ctx.signingKey, { mode: 'mixed', runMode: groupRunMode(project) });
+    const id = this.deps.shortIdGen();
+    const groupedAlbum = ctx.sourceKey.startsWith('g:');
+    const draft = await this.deps.drafts.create({
+      id, sourceKey: ctx.sourceKey, creatorUserId: ctx.creatorUserId, tgChatId: chatId,
+      taskText: description, projectId: project?.id ?? null, assigneeUserId: ctx.creatorUserId,
+      targetStatus: 'todo', attachments: withDefaultAttachmentTargets(attachments),
+      ttlSeconds: DRAFT_TTL_SECONDS,
+      // Проект не выбран — без таймера: ждём кнопку, иначе задача ушла бы во «Входящие».
+      autoCreateSeconds: project ? (groupedAlbum ? 15 : 5) : null,
+    });
+    if (draft.id !== id) return;
+    if (!project) {
+      const rows = projects.slice(0, 20).map((p) => [{
+        text: p.name.slice(0, 60),
+        callback_data: `${MIXED_PROJECT_CALLBACK_PREFIX}${draft.id}:${p.id}`,
+      }]);
+      const messageId = await this.sendReturningId(chatId,
+        '❓ Для какого проекта эта задача? Выберите кнопкой — и я передам её воркеру.',
+        { inline_keyboard: rows });
+      if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
+      return;
+    }
+    const messageId = await this.sendReturningId(chatId, mixedWorkerAcceptedText(project.name));
+    if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
+    if (!groupedAlbum) {
+      await this.finalize(draft, ctx.creatorUserId, chatId, messageId ?? undefined, null);
+    }
+  }
+
+  // wp:<draftId>:<projectId> — выбор проекта для задачи воркеру в смешанной группе. Нажать может
+  // любой участник группы (у автора аккаунта может не быть); проект — только из проектов группы.
+  private async onMixedProjectPick(cq: TelegramCallbackQuery): Promise<void> {
+    const [draftId, projectId] = (cq.data ?? '').slice(MIXED_PROJECT_CALLBACK_PREFIX.length).split(':');
+    const chatId = cq.message?.chat.id;
+    const signingKey = incidentSigningKey();
+    const draft = draftId ? await this.deps.drafts.getById(draftId).catch(() => null) : null;
+    const origin = draft && signingKey ? readIncidentOrigin(draft.taskText ?? '', signingKey) : null;
+    if (!draft || !projectId || chatId === undefined || !signingKey || draft.tgChatId !== chatId ||
+        draft.status !== 'composing' || draft.projectId || origin?.mode !== 'mixed' || origin.chatId !== chatId) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
+      return;
+    }
+    const allowed = (await this.deps.groupProjects?.allowedProjectIds(chatId).catch(() => [] as readonly string[])) ?? [];
+    const project = allowed.includes(projectId) ? await this.deps.projects.getById(projectId).catch(() => null) : null;
+    if (!project || project.isInbox) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот проект больше не подключён к группе.', showAlert: true });
+      return;
+    }
+    const taskText = resignIncidentForProject(draft.taskText ?? '', project.id, signingKey, {
+      mode: 'mixed', runMode: groupRunMode(project),
+    });
+    const updated = taskText
+      ? await this.deps.drafts.patchComposing(draft.id, { taskText, projectId: project.id })
+      : null;
+    if (!updated) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
+      return;
+    }
+    const messageId = cq.message?.message_id ?? draft.tgMessageId ?? undefined;
+    if (messageId) await this.edit(chatId, messageId, mixedWorkerAcceptedText(project.name));
+    await this.finalize(updated, draft.creatorUserId, chatId, messageId, cq.id);
   }
 
   async startFromMessage(
@@ -1552,6 +1661,7 @@ export class TelegramComposerService {
   async handleCallback(cq: TelegramCallbackQuery): Promise<void> {
     const runMode = parseRunModeCallback(cq.data);
     if (runMode) return this.onRunModeSel(cq, runMode.taskId, runMode.runMode);
+    if (cq.data?.startsWith(MIXED_PROJECT_CALLBACK_PREFIX)) return this.onMixedProjectPick(cq);
     const cb = parseCallback(cq.data);
     if (!cb) {
       await this.deps.client.answerCallbackQuery(cq.id);
@@ -1805,7 +1915,8 @@ export class TelegramComposerService {
       const targetId =
         draft.projectId ?? (await this.inboxFor(inboxOwnerId, userId, inboxWorkspaceId)).id;
       if (draft.targetStatus === 'todo') await this.deps.workerPolicy?.requireEnabledForProject(targetId);
-      const group = this.isCSharpFixerDraft(draft) ? null : await this.standardGroup(chatId);
+      const mixedOrigin = this.mixedWorkerOrigin(draft);
+      const group = this.isCSharpFixerDraft(draft) && !mixedOrigin ? null : await this.standardGroup(chatId);
       const task = await this.deps.createTask.execute({
         projectId: targetId,
         ownerUserId: userId,
@@ -1813,7 +1924,8 @@ export class TelegramComposerService {
         status: this.isCSharpFixerDraft(draft) ? 'backlog' : draft.targetStatus ?? DEFAULT_COLUMN,
         ralphMode: this.isCSharpFixerDraft(draft) ? 'silent' : undefined,
         // Инцидент группы — полный конвейер (spec 2026-11-17, раздел 3); CSharpFixer — как раньше.
-        runMode: this.isIncidentGroupDraft(draft) ? 'full' : undefined,
+        // Смешанная группа (db/193) — по флагу проекта, зафиксированному в подписанном источнике.
+        runMode: mixedOrigin ? mixedOrigin.runMode ?? 'quick' : this.isIncidentGroupDraft(draft) ? 'full' : undefined,
         assigneeUserId: draft.assigneeUserId ?? userId,
         // Ручной путь (без AI-сегментов) срока не собирает вовсе — без явного значения
         // CreateTask поставил бы «сегодня». Держим то же правило, что и для сегментов.
@@ -1827,7 +1939,8 @@ export class TelegramComposerService {
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
       await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
       await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId, text);
-      await this.markFromGroup(group, chatId, task, targetId, userId, text);
+      if (mixedOrigin) await this.markMixedWorkerFromGroup(group, chatId, task.id, mixedOrigin.senderName);
+      else await this.markFromGroup(group, chatId, task, targetId, userId, text);
       await this.postOriginalComment(task.id, targetId, userId, text, [], draft.replyContext);
       const attachmentResult = await this.attachDraftAttachments(
         draft.attachments,
@@ -1872,7 +1985,9 @@ export class TelegramComposerService {
           chatId,
           messageId,
           this.isCSharpFixerDraft(draft)
-            ? this.isIncidentGroupDraft(draft)
+            ? mixedOrigin
+              ? `${mixedWorkerAcceptedText(projName)}${attachmentSuffix}`
+              : this.isIncidentGroupDraft(draft)
               ? `🛠 Запрос принят в работу. Ответим здесь, когда будет результат.${attachmentSuffix}`
               : `🛠 Запрос передан CSharpFixer. Проверю скрипт и сообщу результат здесь.${attachmentSuffix}`
             : `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(stripIntakeOrigin(text)))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
@@ -3857,6 +3972,30 @@ export class TelegramComposerService {
     return origin !== null && origin.chatId === draft.tgChatId && origin.projectId === draft.projectId;
   }
 
+  // Подписанный источник задачи воркеру смешанной группы (db/193). null — не она.
+  private mixedWorkerOrigin(draft: TelegramTaskDraft): IncidentOrigin | null {
+    if (!this.isIncidentGroupDraft(draft)) return null;
+    const origin = readIncidentOrigin(draft.taskText ?? '', incidentSigningKey());
+    return origin?.mode === 'mixed' ? origin : null;
+  }
+
+  // Пометка «из группы «…»» на задаче воркеру смешанной группы: автор — человек из Telegram
+  // (аккаунта может не быть), уведомлять некого — задачу ведёт воркер. Best-effort.
+  private async markMixedWorkerFromGroup(
+    group: { readonly title: string | null } | null,
+    chatId: number,
+    taskId: string,
+    senderName: string,
+  ): Promise<void> {
+    try {
+      await this.deps.groupOrigins?.setGroupOrigin(taskId, {
+        chatId, title: group?.title ?? null, authorUserId: null, authorName: senderName.trim() || null,
+      });
+    } catch (err) {
+      console.warn('[tg-mixed] group origin failed:', err);
+    }
+  }
+
   // Рабочая группа обычного режима (db/190), из которой ставят задачу. null — личка или не она.
   private async standardGroup(chatId: number): Promise<{ readonly title: string | null } | null> {
     if (chatId >= 0 || !this.deps.groupProjects?.standardGroupInfo) return null;
@@ -4301,4 +4440,16 @@ export class TelegramComposerService {
 // «@мне» / «@я» / «@me» / «@себе» — ответственный сам автор.
 function isSelfAssigneeQuery(query: string): boolean {
   return /^(мне|я|себе|меня|me)$/i.test(query.trim().replace(/[.,:;!]+$/, ''));
+}
+
+// Смешанная группа (db/193): кнопка выбора проекта задачи воркеру — wp:<draftId>:<projectId>.
+export const MIXED_PROJECT_CALLBACK_PREFIX = 'wp:';
+
+// Режим прогона задачи воркеру из группы — флаг проекта «Полный прогон по умолчанию» (db/193).
+function groupRunMode(project: { readonly groupFullRunDefault?: boolean } | null): 'full' | 'quick' {
+  return project?.groupFullRunDefault ? 'full' : 'quick';
+}
+
+export function mixedWorkerAcceptedText(projectName: string): string {
+  return `🤖 Передал воркеру: <b>${escapeHtml(projectName)}</b>. Сообщу результат здесь.`;
 }

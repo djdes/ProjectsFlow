@@ -106,6 +106,8 @@ function makeHarness(opts?: {
   groupProjects?: Record<number, string[]>;
   // Рабочие группы обычного режима (db/190): chatId → название.
   standardGroups?: Record<number, string | null>;
+  // Мок ИИ-выбора проекта смешанной группы (db/193): id проекта или '' — «не уверен».
+  llmProjectPick?: string;
 }) {
   const projects: { id: string; name: string; workspaceId?: string }[] = opts?.projects ?? [
     { id: 'p1', name: 'Альфа' },
@@ -522,6 +524,16 @@ function makeHarness(opts?: {
           async resolveDelegatedInboxWorkspace(ownerId: string, actorId: string) {
             delegatedResolverCalls.push([ownerId, actorId]);
             return opts.delegatedInboxWorkspace ?? null;
+          },
+        }
+      : {}),
+    ...(opts?.llmProjectPick !== undefined
+      ? {
+          llm: {
+            async generate(input: any) {
+              llmPrompts.push(input.input);
+              return { text: JSON.stringify({ projectId: opts.llmProjectPick, reason: 't' }), model: 'test-llm', usage: null, costUsd: null };
+            },
           },
         }
       : {}),
@@ -3049,3 +3061,161 @@ test('не рабочая группа (личка) — пометки «из г
   assert.equal((h.createTaskCalls[0] as any).originWorkspaceId, null);
   assert.equal(h.groupOrigins.length, 0);
 });
+
+// --- Смешанная группа (db/193): без исполнителя — воркеру, с исполнителем — человеку ---
+const MIXED_CHAT = -100300;
+const MIXED_PROJECTS = [
+  { id: 'cfg', name: 'C#Config', aliases: ['конфиг'], groupFullRunDefault: true },
+  { id: 'yb', name: 'Yesbeat', workspaceId: 'ws-home' },
+] as any[];
+const mctx = (addedByUserId: string | null, senderName = 'SMM') => ({
+  ...gctx('owner-of-group', senderName, 'Скрипты / Сайт YB'), incident: { addedByUserId, mode: 'mixed' as const },
+});
+function mixedHarness(extra: Record<string, unknown> = {}) {
+  return makeHarness({
+    projects: MIXED_PROJECTS,
+    groupProjects: { [MIXED_CHAT]: ['cfg', 'yb'] },
+    standardGroups: { [MIXED_CHAT]: 'Скрипты / Сайт YB' },
+    ...extra,
+  } as any);
+}
+const mixedSignedPayload = (description: string) => {
+  const match = /<!-- tg-incident-origin:([^:]+):[a-f0-9]{64} -->/.exec(description);
+  assert.ok(match, 'signed origin marker');
+  return JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+};
+const mixedCq = (data: string, id = 'cq-m'): TelegramCallbackQuery => ({
+  id, from: { id: 555 }, message: { message_id: 99, chat: { id: MIXED_CHAT } }, data,
+});
+
+test('смешанная группа: без исполнителя — задача воркеру, полный прогон по флагу проекта, пометка группы', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге не сохраняется тариф', mctx('u1', 'Оля'), [], {
+      sourceKey: `m:${MIXED_CHAT}:10`, sourceMessageId: 10,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'cfg');
+    assert.equal(call.ownerUserId, 'u1', 'от того, кто подключил группу: у автора аккаунта нет');
+    assert.equal(call.assigneeUserId, 'u1');
+    assert.equal(call.ralphMode, 'silent');
+    assert.equal(call.runMode, 'full');
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo', 'сразу в очередь воркера');
+    const payload = mixedSignedPayload(call.description ?? '');
+    assert.equal(payload.mode, 'mixed');
+    assert.equal(payload.runMode, 'full');
+    assert.equal(payload.senderName, 'Оля');
+    assert.deepEqual(h.groupOrigins, [
+      { taskId: 't1', chatId: MIXED_CHAT, title: 'Скрипты / Сайт YB', authorUserId: null, authorName: 'Оля' },
+    ]);
+    assert.equal(h.origins[0]?.messageId, 10, 'результат — reply на сообщение автора');
+    assert.match(h.edits.at(-1)?.text ?? '', /Передал воркеру: <b>C#Config<\/b>\. Сообщу результат здесь\./);
+    assert.ok(![...h.sent, ...h.edits].some((m) => /tg-incident-origin|привяж|Перефразирую/i.test(m.text)));
+  }));
+
+test('смешанная группа: проект без флага — обычный прогон (quick), в основном пространстве проекта', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'Yesbeat: не играет плеер', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:11`, sourceMessageId: 11,
+    });
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'yb');
+    assert.equal(call.runMode, 'quick');
+    assert.equal(call.originWorkspaceId, 'ws-home');
+  }));
+
+test('смешанная группа: проект по транслиту «есбит»', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'на есбите пропала кнопка', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:12`, sourceMessageId: 12,
+    });
+    assert.equal(h.createTaskCalls[0]?.projectId, 'yb');
+  }));
+
+test('смешанная группа: проект не понятен по названию — ИИ выбирает из проектов группы', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness({ llmProjectPick: 'yb' });
+    await h.service.startFromMessage(999, MIXED_CHAT, 'пропала обложка трека на сайте', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:13`, sourceMessageId: 13,
+    });
+    assert.equal(h.createTaskCalls[0]?.projectId, 'yb');
+  }));
+
+test('смешанная группа: ИИ не уверен — кнопки проектов, выбрать может любой участник', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness({ llmProjectPick: '' });
+    await h.service.startFromMessage(999, MIXED_CHAT, 'что-то сломалось', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:14`, sourceMessageId: 14,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    const ask = h.sent.at(-1) as any;
+    assert.match(ask.text, /Для какого проекта/);
+    const buttons = ask.replyMarkup.inline_keyboard.flat();
+    assert.deepEqual(buttons.map((b: any) => b.text), ['C#Config', 'Yesbeat']);
+    const draft = [...h.drafts.values()][0]!;
+    assert.equal(draft.projectId, null);
+    assert.equal(draft.autoCreateAt ?? null, null, 'без проекта — не создаём по таймеру');
+    // Проект вне группы подсунуть нельзя.
+    await h.service.handleCallback(mixedCq(`wp:${draft.id}:p-foreign`, 'x'));
+    assert.equal(h.createTaskCalls.length, 0);
+    await h.service.handleCallback(mixedCq(buttons[0].callback_data, 'y'));
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'cfg');
+    assert.equal(call.runMode, 'full');
+    assert.equal(call.ralphMode, 'silent');
+    assert.equal(mixedSignedPayload(call.description).projectId, 'cfg');
+    assert.match(h.edits.at(-1)?.text ?? '', /Передал воркеру: <b>C#Config<\/b>/);
+    // Повторное нажатие ничего не создаёт.
+    await h.service.handleCallback(mixedCq(buttons[1].callback_data, 'z'));
+    assert.equal(h.createTaskCalls.length, 1);
+  }));
+
+test('смешанная группа: без ключа подписи или подключившего группу — ничего не создаём', async () => {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  try {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге баг', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:15`, sourceMessageId: 15,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    assert.match(h.sent.at(-1)?.text ?? '', /администратор/i);
+  } finally {
+    if (saved !== undefined) process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
+  await withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге баг', mctx(null), [], {
+      sourceKey: `m:${MIXED_CHAT}:16`, sourceMessageId: 16,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+  });
+});
+
+test('смешанная группа: с исполнителем — обычный поток группы (#75), задача человеку', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness({
+      shared: [{ id: 'u2', displayName: 'Денис', email: 'd@e.com' }],
+      telegramUsernames: { djdes: 'u2' },
+      projectMembers: { yb: ['u2'] },
+      aiOutcome: 'enqueue-throw',
+    });
+    await h.service.startFromMessage(111, MIXED_CHAT, 'поправить плеер в Yesbeat @djdes', gctx('u1', 'SMM', 'Скрипты / Сайт YB'));
+    const draft = [...h.drafts.values()][0]!;
+    assert.equal(draft.projectId, 'yb');
+    assert.equal(draft.assigneeUserId, 'u2');
+    await h.service.handleCallback({ id: 'g', from: { id: 111 }, message: { message_id: 99, chat: { id: MIXED_CHAT } }, data: `tc:${draft.id}` });
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.assigneeUserId, 'u2');
+    assert.notEqual(call.ralphMode, 'silent');
+    assert.equal(call.originWorkspaceId, 'ws-home');
+    assert.deepEqual(h.groupOrigins[0], {
+      taskId: 't1', chatId: MIXED_CHAT, title: 'Скрипты / Сайт YB', authorUserId: 'u1', authorName: 'Создатель',
+    });
+    assert.ok(h.assigneeMessages.find((m) => m.userId === 'u2'), 'исполнитель получил уведомление');
+    assert.match(h.edits.at(-1)!.text, /Задача создана в <b>Yesbeat<\/b>/);
+  }));

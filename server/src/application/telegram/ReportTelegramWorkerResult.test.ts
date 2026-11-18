@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReportTelegramWorkerResult } from './ReportTelegramWorkerResult.js';
+import { signIncidentRequest } from './composer/incidentIntake.js';
 import { FakeWorkerResultOutbox } from './FakeWorkerResultOutbox.test-helper.js';
 import type { WorkerResultDestination } from './TelegramWorkerResultOutbox.js';
 import type { TelegramTaskOrigin } from './TelegramTaskOriginRepository.js';
@@ -9,7 +10,7 @@ import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 
-function harness(opts: { incident?: boolean } = {}) {
+function harness(opts: { incident?: boolean; mixed?: boolean } = {}) {
   let clock = new Date('2026-10-20T10:00:00Z');
   let row: TelegramTaskOrigin | null = { taskId: 't', projectId: 'p', chatId: -100123, messageId: 42, requestedAt: null };
   let seq = 0;
@@ -34,7 +35,10 @@ function harness(opts: { incident?: boolean } = {}) {
     members: {} as never,
     client: { async sendMessage(input: SendMessageInput) { messages.push(input); return sendResult; } },
     users: { async getTelegramLink() { return link; } },
-    incidentChats: { async isIncident() { return opts.incident === true; } },
+    incidentChats: {
+      async isIncident() { return opts.incident === true; },
+      async isMixed() { return opts.mixed === true; },
+    },
     now: () => clock,
     idGen: () => `lease-${++seq}`,
   };
@@ -305,4 +309,31 @@ test('incident group: a result waiting for approval says so without technical wo
   await drain(h.service);
   assert.match(h.messages[0]!.text, /ждёт проверки ответственным/);
   assert.doesNotMatch(h.messages[0]!.text, /github|Коммит|Воркер/);
+});
+
+test('смешанная группа: задача воркеру (подписанный источник) — ответ простым языком, задача человеку — обычный отчёт', async () => {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  const key = 'mixed-signing-key-not-a-secret-123456789';
+  process.env.TELEGRAM_ORIGIN_SIGNING_KEY = key;
+  try {
+    const source = { chatId: -100123, userId: 9, messageId: 42, messageThreadId: null, senderName: 'Оля' };
+    const worker = harness({ mixed: true });
+    worker.setTask({
+      ...worker.task,
+      description: signIncidentRequest('Не сохраняется тариф', source, 'p', key, { mode: 'mixed', runMode: 'full' }),
+    } as Task);
+    await worker.service.request('t', 'dispatcher');
+    await drain(worker.service);
+    assert.match(worker.messages[0]!.text, /Готово — проблему исправили: Не сохраняется тариф/);
+    assert.doesNotMatch(worker.messages[0]!.text, /github|Коммит|tg-incident-origin/);
+
+    const person = harness({ mixed: true });
+    await person.service.request('t', 'dispatcher');
+    await drain(person.service);
+    assert.match(person.messages[0]!.text, /Воркер выполнил/);
+    assert.match(person.messages[0]!.text, /Коммит/);
+  } finally {
+    if (saved === undefined) delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+    else process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
 });

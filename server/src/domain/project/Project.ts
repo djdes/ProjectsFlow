@@ -58,6 +58,8 @@ export type Project = {
   // («конфиг», «планер») и короткое описание для ИИ-выбора. Необязательны в тестовых фабриках.
   readonly aliases?: readonly string[];
   readonly shortDescription?: string | null;
+  // db/193: задачи воркеру из рабочих групп — полный прогон по умолчанию (иначе 'quick').
+  readonly groupFullRunDefault?: boolean;
   // Публичная ссылка доски (db/096, Publish to web). publicSlug — случайный неугадываемый
   // slug (URL: /p/<slug>); NULL = проект не публиковали. isPublic — опубликовано ли сейчас
   // (гейтит анонимный доступ). publicIndexing — тоггл индексации поисковиками (default off).

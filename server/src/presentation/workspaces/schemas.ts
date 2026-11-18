@@ -160,5 +160,5 @@ export const inviteNeighborsSchema = z.object({
 
 // Режим рабочей группы (spec 2026-11-17, раздел 3).
 export const setTelegramGroupModeSchema = z.object({
-  mode: z.enum(['standard', 'incident']),
+  mode: z.enum(['standard', 'incident', 'mixed']),
 });

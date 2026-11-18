@@ -13,3 +13,15 @@ export function parseAliasInput(raw: string): string[] {
   }
   return out;
 }
+
+// Есть ли несохранённые изменения в карточке подсказок группы (db/192 + флаг db/193).
+export function isGroupHintsDirty(
+  saved: { readonly aliases: readonly string[]; readonly shortDescription: string | null; readonly groupFullRunDefault: boolean },
+  draft: { readonly aliases: readonly string[]; readonly description: string; readonly fullRun: boolean },
+): boolean {
+  return (
+    draft.aliases.join('\n') !== saved.aliases.join('\n') ||
+    (draft.description.trim() || null) !== (saved.shortDescription ?? null) ||
+    draft.fullRun !== saved.groupFullRunDefault
+  );
+}

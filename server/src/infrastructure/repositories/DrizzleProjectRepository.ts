@@ -76,6 +76,7 @@ function toProject(row: ProjectRow): Project {
     description: row.description ?? null,
     aliases: parseAliases(row.aliases),
     shortDescription: row.shortDescription ?? null,
+    groupFullRunDefault: row.groupFullRunDefault ?? false,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
     publicSlug: row.publicSlug ?? null,
@@ -192,7 +193,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance' | 'aliases' | 'shortDescription'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance' | 'aliases' | 'shortDescription' | 'groupFullRunDefault'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
@@ -209,6 +210,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     if (patch.publicAppearance !== undefined) set.publicAppearance = patch.publicAppearance;
     if (patch.aliases !== undefined) set.aliases = patch.aliases.length > 0 ? [...patch.aliases] : null;
     if (patch.shortDescription !== undefined) set.shortDescription = patch.shortDescription;
+    if (patch.groupFullRunDefault !== undefined) set.groupFullRunDefault = patch.groupFullRunDefault;
 
     if (Object.keys(set).length > 0) {
       try {

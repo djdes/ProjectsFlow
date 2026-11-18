@@ -51,9 +51,21 @@ export function groupLabel(group: { readonly chatId: number; readonly title: str
   return group.title?.trim() || `Группа ${group.chatId}`;
 }
 
+// Тост после смены режима группы.
+export function groupModeToast(mode: 'standard' | 'incident' | 'mixed'): string {
+  if (mode === 'incident') return 'Группа переведена в режим инцидентов';
+  if (mode === 'mixed') return 'Группа переведена в смешанный режим';
+  return 'Группа снова обычная';
+}
+
 // Подсказка к переключателю режима группы (spec 2026-11-17, раздел 3).
-export function groupModeHint(mode: 'standard' | 'incident', hasProjects: boolean): string {
+export function groupModeHint(mode: 'standard' | 'incident' | 'mixed', hasProjects: boolean): string {
   if (mode === 'standard') return 'Участники ставят задачи через бота, бот перефразирует и уточняет детали.';
+  if (mode === 'mixed') {
+    return hasProjects
+      ? 'Указан исполнитель (@username, имя или «@мне») — задача ему. Не указан — задача воркеру в проект группы, ответ придёт сюда простым языком.'
+      : 'Выберите проекты группы — без них задачи воркеру не принимаются.';
+  }
   return hasProjects
     ? 'Любой участник пишет о проблеме — задача молча уходит воркеру в проект группы, ответ придёт сюда простым языком.'
     : 'Выберите проекты группы — без них сообщения об инцидентах не принимаются.';

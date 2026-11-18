@@ -75,6 +75,7 @@ function toProject(row: ProjectRow): Project {
     description: row.description ?? null,
     aliases: parseAliases(row.aliases),
     shortDescription: row.shortDescription ?? null,
+    groupFullRunDefault: row.groupFullRunDefault ?? false,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
     publicSlug: row.publicSlug ?? null,

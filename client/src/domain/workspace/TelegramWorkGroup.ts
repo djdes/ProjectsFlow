@@ -6,7 +6,8 @@ export type TelegramWorkGroupStatus = 'draft' | 'active' | 'disconnected';
 
 // standard — обычная рабочая группа; incident — группа инцидентов (замена CSharpFixer-чата):
 // писать может любой, задача молча уходит воркеру, ответ — простым языком в группу.
-export type TelegramWorkGroupMode = 'standard' | 'incident';
+// mixed (db/193): с исполнителем — задача человеку, без исполнителя — воркеру.
+export type TelegramWorkGroupMode = 'standard' | 'incident' | 'mixed';
 
 export type TelegramWorkGroup = {
   readonly chatId: number;
