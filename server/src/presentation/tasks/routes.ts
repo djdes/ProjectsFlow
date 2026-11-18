@@ -161,6 +161,8 @@ export function toDto(t: Task | TaskWithCounts): TaskDto {
     ...publicTask,
     // Всегда в ответе (null = не повторяется), даже если fake-репозиторий поле не заполнил.
     recurrence: t.recurrence ?? null,
+    // Из какой рабочей Telegram-группы пришла задача (db/190). null — не из группы.
+    groupOrigin: t.groupOrigin ?? null,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ralphCancelRequestedAt: t.ralphCancelRequestedAt

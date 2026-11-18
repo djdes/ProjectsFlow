@@ -23,6 +23,7 @@ import {
   type Task,
   type TaskPriority,
   type TaskStatus,
+  type TaskGroupOrigin,
 } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
@@ -99,6 +100,15 @@ function toTask(row: TaskRowJoined): Task {
     // читаем как «не определён», а не протаскиваем мусор в домен.
     taskType: isTaskType(row.taskType) ? row.taskType : null,
     originWorkspaceId: row.originWorkspaceId ?? null,
+    groupOrigin:
+      row.originGroupChatId !== null && row.originGroupChatId !== undefined
+        ? {
+            chatId: Number(row.originGroupChatId),
+            title: row.originGroupTitle ?? null,
+            authorUserId: row.originGroupAuthorUserId ?? null,
+            authorName: row.originGroupAuthorName ?? null,
+          }
+        : null,
     // VARCHAR в БД (db/185): битая строка читается как «не повторяется».
     recurrence: parseTaskRecurrence(row.recurrence),
     recurrenceNextTaskId: row.recurrenceNextTaskId ?? null,
@@ -149,6 +159,10 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
         priority: tasks.priority,
         taskType: tasks.taskType,
         originWorkspaceId: tasks.originWorkspaceId,
+        originGroupChatId: tasks.originGroupChatId,
+        originGroupTitle: tasks.originGroupTitle,
+        originGroupAuthorUserId: tasks.originGroupAuthorUserId,
+        originGroupAuthorName: tasks.originGroupAuthorName,
         recurrence: tasks.recurrence,
         recurrenceNextTaskId: tasks.recurrenceNextTaskId,
         deletedAt: tasks.deletedAt,
@@ -267,6 +281,20 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
       .orderBy(asc(tasks.deletedAt), asc(tasks.id))
       .limit(limit);
     return rows.map((r) => ({ id: r.id, projectId: r.projectId, deletedAt: r.deletedAt as Date }));
+  }
+
+  async setGroupOrigin(taskId: string, origin: TaskGroupOrigin): Promise<void> {
+    await this.db
+      .update(tasks)
+      .set({
+        originGroupChatId: origin.chatId,
+        originGroupTitle: origin.title?.slice(0, 255) ?? null,
+        originGroupAuthorUserId: origin.authorUserId,
+        originGroupAuthorName: origin.authorName?.slice(0, 255) ?? null,
+        // Пометка происхождения — не правка задачи: updated_at не трогаем.
+        updatedAt: sql`${tasks.updatedAt}`,
+      })
+      .where(eq(tasks.id, taskId));
   }
 
   async create(input: CreateTaskInput): Promise<Task> {

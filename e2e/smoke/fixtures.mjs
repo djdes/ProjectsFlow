@@ -107,6 +107,7 @@ function taskDto({
   priority = null,
   taskType = null,
   recurrence = null,
+  groupOrigin = null,
   createdHoursAgo = 48,
 }) {
   positionSeq += 1;
@@ -136,6 +137,7 @@ function taskDto({
     parentTaskId: null,
     priority,
     taskType,
+    groupOrigin,
     recurrence,
   };
 }
@@ -172,7 +174,7 @@ export function createState() {
     taskDto({ id: 't-brands', projectId: 'p-shop', title: 'Добавить фильтр по брендам', status: 'pending_approval', assignee: 'u-vera', createdHoursAgo: 70 }),
     taskDto({ id: 't-webhooks', projectId: 'p-crm', title: 'Настроить вебхуки CRM', status: 'todo', assignee: 'u-gleb', deadline: nextWeek, createdHoursAgo: 40 }),
     taskDto({ id: 't-profile-screen', projectId: 'p-mobile', title: 'Экран профиля пользователя', status: 'in_progress', assignee: 'u-boris', createdHoursAgo: 35 }),
-    taskDto({ id: 't-prices', projectId: 'p-site', title: 'Обновить прайс-лист', status: 'backlog', assignee: 'u-vera', deadline: yesterday, createdHoursAgo: 90 }),
+    taskDto({ id: 't-prices', projectId: 'p-site', title: 'Обновить прайс-лист', status: 'backlog', assignee: 'u-vera', deadline: yesterday, createdHoursAgo: 90, groupOrigin: { chatId: -100200, title: 'Скрипты', authorUserId: 'u-vera', authorName: 'Вера' } }),
     // A colleague's personal inbox task (visible on «Все», read-only).
     taskDto({ id: 't-vera-report', projectId: VERA_INBOX_ID, title: 'Подготовить отчёт за неделю', status: 'backlog', assignee: 'u-vera', creator: 'u-vera', createdHoursAgo: 10 }),
   ];

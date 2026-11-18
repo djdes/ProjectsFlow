@@ -1469,6 +1469,7 @@ const waitForAiPromptJob = new WaitForAiPromptJob({
 const telegramComposer = new TelegramComposerService({
   workerPolicy,
   groupProjects: telegramWorkGroups,
+  groupOrigins: taskRepo,
   taskOrigins: telegramTaskOriginRepo,
   drafts: telegramTaskDraftRepo,
   taskMessages: telegramTaskMessageRepo,

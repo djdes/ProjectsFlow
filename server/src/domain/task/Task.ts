@@ -128,6 +128,9 @@ export type Task = {
   // Пространство, в котором задачу создали (общий проект, db/182). null = основное
   // пространство проекта. Optional — старые fake-репозитории его не заполняют.
   readonly originWorkspaceId?: string | null;
+  // Рабочая Telegram-группа, из которой поставили задачу (db/190). null — не из группы.
+  // Optional — старые fake-репозитории его не заполняют.
+  readonly groupOrigin?: TaskGroupOrigin | null;
   // Правило повтора (db/185). null = не повторяется. При переходе в 'done' сервер ставит
   // следующий повтор (SpawnNextRecurringTask). Optional — старые fake-репозитории его не
   // заполняют; Drizzle-репозиторий отдаёт всегда.
@@ -143,4 +146,13 @@ export type Task = {
   readonly deletedBy?: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+};
+
+// Откуда пришла задача: рабочая Telegram-группа (db/190). Снимки названия и имени автора —
+// на момент постановки; время постановки — createdAt задачи.
+export type TaskGroupOrigin = {
+  readonly chatId: number;
+  readonly title: string | null;
+  readonly authorUserId: string | null;
+  readonly authorName: string | null;
 };

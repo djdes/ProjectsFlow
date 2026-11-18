@@ -23,6 +23,7 @@ import { TaskRecurrenceBadge } from './TaskRecurrenceBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
 import { useTaskOriginLabel } from '@/presentation/hooks/useTaskOriginLabel';
+import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
 import { WorkerHandoffIcon } from './workerHandoff';
@@ -229,6 +230,7 @@ function KanbanCardImpl({
       (task.ralphMode && task.ralphMode !== 'normal') ||
       task.taskType ||
       originLabel ||
+      task.groupOrigin ||
       task.priority ||
       task.deadline ||
       task.recurrence ||
@@ -431,6 +433,7 @@ function KanbanCardImpl({
         </span>
       )}
       <RalphModeBadge mode={task.ralphMode} />
+      <TaskGroupOriginBadge origin={task.groupOrigin} createdAt={task.createdAt} className="max-w-[12rem]" />
       {originLabel && (
         <span
           className="shrink-0 truncate whitespace-nowrap rounded bg-muted px-1.5 py-px text-muted-foreground"

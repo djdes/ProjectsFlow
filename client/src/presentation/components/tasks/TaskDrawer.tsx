@@ -105,6 +105,7 @@ import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { TaskVersionsDialog } from './TaskVersionsDialog';
 import { TaskCreatedValue } from './TaskCreatedValue';
+import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -2062,6 +2063,12 @@ export function TaskDrawer({
                   сохраняется в профиль (ui_prefs) для всех проектов. Значения и видимость
                   собираем в map по ключу, рендерим в сохранённом порядке. */}
               <div className="px-[var(--pf-drawer-px)] pbe-2.5 pbs-1">
+                {/* Задача поставлена в рабочей Telegram-группе (db/190): откуда, кто и когда. */}
+                {task.groupOrigin && (
+                  <div className="mbe-1.5 flex">
+                    <TaskGroupOriginBadge origin={task.groupOrigin} createdAt={task.createdAt} className="text-xs" />
+                  </div>
+                )}
                 {(() => {
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     status: <TaskStatusField task={task} disabled={!canEdit || !currentUser} beforeChange={flushDescription} onMove={onMove} onChanged={(updated) => { setStatusResult(updated); notifyChanged(); }} />,
