@@ -84,7 +84,7 @@ export function LiveQueueStatus({
         <span className="shrink-0 tabular-nums text-xs opacity-80" data-pf-live-queue-elapsed="">{formatElapsed(waited)}</span>
       </div>
       {pulse.kind === 'seen' && (
-        <p className="text-xs opacity-80" data-pf-dispatcher-pulse="seen">Диспетчер видел очередь {formatElapsed(pulse.secondsAgo)} назад</p>
+        <p className="text-xs opacity-80" data-pf-dispatcher-pulse="seen">Диспетчер на связи ({formatElapsed(pulse.secondsAgo)} назад)</p>
       )}
       {pulse.kind === 'offline' && (
         <p className="flex items-start gap-1.5 text-xs text-destructive" data-pf-dispatcher-pulse="offline">

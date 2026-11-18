@@ -78,6 +78,8 @@ export function answeredQidSet(comments: readonly TaskComment[]): Set<string> {
 // single → кнопки-варианты (клик = ответ); multi → чекбоксы + «Готово»; open/allowOpen → поле ввода.
 // Постит комментарий с маркером ralph-answer (q=qid, value); сервер вернёт задачу в работу,
 // диспетчер распознает ответ.
+const QUICK_REPLIES: readonly string[] = ['Да', 'Нет'];
+
 export function RalphAnswerControls({
   question,
   projectId,
@@ -123,12 +125,17 @@ export function RalphAnswerControls({
 
   const isMulti = question.type === 'multi';
   const isOpenOnly = question.type === 'open' || question.options.length === 0;
+  // Вопрос без вариантов (например, «Уточнение перед стартом») — всё равно даём быстрые
+  // «Да»/«Нет», свободный ответ остаётся.
+  const quickReplies = question.options.length === 0 && !isMulti;
+  const options = quickReplies ? QUICK_REPLIES : question.options;
+  const showOptions = quickReplies || (!isOpenOnly && options.length > 0);
 
   return (
     <div className="mbs-2 flex flex-col gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-2">
-      {!isOpenOnly && question.options.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {question.options.map((opt) =>
+      {showOptions && (
+        <div className="flex flex-wrap gap-1.5" data-pf-ralph-quick-replies={quickReplies ? '' : undefined}>
+          {options.map((opt) =>
             isMulti ? (
               <button
                 key={opt}

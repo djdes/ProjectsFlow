@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
 import { isWorkerStartupNotice } from '@/lib/isWorkerStartupNotice';
@@ -17,8 +18,9 @@ import {
   parseReviewVerdictPayload,
   parseStagePayload,
   pipelineProgress,
+  pipelineStopReason,
 } from '@/domain/live/LivePipeline';
-import { CheckResultRow, formatElapsed, HandoffDivider, PipelineStepper, ReviewVerdictCard, RoleTurn, STAGE_LABEL, StageLine, ToolJournal } from './LivePipeline';
+import { CheckResultRow, formatElapsed, HandoffDivider, pipelineCaption, PipelineStepper, ReviewVerdictCard, RoleTurn, STAGE_LABEL, StageLine, ToolJournal } from './LivePipeline';
 import { WorkerChatMessage } from './WorkerChatMessage';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type {
@@ -130,6 +132,8 @@ function TaskLiveChat({
   onTaskChanged,
   onTaskUpdated,
 }: Props): React.ReactElement {
+  // Подтверждённый сервером ответ (отмена, постановка в очередь, смена режима) живёт,
+  // пока родитель не прислал свежую задачу; дальше правда — серверный статус из пропса.
   const [cancelResult, setCancelResult] = useState<{ source: Task; task: Task } | null>(null);
   const task = cancelResult?.source === sourceTask ? cancelResult.task : sourceTask;
   const handleCancelChanged = (updated: Task): void => {
@@ -154,8 +158,6 @@ function TaskLiveChat({
     return () => { disposed = true; };
   }, [projectId, projectRepository]);
   const { runs, loading: sessionsLoading, error: timelineError } = useTaskLiveTimeline(projectId, taskId);
-  const [queuedAfterSession, setQueuedAfterSession] = useState<string | null>(null);
-  const queued = queuedAfterSession !== null;
   const [visibleCount, setVisibleCount] = useState(DOM_CAP);
   // While the reader is above the tail, the window keeps its first row: new actions
   // must not push rows out of the DOM above the text being read.
@@ -233,26 +235,41 @@ function TaskLiveChat({
     return answers;
   }, [questionComments]);
 
-  const handleAnswerCreated = useCallback(
-    (created: TaskComment): void => {
-      setQuestionComments((current) =>
-        current.some((comment) => comment.id === created.id) ? current : [...current, created],
-      );
-      onCommentCreated?.(created);
-      onTaskChanged?.();
-    },
-    [onCommentCreated, onTaskChanged],
-  );
+  // Ответ на вопрос диспетчера: сервер сразу возвращает задачу из «На уточнении».
+  // Не ждём, пока родитель перерисует нас: перечитываем задачу и переходим в живое
+  // состояние очереди по серверному статусу. 'pending' — ответ отправлен, статус ещё читаем.
+  const [answerState, setAnswerState] = useState<'pending' | 'reopened' | null>(null);
+  const handleAnswerCreated = (created: TaskComment): void => {
+    setQuestionComments((current) =>
+      current.some((comment) => comment.id === created.id) ? current : [...current, created],
+    );
+    onCommentCreated?.(created);
+    setAnswerState('pending');
+    const source = sourceTask;
+    void taskRepository.get(projectId, taskId)
+      .then((fresh) => {
+        setCancelResult({ source, task: fresh });
+        if (fresh.status === 'todo') setQueuedAt(new Date());
+        setAnswerState(fresh.status === 'awaiting_clarification' ? null : 'reopened');
+      })
+      .catch((error: unknown) => {
+        setAnswerState(null);
+        toast.error(`Ответ сохранён, но не удалось обновить статус задачи: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    onTaskChanged?.();
+  };
 
   const latestRun = runs.at(-1);
   const runningRun = latestRun?.session.status === 'running' ? latestRun : undefined;
   const anyRunning = !!runningRun;
   useEffect(() => { onRunningChange?.(anyRunning); }, [anyRunning, onRunningChange]);
-  useEffect(() => {
-    if (anyRunning) setQueuedAt(null);
-    if (anyRunning || (queuedAfterSession !== null && (runs.at(-1)?.session.id ?? '') !== queuedAfterSession)) setQueuedAfterSession(null);
-  }, [anyRunning, runs, queuedAfterSession]);
   const isWorking = anyRunning;
+  // «В очереди» — только серверный статус todo без идущей сессии. Никаких локальных
+  // флагов, которые переживают отмену и не сверяются с сервером.
+  const queued = task.status === 'todo' && !isWorking;
+  useEffect(() => { if (!queued) setQueuedAt(null); }, [queued]);
+  useEffect(() => { if (isWorking) setAnswerState(null); }, [isWorking]);
+  const answerAccepted = answerState === 'pending' || (answerState === 'reopened' && !isWorking && task.status !== 'awaiting_clarification');
   const handleChatComment = (created: TaskComment): void => {
     stickToBottomRef.current = true;
     setPinnedKey(null);
@@ -289,6 +306,12 @@ function TaskLiveChat({
     stickToBottomRef.current = true;
     setPinnedKey(null);
   }, []);
+  // Постановку в очередь показываем по ответу сервера (статус todo), а не оптимистично.
+  const handleQueued = (updated: Task): void => {
+    followTail();
+    setCancelResult({ source: sourceTask, task: { ...task, ...updated } });
+    if (updated.status === 'todo') setQueuedAt(new Date());
+  };
 
   // Every opening (including a force-mounted tab) starts at the newest message.
   useLayoutEffect(() => {
@@ -333,6 +356,10 @@ function TaskLiveChat({
 
   const pipelineRun = latestRun && isPipelineSession(latestRun.session) ? latestRun : undefined;
   const progress = useMemo(() => pipelineRun ? pipelineProgress(pipelineRun.events, pipelineRun.session.status) : null, [pipelineRun]);
+  const finishedOutcome = progress && progress.outcome !== 'running' ? progress.outcome : null;
+  // Прошлый запуск не довёл задачу: предлагаем «Запустить снова», а не «Сделать с помощью воркера».
+  const relaunch = task.status === 'awaiting_clarification' || finishedOutcome === 'blocked' || finishedOutcome === 'stopped';
+  const stopReason = useMemo(() => pipelineRun && finishedOutcome === 'blocked' ? pipelineStopReason(pipelineRun.events) : null, [pipelineRun, finishedOutcome]);
   const activeStage = progress?.outcome === 'running' ? progress.steps.find(step => step.state === 'active')?.stage : undefined;
   const executing = activeStage === 'execute';
   const spinnerStage = activeStage ? STAGE_LABEL[activeStage] : undefined;
@@ -342,7 +369,14 @@ function TaskLiveChat({
   return (
     <div ref={panelRef} data-pf-live-panel="" className={cn('flex min-h-0 flex-col bg-panel text-foreground', fillHeight ? 'h-full flex-1' : 'h-[70dvh] shrink-0')}>
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
-      {progress && <PipelineStepper progress={progress} />}
+      {/* Новый запуск ждёт диспетчера — прошлый (прерванный/завершённый) прогон не должен
+          выдавать себя за текущее состояние: сворачиваем его в историю. */}
+      {progress && (queued && progress.outcome !== 'running' ? (
+        <details data-pf-previous-run="" className="shrink-0 border-be border-border bg-card px-3 py-1.5 text-2xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">Предыдущий запуск · {pipelineCaption(progress)}</summary>
+          <div className="mbs-1.5"><PipelineStepper progress={progress} /></div>
+        </details>
+      ) : <PipelineStepper progress={progress} />)}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
@@ -370,7 +404,19 @@ function TaskLiveChat({
         })}
         {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} label={pipelineRun === runningRun ? spinnerStage : undefined} />}
         {runningRun && <LiveRunModeNote task={task} />}
-        {(queued || task.status === 'todo') && !isWorking && <LiveQueueStatus task={task} queuedSince={queuedAt ?? task.updatedAt} canEdit={canEdit} onTaskChanged={handleModeChanged} />}
+        {stopReason && !queued && !isWorking && (
+          <div role="status" data-pf-live-stop-reason="" className="rounded-lg border border-destructive/30 bg-card px-3 py-2 text-sm">
+            <p className="font-medium text-destructive">Почему остановлено: {stopReason.title}</p>
+            {stopReason.line && <p className="mbs-0.5 truncate font-mono text-xs text-muted-foreground" title={stopReason.line}>{stopReason.line}</p>}
+          </div>
+        )}
+        {answerAccepted && (
+          <p role="status" data-pf-live-answer-accepted="" className="flex items-center gap-1.5 rounded-lg bg-done-soft px-3 py-2 text-sm text-done-ink">
+            <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+            Ответ принят — задача снова в очереди
+          </p>
+        )}
+        {queued && <LiveQueueStatus task={task} queuedSince={queuedAt ?? task.updatedAt} canEdit={canEdit} onTaskChanged={handleModeChanged} />}
         {!sessionsLoading && runs.length === 0 && rows.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
         {questionsLoading && !sessionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
@@ -402,19 +448,20 @@ function TaskLiveChat({
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
       <div className="shrink-0">
-        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); setQueuedAt(new Date()); }} onChanged={onTaskChanged} />}
-        {isWorking || task.status === 'in_progress' ? (
+        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} relaunch={relaunch} onQueued={handleQueued} onChanged={onTaskChanged} />}
+        {/* «Отменить работу» — только пока воркер реально работает (или ждём подтверждения
+            уже запрошенной отмены). Запаркованная/упавшая задача получает «Запустить снова». */}
+        {isWorking || task.ralphCancelRequestedAt ? (
           canEdit ? <CancelWorkButton task={task} workerRunning={isWorking} onChanged={handleCancelChanged} /> : null
         ) : task.status === 'awaiting_clarification' ? (
           <>
-            {canEdit && <CancelWorkButton task={task} onChanged={handleCancelChanged} />}
             <TaskDrawerComposer
               task={{ ...task, canEdit }}
               backlogTail={backlogTail}
               todoTail={todoTail}
               onCommentCreated={handleChatComment}
             defaultTarget="worker"
-            onWorkerQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); setQueuedAt(new Date()); }}
+            onWorkerQueued={handleQueued}
               onTaskChanged={() => onTaskChanged?.()}
             />
           </>
@@ -425,7 +472,7 @@ function TaskLiveChat({
             todoTail={todoTail}
             onCommentCreated={handleChatComment}
               defaultTarget="worker"
-              onWorkerQueued={() => { followTail(); setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); setQueuedAt(new Date()); }}
+              onWorkerQueued={handleQueued}
             onTaskChanged={() => onTaskChanged?.()}
           />
         )}
@@ -456,7 +503,10 @@ export function DispatcherQuestionCard({
   taskId: string;
   onAnswerCreated: (created: TaskComment) => void;
 }): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(Boolean(answer));
+  const answered = Boolean(answer);
+  const [collapsed, setCollapsed] = useState(answered);
+  // Ответ пришёл, пока карточка открыта, — сворачиваем: вопрос больше не ждёт человека.
+  useEffect(() => { if (answered) setCollapsed(true); }, [answered]);
   const answerText = Array.isArray(answer?.value) ? answer.value.join(', ') : answer?.value;
   return (
     // Вопрос ждёт решения человека — смысл «на утверждении» (фиолетовый). Карточка
@@ -479,15 +529,7 @@ export function DispatcherQuestionCard({
       </div>
       <div hidden={collapsed}>
       <CommentBody body={comment.body} className={cn(RICH_MD, 'text-sm')} />
-      {answer ? (
-        <div className="mbs-2 flex items-start gap-1.5 rounded-md bg-done-soft px-2.5 py-2 text-xs text-done-ink">
-          <CheckCircle2 className="mbs-0.5 size-3.5 shrink-0" aria-hidden />
-          <span>
-            <span className="font-medium">Ответ принят</span>
-            {answerText ? `: ${answerText}` : ''}
-          </span>
-        </div>
-      ) : (
+      {!answer && (
         <RalphAnswerControls
           question={question}
           projectId={projectId}
@@ -496,6 +538,15 @@ export function DispatcherQuestionCard({
         />
       )}
       </div>
+      {answer && (
+        <div className="mbs-2 flex items-start gap-1.5 rounded-md bg-done-soft px-2.5 py-2 text-xs text-done-ink">
+          <CheckCircle2 className="mbs-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            <span className="font-medium">Ответ принят</span>
+            {answerText ? `: ${answerText}` : ''}
+          </span>
+        </div>
+      )}
     </section>
   );
 }

@@ -543,6 +543,9 @@ function KanbanCardImpl({
           // на цветном кольце). Побочно: плашки мета/действий на hover'е красятся сплошным
           // bg-card, и на незалитой карточке они наконец сходятся с ней в цвете.
           doneCard && 'border-success/25 hover:border-success/45',
+          // «На уточнении» визуально живёт в колонке «Воркер», но это НЕ очередь: задача ждёт
+          // человека — янтарный контур, чтобы она не выглядела стоящей в очереди.
+          !preview && task.status === 'awaiting_clarification' && 'border-warning/60 hover:border-warning/80',
           // Приоритет — флажком в нижней строке, а не цветной полосой слева (дизайн C4: без
           // полос-рамок; цвет живёт в метке).
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',

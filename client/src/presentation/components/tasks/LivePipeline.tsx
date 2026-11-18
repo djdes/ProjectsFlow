@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { retryCaption } from '@/domain/live/QueueLiveness';
 import {
-  Check, ChevronRight, CircleDashed, CornerDownRight, Loader2, Minus, ShieldCheck, SquareTerminal, Workflow, X, Zap,
+  Check, ChevronRight, CircleDashed, HelpCircle, CornerDownRight, Loader2, Minus, ShieldCheck, SquareTerminal, Workflow, X, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
@@ -86,11 +86,13 @@ const STEP_STATE_LABEL: Record<StepState, string> = {
   passed: 'пройдено',
   failed: 'не пройдено',
   skipped: 'пропущено',
+  waiting: 'ждёт ответа',
 };
 
 function StepIcon({ state }: { state: StepState }): React.ReactElement {
   if (state === 'passed') return <span className="grid size-4 place-items-center rounded-full bg-done text-white dark:text-background"><Check className="size-2.5" strokeWidth={3} /></span>;
   if (state === 'failed') return <span className="grid size-4 place-items-center rounded-full bg-destructive text-white"><X className="size-2.5" strokeWidth={3} /></span>;
+  if (state === 'waiting') return <span className="grid size-4 place-items-center rounded-full bg-warning text-white"><HelpCircle className="size-2.5" strokeWidth={3} /></span>;
   if (state === 'skipped') return <span className="grid size-4 place-items-center rounded-full bg-muted text-muted-foreground"><Minus className="size-2.5" strokeWidth={3} /></span>;
   if (state === 'active') return (
     <span className="relative grid size-4 place-items-center">
@@ -101,17 +103,27 @@ function StepIcon({ state }: { state: StepState }): React.ReactElement {
   return <span className="grid size-4 place-items-center"><span className="size-2 rounded-full border-[1.5px] border-muted-foreground/50" /></span>;
 }
 
-export function PipelineStepper({ progress }: { progress: PipelineProgress }): React.ReactElement {
-  const current = progress.steps.find(step => step.state === 'active')
+function currentStep(progress: PipelineProgress): PipelineProgress['steps'][number] | undefined {
+  return progress.steps.find(step => step.state === 'active')
     ?? [...progress.steps].reverse().find(step => step.state === 'failed');
-  const caption = progress.outcome === 'done' ? 'Конвейер завершён'
+}
+
+export function pipelineCaption(progress: PipelineProgress): string {
+  const current = currentStep(progress);
+  return progress.outcome === 'clarification' ? 'Ждёт ответа'
+    : progress.outcome === 'done' ? 'Конвейер завершён'
     : progress.outcome === 'blocked' ? 'Конвейер остановлен'
       : progress.outcome === 'stopped' ? 'Конвейер прерван'
         : current ? `${STAGE_LABEL[current.stage]} · ${STEP_STATE_LABEL[current.state]}` : 'Конвейер';
+}
+
+export function PipelineStepper({ progress }: { progress: PipelineProgress }): React.ReactElement {
+  const current = currentStep(progress);
+  const caption = pipelineCaption(progress);
   return (
     <nav aria-label="Этапы конвейера" data-pf-pipeline-stepper="" className="shrink-0 border-be border-border bg-card px-3 py-2">
       <div className="mbe-1.5 flex min-w-0 items-center gap-2 text-2xs">
-        <span className={cn('min-w-0 truncate font-medium', progress.outcome === 'blocked' || progress.outcome === 'stopped' || current?.state === 'failed' ? 'text-destructive' : progress.outcome === 'done' ? 'text-done-ink' : 'text-foreground')}>{caption}</span>
+        <span className={cn('min-w-0 truncate font-medium', progress.outcome === 'clarification' ? 'text-warning-ink' : progress.outcome === 'blocked' || progress.outcome === 'stopped' || current?.state === 'failed' ? 'text-destructive' : progress.outcome === 'done' ? 'text-done-ink' : 'text-foreground')}>{caption}</span>
         {progress.round !== null && <span className="shrink-0 text-muted-foreground">раунд {progress.round}</span>}
         {progress.escalated && <span className="pf-tone-orange inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-tone-bg px-1 text-tone-fg"><Zap className="size-3" aria-hidden />усиленный исполнитель</span>}
       </div>
